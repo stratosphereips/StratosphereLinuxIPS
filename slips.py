@@ -511,7 +511,7 @@ parser.add_argument('-w', '--width', help='Width of the time slot used for the a
 parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
 parser.add_argument('-d', '--datawhois', help='Get and show the whois info for the destination IP in each tuple', action='store_true', default=False, required=False)
 parser.add_argument('-m', '--models', help='Folder with all the models to detect.', action='store', required=False)
-parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows. Just print the connectionthe connections.', default=False, action='store_true', required=False)
+parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows. Just print the connections.', default=False, action='store_true', required=False)
 parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
 args = parser.parse_args()
 
