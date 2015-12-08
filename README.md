@@ -37,8 +37,7 @@ The core of the slips program is not only the machine learning algorithm, but mo
 
 The behavioral models are stored in the __models__ folder and will be updated regularly. In this version you should pull the git repository by hand to update the models.
 
-## Features and restrictions
-
+## Features 
 This alpha version of slips comes with the following features:
 
 - If you execute slips without the -m parameter it will __not__ detect any behavior in the network but just print the tuples (see the Stratosphere web page for more information). So actually you can also use slips to see what is happening in your network even without detection.
@@ -52,3 +51,6 @@ This alpha version of slips comes with the following features:
 [Argus]: http://qosient.com/argus/ "Argus"
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
+
+### Author
+For bugs, reports, ideas or comments send an email to Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz
