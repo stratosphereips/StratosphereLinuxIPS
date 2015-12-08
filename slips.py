@@ -1,6 +1,7 @@
 #!/usr/bin/python -u
 # This file is part of the Stratosphere Linux IPS
 # See the file 'LICENSE' for copying permission.
+# Author: Sebastian Garcia. eldraco@gmail.com , sebastian.garcia@agents.fel.cvut.cz
 
 import sys
 from colors import *
@@ -14,7 +15,7 @@ from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
 
-version = '0.1alpha'
+version = '0.2alpha'
 
 ###################
 class Tuple(object):
