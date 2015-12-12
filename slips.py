@@ -454,33 +454,39 @@ class Processor(multiprocessing.Process):
                     if 'stop' != line:
                         # Process this flow
                         nline = ','.join(line.strip().split(',')[:13])
-                        column_values = nline.split(',')
-                        # 0:starttime, 1:dur, 2:proto, 3:saddr, 4:sport, 5:dir, 6:daddr: 7:dport, 8:state, 9:stos,  10:dtos, 11:pkts, 12:bytes
-                        if self.slot_starttime == -1:
-                            # First flow
-                            try:
-                                self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-                            except ValueError:
-                                continue
-                            self.slot_endtime = self.slot_starttime + self.slot_width
-                        flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-                        if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
-                            # Inside the slot
-                            tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
-                            tuple = self.get_tuple(tuple4)
-                            if self.verbose:
-                                if len(tuple.state) == 0:
-                                    tuple.set_color(red)
-                            tuple.add_new_flow(column_values)
-                            # Detect
-                            self.detect(tuple)
-                        elif flowtime > self.slot_endtime:
-                            # Out of time slot
-                            self.process_out_of_time_slot(column_values)
+                        try:
+                            column_values = nline.split(',')
+                            # 0:starttime, 1:dur, 2:proto, 3:saddr, 4:sport, 5:dir, 6:daddr: 7:dport, 8:state, 9:stos,  10:dtos, 11:pkts, 12:bytes
+                            if self.slot_starttime == -1:
+                                # First flow
+                                try:
+                                    self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+                                except ValueError:
+                                    continue
+                                self.slot_endtime = self.slot_starttime + self.slot_width
+                            flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+                            if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
+                                # Inside the slot
+                                tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+                                tuple = self.get_tuple(tuple4)
+                                if self.verbose:
+                                    if len(tuple.state) == 0:
+                                        tuple.set_color(red)
+                                tuple.add_new_flow(column_values)
+                                # Detect
+                                self.detect(tuple)
+                            elif flowtime > self.slot_endtime:
+                                # Out of time slot
+                                self.process_out_of_time_slot(column_values)
+                        except UnboundLocalError:
+                            print 'Probable empty file.'
                     else:
-                        # Process the last flows in the last time slot
-                        self.process_out_of_time_slot(column_values)
-                        # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
+                        try:
+                            # Process the last flows in the last time slot
+                            self.process_out_of_time_slot(column_values)
+                        except UnboundLocalError:
+                            print 'Probable empty file.'
+                            # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
                         # Just Return
                         return True
 
