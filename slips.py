@@ -411,14 +411,13 @@ class Processor(multiprocessing.Process):
         """
         # Outside the slot
         if self.verbose:
-            print cyan('Slot Started: {}, finished: {}'.format(self.slot_starttime, self.slot_endtime))
+            print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples)))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
                 if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
                     if not tuple.desc and self.get_whois:
                         tuple.get_whois_data()
                     print tuple.print_tuple_detected()
-                    #print tuple
                 # Clear the color because we already print it
                 if tuple.color == red:
                     tuple.set_color(yellow)
