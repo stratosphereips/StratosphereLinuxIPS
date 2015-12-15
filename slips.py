@@ -392,6 +392,7 @@ class Processor(multiprocessing.Process):
         self.slot_endtime = -1
         self.slot_width = slot_width
         self.dontdetect = dontdetect
+        self.amount_of_tuple_in_this_time_slot = 0
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -411,7 +412,8 @@ class Processor(multiprocessing.Process):
         """
         # Outside the slot
         if self.verbose:
-            print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples)))
+            self.amount_of_tuple_in_this_time_slot = len(self.tuples) - self.amount_of_tuple_in_this_time_slot
+            print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot)))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
                 if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
