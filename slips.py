@@ -64,6 +64,13 @@ class Tuple(object):
         # After a tuple is detected, max_state_len holds the max letter position in the state
         # where the detection happened. The new arriving letters to be detected are between max_state_len and the real end of the state
         self.max_state_len = 0
+        self.detected_label = ''
+
+    def set_detected_label(self, label):
+        self.detected_label = label
+
+    def get_detected_label(self):
+        return self.detected_label
 
     def get_state_detected_last(self):
         if self.max_state_len == 0:
@@ -350,7 +357,7 @@ class Tuple(object):
         """
         Print the tuple. The state is the state since the last detection of the tuple. Not everything
         """
-        return('{} [{}] ({}): {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state_detected_last()))
+        return('{} [{}] ({}): {}. Detected as: {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state_detected_last(), self.get_detected_label()))
 
     def set_color(self, color):
         self.color = color
@@ -443,10 +450,12 @@ class Processor(multiprocessing.Process):
         Detect behaviors
         """
         if not self.dontdetect:
-            detected = __markov_models__.detect(tuple, self.verbose)
+            (detected, label) = __markov_models__.detect(tuple, self.verbose)
             if detected:
                 # Change color
                 tuple.set_color(magenta)
+                # Set the detection label
+                tuple.set_detected_label(label)
                 # Play sound
                 if args.sound:
                     pygame.mixer.music.play()
@@ -481,7 +490,7 @@ class Processor(multiprocessing.Process):
                                     if len(tuple.state) == 0:
                                         tuple.set_color(red)
                                 tuple.add_new_flow(column_values)
-                                # Detect
+                                # Detection
                                 self.detect(tuple)
                             elif flowtime > self.slot_endtime:
                                 # Out of time slot

@@ -149,12 +149,12 @@ class MarkovModelsDetection():
         # Only detect states with more than 3 letters
         #if len(tuple.get_state()) < 4:
         if len(tuple.get_state()[tuple.get_max_state_len():]) < 4:
-            return False
+            return (False, False)
         # Use the current models for detection
         for model in self.models:
             # Only detect if protocol matches
             if model.get_protocol().lower() != tuple.get_protocol().lower():
-                return False
+                return (False, False)
             # Letters of the trained model. Get from the last detected letter to the end. NO CUT HERE. We dont cut the training letters, because if we do, we have to cut ALL of them, 
             # including the matching and the not matching ones.
             train_sequence = model.get_state()[0:len(tuple.get_state())]
@@ -193,10 +193,8 @@ class MarkovModelsDetection():
                 else:
                     tuple.set_min_state_len(tuple.get_max_state_len())
                     tuple.set_max_state_len(len(tuple.get_state()))
-                return model.matched
-        return False
-        #if self.is_periodic(tuple.get_state()):
-        #    return True
+                return (model.matched, model.get_label())
+        return (False, False)
 
 
 __markov_models__ = MarkovModelsDetection()
