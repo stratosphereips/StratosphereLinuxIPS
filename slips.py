@@ -413,7 +413,7 @@ class Processor(multiprocessing.Process):
         # Outside the slot
         if self.verbose:
             self.amount_of_tuple_in_this_time_slot = len(self.tuples) - self.amount_of_tuple_in_this_time_slot
-            print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot)))
+            print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
                 if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
