@@ -128,8 +128,16 @@ class Tuple(object):
         if self.verbose > 2:
             print 'Adding flow {}'.format(column_values)
         self.datetime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-        self.current_size = float(column_values[12])
-        self.current_duration = float(column_values[1])
+        try:
+            self.current_size = float(column_values[12])
+        except ValueError:
+            # It can happend that we dont have this value in the binetflow
+            self.current_size = 0.0
+        try:
+            self.current_duration = float(column_values[1])
+        except ValueError:
+            # It can happend that we dont have this value in the binetflow
+            self.current_duration = 0.0
         self.proto = str(column_values[2])
         self.amount_of_flows += 1
         # Update values
