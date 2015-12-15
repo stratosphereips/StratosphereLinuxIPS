@@ -427,7 +427,8 @@ class Processor(multiprocessing.Process):
         # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
         ids_to_delete = []
         for tup in self.tuples:
-            if self.tuples[tup].amount_of_flows > 1000:
+            #if self.tuples[tup].amount_of_flows > 1000:
+            if self.tuples[tup].amount_of_flows > 100:
                 ids_to_delete.append(self.tuples[tup].get_id())
         for id in ids_to_delete:
             del self.tuples[id]
