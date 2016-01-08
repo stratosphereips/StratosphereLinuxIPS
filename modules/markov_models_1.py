@@ -145,56 +145,65 @@ class MarkovModelsDetection():
         """
         Main detect function
         """
-        self.verbose = verbose
-        # Only detect states with more than 3 letters
-        #if len(tuple.get_state()) < 4:
-        if len(tuple.get_state()[tuple.get_max_state_len():]) < 4:
-            return (False, False)
-        # Use the current models for detection
-        for model in self.models:
-            # Only detect if protocol matches
-            if model.get_protocol().lower() != tuple.get_protocol().lower():
+        try:
+            # Clear the temp best model
+            tuple.temp_best_model_so_far = False
+            # Set the verbose
+            self.verbose = verbose
+            # Only detect states with more than 3 letters
+            if len(tuple.get_state()[tuple.get_max_state_len():]) < 4:
                 return (False, False)
-            # Letters of the trained model. Get from the last detected letter to the end. NO CUT HERE. We dont cut the training letters, because if we do, we have to cut ALL of them, 
-            # including the matching and the not matching ones.
-            train_sequence = model.get_state()[0:len(tuple.get_state())]
-            # We dont recreate the matrix because the trained is never cutted. # First re-create the matrix only for this sequence 
-            ##model.create(train_sequence)
-            # Get the new original prob so far...
-            training_original_prob = model.compute_probability(train_sequence)
-            # Now obtain the probability for testing. The prob is computed by using the API on the train model, which knows its own matrix
-            test_prob = model.compute_probability(tuple.get_state()[tuple.get_max_state_len():])
-            # Get the distance             
-            prob_distance = -1             
-            if training_original_prob != -1 and test_prob != -1 and training_original_prob <= test_prob:
-                try:                       
-                    prob_distance = training_original_prob / test_prob
-                except ZeroDivisionError:          
-                    prob_distance = -1         
-            elif training_original_prob != -1 and test_prob != -1 and training_original_prob > test_prob:
-                try:                       
-                    prob_distance = test_prob / training_original_prob
-                except ZeroDivisionError:          
-                    prob_distance = -1 
-            if self.verbose > 2:
-                #print tuple.get_min_state_len()
-                #print tuple.get_max_state_len()
-                print 'Trained Model: {}. Label: {}. State: {}'.format(model.get_id(), model.get_label(), train_sequence)
-                #print 'Test Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state()) 
-                print 'Test Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state()[tuple.get_max_state_len():])
-                print 'Train prob: {}'.format(training_original_prob)
-                print 'Test prob: {}'.format(test_prob)
-                print 'Distance: {}'.format(prob_distance)
-            # Now just return the first model that matches
-            if prob_distance <= model.get_threshold():
-                if tuple.get_max_state_len() == 0:
-                    # first time matched. move only the max
-                    tuple.set_max_state_len(len(tuple.get_state()))
-                else:
-                    tuple.set_min_state_len(tuple.get_max_state_len())
-                    tuple.set_max_state_len(len(tuple.get_state()))
-                return (model.matched, model.get_label())
-        return (False, False)
+            # Use the current models for detection
+            for model in self.models:
+                # Only detect if protocol matches
+                if model.get_protocol().lower() != tuple.get_protocol().lower():
+                    # Go get the next
+                    continue
+                # Letters of the trained model. Get from the last detected letter to the end. NO CUT HERE. We dont cut the training letters, because if we do, we have to cut ALL of them, 
+                # including the matching and the not matching ones.
+                train_sequence = model.get_state()[0:len(tuple.get_state())]
+                # We dont recreate the matrix because the trained is never cutted. 
+                # Get the new original prob so far...
+                training_original_prob = model.compute_probability(train_sequence)
+                # Now obtain the probability for testing. The prob is computed by using the API on the train model, which knows its own matrix
+                test_prob = model.compute_probability(tuple.get_state()[tuple.get_max_state_len():])
+                # Get the distance             
+                prob_distance = -1             
+                if training_original_prob != -1 and test_prob != -1 and training_original_prob <= test_prob:
+                    try:                       
+                        prob_distance = training_original_prob / test_prob
+                    except ZeroDivisionError:          
+                        prob_distance = -1         
+                elif training_original_prob != -1 and test_prob != -1 and training_original_prob > test_prob:
+                    try:                       
+                        prob_distance = test_prob / training_original_prob
+                    except ZeroDivisionError:          
+                        prob_distance = -1 
+                if self.verbose > 2:
+                    print 'Trained Model: {}. Label: {}. State: {}'.format(model.get_id(), model.get_label(), train_sequence)
+                    print 'Test Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state()[tuple.get_max_state_len():])
+                    print 'Train prob: {}'.format(training_original_prob)
+                    print 'Test prob: {}'.format(test_prob)
+                    print 'Distance: {}'.format(prob_distance)
+                # Now just return the first model that matches
+                if prob_distance <= model.get_threshold():
+                    if tuple.get_max_state_len() == 0:
+                        # First time matched. move only the max state value of the tuple to the place where we detected the match
+                        tuple.set_max_state_len(len(tuple.get_state()))
+                    else:
+                        # Not the first time this tuple is matched. We should move the min and max
+                        tuple.set_min_state_len(tuple.get_max_state_len())
+                        tuple.set_max_state_len(len(tuple.get_state()))
+
+                    return (model.matched, model.get_label())
+            return (False, False)
+        except Exception as inst:
+            print 'Problem in detect()'
+            print type(inst)     # the exception instance
+            print inst.args      # arguments stored in .args
+            print inst           # __str__ allows args to printed directly
+            sys.exit(-1)
+
 
 
 __markov_models__ = MarkovModelsDetection()
