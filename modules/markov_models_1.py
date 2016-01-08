@@ -147,7 +147,9 @@ class MarkovModelsDetection():
         """
         try:
             # Clear the temp best model
-            tuple.temp_best_model_so_far = False
+            best_model_so_far = False
+            best_distance_so_far = float('inf')
+            best_model_matching_len = -1
             # Set the verbose
             self.verbose = verbose
             # Only detect states with more than 3 letters
@@ -180,23 +182,36 @@ class MarkovModelsDetection():
                     except ZeroDivisionError:          
                         prob_distance = -1 
                 if self.verbose > 2:
-                    print 'Trained Model: {}. Label: {}. State: {}'.format(model.get_id(), model.get_label(), train_sequence)
-                    print 'Test Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state()[tuple.get_max_state_len():])
-                    print 'Train prob: {}'.format(training_original_prob)
-                    print 'Test prob: {}'.format(test_prob)
-                    print 'Distance: {}'.format(prob_distance)
-                # Now just return the first model that matches
-                if prob_distance <= model.get_threshold():
-                    if tuple.get_max_state_len() == 0:
-                        # First time matched. move only the max state value of the tuple to the place where we detected the match
-                        tuple.set_max_state_len(len(tuple.get_state()))
-                    else:
-                        # Not the first time this tuple is matched. We should move the min and max
-                        tuple.set_min_state_len(tuple.get_max_state_len())
-                        tuple.set_max_state_len(len(tuple.get_state()))
-
-                    return (model.matched, model.get_label())
-            return (False, False)
+                    print '\t\tTrained Model: {}. Label: {}. State: {}'.format(model.get_id(), model.get_label(), train_sequence)
+                    print '\t\t\tTest Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state()[tuple.get_max_state_len():])
+                    print '\t\t\tTrain prob: {}'.format(training_original_prob)
+                    print '\t\t\tTest prob: {}'.format(test_prob)
+                    print '\t\t\tDistance: {}'.format(prob_distance)
+                # If we matched and we are the best so far
+                if prob_distance <= model.get_threshold() and prob_distance < best_distance_so_far:
+                    best_model_so_far = model
+                    best_distance_so_far = prob_distance
+                    best_model_matching_len = len(tuple.get_state())
+                    if self.verbose > 3:
+                        print '\t\t\t\tThis model is the best so far. State len: {}'.format(best_model_matching_len)
+            # If we detected something
+            if best_model_so_far:
+                # Move the states of the tuple so next time for this tuple we don't compare from the start
+                if tuple.get_max_state_len() == 0:
+                    # First time matched. move only the max state value of the tuple to the place where we detected the match
+                    tuple.set_max_state_len(best_model_matching_len)
+                    if self.verbose > 3:
+                        print 'We moved the max to: {}'.format(best_model_matching_len)
+                else:
+                    # Not the first time this tuple is matched. We should move the min and max
+                    tuple.set_min_state_len(tuple.get_max_state_len())
+                    tuple.set_max_state_len(best_model_matching_len)
+                    if self.verbose > 3:
+                        print 'We moved the min to: {} and max to: {}'.format(tuple.get_max_state_len(), best_model_matching_len)
+                # Return
+                return (best_model_so_far.matched, best_model_so_far.get_label())
+            else:
+                return (False, False)
         except Exception as inst:
             print 'Problem in detect()'
             print type(inst)     # the exception instance
