@@ -23,36 +23,39 @@ class Model():
             init_letter_prob = math.log(self.init_vector[state[i]])
         except ValueError:
             # There is not enough data to even create a matrix
-            init_letter_prob = 0           
+            init_letter_prob = 0
         except IndexError:
             # The first letter is not in the matrix, so penalty...
-            init_letter_prob = -4.6        
+            init_letter_prob = -4.6
         # We should have more than 2 states at least
-        while i < len(state) and len(state) > 1: 
+        while i < len(state) and len(state) > 1:
             try:
-                vector = state[i] + state[i+1] 
-                growing_v = state[0:i+2]       
+                vector = state[i] + state[i+1]
+                growing_v = state[0:i+2]
                 # The transitions that include the # char will be automatically excluded
                 temp_prob = self.matrix.walk_probability(vector)
                 i += 1
-                if temp_prob != float('-inf'):                 
+                if temp_prob != float('-inf'):
                     probability = probability + temp_prob # logs should be summed up
                     #print_info('\tTransition [{}:{}]: {} -> Prob:{:.10f}. CumProb: {}'.format(i-1, i,vector, temp_prob, probability))
                 else:
                     # Here is our trick. If two letters are not in the matrix... assign a penalty probability
                     # The temp_prob is the penalty we assign if we can't find the transition
                     temp_prob = -4.6 # Which is approx 0.01 probability
-                    probability = probability + temp_prob # logs should be + 
-                    if '#' not in vector:          
-                        ignored += 1                   
+                    #temp_prob = -20 # Which is approx 0.01 probability
+                    #temp_prob = -40 # Which is approx 0.01 probability
+                    #temp_prob = -80 # Which is approx 0.01 probability
+                    probability = probability + temp_prob # logs should be +
+                    if '#' not in vector:
+                        ignored += 1
                     continue
-            except IndexError:             
-                # We are out of letters        
+            except IndexError:
+                # We are out of letters
                 break
         #if ignored:
             #print_warning('Ignored transitions: {}'.format(ignored))
             #ignored = 0
-        return probability             
+        return probability
 
 
     def set_state(self, state):
@@ -109,7 +112,7 @@ class Model():
 
 
 class MarkovModelsDetection():
-    """ 
+    """
     Class that do all the detection using markov models
     """
     def __init__(self):
@@ -122,11 +125,11 @@ class MarkovModelsDetection():
                 return True
 
     def set_model_to_detect(self, file):
-        """ 
+        """
         Receives a file and extracts the model in it
         """
-        input = open(file, 'r') 
-        try: 
+        input = open(file, 'r')
+        try:
             id = self.models[-1].get_id() + 1
         except (KeyError, IndexError):
             id = 1
@@ -139,13 +142,14 @@ class MarkovModelsDetection():
         model.set_threshold(cPickle.load(input))
         self.models.append(model)
         print 'Adding model {} to the list.'.format(model.get_label())
-        input.close() 
+        input.close()
 
     def detect(self, tuple, verbose):
         """
         Main detect function
         """
         try:
+            print 'Trying to detect tuple {}'.format(tuple.get_id())
             # Clear the temp best model
             best_model_so_far = False
             best_distance_so_far = float('inf')
@@ -154,6 +158,8 @@ class MarkovModelsDetection():
             self.verbose = verbose
             # Only detect states with more than 3 letters
             if len(tuple.get_state()[tuple.get_max_state_len():]) < 4:
+                if self.verbose > 3:
+                    print 'State to small'
                 return (False, False)
             # Use the current models for detection
             for model in self.models:
@@ -161,26 +167,26 @@ class MarkovModelsDetection():
                 if model.get_protocol().lower() != tuple.get_protocol().lower():
                     # Go get the next
                     continue
-                # Letters of the trained model. Get from the last detected letter to the end. NO CUT HERE. We dont cut the training letters, because if we do, we have to cut ALL of them, 
+                # Letters of the trained model. Get from the last detected letter to the end. NO CUT HERE. We dont cut the training letters, because if we do, we have to cut ALL of them,
                 # including the matching and the not matching ones.
                 train_sequence = model.get_state()[0:len(tuple.get_state())]
-                # We dont recreate the matrix because the trained is never cutted. 
+                # We dont recreate the matrix because the trained is never cutted.
                 # Get the new original prob so far...
                 training_original_prob = model.compute_probability(train_sequence)
                 # Now obtain the probability for testing. The prob is computed by using the API on the train model, which knows its own matrix
                 test_prob = model.compute_probability(tuple.get_state()[tuple.get_max_state_len():])
-                # Get the distance             
-                prob_distance = -1             
+                # Get the distance
+                prob_distance = -1
                 if training_original_prob != -1 and test_prob != -1 and training_original_prob <= test_prob:
-                    try:                       
+                    try:
                         prob_distance = training_original_prob / test_prob
-                    except ZeroDivisionError:          
-                        prob_distance = -1         
+                    except ZeroDivisionError:
+                        prob_distance = -1
                 elif training_original_prob != -1 and test_prob != -1 and training_original_prob > test_prob:
-                    try:                       
+                    try:
                         prob_distance = test_prob / training_original_prob
-                    except ZeroDivisionError:          
-                        prob_distance = -1 
+                    except ZeroDivisionError:
+                        prob_distance = -1
                 if self.verbose > 2:
                     print '\t\tTrained Model: {}. Label: {}. State: {}'.format(model.get_id(), model.get_label(), train_sequence)
                     print '\t\t\tTest Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state()[tuple.get_max_state_len():])
@@ -200,15 +206,17 @@ class MarkovModelsDetection():
                 if tuple.get_max_state_len() == 0:
                     # First time matched. move only the max state value of the tuple to the place where we detected the match
                     tuple.set_max_state_len(best_model_matching_len)
-                    if self.verbose > 3:
-                        print 'We moved the max to: {}'.format(best_model_matching_len)
+                    #if self.verbose > 3:
+                    #    print 'We moved the max to: {}'.format(best_model_matching_len)
                 else:
                     # Not the first time this tuple is matched. We should move the min and max
                     tuple.set_min_state_len(tuple.get_max_state_len())
                     tuple.set_max_state_len(best_model_matching_len)
-                    if self.verbose > 3:
-                        print 'We moved the min to: {} and max to: {}'.format(tuple.get_max_state_len(), best_model_matching_len)
+                    #if self.verbose > 3:
+                    #    print 'We moved the min to: {} and max to: {}'.format(tuple.get_max_state_len(), best_model_matching_len)
                 # Return
+                if self.verbose > 3:
+                    print 'Returning the best model with label {} ({})'.format(best_model_so_far.get_label(), best_model_so_far.matched)
                 return (best_model_so_far.matched, best_model_so_far.get_label())
             else:
                 return (False, False)
