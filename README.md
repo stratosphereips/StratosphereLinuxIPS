@@ -54,3 +54,9 @@ This alpha version of slips comes with the following features:
 
 ### Author
 For bugs, reports, ideas or comments send an email to Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz
+
+## TODO
+- Only move the state len when the time window finishes. Actually only send the tuple to detect when the time window finishes. if not, we detect and mark the tuple to print and move the state len, but then the next flow is too short and the tuple is marked as not detected and therefore not to print.
+
+
+
