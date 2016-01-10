@@ -149,7 +149,6 @@ class MarkovModelsDetection():
         Main detect function
         """
         try:
-            print 'Trying to detect tuple {}'.format(tuple.get_id())
             # Clear the temp best model
             best_model_so_far = False
             best_distance_so_far = float('inf')
@@ -159,7 +158,7 @@ class MarkovModelsDetection():
             # Only detect states with more than 3 letters
             if len(tuple.get_state()[tuple.get_max_state_len():]) < 4:
                 if self.verbose > 3:
-                    print 'State to small'
+                    print 'State too small'
                 return (False, False)
             # Use the current models for detection
             for model in self.models:
@@ -205,18 +204,20 @@ class MarkovModelsDetection():
                 # Move the states of the tuple so next time for this tuple we don't compare from the start
                 if tuple.get_max_state_len() == 0:
                     # First time matched. move only the max state value of the tuple to the place where we detected the match
-                    tuple.set_max_state_len(best_model_matching_len)
+                    #tuple.set_max_state_len(best_model_matching_len)
                     #if self.verbose > 3:
                     #    print 'We moved the max to: {}'.format(best_model_matching_len)
+                    pass
                 else:
                     # Not the first time this tuple is matched. We should move the min and max
-                    tuple.set_min_state_len(tuple.get_max_state_len())
-                    tuple.set_max_state_len(best_model_matching_len)
+                    #tuple.set_min_state_len(tuple.get_max_state_len())
+                    #tuple.set_max_state_len(best_model_matching_len)
                     #if self.verbose > 3:
                     #    print 'We moved the min to: {} and max to: {}'.format(tuple.get_max_state_len(), best_model_matching_len)
+                    pass
                 # Return
-                if self.verbose > 3:
-                    print 'Returning the best model with label {} ({})'.format(best_model_so_far.get_label(), best_model_so_far.matched)
+                #if self.verbose > 3:
+                    #print 'Returning the best model with label {} ({})'.format(best_model_so_far.get_label(), best_model_so_far.matched)
                 return (best_model_so_far.matched, best_model_so_far.get_label())
             else:
                 return (False, False)
