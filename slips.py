@@ -59,7 +59,7 @@ class Tuple(object):
         self.should_be_printed = True
         self.desc = ''
         # After a tuple is detected, min_state_len holds the lower letter position in the state
-        # where the detection happened. 
+        # where the detection happened.
         self.min_state_len = 0
         # After a tuple is detected, max_state_len holds the max letter position in the state
         # where the detection happened. The new arriving letters to be detected are between max_state_len and the real end of the state
@@ -380,7 +380,7 @@ class Tuple(object):
 class Processor(multiprocessing.Process):
     """ A class process to run the process of the flows """
     def __init__(self, queue, slot_width, only_detections, get_whois, verbose, amount, dontdetect):
-        multiprocessing.Process.__init__(self) 
+        multiprocessing.Process.__init__(self)
         self.only_detections = only_detections
         self.get_whois = get_whois
         self.verbose = verbose
@@ -407,7 +407,7 @@ class Processor(multiprocessing.Process):
         return tuple
 
     def process_out_of_time_slot(self, column_values):
-        """ 
+        """
         Process the tuples when we are out of the time slot
         """
         # Outside the slot
@@ -416,6 +416,7 @@ class Processor(multiprocessing.Process):
             print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
+                print 'Processing tuple: {}'.format(tuple.get_id())
                 if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
                     if not tuple.desc and self.get_whois:
                         tuple.get_whois_data()
@@ -429,22 +430,22 @@ class Processor(multiprocessing.Process):
         # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
         ids_to_delete = []
         for tup in self.tuples:
-            #if self.tuples[tup].amount_of_flows > 1000:
             if self.tuples[tup].amount_of_flows > 100:
                 ids_to_delete.append(self.tuples[tup].get_id())
         for id in ids_to_delete:
             del self.tuples[id]
+        # Move the time slot
         self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
         self.slot_endtime = self.slot_starttime + self.slot_width
 
-        # Put the last flow received in the next slot, because it overcommed the threshold
+        # Put the last flow received in the next slot, because it overcommed the threshold and it was not processed
         tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
         tuple = self.get_tuple(tuple4)
         if self.verbose:
             if len(tuple.state) == 0:
                 tuple.set_color(red)
         tuple.add_new_flow(column_values)
-        # Detect
+        # Detect the first flow of the future timeslow
         self.detect(tuple)
 
     def detect(self, tuple):
@@ -458,10 +459,13 @@ class Processor(multiprocessing.Process):
                 tuple.set_color(magenta)
                 # Set the detection label
                 tuple.set_detected_label(label)
+                #print 'Detected with {}'.format(label)
                 # Play sound
                 if args.sound:
                     pygame.mixer.music.play()
+                #tuple.do_print()
             elif not detected and self.only_detections:
+                #print 'Not Detected with {}'.format(label)
                 tuple.dont_print()
 
     def run(self):
@@ -492,6 +496,7 @@ class Processor(multiprocessing.Process):
                                     if len(tuple.state) == 0:
                                         tuple.set_color(red)
                                 tuple.add_new_flow(column_values)
+                                #print 'NEW2'
                                 # Detection
                                 self.detect(tuple)
                             elif flowtime > self.slot_endtime:
@@ -557,11 +562,11 @@ if args.folder:
     for file in onlyfiles:
         __markov_models__.set_model_to_detect(join(args.folder, file))
 
-# Create the queue             
+# Create the queue
 queue = Queue()
 # Create the thread and start it
 processorThread = Processor(queue, timedelta(minutes=args.width), args.print_detections, args.datawhois, args.verbose, args.amount, args.dontdetect)
-processorThread.start()           
+processorThread.start()
 
 # Just put the lines in the queue as fast as possible
 for line in sys.stdin:
