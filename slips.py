@@ -133,7 +133,7 @@ class Tuple(object):
         self.previous_duration = self.current_duration
         self.previous_time = self.datetime
         if self.verbose > 2:
-            print 'Adding flow {}'.format(column_values)
+            print '\nAdding flow {}'.format(column_values)
         self.datetime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
         try:
             self.current_size = float(column_values[12])
@@ -416,7 +416,6 @@ class Processor(multiprocessing.Process):
             print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
-                print 'Processing tuple: {}'.format(tuple.get_id())
                 if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
                     if not tuple.desc and self.get_whois:
                         tuple.get_whois_data()
@@ -431,6 +430,8 @@ class Processor(multiprocessing.Process):
         ids_to_delete = []
         for tup in self.tuples:
             if self.tuples[tup].amount_of_flows > 100:
+                if self.verbose > 3:
+                    print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
                 ids_to_delete.append(self.tuples[tup].get_id())
         for id in ids_to_delete:
             del self.tuples[id]
@@ -459,13 +460,16 @@ class Processor(multiprocessing.Process):
                 tuple.set_color(magenta)
                 # Set the detection label
                 tuple.set_detected_label(label)
-                #print 'Detected with {}'.format(label)
+                if self.verbose > 5:
+                    print 'Detected with {}'.format(label)
                 # Play sound
                 if args.sound:
                     pygame.mixer.music.play()
                 #tuple.do_print()
             elif not detected and self.only_detections:
-                #print 'Not Detected with {}'.format(label)
+                # Not detected by any reason. No model matching but also the state len is too short.
+                if self.verbose > 5:
+                    print 'Not Detected with {}'.format(label)
                 tuple.dont_print()
 
     def run(self):
