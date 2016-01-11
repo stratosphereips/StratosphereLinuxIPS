@@ -13,6 +13,16 @@ class Model():
         self.matrix = False
         self.self_probability = -1
         self.label = -1
+        # To store when did this model had the best match. Later use to cut the state
+        """
+        self.best_matching_len = -1
+
+    def set_best_model_matching_len(self, statelen):
+        self.best_matching_len = statelen
+
+    def get_best_model_matching_len(self):
+        return self.best_matching_len
+        """
 
     def create(self, state):
         """ Create the Markov chain itself. We use the parameter instead of the attribute so we can compute the matrix for different states """
@@ -170,6 +180,7 @@ class MarkovModelsDetection():
             if len(tuple.get_state()[tuple.get_max_state_len():]) < 4:
                 if self.verbose > 3:
                     print '\t-> State too small'
+                #return (False, False, False)
                 return (False, False)
             # Use the current models for detection
             for model in self.models:
@@ -211,35 +222,24 @@ class MarkovModelsDetection():
                             print '\t\t\t\t{}:{}'.format(i, matrix[i])
                 # If we matched and we are the best so far
                 if prob_distance >= 1 and prob_distance <= model.get_threshold() and prob_distance < best_distance_so_far:
+                    """
+                    # Store for this model, where it had its match. Len of the state. So later we can cut the state.
+                    model.set_best_model_matching_len(len(tuple.get_state()))
+                    """
+                    # Now store the best
                     best_model_so_far = model
                     best_distance_so_far = prob_distance
-                    best_model_matching_len = len(tuple.get_state())
                     if self.verbose > 3:
-                        print '\t\t\t\tThis model is the best so far. State len: {}'.format(best_model_matching_len)
+                        print '\t\t\t\tThis model is the best so far. State len: {}'.format(len(tuple.get_state()))
             # If we detected something
             if best_model_so_far:
-                # Move the states of the tuple so next time for this tuple we don't compare from the start
-                if tuple.get_max_state_len() == 0:
-                    # First time matched. move only the max state value of the tuple to the place where we detected the match
-                    #tuple.set_max_state_len(best_model_matching_len)
-                    #if self.verbose > 3:
-                    #    print 'We moved the max to: {}'.format(best_model_matching_len)
-                    pass
-                else:
-                    # Not the first time this tuple is matched. We should move the min and max
-                    #tuple.set_min_state_len(tuple.get_max_state_len())
-                    #tuple.set_max_state_len(best_model_matching_len)
-                    #if self.verbose > 3:
-                    #    print 'We moved the min to: {} and max to: {}'.format(tuple.get_max_state_len(), best_model_matching_len)
-                    pass
-                # Return
-                #if self.verbose > 3:
-                    #print 'Returning the best model with label {} ({})'.format(best_model_so_far.get_label(), best_model_so_far.matched)
+                #return (best_model_so_far.matched, best_model_so_far.get_label(), best_model_so_far.get_best_model_matching_len())
                 return (best_model_so_far.matched, best_model_so_far.get_label())
             else:
+                #return (False, False, False)
                 return (False, False)
         except Exception as inst:
-            print 'Problem in detect()'
+            print 'Problem in detect() in markov_models'
             print type(inst)     # the exception instance
             print inst.args      # arguments stored in .args
             print inst           # __str__ allows args to printed directly
