@@ -368,7 +368,7 @@ class Tuple(object):
         """
         Print the tuple. The state is the state since the last detection of the tuple. Not everything
         """
-        return('{} [{}] ({}): {}. Detected as: {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state_detected_last(), self.get_detected_label()))
+        return('{} [{}] ({}): {}  Detected as: {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state_detected_last(), self.get_detected_label()))
 
     def set_color(self, color):
         self.color = color
