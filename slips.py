@@ -134,26 +134,32 @@ class Tuple(object):
         self.previous_time = self.datetime
         if self.verbose > 2:
             print '\nAdding flow {}'.format(column_values)
+        # Get the starttime
         self.datetime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+        # Get the size
         try:
             self.current_size = float(column_values[12])
         except ValueError:
             # It can happend that we dont have this value in the binetflow
             self.current_size = 0.0
+        # Get the duration
         try:
             self.current_duration = float(column_values[1])
         except ValueError:
             # It can happend that we dont have this value in the binetflow
             self.current_duration = 0.0
+        # Get the proto
         self.proto = str(column_values[2])
+        # Get the amount of flows
         self.amount_of_flows += 1
-        # Update values
+        # Update value of T1
         self.T1 = self.T2
         try:
+            # Update value of T2
             self.T2 = self.datetime - self.previous_time
+            # Are flows sorted?
             if self.T2.total_seconds() < 0:
-                #print 'The last flow is: {}'.format(column_values)
-                #print 'Flows are not sorted..'
+                # Flows are not sorted
                 if self.verbose > 2:
                     print '@',
                 # What is going on here when the flows are not ordered?? Are we losing flows?
@@ -171,6 +177,7 @@ class Tuple(object):
 
 
     def compute_periodicity(self):
+        # If either T1 or T2 are False
         if (isinstance(self.T1, bool) and self.T1 == False) or (isinstance(self.T2, bool) and self.T2 == False):
             self.periodicity = -1
         elif self.T2 >= self.tto:
@@ -178,6 +185,12 @@ class Tuple(object):
             tto_in_hours = self.tto.total_seconds() / 3600.0
             # Should be int always
             for i in range(int(t2_in_hours)):
+                self.state += '0'
+        elif self.T1 >= self.tto:
+            t1_in_hours = self.T1.total_seconds() / 3600.0
+            tto_in_hours = self.tto.total_seconds() / 3600.0
+            # Should be int always
+            for i in range(int(t1_in_hours)):
                 self.state += '0'
         elif self.T1 and self.T2:
             try:
