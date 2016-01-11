@@ -181,18 +181,16 @@ class Tuple(object):
         if (isinstance(self.T1, bool) and self.T1 == False) or (isinstance(self.T2, bool) and self.T2 == False):
             self.periodicity = -1
         elif self.T2 >= self.tto:
-            t2_in_hours = self.T2.total_seconds() / 3600.0
-            tto_in_hours = self.tto.total_seconds() / 3600.0
+            t2_in_hours = self.T2.total_seconds() / self.tto.total_seconds()
             # Should be int always
             for i in range(int(t2_in_hours)):
                 self.state += '0'
         elif self.T1 >= self.tto:
-            t1_in_hours = self.T1.total_seconds() / 3600.0
-            tto_in_hours = self.tto.total_seconds() / 3600.0
+            t1_in_hours = self.T1.total_seconds() / self.tto.total_seconds()
             # Should be int always
             for i in range(int(t1_in_hours)):
                 self.state += '0'
-        elif self.T1 and self.T2:
+        if not isinstance(self.T1, bool) and not isinstance(self.T2, bool):
             try:
                 if self.T2 >= self.T1:
                     self.TD = timedelta(seconds=(self.T2.total_seconds() / self.T1.total_seconds())).total_seconds()
