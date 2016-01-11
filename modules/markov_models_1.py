@@ -60,15 +60,14 @@ class Model():
                     #temp_prob = -40 # Which is approx 0.01 probability
                     #temp_prob = -80 # Which is approx 0.01 probability
                     probability = probability + temp_prob # logs should be +
-                    if '#' not in vector:
-                        ignored += 1
+                    ignored += 1
                     continue
             except IndexError:
                 # We are out of letters
                 break
-        #if ignored:
-            #print_warning('Ignored transitions: {}'.format(ignored))
-            #ignored = 0
+        if ignored:
+            #print 'Ignored transitions: {}'.format(ignored)
+            pass
         return probability
 
 
