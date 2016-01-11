@@ -64,10 +64,22 @@ class Tuple(object):
         # After a tuple is detected, max_state_len holds the max letter position in the state
         # where the detection happened. The new arriving letters to be detected are between max_state_len and the real end of the state
         self.max_state_len = 0
-        self.detected_label = ''
+        self.detected_label = False
+        """
+        self.best_matching_len = -1
+
+    def set_best_model_matching_len(self, statelen):
+        self.best_matching_len = statelen
+
+    def get_best_model_matching_len(self):
+        return self.best_matching_len
+        """
 
     def set_detected_label(self, label):
         self.detected_label = label
+
+    def unset_detected_label(self):
+        self.detected_label = False
 
     def get_detected_label(self):
         return self.detected_label
@@ -439,11 +451,28 @@ class Processor(multiprocessing.Process):
                     tuple.dont_print()
         # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
         ids_to_delete = []
-        for tup in self.tuples:
-            if self.tuples[tup].amount_of_flows > 100:
+        for tuple in self.tuples:
+            if self.tuples[tuple].amount_of_flows > 100:
                 if self.verbose > 3:
                     print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
-                ids_to_delete.append(self.tuples[tup].get_id())
+                ids_to_delete.append(self.tuples[tuple].get_id())
+            """
+            # Move the states of the tuple so next time for this tuple we don't compare from the start
+            if self.tuples[tuple].get_max_state_len() == 0:
+                # First time matched. move only the max state value of the tuple to the place where we detected the match
+                self.tuples[tuple].set_max_state_len(self.tuples[tuple].get_best_model_matching_len())
+                if self.verbose > 3:
+                    print 'For tuple {} we moved the max to: {}'.format(self.tuples[tuple].get_id(), self.tuples[tuple].get_best_model_matching_len())
+                pass
+            else:
+                # Not the first time this tuple is matched. We should move the min and max
+                self.tuples[tuple].set_min_state_len(self.tuples[tuple].get_max_state_len())
+                self.tuples[tuple].set_max_state_len(self.tuples[tuple].get_best_model_matching_len())
+                if self.verbose > 3:
+                    print 'For tuple {}, we moved the min to: {} and max to: {}'.format(self.tuples[tuple].get_id(), self.tuples[tuple].get_max_state_len(), self.tuples[tuple].get_best_model_matching_len())
+                pass
+            """
+        # Actually delete them
         for id in ids_to_delete:
             del self.tuples[id]
         # Move the time slot
@@ -464,24 +493,36 @@ class Processor(multiprocessing.Process):
         """
         Detect behaviors
         """
-        if not self.dontdetect:
-            (detected, label) = __markov_models__.detect(tuple, self.verbose)
-            if detected:
-                # Change color
-                tuple.set_color(magenta)
-                # Set the detection label
-                tuple.set_detected_label(label)
-                if self.verbose > 5:
-                    print 'Last flow: Detected with {}'.format(label)
-                # Play sound
-                if args.sound:
-                    pygame.mixer.music.play()
-                #tuple.do_print()
-            elif not detected and self.only_detections:
-                # Not detected by any reason. No model matching but also the state len is too short.
-                if self.verbose > 5:
-                    print 'Last flow: Not detected'
-                tuple.dont_print()
+        try:
+            if not self.dontdetect:
+                #(detected, label, statelen) = __markov_models__.detect(tuple, self.verbose)
+                (detected, label) = __markov_models__.detect(tuple, self.verbose)
+                if detected:
+                    # Change color
+                    tuple.set_color(magenta)
+                    # Set the detection label
+                    tuple.set_detected_label(label)
+                    """
+                    # Set the detection state len
+                    tuple.set_best_model_matching_len(statelen)
+                    """
+                    if self.verbose > 5:
+                        print 'Last flow: Detected with {}'.format(label)
+                    # Play sound
+                    if args.sound:
+                        pygame.mixer.music.play()
+                elif not detected and self.only_detections:
+                    # Not detected by any reason. No model matching but also the state len is too short.
+                    tuple.unset_detected_label()
+                    if self.verbose > 5:
+                        print 'Last flow: Not detected'
+                    tuple.dont_print()
+        except Exception as inst:
+            print '\tProblem with detect()'
+            print type(inst)     # the exception instance
+            print inst.args      # arguments stored in .args
+            print inst           # __str__ allows args to printed directly
+            sys.exit(1)
 
     def run(self):
         try:
