@@ -158,7 +158,7 @@ class MarkovModelsDetection():
             # Only detect states with more than 3 letters
             if len(tuple.get_state()[tuple.get_max_state_len():]) < 4:
                 if self.verbose > 3:
-                    print 'State too small'
+                    print '\t-> State too small'
                 return (False, False)
             # Use the current models for detection
             for model in self.models:
@@ -187,11 +187,15 @@ class MarkovModelsDetection():
                     except ZeroDivisionError:
                         prob_distance = -1
                 if self.verbose > 2:
-                    print '\t\tTrained Model: {}. Label: {}. State: {}'.format(model.get_id(), model.get_label(), train_sequence)
+                    print '\t\tTrained Model: {}. Label: {}. Threshold: {}, State: {}'.format(model.get_id(), model.get_label(), model.get_threshold(), train_sequence)
                     print '\t\t\tTest Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state()[tuple.get_max_state_len():])
                     print '\t\t\tTrain prob: {}'.format(training_original_prob)
                     print '\t\t\tTest prob: {}'.format(test_prob)
                     print '\t\t\tDistance: {}'.format(prob_distance)
+                    print '\t\t\tTrained Matrix:'
+                    matrix = model.get_matrix()
+                    for i in matrix:
+                        print '\t\t\t\t{}:{}'.format(i, matrix[i])
                 # If we matched and we are the best so far
                 if prob_distance <= model.get_threshold() and prob_distance < best_distance_so_far:
                     best_model_so_far = model
