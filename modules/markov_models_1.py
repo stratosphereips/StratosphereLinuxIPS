@@ -198,7 +198,7 @@ class MarkovModelsDetection():
                         for i in matrix:
                             print '\t\t\t\t{}:{}'.format(i, matrix[i])
                 # If we matched and we are the best so far
-                if prob_distance <= model.get_threshold() and prob_distance < best_distance_so_far:
+                if prob_distance >= 1 and prob_distance <= model.get_threshold() and prob_distance < best_distance_so_far:
                     best_model_so_far = model
                     best_distance_so_far = prob_distance
                     best_model_matching_len = len(tuple.get_state())
