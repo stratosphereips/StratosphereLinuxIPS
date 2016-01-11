@@ -488,7 +488,6 @@ class Processor(multiprocessing.Process):
             while True:
                 if not self.queue.empty():
                     line = self.queue.get()
-                    #print 'B: {}'.format(queue.qsize())
                     if 'stop' != line:
                         # Process this flow
                         nline = ','.join(line.strip().split(',')[:13])
@@ -511,7 +510,6 @@ class Processor(multiprocessing.Process):
                                     if len(tuple.state) == 0:
                                         tuple.set_color(red)
                                 tuple.add_new_flow(column_values)
-                                #print 'NEW2'
                                 # Detection
                                 self.detect(tuple)
                             elif flowtime > self.slot_endtime:
