@@ -192,10 +192,11 @@ class MarkovModelsDetection():
                     print '\t\t\tTrain prob: {}'.format(training_original_prob)
                     print '\t\t\tTest prob: {}'.format(test_prob)
                     print '\t\t\tDistance: {}'.format(prob_distance)
-                    print '\t\t\tTrained Matrix:'
-                    matrix = model.get_matrix()
-                    for i in matrix:
-                        print '\t\t\t\t{}:{}'.format(i, matrix[i])
+                    if self.verbose > 4:
+                        print '\t\t\tTrained Matrix:'
+                        matrix = model.get_matrix()
+                        for i in matrix:
+                            print '\t\t\t\t{}:{}'.format(i, matrix[i])
                 # If we matched and we are the best so far
                 if prob_distance <= model.get_threshold() and prob_distance < best_distance_so_far:
                     best_model_so_far = model
