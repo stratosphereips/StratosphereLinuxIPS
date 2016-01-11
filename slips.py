@@ -461,7 +461,7 @@ class Processor(multiprocessing.Process):
                 # Set the detection label
                 tuple.set_detected_label(label)
                 if self.verbose > 5:
-                    print 'Detected with {}'.format(label)
+                    print 'Last flow: Detected with {}'.format(label)
                 # Play sound
                 if args.sound:
                     pygame.mixer.music.play()
@@ -469,7 +469,7 @@ class Processor(multiprocessing.Process):
             elif not detected and self.only_detections:
                 # Not detected by any reason. No model matching but also the state len is too short.
                 if self.verbose > 5:
-                    print 'Not Detected with {}'.format(label)
+                    print 'Last flow: Not detected'
                 tuple.dont_print()
 
     def run(self):
