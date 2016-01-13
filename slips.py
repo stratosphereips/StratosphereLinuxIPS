@@ -58,22 +58,7 @@ class Tuple(object):
         # By default print all tuples. Depends on the arg
         self.should_be_printed = True
         self.desc = ''
-        # After a tuple is detected, min_state_len holds the lower letter position in the state
-        # where the detection happened.
-        self.min_state_len = 0
-        # After a tuple is detected, max_state_len holds the max letter position in the state
-        # where the detection happened. The new arriving letters to be detected are between max_state_len and the real end of the state
-        self.max_state_len = 0
         self.detected_label = False
-        """
-        self.best_matching_len = -1
-
-    def set_best_model_matching_len(self, statelen):
-        self.best_matching_len = statelen
-
-    def get_best_model_matching_len(self):
-        return self.best_matching_len
-        """
 
     def set_detected_label(self, label):
         self.detected_label = label
@@ -91,20 +76,6 @@ class Tuple(object):
         # After the first detection
         return self.state[self.min_state_len:self.max_state_len]
     
-    """
-    def set_min_state_len(self, state_len):
-        self.min_state_len = state_len
-
-    def get_min_state_len(self):
-        return self.min_state_len
-
-    def set_max_state_len(self, state_len):
-        self.max_state_len = state_len
-
-    def get_max_state_len(self):
-        return self.max_state_len
-    """
-
     def get_protocol(self):
         return self.protocol
 
@@ -458,22 +429,6 @@ class Processor(multiprocessing.Process):
                 if self.verbose > 3:
                     print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
                 ids_to_delete.append(self.tuples[tuple].get_id())
-            """
-            # Move the states of the tuple so next time for this tuple we don't compare from the start
-            if self.tuples[tuple].get_max_state_len() == 0:
-                # First time matched. move only the max state value of the tuple to the place where we detected the match
-                self.tuples[tuple].set_max_state_len(self.tuples[tuple].get_best_model_matching_len())
-                if self.verbose > 3:
-                    print 'For tuple {} we moved the max to: {}'.format(self.tuples[tuple].get_id(), self.tuples[tuple].get_best_model_matching_len())
-                pass
-            else:
-                # Not the first time this tuple is matched. We should move the min and max
-                self.tuples[tuple].set_min_state_len(self.tuples[tuple].get_max_state_len())
-                self.tuples[tuple].set_max_state_len(self.tuples[tuple].get_best_model_matching_len())
-                if self.verbose > 3:
-                    print 'For tuple {}, we moved the min to: {} and max to: {}'.format(self.tuples[tuple].get_id(), self.tuples[tuple].get_max_state_len(), self.tuples[tuple].get_best_model_matching_len())
-                pass
-            """
         # Actually delete them
         for id in ids_to_delete:
             del self.tuples[id]
