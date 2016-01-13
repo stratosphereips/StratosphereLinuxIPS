@@ -90,7 +90,8 @@ class Tuple(object):
             return self.state[self.min_state_len:]
         # After the first detection
         return self.state[self.min_state_len:self.max_state_len]
-
+    
+    """
     def set_min_state_len(self, state_len):
         self.min_state_len = state_len
 
@@ -102,6 +103,7 @@ class Tuple(object):
 
     def get_max_state_len(self):
         return self.max_state_len
+    """
 
     def get_protocol(self):
         return self.protocol
