@@ -14,7 +14,6 @@ class Model():
         self.self_probability = -1
         self.label = -1
         # To store when did this model had the best match. Later use to cut the state
-        """
         self.best_matching_len = -1
 
     def set_best_model_matching_len(self, statelen):
@@ -22,7 +21,6 @@ class Model():
 
     def get_best_model_matching_len(self):
         return self.best_matching_len
-        """
 
     def create(self, state):
         """ Create the Markov chain itself. We use the parameter instead of the attribute so we can compute the matrix for different states """
@@ -180,8 +178,8 @@ class MarkovModelsDetection():
             if len(tuple.get_state()) < 4:
                 if self.verbose > 3:
                     print '\t-> State too small'
-                #return (False, False, False)
-                return (False, False)
+                return (False, False, False)
+                #return (False, False)
             # Use the current models for detection
             for model in self.models:
                 # Only detect if protocol matches
@@ -222,10 +220,8 @@ class MarkovModelsDetection():
                             print '\t\t\t\t{}:{}'.format(i, matrix[i])
                 # If we matched and we are the best so far
                 if prob_distance >= 1 and prob_distance <= model.get_threshold() and prob_distance < best_distance_so_far:
-                    """
                     # Store for this model, where it had its match. Len of the state. So later we can cut the state.
                     model.set_best_model_matching_len(len(tuple.get_state()))
-                    """
                     # Now store the best
                     best_model_so_far = model
                     best_distance_so_far = prob_distance
@@ -233,11 +229,11 @@ class MarkovModelsDetection():
                         print '\t\t\t\tThis model is the best so far. State len: {}'.format(len(tuple.get_state()))
             # If we detected something
             if best_model_so_far:
-                #return (best_model_so_far.matched, best_model_so_far.get_label(), best_model_so_far.get_best_model_matching_len())
-                return (best_model_so_far.matched, best_model_so_far.get_label())
+                return (best_model_so_far.matched, best_model_so_far.get_label(), best_model_so_far.get_best_model_matching_len())
+                #return (best_model_so_far.matched, best_model_so_far.get_label())
             else:
-                #return (False, False, False)
-                return (False, False)
+                return (False, False, False)
+                #return (False, False)
         except Exception as inst:
             print 'Problem in detect() in markov_models'
             print type(inst)     # the exception instance
