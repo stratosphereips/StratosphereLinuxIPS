@@ -69,12 +69,14 @@ class Tuple(object):
     def get_detected_label(self):
         return self.detected_label
 
+    """
     def get_state_detected_last(self):
         if self.max_state_len == 0:
             # First time before any detection
             return self.state[self.min_state_len:]
         # After the first detection
         return self.state[self.min_state_len:self.max_state_len]
+    """
     
     def get_protocol(self):
         return self.protocol
@@ -353,7 +355,8 @@ class Tuple(object):
         """
         Print the tuple. The state is the state since the last detection of the tuple. Not everything
         """
-        return('{} [{}] ({}): {}  Detected as: {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state_detected_last(), self.get_detected_label()))
+        #return('{} [{}] ({}): {}  Detected as: {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state_detected_last(), self.get_detected_label()))
+        return('{} [{}] ({}): {}  Detected as: {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state(), self.get_detected_label()))
 
     def set_color(self, color):
         self.color = color
