@@ -177,7 +177,8 @@ class MarkovModelsDetection():
             # Set the verbose
             self.verbose = verbose
             # Only detect states with more than 3 letters
-            if len(tuple.get_state()[tuple.get_max_state_len():]) < 4:
+            #if len(tuple.get_state()[tuple.get_max_state_len():]) < 4:
+            if len(tuple.get_state()) < 4:
                 if self.verbose > 3:
                     print '\t-> State too small'
                 #return (False, False, False)
@@ -196,7 +197,8 @@ class MarkovModelsDetection():
                 # Get the new original prob so far...
                 training_original_prob = model.compute_probability(train_sequence)
                 # Now obtain the probability for testing. The prob is computed by using the API on the train model, which knows its own matrix
-                test_prob = model.compute_probability(tuple.get_state()[tuple.get_max_state_len():])
+                #test_prob = model.compute_probability(tuple.get_state()[tuple.get_max_state_len():])
+                test_prob = model.compute_probability(tuple.get_state())
                 # Get the distance
                 prob_distance = -1
                 if training_original_prob != -1 and test_prob != -1 and training_original_prob <= test_prob:
@@ -211,7 +213,8 @@ class MarkovModelsDetection():
                         prob_distance = -1
                 if self.verbose > 2:
                     print '\t\tTrained Model: {}. Label: {}. Threshold: {}, State: {}'.format(model.get_id(), model.get_label(), model.get_threshold(), train_sequence)
-                    print '\t\t\tTest Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state()[tuple.get_max_state_len():])
+                    #print '\t\t\tTest Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state()[tuple.get_max_state_len():])
+                    print '\t\t\tTest Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state())
                     print '\t\t\tTrain prob: {}'.format(training_original_prob)
                     print '\t\t\tTest prob: {}'.format(test_prob)
                     print '\t\t\tDistance: {}'.format(prob_distance)
