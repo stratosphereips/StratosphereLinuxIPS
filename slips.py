@@ -453,7 +453,7 @@ class Processor(multiprocessing.Process):
         try:
             if not self.dontdetect:
                 #(detected, label, statelen) = __markov_models__.detect(tuple, self.verbose)
-                (detected, label) = __markov_models__.detect(tuple, self.verbose)
+                (detected, label, matching_len) = __markov_models__.detect(tuple, self.verbose)
                 if detected:
                     # Change color
                     tuple.set_color(magenta)
