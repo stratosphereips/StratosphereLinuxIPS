@@ -20,8 +20,9 @@ version = '0.2alpha'
 ###################
 class Tuple(object):
     """ The class to simply handle tuples """
-    def __init__(self, tuple4):
+    def __init__(self, tuple4, anonymize=False):
         self.id = tuple4
+        self.anonymize = anonymize
         self.amount_of_flows = 0
         self.src_ip = tuple4.split('-')[0]
         self.dst_ip = tuple4.split('-')[1]
@@ -68,6 +69,15 @@ class Tuple(object):
 
     def get_detected_label(self):
         return self.detected_label
+
+    def get_src_ip(self):
+        return self.src_ip
+
+    def set_original_src_ip(self, orig_src_ip):
+        self.original_src_ip = orig_src_ip
+
+    def get_original_src_ip(self):
+        return self.original_src_ip
 
     def get_protocol(self):
         return self.protocol
@@ -388,61 +398,81 @@ class Processor(multiprocessing.Process):
         # To know if we should export the 
         self.anonymize = anonymize
 
-    def get_tuple(self, tuple4):
+    def get_tuple(self, tuple4, orig_src_ip=False):
         """ Get the values and return the correct tuple for them """
         try:
             tuple = self.tuples[tuple4]
-            # We already have this connection
         except KeyError:
             # First time for this connection
-            tuple = Tuple(tuple4)
+            tuple = Tuple(tuple4, self.anonymize)
             tuple.set_verbose(self.verbose)
-            self.tuples[tuple4] = tuple
+            if self.anonymize and orig_src_ip:
+                tuple.set_original_src_ip(orig_src_ip)
+            self.tuples[tuple.get_id()] = tuple
         return tuple
 
     def process_out_of_time_slot(self, column_values):
         """
         Process the tuples when we are out of the time slot
         """
-        # Outside the slot
-        if self.verbose:
-            self.amount_of_tuple_in_this_time_slot = len(self.tuples) - self.amount_of_tuple_in_this_time_slot
-            print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
-            for tuple4 in self.tuples:
-                tuple = self.get_tuple(tuple4)
-                if tuple.amount_of_flows >= self.amount and tuple.should_be_printed:
-                    if not tuple.desc and self.get_whois:
-                        tuple.get_whois_data()
-                    print tuple.print_tuple_detected()
-                # Clear the color because we already print it
-                if tuple.color == red:
-                    tuple.set_color(yellow)
-                # After printing the tuple in this time slot, we should not print it again unless we see some of its flows.
-                if tuple.should_be_printed:
-                    tuple.dont_print()
-        # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
-        ids_to_delete = []
-        for tuple in self.tuples:
-            if self.tuples[tuple].amount_of_flows > 100:
-                if self.verbose > 3:
-                    print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
-                ids_to_delete.append(self.tuples[tuple].get_id())
-        # Actually delete them
-        for id in ids_to_delete:
-            del self.tuples[id]
-        # Move the time slot
-        self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-        self.slot_endtime = self.slot_starttime + self.slot_width
+        try:
+            # Outside the slot
+            if self.verbose:
+                self.amount_of_tuple_in_this_time_slot = len(self.tuples) - self.amount_of_tuple_in_this_time_slot
+                print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
+                for tuple4 in self.tuples:
+                    tuple = self.get_tuple(tuple4)
+                    if tuple.amount_of_flows >= self.amount and tuple.should_be_printed:
+                        if not tuple.desc and self.get_whois:
+                            tuple.get_whois_data()
+                        print tuple.print_tuple_detected()
+                    # Clear the color because we already print it
+                    if tuple.color == red:
+                        tuple.set_color(yellow)
+                    # After printing the tuple in this time slot, we should not print it again unless we see some of its flows.
+                    if tuple.should_be_printed:
+                        tuple.dont_print()
+            # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
+            ids_to_delete = []
+            for tuple in self.tuples:
+                if self.tuples[tuple].amount_of_flows > 100:
+                    if self.verbose > 3:
+                        print 'Delete all the letters of {} because there were more than 100. Start again with this tuple.'.format(self.tuples[tuple].get_id())
+                    ids_to_delete.append(self.tuples[tuple].get_id())
+            # Actually delete them
+            for id in ids_to_delete:
+                del self.tuples[id]
+            # Move the time slot
+            self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+            self.slot_endtime = self.slot_starttime + self.slot_width
 
-        # Put the last flow received in the next slot, because it overcommed the threshold and it was not processed
-        tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
-        tuple = self.get_tuple(tuple4)
-        if self.verbose:
-            if len(tuple.state) == 0:
-                tuple.set_color(red)
-        tuple.add_new_flow(column_values)
-        # Detect the first flow of the future timeslow
-        self.detect(tuple)
+            # Put the last flow received in the next slot, because it overcommed the threshold and it was not processed
+            tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+            srcip = False
+            if self.anonymize:
+                # Hash the IP 
+                srcip = tuple4.split('-')[0]
+                dstip = tuple4.split('-')[1]
+                dstport = tuple4.split('-')[2]
+                proto = tuple4.split('-')[3]
+                t_hashed_ip = hashlib.md5()
+                t_hashed_ip.update(srcip)
+                hash_src_ip = t_hashed_ip.hexdigest()
+                tuple4 = hash_src_ip + '-' + dstip + '-' + dstport + '-' + proto
+            # Get the tuple, but store the original src ip if we create a new tuple
+            tuple = self.get_tuple(tuple4, orig_src_ip=srcip)
+            if self.verbose:
+                if len(tuple.state) == 0:
+                    tuple.set_color(red)
+            tuple.add_new_flow(column_values)
+            # Detect the first flow of the future timeslow
+            self.detect(tuple)
+        except Exception as inst:
+            print '\tProblem with process_out_of_time_slot()'
+            print type(inst)     # the exception instance
+            print inst.args      # arguments stored in .args
+            print inst           # __str__ allows args to printed directly
+            sys.exit(1)
 
     def detect(self, tuple):
         """
@@ -500,15 +530,20 @@ class Processor(multiprocessing.Process):
                             flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
                             if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
                                 # Inside the slot
-                                # If we are anonymizing, hash the src IP before using it.
+                                tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+                                srcip = False
                                 if self.anonymize:
-                                    original_ip = column_values[3]
-                                    hashed_ip = hashlib.md5()
-                                    hashed_ip.update(original_ip)
-                                    tuple4 = hashed_ip.hexdigest()+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
-                                else:
-                                    tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
-                                tuple = self.get_tuple(tuple4)
+                                    # Hash the IP 
+                                    srcip = tuple4.split('-')[0]
+                                    dstip = tuple4.split('-')[1]
+                                    dstport = tuple4.split('-')[2]
+                                    proto = tuple4.split('-')[3]
+                                    t_hashed_ip = hashlib.md5()
+                                    t_hashed_ip.update(srcip)
+                                    hash_src_ip = t_hashed_ip.hexdigest()
+                                    tuple4 = hash_src_ip + '-' + dstip + '-' + dstport + '-' + proto
+                                # Get the tuple, but store the original src ip if we create a new tuple
+                                tuple = self.get_tuple(tuple4, orig_src_ip=srcip)
                                 if self.verbose:
                                     if len(tuple.state) == 0:
                                         tuple.set_color(red)
@@ -524,6 +559,24 @@ class Processor(multiprocessing.Process):
                         try:
                             # Process the last flows in the last time slot
                             self.process_out_of_time_slot(column_values)
+                            if self.anonymize:
+                                # Open the file for storing the anonymized src ip addresses
+                                (fd, anon_matching_file_path) = tempfile.mkstemp(suffix='-stratosphere-anonips.txt', dir='.', text=True)
+                                anon_matching_file = open(anon_matching_file_path, 'w+')
+                                anon_matching_file.write('HashedIP' + ',' + 'OriginalIP' + '\n')
+                                # The same src ip can be in different tuples, so temporary store them so we don't repeat them
+                                temp_src_ips = {}
+                                for tup in self.tuples:
+                                    try:
+                                        isthere = temp_src_ips[self.tuples[tup].get_original_src_ip()]
+                                    except KeyError:
+                                        # Is new, so print it
+                                        anon_matching_file.write(self.tuples[tup].get_src_ip() + ',' + self.tuples[tup].get_original_src_ip() + '\n')
+                                        anon_matching_file.flush()
+                                        temp_src_ips[self.tuples[tup].get_original_src_ip()] = ''
+                                print 'Created output file with anonymized IP list. {}'.format(anon_matching_file_path)
+                                anon_matching_file.close()
+                                os.close(fd)
                         except UnboundLocalError:
                             print 'Probable empty file.'
                             # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
@@ -532,6 +585,8 @@ class Processor(multiprocessing.Process):
 
         except KeyboardInterrupt:
             return True
+            if self.anonymize:
+                self.anon_matching_file.close()
         except Exception as inst:
             print '\tProblem with Processor()'
             print type(inst)     # the exception instance
@@ -575,6 +630,7 @@ if args.sound:
 # Do we need the hashing libs?
 if args.anonymize:
     import hashlib
+    import tempfile
 
 # Read the folder with models if specified
 if args.folder:
