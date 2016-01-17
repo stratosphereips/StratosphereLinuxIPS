@@ -410,7 +410,7 @@ class Processor(multiprocessing.Process):
             print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
-                if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
+                if tuple.amount_of_flows >= self.amount and tuple.should_be_printed:
                     if not tuple.desc and self.get_whois:
                         tuple.get_whois_data()
                     print tuple.print_tuple_detected()
