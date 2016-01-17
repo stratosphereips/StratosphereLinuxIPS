@@ -47,16 +47,15 @@ This alpha version of slips comes with the following features:
 - The -p option tells slips to print the tuples that were detected. Even if the detection is working, without -p the tuples are not printed.
 - If you want to be alerted of any detection without looking at the screen you can specify -s to have a sound alert. You need to install the pygames libraries.
 - If you want to avoid doing any detection you should use -D.
+- If you want to anonymize the source IP addresses before doing any processing, you can use -A. This will force all the source IPs to be hashed to MD5 in memory. Also a file is created in the current folder with the relationship of original IP addresses and new hashed IP addresses. So you can later relate the detections.
 
 [Argus]: http://qosient.com/argus/ "Argus"
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
 
+
+### TODO
+
 ### Author
 For bugs, reports, ideas or comments send an email to Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz
-
-## TODO
-- Only move the state len when the time window finishes. Actually only send the tuple to detect when the time window finishes. if not, we detect and mark the tuple to print and move the state len, but then the next flow is too short and the tuple is marked as not detected and therefore not to print.
-
-
 
