@@ -69,15 +69,6 @@ class Tuple(object):
     def get_detected_label(self):
         return self.detected_label
 
-    """
-    def get_state_detected_last(self):
-        if self.max_state_len == 0:
-            # First time before any detection
-            return self.state[self.min_state_len:]
-        # After the first detection
-        return self.state[self.min_state_len:self.max_state_len]
-    """
-    
     def get_protocol(self):
         return self.protocol
 
@@ -355,7 +346,6 @@ class Tuple(object):
         """
         Print the tuple. The state is the state since the last detection of the tuple. Not everything
         """
-        #return('{} [{}] ({}): {}  Detected as: {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state_detected_last(), self.get_detected_label()))
         return('{} [{}] ({}): {}  Detected as: {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state(), self.get_detected_label()))
 
     def set_color(self, color):
@@ -375,10 +365,13 @@ class Tuple(object):
 
 
 
+
 # Process
+###########
+###########
 class Processor(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, queue, slot_width, only_detections, get_whois, verbose, amount, dontdetect):
+    def __init__(self, queue, slot_width, only_detections, get_whois, verbose, amount, dontdetect, anonymize):
         multiprocessing.Process.__init__(self)
         self.only_detections = only_detections
         self.get_whois = get_whois
@@ -392,6 +385,8 @@ class Processor(multiprocessing.Process):
         self.slot_width = slot_width
         self.dontdetect = dontdetect
         self.amount_of_tuple_in_this_time_slot = 0
+        # To know if we should export the 
+        self.anonymize = anonymize
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -505,7 +500,14 @@ class Processor(multiprocessing.Process):
                             flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
                             if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
                                 # Inside the slot
-                                tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+                                # If we are anonymizing, hash the src IP before using it.
+                                if self.anonymize:
+                                    original_ip = column_values[3]
+                                    hashed_ip = hashlib.md5()
+                                    hashed_ip.update(original_ip)
+                                    tuple4 = hashed_ip.hexdigest()+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+                                else:
+                                    tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
                                 tuple = self.get_tuple(tuple4)
                                 if self.verbose:
                                     if len(tuple.state) == 0:
@@ -558,6 +560,7 @@ parser.add_argument('-d', '--datawhois', help='Get and show the whois info for t
 parser.add_argument('-m', '--models', help='Folder with all the models to detect.', action='store', required=False)
 parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows. Just print the connections.', default=False, action='store_true', required=False)
 parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
+parser.add_argument('-A', '--anonymize', help='Anonymize the source IP addresses before priting them.', action='store_true', default=False, required=False)
 args = parser.parse_args()
 
 # Global shit for whois cache. The tuple needs to access it but should be shared, so global
@@ -569,6 +572,9 @@ if args.sound:
     pygame.mixer.init(44100)
     pygame.mixer.music.load('periodic.ogg')
 
+# Do we need the hashing libs?
+if args.anonymize:
+    import hashlib
 
 # Read the folder with models if specified
 if args.folder:
@@ -579,7 +585,7 @@ if args.folder:
 # Create the queue
 queue = Queue()
 # Create the thread and start it
-processorThread = Processor(queue, timedelta(minutes=args.width), args.print_detections, args.datawhois, args.verbose, args.amount, args.dontdetect)
+processorThread = Processor(queue, timedelta(minutes=args.width), args.print_detections, args.datawhois, args.verbose, args.amount, args.dontdetect, args.anonymize)
 processorThread.start()
 
 # Just put the lines in the queue as fast as possible
