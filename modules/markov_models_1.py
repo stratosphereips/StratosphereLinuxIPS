@@ -151,6 +151,7 @@ class MarkovModelsDetection():
             onlyfiles = [f for f in listdir(folder) if isfile(join(folder, f))]
             for file in onlyfiles:
                 self.set_model_to_detect(join(folder, file))
+            return True
         except OSError:
             print 'Inexistent directory for folders.'
             return False
