@@ -12,8 +12,6 @@ import multiprocessing
 from multiprocessing import Queue
 import time
 from modules.markov_models_1 import __markov_models__
-from os import listdir
-from os.path import isfile, join
 
 version = '0.3alpha'
 
@@ -480,7 +478,6 @@ class Processor(multiprocessing.Process):
         """
         try:
             if not self.dontdetect:
-                #(detected, label, statelen) = __markov_models__.detect(tuple, self.verbose)
                 (detected, label, matching_len) = __markov_models__.detect(tuple, self.verbose)
                 if detected:
                     # Change color
@@ -632,11 +629,9 @@ if args.anonymize:
     import hashlib
     import tempfile
 
-# Read the folder with models if specified
-if args.folder:
-    onlyfiles = [f for f in listdir(args.folder) if isfile(join(args.folder, f))]
-    for file in onlyfiles:
-        __markov_models__.set_model_to_detect(join(args.folder, file))
+# Set the folder with models if specified
+if not __markov_models__.set_models_folder(args.folder):
+    sys.exit(-1)
 
 # Create the queue
 queue = Queue()
