@@ -5,6 +5,8 @@ from colors import *
 import cPickle
 import math
 import pykov
+from os import listdir
+from os.path import isfile, join
 
 class Model():
     def __init__(self, id):
@@ -142,6 +144,16 @@ class MarkovModelsDetection():
         for pattern in basic_patterns:
             if pattern in state:
                 return True
+
+    def set_models_folder(self, folder):
+        """ Read the folder with models if specified """
+        try:
+            onlyfiles = [f for f in listdir(folder) if isfile(join(folder, f))]
+            for file in onlyfiles:
+                self.set_model_to_detect(join(folder, file))
+        except OSError:
+            print 'Inexistent directory for folders.'
+            return False
 
     def set_model_to_detect(self, file):
         """
