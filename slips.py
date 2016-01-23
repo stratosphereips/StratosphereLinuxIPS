@@ -630,7 +630,7 @@ if args.anonymize:
     import tempfile
 
 # Set the folder with models if specified
-if not __markov_models__.set_models_folder(args.folder):
+if args.folder and not __markov_models__.set_models_folder(args.folder):
     sys.exit(-1)
 
 # Create the queue
