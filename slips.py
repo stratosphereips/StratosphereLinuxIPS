@@ -612,7 +612,7 @@ parser.add_argument('-p', '--print_detections', help='Only print the tuples that
 parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=1, required=False, type=int)
 parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
 parser.add_argument('-d', '--datawhois', help='Get and show the whois info for the destination IP in each tuple', action='store_true', default=False, required=False)
-parser.add_argument('-m', '--models', help='Folder with all the models to detect.', action='store', required=False)
+#parser.add_argument('-m', '--models', help='Folder with all the models to detect.', action='store', required=False)
 parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows. Just print the connections.', default=False, action='store_true', required=False)
 parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
 parser.add_argument('-A', '--anonymize', help='Anonymize the source IP addresses before priting them.', action='store_true', default=False, required=False)
@@ -641,7 +641,7 @@ if args.folder:
 # Create the queue
 queue = Queue()
 # Create the thread and start it
-processorThread = Processor(queue, timedelta(minutes=args.width), args.print_detections, args.datawhois, args.verbose, args.amount, args.dontdetect, args.anonymize)
+processorThread = Processor(queue, timedelta(minutes=args.width), 'True' if args.folder else 'False', args.datawhois, args.verbose, args.amount, args.dontdetect, args.anonymize)
 processorThread.start()
 
 # Just put the lines in the queue as fast as possible
