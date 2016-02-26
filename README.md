@@ -55,6 +55,11 @@ This alpha version of slips comes with the following features:
 
 
 ### TODO
+-         Problem with process_out_of_time_slot()
+<class 'ipwhois.ipwhois.WhoisLookupError'>
+("Whois lookup failed for '205.251.199.89'.",)
+Whois lookup failed for '205.251.199.89'.
+
 
 ### Author
 For bugs, reports, ideas or comments send an email to Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz
