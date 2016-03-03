@@ -55,6 +55,12 @@ This alpha version of slips comes with the following features:
 
 
 ### TODO
+    2016/01/24
+    Problem with process_out_of_time_slot()
+    <type 'exceptions.AttributeError'>
+    ("'NoneType' object has no attribute 'strip'",)
+    'NoneType' object has no attribute 'strip'
+
 
 ### Author
 For bugs, reports, ideas or comments send an email to Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz
