@@ -635,7 +635,7 @@ if args.folder and not __markov_models__.set_models_folder(args.folder):
 # Create the queue
 queue = Queue()
 # Create the thread and start it
-processorThread = Processor(queue, timedelta(minutes=args.width), args.print_detections, args.datawhois, args.verbose, args.amount, args.dontdetect, args.anonymize)
+processorThread = Processor(queue, timedelta(minutes=args.width), 'True' if args.folder else 'False', args.datawhois, args.verbose, args.amount, args.dontdetect, args.anonymize)
 processorThread.start()
 
 # Just put the lines in the queue as fast as possible

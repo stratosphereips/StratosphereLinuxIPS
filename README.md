@@ -55,11 +55,15 @@ This alpha version of slips comes with the following features:
 
 
 ### TODO
-    2016/01/24
+- 2016/01/24
     Problem with process_out_of_time_slot()
     <type 'exceptions.AttributeError'>
     ("'NoneType' object has no attribute 'strip'",)
     'NoneType' object has no attribute 'strip'
+- Problem with process_out_of_time_slot()
+    <class 'ipwhois.ipwhois.WhoisLookupError'>
+    ("Whois lookup failed for '205.251.199.89'.",)
+    Whois lookup failed for '205.251.199.89'.
 
 
 ### Author
