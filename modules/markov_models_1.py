@@ -7,7 +7,7 @@ import math
 #import pykov
 from os import listdir
 from os.path import isfile, join
-import markov_chains as mc
+import stf.common.markov_chains as mc
 
 class Model():
     def __init__(self, id):
