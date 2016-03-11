@@ -4,7 +4,6 @@
 from colors import *
 import cPickle
 import math
-#import pykov
 from os import listdir
 from os.path import isfile, join
 import stf.common.markov_chains as mc
@@ -44,7 +43,6 @@ class Model():
         i = 0
         probability = 0
         penalty = -4.6 # Which is approx 0.01 probability
-        #ignored = 0
         # Get the initial probability of this letter in the IV.
         try:
             init_letter_prob = math.log(self.init_vector[state[i]])
@@ -74,14 +72,10 @@ class Model():
                     # The temp_prob is the penalty we assign if we can't find the transition
                     temp_prob = penalty 
                     probability = probability + temp_prob # logs should be +
-                    #ignored += 1
                     continue
             except IndexError:
                 # We are out of letters
                 break
-        #if ignored:
-            #print 'Ignored transitions: {}'.format(ignored)
-            #pass
         return probability
 
 
@@ -198,7 +192,6 @@ class MarkovModelsDetection():
                 if self.verbose > 3:
                     print '\t-> State too small'
                 return (False, False, False)
-                #return (False, False)
             # Use the current models for detection
             for model in self.models:
                 # Only detect if protocol matches
