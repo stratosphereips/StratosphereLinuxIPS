@@ -495,8 +495,8 @@ class Processor(multiprocessing.Process):
         """
         try:
             if not self.dontdetect:
-                #(detected, label, statelen) = __markov_models__.detect(tuple, self.verbose)
-                (detected, label) = __markov_models__.detect(tuple, self.verbose)
+                (detected, label, statelen) = __markov_models__.detect(tuple, self.verbose)
+                #(detected, label) = __markov_models__.detect(tuple, self.verbose)
                 if detected:
                     # Change color
                     tuple.set_color(magenta)
@@ -591,7 +591,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
 parser.add_argument('-v', '--verbose', help='Amount of verbosity.', action='store', default=1, required=False, type=int)
 parser.add_argument('-p', '--print_detections', help='Only print the tuples that are detected.', action='store_true', default=False, required=False)
-parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=1, required=False, type=int)
+parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=5, required=False, type=int)
 parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
 parser.add_argument('-d', '--datawhois', help='Get and show the whois info for the destination IP in each tuple', action='store_true', default=False, required=False)
 parser.add_argument('-m', '--models', help='Folder with all the models to detect.', action='store', required=False)
