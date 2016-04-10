@@ -395,11 +395,9 @@ class Tuple(object):
         if self.verbose > 3:
             print '\tPrint tuple {}'.format(self.get_id())
 
-
-
-
-
 # Process
+
+
 class Processor(multiprocessing.Process):
     """ A class process to run the process of the flows """
     def __init__(self, queue, slot_width, only_detections, get_whois, verbose, amount, dontdetect):
