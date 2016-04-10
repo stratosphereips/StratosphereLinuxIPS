@@ -8,6 +8,7 @@ from os import listdir
 from os.path import isfile, join
 import stf.common.markov_chains as mc
 
+
 class Model():
     def __init__(self, id):
         self.id = id
@@ -77,7 +78,6 @@ class Model():
                 # We are out of letters
                 break
         return probability
-
 
     def set_state(self, state):
         self.state = state
