@@ -19,12 +19,15 @@ class Matrix(dict):
         return self.init_vector
 
     def walk_probability(self, states):
-        """ Compute the probability of generating these states using ourselves. The returned value must be log. """
+        """
+        Compute the probability of generating these states using ourselves.
+        The returned value must be log.
+        The main feature of this markov function is that is not trying to
+        recognize each "state", it just uses each position of the vector
+        given as new state. This allow us to have more comple states
+        to work.
+        """
         try:
-            #print '\t\twalk_probability'
-            #print '\t\tReceived states {}'.format(states)
-            #print '\t\tself init_vector: {}'.format(self.get_init_vector())
-            #print '\t\tself matrix: {}'.format(self)
             cum_prob = 0
             index = 0
             # index should be < that len - 1 because index starts in 0, and a two position vector has len 2, but the index of the last position is 1.
@@ -106,5 +109,3 @@ def maximum_likelihood_probabilities(states, order=1):
         #for value in matrix:
         #    print value, matrix[value]
     return (init_vector, matrix)
-
-
