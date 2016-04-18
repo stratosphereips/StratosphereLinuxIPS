@@ -127,7 +127,11 @@ class Tuple(object):
             try:
                 obj = ipwhois.IPWhois(self.dst_ip)
                 data = obj.lookup()
-                self.desc = data['nets'][0]['description'].strip().replace('\n',' ') + ',' + data['nets'][0]['country']
+                try:
+                    self.desc = data['nets'][0]['description'].strip().replace('\n',' ') + ',' + data['nets'][0]['country']
+                except AttributeError:
+                    # There is no description field
+                    self.desc = ""
             except ipwhois.IPDefinedError as e:
                 if 'Multicast' in e:
                     self.desc = 'Multicast'
