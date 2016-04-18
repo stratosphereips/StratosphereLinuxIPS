@@ -15,7 +15,7 @@ from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
 
-version = '0.3.1alpha'
+version = '0.3.2alpha'
 
 ###################
 class Tuple(object):
@@ -65,16 +65,6 @@ class Tuple(object):
         # where the detection happened. The new arriving letters to be detected are between max_state_len and the real end of the state
         self.max_state_len = 0
         self.detected_label = False
-
-        """
-        self.best_matching_len = -1
-
-    def set_best_model_matching_len(self, statelen):
-        self.best_matching_len = statelen
-
-    def get_best_model_matching_len(self):
-        return self.best_matching_len
-        """
 
     def set_detected_label(self, label):
         self.detected_label = label
