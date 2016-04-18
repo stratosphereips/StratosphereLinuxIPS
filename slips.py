@@ -12,15 +12,16 @@ import multiprocessing
 from multiprocessing import Queue
 import time
 from modules.markov_models_1 import __markov_models__
+from os import listdir
+from os.path import isfile, join
 
-version = '0.3alpha'
+version = '0.3.1alpha'
 
 ###################
 class Tuple(object):
     """ The class to simply handle tuples """
-    def __init__(self, tuple4, anonymize=False):
+    def __init__(self, tuple4):
         self.id = tuple4
-        self.anonymize = anonymize
         self.amount_of_flows = 0
         self.src_ip = tuple4.split('-')[0]
         self.dst_ip = tuple4.split('-')[1]
@@ -57,7 +58,23 @@ class Tuple(object):
         # By default print all tuples. Depends on the arg
         self.should_be_printed = True
         self.desc = ''
+        # After a tuple is detected, min_state_len holds the lower letter position in the state
+        # where the detection happened.
+        self.min_state_len = 0
+        # After a tuple is detected, max_state_len holds the max letter position in the state
+        # where the detection happened. The new arriving letters to be detected are between max_state_len and the real end of the state
+        self.max_state_len = 0
         self.detected_label = False
+
+        """
+        self.best_matching_len = -1
+
+    def set_best_model_matching_len(self, statelen):
+        self.best_matching_len = statelen
+
+    def get_best_model_matching_len(self):
+        return self.best_matching_len
+        """
 
     def set_detected_label(self, label):
         self.detected_label = label
@@ -68,14 +85,24 @@ class Tuple(object):
     def get_detected_label(self):
         return self.detected_label
 
-    def get_src_ip(self):
-        return self.src_ip
+    def get_state_detected_last(self):
+        if self.max_state_len == 0:
+            # First time before any detection
+            return self.state[self.min_state_len:]
+        # After the first detection
+        return self.state[self.min_state_len:self.max_state_len]
 
-    def set_original_src_ip(self, orig_src_ip):
-        self.original_src_ip = orig_src_ip
+    def set_min_state_len(self, state_len):
+        self.min_state_len = state_len
 
-    def get_original_src_ip(self):
-        return self.original_src_ip
+    def get_min_state_len(self):
+        return self.min_state_len
+
+    def set_max_state_len(self, state_len):
+        self.max_state_len = state_len
+
+    def get_max_state_len(self):
+        return self.max_state_len
 
     def get_protocol(self):
         return self.protocol
@@ -164,7 +191,6 @@ class Tuple(object):
         self.do_print()
         if self.verbose > 1:
             print '\tTuple {}. Amount of flows so far: {}'.format(self.get_id(), self.amount_of_flows)
-
 
     def compute_periodicity(self):
         # If either T1 or T2 are False
@@ -358,7 +384,7 @@ class Tuple(object):
         """
         Print the tuple. The state is the state since the last detection of the tuple. Not everything
         """
-        return('{} [{}] ({}): {}  Detected as: {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state(), self.get_detected_label()))
+        return('{} [{}] ({}): {}  Detected as: {}'.format(self.color(self.get_id()), self.desc, self.amount_of_flows, self.get_state_detected_last(), self.get_detected_label()))
 
     def set_color(self, color):
         self.color = color
@@ -373,17 +399,12 @@ class Tuple(object):
         if self.verbose > 3:
             print '\tPrint tuple {}'.format(self.get_id())
 
-
-
-
-
-
 # Process
-###########
-###########
+
+
 class Processor(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, queue, slot_width, only_detections, get_whois, verbose, amount, dontdetect, anonymize):
+    def __init__(self, queue, slot_width, only_detections, get_whois, verbose, amount, dontdetect):
         multiprocessing.Process.__init__(self)
         self.only_detections = only_detections
         self.get_whois = get_whois
@@ -397,84 +418,78 @@ class Processor(multiprocessing.Process):
         self.slot_width = slot_width
         self.dontdetect = dontdetect
         self.amount_of_tuple_in_this_time_slot = 0
-        # To know if we should export the 
-        self.anonymize = anonymize
 
-    def get_tuple(self, tuple4, orig_src_ip=False):
+    def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
         try:
             tuple = self.tuples[tuple4]
+            # We already have this connection
         except KeyError:
             # First time for this connection
-            tuple = Tuple(tuple4, self.anonymize)
+            tuple = Tuple(tuple4)
             tuple.set_verbose(self.verbose)
-            if self.anonymize and orig_src_ip:
-                tuple.set_original_src_ip(orig_src_ip)
-            self.tuples[tuple.get_id()] = tuple
+            self.tuples[tuple4] = tuple
         return tuple
 
     def process_out_of_time_slot(self, column_values):
         """
         Process the tuples when we are out of the time slot
         """
-        try:
-            # Outside the slot
-            if self.verbose:
-                self.amount_of_tuple_in_this_time_slot = len(self.tuples) - self.amount_of_tuple_in_this_time_slot
-                print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
-                for tuple4 in self.tuples:
-                    tuple = self.get_tuple(tuple4)
-                    if tuple.amount_of_flows >= self.amount and tuple.should_be_printed:
-                        if not tuple.desc and self.get_whois:
-                            tuple.get_whois_data()
-                        print tuple.print_tuple_detected()
-                    # Clear the color because we already print it
-                    if tuple.color == red:
-                        tuple.set_color(yellow)
-                    # After printing the tuple in this time slot, we should not print it again unless we see some of its flows.
-                    if tuple.should_be_printed:
-                        tuple.dont_print()
-            # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
-            ids_to_delete = []
-            for tuple in self.tuples:
-                if self.tuples[tuple].amount_of_flows > 100:
-                    if self.verbose > 3:
-                        print 'Delete all the letters of {} because there were more than 100. Start again with this tuple.'.format(self.tuples[tuple].get_id())
-                    ids_to_delete.append(self.tuples[tuple].get_id())
-            # Actually delete them
-            for id in ids_to_delete:
-                del self.tuples[id]
-            # Move the time slot
-            self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-            self.slot_endtime = self.slot_starttime + self.slot_width
+        # Outside the slot
+        if self.verbose:
+            self.amount_of_tuple_in_this_time_slot = len(self.tuples) - self.amount_of_tuple_in_this_time_slot
+            print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
+            for tuple4 in self.tuples:
+                tuple = self.get_tuple(tuple4)
+                if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
+                    if not tuple.desc and self.get_whois:
+                        tuple.get_whois_data()
+                    print tuple.print_tuple_detected()
+                # Clear the color because we already print it
+                if tuple.color == red:
+                    tuple.set_color(yellow)
+                # After printing the tuple in this time slot, we should not print it again unless we see some of its flows.
+                if tuple.should_be_printed:
+                    tuple.dont_print()
+        # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
+        ids_to_delete = []
+        for tuple in self.tuples:
+            if self.tuples[tuple].amount_of_flows > 100:
+                if self.verbose > 3:
+                    print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
+                ids_to_delete.append(self.tuples[tuple].get_id())
+            """
+            # Move the states of the tuple so next time for this tuple we don't compare from the start
+            if self.tuples[tuple].get_max_state_len() == 0:
+                # First time matched. move only the max state value of the tuple to the place where we detected the match
+                self.tuples[tuple].set_max_state_len(self.tuples[tuple].get_best_model_matching_len())
+                if self.verbose > 3:
+                    print 'For tuple {} we moved the max to: {}'.format(self.tuples[tuple].get_id(), self.tuples[tuple].get_best_model_matching_len())
+                pass
+            else:
+                # Not the first time this tuple is matched. We should move the min and max
+                self.tuples[tuple].set_min_state_len(self.tuples[tuple].get_max_state_len())
+                self.tuples[tuple].set_max_state_len(self.tuples[tuple].get_best_model_matching_len())
+                if self.verbose > 3:
+                    print 'For tuple {}, we moved the min to: {} and max to: {}'.format(self.tuples[tuple].get_id(), self.tuples[tuple].get_max_state_len(), self.tuples[tuple].get_best_model_matching_len())
+                pass
+            """
+        # Actually delete them
+        for id in ids_to_delete:
+            del self.tuples[id]
+        # Move the time slot
+        self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+        self.slot_endtime = self.slot_starttime + self.slot_width
 
-            # Put the last flow received in the next slot, because it overcommed the threshold and it was not processed
-            tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
-            srcip = False
-            if self.anonymize:
-                # Hash the IP 
-                srcip = tuple4.split('-')[0]
-                dstip = tuple4.split('-')[1]
-                dstport = tuple4.split('-')[2]
-                proto = tuple4.split('-')[3]
-                t_hashed_ip = hashlib.md5()
-                t_hashed_ip.update(srcip)
-                hash_src_ip = t_hashed_ip.hexdigest()
-                tuple4 = hash_src_ip + '-' + dstip + '-' + dstport + '-' + proto
-            # Get the tuple, but store the original src ip if we create a new tuple
-            tuple = self.get_tuple(tuple4, orig_src_ip=srcip)
-            if self.verbose:
-                if len(tuple.state) == 0:
-                    tuple.set_color(red)
-            tuple.add_new_flow(column_values)
-            # Detect the first flow of the future timeslow
-            self.detect(tuple)
-        except Exception as inst:
-            print '\tProblem with process_out_of_time_slot()'
-            print type(inst)     # the exception instance
-            print inst.args      # arguments stored in .args
-            print inst           # __str__ allows args to printed directly
-            sys.exit(1)
+        # Put the last flow received in the next slot, because it overcommed the threshold and it was not processed
+        tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+        tuple = self.get_tuple(tuple4)
+        if self.verbose:
+            if len(tuple.state) == 0:
+                tuple.set_color(red)
+        tuple.add_new_flow(column_values)
+        # Detect the first flow of the future timeslow
+        self.detect(tuple)
 
     def detect(self, tuple):
         """
@@ -482,7 +497,8 @@ class Processor(multiprocessing.Process):
         """
         try:
             if not self.dontdetect:
-                (detected, label, matching_len) = __markov_models__.detect(tuple, self.verbose)
+                (detected, label, statelen) = __markov_models__.detect(tuple, self.verbose)
+                #(detected, label) = __markov_models__.detect(tuple, self.verbose)
                 if detected:
                     # Change color
                     tuple.set_color(magenta)
@@ -532,19 +548,7 @@ class Processor(multiprocessing.Process):
                             if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
                                 # Inside the slot
                                 tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
-                                srcip = False
-                                if self.anonymize:
-                                    # Hash the IP 
-                                    srcip = tuple4.split('-')[0]
-                                    dstip = tuple4.split('-')[1]
-                                    dstport = tuple4.split('-')[2]
-                                    proto = tuple4.split('-')[3]
-                                    t_hashed_ip = hashlib.md5()
-                                    t_hashed_ip.update(srcip)
-                                    hash_src_ip = t_hashed_ip.hexdigest()
-                                    tuple4 = hash_src_ip + '-' + dstip + '-' + dstport + '-' + proto
-                                # Get the tuple, but store the original src ip if we create a new tuple
-                                tuple = self.get_tuple(tuple4, orig_src_ip=srcip)
+                                tuple = self.get_tuple(tuple4)
                                 if self.verbose:
                                     if len(tuple.state) == 0:
                                         tuple.set_color(red)
@@ -560,24 +564,6 @@ class Processor(multiprocessing.Process):
                         try:
                             # Process the last flows in the last time slot
                             self.process_out_of_time_slot(column_values)
-                            if self.anonymize:
-                                # Open the file for storing the anonymized src ip addresses
-                                (fd, anon_matching_file_path) = tempfile.mkstemp(suffix='-stratosphere-anonips.txt', dir='.', text=True)
-                                anon_matching_file = open(anon_matching_file_path, 'w+')
-                                anon_matching_file.write('HashedIP' + ',' + 'OriginalIP' + '\n')
-                                # The same src ip can be in different tuples, so temporary store them so we don't repeat them
-                                temp_src_ips = {}
-                                for tup in self.tuples:
-                                    try:
-                                        isthere = temp_src_ips[self.tuples[tup].get_original_src_ip()]
-                                    except KeyError:
-                                        # Is new, so print it
-                                        anon_matching_file.write(self.tuples[tup].get_src_ip() + ',' + self.tuples[tup].get_original_src_ip() + '\n')
-                                        anon_matching_file.flush()
-                                        temp_src_ips[self.tuples[tup].get_original_src_ip()] = ''
-                                print 'Created output file with anonymized IP list. {}'.format(anon_matching_file_path)
-                                anon_matching_file.close()
-                                os.close(fd)
                         except UnboundLocalError:
                             print 'Probable empty file.'
                             # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
@@ -586,15 +572,12 @@ class Processor(multiprocessing.Process):
 
         except KeyboardInterrupt:
             return True
-            if self.anonymize:
-                self.anon_matching_file.close()
         except Exception as inst:
             print '\tProblem with Processor()'
             print type(inst)     # the exception instance
             print inst.args      # arguments stored in .args
             print inst           # __str__ allows args to printed directly
             sys.exit(1)
-
 
 
 
@@ -610,12 +593,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
 parser.add_argument('-v', '--verbose', help='Amount of verbosity.', action='store', default=1, required=False, type=int)
 parser.add_argument('-p', '--print_detections', help='Only print the tuples that are detected.', action='store_true', default=False, required=False)
-parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=1, required=False, type=int)
+parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=5, required=False, type=int)
 parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
 parser.add_argument('-d', '--datawhois', help='Get and show the whois info for the destination IP in each tuple', action='store_true', default=False, required=False)
+parser.add_argument('-m', '--models', help='Folder with all the models to detect.', action='store', required=False)
 parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows. Just print the connections.', default=False, action='store_true', required=False)
 parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
-parser.add_argument('-A', '--anonymize', help='Anonymize the source IP addresses before priting them.', action='store_true', default=False, required=False)
 args = parser.parse_args()
 
 # Global shit for whois cache. The tuple needs to access it but should be shared, so global
@@ -627,19 +610,17 @@ if args.sound:
     pygame.mixer.init(44100)
     pygame.mixer.music.load('periodic.ogg')
 
-# Do we need the hashing libs?
-if args.anonymize:
-    import hashlib
-    import tempfile
 
-# Set the folder with models if specified
-if args.folder and not __markov_models__.set_models_folder(args.folder):
-    sys.exit(-1)
+# Read the folder with models if specified
+if args.folder:
+    onlyfiles = [f for f in listdir(args.folder) if isfile(join(args.folder, f))]
+    for file in onlyfiles:
+        __markov_models__.set_model_to_detect(join(args.folder, file))
 
 # Create the queue
 queue = Queue()
 # Create the thread and start it
-processorThread = Processor(queue, timedelta(minutes=args.width), 'True' if args.folder else 'False', args.datawhois, args.verbose, args.amount, args.dontdetect, args.anonymize)
+processorThread = Processor(queue, timedelta(minutes=args.width), args.print_detections, args.datawhois, args.verbose, args.amount, args.dontdetect)
 processorThread.start()
 
 # Just put the lines in the queue as fast as possible
