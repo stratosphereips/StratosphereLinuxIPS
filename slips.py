@@ -444,26 +444,11 @@ class Processor(multiprocessing.Process):
         # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
         ids_to_delete = []
         for tuple in self.tuples:
+            # We cut the strings of letters regardless of it being detected before.
             if self.tuples[tuple].amount_of_flows > 100:
                 if self.verbose > 3:
                     print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
                 ids_to_delete.append(self.tuples[tuple].get_id())
-            """
-            # Move the states of the tuple so next time for this tuple we don't compare from the start
-            if self.tuples[tuple].get_max_state_len() == 0:
-                # First time matched. move only the max state value of the tuple to the place where we detected the match
-                self.tuples[tuple].set_max_state_len(self.tuples[tuple].get_best_model_matching_len())
-                if self.verbose > 3:
-                    print 'For tuple {} we moved the max to: {}'.format(self.tuples[tuple].get_id(), self.tuples[tuple].get_best_model_matching_len())
-                pass
-            else:
-                # Not the first time this tuple is matched. We should move the min and max
-                self.tuples[tuple].set_min_state_len(self.tuples[tuple].get_max_state_len())
-                self.tuples[tuple].set_max_state_len(self.tuples[tuple].get_best_model_matching_len())
-                if self.verbose > 3:
-                    print 'For tuple {}, we moved the min to: {} and max to: {}'.format(self.tuples[tuple].get_id(), self.tuples[tuple].get_max_state_len(), self.tuples[tuple].get_best_model_matching_len())
-                pass
-            """
         # Actually delete them
         for id in ids_to_delete:
             del self.tuples[id]
