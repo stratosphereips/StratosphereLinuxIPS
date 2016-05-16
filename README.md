@@ -64,6 +64,7 @@ This alpha version of slips comes with the following features:
     <class 'ipwhois.ipwhois.WhoisLookupError'>
     ("Whois lookup failed for '205.251.199.89'.",)
     Whois lookup failed for '205.251.199.89'.
+- The number of tuples reported for each time window is wrong. Check
 
 
 ### Author
