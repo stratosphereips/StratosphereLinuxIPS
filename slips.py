@@ -129,6 +129,9 @@ class Tuple(object):
             except ValueError:
                 # Not a real IP, maybe a MAC
                 pass
+            except IndexError:
+                # Some problem with the whois info. Continue
+                pass
             # Store in the cache
             whois_cache[self.dst_ip] = self.desc
 
