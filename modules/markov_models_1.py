@@ -27,7 +27,7 @@ class Model():
 
     def create(self, state):
         """ Create the Markov chain itself. We use the parameter instead of the attribute so we can compute the matrix for different states """
-        # Separete the letters considering the letter and the symbol as a unique state:
+        # Separate the letters considering the letter and the symbol as a unique state:
         # So from "88,a,b," we get: '8' '8,' 'a,' 'b,'
         try:
             # This is a first order markov model. Each individual object (letter, number, etc.) is a state
@@ -173,7 +173,7 @@ class MarkovModelsDetection():
         model.set_label(cPickle.load(input))
         model.set_threshold(cPickle.load(input))
         self.models.append(model)
-        print 'Adding model {} to the list.'.format(model.get_label())
+        print '\tAdding model {} to the list.'.format(model.get_label())
         input.close()
 
     def detect(self, tuple, verbose):
