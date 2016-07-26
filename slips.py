@@ -153,15 +153,15 @@ class Tuple(object):
         try:
             self.current_size = float(column_values[12])
         except ValueError:
-            # It can happend that we dont have this value in the binetflow
+            # It can happen that we dont have this value in the binetflow
             self.current_size = 0.0
         # Get the duration
         try:
             self.current_duration = float(column_values[1])
         except ValueError:
-            # It can happend that we dont have this value in the binetflow
+            # It can happen that we dont have this value in the binetflow
             self.current_duration = 0.0
-        # Get the proto
+        # Get the protocol
         self.proto = str(column_values[2])
         # Get the amount of flows
         self.amount_of_flows += 1
@@ -400,9 +400,8 @@ class Tuple(object):
 
 class Processor(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, queue, slot_width, only_detections, get_whois, verbose, amount, dontdetect):
+    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect):
         multiprocessing.Process.__init__(self)
-        self.only_detections = only_detections
         self.get_whois = get_whois
         self.verbose = verbose
         # The amount of letters requested to print minimum
@@ -434,7 +433,7 @@ class Processor(multiprocessing.Process):
         # Outside the slot
         if self.verbose:
             self.amount_of_tuple_in_this_time_slot = len(self.tuples) - self.amount_of_tuple_in_this_time_slot
-            print cyan('Slot Started: {}, finished: {}. ({} tuples)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
+            print cyan('Slot Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
                 if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
@@ -462,14 +461,14 @@ class Processor(multiprocessing.Process):
         self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
         self.slot_endtime = self.slot_starttime + self.slot_width
 
-        # Put the last flow received in the next slot, because it overcommed the threshold and it was not processed
+        # Put the last flow received in the next slot, because it overcome the threshold and it was not processed
         tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
         tuple = self.get_tuple(tuple4)
         if self.verbose:
             if len(tuple.state) == 0:
                 tuple.set_color(red)
         tuple.add_new_flow(column_values)
-        # Detect the first flow of the future timeslow
+        # Detect the first flow of the future timeslot
         self.detect(tuple)
 
     def detect(self, tuple):
@@ -479,7 +478,6 @@ class Processor(multiprocessing.Process):
         try:
             if not self.dontdetect:
                 (detected, label, statelen) = __markov_models__.detect(tuple, self.verbose)
-                #(detected, label) = __markov_models__.detect(tuple, self.verbose)
                 if detected:
                     # Change color
                     tuple.set_color(magenta)
@@ -494,7 +492,7 @@ class Processor(multiprocessing.Process):
                     # Play sound
                     if args.sound:
                         pygame.mixer.music.play()
-                elif not detected and self.only_detections:
+                elif not detected:
                     # Not detected by any reason. No model matching but also the state len is too short.
                     tuple.unset_detected_label()
                     if self.verbose > 5:
@@ -573,17 +571,21 @@ print 'Stratosphere Linux IPS. Version {}\n'.format(version)
 parser = argparse.ArgumentParser()
 parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
 parser.add_argument('-v', '--verbose', help='Amount of verbosity.', action='store', default=1, required=False, type=int)
-parser.add_argument('-p', '--print_detections', help='Only print the tuples that are detected.', action='store_true', default=False, required=False)
 parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=5, required=False, type=int)
-parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
 parser.add_argument('-d', '--datawhois', help='Get and show the whois info for the destination IP in each tuple', action='store_true', default=False, required=False)
-parser.add_argument('-m', '--models', help='Folder with all the models to detect.', action='store', required=False)
-parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows. Just print the connections.', default=False, action='store_true', required=False)
+parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows using the models. Just print the connections.', default=False, action='store_true', required=False)
 parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
+parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
 args = parser.parse_args()
 
 # Global shit for whois cache. The tuple needs to access it but should be shared, so global
 whois_cache = {}
+
+if args.dontdetect:
+    print 'Warning: No detections will be done. Only the behaviors are printed.'
+    print
+    # If the folder with models was specified, just ignore it
+    args.folder = False
 
 # Do we need sound?
 if args.sound:
@@ -595,20 +597,21 @@ if args.sound:
 # Read the folder with models if specified
 if args.folder:
     onlyfiles = [f for f in listdir(args.folder) if isfile(join(args.folder, f))]
+    print 'Detecting malicious behaviors with the following models:'
     for file in onlyfiles:
         __markov_models__.set_model_to_detect(join(args.folder, file))
 
 # Create the queue
 queue = Queue()
 # Create the thread and start it
-processorThread = Processor(queue, timedelta(minutes=args.width), args.print_detections, args.datawhois, args.verbose, args.amount, args.dontdetect)
+processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect)
 processorThread.start()
 
 # Just put the lines in the queue as fast as possible
 for line in sys.stdin:
     queue.put(line)
     #print 'A: {}'.format(queue.qsize())
-print 'Finished Processing the input.'
+print 'Finished receiving the input.'
 # Shall we wait? Not sure. Seems that not
 time.sleep(1)
 queue.put('stop')
