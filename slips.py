@@ -408,11 +408,11 @@ class Processor(multiprocessing.Process):
         self.amount = amount
         self.queue = queue
         self.tuples = {}
+        self.tuples_in_this_time_slot = {}
         self.slot_starttime = -1
         self.slot_endtime = -1
         self.slot_width = slot_width
         self.dontdetect = dontdetect
-        self.amount_of_tuple_in_this_time_slot = 0
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -432,8 +432,7 @@ class Processor(multiprocessing.Process):
         """
         # Outside the slot
         if self.verbose:
-            self.amount_of_tuple_in_this_time_slot = len(self.tuples) - self.amount_of_tuple_in_this_time_slot
-            print cyan('Slot Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, self.amount_of_tuple_in_this_time_slot))
+            print cyan('Slot Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples_in_this_time_slot)))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
                 if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
@@ -470,6 +469,8 @@ class Processor(multiprocessing.Process):
         tuple.add_new_flow(column_values)
         # Detect the first flow of the future timeslot
         self.detect(tuple)
+        # Empty the tuples in this time window
+        self.tuples_in_this_time_slot = {}
 
     def detect(self, tuple):
         """
@@ -528,6 +529,7 @@ class Processor(multiprocessing.Process):
                                 # Inside the slot
                                 tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
                                 tuple = self.get_tuple(tuple4)
+                                self.tuples_in_this_time_slot[tuple.get_id()] = tuple
                                 if self.verbose:
                                     if len(tuple.state) == 0:
                                         tuple.set_color(red)
