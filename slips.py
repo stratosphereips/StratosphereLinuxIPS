@@ -15,7 +15,7 @@ from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
 
-version = '0.3.2alpha'
+version = '0.3.3alpha'
 
 ###################
 class Tuple(object):
