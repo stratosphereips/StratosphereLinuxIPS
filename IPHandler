@@ -18,9 +18,9 @@ class IPAdress(object):
 		#TODO:
 		#	timeformat
 		if detection:
-			self.n_good_detections++
+			self.n_good_detections+=1
 		else:
-			self.n_malicious_detections++;
+			self.n_malicious_detections+=1
 
 		if detection == self.lastDetectedRuling:
 			self.lastDetectedTime = time
