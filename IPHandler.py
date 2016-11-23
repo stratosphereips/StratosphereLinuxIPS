@@ -1,9 +1,14 @@
 #!/usr/bin/python
 #authot Ondrej Lukas - luaksond@fel.cvut.cz
-from collections import defaultdict
+import datetime
+from time import gmtime, strftime
+import time
 
 class IPAdress(object):
 	"""docstring for IPAdress"""
+
+	#TODO: storing ip as string? maybe there is a better way?
+	
 	def __init__(self, adress):
 		self.adress =adress
 		self.lastDetectedRuling = False
@@ -14,25 +19,7 @@ class IPAdress(object):
 		return "<" + self.adress + ">" + str(self.get_detections())
 
 	def set_detection(self, detection,time):
-		#TODO:
-
-
-		#	timeformat
-		"""if detection:
-			self.n_good_detections+=1
-		else:
-			self.n_malicious_detections+=1
-
-		if detection == self.lastDetectedRuling:
-			self.lastDetectedTime = time
-		else:
-			self.lastDetectedRuling = detection
-			self.lastDetectedTime  = time
-			#Something changed -> sent Alert
-			#TODO parameters for amount of printed information?
-			print "DETECTION OF <" + self.adress + "> CHANGED  " + str(not self.lastDetectedRuling)  + " -> "  + str(self.lastDetectedRuling) + " at " + str(self.lastDetectedTime)
-		"""
-		self.detections[time] = detection;
+		#TODO: check timeformat?
 		#check if the detection has changed
 		if self.lastDetectedRuling != detection:
 			#yep, send alert
@@ -72,11 +59,14 @@ class IpHandler(object):
 if __name__ == '__main__':
 	handler = IpHandler()
 	ip1 = handler.get_ip('127.0.0.1')
-	handler.add_detection_result('127.0.0.1',"Malware", 1)
-	handler.add_detection_result('127.0.0.1',"Ransomware", 2)
+	handler.add_detection_result('127.0.0.1',"Malware", datetime.datetime.now())
+	time.sleep(0.0051)
+	handler.add_detection_result('127.0.0.1',"Ransomware", datetime.datetime.now())
+	time.sleep(0.001)
 	ip2 = handler.get_ip('192.168.0.1')
-	handler.add_detection_result('192.168.0.1',"Troyan", 1)
-	handler.add_detection_result('192.168.0.1',False, 4)
+	handler.add_detection_result('192.168.0.1',"Troyan", datetime.datetime.now())
+	time.sleep(0.001)
+	handler.add_detection_result('192.168.0.1',False, datetime.datetime.now())
 	print ip1.to_string()
 	print ip2.to_string()
 		

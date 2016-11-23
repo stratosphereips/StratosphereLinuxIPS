@@ -536,6 +536,7 @@ class Processor(multiprocessing.Process):
                                 # Inside the slot
                                 tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
                                 tuple = self.get_tuple(tuple4)
+                                self.IPHandler.get_ip(tuple.src_ip)
                                 self.tuples_in_this_time_slot[tuple.get_id()] = tuple
                                 if self.verbose:
                                     if len(tuple.state) == 0:
