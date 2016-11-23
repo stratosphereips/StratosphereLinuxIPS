@@ -414,6 +414,9 @@ class Processor(multiprocessing.Process):
         self.slot_width = slot_width
         self.dontdetect = dontdetect
 
+
+        self.IPHandler = IPHandler()
+
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
         try:
@@ -499,6 +502,10 @@ class Processor(multiprocessing.Process):
                     if self.verbose > 5:
                         print 'Last flow: Not detected'
                     tuple.dont_print()
+
+                #store the detection result in the Ip object
+                self.IPHandler.set_detection_result(tuple.src_ip,tuple.detected_label)
+
         except Exception as inst:
             print '\tProblem with detect()'
             print type(inst)     # the exception instance
@@ -605,6 +612,7 @@ if args.folder:
 
 # Create the queue
 queue = Queue()
+
 # Create the thread and start it
 processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect)
 processorThread.start()
