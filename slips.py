@@ -14,6 +14,11 @@ import time
 from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
+from ip_handler import IpHandler
+from ip_handler import IpAdress
+
+
+import random
 
 version = '0.3.3alpha'
 
@@ -115,13 +120,23 @@ class Tuple(object):
         except KeyError:
             # Is not, so just ask for it
             try:
+                print self.dst_ip
                 obj = ipwhois.IPWhois(self.dst_ip)
-                data = obj.lookup()
+                print obj
+                #data = obj.lookup() #//DEPReCATED FUCNTION -> use ".lookup_whois()" instead
+                data = obj.lookup_whois()
+                print data
                 try:
                     self.desc = data['nets'][0]['description'].strip().replace('\n',' ') + ',' + data['nets'][0]['country']
                 except AttributeError:
                     # There is no description field
                     self.desc = ""
+            except ValueError:
+                # Not a real IP, maybe a MAC
+                pass
+            except IndexError:
+                # Some problem with the whois info. Continue
+                pass        
             except ipwhois.IPDefinedError as e:
                 if 'Multicast' in e:
                     self.desc = 'Multicast'
@@ -129,12 +144,6 @@ class Tuple(object):
             except ipwhois.ipwhois.WhoisLookupError:
                 print 'Error looking the whois of {}'.format(self.dst_ip)
                 # continue with the work
-            except ValueError:
-                # Not a real IP, maybe a MAC
-                pass
-            except IndexError:
-                # Some problem with the whois info. Continue
-                pass
             # Store in the cache
             whois_cache[self.dst_ip] = self.desc
 
@@ -413,9 +422,7 @@ class Processor(multiprocessing.Process):
         self.slot_endtime = -1
         self.slot_width = slot_width
         self.dontdetect = dontdetect
-
-
-        self.IPHandler = IPHandler()
+        self.ip_handler = IpHandler()
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -502,10 +509,6 @@ class Processor(multiprocessing.Process):
                     if self.verbose > 5:
                         print 'Last flow: Not detected'
                     tuple.dont_print()
-
-                #store the detection result in the Ip object
-                self.IPHandler.set_detection_result(tuple.src_ip,tuple.detected_label)
-
         except Exception as inst:
             print '\tProblem with detect()'
             print type(inst)     # the exception instance
@@ -535,8 +538,11 @@ class Processor(multiprocessing.Process):
                             if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
                                 # Inside the slot
                                 tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+
+                                #Ask for IpAdress object 
+                                ip_adress = self.ip_handler.get_ip(column_values[3])
+
                                 tuple = self.get_tuple(tuple4)
-                                self.IPHandler.get_ip(tuple.src_ip)
                                 self.tuples_in_this_time_slot[tuple.get_id()] = tuple
                                 if self.verbose:
                                     if len(tuple.state) == 0:
@@ -544,6 +550,8 @@ class Processor(multiprocessing.Process):
                                 tuple.add_new_flow(column_values)
                                 # Detection
                                 self.detect(tuple)
+                                #store detection into Ip_adress
+                                ip_adress.set_detection(tuple.detected_label,random.random())
                             elif flowtime > self.slot_endtime:
                                 # Out of time slot
                                 self.process_out_of_time_slot(column_values)
@@ -556,7 +564,9 @@ class Processor(multiprocessing.Process):
                         except UnboundLocalError:
                             print 'Probable empty file.'
                             # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
+                        self.ip_handler.print_adresses()
                         # Just Return
+
                         return True
 
         except KeyboardInterrupt:
@@ -613,7 +623,6 @@ if args.folder:
 
 # Create the queue
 queue = Queue()
-
 # Create the thread and start it
 processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect)
 processorThread.start()
