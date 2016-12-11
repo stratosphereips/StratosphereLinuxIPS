@@ -12,6 +12,7 @@ class IpAdress(object):
 	
 	def __init__(self, adress):
 		self.adress =adress
+		self.whois_data = None 
 		self.lastDetectedRuling = False
 		self.lastDetectedTime = -1
 		self.detections = {}
@@ -19,17 +20,38 @@ class IpAdress(object):
 	def to_string(self):
 		return "<" + self.adress + ">(" + str(len(self.detections))  + ")" + " last detected as: " + str(self.lastDetectedRuling)
 
-	def set_detection(self, detection,time):
-		#TODO: check timeformat?
+	def add_detection(self, detection,time):
+		#TODO: 	
+		#check timeformat?
+		#alerts
+
 		#check if the detection has changed
 		if self.lastDetectedRuling != detection:
 			#yep, send alert
-			print "LABEL OF <" + self.adress + "> CHANGED  " + str(self.lastDetectedRuling)  + " -> "  + str(detection) + " at " + str(time)
+			print "Detection label of <" + self.adress + "> CHANGED  " + str(self.lastDetectedRuling)  + " -> "  + str(detection) + " at " + str(time)
 		self.lastDetectedTime = time;
 		self.lastDetectedRuling = detection;
 
 	def get_detections(self):
 		return self.detections;
+
+
+	def find_whois(self):
+		#Check access to ipwhois library
+		try:
+			import ipwhois
+		except ImportError:
+			print 'The ipwhois library is not installed. pip install ipwhois'
+			return False
+
+
+
+	def get_whois(self):
+		if self.whois_data == None:
+			find_whois(self)
+		return self.whois_data
+
+
 
 
 class IpHandler(object):
@@ -50,31 +72,41 @@ class IpHandler(object):
 
 	def get_ip(self,ip_string):
 		#Have I seen this IP before?
-		if not self.adresses.has_key(ip_string):
-			self.adresses[ip_string] = IpAdress(ip_string)
-			print "Adding " + ip_string + " to the dictionary." + "  - SIZE:%d" %len(self.adresses)
-		return self.adresses[ip_string]
+		try:
+			ip = self.adresses[ip_string]
+		#no, create it
+		except KeyError:
+			#TODO:
+			#check files?
+			ip = IpAdress(ip_string)
+			self.adresses[ip_string] = ip
+			print "Adding " + ip_string + " to the dictionary."
+		return ip
 
+# 	call IpAdress.add_detection instead?
 	def add_detection_result(self, ip_string,result,time):
 		if not self.adresses.has_key(ip_string):
 			print "Invalid argument! No such ip has been stored!"
 		else:
-			self.adresses[ip_string].set_detection(result,time)
+			self.adresses[ip_string].add_detection(result,time)
 
+	def statistic_for_ip(self,ip_string):
+		harmless = len(self.adresses[ip_string].detections[False]);
+		print "Result for <%s>\nDetected as malicious:%dx\nDetected as harmless:%d" %{ip_string,harmless,len(self.adresses[ip_string].detection) - harmless}
 
 
 if __name__ == '__main__':
 	handler = IpHandler()
 	ip1 = handler.get_ip('127.0.0.1')
 	handler.add_detection_result('127.0.0.1',"Malware", datetime.datetime.now())
+
 	time.sleep(0.0051)
 	handler.add_detection_result('127.0.0.1',"Ransomware", datetime.datetime.now())
 	time.sleep(0.001)
 	ip2 = handler.get_ip('192.168.0.1')
 	handler.add_detection_result('192.168.0.1',"Troyan", datetime.datetime.now())
+
 	time.sleep(0.001)
 	handler.add_detection_result('192.168.0.1',False, datetime.datetime.now())
-
-	print "Adresses:"
-	for adress in handler.adresses.values():
-		print adress.to_string()
+	time.sleep(0.001)
+	handler.add_detection_result('192.168.0.1',False, datetime.datetime.now())
