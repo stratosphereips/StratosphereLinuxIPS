@@ -15,7 +15,7 @@ from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
 from ip_handler import IpHandler
-from ip_handler import IpAdress
+from ip_handler import IpAddress
 
 
 import random
@@ -552,7 +552,7 @@ class Processor(multiprocessing.Process):
                                 self.detect(tuple)
 
                                 #store detection into Ip_adress
-                                ip_adress.set_detection(tuple.detected_label,datetime.datetime.now(),1/(self.max_state_len - self.min_state_len))
+                                ip_adress.add_detection(tuple.detected_label,datetime.now(),tuple.max_state_len - tuple.min_state_len)
                             elif flowtime > self.slot_endtime:
                                 # Out of time slot
                                 self.process_out_of_time_slot(column_values)
@@ -565,7 +565,7 @@ class Processor(multiprocessing.Process):
                         except UnboundLocalError:
                             print 'Probable empty file.'
                             # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
-                        self.ip_handler.print_adresses()
+                        self.ip_handler.print_addresses()
                         # Just Return
 
                         return True
