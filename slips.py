@@ -550,8 +550,9 @@ class Processor(multiprocessing.Process):
                                 tuple.add_new_flow(column_values)
                                 # Detection
                                 self.detect(tuple)
+
                                 #store detection into Ip_adress
-                                ip_adress.set_detection(tuple.detected_label,random.random())
+                                ip_adress.set_detection(tuple.detected_label,datetime.datetime.now(),1/(self.max_state_len - self.min_state_len))
                             elif flowtime > self.slot_endtime:
                                 # Out of time slot
                                 self.process_out_of_time_slot(column_values)
