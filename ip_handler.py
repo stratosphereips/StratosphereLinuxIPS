@@ -1,11 +1,11 @@
 #!/usr/bin/python
 #authot Ondrej Lukas - luaksond@fel.cvut.cz
-#version from 21.12.2016
 #cat /home/ondrej/Dokumenty/flows/2016-07-29_win.binetflow | ./slips.py -w 6000 -v 2 -D -f ./models | less -R
 import datetime
 from time import gmtime, strftime
 import time
 from colors import *
+
 class IpAddress(object):
 	"""docstring for IPAdress"""
 
@@ -60,38 +60,29 @@ class IpAddress(object):
 			count += tuple_result[1]
 
 			if tuple_result[1] != 0:
-				result+=tuple_result[0]/tuple_result[1]
-
+				result+= (tuple_result[0]/float(tuple_result[1]))
 		if result >= threshold:
 			return ("MALICIOUS",result,n_malicious,count)
 		else:
 			return ("NORMAL",result,n_malicious,count)
 
 	def print_ip(self, verb,start_time, end_time,threshold,print_all):
-		"""if (self.last_time >= start_time and self.last_time < end_time) or print_all:
-			res = self.get_result(start_time,end_time,print_all)
-			if verb > 0:
-				if(res[1] =='MALICIOUS'):
-					print red("\t+%s %d/%d VERDICT:%s" %(self.address, res[0],len(self.detections),res[1]))
-				else:	
-					print green("\t+%s %d/%d VERDICT:%s" %(self.address, res[0],len(self.detections),res[1]))
-			if verb > 1:
-				for detection in self.detections:
-					if (detection[3] >= start_time and detection[3] <= end_time) or print_all:
-						print "\t\t" + str(detection)"""
-
 		if (self.last_time >= start_time and self.last_time < end_time) or print_all:
 			res = self.get_result(start_time,end_time,threshold,print_all)
 			if verb > 0:
 				if(res[0] =='MALICIOUS'):
-					print red("\t+%s %d/%d VERDICT:%s" %(self.address, res[2],res[3],res[0]))
+					print red("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
 				else:	
-					print green("\t+%s %d/%d VERDICT:%s" %(self.address, res[2],res[3],res[0]))
+					print green("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
 			if verb > 1:
 				for key in self.tuples.keys():
 					tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
 					if(tuple_res[1] > 0):
 						print "\t\t%s(%d/%d)" %(key,tuple_res[0],tuple_res[1])
+						if verb > 2:
+							for detection in self.tuples[key]:
+								if (detection[2] >= start_time and detection[2] < end_time) or print_all:
+									print "\t\t\t"+ str(detection)
 
 class IpHandler(object):
 	"""Class which handles all IP actions for slips. Stores every IP object in the session, provides summary, statistics etc."""
@@ -101,10 +92,12 @@ class IpHandler(object):
 
 
 	def print_addresses(self,verb,start_time,end_time,threshold,print_all):
-		print "ADDRESSES STORED IN HANDLER:"
+		if print_all:
+		    print "Summary of registered addresses:"
+		else:
+			print "Addresses registered in this timewindow:"
 		for address in self.addresses.values():
 			address.print_ip(verb,start_time,end_time,threshold,print_all)
-		print "END OF LIST"
 
 	def get_ip(self,ip_string):
 		#Have I seen this IP before?
@@ -115,7 +108,7 @@ class IpHandler(object):
 			#TODO:
 			ip = IpAddress(ip_string)
 			self.addresses[ip_string] = ip
-			print("\tAdding %s to the dictionary." %(ip_string))
+			print yellow("\tAdding %s to the dictionary." %(ip_string))
 		return ip
 
 # 	call IpAddress.add_detection instead?

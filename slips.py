@@ -423,7 +423,7 @@ class Processor(multiprocessing.Process):
         self.slot_width = slot_width
         self.dontdetect = dontdetect
         self.ip_handler = IpHandler()
-        self.detection_threshold = 0.2;
+        self.detection_threshold = 0.002;
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -480,7 +480,6 @@ class Processor(multiprocessing.Process):
         tuple.add_new_flow(column_values)
         # Detect the first flow of the future timeslot
         self.detect(tuple)
-        # Empty the tuples in this time window
         self.tuples_in_this_time_slot = {}
 
     def detect(self, tuple):
@@ -556,7 +555,6 @@ class Processor(multiprocessing.Process):
                             elif flowtime > self.slot_endtime:
                                 # Out of time slot
                                 #Print summary for timeslot
-                                print("SUMMARY FOR TW FROM %s TO %s" %(self.slot_starttime,self.slot_endtime))
                                 self.ip_handler.print_addresses(self.verbose,self.slot_starttime,self.slot_endtime,self.detection_threshold,False)
                                 self.process_out_of_time_slot(column_values)
                         except UnboundLocalError:
