@@ -423,6 +423,7 @@ class Processor(multiprocessing.Process):
         self.slot_width = slot_width
         self.dontdetect = dontdetect
         self.ip_handler = IpHandler()
+        self.detection_threshold = 0.2;
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -550,11 +551,13 @@ class Processor(multiprocessing.Process):
                                 tuple.add_new_flow(column_values)
                                 # Detection
                                 self.detect(tuple)
-
-                                #store detection into Ip_adress
-                                ip_adress.add_detection(tuple.detected_label,datetime.now(),tuple.max_state_len - tuple.min_state_len)
+                                #store detection result into Ip_adress
+                                ip_adress.add_detection(tuple.detected_label,tuple.id,tuple.current_size,flowtime)
                             elif flowtime > self.slot_endtime:
                                 # Out of time slot
+                                #Print summary for timeslot
+                                print("SUMMARY FOR TW FROM %s TO %s" %(self.slot_starttime,self.slot_endtime))
+                                self.ip_handler.print_addresses(self.verbose,self.slot_starttime,self.slot_endtime,self.detection_threshold,False)
                                 self.process_out_of_time_slot(column_values)
                         except UnboundLocalError:
                             print 'Probable empty file.'
@@ -565,7 +568,8 @@ class Processor(multiprocessing.Process):
                         except UnboundLocalError:
                             print 'Probable empty file.'
                             # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
-                        self.ip_handler.print_addresses()
+                        #Print SUMMARY
+                        self.ip_handler.print_addresses(self.verbose,flowtime,flowtime,self.detection_threshold,True)
                         # Just Return
 
                         return True

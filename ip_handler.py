@@ -1,88 +1,97 @@
 #!/usr/bin/python
 #authot Ondrej Lukas - luaksond@fel.cvut.cz
+#version from 21.12.2016
 #cat /home/ondrej/Dokumenty/flows/2016-07-29_win.binetflow | ./slips.py -w 6000 -v 2 -D -f ./models | less -R
 import datetime
 from time import gmtime, strftime
 import time
-
+from colors import *
 class IpAddress(object):
 	"""docstring for IPAdress"""
 
 	#TODO: storing ip as string? maybe there is a better way?
 	
-	def __init__(self, adress):
-		self.adress =adress
-		self.whois_data = None 
-		self.lastDetectedRuling = False
-		self.lastDetectedTime = -1
-		self.detections = {}
+	def __init__(self, address):
+		self.address =address
+		self.last_label = False
+		self.tuples = {}
+		self.last_time = -1
 
-	def to_string(self):
-		return "<" + self.adress + ">(detected " + str(len(self.detections))  + "x)" + " last detected as: " + str(self.lastDetectedRuling) + " (W="+ str(self.detections[self.lastDetectedTime][1]) +")"
-
-	def add_detection(self, detection,time,weight):
+	def add_detection(self, label,tuple,n_chars,input_time):
 		#TODO: 	
-		#check timeformat?
 		#alerts
 
 		#check if the detection has changed
-		if self.lastDetectedRuling != detection:
+		"""if self.last_label != label:
 			#yep, send alert
-			print "Detection label of <" + self.adress + "> CHANGED  " + str(self.lastDetectedRuling)  + " -> "  + str(detection) + " at " + str(time)
-		self.detections[time] = (detection,weight);
-		self.lastDetectedTime = time;
-		self.lastDetectedRuling = detection;
-
-	def get_result(self):
+			print("Detection label of %s CHANGED %s -> %s",(self.address,str(self.last_label),str(label)))
+		self.last_label = label
 		"""
-		det_count ={}
-		weights = {}
-		for detections in self.detections.values():
-			#count
-			if det_count.has_key(detection[0]):
-				det_count[detection[0]] +=1
-			else:
-				det_count[detection[0]] = 1
+		detection = (label,n_chars,input_time)
+		self.last_time = input_time
 
-			#weights
-			if weights.has_key(detection[0]):
-				weights[detection[0]] += detection[1]
-			else:
-				weights[detection[0]] = detection[1]
+		#first time we see this tuple
+		if(not self.tuples.has_key(tuple)):
+			self.tuples[tuple] = []
+		#add detection to array
+		self.tuples[tuple].append(detection)
 
-		res = None
-		res_weight = -1
-		for detections in self.detections.values():
-		"""
-		#TODO: better way of 
+
+	def result_per_tuple(self,tuple,start_time,end_time,use_all):		
+		n_malicious = 0
+		count = 0
+		for detection in self.tuples[tuple]:
+			if (detection[2] >= start_time and detection[2] < end_time) or use_all:
+				count += 1
+				if(detection[0] != False):
+					n_malicious += 1
+			else:
+				continue
+
+		return (n_malicious,count)
+
+	def get_result(self,start_time,end_time,threshold,use_all):
+		result= 0;
 		n_malicious = 0;
-		n_harmless = 0;
-		for detection in self.detections.values():
-			if(detection[0] == False):
-				n_harmless += 1
-			else:
-				n_malicious += 1
-		if n_harmless >= n_malicious:
-			return "OK"
+		count = 0
+		for key in self.tuples.keys():
+			tuple_result = self.result_per_tuple(key,start_time,end_time,use_all)
+			n_malicious += tuple_result[0]
+			count += tuple_result[1]
+
+			if tuple_result[1] != 0:
+				result+=tuple_result[0]/tuple_result[1]
+
+		if result >= threshold:
+			return ("MALICIOUS",result,n_malicious,count)
 		else:
-			return "Malicious"
+			return ("NORMAL",result,n_malicious,count)
 
-	#WHOIS	
-	def find_whois(self):
-		#Check access to ipwhois library
-		try:
-			import ipwhois
-		except ImportError:
-			print 'The ipwhois library is not installed. pip install ipwhois'
-			return False
+	def print_ip(self, verb,start_time, end_time,threshold,print_all):
+		"""if (self.last_time >= start_time and self.last_time < end_time) or print_all:
+			res = self.get_result(start_time,end_time,print_all)
+			if verb > 0:
+				if(res[1] =='MALICIOUS'):
+					print red("\t+%s %d/%d VERDICT:%s" %(self.address, res[0],len(self.detections),res[1]))
+				else:	
+					print green("\t+%s %d/%d VERDICT:%s" %(self.address, res[0],len(self.detections),res[1]))
+			if verb > 1:
+				for detection in self.detections:
+					if (detection[3] >= start_time and detection[3] <= end_time) or print_all:
+						print "\t\t" + str(detection)"""
 
-
-
-	def get_whois(self):
-		if self.whois_data == None:
-			find_whois(self)
-		return self.whois_data
-
+		if (self.last_time >= start_time and self.last_time < end_time) or print_all:
+			res = self.get_result(start_time,end_time,threshold,print_all)
+			if verb > 0:
+				if(res[0] =='MALICIOUS'):
+					print red("\t+%s %d/%d VERDICT:%s" %(self.address, res[2],res[3],res[0]))
+				else:	
+					print green("\t+%s %d/%d VERDICT:%s" %(self.address, res[2],res[3],res[0]))
+			if verb > 1:
+				for key in self.tuples.keys():
+					tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
+					if(tuple_res[1] > 0):
+						print "\t\t%s(%d/%d)" %(key,tuple_res[0],tuple_res[1])
 
 class IpHandler(object):
 	"""Class which handles all IP actions for slips. Stores every IP object in the session, provides summary, statistics etc."""
@@ -91,14 +100,11 @@ class IpHandler(object):
 		print "Handler created"
 
 
-	def to_string(self):
-		return self.adresses.values();
-
-	def print_addresses(self):
-		print "ADDRESSES STORED:"
+	def print_addresses(self,verb,start_time,end_time,threshold,print_all):
+		print "ADDRESSES STORED IN HANDLER:"
 		for address in self.addresses.values():
-			print address.to_string() + " RESULT: " + address.get_result()
-
+			address.print_ip(verb,start_time,end_time,threshold,print_all)
+		print "END OF LIST"
 
 	def get_ip(self,ip_string):
 		#Have I seen this IP before?
@@ -107,33 +113,15 @@ class IpHandler(object):
 		#no, create it
 		except KeyError:
 			#TODO:
-			#check files?
 			ip = IpAddress(ip_string)
 			self.addresses[ip_string] = ip
-			print "Adding " + ip_string + " to the dictionary."
+			print("\tAdding %s to the dictionary." %(ip_string))
 		return ip
 
 # 	call IpAddress.add_detection instead?
-	def add_detection_result(self, ip_string,result,time,weight):
+	def add_detection_result(self, ip_string,label,tuple,n_chars):
 		if not self.addresses.has_key(ip_string):
 			print "Invalid argument! No such ip has been stored!"
 		else:
-			self.addresses[ip_string].add_detection(result,time,weight)
+			self.addresses[ip_string].add_detection(label,tuple,n_chars)
 
-
-if __name__ == '__main__':
-	handler = IpHandler()
-	ip1 = handler.get_ip('127.0.0.1')
-	handler.add_detection_result('127.0.0.1',"Malware", datetime.datetime.now(),1)
-
-	time.sleep(0.0051)
-	handler.add_detection_result('127.0.0.1',"Ransomware", datetime.datetime.now(),2)
-	time.sleep(0.001)
-	ip2 = handler.get_ip('192.168.0.1')
-	handler.add_detection_result('192.168.0.1',"Troyan", datetime.datetime.now(),3)
-
-	time.sleep(0.001)
-	handler.add_detection_result('192.168.0.1',False, datetime.datetime.now(),4)
-	time.sleep(0.001)
-	handler.add_detection_result('192.168.0.1',False, datetime.datetime.now(),5)
-	print handler.print_addresses()
