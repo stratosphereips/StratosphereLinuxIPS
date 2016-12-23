@@ -93,9 +93,9 @@ class IpHandler(object):
 
 	def print_addresses(self,verb,start_time,end_time,threshold,print_all):
 		if print_all:
-		    print "Summary of registered addresses:"
+		    print "Summary of registered addresses (t=%f):" %(threshold)
 		else:
-			print "Addresses registered in this timewindow:"
+			print "Addresses registered in this timewindow (t=%f):" %(threshold)
 		for address in self.addresses.values():
 			address.print_ip(verb,start_time,end_time,threshold,print_all)
 
