@@ -422,7 +422,7 @@ class Processor(multiprocessing.Process):
         self.slot_endtime = -1
         self.slot_width = slot_width
         self.dontdetect = dontdetect
-        self.ip_handler = IpHandler()
+        self.ip_handler = IpHandler(verbose)
         self.detection_threshold = threshold;
 
     def get_tuple(self, tuple4):

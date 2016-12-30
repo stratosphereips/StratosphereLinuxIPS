@@ -72,8 +72,9 @@ class IpAddress(object):
 			if verb > 0:
 				if(res[0] =='MALICIOUS'):
 					print red("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
-				else:	
-					print green("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
+				else:
+					if verb > 1 or print_all:	
+						print green("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
 			if verb > 1:
 				for key in self.tuples.keys():
 					tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
@@ -86,8 +87,9 @@ class IpAddress(object):
 
 class IpHandler(object):
 	"""Class which handles all IP actions for slips. Stores every IP object in the session, provides summary, statistics etc."""
-	def __init__(self):
+	def __init__(self,verbose):
 		self.addresses = {}
+		self.verbose =verbose
 		print "Handler created"
 
 
@@ -95,7 +97,10 @@ class IpHandler(object):
 		if print_all:
 		    print "Summary of registered addresses (t=%f):" %(threshold)
 		else:
-			print "Addresses registered in this timewindow (t=%f):" %(threshold)
+			if verb > 1:
+				print "Addresses registered in this timewindow (t=%f):" %(threshold)
+			else:
+				print " Malicious addresses registered in this timewindow (t=%f):" %(threshold)
 		for address in self.addresses.values():
 			address.print_ip(verb,start_time,end_time,threshold,print_all)
 
@@ -108,7 +113,8 @@ class IpHandler(object):
 			#TODO:
 			ip = IpAddress(ip_string)
 			self.addresses[ip_string] = ip
-			print yellow("\tAdding %s to the dictionary." %(ip_string))
+			if self.verbose > 1:
+				print yellow("\tAdding %s to the dictionary." %(ip_string))
 		return ip
 
 # 	call IpAddress.add_detection instead?
