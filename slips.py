@@ -443,56 +443,65 @@ class Processor(multiprocessing.Process):
         """
         Process the tuples when we are out of the time slot
         """
-        # Outside the slot
-        if self.verbose:
-            print cyan('Slot Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples_in_this_time_slot)))
-            for tuple4 in self.tuples:
-                tuple = self.get_tuple(tuple4)
-                # Print the tuple and search its whois only if it has more than X amount of letters.
-                # This was the old way of stopping the system of analyzing tuples with less than amount of letters. Now should not be done here.
-                # if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
-                if tuple.should_be_printed:
-                    if not tuple.desc and self.get_whois:
-                        tuple.get_whois_data()
-                    print tuple.print_tuple_detected()
-                # Clear the color because we already print it
-                if tuple.color == red:
-                    tuple.set_color(yellow)
-                # After printing the tuple in this time slot, we should not print it again unless we see some of its flows.
-                if tuple.should_be_printed:
-                    tuple.dont_print()
-        self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.detection_threshold, False)
-        # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
-        ids_to_delete = []
-        for tuple in self.tuples:
-            # We cut the strings of letters regardless of it being detected before.
-            if self.tuples[tuple].amount_of_flows > 100:
-                if self.debug > 3:
-                    print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
-                ids_to_delete.append(self.tuples[tuple].get_id())
-        # Actually delete them
-        for id in ids_to_delete:
-            del self.tuples[id]
-        # Move the time slot
-        self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-        self.slot_endtime = self.slot_starttime + self.slot_width
+        try:
+            # Outside the slot
+            if self.verbose:
+                print cyan('Slot Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples_in_this_time_slot)))
+                for tuple4 in self.tuples:
+                    tuple = self.get_tuple(tuple4)
+                    # Print the tuple and search its whois only if it has more than X amount of letters.
+                    # This was the old way of stopping the system of analyzing tuples with less than amount of letters. Now should not be done here.
+                    # if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
+                    if tuple.should_be_printed:
+                        if not tuple.desc and self.get_whois:
+                            tuple.get_whois_data()
+                        print tuple.print_tuple_detected()
+                    # Clear the color because we already print it
+                    if tuple.color == red:
+                        tuple.set_color(yellow)
+                    # After printing the tuple in this time slot, we should not print it again unless we see some of its flows.
+                    if tuple.should_be_printed:
+                        tuple.dont_print()
+            self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.detection_threshold, False)
+            # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
+            ids_to_delete = []
+            for tuple in self.tuples:
+                # We cut the strings of letters regardless of it being detected before.
+                if self.tuples[tuple].amount_of_flows > 100:
+                    if self.debug > 3:
+                        print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
+                    ids_to_delete.append(self.tuples[tuple].get_id())
+            # Actually delete them
+            for id in ids_to_delete:
+                del self.tuples[id]
+            # Move the time slot
+            self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+            self.slot_endtime = self.slot_starttime + self.slot_width
 
-        # Put the last flow received in the next slot, because it overcome the threshold and it was not processed
-        tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
-        tuple = self.get_tuple(tuple4)
-        if self.verbose:
-            # If this is the first time this tuple appears in this time window, print it in red.
-            if len(tuple.state) == 0:
-                tuple.set_color(red)
-        tuple.add_new_flow(column_values)
-        # Detect the first flow of the future timeslot
-        self.detect(tuple)
-        self.tuples_in_this_time_slot = {}
-        flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-        # Ask for IpAdress object 
-        ip_address = self.ip_handler.get_ip(column_values[3])
-        #store detection result into Ip_address
-        ip_address.add_detection(tuple.detected_label,tuple.id,tuple.current_size, flowtime)
+            # Put the last flow received in the next slot, because it overcome the threshold and it was not processed
+            tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+            tuple = self.get_tuple(tuple4)
+            if self.verbose:
+                # If this is the first time this tuple appears in this time window, print it in red.
+                if len(tuple.state) == 0:
+                    tuple.set_color(red)
+            tuple.add_new_flow(column_values)
+            # Detect the first flow of the future timeslot
+            self.detect(tuple)
+            self.tuples_in_this_time_slot = {}
+            flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+            # Ask for IpAdress object 
+            ip_address = self.ip_handler.get_ip(column_values[3])
+            #store detection result into Ip_address
+            ip_address.add_detection(tuple.detected_label,tuple.id,tuple.current_size, flowtime)
+        except Exception as inst:
+            print 'Problem in process_out_of_time_slot() in class Processor'
+            print type(inst)     # the exception instance
+            print inst.args      # arguments stored in .args
+            print inst           # __str__ allows args to printed directly
+            exit(-1)
+
+
 
     def detect(self, tuple):
         """
@@ -533,6 +542,7 @@ class Processor(multiprocessing.Process):
             while True:
                 if not self.queue.empty():
                     line = self.queue.get()
+                    print line
                     if 'stop' != line:
                         # Process this flow
                         nline = ','.join(line.strip().split(',')[:13])
@@ -547,11 +557,17 @@ class Processor(multiprocessing.Process):
                                     continue
                                 self.slot_endtime = self.slot_starttime + self.slot_width
                             flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+                            print self.slot_starttime
+                            print self.slot_endtime
+                            print flowtime
                             if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
                                 # Inside the slot
                                 tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+                                print tuple4
                                 tuple = self.get_tuple(tuple4)
+                                print tuple
                                 self.tuples_in_this_time_slot[tuple.get_id()] = tuple
+                                print self.tuples_in_this_time_slot
                                 # If this is the first time the tuple appears in this time windows, put it in red
                                 if self.verbose:
                                     if len(tuple.state) == 0:
@@ -573,7 +589,7 @@ class Processor(multiprocessing.Process):
                                 # Out of time slot
                                 self.process_out_of_time_slot(column_values)
                         except UnboundLocalError:
-                            print 'Probable empty file.'
+                            print 'Probably empty file.'
                     else:
                         try:
                             # Process the last flows in the last time slot
@@ -581,7 +597,7 @@ class Processor(multiprocessing.Process):
                             # Print SUMMARY
                             self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold, True)
                         except UnboundLocalError:
-                            print 'Probable empty file.'
+                            print 'Probably empty file...'
                             # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
                         # Just Return
                         return True
