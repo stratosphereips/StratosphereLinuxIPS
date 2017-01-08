@@ -628,8 +628,8 @@ if args.verbose < 1:
     args.verbose = 1
 
 # Check the debug level
-if args.debug < 1:
-    args.debug = 1
+if args.debug < 0:
+    args.debug = 0
 
 if args.dontdetect:
     print 'Warning: No detections will be done. Only the behaviors are printed.'
