@@ -120,12 +120,9 @@ class Tuple(object):
         except KeyError:
             # Is not, so just ask for it
             try:
-                print self.dst_ip
                 obj = ipwhois.IPWhois(self.dst_ip)
-                print obj
                 #data = obj.lookup() #//DEPReCATED FUCNTION -> use ".lookup_whois()" instead
                 data = obj.lookup_whois()
-                print data
                 try:
                     self.desc = data['nets'][0]['description'].strip().replace('\n',' ') + ',' + data['nets'][0]['country']
                 except AttributeError:
@@ -447,7 +444,8 @@ class Processor(multiprocessing.Process):
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
                 # Print the tuple and search its whois only if it has more than X amount of letters.
-                #if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
+                # This was the old way of stopping the system of analyzing tuples with less than amount of letters. Now should not be done here.
+                # if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
                 if tuple.should_be_printed:
                     if not tuple.desc and self.get_whois:
                         tuple.get_whois_data()
@@ -555,6 +553,7 @@ class Processor(multiprocessing.Process):
                                 # Dont print it until it is tried to be detected
                                 tuple.dont_print()
                                 # After the flow has been added to the tuple, only work with the ones having more than X amount of flows
+                                # Check that this is working correclty comparing it to the old program
                                 if len(tuple.state) >= self.amount:
                                     tuple.do_print()
                                     # Detection
