@@ -55,20 +55,19 @@ class IpAddress(object):
                     tuple_result = self.result_per_tuple(key,start_time,end_time,use_all)
                     n_malicious += tuple_result[0]
                     count += tuple_result[1]
-                    #if tuple_result[1] != 0:
                     try:
                         # Compute the ratio of the detections per tuple. This is the score of the tuple.
-                        # Also sum up all the scores of all the different tuples for this ip
                         tuple_ratio = tuple_result[0] / float(tuple_result[1])
+                        # Also sum up all the scores of all the different tuples for this ip
                         result += tuple_ratio
-                        if debug:
-                            print '\t\tTuple:{}, Score: {}, ({}/{})'.format(key, tuple_ratio, tuple_result[0], tuple_result[1])
-                        # If the last tuple was detected at least once, then count it.
-                        if tuple_result[0] > 0:
-                            total_infected_tuples += 1
                     except ZeroDivisionError:
                         print 'Warning! trying to divide by zero. We should not be here.'
                         result = False
+                    if debug:
+                        print '\t\tTuple:{}, Score: {}, ({}/{})'.format(key, tuple_ratio, tuple_result[0], tuple_result[1])
+                    # If the last tuple was detected at least once, then count it.
+                    if tuple_result[0] > 0:
+                        total_infected_tuples += 1
                 tuples_dect_perc = float(total_infected_tuples) / len(self.tuples.keys())
                 # Compute the weighted result
                 weighted_score = float(tuples_dect_perc) * result
