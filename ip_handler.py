@@ -61,8 +61,7 @@ class IpAddress(object):
                         # Also sum up all the scores of all the different tuples for this ip
                         result += tuple_ratio
                     except ZeroDivisionError:
-                        print 'Warning! trying to divide by zero. We should not be here.'
-                        result = False
+                        print 'Warning! trying to divide by zero. We should not be here. Ignore and continue'
                     if debug:
                         print '\t\tTuple:{}, Score: {}, ({}/{})'.format(key, tuple_ratio, tuple_result[0], tuple_result[1])
                     # If the last tuple was detected at least once, then count it.
