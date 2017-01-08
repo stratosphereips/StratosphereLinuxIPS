@@ -20,7 +20,7 @@ from ip_handler import IpAddress
 
 import random
 
-version = '0.3.3alpha'
+version = '0.4'
 
 ###################
 class Tuple(object):
