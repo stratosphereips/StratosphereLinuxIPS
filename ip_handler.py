@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # Author: Ondrej Lukas - luaksond@fel.cvut.cz
-import datetime
+from datetime import datetime
 from time import gmtime, strftime
 from colors import *
 
@@ -24,7 +24,8 @@ class IpAddress(object):
                     print("Detection label of %s CHANGED %s -> %s",(self.address,str(self.last_label),str(label)))
             self.last_label = label
             """
-            detection = (label,n_chars,input_time)
+            # The detection structure is a 3-tuple of a label, the number of chars when it was detected and when it was detected
+            detection = (label, n_chars, input_time)
             self.last_time = input_time
 
             #first time we see this tuple
@@ -62,37 +63,40 @@ class IpAddress(object):
 
 	def print_ip(self, verb, start_time, end_time, threshold, print_all):
             """ Print information about the IPs. Both during the time window and at the end. Do the verbose printings better"""
-		if (self.last_time >= start_time and self.last_time < end_time) or print_all:
-                    res = self.get_result(start_time,end_time,threshold,print_all)
-                    if verb > 0 and res[0] == 'MALICIOUS':
-                        print red("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
-                        if verb > 1:
-                            for key in self.tuples.keys():
-                                tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
-                                #if tuple_res[1] > 0:
-                                if tuple_res[0] > 0:
-                                    print "\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1])
-                                    if verb > 2:
-                                        for detection in self.tuples[key]:
-                                            if (detection[2] >= start_time and detection[2] < end_time) or print_all:
-                                                print "\t\t\t"+ str(detection)
-                    if verb > 2 and res[0] != 'MALICIOUS':
-                        print green("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
-                        if verb > 3:
-                            for key in self.tuples.keys():
-                                tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
-                                if(tuple_res[1] > 0):
-                                    print "\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1])
-                                    if verb > 4:
-                                        for detection in self.tuples[key]:
-                                            if (detection[2] >= start_time and detection[2] < end_time) or print_all:
-                                                print "\t\t\t"+ str(detection)
+            if (self.last_time >= start_time and self.last_time < end_time) or print_all:
+                res = self.get_result(start_time,end_time,threshold,print_all)
+                if verb > 0 and res[0] == 'MALICIOUS':
+                    print red("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
+                    if verb > 1:
+                        for key in self.tuples.keys():
+                            tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
+                            #if tuple_res[1] > 0:
+                            if tuple_res[0] > 0:
+                                print "\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1])
+                                if verb > 2:
+                                    for detection in self.tuples[key]:
+                                        if (detection[2] >= start_time and detection[2] < end_time) or print_all:
+                                            # Only print when it was positively detected
+                                            if detection[0] != False:
+                                                print '\t\t\tLabel: {}, #chars: {}, Detection time: {}'.format(detection[0],detection[1], detection[2].strftime('%Y/%m/%d %H:%M:%S.%f'))
+                if verb > 3 and res[0] != 'MALICIOUS':
+                    print green("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
+                    if verb > 4:
+                        for key in self.tuples.keys():
+                            tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
+                            if(tuple_res[1] > 0):
+                                print "\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1])
+                                if verb > 5:
+                                    for detection in self.tuples[key]:
+                                        if (detection[2] >= start_time and detection[2] < end_time) or print_all:
+                                            print "\t\t\t"+ str(detection)
 
 class IpHandler(object):
 	"""Class which handles all IP actions for slips. Stores every IP object in the session, provides summary, statistics etc."""
-	def __init__(self, verbose):
+	def __init__(self, verbose, debug):
             self.addresses = {}
             self.verbose = verbose
+            self.debug = debug
 
 	def print_addresses(self, start_time, end_time, threshold, print_all):
             if print_all:
