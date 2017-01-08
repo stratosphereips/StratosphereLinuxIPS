@@ -62,6 +62,7 @@ class IpAddress(object):
                         result += tuple_ratio
                     except ZeroDivisionError:
                         #print 'Warning! trying to divide by zero. We should not be here. Ignore and continue'
+                        tuple_ratio = False
                         pass
                     if debug:
                         print '\t\tTuple:{}, Score: {}, ({}/{})'.format(key, tuple_ratio, tuple_result[0], tuple_result[1])
