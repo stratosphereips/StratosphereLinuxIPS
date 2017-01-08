@@ -542,7 +542,6 @@ class Processor(multiprocessing.Process):
             while True:
                 if not self.queue.empty():
                     line = self.queue.get()
-                    print line
                     if 'stop' != line:
                         # Process this flow
                         nline = ','.join(line.strip().split(',')[:13])
@@ -557,17 +556,11 @@ class Processor(multiprocessing.Process):
                                     continue
                                 self.slot_endtime = self.slot_starttime + self.slot_width
                             flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-                            print self.slot_starttime
-                            print self.slot_endtime
-                            print flowtime
                             if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
                                 # Inside the slot
                                 tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
-                                print tuple4
                                 tuple = self.get_tuple(tuple4)
-                                print tuple
                                 self.tuples_in_this_time_slot[tuple.get_id()] = tuple
-                                print self.tuples_in_this_time_slot
                                 # If this is the first time the tuple appears in this time windows, put it in red
                                 if self.verbose:
                                     if len(tuple.state) == 0:
