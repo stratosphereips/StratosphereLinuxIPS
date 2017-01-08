@@ -35,18 +35,26 @@ class IpAddress(object):
             self.tuples[tuple].append(detection)
 
 	def result_per_tuple(self, tuple, start_time, end_time, use_all):		
-            n_malicious = 0
-            count = 0
-            for detection in self.tuples[tuple]:
-                if (detection[2] >= start_time and detection[2] < end_time) or use_all:
-                    count += 1
-                    if detection[0] != False:
-                        n_malicious += 1
-                else:
-                    continue
-            return (n_malicious, count)
+            try:
+                n_malicious = 0
+                count = 0
+                for detection in self.tuples[tuple]:
+                    if (detection[2] >= start_time and detection[2] < end_time) or use_all:
+                        count += 1
+                        if detection[0] != False:
+                            n_malicious += 1
+                    else:
+                        continue
+                return (n_malicious, count)
+            except Exception as inst:
+                print '\tProblem with result_per_tuple() in ip_handler.py'
+                print type(inst)     # the exception instance
+                print inst.args      # arguments stored in .args
+                print inst           # __str__ allows args to printed directly
+                sys.exit(1)
 
 	def get_result(self, start_time, end_time, threshold, use_all, verbose, debug):
+            try:
 		result = 0;
 		n_malicious = 0;
 		count = 0
@@ -80,39 +88,52 @@ class IpAddress(object):
 		else:
                     verdict = 'Normal'
                 return (verdict, result, n_malicious, count, weighted_score, tuples_dect_perc, total_infected_tuples, len(self.tuples.keys()))
+            except Exception as inst:
+                print '\tProblem with get_results() in ip_handler.py'
+                print type(inst)     # the exception instance
+                print inst.args      # arguments stored in .args
+                print inst           # __str__ allows args to printed directly
+                sys.exit(1)
 
 	def print_ip(self, verbose, debug, start_time, end_time, threshold, print_all):
             """ Print information about the IPs. Both during the time window and at the end. Do the verbose printings better"""
-            if (self.last_time >= start_time and self.last_time < end_time) or print_all:
-                if debug:
-                    print 'Analyzing IP {}'.format(self.address)
-                res = self.get_result(start_time, end_time, threshold, print_all, verbose, debug)
-                # Check independently of the case
-                if verbose > 0 and res[0].lower() == 'malicious':
-                    print red('\t+ {} (Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}'.format(self.address, res[1], res[0], res[2], res[3], res[4], res[5]))
-                    if verbose > 1:
-                        for key in self.tuples.keys():
-                            tuple_res = self.result_per_tuple(key, start_time, end_time, print_all)
-                            #if tuple_res[1] > 0:
-                            if tuple_res[0] > 0:
-                                print "\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1])
-                                if verbose > 2:
-                                    for detection in self.tuples[key]:
-                                        if (detection[2] >= start_time and detection[2] < end_time) or print_all:
-                                            # Only print when it was positively detected
-                                            if detection[0] != False:
-                                                print '\t\t\tLabel: {}, #chars: {}, Detection time: {}'.format(detection[0], detection[1], detection[2].strftime('%Y/%m/%d %H:%M:%S.%f'))
-                if verbose > 3 and res[0].lower() != 'malicious':
-                    print green("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
-                    if verbose > 4:
-                        for key in self.tuples.keys():
-                            tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
-                            if(tuple_res[1] > 0):
-                                print "\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1])
-                                if verbose > 5:
-                                    for detection in self.tuples[key]:
-                                        if (detection[2] >= start_time and detection[2] < end_time) or print_all:
-                                            print "\t\t\t"+ str(detection)
+            try:
+                if (self.last_time >= start_time and self.last_time < end_time) or print_all:
+                    if debug:
+                        print 'Analyzing IP {}'.format(self.address)
+                    res = self.get_result(start_time, end_time, threshold, print_all, verbose, debug)
+                    # Check independently of the case
+                    if verbose > 0 and res[0].lower() == 'malicious':
+                        print red('\t+ {} (Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}'.format(self.address, res[1], res[0], res[2], res[3], res[4], res[5]))
+                        if verbose > 1:
+                            for key in self.tuples.keys():
+                                tuple_res = self.result_per_tuple(key, start_time, end_time, print_all)
+                                #if tuple_res[1] > 0:
+                                if tuple_res[0] > 0:
+                                    print "\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1])
+                                    if verbose > 2:
+                                        for detection in self.tuples[key]:
+                                            if (detection[2] >= start_time and detection[2] < end_time) or print_all:
+                                                # Only print when it was positively detected
+                                                if detection[0] != False:
+                                                    print '\t\t\tLabel: {}, #chars: {}, Detection time: {}'.format(detection[0], detection[1], detection[2].strftime('%Y/%m/%d %H:%M:%S.%f'))
+                    if verbose > 3 and res[0].lower() != 'malicious':
+                        print green("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
+                        if verbose > 4:
+                            for key in self.tuples.keys():
+                                tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
+                                if(tuple_res[1] > 0):
+                                    print "\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1])
+                                    if verbose > 5:
+                                        for detection in self.tuples[key]:
+                                            if (detection[2] >= start_time and detection[2] < end_time) or print_all:
+                                                print "\t\t\t"+ str(detection)
+            except Exception as inst:
+                print '\tProblem with print_ip() in ip_handler.py'
+                print type(inst)     # the exception instance
+                print inst.args      # arguments stored in .args
+                print inst           # __str__ allows args to printed directly
+                sys.exit(1)
 
 class IpHandler(object):
 	"""Class which handles all IP actions for slips. Stores every IP object in the session, provides summary, statistics etc."""
