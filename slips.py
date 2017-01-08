@@ -14,6 +14,11 @@ import time
 from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
+from ip_handler import IpHandler
+from ip_handler import IpAddress
+
+
+import random
 
 version = '0.3.3alpha'
 
@@ -115,13 +120,23 @@ class Tuple(object):
         except KeyError:
             # Is not, so just ask for it
             try:
+                print self.dst_ip
                 obj = ipwhois.IPWhois(self.dst_ip)
-                data = obj.lookup()
+                print obj
+                #data = obj.lookup() #//DEPReCATED FUCNTION -> use ".lookup_whois()" instead
+                data = obj.lookup_whois()
+                print data
                 try:
                     self.desc = data['nets'][0]['description'].strip().replace('\n',' ') + ',' + data['nets'][0]['country']
                 except AttributeError:
                     # There is no description field
                     self.desc = ""
+            except ValueError:
+                # Not a real IP, maybe a MAC
+                pass
+            except IndexError:
+                # Some problem with the whois info. Continue
+                pass        
             except ipwhois.IPDefinedError as e:
                 if 'Multicast' in e:
                     self.desc = 'Multicast'
@@ -129,12 +144,6 @@ class Tuple(object):
             except ipwhois.ipwhois.WhoisLookupError:
                 print 'Error looking the whois of {}'.format(self.dst_ip)
                 # continue with the work
-            except ValueError:
-                # Not a real IP, maybe a MAC
-                pass
-            except IndexError:
-                # Some problem with the whois info. Continue
-                pass
             # Store in the cache
             whois_cache[self.dst_ip] = self.desc
 
@@ -185,7 +194,7 @@ class Tuple(object):
         self.compute_state()
         self.compute_symbols()
         self.do_print()
-        if self.verbose > 1:
+        if self.verbose > 3:
             print '\tTuple {}. Amount of flows so far: {}'.format(self.get_id(), self.amount_of_flows)
 
     def compute_periodicity(self):
@@ -400,7 +409,7 @@ class Tuple(object):
 
 class Processor(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect):
+    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect, threshold):
         multiprocessing.Process.__init__(self)
         self.get_whois = get_whois
         self.verbose = verbose
@@ -413,6 +422,8 @@ class Processor(multiprocessing.Process):
         self.slot_endtime = -1
         self.slot_width = slot_width
         self.dontdetect = dontdetect
+        self.ip_handler = IpHandler(self.verbose)
+        self.detection_threshold = threshold;
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -435,7 +446,9 @@ class Processor(multiprocessing.Process):
             print cyan('Slot Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples_in_this_time_slot)))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
-                if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
+                # Print the tuple and search its whois only if it has more than X amount of letters.
+                #if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
+                if tuple.should_be_printed:
                     if not tuple.desc and self.get_whois:
                         tuple.get_whois_data()
                     print tuple.print_tuple_detected()
@@ -445,6 +458,7 @@ class Processor(multiprocessing.Process):
                 # After printing the tuple in this time slot, we should not print it again unless we see some of its flows.
                 if tuple.should_be_printed:
                     tuple.dont_print()
+        self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.detection_threshold, False)
         # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
         ids_to_delete = []
         for tuple in self.tuples:
@@ -469,8 +483,12 @@ class Processor(multiprocessing.Process):
         tuple.add_new_flow(column_values)
         # Detect the first flow of the future timeslot
         self.detect(tuple)
-        # Empty the tuples in this time window
         self.tuples_in_this_time_slot = {}
+        flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+        # Ask for IpAdress object 
+        ip_adress = self.ip_handler.get_ip(column_values[3])
+        #store detection result into Ip_adress
+        ip_adress.add_detection(tuple.detected_label,tuple.id,tuple.current_size, flowtime)
 
     def detect(self, tuple):
         """
@@ -534,8 +552,17 @@ class Processor(multiprocessing.Process):
                                     if len(tuple.state) == 0:
                                         tuple.set_color(red)
                                 tuple.add_new_flow(column_values)
-                                # Detection
-                                self.detect(tuple)
+                                # Dont print it until it is tried to be detected
+                                tuple.dont_print()
+                                # After the flow has been added to the tuple, only work with the ones having more than X amount of flows
+                                if len(tuple.state) >= self.amount:
+                                    tuple.do_print()
+                                    # Detection
+                                    self.detect(tuple)
+                                    # Ask for IpAdress object 
+                                    ip_adress = self.ip_handler.get_ip(column_values[3])
+                                    # Store detection result into Ip_adress
+                                    ip_adress.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime)
                             elif flowtime > self.slot_endtime:
                                 # Out of time slot
                                 self.process_out_of_time_slot(column_values)
@@ -545,6 +572,8 @@ class Processor(multiprocessing.Process):
                         try:
                             # Process the last flows in the last time slot
                             self.process_out_of_time_slot(column_values)
+                            # Print SUMMARY
+                            self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold, True)
                         except UnboundLocalError:
                             print 'Probable empty file.'
                             # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
@@ -578,10 +607,15 @@ parser.add_argument('-d', '--datawhois', help='Get and show the whois info for t
 parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows using the models. Just print the connections.', default=False, action='store_true', required=False)
 parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
 parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
+parser.add_argument('-t', '--threshold', help='Threshold for detection with IPHandler', action='store', default=0.5, required=False, type=float)
+
 args = parser.parse_args()
 
 # Global shit for whois cache. The tuple needs to access it but should be shared, so global
 whois_cache = {}
+
+if args.verbose < 1:
+    args.verbose = 1
 
 if args.dontdetect:
     print 'Warning: No detections will be done. Only the behaviors are printed.'
@@ -606,7 +640,7 @@ if args.folder:
 # Create the queue
 queue = Queue()
 # Create the thread and start it
-processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect)
+processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect,args.threshold)
 processorThread.start()
 
 # Just put the lines in the queue as fast as possible
