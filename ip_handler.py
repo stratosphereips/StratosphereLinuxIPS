@@ -89,7 +89,7 @@ class IpAddress(object):
                 res = self.get_result(start_time, end_time, threshold, print_all, verbose, debug)
                 # Check independently of the case
                 if verbose > 0 and res[0].lower() == 'malicious':
-                    print red('\t+ {} (Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {}'.format(self.address, res[1], res[0], res[2], res[3], res[4]))
+                    print red('\t+ {} (Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}'.format(self.address, res[1], res[0], res[2], res[3], res[4], res[5]))
                     if verbose > 1:
                         for key in self.tuples.keys():
                             tuple_res = self.result_per_tuple(key, start_time, end_time, print_all)
