@@ -490,9 +490,9 @@ class Processor(multiprocessing.Process):
         self.tuples_in_this_time_slot = {}
         flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
         # Ask for IpAdress object 
-        ip_adress = self.ip_handler.get_ip(column_values[3])
-        #store detection result into Ip_adress
-        ip_adress.add_detection(tuple.detected_label,tuple.id,tuple.current_size, flowtime)
+        ip_address = self.ip_handler.get_ip(column_values[3])
+        #store detection result into Ip_address
+        ip_address.add_detection(tuple.detected_label,tuple.id,tuple.current_size, flowtime)
 
     def detect(self, tuple):
         """
@@ -566,9 +566,9 @@ class Processor(multiprocessing.Process):
                                     # Detection
                                     self.detect(tuple)
                                     # Ask for IpAdress object 
-                                    ip_adress = self.ip_handler.get_ip(column_values[3])
-                                    # Store detection result into Ip_adress
-                                    ip_adress.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime)
+                                    ip_address = self.ip_handler.get_ip(column_values[3])
+                                    # Store detection result into Ip_address
+                                    ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime)
                             elif flowtime > self.slot_endtime:
                                 # Out of time slot
                                 self.process_out_of_time_slot(column_values)
