@@ -587,6 +587,8 @@ class Processor(multiprocessing.Process):
                         return True
 
         except KeyboardInterrupt:
+            # Print SUMMARY
+            self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold, True)
             return True
         except Exception as inst:
             print '\tProblem with Processor()'
