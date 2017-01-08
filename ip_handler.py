@@ -66,7 +66,8 @@ class IpAddress(object):
                         # If the last tuple was detected at least once, then count it.
                         if tuple_result[0] > 0:
                             total_infected_tuples += 1
-                    except DivisionError:
+                    except ZeroDivisionError:
+                        print 'Warning! trying to divide by zero. We should not be here.'
                         result = False
                 tuples_dect_perc = float(total_infected_tuples) / len(self.tuples.keys())
                 # Compute the weighted result
