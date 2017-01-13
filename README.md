@@ -26,7 +26,7 @@ To use this alpha version you will need an argus instance running and listening 
 
 - Then you start the slips program receiving packets from a ra client.
 
-    ra -F [slipsfolder]/ra.conf -n -Z b -S 127.0.0.1:902 | ./slips.py -m models -p
+    ra -F [slipsfolder]/ra.conf -n -Z b -S 127.0.0.1:902 | [slipsfolder]/slips.py -m models -p
 
     This will read the network traffic in your computer and try to detect some malicious behavior by applying the models in the folder __models__.
 
