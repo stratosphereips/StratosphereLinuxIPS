@@ -3,6 +3,10 @@
 from datetime import datetime
 from time import gmtime, strftime
 from colors import *
+
+
+global filename
+filename = 'log.txt'
 class Alert(object):
     """docstring for Alert"""
     def __init__(self, time,source):
@@ -19,15 +23,13 @@ class IpDetectionAlert(Alert):
             super(IpDetectionAlert, self).__init__(time,source)
             self.score = score
     def print_alert(self):
-            print  yellow('\t*{} detected with score {}\ttime: {}*'.format(self.source,self.score,self.time.strftime('%Y/%m/%d %H:%M:%S.%f')))   
+            print  yellow('\t*{} detected with score {}\ttime: {}*'.format(self.source,self.score,self.time.strftime('%Y/%m/%d %H:%M:%S.%f')))
 
 class TupleDetectionAlert(object):
     """docstring for TupleDetectionAlert"""
     def __init__(self, time, source,model):
             super(TupleDetectionAlert, self).__init__(time,source)
-            self.model = model
-    def print_alert(self):
-            
+            self.model = model            
         
 
 class IpAddress(object):
@@ -106,7 +108,7 @@ class IpAddress(object):
                     if debug:
                         print '\t#Tuples:{}, Tuples Score: {}, ({}/{}). Detection Score: {} ({}/{}). Weighted Score: {}'.format(len(self.tuples.keys()), result, n_malicious, count, tuples_dect_perc, total_infected_tuples, len(self.tuples.keys()), weighted_score)
                 # Compute the verdict
-                if weighted_score >= 0.005: #implement threshold variable!
+                if weighted_score >= 0.05: #implement threshold variable!
                     verdict = "Bad"
                 elif result >= threshold:
                     verdict = 'Malicious'
@@ -124,37 +126,48 @@ class IpAddress(object):
 
     def print_ip(self, verbose, debug, start_time, end_time, threshold, print_all):
             """ Print information about the IPs. Both during the time window and at the end. Do the verbose printings better"""
+            sb= []
             try:
                 if (self.last_time >= start_time and self.last_time < end_time) or print_all:
                     if debug:
                         print 'Analyzing IP {}'.format(self.address)
+                        sb.append('Analyzing IP {}\n'.format(self.address))
                     res = self.get_result(start_time, end_time, threshold, print_all, verbose, debug)
                     # Check independently of the case
                     if verbose > 0 and (res[0].lower() == 'malicious' or  res[0].lower() == 'bad'):
                         print red('\t+ {} (Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}'.format(self.address, res[1], res[0], res[2], res[3], res[4], res[5]))
+                        sb.append('\t+ {} (Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address, res[1], res[0], res[2], res[3], res[4], res[5]))
                         if verbose > 1:
                             for key in self.tuples.keys():
                                 tuple_res = self.result_per_tuple(key, start_time, end_time, print_all)
-                                #if tuple_res[1] > 0:
                                 if tuple_res[0] > 0:
                                     print "\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1])
+                                    sb.append("\t\t%s (%d/%d)\n" %(key,tuple_res[0],tuple_res[1]))
                                     if verbose > 2:
                                         for detection in self.tuples[key]:
                                             if (detection[2] >= start_time and detection[2] < end_time) or print_all:
                                                 # Only print when it was positively detected
                                                 if detection[0] != False:
                                                     print '\t\t\tLabel: {}, #chars: {}, Detection time: {}'.format(detection[0], detection[1], detection[2].strftime('%Y/%m/%d %H:%M:%S.%f'))
+                                                    sb.append('\t\t\tLabel: {}, #chars: {}, Detection time: {}\n'.format(detection[0], detection[1], detection[2].strftime('%Y/%m/%d %H:%M:%S.%f')))
                     if verbose > 3 and res[0].lower() != 'malicious':
                         print green("\t+ %s %d/%d (%f) verdict:%s" %(self.address, res[2],res[3],res[1],res[0]))
+                        sb.append("\t+ %s %d/%d (%f) verdict:%s\n" %(self.address, res[2],res[3],res[1],res[0]))
                         if verbose > 4:
                             for key in self.tuples.keys():
                                 tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
                                 if(tuple_res[1] > 0):
                                     print "\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1])
+                                    sb.append("\t\t%s (%d/%d)\n" %(key,tuple_res[0],tuple_res[1]))
                                     if verbose > 5:
                                         for detection in self.tuples[key]:
                                             if (detection[2] >= start_time and detection[2] < end_time) or print_all:
                                                 print "\t\t\t"+ str(detection)
+                                                sb.append("\t\t\t"+ str(detection) + '\n')
+                if(len(sb) > 0) and print_all:
+                    with open(filename,'a') as f:
+                        f.write(''.join(sb))
+                        f.close()   
             except Exception as inst:
                 print '\tProblem with print_ip() in ip_handler.py'
                 print type(inst)     # the exception instance
@@ -177,7 +190,9 @@ class IpHandler(object):
 
     def print_addresses(self, start_time, end_time, threshold, print_all):
             if print_all:
-                print
+                f = open(filename,"w")
+                f.write("DATE:\t{}\nTHRESHOLD:\t{}\nSummary of adresses in this capture:\n\n".format(datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f'),threshold))
+                f.close()
                 print "Final summary of addresses in this capture (t=%f):" %(threshold)
             else:
                 print "Detections in this timewindow (t=%f):" %(threshold)
