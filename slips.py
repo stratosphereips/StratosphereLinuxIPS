@@ -628,7 +628,7 @@ parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavi
 parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
 parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
 parser.add_argument('-t', '--threshold', help='Threshold for detection with IPHandler', action='store', default=0.002, required=False, type=float)
-parser.add_argument('-sw', '--threshold', help='Width of sliding window', action='store', default=10, required=False, type=float)
+parser.add_argument('-sw', '--slidingwindowwidth', help='Width of sliding window', action='store', default=10, required=False, type=float)
 
 args = parser.parse_args()
 
