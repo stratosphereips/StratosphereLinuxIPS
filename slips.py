@@ -126,9 +126,6 @@ class Tuple(object):
                 if 'Multicast' in e:
                     self.desc = 'Multicast'
                 self.desc = 'Private Use'
-            except ipwhois.ipwhois.WhoisLookupError:
-                print 'Error looking the whois of {}'.format(self.dst_ip)
-                # continue with the work
             except ValueError:
                 # Not a real IP, maybe a MAC
                 pass
