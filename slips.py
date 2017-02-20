@@ -116,7 +116,7 @@ class Tuple(object):
             # Is not, so just ask for it
             try:
                 obj = ipwhois.IPWhois(self.dst_ip)
-                data = obj.lookup()
+                data = obj.lookup_whois()
                 try:
                     self.desc = data['nets'][0]['description'].strip().replace('\n',' ') + ',' + data['nets'][0]['country']
                 except AttributeError:
