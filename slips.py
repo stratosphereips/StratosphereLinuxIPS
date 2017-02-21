@@ -14,8 +14,16 @@ import time
 from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
+import logging
+import re
+import ConfigParser
 
 version = '0.3.3alpha'
+logging.basicConfig(filename='slips.log', level=logging.ERROR)
+logger = logging.getLogger(__name__)
+
+timeStampFormat = '%Y/%m/%d %H:%M:%S.%f'  # default format is overwritten by the value from the config file (if specified)
+
 
 ###################
 class Tuple(object):
@@ -145,12 +153,15 @@ class Tuple(object):
         if self.verbose > 2:
             print '\nAdding flow {}'.format(column_values)
         # Get the starttime
-        self.datetime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+        self.datetime = datetime.strptime(column_values[0], timeStampFormat)
         # Get the size
         try:
             self.current_size = float(column_values[12])
         except ValueError:
-            # It can happen that we dont have this value in the binetflow
+            # It can happen that we don't have this value in the binetflow
+            # ------->>> it may not always be ValueError it can also be indexout of bound error.
+            self.current_size = 0.0
+        except Exception:
             self.current_size = 0.0
         # Get the duration
         try:
@@ -397,7 +408,7 @@ class Tuple(object):
 
 class Processor(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect):
+    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect, config):
         multiprocessing.Process.__init__(self)
         self.get_whois = get_whois
         self.verbose = verbose
@@ -410,6 +421,7 @@ class Processor(multiprocessing.Process):
         self.slot_endtime = -1
         self.slot_width = slot_width
         self.dontdetect = dontdetect
+        self.config = config
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -429,7 +441,9 @@ class Processor(multiprocessing.Process):
         """
         # Outside the slot
         if self.verbose:
-            print cyan('Slot Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples_in_this_time_slot)))
+            print cyan(
+                'Slot Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime,
+                                                                          len(self.tuples_in_this_time_slot)))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
                 if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
@@ -439,13 +453,18 @@ class Processor(multiprocessing.Process):
                 # Clear the color because we already print it
                 if tuple.color == red:
                     tuple.set_color(yellow)
-                # After printing the tuple in this time slot, we should not print it again unless we see some of its flows.
+                # After printing the tuple in this time slot, we should not
+                # print it again unless we see some of its flows.
                 if tuple.should_be_printed:
                     tuple.dont_print()
-        # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
+        # After each timeslot finishes forget the tuples that are too big. This
+        # is useful when a tuple has a very very long state that is not so
+        # useful to us. Later we forget it when we detect it or after a long
+        # time.
         ids_to_delete = []
         for tuple in self.tuples:
-            # We cut the strings of letters regardless of it being detected before.
+            # We cut the strings of letters regardless of it being detected
+            # before.
             if self.tuples[tuple].amount_of_flows > 100:
                 if self.verbose > 3:
                     print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
@@ -454,11 +473,13 @@ class Processor(multiprocessing.Process):
         for id in ids_to_delete:
             del self.tuples[id]
         # Move the time slot
-        self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+        self.slot_starttime = datetime.strptime(
+                column_values[0], timeStampFormat)
         self.slot_endtime = self.slot_starttime + self.slot_width
 
-        # Put the last flow received in the next slot, because it overcome the threshold and it was not processed
-        tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+        # Put the last flow received in the next slot, because it overcome the
+        # threshold and it was not processed
+        tuple4 = column_values[3] + '-' + column_values[6] + '-' + column_values[7] + '-' + column_values[2]
         tuple = self.get_tuple(tuple4)
         if self.verbose:
             if len(tuple.state) == 0:
@@ -475,7 +496,8 @@ class Processor(multiprocessing.Process):
         """
         try:
             if not self.dontdetect:
-                (detected, label, statelen) = __markov_models__.detect(tuple, self.verbose)
+                (detected, label, statelen) = __markov_models__.detect(
+                    tuple, self.verbose)
                 if detected:
                     # Change color
                     tuple.set_color(magenta)
@@ -503,6 +525,25 @@ class Processor(multiprocessing.Process):
             print inst           # __str__ allows args to printed directly
             sys.exit(1)
 
+    def parseFlow(self, line):
+
+        if (config.has_option('delimiter', 'regex')):
+            try:
+                fdelimiter = config.get('delimiter', 'regex')
+                return re.split(fdelimiter, line)
+            except Exception:
+                logger.error("Invalid delimiter has been specified: " + fdelimiter)
+
+        if (config.has_option('delimiter', 'string')):
+            try:
+                fdelimiter = config.get('delimiter', 'regex')
+            except Exception:
+                logger.error("Invalid delimiter has been specified: " + fdelimiter)
+        else:
+            nline = ','.join(line.strip().split(',')[:13])
+            return nline.split(',')
+
+
     def run(self):
         try:
             while True:
@@ -510,23 +551,42 @@ class Processor(multiprocessing.Process):
                     line = self.queue.get()
                     if 'stop' != line:
                         # Process this flow
-                        nline = ','.join(line.strip().split(',')[:13])
+                        columns = self.parseFlow(line)
                         try:
-                            column_values = nline.split(',')
-                            # 0:starttime, 1:dur, 2:proto, 3:saddr, 4:sport, 5:dir, 6:daddr: 7:dport, 8:state, 9:stos,  10:dtos, 11:pkts, 12:bytes
+                            column_values = columns
+                            # 0:starttime, 1:dur, 2:proto, 3:saddr, 4:sport,
+                            # 5:dir, 6:daddr: 7:dport, 8:state, 9:stos,
+                            # 10:dtos, 11:pkts, 12:bytes
                             if self.slot_starttime == -1:
                                 # First flow
                                 try:
-                                    self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+                                    if config.has_option('timestamp', 'format'):
+                                        timeStampFormat = config.get('timestamp', 'format')
+                                    self.slot_starttime = datetime.strptime(column_values[0], timeStampFormat)
                                 except ValueError:
+                                    logger.error(
+                                        "Invalid timestamp format: " + timeStampFormat)
                                     continue
-                                self.slot_endtime = self.slot_starttime + self.slot_width
-                            flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+                                self.slot_endtime = self.slot_starttime + \
+                                                    self.slot_width
+                                # flowtime =
+                                # datetime.strptime(column_values[0], '%Y/%m/%d
+                                # %H:%M:%S.%f')
+                            try:
+                                flowtime = datetime.strptime(
+                                    column_values[0], timeStampFormat)
+
+                            except ValueError:
+                                logger.error(
+                                    "Invalid timestamp format: " + timeStampFormat)
+
                             if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
                                 # Inside the slot
-                                tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+                                tuple4 = column_values[3] + '-' + column_values[6] + '-' + column_values[7] + '-' + \
+                                         column_values[2]
                                 tuple = self.get_tuple(tuple4)
-                                self.tuples_in_this_time_slot[tuple.get_id()] = tuple
+                                self.tuples_in_this_time_slot[
+                                    tuple.get_id()] = tuple
                                 if self.verbose:
                                     if len(tuple.state) == 0:
                                         tuple.set_color(red)
@@ -537,6 +597,9 @@ class Processor(multiprocessing.Process):
                                 # Out of time slot
                                 self.process_out_of_time_slot(column_values)
                         except UnboundLocalError:
+                            logger.error(
+                                "Unbound error, Probable empty file.",
+                                exc_info=True)
                             print 'Probable empty file.'
                     else:
                         try:
@@ -547,7 +610,8 @@ class Processor(multiprocessing.Process):
                             # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
                         # Just Return
                         return True
-
+                else:
+                    time.sleep(1)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -558,7 +622,15 @@ class Processor(multiprocessing.Process):
             sys.exit(1)
 
 
-
+def readFileContent(path):
+    print path
+    try:
+        with open(path) as f:
+            content = f.readlines()
+            f.close()
+            return [x.strip() for x in content]
+    except Exception:
+        logger.error("Error opening flow file.", exc_info=True)
 
 
 ####################
@@ -568,17 +640,70 @@ print 'Stratosphere Linux IPS. Version {}\n'.format(version)
 
 # Parse the parameters
 parser = argparse.ArgumentParser()
-parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
-parser.add_argument('-v', '--verbose', help='Amount of verbosity.', action='store', default=1, required=False, type=int)
-parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=5, required=False, type=int)
-parser.add_argument('-d', '--datawhois', help='Get and show the whois info for the destination IP in each tuple', action='store_true', default=False, required=False)
-parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows using the models. Just print the connections.', default=False, action='store_true', required=False)
-parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
-parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
+parser.add_argument(
+    '-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.',
+    action='store', required=False, type=int, default=-1)
+
+parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False)
+parser.add_argument(
+    '-v',
+    '--verbose',
+    help='Amount of verbosity.',
+    action='store',
+    default=1,
+    required=False,
+    type=int)
+parser.add_argument(
+    '-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store',
+    default=5, required=False, type=int)
+parser.add_argument(
+    '-d', '--datawhois', help='Get and show the whois info for the destination IP in each tuple',
+    action='store_true', default=False, required=False)
+parser.add_argument('-D', '--dontdetect',
+                    help='Dont detect the malicious behavior in the flows using the models. Just print the connections.',
+                    default=False, action='store_true', required=False)
+parser.add_argument(
+    '-f',
+    '--folder',
+    help='Folder with models to apply for detection.',
+    action='store',
+    required=False)
+parser.add_argument(
+    '-s', '--sound', help='Play a small sound when a periodic connections is found.',
+    action='store_true', default=False, required=False)
+parser.add_argument(
+    '-o', '--offline', help='Process flows in offline mode.', action='store_true', default=False,
+    required=False)
+parser.add_argument(
+    '-p',
+    '--path',
+    help='Path to the flow file.',
+    required=False)
 args = parser.parse_args()
 
-# Global shit for whois cache. The tuple needs to access it but should be shared, so global
+# Global shit for whois cache. The tuple needs to access it but should be
+# shared, so global
 whois_cache = {}
+
+config = ConfigParser.ConfigParser()
+if args.config:
+    try:
+        with open(args.config) as source:
+            config.readfp(source)
+            logger.info("Successfully read the config file.")
+    except IOError:
+        logger.error("Could not find the config file.")
+else:
+    for loc in os.curdir, os.path.expanduser("~"), "/etc/slips", os.environ.get("SLIPS_CONF"):
+        if loc:
+            try:
+                with open(os.path.join(loc, "slips.conf")) as source:
+                    config.readfp(source)
+                    logger.info("Successfully read the config file.")
+                    break
+            except IOError:
+                pass
+
 
 if args.dontdetect:
     print 'Warning: No detections will be done. Only the behaviors are printed.'
@@ -592,10 +717,10 @@ if args.sound:
     pygame.mixer.init(44100)
     pygame.mixer.music.load('periodic.ogg')
 
-
 # Read the folder with models if specified
 if args.folder:
-    onlyfiles = [f for f in listdir(args.folder) if isfile(join(args.folder, f))]
+    onlyfiles = [
+        f for f in listdir(args.folder) if isfile(join(args.folder, f))]
     print 'Detecting malicious behaviors with the following models:'
     for file in onlyfiles:
         __markov_models__.set_model_to_detect(join(args.folder, file))
@@ -603,13 +728,33 @@ if args.folder:
 # Create the queue
 queue = Queue()
 # Create the thread and start it
-processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect)
+processorThread = Processor(
+    queue, timedelta(
+        minutes=args.width), args.datawhois, args.verbose, args.amount,
+    args.dontdetect, config)
 processorThread.start()
 
-# Just put the lines in the queue as fast as possible
-for line in sys.stdin:
-    queue.put(line)
-    #print 'A: {}'.format(queue.qsize())
+if args.offline:
+    print 'Working in offline mode'
+    if args.path:
+        content = readFileContent(args.path)
+        for line in content:
+            try:
+                queue.put(line)
+            except Exception:
+                logger.error("Failed to put the line into queue.",  exc_info=True)
+        print "Finished reading the file. "
+    else:
+        logging.error(
+            "A path to the flow file should be provided in the offline mode. ")
+
+else:
+    while True:
+        line = sys.stdin.readline()
+        if not line:
+            break
+        queue.put(line)
+        # print 'A: {}'.format(queue.qsize())
 print 'Finished receiving the input.'
 # Shall we wait? Not sure. Seems that not
 time.sleep(1)
