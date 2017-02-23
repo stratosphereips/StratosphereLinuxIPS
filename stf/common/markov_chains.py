@@ -10,7 +10,7 @@ class Matrix(dict):
     """ The basic matrix object """
     def __init__(self, *args, **kw):
         super(Matrix,self).__init__(*args, **kw)
-        self.itemlist = super(Matrix,self).keys()
+        self.itemlist = list(super(Matrix,self).keys())
 
     def set_init_vector(self, init_vector):
         self.init_vector = init_vector
@@ -53,9 +53,9 @@ class Matrix(dict):
             #print '\t\tFinal Prob (log): {}'.format(cum_prob)
             return cum_prob
         except Exception as err:
-            print type(err)
-            print err.args
-            print err
+            print(type(err))
+            print(err.args)
+            print(err)
             sys.exit(-1)
 
 
