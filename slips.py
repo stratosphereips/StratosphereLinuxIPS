@@ -556,15 +556,12 @@ class Processor(multiprocessing.Process):
                                     if config.has_option('timestamp', 'format'):
                                         timeStampFormat = config.get('timestamp', 'format')
                                     self.slot_starttime = datetime.strptime(column_values[0], timeStampFormat)
+                                    # If not?
                                 except ValueError:
-                                    logger.error(
-                                        "Invalid timestamp format: " + timeStampFormat)
+                                    logger.error("Invalid timestamp format: " + timeStampFormat)
                                     continue
-                                self.slot_endtime = self.slot_starttime + \
-                                                    self.slot_width
-                                # flowtime =
-                                # datetime.strptime(column_values[0], '%Y/%m/%d
-                                # %H:%M:%S.%f')
+                                self.slot_endtime = self.slot_starttime + self.slot_width
+                                # flowtime = # datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
                             try:
                                 flowtime = datetime.strptime(column_values[0], timeStampFormat)
                             except ValueError:
