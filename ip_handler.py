@@ -21,12 +21,14 @@ global filename
 filename = 'log.txt'
 global sw_width
 sw_width = 10
+
+
 class Alert(object):
     """docstring for Alert"""
     def __init__(self, time,source):
             self.time = time
             self.source = source
-    def print_alert(self):
+    def __str__(self):
             print "function print_alert() has to be implemented in derived class!"
             return  NotImplemented
 
@@ -36,8 +38,8 @@ class IpDetectionAlert(Alert):
     def __init__(self, time, source, score):
             super(IpDetectionAlert, self).__init__(time,source)
             self.score = score
-    def print_alert(self):
-            print  yellow('\t*{} detected with score {}\ttime: {}*'.format(self.source,self.score,self.time.strftime('%Y/%m/%d %H:%M:%S.%f')))
+    def __str__(self):
+            return yellow('*{} detected with score {}\ttime: {}*'.format(self.source,self.score,self.time.strftime('%Y/%m/%d %H:%M:%S.%f')))
 
 class TupleDetectionAlert(object):
     """docstring for TupleDetectionAlert"""
@@ -59,21 +61,18 @@ class IpAddress(object):
             self.address = address
             self.tuples = {}
             self.alerts = []
-            self.tw_weighted_score = []
+            self.ws_per_tw = {}
             self.last_result = None
             self.last_verdict = None
             self.last_time = None
 
-    def add_detection(self, label,tuple,n_chars,input_time):
-            #TODO:  
-            #alerts
+    def add_detection(self, label,tuple,n_chars,input_time,dest_add):
             # The detection structure is a 3-tuple of a label, the number of chars when it was detected and when it was detected
-            detection = (label, n_chars, input_time)
+            detection = (label, n_chars, input_time,dest_add)
             self.last_time = input_time
-
             #first time we see this tuple
             if(not self.tuples.has_key(tuple)):
-                    self.tuples[tuple] = []
+                self.tuples[tuple] = []
             #add detection to array
             self.tuples[tuple].append(detection)
 
@@ -96,7 +95,7 @@ class IpAddress(object):
                 print inst           # __str__ allows args to printed directly
                 sys.exit(1)
 
-    def get_weighted_score(self,start_time,end_time,use_all,debug=False):
+    def get_weighted_score(self,start_time,end_time,tw_index,use_all=False,debug=False):
             #threshold - sum of over all tuples
             try:
                 result = 0;
@@ -126,8 +125,7 @@ class IpAddress(object):
                     weighted_score = float(tuples_dect_perc) * result
                     if debug:
                         print '\t#Tuples:{}, Tuples Score: {}, ({}/{}). Detection Score: {} ({}/{}). Weighted Score: {}'.format(len(self.tuples.keys()), result, n_malicious, count, tuples_dect_perc, total_infected_tuples, len(self.tuples.keys()), weighted_score)
-                #self.tw_weighted_score.append((start_time,end_time,weighted_score))
-                self.tw_weighted_score.append(weighted_score)
+                self.ws_per_tw[tw_index] = weighted_score
                 self.last_result = (result, n_malicious, count, weighted_score, tuples_dect_perc, total_infected_tuples, len(self.tuples.keys()))
                 return weighted_score
             except Exception as inst:
@@ -141,45 +139,54 @@ class IpAddress(object):
                 print inst           # __str__ allows args to printed directly
                 sys.exit(1)
 
-    def get_verdict(self,start_time,end_time,offset,threshold,use_all=False,debug=False):
-            ws = self.get_weighted_score(start_time,end_time,use_all,debug)
-            if len(self.tw_weighted_score) < offset:
-                slide_window = self.tw_weighted_score
-            else:
-                slide_window = self.tw_weighted_score[len(self.tw_weighted_score)-offset:]
-            mean = sum(slide_window)/float(offset)
+    """This function uses sliding detection window (SDW) to compute mean of last n time windows weighted score"""
+    def get_verdict(self,start_time,end_time,tw_index,sdw_width,threshold,use_all=False,debug=False):
+            #compute weighted score for the last TW
+            self.get_weighted_score(start_time,end_time,tw_index,use_all,debug)
+            sdw = []
+            for i in range (tw_index,tw_index-sdw_width,-1):
+                if i < 0:
+                    break
+                if self.ws_per_tw.has_key(i):
+                    sdw.append(self.ws_per_tw[i])
+            mean = sum(sdw)/float(sdw_width)
             if debug:
-                print "Mean of the slide window:{}.".format(mean)
+                print "\tSDW startindex:{}. SDW endindex:{}.".format(tw_index-sdw_width,tw_index)
+                print "\t\t " +str(sdw)
+                print "\t\tMean of SDW:{}.".format(mean)
             if mean < threshold:
                 self.last_verdict = "Normal"
                 return 'Normal'
             else:
-                self.alerts.append(IpDetectionAlert(datetime.now(),self.address,ws))
-                print "\tSlide window width:{}, mean of SW:{}".format(offset,mean)
+                self.alerts.append(IpDetectionAlert(datetime.now(),self.address,mean))
+                print "\tSlide window width:{}, mean of SW:{}".format(sdw_width,mean)
                 self.last_verdict = "Malicious"
-                return 'Malicious'
 
-    def to_string(self, verbose, debug, start_time, end_time, threshold, print_all=False,colors=True):
+
+    def to_string(self, verbose, debug, start_time, end_time, threshold,whois_data, print_all=False,colors=True):
             """ Print information about the IPs. Both during the time window and at the end. Do the verbose printings better"""
             sb= []
-
             try:
                 if (self.last_time >= start_time and self.last_time < end_time) or print_all:
-                    if debug:
-                        sb.append('Analyzing IP {}\n'.format(self.address))
-                    verdict = self.get_verdict(start_time,end_time,sw_width,threshold,print_all,debug)
+                    verdict = self.last_verdict
                     res = self.last_result
                     # Check independently of the case
                     if verbose > 0 and verdict.lower() == 'malicious':
                         if colors:
-                            sb.append(red('\t+ {} (Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address, res[0], verdict, res[1], res[2], res[3], res[4])))
+                            sb.append(red('\t+ {} (Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address,res[0], verdict, res[1], res[2], res[3], res[4])))
                         else:
-                            sb.append('\t+ {} (Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address, res[0], verdict, res[1], res[2], res[3], res[4]))
+                            sb.append('\t+ {}(Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address,res[0], verdict, res[1], res[2], res[3], res[4]))
                         if verbose > 1:
                             for key in self.tuples.keys():
                                 tuple_res = self.result_per_tuple(key, start_time, end_time, print_all)
                                 if tuple_res[0] > 0:
-                                    sb.append("\t\t%s (%d/%d)\n" %(key,tuple_res[0],tuple_res[1]))
+
+                                    #has WHOIS?
+                                    if whois_data.has_key(self.tuples[key][0][3]):
+                                        whois = whois_data[self.tuples[key][0][3]]
+                                    else:
+                                        whois = "Unknown"
+                                    sb.append("\t\t%s[%s] (%d/%d)\n" %(key,whois,tuple_res[0],tuple_res[1]))
                                     if verbose > 2:
                                         for detection in self.tuples[key]:
                                             if (detection[2] >= start_time and detection[2] < end_time) or print_all:
@@ -209,12 +216,12 @@ class IpAddress(object):
                 print inst           # __str__ allows args to printed directly
                 sys.exit(1)
 
-    def proccess_timewindow(self,start_time,end_time,sdw_width,swd_threshold,verbose,use_all=False,debug=False):
-            verdict = get_verdict(start_time,end_time,sdw_width,swd_threshold,use_all,debug)
-            print to_string(verbose,debug,start_time,end_time,swd_threshold,use_all)
-
-    
-
+    def proccess_timewindow(self,start_time,end_time,tw_index,sdw_width,swd_threshold,verbose,use_all=False,debug=False):
+            if debug:
+                print "Proccess TW for " + self.address
+            self.get_weighted_score(start_time,end_time,tw_index,use_all,debug)
+            self.get_verdict(start_time,end_time,tw_index,sdw_width,swd_threshold,use_all,debug)
+            #print to_string(verbose,debug,start_time,end_time,swd_threshold,use_all)
 
     def get_alerts(self):
             return self.alerts
@@ -225,10 +232,8 @@ class IpHandler(object):
             self.addresses = {}
             self.verbose = verbose
             self.debug = debug
-            self.time_threshold = 0.5
-            self.impact_threshold = 0.5
 
-    def print_addresses(self, start_time, end_time, threshold, print_all):
+    def print_addresses(self, start_time, end_time,tw_index, threshold, print_all,whois):
             if print_all:
                 f = open(filename,"w")
                 f.write("DATE:\t{}\nTHRESHOLD:\t{}\nSummary of adresses in this capture:\n\n".format(datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f'),threshold))
@@ -238,7 +243,8 @@ class IpHandler(object):
                 print "Detections in this timewindow (t=%f):" %(threshold)
             for address in self.addresses.values():
                 #address.print_ip(self.verbose, self.debug, start_time, end_time, threshold, print_all)
-                string = address.to_string(self.verbose, self.debug, start_time, end_time, threshold, print_all,True)
+                address.proccess_timewindow(start_time,end_time,tw_index,10,threshold,print_all,True)
+                string = address.to_string(self.verbose, self.debug, start_time, end_time, threshold,whois, print_all,True)
                 if(len(string) > 0):
                     print string
 
@@ -250,21 +256,12 @@ class IpHandler(object):
             except KeyError:
                 ip = IpAddress(ip_string)
                 self.addresses[ip_string] = ip
-                #print yellow("\tAdding %s to the dictionary." %(ip_string))
             return ip
-
-        # Call IpAddress.add_detection instead?
-    def add_detection_result(self, ip_string,label,tuple,n_chars):
-            if not self.addresses.has_key(ip_string):
-                print "Invalid argument! No such ip has been stored!"
-            else:
-                self.addresses[ip_string].add_detection(label,tuple,n_chars)
 
     def print_alerts(self):
             print "ALERTS:"
             for ip in self.addresses.values():
-                for alert in ip.get_alerts():
-                    alert.print_alert()
-
-
-
+                if len(ip.alerts) > 0:
+                    print "\t"+ ip.address
+                    for alert in ip.get_alerts():
+                        print "\t\t" + str(alert)
