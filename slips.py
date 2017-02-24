@@ -409,7 +409,7 @@ class Tuple(object):
 
 class Processor(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect, threshold, debug):
+    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect, threshold, debug,whitelist):
         multiprocessing.Process.__init__(self)
         self.get_whois = get_whois
         self.verbose = verbose
@@ -425,6 +425,8 @@ class Processor(multiprocessing.Process):
         self.dontdetect = dontdetect
         self.ip_handler = IpHandler(self.verbose, self.debug)
         self.detection_threshold = threshold;
+        self.tw_index = 0
+        self.ip_whitelist = whitelist
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -462,8 +464,9 @@ class Processor(multiprocessing.Process):
                     # After printing the tuple in this time slot, we should not print it again unless we see some of its flows.
                     if tuple.should_be_printed:
                         tuple.dont_print()
-            self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.detection_threshold, False)
+            self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime,self.tw_index, self.detection_threshold, False,whois_cache)
             # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
+            self.tw_index +=1
             ids_to_delete = []
             for tuple in self.tuples:
                 # We cut the strings of letters regardless of it being detected before.
@@ -490,18 +493,16 @@ class Processor(multiprocessing.Process):
             self.detect(tuple)
             self.tuples_in_this_time_slot = {}
             flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-            # Ask for IpAdress object 
+            # Ask for IpAdress object
             ip_address = self.ip_handler.get_ip(column_values[3])
             #store detection result into Ip_address
-            ip_address.add_detection(tuple.detected_label,tuple.id,tuple.current_size, flowtime)
+            ip_address.add_detection(tuple.detected_label,tuple.id,tuple.current_size, flowtime,column_values[6])
         except Exception as inst:
             print 'Problem in process_out_of_time_slot() in class Processor'
             print type(inst)     # the exception instance
             print inst.args      # arguments stored in .args
             print inst           # __str__ allows args to printed directly
             exit(-1)
-
-
 
     def detect(self, tuple):
         """
@@ -548,39 +549,44 @@ class Processor(multiprocessing.Process):
                         try:
                             column_values = nline.split(',')
                             # 0:starttime, 1:dur, 2:proto, 3:saddr, 4:sport, 5:dir, 6:daddr: 7:dport, 8:state, 9:stos,  10:dtos, 11:pkts, 12:bytes
-                            if self.slot_starttime == -1:
-                                # First flow
-                                try:
-                                    self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-                                except ValueError:
-                                    continue
-                                self.slot_endtime = self.slot_starttime + self.slot_width
-                            flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-                            if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
-                                # Inside the slot
-                                tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
-                                tuple = self.get_tuple(tuple4)
-                                self.tuples_in_this_time_slot[tuple.get_id()] = tuple
-                                # If this is the first time the tuple appears in this time windows, put it in red
-                                if self.verbose:
-                                    if len(tuple.state) == 0:
-                                        tuple.set_color(red)
-                                tuple.add_new_flow(column_values)
-                                # Dont print it until it is tried to be detected
-                                tuple.dont_print()
-                                # After the flow has been added to the tuple, only work with the ones having more than X amount of flows
-                                # Check that this is working correclty comparing it to the old program
-                                if len(tuple.state) >= self.amount:
-                                    tuple.do_print()
-                                    # Detection
-                                    self.detect(tuple)
-                                    # Ask for IpAdress object 
-                                    ip_address = self.ip_handler.get_ip(column_values[3])
-                                    # Store detection result into Ip_address
-                                    ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime)
-                            elif flowtime > self.slot_endtime:
-                                # Out of time slot
-                                self.process_out_of_time_slot(column_values)
+                            #check if ip is not in whitelist
+                            if not column_values[3] in self.ip_whitelist:
+                                if self.slot_starttime == -1:
+                                    # First flow
+                                    try:
+                                        self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+                                    except ValueError:
+                                        continue
+                                    self.slot_endtime = self.slot_starttime + self.slot_width
+                                flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
+                                if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
+                                    # Inside the slot
+                                    tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+                                    tuple = self.get_tuple(tuple4)
+                                    self.tuples_in_this_time_slot[tuple.get_id()] = tuple
+                                    # If this is the first time the tuple appears in this time windows, put it in red
+                                    if self.verbose:
+                                        if len(tuple.state) == 0:
+                                            tuple.set_color(red)
+                                    tuple.add_new_flow(column_values)
+                                    # Dont print it until it is tried to be detected
+                                    tuple.dont_print()
+                                    # After the flow has been added to the tuple, only work with the ones having more than X amount of flows
+                                    # Check that this is working correclty comparing it to the old program
+                                    if len(tuple.state) >= self.amount:
+                                        tuple.do_print()
+                                        # Detection
+                                        self.detect(tuple)
+                                        # Ask for IpAdress object 
+                                        ip_address = self.ip_handler.get_ip(column_values[3])
+                                        # Store detection result into Ip_address
+                                        ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime,column_values[6])
+                                elif flowtime > self.slot_endtime:
+                                    # Out of time slot
+                                    self.process_out_of_time_slot(column_values)
+                            else:
+                                if self.debug:
+                                    print blue("Skipping flow with whitelisted ip: {}".format(column_values[3]))
                         except UnboundLocalError:
                             print 'Probably empty file.'
                     else:
@@ -588,7 +594,7 @@ class Processor(multiprocessing.Process):
                             # Process the last flows in the last time slot
                             self.process_out_of_time_slot(column_values)
                             # Print SUMMARY
-                            self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold, True)
+                            self.ip_handler.print_addresses(flowtime, flowtime,self.tw_index, self.detection_threshold, True,whois_cache)
                             self.ip_handler.print_alerts()
                         except UnboundLocalError:
                             print 'Probably empty file...'
@@ -598,7 +604,7 @@ class Processor(multiprocessing.Process):
 
         except KeyboardInterrupt:
             # Print SUMMARY
-            self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold, True)
+            self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold, True,whois_cache)
             self.ip_handler.print_alerts()
             return True
         except Exception as inst:
@@ -629,6 +635,7 @@ parser.add_argument('-f', '--folder', help='Folder with models to apply for dete
 parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
 parser.add_argument('-t', '--threshold', help='Threshold for detection with IPHandler', action='store', default=0.002, required=False, type=float)
 parser.add_argument('-sw', '--slidingwindowwidth', help='Width of sliding window', action='store', default=10, required=False, type=float)
+parser.add_argument('-wl','--whitelist',help="Whitelist of IP addresses",action='store',required=False)
 
 args = parser.parse_args()
 
@@ -665,8 +672,22 @@ if args.folder:
 
 # Create the queue
 queue = Queue()
+
+#Read whitelist
+whitelist = []
+if args.whitelist:
+    try:
+        content = [line.rstrip('\n') for line in open(args.whitelist)]
+        if len(content) > 0:
+            print blue("Whitelisted IPs:")
+            for item in content:
+                print blue("\t" + item)
+            whitelist = content
+    except Exception as e:
+        print blue("Whitelist file '{}' not found!".format(args.whitelist))
+
 # Create the thread and start it
-processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect, args.threshold, args.debug)
+processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect, args.threshold, args.debug,whitelist)
 processorThread.start()
 
 # Just put the lines in the queue as fast as possible
