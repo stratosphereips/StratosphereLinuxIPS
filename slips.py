@@ -15,7 +15,7 @@ from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
 from ip_handler import IpHandler
-from ip_handler import IpAddress
+#from ip_handler import IpAddress
 
 
 import random
@@ -446,8 +446,9 @@ class Processor(multiprocessing.Process):
         """
         try:
             # Outside the slot
-            if self.verbose:
+            if self.verbose > 1:
                 print cyan('Time Window Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples_in_this_time_slot)))
+                """
                 for tuple4 in self.tuples:
                     tuple = self.get_tuple(tuple4)
                     # Print the tuple and search its whois only if it has more than X amount of letters.
@@ -463,9 +464,11 @@ class Processor(multiprocessing.Process):
                     # After printing the tuple in this time slot, we should not print it again unless we see some of its flows.
                     if tuple.should_be_printed:
                         tuple.dont_print()
+                """
             self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime,self.tw_index, self.detection_threshold, False, whois_cache)
             # After each timeslot finishes forget the tuples that are too big. This is useful when a tuple has a very very long state that is not so useful to us. Later we forget it when we detect it or after a long time.
             self.tw_index +=1
+            """
             ids_to_delete = []
             for tuple in self.tuples:
                 # We cut the strings of letters regardless of it being detected before.
@@ -476,6 +479,7 @@ class Processor(multiprocessing.Process):
             # Actually delete them
             for id in ids_to_delete:
                 del self.tuples[id]
+            """
             # Move the time slot
             self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
             self.slot_endtime = self.slot_starttime + self.slot_width
@@ -483,19 +487,21 @@ class Processor(multiprocessing.Process):
             # Put the last flow received in the next slot, because it overcome the threshold and it was not processed
             tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
             tuple = self.get_tuple(tuple4)
+            """
             if self.verbose:
                 # If this is the first time this tuple appears in this time window, print it in red.
                 if len(tuple.state) == 0:
                     tuple.set_color(red)
+            """
             tuple.add_new_flow(column_values)
             # Detect the first flow of the future timeslot
             self.detect(tuple)
             self.tuples_in_this_time_slot = {}
             flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
-            # Ask for IpAdress object
+            # Ask for IpAddress object
             ip_address = self.ip_handler.get_ip(column_values[3])
-            #store detection result into Ip_address
-            ip_address.add_detection(tuple.detected_label,tuple.id,tuple.current_size, flowtime, column_values[6])
+            # Store detection result into Ip_address
+            ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime, column_values[6])
         except Exception as inst:
             print 'Problem in process_out_of_time_slot() in class Processor'
             print type(inst)     # the exception instance
@@ -576,7 +582,7 @@ class Processor(multiprocessing.Process):
                                         tuple.do_print()
                                         # Detection
                                         self.detect(tuple)
-                                        # Ask for IpAdress object 
+                                        # Ask for IpAddress object 
                                         ip_address = self.ip_handler.get_ip(column_values[3])
                                         # Store detection result into Ip_address
                                         ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime,column_values[6])
@@ -620,7 +626,9 @@ class Processor(multiprocessing.Process):
 ####################
 # Main
 ####################
-print 'Stratosphere Linux IPS. Version {}\n'.format(version)
+print 'Stratosphere Linux IPS. Version {}'.format(version)
+print('https://stratosphereips.org')
+print
 
 # Parse the parameters
 parser = argparse.ArgumentParser()
@@ -665,8 +673,11 @@ if args.sound:
 # Read the folder with models if specified
 if args.folder:
     onlyfiles = [f for f in listdir(args.folder) if isfile(join(args.folder, f))]
-    print 'Detecting malicious behaviors with the following models:'
+    if args.verbose > 2:
+        print 'Detecting malicious behaviors with the following models:'
     for file in onlyfiles:
+        __markov_models__.set_verbose(args.verbose)
+        __markov_models__.set_debug(args.debug)
         __markov_models__.set_model_to_detect(join(args.folder, file))
 
 # Create the queue
@@ -692,7 +703,8 @@ processorThread.start()
 # Just put the lines in the queue as fast as possible
 for line in sys.stdin:
     queue.put(line)
-print 'Finished receiving the input.'
+if args.verbose > 2:
+    print 'Finished receiving the input.'
 # Shall we wait? Not sure. Seems that not
 time.sleep(1)
 queue.put('stop')
