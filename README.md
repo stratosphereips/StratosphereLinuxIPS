@@ -53,6 +53,17 @@ This alpha version of slips comes with the following features:
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
 
+### Where does it work
+- Slips runs in 
+    - Ubuntu 16.04 LTS
+    - Debian stable/testing/unstable
+    - MacOS 10.9.5, 10.10.x to 10.12.x
+- To try:
+    - Android
+    - IOS
+
+
+
 ### Roadmap
 
 
@@ -63,7 +74,7 @@ This alpha version of slips comes with the following features:
 
 
 ### TODO
-
+- Make a good reference to the installation of argus 3.x
 
 
 ### Author and Contributors
