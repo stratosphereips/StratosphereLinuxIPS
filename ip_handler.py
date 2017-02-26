@@ -195,7 +195,7 @@ class IpAddress(object):
                                 if verbose > 5:
                                     for detection in self.tuples[key]:
                                         if (detection[2] >= start_time and detection[2] < end_time) or print_all:
-                                            sb.append("\t\t\t"+ str(detection) + '\n')
+                                            sb.append("\n\t\t\t"+ str(detection))
                                             
             return ''.join(sb)  
         except Exception as inst:
