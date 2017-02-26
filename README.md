@@ -49,23 +49,36 @@ This alpha version of slips comes with the following features:
 - If you want to avoid doing any detection you should use -D.
 - If you want to anonymize the source IP addresses before doing any processing, you can use -A. This will force all the source IPs to be hashed to MD5 in memory. Also a file is created in the current folder with the relationship of original IP addresses and new hashed IP addresses. So you can later relate the detections.
 
+
+## The use of verbose (-v)
+
+- -v 0: 
+    - In each time window shows:
+        - Print the detected source IP address, together with info about the thresholds and scores.
+- -v 1: 
+    - In each time window shows:
+        - Print the detected source IP address, together with info about the thresholds and scores.
+- -v 2: 
+    - For each detected source IP, print also the detected connections.
+- -v 3: 
+    - For each detected connection, print also the which model matched that connection and when.
+- -v 4: 
+    - Print the source IP addresses that were NOT detected.
+- -v 5: 
+    - For the NOT detected IP, print the connections
+- -v 5: 
+    - For the NOT detected IP, print each NOT detected test for each connection
+
+
+
 [Argus]: http://qosient.com/argus/ "Argus"
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
 
 
-### TODO
-- 2016/01/24
-    Problem with process_out_of_time_slot()
-    <type 'exceptions.AttributeError'>
-    ("'NoneType' object has no attribute 'strip'",)
-    'NoneType' object has no attribute 'strip'
-- Problem with process_out_of_time_slot()
-    <class 'ipwhois.ipwhois.WhoisLookupError'>
-    ("Whois lookup failed for '205.251.199.89'.",)
-    Whois lookup failed for '205.251.199.89'.
-- The number of tuples reported for each time window is wrong. Check
+## TODO
 
+- When using -v 4 the printing of the normal IPs appears before the text "Slide time window width"
 
 ### Author
 For bugs, reports, ideas or comments send an email to Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz
