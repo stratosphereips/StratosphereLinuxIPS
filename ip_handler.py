@@ -191,7 +191,7 @@ class IpAddress(object):
                         for key in self.tuples.keys():
                             tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
                             if(tuple_res[1] > 0):
-                                sb.append("\t\t%s (%d/%d)\n" %(key,tuple_res[0],tuple_res[1]))
+                                sb.append("\n\t\t%s (%d/%d)" %(key,tuple_res[0],tuple_res[1]))
                                 if verbose > 5:
                                     for detection in self.tuples[key]:
                                         if (detection[2] >= start_time and detection[2] < end_time) or print_all:
