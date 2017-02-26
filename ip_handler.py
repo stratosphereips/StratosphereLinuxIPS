@@ -228,7 +228,8 @@ class IpHandler(object):
         if print_all:
             print "Final summary of addresses in this capture (t=%f):" %(threshold)
         else:
-            print "Detections in this timewindow (t=%f):" %(threshold)
+            if self.verbose > 1:
+                print "Detections in this timewindow (t=%f):" %(threshold)
         for address in self.addresses.values():
             address.proccess_timewindow(start_time,end_time,tw_index,10,threshold,print_all,True)
             string = address.to_string(self.verbose, self.debug, start_time, end_time, threshold,whois, print_all,True)
