@@ -160,7 +160,7 @@ class MarkovModelsDetection():
         """
         Receives a file and extracts the model in it
         """
-        input = open(file, 'r')
+        input = open(file, 'rb')
         try:
             id = self.models[-1].get_id() + 1
         except (KeyError, IndexError):
