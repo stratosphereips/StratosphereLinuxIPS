@@ -148,7 +148,7 @@ class IpAddress(object):
             return 'Normal'
         else:
             self.alerts.append(IpDetectionAlert(datetime.now(),self.address,mean))
-            print "\tSlide window width:{}, mean of SW:{}".format(sdw_width,mean)
+            #print "\tSlide window width:{}, mean of SW:{}".format(sdw_width,mean)
             self.last_verdict = "Malicious"
 
 
@@ -162,26 +162,25 @@ class IpAddress(object):
                 # Check independently of the case
                 if verbose > 0 and verdict.lower() == 'malicious':
                     if colors:
-                        sb.append(red('\t+ {} (Tuple Score: {:.5f}) Verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address,res[0], verdict, res[1], res[2], res[3], res[4])))
+                        sb.append(red('\t+ {} (Tuple Score: {:.5f}) Verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}'.format(self.address,res[0], verdict, res[1], res[2], res[3], res[4])))
                     else:
-                        sb.append('\t+ {}(Tuple Score: {:.5f}) Verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address,res[0], verdict, res[1], res[2], res[3], res[4]))
+                        sb.append('\t+ {}(Tuple Score: {:.5f}) Verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}'.format(self.address,res[0], verdict, res[1], res[2], res[3], res[4]))
                     if verbose > 1:
                         for key in self.tuples.keys():
                             tuple_res = self.result_per_tuple(key, start_time, end_time, print_all)
                             if tuple_res[0] > 0:
-
                                 #has WHOIS?
                                 if whois_data.has_key(self.tuples[key][0][3]):
                                     whois = whois_data[self.tuples[key][0][3]]
                                 else:
                                     whois = "Unknown"
-                                sb.append("\t\t%s[%s] (%d/%d)\n" %(key,whois,tuple_res[0],tuple_res[1]))
+                                sb.append("\n\t\t%s [%s] (%d/%d)" %(key,whois,tuple_res[0],tuple_res[1]))
                                 if verbose > 2:
                                     for detection in self.tuples[key]:
                                         if (detection[2] >= start_time and detection[2] < end_time) or print_all:
                                             # Only print when it was positively detected
                                             if detection[0] != False:
-                                                sb.append('\t\t\tLabel: {}, #chars: {}, Detection time: {}\n'.format(detection[0], detection[1], detection[2].strftime('%Y/%m/%d %H:%M:%S.%f')))
+                                                sb.append('\n\t\t\tLabel: {}, #chars: {}, Detection time: {}'.format(detection[0], detection[1], detection[2].strftime('%Y/%m/%d %H:%M:%S.%f')))
                 if verbose > 3 and verdict.lower() != 'malicious':
                     if colors:
                         sb.append(green("\t+ %s %d/%d (%f) Verdict:%s" %(self.address, res[1],res[2],res[0],verdict)))
@@ -226,10 +225,10 @@ class IpHandler(object):
     def print_addresses(self, start_time, end_time,tw_index, threshold, print_all, whois):
         """ TODO put description here"""
         if print_all:
-            print "Final summary of addresses in this capture (t=%f):" %(threshold)
-        else:
-            if self.verbose > 1:
-                print "Detections in this timewindow (t=%f):" %(threshold)
+            print "\nFinal Alerts (Threshold = %f):" %(threshold)
+        #else:
+            #if self.verbose > 1:
+                #print "Detections in this timewindow (t=%f):" %(threshold)
         for address in self.addresses.values():
             address.proccess_timewindow(start_time,end_time,tw_index,10,threshold,print_all,True)
             string = address.to_string(self.verbose, self.debug, start_time, end_time, threshold,whois, print_all,True)
@@ -252,12 +251,11 @@ class IpHandler(object):
         # Open the file for the log
         f = open(filename,"w")
         f.write("DATE:\t{}\nSummary of adresses in this capture:\n\n".format(datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')))
-        print "ALERTS:"
         f.write('ALERTS:\n')
         for ip in self.addresses.values():
             if len(ip.alerts) > 0:
-                print "\t"+ ip.address
-                f.write( '\t' + ip.address + '\n')
+                print "\t - "+ ip.address
+                f.write( '\t - ' + ip.address + '\n')
                 for alert in ip.get_alerts():
                     print "\t\t" + str(alert)
                     f.write( '\t\t' + str(alert) + '\n')
