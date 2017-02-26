@@ -205,13 +205,12 @@ class IpAddress(object):
             print inst           # __str__ allows args to printed directly
             sys.exit(1)
 
-    def proccess_timewindow(self,start_time,end_time,tw_index,sdw_width,swd_threshold,verbose,use_all=False,debug=False):
+    def proccess_timewindow(self, start_time, end_time, tw_index, sdw_width, swd_threshold, verbose, use_all=False, debug=False):
         """ TODO put description here"""
         if debug:
             print "Proccess TW for " + self.address
         self.get_weighted_score(start_time,end_time,tw_index,use_all,debug)
         self.get_verdict(start_time,end_time,tw_index,sdw_width,swd_threshold,use_all,debug)
-        #print to_string(verbose,debug,start_time,end_time,swd_threshold,use_all)
 
     def get_alerts(self):
         """ TODO put description here"""
@@ -224,17 +223,13 @@ class IpHandler(object):
         self.verbose = verbose
         self.debug = debug
 
-    def print_addresses(self, start_time, end_time,tw_index, threshold, print_all,whois):
+    def print_addresses(self, start_time, end_time,tw_index, threshold, print_all, whois):
         """ TODO put description here"""
         if print_all:
-            f = open(filename,"w")
-            f.write("DATE:\t{}\nTHRESHOLD:\t{}\nSummary of adresses in this capture:\n\n".format(datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f'),threshold))
-            f.close()
             print "Final summary of addresses in this capture (t=%f):" %(threshold)
         else:
             print "Detections in this timewindow (t=%f):" %(threshold)
         for address in self.addresses.values():
-            #address.print_ip(self.verbose, self.debug, start_time, end_time, threshold, print_all)
             address.proccess_timewindow(start_time,end_time,tw_index,10,threshold,print_all,True)
             string = address.to_string(self.verbose, self.debug, start_time, end_time, threshold,whois, print_all,True)
             if(len(string) > 0):
@@ -253,9 +248,16 @@ class IpHandler(object):
 
     def print_alerts(self):
         """ TODO put description here"""
+        # Open the file for the log
+        f = open(filename,"w")
+        f.write("DATE:\t{}\nSummary of adresses in this capture:\n\n".format(datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')))
         print "ALERTS:"
+        f.write('ALERTS:\n')
         for ip in self.addresses.values():
             if len(ip.alerts) > 0:
                 print "\t"+ ip.address
+                f.write( '\t' + ip.address + '\n')
                 for alert in ip.get_alerts():
                     print "\t\t" + str(alert)
+                    f.write( '\t\t' + str(alert) + '\n')
+        f.close()
