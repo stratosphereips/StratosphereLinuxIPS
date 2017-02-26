@@ -162,9 +162,9 @@ class IpAddress(object):
                 # Check independently of the case
                 if verbose > 0 and verdict.lower() == 'malicious':
                     if colors:
-                        sb.append(red('\t+ {} (Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address,res[0], verdict, res[1], res[2], res[3], res[4])))
+                        sb.append(red('\t+ {} (Tuple Score: {:.5f}) Verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address,res[0], verdict, res[1], res[2], res[3], res[4])))
                     else:
-                        sb.append('\t+ {}(Tuple Score: {:.5f}) verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address,res[0], verdict, res[1], res[2], res[3], res[4]))
+                        sb.append('\t+ {}(Tuple Score: {:.5f}) Verdict: {} ({} of {} detections). Weighted Score: {} considering Detection Score: {}\n'.format(self.address,res[0], verdict, res[1], res[2], res[3], res[4]))
                     if verbose > 1:
                         for key in self.tuples.keys():
                             tuple_res = self.result_per_tuple(key, start_time, end_time, print_all)
@@ -184,9 +184,9 @@ class IpAddress(object):
                                                 sb.append('\t\t\tLabel: {}, #chars: {}, Detection time: {}\n'.format(detection[0], detection[1], detection[2].strftime('%Y/%m/%d %H:%M:%S.%f')))
                 if verbose > 3 and verdict.lower() != 'malicious':
                     if colors:
-                        sb.append(green("\t+ %s %d/%d (%f) verdict:%s\n" %(self.address, res[1],res[2],res[0],verdict)))
+                        sb.append(green("\t+ %s %d/%d (%f) Verdict:%s" %(self.address, res[1],res[2],res[0],verdict)))
                     else:
-                        sb.append("\t+ %s %d/%d (%f) verdict:%s\n" %(self.address, res[1],res[2],res[0],verdict))
+                        sb.append("\t+ %s %d/%d (%f) Verdict:%s" %(self.address, res[1],res[2],res[0],verdict))
                     if verbose > 4:
                         for key in self.tuples.keys():
                             tuple_res = self.result_per_tuple(key,start_time,end_time,print_all)
