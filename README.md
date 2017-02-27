@@ -97,8 +97,9 @@ This alpha version of slips comes with the following features:
 
 ### TODO
 - Make a good reference to the installation of argus 3.x
-
-- When using -v 4 the printing of the normal IPs appears before the text "Slide time window width"
+- Create a local DB of IPs so we can rememeber info about them (sqlite)
+- Add priories to the log: CRITIAL, etc.
+- If even the format of the flows change during the read, one idea is to search for an exception in the read of the format and then check which is the new format in the flow. Only check when there is an exception.
 
 ### Author and Contributors
 
