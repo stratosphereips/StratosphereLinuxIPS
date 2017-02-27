@@ -110,41 +110,6 @@ class Tuple(object):
     def set_debug(self, debug):
         self.debug = debug
 
-    def get_whois_data(self):
-        try:
-            import ipwhois
-        except ImportError:
-            print 'The ipwhois library is not install. pip install ipwhois'
-            return False
-        # is the ip in the cache
-        try:
-            self.desc = whois_cache[self.dst_ip]
-        except KeyError:
-            # Is not, so just ask for it
-            try:
-                obj = ipwhois.IPWhois(self.dst_ip)
-                data = obj.lookup_whois()
-                try:
-                    self.desc = data['nets'][0]['description'].strip().replace('\n',' ') + ',' + data['nets'][0]['country']
-                except AttributeError:
-                    # There is no description field
-                    self.desc = ""
-            except ValueError:
-                # Not a real IP, maybe a MAC
-                pass
-            except IndexError:
-                # Some problem with the whois info. Continue
-                pass        
-            except ipwhois.IPDefinedError as e:
-                if 'Multicast' in e:
-                    self.desc = 'Multicast'
-                self.desc = 'Private Use'
-            except ipwhois.ipwhois.WhoisLookupError:
-                print 'Error looking the whois of {}'.format(self.dst_ip)
-                # continue with the work
-            # Store in the cache
-            whois_cache[self.dst_ip] = self.desc
-
     def add_new_flow(self, column_values):
         """ Add new stuff about the flow in this tuple """
         # 0:starttime, 1:dur, 2:proto, 3:saddr, 4:sport, 5:dir, 6:daddr: 7:dport, 8:state, 9:stos,  10:dtos, 11:pkts, 12:bytes
@@ -449,9 +414,9 @@ class Processor(multiprocessing.Process):
             # Outside the slot
             if self.verbose > 1:
                 print cyan('Time Window Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples_in_this_time_slot)))
+            for tuple4 in self.tuples:
+                tuple = self.get_tuple(tuple4)
                 """
-                for tuple4 in self.tuples:
-                    tuple = self.get_tuple(tuple4)
                     # Print the tuple and search its whois only if it has more than X amount of letters.
                     # This was the old way of stopping the system of analyzing tuples with less than amount of letters. Now should not be done here.
                     # if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
@@ -467,7 +432,7 @@ class Processor(multiprocessing.Process):
                         tuple.dont_print()
                 """
             # Print all the addresses in this time window
-            self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.tw_index, self.detection_threshold, False, whois_cache)
+            self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.tw_index, self.detection_threshold, False)
             # Add 1 to the time window index 
             self.tw_index +=1
             """
@@ -618,7 +583,7 @@ class Processor(multiprocessing.Process):
 
         except KeyboardInterrupt:
             # Print Summary of detections in the last Time Window
-            self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold, True, whois_cache)
+            self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold, True)
             # Print final Alerts
             self.ip_handler.print_alerts()
             return True
@@ -655,9 +620,6 @@ parser.add_argument('-sw', '--slidingwindowwidth', help='Width of sliding window
 parser.add_argument('-wl','--whitelist',help="Whitelist of IP addresses",action='store',required=False)
 
 args = parser.parse_args()
-
-# Global shit for whois cache. The tuple needs to access it but should be shared, so global
-whois_cache = {}
 
 # Check the verbose level
 if args.verbose < 1:
