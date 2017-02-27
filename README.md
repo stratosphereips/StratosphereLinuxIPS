@@ -1,4 +1,4 @@
-# Stratosphere Linux IPS (slips)
+# Stratosphere Linux IPS (slips) Version 0.3.3alpha
 This is the linux version of the Stratosphere IPS, a behavioral-based intrusion detection and prevention system that uses machine learning algorithms to detect malicious behaviors. It is part of a larger suite of programs that include the [Stratosphere Windows IPS] and the [Stratosphere Testing Framework].
 
 This alpha version receives flows from a ra client ([Argus] Suite) and process them using a specific algorithm. The purpose of the Alpha version is to get feedback from the community, please send us your bug reports, feature requests and ideas. See the [Stratosphere IPS Website](https://stratosphereips.org).
@@ -53,20 +53,34 @@ This alpha version of slips comes with the following features:
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
 
+### Where does it work
+- Slips runs in 
+    - Ubuntu 16.04 LTS
+    - Debian stable/testing/unstable
+    - MacOS 10.9.5, 10.10.x to 10.12.x
+- To try:
+    - Android
+    - IOS
+
+
+
+### Roadmap
+
+
+### Changelog
+
+- 0.3.3alpha
+
+
 
 ### TODO
-- 2016/01/24
-    Problem with process_out_of_time_slot()
-    <type 'exceptions.AttributeError'>
-    ("'NoneType' object has no attribute 'strip'",)
-    'NoneType' object has no attribute 'strip'
-- Problem with process_out_of_time_slot()
-    <class 'ipwhois.ipwhois.WhoisLookupError'>
-    ("Whois lookup failed for '205.251.199.89'.",)
-    Whois lookup failed for '205.251.199.89'.
-- The number of tuples reported for each time window is wrong. Check
+- Make a good reference to the installation of argus 3.x
 
 
-### Author
-For bugs, reports, ideas or comments send an email to Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz
+### Author and Contributors
 
+- The author of the project is Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. (Send an email for bugs, reports, ideas or comments)
+- Ondrej Lukas: New detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classs, etc. 
+- Elaheh Biglar Beigi.
+- MariaRigaki.
+- kartik88363.
