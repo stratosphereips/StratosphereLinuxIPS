@@ -15,7 +15,6 @@ from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
 from ip_handler import IpHandler
-#from ip_handler import IpAddress
 
 
 import random
