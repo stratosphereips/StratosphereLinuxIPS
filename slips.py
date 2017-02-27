@@ -616,8 +616,8 @@ parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavi
 parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
 parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
 parser.add_argument('-t', '--threshold', help='Threshold for detection with IPHandler', action='store', default=0.002, required=False, type=float)
-parser.add_argument('-sw', '--slidingwindowwidth', help='Width of sliding window', action='store', default=10, required=False, type=float)
-parser.add_argument('-wl','--whitelist',help="Whitelist of IP addresses",action='store',required=False)
+parser.add_argument('-S', '--slidingwindowwidth', help='Width of sliding window. The unit is in \time windows\'. So a -S 10 and a -w 5, means a sliding window of 50 minutes.', action='store', default=10, required=False, type=float)
+parser.add_argument('-W','--whitelist',help="File with the IP addresses to whitelist. One per line.",action='store',required=False)
 
 args = parser.parse_args()
 
@@ -661,9 +661,11 @@ if args.whitelist:
     try:
         content = [line.rstrip('\n') for line in open(args.whitelist)]
         if len(content) > 0:
-            print blue("Whitelisted IPs:")
+            if args.verbose > 1:
+                print blue("Whitelisted IPs:")
             for item in content:
-                print blue("\t" + item)
+                if args.verbose > 1:
+                    print blue("\t" + item)
             whitelist = content
     except Exception as e:
         print blue("Whitelist file '{}' not found!".format(args.whitelist))
