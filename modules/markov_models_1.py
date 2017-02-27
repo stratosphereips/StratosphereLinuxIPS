@@ -176,7 +176,7 @@ class MarkovModelsDetection():
         print '\tAdding model {} to the list.'.format(model.get_label())
         input.close()
 
-    def detect(self, tuple, verbose):
+    def detect(self, tuple, verbose,debug):
         """
         Main detect function
         """
