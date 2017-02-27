@@ -18,7 +18,8 @@ from colors import *
 
 filename = 'log.txt'
 sw_width = 10
-
+# Global shit for whois cache. The tuple needs to access it but should be shared, so global
+whois_cache = {}
 
 class Alert(object):
     """docstring for Alert"""
@@ -56,6 +57,43 @@ class IpAddress(object):
         self.last_time = None
         self.verbose = verbose
         self.debug = debug
+
+    def get_whois_data(self, ip):
+        """ Get the whois data. This should be an independent function"""
+        try:
+            import ipwhois
+        except ImportError:
+            print 'The ipwhois library is not install. pip install ipwhois'
+            return False
+        # is the ip in the cache
+        try:
+            self.desc = whois_cache[ip]
+        except KeyError:
+            # Is not, so just ask for it
+            try:
+                obj = ipwhois.IPWhois(ip)
+                data = obj.lookup_whois()
+                try:
+                    self.desc = data['nets'][0]['description'].strip().replace('\n',' ') + ',' + data['nets'][0]['country']
+                except AttributeError:
+                    # There is no description field
+                    self.desc = ""
+            except ValueError:
+                # Not a real IP, maybe a MAC
+                pass
+            except IndexError:
+                # Some problem with the whois info. Continue
+                pass        
+            except ipwhois.IPDefinedError as e:
+                if 'Multicast' in e:
+                    self.desc = 'Multicast'
+                self.desc = 'Private Use'
+            except ipwhois.ipwhois.WhoisLookupError:
+                print 'Error looking the whois of {}'.format(ip)
+                # continue with the work
+            # Store in the cache
+            whois_cache[ip] = self.desc
+            return self.desc
 
     def add_detection(self, label, tuple, n_chars, input_time, dest_add):
         # The detection structure is a 3-tuple of a label, the number of chars when it was detected and when it was detected
@@ -159,7 +197,7 @@ class IpAddress(object):
             self.last_verdict = "Malicious"
 
 
-    def to_string(self, verbose, start_time, end_time, threshold, whois_data, print_all=False, colors=True):
+    def to_string(self, verbose, start_time, end_time, threshold, print_all=False, colors=True):
         """ Print information about the IPs. Both during the time window and at the end. Do the verbose printings better"""
         sb= []
         try:
@@ -176,12 +214,9 @@ class IpAddress(object):
                         for key in self.tuples.keys():
                             tuple_res = self.result_per_tuple(key, start_time, end_time, print_all)
                             if tuple_res[0] > 0:
-                                #has WHOIS?
-                                if whois_data.has_key(self.tuples[key][0][3]):
-                                    whois = whois_data[self.tuples[key][0][3]]
-                                else:
-                                    whois = "Unknown"
-                                sb.append("\n\t\t%s [%s] (%d/%d)" %(key,whois,tuple_res[0],tuple_res[1]))
+                                # Get whois
+                                whois = self.get_whois_data(self.tuples[key][0][3])
+                                sb.append("\n\t\t%s [%s] (%d/%d)" %(key, whois, tuple_res[0], tuple_res[1]))
                                 if verbose > 2:
                                     for detection in self.tuples[key]:
                                         if (detection[2] >= start_time and detection[2] < end_time) or print_all:
@@ -229,7 +264,7 @@ class IpHandler(object):
         self.verbose = verbose
         self.debug = debug
 
-    def print_addresses(self, start_time, end_time, tw_index, threshold, print_all, whois):
+    def print_addresses(self, start_time, end_time, tw_index, threshold, print_all):
         """ Print information about all the IP addresses in the time window specified in the parameters."""
         if print_all:
             print "\nFinal summary using the complete capture as a unique Time Window (Threshold = %f):" %(threshold)
@@ -241,11 +276,11 @@ class IpHandler(object):
             # Process this IP for the time window specified. So we can compute the detection value.
             address.process_timewindow(start_time, end_time, tw_index, 10, threshold, print_all, True)
             # Get a printable version of this IP's data
-            string = address.to_string(self.verbose, start_time, end_time, threshold,whois, print_all,True)
+            string = address.to_string(self.verbose, start_time, end_time, threshold, print_all, True)
             if(len(string) > 0):
                 print string
 
-    def get_ip(self,ip_string):
+    def get_ip(self, ip_string):
         """ TODO put description here"""
         #Have I seen this IP before?
         try:
