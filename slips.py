@@ -107,7 +107,7 @@ class Tuple(object):
         try:
             import ipwhois
         except ImportError:
-            print 'The ipwhois library is not install. pip install ipwhois'
+            print('The ipwhois library is not install. pip install ipwhois')
             return False
         # is the ip in the cache
         try:
@@ -143,7 +143,7 @@ class Tuple(object):
         self.previous_duration = self.current_duration
         self.previous_time = self.datetime
         if self.verbose > 2:
-            print '\nAdding flow {}'.format(column_values)
+            print('\nAdding flow {}'.format(column_values))
         # Get the starttime
         self.datetime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
         # Get the size
@@ -171,7 +171,7 @@ class Tuple(object):
             if self.T2.total_seconds() < 0:
                 # Flows are not sorted
                 if self.verbose > 2:
-                    print '@',
+                    print('@')
                 # What is going on here when the flows are not ordered?? Are we losing flows?
         except TypeError:
             self.T2 = False
@@ -183,7 +183,7 @@ class Tuple(object):
         self.compute_symbols()
         self.do_print()
         if self.verbose > 1:
-            print '\tTuple {}. Amount of flows so far: {}'.format(self.get_id(), self.amount_of_flows)
+            print('\tTuple {}. Amount of flows so far: {}'.format(self.get_id(), self.amount_of_flows))
 
     def compute_periodicity(self):
         # If either T1 or T2 are False
@@ -220,7 +220,7 @@ class Tuple(object):
             else:
                 self.periodic = 4
         if self.verbose > 2:
-            print '\tPeriodic: {}'.format(self.periodic)
+            print('\tPeriodic: {}'.format(self.periodic))
 
     def compute_duration(self):
         if self.current_duration <= self.td1:
@@ -230,7 +230,7 @@ class Tuple(object):
         elif self.current_duration > self.td2:
             self.duration = 3
         if self.verbose > 2:
-            print '\tDuration: {}'.format(self.duration)
+            print('\tDuration: {}'.format(self.duration))
 
     def compute_size(self):
         if self.current_size <= self.ts1:
@@ -240,7 +240,7 @@ class Tuple(object):
         elif self.current_size > self.ts2:
             self.size = 3
         if self.verbose > 2:
-            print '\tSize: {}'.format(self.size)
+            print('\tSize: {}'.format(self.size))
 
     def compute_state(self):
         if self.periodic == -1:
@@ -365,7 +365,7 @@ class Tuple(object):
             elif self.T2 <= timedelta(seconds=3600):
                 self.state += '*'
         if self.verbose > 2:
-            print '\tTD:{}, T2:{}, T1:{}, State: {}'.format(self.TD, self.T2, self.T1, self.state)
+            print('\tTD:{}, T2:{}, T1:{}, State: {}'.format(self.TD, self.T2, self.T1, self.state))
 
     def get_id(self):
         return self.id
@@ -384,13 +384,13 @@ class Tuple(object):
 
     def dont_print(self):
         if self.verbose > 3:
-            print '\tDont print tuple {}'.format(self.get_id())
+            print('\tDont print tuple {}'.format(self.get_id()))
         self.should_be_printed = False
 
     def do_print(self):
         self.should_be_printed = True
         if self.verbose > 3:
-            print '\tPrint tuple {}'.format(self.get_id())
+            print('\tPrint tuple {}'.format(self.get_id()))
 
 # Process
 
@@ -429,13 +429,13 @@ class Processor(multiprocessing.Process):
         """
         # Outside the slot
         if self.verbose:
-            print cyan('Slot Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples_in_this_time_slot)))
+            print(cyan('Slot Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples_in_this_time_slot))))
             for tuple4 in self.tuples:
                 tuple = self.get_tuple(tuple4)
                 if tuple.amount_of_flows > self.amount and tuple.should_be_printed:
                     if not tuple.desc and self.get_whois:
                         tuple.get_whois_data()
-                    print tuple.print_tuple_detected()
+                    print(tuple.print_tuple_detected())
                 # Clear the color because we already print it
                 if tuple.color == red:
                     tuple.set_color(yellow)
@@ -448,7 +448,7 @@ class Processor(multiprocessing.Process):
             # We cut the strings of letters regardless of it being detected before.
             if self.tuples[tuple].amount_of_flows > 100:
                 if self.verbose > 3:
-                    print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
+                    print('Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.')
                 ids_to_delete.append(self.tuples[tuple].get_id())
         # Actually delete them
         for id in ids_to_delete:
@@ -486,7 +486,7 @@ class Processor(multiprocessing.Process):
                     tuple.set_best_model_matching_len(statelen)
                     """
                     if self.verbose > 5:
-                        print 'Last flow: Detected with {}'.format(label)
+                        print('Last flow: Detected with {}'.format(label))
                     # Play sound
                     if args.sound:
                         pygame.mixer.music.play()
@@ -494,13 +494,13 @@ class Processor(multiprocessing.Process):
                     # Not detected by any reason. No model matching but also the state len is too short.
                     tuple.unset_detected_label()
                     if self.verbose > 5:
-                        print 'Last flow: Not detected'
+                        print('Last flow: Not detected')
                     tuple.dont_print()
         except Exception as inst:
-            print '\tProblem with detect()'
-            print type(inst)     # the exception instance
-            print inst.args      # arguments stored in .args
-            print inst           # __str__ allows args to printed directly
+            print('\tProblem with detect()')
+            print(type(inst))     # the exception instance
+            print(inst.args)      # arguments stored in .args
+            print(inst)           # __str__ allows args to printed directly
             sys.exit(1)
 
     def run(self):
@@ -537,13 +537,13 @@ class Processor(multiprocessing.Process):
                                 # Out of time slot
                                 self.process_out_of_time_slot(column_values)
                         except UnboundLocalError:
-                            print 'Probable empty file.'
+                            print('Probable empty file.')
                     else:
                         try:
                             # Process the last flows in the last time slot
                             self.process_out_of_time_slot(column_values)
                         except UnboundLocalError:
-                            print 'Probable empty file.'
+                            print('Probable empty file.')
                             # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
                         # Just Return
                         return True
@@ -551,10 +551,10 @@ class Processor(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            print '\tProblem with Processor()'
-            print type(inst)     # the exception instance
-            print inst.args      # arguments stored in .args
-            print inst           # __str__ allows args to printed directly
+            print('\tProblem with Processor()')
+            print(type(inst))     # the exception instance
+            print(inst.args)      # arguments stored in .args
+            print(inst)           # __str__ allows args to printed directly
             sys.exit(1)
 
 
@@ -564,7 +564,7 @@ class Processor(multiprocessing.Process):
 ####################
 # Main
 ####################
-print 'Stratosphere Linux IPS. Version {}\n'.format(version)
+print('Stratosphere Linux IPS. Version {}\n'.format(version))
 
 # Parse the parameters
 parser = argparse.ArgumentParser()
@@ -581,8 +581,8 @@ args = parser.parse_args()
 whois_cache = {}
 
 if args.dontdetect:
-    print 'Warning: No detections will be done. Only the behaviors are printed.'
-    print
+    print('Warning: No detections will be done. Only the behaviors are printed.')
+    print()
     # If the folder with models was specified, just ignore it
     args.folder = False
 
@@ -596,7 +596,7 @@ if args.sound:
 # Read the folder with models if specified
 if args.folder:
     onlyfiles = [f for f in listdir(args.folder) if isfile(join(args.folder, f))]
-    print 'Detecting malicious behaviors with the following models:'
+    print('Detecting malicious behaviors with the following models:')
     for file in onlyfiles:
         __markov_models__.set_model_to_detect(join(args.folder, file))
 
@@ -610,7 +610,7 @@ processorThread.start()
 for line in sys.stdin:
     queue.put(line)
     #print 'A: {}'.format(queue.qsize())
-print 'Finished receiving the input.'
+print('Finished receiving the input.')
 # Shall we wait? Not sure. Seems that not
 time.sleep(1)
 queue.put('stop')
