@@ -68,6 +68,7 @@ class IpAddress(object):
         # is the ip in the cache
         try:
             self.desc = whois_cache[ip]
+            return self.desc
         except KeyError:
             # Is not, so just ask for it
             try:
