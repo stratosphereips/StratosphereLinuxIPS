@@ -139,6 +139,12 @@ class MarkovModelsDetection():
     def __init__(self):
         self.models = []
 
+    def set_verbose(self, verbose):
+        self.verbose = verbose
+
+    def set_debug(self, debug):
+        self.debug = debug
+
     def is_periodic(self,state):
         basic_patterns = ['a,a,a,','b,b,b,', 'c,c,c,', 'd,d,d,', 'e,e,e,', 'f,f,f,', 'g,g,g,', 'h,h,h,', 'i,i,i,', 'a+a+a+', 'b+b+b+', 'c+c+c+', 'd+d+d+', 'e+e+e+', 'f+f+f+', 'g+g+g+', 'h+h+h+', 'i+i+i+', 'a*a*a*', 'b*b*b*', 'c*c*c*', 'd*d*d*', 'e*e*e*', 'f*f*f*', 'g*g*g*', 'h*h*h*', 'i*i*i*', 'A,A,A,','B,B,B,', 'C,C,C,', 'D,D,D,', 'E,E,E,', 'F,F,F,', 'G,G,G,', 'H,H,H,', 'I,I,I,', 'A+A+A+', 'B+B+B+', 'C+C+C+', 'D+D+D+', 'E+E+E+', 'F+F+F+', 'G+G+G+', 'H+H+H+', 'I+I+I+', 'A*A*A*', 'B*B*B*', 'C*C*C*', 'D*D*D*', 'E*E*E*', 'F*F*F*', 'G*G*G*', 'H*H*H*', 'I*I*I*']
         for pattern in basic_patterns:
@@ -173,10 +179,11 @@ class MarkovModelsDetection():
         model.set_label(cPickle.load(input))
         model.set_threshold(cPickle.load(input))
         self.models.append(model)
-        print '\tAdding model {} to the list.'.format(model.get_label())
+        if self.verbose > 2:
+            print '\tAdding model {} to the list.'.format(model.get_label())
         input.close()
 
-    def detect(self, tuple, verbose,debug):
+    def detect(self, tuple, verbose, debug):
         """
         Main detect function
         """
@@ -185,11 +192,12 @@ class MarkovModelsDetection():
             best_model_so_far = False
             best_distance_so_far = float('inf')
             # best_model_matching_len = -1
-            # Set the verbose
+            # Set the verbose and debug
             self.verbose = verbose
+            self.debug = debug
             # Only detect states with more than 3 letters
             if len(tuple.get_state()) < 4:
-                if self.verbose > 3:
+                if self.debug > 3:
                     print '\t-> State too small'
                 return (False, False, False)
             # Use the current models for detection
@@ -219,13 +227,13 @@ class MarkovModelsDetection():
                         prob_distance = test_prob / training_original_prob
                     except ZeroDivisionError:
                         prob_distance = -1
-                if self.verbose > 2:
+                if self.debug > 2:
                     print '\t\tTrained Model: {}. Label: {}. Threshold: {}, State: {}'.format(model.get_id(), model.get_label(), model.get_threshold(), train_sequence)
                     print '\t\t\tTest Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state())
                     print '\t\t\tTrain prob: {}'.format(training_original_prob)
                     print '\t\t\tTest prob: {}'.format(test_prob)
                     print '\t\t\tDistance: {}'.format(prob_distance)
-                    if self.verbose > 4:
+                    if self.debug > 4:
                         print '\t\t\tTrained Matrix:'
                         matrix = model.get_matrix()
                         for i in matrix:
@@ -237,7 +245,7 @@ class MarkovModelsDetection():
                     # Now store the best
                     best_model_so_far = model
                     best_distance_so_far = prob_distance
-                    if self.verbose > 3:
+                    if self.debug > 3:
                         print '\t\t\t\tThis model is the best so far. State len: {}'.format(len(tuple.get_state()))
             # If we detected something
             if best_model_so_far:

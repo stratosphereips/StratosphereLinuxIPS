@@ -1,4 +1,4 @@
-# Stratosphere Linux IPS (slips)
+# Stratosphere Linux IPS (slips) Version 0.3.3alpha
 This is the linux version of the Stratosphere IPS, a behavioral-based intrusion detection and prevention system that uses machine learning algorithms to detect malicious behaviors. It is part of a larger suite of programs that include the [Stratosphere Windows IPS] and the [Stratosphere Testing Framework].
 
 This alpha version receives flows from a ra client ([Argus] Suite) and process them using a specific algorithm. The purpose of the Alpha version is to get feedback from the community, please send us your bug reports, feature requests and ideas. See the [Stratosphere IPS Website](https://stratosphereips.org).
@@ -22,11 +22,11 @@ To use this alpha version you will need an argus instance running and listening 
 - To run argus in your own computer you should do:
     - argus -B localhost -F [slipsfolder]/argus.conf
 
-    This will run argus in your interface, open the port 902 in the localhost address only and run in background. See the argus configuration file and the Argus documentation for more information. (port 902 is used because is not in the default port list of nmap, so there are fewer chances that anybody will find it).
+    This will run argus in your interface, open the port 561 in the localhost address only and run in background. See the argus configuration file and the Argus documentation for more information. (port 561 is used because is not in the default port list of nmap, so there are fewer chances that anybody will find it).
 
 - Then you start the slips program receiving packets from a ra client.
 
-    ra -F [slipsfolder]/ra.conf -n -Z b -S 127.0.0.1:902 | ./slips.py -m models -p
+    ra -F [slipsfolder]/ra.conf -n -Z b -S 127.0.0.1:561 | [slipsfolder]/./slips.py -f [slipsfolder]/models -d
 
     This will read the network traffic in your computer and try to detect some malicious behavior by applying the models in the folder __models__.
 
@@ -49,24 +49,62 @@ This alpha version of slips comes with the following features:
 - If you want to avoid doing any detection you should use -D.
 - If you want to anonymize the source IP addresses before doing any processing, you can use -A. This will force all the source IPs to be hashed to MD5 in memory. Also a file is created in the current folder with the relationship of original IP addresses and new hashed IP addresses. So you can later relate the detections.
 
+
+## The use of verbose (-v)
+
+- -v 0: 
+    - In each time window shows:
+        - Print the detected source IP address, together with info about the thresholds and scores.
+- -v 1: 
+    - In each time window shows:
+        - Print the detected source IP address, together with info about the thresholds and scores.
+- -v 2: 
+    - For each detected source IP, print also the detected connections.
+- -v 3: 
+    - For each detected connection, print also the which model matched that connection and when.
+- -v 4: 
+    - Print the source IP addresses that were NOT detected.
+- -v 5: 
+    - For the NOT detected IP, print the connections
+- -v 5: 
+    - For the NOT detected IP, print each NOT detected test for each connection
+
+
+
 [Argus]: http://qosient.com/argus/ "Argus"
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
 
+### Where does it work
+- Slips runs in 
+    - Ubuntu 16.04 LTS
+    - Debian stable/testing/unstable
+    - MacOS 10.9.5, 10.10.x to 10.12.x
+- To try:
+    - Android
+    - IOS
+
+
+
+### Roadmap
+
+
+### Changelog
+
+- 0.3.3alpha
+
+
 
 ### TODO
-- 2016/01/24
-    Problem with process_out_of_time_slot()
-    <type 'exceptions.AttributeError'>
-    ("'NoneType' object has no attribute 'strip'",)
-    'NoneType' object has no attribute 'strip'
-- Problem with process_out_of_time_slot()
-    <class 'ipwhois.ipwhois.WhoisLookupError'>
-    ("Whois lookup failed for '205.251.199.89'.",)
-    Whois lookup failed for '205.251.199.89'.
-- The number of tuples reported for each time window is wrong. Check
+- Make a good reference to the installation of argus 3.x
+- Create a local DB of IPs so we can rememeber info about them (sqlite)
+- Add priories to the log: CRITIAL, etc.
+- If even the format of the flows change during the read, one idea is to search for an exception in the read of the format and then check which is the new format in the flow. Only check when there is an exception.
 
+### Author and Contributors
 
-### Author
-For bugs, reports, ideas or comments send an email to Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz
-
+- The author of the project is Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. (Send an email for bugs, reports, ideas or comments)
+- Ondrej Lukas: New detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classs, etc. 
+- Elaheh Biglar Beigi.
+- MariaRigaki.
+- kartik88363.
