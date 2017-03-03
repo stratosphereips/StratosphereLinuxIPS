@@ -91,7 +91,8 @@ class IpAddress(object):
                 self.desc = 'Private Use'
             except ipwhois.ipwhois.WhoisLookupError:
                 print 'Error looking the whois of {}'.format(ip)
-                # continue with the work
+                # continue with the work\
+                pass
             # Store in the cache
             whois_cache[ip] = self.desc
             return self.desc
@@ -249,8 +250,6 @@ class IpAddress(object):
 
     def process_timewindow(self, start_time, end_time, tw_index, sdw_width, swd_threshold, verbose, use_all=False):
         """ For this IP, see if we should report a detection or not based on the thresholds and TW"""
-        if self.debug:
-            print "\tProcess Time Window for IP {}".format(self.address)
         score = self.get_weighted_score(start_time, end_time, tw_index, use_all)
         self.get_verdict(start_time, end_time, tw_index, sdw_width, swd_threshold, use_all)
 
@@ -265,13 +264,12 @@ class IpHandler(object):
         self.verbose = verbose
         self.debug = debug
 
-    def print_addresses(self, start_time, end_time, tw_index, threshold, print_all):
+    def print_addresses(self, start_time, end_time, tw_index, threshold,sdw_width, print_all):
         """ Print information about all the IP addresses in the time window specified in the parameters."""
+        if self.debug:
+            print "Timewindow index:{}, threshold:{},SDW width: {}".format(tw_index,threshold,sdw_width)
         if print_all:
             print "\nFinal summary using the complete capture as a unique Time Window (Threshold = %f):" %(threshold)
-        #else:
-            #if self.verbose > 1:
-                #print "Detections in this timewindow (t=%f):" %(threshold)
         # For all the addresses stored in total
         for address in self.addresses.values():
             # Process this IP for the time window specified. So we can compute the detection value.
