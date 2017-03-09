@@ -69,7 +69,7 @@ class IpAddress(object):
         try:
             self.desc = whois_cache[ip]
             if self.debug > 2:
-                print 'The whois was in the cache'
+                print 'The whois for {} was in the cache'.format(ip)
             return self.desc
         except KeyError:
             # Is not, so just ask for it
@@ -97,7 +97,7 @@ class IpAddress(object):
             # Store in the cache
             whois_cache[ip] = self.desc
             if self.debug > 2:
-                print 'The whois was not in the cache, and the new value is: {}'.format(self.desc)
+                print 'The whois for {} was not in the cache, and the new value is: {}'.format(ip, self.desc)
             return self.desc
 
     def add_detection(self, label, tuple, n_chars, input_time, dest_add):
