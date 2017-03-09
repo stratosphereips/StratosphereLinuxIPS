@@ -77,7 +77,13 @@ class IpAddress(object):
                 obj = ipwhois.IPWhois(ip)
                 data = obj.lookup_whois()
                 try:
-                    self.desc = data['nets'][0]['description'].strip().replace('\n',' ') + ',' + data['nets'][0]['country']
+                    description = data['nets'][0]['description'].strip().replace('\n',' ')
+                    if description == None:
+                        description = data['nets'][1]['description'].strip().replace('\n',' ')
+                    country = data['nets'][0]['country']
+                    if country == None:
+                        country = data['nets'][1]['country']
+                    self.desc = description + ',' + country
                 except AttributeError:
                     # There is no description field
                     self.desc = ""
