@@ -68,7 +68,7 @@ class IpAddress(object):
         # is the ip in the cache
         try:
             self.desc = whois_cache[ip]
-            if self.debug > 2:
+            if self.debug > 1:
                 print 'The whois for {} was in the cache'.format(ip)
             return self.desc
         except KeyError:
@@ -78,17 +78,26 @@ class IpAddress(object):
                 data = obj.lookup_whois()
                 try:
                     description = data['nets'][0]['description'].strip().replace('\n',' ')
-                    if description == None:
-                        description = data['nets'][1]['description'].strip().replace('\n',' ')
-                    country = data['nets'][0]['country']
-                    if country == None:
-                        country = data['nets'][1]['country']
-                    self.desc = description + ',' + country
                 except AttributeError:
-                    # There is no description field
-                    self.desc = ""
+                    # There is no description field, try  to get the second
+                    try:
+                        description = data['nets'][1]['description'].strip().replace('\n',' ')
+                    except AttributeError:
+                        # There is no description field
+                        description = ''
+                try:
+                    country = data['nets'][0]['country']
+                except AttributeError:
+                    # There is no coutry field, try the second
+                    try:
+                        country = data['nets'][1]['country']
+                    except AttributeError:
+                        # There is no coutry field
+                        country = ''
+                self.desc = description + ',' + country
             except ValueError:
                 # Not a real IP, maybe a MAC
+                self.desc = ''
                 pass
             except IndexError:
                 # Some problem with the whois info. Continue
@@ -102,7 +111,7 @@ class IpAddress(object):
                 # continue with the work
             # Store in the cache
             whois_cache[ip] = self.desc
-            if self.debug > 2:
+            if self.debug > 1:
                 print 'The whois for {} was not in the cache, and the new value is: {}'.format(ip, self.desc)
             return self.desc
 
