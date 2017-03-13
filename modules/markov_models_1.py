@@ -139,6 +139,12 @@ class MarkovModelsDetection():
     def __init__(self):
         self.models = []
 
+    def set_verbose(self, verbose):
+        self.verbose = verbose
+
+    def set_debug(self, debug):
+        self.debug = debug
+
     def is_periodic(self,state):
         basic_patterns = ['a,a,a,','b,b,b,', 'c,c,c,', 'd,d,d,', 'e,e,e,', 'f,f,f,', 'g,g,g,', 'h,h,h,', 'i,i,i,', 'a+a+a+', 'b+b+b+', 'c+c+c+', 'd+d+d+', 'e+e+e+', 'f+f+f+', 'g+g+g+', 'h+h+h+', 'i+i+i+', 'a*a*a*', 'b*b*b*', 'c*c*c*', 'd*d*d*', 'e*e*e*', 'f*f*f*', 'g*g*g*', 'h*h*h*', 'i*i*i*', 'A,A,A,','B,B,B,', 'C,C,C,', 'D,D,D,', 'E,E,E,', 'F,F,F,', 'G,G,G,', 'H,H,H,', 'I,I,I,', 'A+A+A+', 'B+B+B+', 'C+C+C+', 'D+D+D+', 'E+E+E+', 'F+F+F+', 'G+G+G+', 'H+H+H+', 'I+I+I+', 'A*A*A*', 'B*B*B*', 'C*C*C*', 'D*D*D*', 'E*E*E*', 'F*F*F*', 'G*G*G*', 'H*H*H*', 'I*I*I*']
         for pattern in basic_patterns:
@@ -173,7 +179,8 @@ class MarkovModelsDetection():
         model.set_label(cPickle.load(input))
         model.set_threshold(cPickle.load(input))
         self.models.append(model)
-        print '\tAdding model {} to the list.'.format(model.get_label())
+        if self.verbose > 2:
+            print '\tAdding model {} to the list.'.format(model.get_label())
         input.close()
 
     def detect(self, tuple, verbose, debug):
