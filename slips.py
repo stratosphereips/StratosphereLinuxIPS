@@ -33,14 +33,15 @@ class SignalHandler(object):
             signal.signal(signal_n,self.process_signal)
 
     def process_signal(self,signal, frame):
-        print "signal:{},frame:{},time:{}.".format(signal,frame,datetime.now())
+        #print "signal:{},frame:{},time:{}.".format(signal,frame,datetime.now())
         try:
-            print "signal:{},frame:{},time:{}.".format(signal,frame,datetime.now())
-            print "Interupting SLIPS"
+            print "\nInterupting SLIPS"
             self.process.ip_handler.print_alerts()
-        except KeyError:
-            print "a"
-            pass
+            time.sleep(0.5)
+        except Exception:
+            print "Sth went wrong"
+        #self.process.stop()
+        self.process.terminate()
         time.sleep(1)
         sys.exit(0)
 
@@ -613,9 +614,9 @@ class Processor(multiprocessing.Process):
                             return True
             except KeyboardInterrupt:
                 # Print Summary of detections in the last Time Window
-                self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold,self.sdw_width, True)
+                #self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold,self.sdw_width, True)
                 # Print final Alerts
-                self.ip_handler.print_alerts()
+                #self.ip_handler.print_alerts()
                 return True
             except Exception as inst:
                 print '\tProblem with Processor()'
@@ -623,6 +624,21 @@ class Processor(multiprocessing.Process):
                 print inst.args      # arguments stored in .args
                 print inst           # __str__ allows args to printed directly
                 sys.exit(1)
+
+
+    def stop(self):
+        self.queue.clear()
+        time.sleep(1)
+        self.ip_handler.print_alerts();
+        time.sleep(1)
+        print "Shutting down in:"
+        print "3"
+        time.sleep(1)
+        print "2"
+        time.sleep(1)
+        print "1"
+        time.sleep(1)
+        sys.exit();
 
 
 

@@ -66,7 +66,7 @@ This alpha version of slips comes with the following features:
     - Print the source IP addresses that were NOT detected.
 - -v 5: 
     - For the NOT detected IP, print the connections
-- -v 5: 
+- -v 6: 
     - For the NOT detected IP, print each NOT detected test for each connection
 
 

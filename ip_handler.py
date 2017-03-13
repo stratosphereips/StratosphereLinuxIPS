@@ -16,8 +16,12 @@ from datetime import datetime
 from time import gmtime, strftime
 from colors import *
 
-filename = 'log.txt'
-sw_width = 10
+
+logdir_path = "./logs"
+if not os.path.exists(logdir_path):
+    os.makedirs(logdir_path)
+
+filename = logdir_path+"/" + 'log_' + str(datetime.now())+'.txt'; 
 # Global shit for whois cache. The tuple needs to access it but should be shared, so global
 whois_cache = {}
 
@@ -278,6 +282,10 @@ class IpHandler(object):
             string = address.to_string(self.verbose, start_time, end_time, threshold, print_all, True)
             if(len(string) > 0):
                 print string
+                f = open(filename,"a")
+                f.write(string)
+
+
 
     def get_ip(self, ip_string):
         """ TODO put description here"""
