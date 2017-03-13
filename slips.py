@@ -639,9 +639,6 @@ class Processor(multiprocessing.Process):
         print "1"
         time.sleep(1)
         sys.exit();
->>>>>>> e254fa487f73ff79630cbe76868667547a5b14c8
-
-
 
 
 
