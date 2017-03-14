@@ -45,8 +45,7 @@ class SignalHandler(object):
         time.sleep(1)
         sys.exit(0)
 
-
-def signal_handler(signal,frame):
+def signal_handler(signal, frame):
     processorThread.ip_handler.print_alerts()
     time.sleep(1)
     #processorThread.terminate()
