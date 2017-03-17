@@ -15,44 +15,15 @@ If mean od N last WSs is equal or bigger than threshold, IP is labeled as 'Malic
 from datetime import datetime
 from time import gmtime, strftime
 from colors import *
+from utils import WhoisHandler
+from alerts import *
 
-
+#check if the log directory exists, if not, create it
 logdir_path = "./logs"
 if not os.path.exists(logdir_path):
     os.makedirs(logdir_path)
-
+#file for logging
 filename = logdir_path+"/" + 'log_' + datetime.now().strftime('%Y-%m-%d %H:%M:%S')+'.txt'; 
-# Global shit for whois cache. The tuple needs to access it but should be shared, so global
-whois_cache = {}
-
-class Alert(object):
-    """docstring for Alert"""
-    def __init__(self, time,source):
-        self.time = time
-        self.source = source
-    def __str__(self):
-        print "function print_alert() has to be implemented in derived class!"
-        return  NotImplemented
-
-class IpDetectionAlert(Alert):
-    """docstring for IpDetectionAlert"""
-    def __init__(self, time, source, score):
-        super(IpDetectionAlert, self).__init__(time,source)
-        self.score = score
-
-    def __str__(self):
-        return yellow('*detected with score {}\ttime: {}*'.format(self.score,self.time.strftime('%Y/%m/%d %H:%M:%S')))
-
-class TupleDetectionAlert(object):
-    """docstring for TupleDetectionAlert"""
-    def __init__(self, time, source,model):
-        super(TupleDetectionAlert, self).__init__(time,source)
-        self.model = model
-
-
-
-
-
 
 class IpAddress(object):
     """docstring for IPAdress"""
@@ -219,7 +190,7 @@ class IpAddress(object):
             self.last_verdict = None
 
 
-    def print_last_result(self, verbose, start_time, end_time, threshold, use_whois):
+    def print_last_result(self, verbose, start_time, end_time, threshold, use_whois, whois_handler):
         """ Print information about the IPs. Both during the time window and at the end. Do the verbose printings better"""
         try:            
             if self.last_verdict != None:
@@ -232,7 +203,7 @@ class IpAddress(object):
                             if tuple_result != None:
                                 #Shall we use whois?
                                 if use_whois:
-                                    whois = self.get_whois_data(self.tuples[tuple4][0][3])
+                                    whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
                                     print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
                                 else:
                                     print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
@@ -282,6 +253,7 @@ class IpHandler(object):
         self.verbose = verbose
         self.debug = debug
         self.whois = whois
+        self.whois_handler = WhoisHandler("WhoisData.txt")
 
     def print_addresses(self, start_time, end_time, tw_index, threshold, sdw_width, print_all):
         """ Print information about all the IP addresses in the time window specified in the parameters."""
@@ -296,7 +268,7 @@ class IpHandler(object):
             address.process_timewindow(start_time, end_time, tw_index, 10, threshold)
             # Get a printable version of this IP's data
             #string = address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois, print_all, True)
-            address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois)
+            address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois,self.whois_handler)
             #print "***********************"
 
     def get_ip(self, ip_string):
@@ -313,6 +285,7 @@ class IpHandler(object):
     def print_alerts(self):
         """ TODO put description here"""
         detected_counter = 0
+        self.whois_handler.store_whois_data_in_file()
         print '\nFinal Alerts generated:'
         f = open(filename,"w")
         f.write("DATE:\t{}\nSummary of adresses in this capture:\n\n".format(datetime.now().strftime('%Y/%m/%d %H:%M:%S')))

@@ -1,0 +1,10 @@
+DATE:	2017/03/17 16:38:48
+Summary of adresses in this capture:
+
+Alerts:
+	 - 192.168.1.128
+		[33m*detected with score 0.00767701863354	time: 2017/03/17 16:36:26*[0m
+		[33m*detected with score 0.0103436853002	time: 2017/03/17 16:37:19*[0m
+		[33m*detected with score 0.0103436853002	time: 2017/03/17 16:37:54*[0m
+		[33m*detected with score 0.0103436853002	time: 2017/03/17 16:38:22*[0m
+1 IP(s) out of 44 detected as malicious.

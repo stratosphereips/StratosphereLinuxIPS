@@ -16,43 +16,12 @@ from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
 from ip_handler import IpHandler
+from utils import SignalHandler
 
 
 import random
 
 version = '0.4'
-###################
-#Signal
-
-class SignalHandler(object):
-
-    def __init__(self,process):
-            self.process = process
-
-    def register_signal(self, signal_n):
-            signal.signal(signal_n,self.process_signal)
-
-    def process_signal(self,signal, frame):
-        #print "signal:{},frame:{},time:{}.".format(signal,frame,datetime.now())
-        try:
-            print "\nInterupting SLIPS"
-            self.process.ip_handler.print_alerts()
-            time.sleep(0.5)
-        except Exception:
-            print "Sth went wrong"
-        #self.process.stop()
-        self.process.terminate()
-        time.sleep(1)
-        sys.exit(0)
-
-
-def signal_handler(signal,frame):
-    processorThread.ip_handler.print_alerts()
-    time.sleep(1)
-    #processorThread.terminate()
-    sys.exit(0)
-
-
 #Tuple
 class Tuple(object):
     """ The class to simply handle tuples """
@@ -474,7 +443,7 @@ class Processor(multiprocessing.Process):
                 # We cut the strings of letters regardless of it being detected before.
                 if self.tuples[tuple].amount_of_flows > 100:
                     if self.debug > 3:
-                        print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
+                           print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
                     ids_to_delete.append(self.tuples[tuple].get_id())
             # Actually delete them
             for id in ids_to_delete:

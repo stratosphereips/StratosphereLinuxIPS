@@ -1,0 +1,5 @@
+DATE:	2017/03/17 17:27:01
+Summary of adresses in this capture:
+
+Alerts:
+0 IP(s) out of 0 detected as malicious.
