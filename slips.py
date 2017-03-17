@@ -416,7 +416,7 @@ class Processor(multiprocessing.Process):
         self.slot_endtime = -1
         self.slot_width = slot_width
         self.dontdetect = dontdetect
-        self.ip_handler = IpHandler(self.verbose, self.debug)
+        self.ip_handler = IpHandler(self.verbose, self.debug,self.get_whois)
         self.detection_threshold = threshold;
         # Used to keep track of the number of time window we are currently in (also total amount of tw)
         self.tw_index = 0
@@ -502,7 +502,7 @@ class Processor(multiprocessing.Process):
                 # Ask for the IpAddress object for this source IP
                 ip_address = self.ip_handler.get_ip(column_values[3])
                 # Store detection result into Ip_address
-                ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime, column_values[6])
+                ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime, column_values[6],tuple.get_state_detected_last(),self.tw_index)
         except Exception as inst:
             print 'Problem in process_out_of_time_slot() in class Processor'
             print type(inst)     # the exception instance
@@ -525,7 +525,10 @@ class Processor(multiprocessing.Process):
                     """
                     # Set the detection state len
                     tuple.set_best_model_matching_len(statelen)
+
                     """
+                    #print tuple.state[:statelen]
+                    #print tuple.state[len(tuple.state)-statelen:-1]
                     if self.debug > 5:
                         print 'Last flow: Detected with {}'.format(label)
                     # Play sound
@@ -556,7 +559,6 @@ class Processor(multiprocessing.Process):
                                 column_values = nline.split(',')
                                 # 0:starttime, 1:dur, 2:proto, 3:saddr, 4:sport, 5:dir, 6:daddr: 7:dport, 8:state, 9:stos,  10:dtos, 11:pkts, 12:bytes
                                 #check if ip is not in whitelist
-                                # TODO, transform the whitelist check into a has_key() so is faster.
                                 if not column_values[3] in self.ip_whitelist:
                                     if self.slot_starttime == -1:
                                         # First flow
@@ -591,7 +593,7 @@ class Processor(multiprocessing.Process):
                                             # Ask for IpAddress object 
                                             ip_address = self.ip_handler.get_ip(column_values[3])
                                             # Store detection result into Ip_address
-                                            ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime,column_values[6])
+                                            ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime,column_values[6], tuple.get_state_detected_last(),self.tw_index)
                                     elif flowtime > self.slot_endtime:
                                         # Out of time slot
                                         self.process_out_of_time_slot(column_values, last_tw = False)
@@ -624,24 +626,6 @@ class Processor(multiprocessing.Process):
                 print inst.args      # arguments stored in .args
                 print inst           # __str__ allows args to printed directly
                 sys.exit(1)
-
-
-    def stop(self):
-        self.queue.clear()
-        time.sleep(1)
-        self.ip_handler.print_alerts();
-        time.sleep(1)
-        print "Shutting down in:"
-        print "3"
-        time.sleep(1)
-        print "2"
-        time.sleep(1)
-        print "1"
-        time.sleep(1)
-        sys.exit();
-
-
-
 
 
 ####################
