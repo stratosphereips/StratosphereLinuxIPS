@@ -5,9 +5,9 @@
 
 import signal
 import time
+import sys
 
 class SignalHandler(object):
-
     def __init__(self,process):
             self.process = process
 
@@ -28,15 +28,19 @@ class SignalHandler(object):
         sys.exit(0)
 
 class WhoisHandler(object):
-    
     def __init__(self,whois_file):
         self.whois_data = {}
         self.filename = whois_file
         try:
             with open(whois_file) as f:
                 for line in f:
-                    (key,val) = line.strip().split("___")
-                    self.whois_data[key] = val
+                    # What about repetitions?
+                    try:
+                        (key,val) = line.strip().split("___")
+                        self.whois_data[key] = val
+                    except ValueError:
+                        # A probable malformed line. Ignore
+                        pass
         except IOError:
             print "Whois informaton file:'{}' doesn't exist!".format(self.filename)
             pass
@@ -64,6 +68,7 @@ class WhoisHandler(object):
                     desc = ""
             except ValueError:
                 # Not a real IP, maybe a MAC
+                desc = 'Not an IP'
                 pass
             except IndexError:
                 # Some problem with the whois info. Continue
@@ -75,9 +80,16 @@ class WhoisHandler(object):
             # Store in the cache
             self.whois_data[ip] = desc
             return desc
+        except Exception as inst:
+            print '\tProblem with get_whois_data() in utils.py'
+            print type(inst)     # the exception instance
+            print inst.args      # arguments stored in .args
+            print inst           # __str__ allows args to printed directly
+            sys.exit(1)
 
 
     def store_whois_data_in_file(self):
+        """ TODO: Description"""
         f = open(self.filename,"w")
         for item in self.whois_data.items():
             f.write('{}___{}\n'.format(item[0],item[1]));
