@@ -35,7 +35,6 @@
 178.132.153.55___JSC "Moldtelecom" S.A. Chisinau, Moldova,MD
 77.37.154.193___NCNET,RU
 192.168.100.8___Private Use
-80.78.244.170___Reg.Ru Hosting,RU
 186.22.122.127___Telecentro S.A.,AR
 86.3.251.11___LUTON,GB
 79.167.52.212___Hellas On Line SA - DSL,GR
@@ -104,6 +103,7 @@
 109.252.109.82___Moscow Local Telephone Network (OAO MGTS),RU
 93.44.100.92___Infrastructure for Fastwebs main location PAT POOL for residential customer POP 2308, public subnet,IT
 217.66.152.156___Mobile TeleSystems, OJSC, MR North-West,RU
+37.48.104.209___
 109.237.225.46___LLC Kvant NetBLK1,RU
 5.136.88.71___OJSC "Sibirtelecom",RU
 37.48.124.198___
@@ -142,7 +142,7 @@
 65.50.19.140___GigaMonster,US
 118.176.138.67___DLIVE,KR
 95.134.29.57___NCC#2011011865 Approved IP assignment,UA
-67.225.77.137___Saskatchewan Telecommunications,CA
+95.211.168.33___LeaseWeb Netherlands B.V.,NL
 85.17.120.67___LeaseWeb Netherlands B.V.,NL
 5.49.165.108___Pool for Broadband CABLE customers,FR
 95.211.147.156___LeaseWeb Netherlands B.V.,NL
@@ -166,10 +166,10 @@
 67.112.247.18___AT&T Internet Services,US
 2.87.182.179___Multiprotocol Service Provider to other ISP's and End Users,GR
 81.97.152.160___Virgin Media Hampshire,GB
-37.48.104.209___
+80.78.244.170___Reg.Ru Hosting,RU
 117.151.94.220___China Mobile Communications Corporation Mobile Communications Network Operator in China Internet Service Provider in China,CN
 195.154.14.23___Iliad Entreprises Customers,FR
-95.211.168.33___LeaseWeb Netherlands B.V.,NL
+67.225.77.137___Saskatchewan Telecommunications,CA
 46.238.18.220___Megalan Network Ltd.,BG
 188.220.117.250___Sky UK Limited,GB
 23.21.92.252___Amazon.com, Inc.,US
