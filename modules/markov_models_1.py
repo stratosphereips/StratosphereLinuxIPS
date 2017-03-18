@@ -227,7 +227,7 @@ class MarkovModelsDetection():
                         prob_distance = test_prob / training_original_prob
                     except ZeroDivisionError:
                         prob_distance = -1
-                if self.debug > 2:
+                if self.debug > 3:
                     print '\t\tTrained Model: {}. Label: {}. Threshold: {}, State: {}'.format(model.get_id(), model.get_label(), model.get_threshold(), train_sequence)
                     print '\t\t\tTest Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state())
                     print '\t\t\tTrain prob: {}'.format(training_original_prob)
