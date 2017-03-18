@@ -102,7 +102,7 @@ class IpAddress(object):
                 #Compute the ratio of the detections of this tuple - TupleRatio
                 tuple_ratio = tuple_result[0]/ float(tuple_result[1])
                 tuple_ratios_sum += tuple_ratio
-                if self.debug > 1:
+                if self.debug > 0:
                     print '\t\tTuple: {}, ratio: {} ({}/{})'.format(tuple4, tuple_ratio, tuple_result[0], tuple_result[1])
                 if tuple_ratio > 0: #There was at least one positive detection in this tuple
                     n_infected_tuples += 1
@@ -113,8 +113,8 @@ class IpAddress(object):
             weighted_score = tuple_ratios_sum*detected_tuples_perc
             self.ws_per_tw[tw_index] = weighted_score
             self.last_tw_result = (weighted_score,tuple_ratios_sum,detected_tuples_perc)
-            if self.debug:
-                print "#tuples: {}, WS:{} = {}(tuple ratios sum) x {} (detected tuple percentage)".format(n_tuples_in_tw,weighted_score,tuple_ratios_sum,detected_tuples_perc)
+            if self.debug > 0:
+                print "\t\t\t#tuples: {}, WS:{} = {}(tuple ratios sum) x {} (detected tuple percentage)".format(n_tuples_in_tw,weighted_score,tuple_ratios_sum,detected_tuples_perc)
         else:
             if True or debug:
                 self.last_tw_result = None
@@ -122,7 +122,7 @@ class IpAddress(object):
 
     def get_verdict(self, start_time, end_time, tw_index, sdw_width, threshold):
         """This function uses sliding detection window (SDW) to compute mean of last n time windows weighted score"""
-        #compute weighted score for the last TW
+        # Get the weighted score
         self.get_weighted_score(start_time,end_time,tw_index)
         
         if self.ws_per_tw.has_key(tw_index): #traffic in this TW
@@ -202,7 +202,7 @@ class IpAddress(object):
 
     def process_timewindow(self, start_time, end_time, tw_index, sdw_width, swd_threshold,):
         """ For this IP, see if we should report a detection or not based on the thresholds and TW"""
-        self.get_weighted_score(start_time, end_time, tw_index)
+        #self.get_weighted_score(start_time, end_time, tw_index)
         self.get_verdict(start_time, end_time, tw_index, sdw_width, swd_threshold)
 
     def get_alerts(self):
@@ -221,7 +221,7 @@ class IpHandler(object):
     def print_addresses(self, start_time, end_time, tw_index, threshold, sdw_width, print_all):
         """ Print information about all the IP addresses in the time window specified in the parameters."""
         if self.debug:
-            print "Timewindow index:{}, threshold:{},SDW width: {}".format(tw_index,threshold,sdw_width)
+            print "\tTimewindow index:{}, threshold:{},SDW width: {}".format(tw_index,threshold,sdw_width)
         if print_all:
             print "\nFinal summary using the complete capture as a unique Time Window (Threshold = %f):" %(threshold)
         # For all the addresses stored in total
