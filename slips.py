@@ -119,7 +119,7 @@ class Tuple(object):
         self.previous_duration = self.current_duration
         self.previous_time = self.datetime
         if self.debug > 2:
-            print '\nAdding flow {}'.format(column_values)
+            print 'Adding flow {}'.format(column_values)
         # Get the starttime
         self.datetime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
         # Get the size
@@ -157,8 +157,7 @@ class Tuple(object):
         self.compute_size()
         self.compute_state()
         self.compute_symbols()
-        self.do_print()
-        if self.debug > 3:
+        if self.debug > 4:
             print '\tTuple {}. Amount of flows so far: {}'.format(self.get_id(), self.amount_of_flows)
 
     def compute_periodicity(self):
@@ -195,7 +194,7 @@ class Tuple(object):
                 self.periodic = 3
             else:
                 self.periodic = 4
-        if self.debug > 2:
+        if self.debug > 3:
             print '\tPeriodic: {}'.format(self.periodic)
 
     def compute_duration(self):
@@ -205,7 +204,7 @@ class Tuple(object):
             self.duration = 2
         elif self.current_duration > self.td2:
             self.duration = 3
-        if self.debug > 2:
+        if self.debug > 3:
             print '\tDuration: {}'.format(self.duration)
 
     def compute_size(self):
@@ -215,7 +214,7 @@ class Tuple(object):
             self.size = 2
         elif self.current_size > self.ts2:
             self.size = 3
-        if self.debug > 2:
+        if self.debug > 3:
             print '\tSize: {}'.format(self.size)
 
     def compute_state(self):
@@ -340,7 +339,7 @@ class Tuple(object):
                 self.state += '+'
             elif self.T2 <= timedelta(seconds=3600):
                 self.state += '*'
-        if self.debug > 2:
+        if self.debug > 3:
             print '\tTD:{}, T2:{}, T1:{}, State: {}'.format(self.TD, self.T2, self.T1, self.state)
 
     def get_id(self):
@@ -357,16 +356,6 @@ class Tuple(object):
 
     def set_color(self, color):
         self.color = color
-
-    def dont_print(self):
-        if self.debug > 3:
-            print '\tDont print tuple {}'.format(self.get_id())
-        self.should_be_printed = False
-
-    def do_print(self):
-        self.should_be_printed = True
-        if self.debug > 3:
-            print '\tPrint tuple {}'.format(self.get_id())
 
 # Process
 class Processor(multiprocessing.Process):
@@ -508,7 +497,6 @@ class Processor(multiprocessing.Process):
                     tuple.unset_detected_label()
                     if self.debug > 5:
                         print 'Last flow: Not detected'
-                    tuple.dont_print()
         except Exception as inst:
             print '\tProblem with detect()'
             print type(inst)     # the exception instance
