@@ -83,10 +83,7 @@ This alpha version of slips comes with the following features:
 - To try:
     - Android
     - IOS
-
-
 ### Roadmap
-
 
 ### Changelog
 
