@@ -4,6 +4,7 @@
 #Author: Ondrej Lukas - ondrej.lukas95@gmail.com, lukasond@fel.cvut.cz
 
 import signal
+import time
 
 class SignalHandler(object):
 
