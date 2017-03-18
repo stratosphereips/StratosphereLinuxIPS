@@ -247,13 +247,13 @@ class MarkovModelsDetection():
                     best_distance_so_far = prob_distance
                     if self.debug > 3:
                         print '\t\t\t\tThis model is the best so far. State len: {}'.format(len(tuple.get_state()))
+                    # New decision. If one model matched, just stop checking the rest of the models
+                    break
             # If we detected something
             if best_model_so_far:
                 return (best_model_so_far.matched, best_model_so_far.get_label(), best_model_so_far.get_best_model_matching_len())
-                #return (best_model_so_far.matched, best_model_so_far.get_label())
             else:
                 return (False, False, False)
-                #return (False, False)
         except Exception as inst:
             print 'Problem in detect() in markov_models_1'
             print type(inst)     # the exception instance
