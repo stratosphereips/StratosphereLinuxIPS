@@ -17,11 +17,20 @@ from os import listdir
 from os.path import isfile, join
 from ip_handler import IpHandler
 from utils import SignalHandler
-
-
 import random
 
 version = '0.4'
+
+def timing(f):
+    """ Function to measure the time another function takes."""
+    def wrap(*args, **kwargs):
+        time1 = time.time()
+        ret = f(*args, **kwargs)
+        time2 = time.time()
+        print '%s function took %0.3f ms' % (f.func_name, (time2-time1)*1000.0)
+        return ret
+    return wrap
+
 #Tuple
 class Tuple(object):
     """ The class to simply handle tuples """
