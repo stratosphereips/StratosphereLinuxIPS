@@ -17,6 +17,7 @@ from time import gmtime, strftime
 from colors import *
 from utils import WhoisHandler
 from alerts import *
+import time
 
 #check if the log directory exists, if not, create it
 logdir_path = "./logs"
@@ -24,6 +25,16 @@ if not os.path.exists(logdir_path):
     os.makedirs(logdir_path)
 #file for logging
 filename = logdir_path+"/" + 'log_' + datetime.now().strftime('%Y-%m-%d %H:%M:%S')+'.txt'; 
+
+def timing(f):
+    """ Function to measure the time another function takes."""
+    def wrap(*args):
+        time1 = time.time()
+        ret = f(*args)
+        time2 = time.time()
+        print '%s function took %0.3f ms' % (f.func_name, (time2-time1)*1000.0)
+        return ret
+    return wrap
 
 class IpAddress(object):
     """docstring for IPAdress"""
@@ -165,6 +176,7 @@ class IpAddress(object):
                 print red("\t+{} verdict: {} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
                 if verbose > 1 and verbose <= 3:
                     for tuple4 in self.tuples.keys():
+                        # Here we are checking for all the tuples of this IP in all the capture!! this is veryyy inefficient
                         tuple_result = self.result_per_tuple(tuple4, start_time, end_time)
                         # Is at least one tuple detected?
                         if tuple_result[0] != 0:
@@ -196,6 +208,7 @@ class IpAddress(object):
                                     print("\t\t\tDstIP: {}, Label:{:>40} , Detection Time:{}, State(100 max): {}").format(detection[3], detection[0], detection[2], detection[4][:100])
             # Print normal IPs
             elif verbose > 3:
+                # Since the value of self.last_tw_result can be None of a 3-tuple of strings, we need to check before
                 try: 
                     last_tw_result_0 = self.last_tw_result[0]
                 except TypeError:
@@ -250,21 +263,33 @@ class IpHandler(object):
         self.whois = whois
         self.whois_handler = WhoisHandler("WhoisData.txt")
 
+    # Using this decorator we can measure the time of a function
+    #@timing
     def print_addresses(self, start_time, end_time, tw_index, threshold, sdw_width, print_all):
         """ Print information about all the IP addresses in the time window specified in the parameters."""
         if self.debug:
             print "\tTimewindow index:{}, threshold:{},SDW width: {}".format(tw_index,threshold,sdw_width)
         if print_all:
             print "\nFinal summary using the complete capture as a unique Time Window (Threshold = %f):" %(threshold)
-        # For all the addresses stored in total
-        for address in self.addresses.values():
-            # print "********BEGINNIG {} *******".format(address.address)
-            # Process this IP for the time window specified. So we can compute the detection value.
-            address.process_timewindow(start_time, end_time, tw_index, 10, threshold)
-            # Get a printable version of this IP's data
-            #string = address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois, print_all, True)
-            address.print_last_result(self.verbose, start_time, end_time, threshold, self.whois, self.whois_handler)
-            #print "***********************"
+            # For all the addresses stored in total
+            for address in self.addresses.values():
+                # print "********BEGINNIG {} *******".format(address.address)
+                # Process this IP for the time window specified. So we can compute the detection value.
+                address.process_timewindow(start_time, end_time, tw_index, 10, threshold)
+                # Get a printable version of this IP's data
+                #string = address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois, print_all, True)
+                address.print_last_result(self.verbose, start_time, end_time, threshold, self.whois, self.whois_handler)
+                #print "***********************"
+        if not print_all:
+            # We should not process all the ips here...
+            for address in self.addresses.values():
+                # print "********BEGINNIG {} *******".format(address.address)
+                # Process this IP for the time window specified. So we can compute the detection value.
+                address.process_timewindow(start_time, end_time, tw_index, 10, threshold)
+                # Get a printable version of this IP's data
+                #string = address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois, print_all, True)
+                address.print_last_result(self.verbose, start_time, end_time, threshold, self.whois, self.whois_handler)
+                #print "***********************"
 
     def get_ip(self, ip_string):
         """ TODO put description here"""
