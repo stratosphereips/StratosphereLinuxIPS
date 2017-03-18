@@ -115,7 +115,7 @@ class IpAddress(object):
             #Compute weigted score of the IP in this TW (WS = tuple_ratios_sum*detected_tuples_perc)
             weighted_score = tuple_ratios_sum*detected_tuples_perc
             self.ws_per_tw[tw_index] = weighted_score
-            self.last_tw_result = (weighted_score,tuple_ratios_sum,detected_tuples_perc)
+            self.last_tw_result = (weighted_score, tuple_ratios_sum, detected_tuples_perc)
             if self.debug > 0:
                 print "\t\t\t#tuples: {}, WS:{} = {} (sum of detected tuple ratios) x {} (percentage of detected tuples over total tuples)".format(n_tuples_in_tw,weighted_score,tuple_ratios_sum,detected_tuples_perc)
         else:
@@ -154,50 +154,66 @@ class IpAddress(object):
                 self.last_verdict = "Malicious"
                 self.last_SDW_score = mean
         else:
-            self.last_verdict = None
+            #self.last_verdict = None
+            self.last_verdict = 'Unknown'
 
     def print_last_result(self, verbose, start_time, end_time, threshold, use_whois, whois_handler):
-        """ Print information about the IPs. Both during the time window and at the end. Do the verbose printings better"""
+        """ 
+        TODO: Update description
+        Print information about the IPs. Both during the time window and at the end. Do the verbose printings better
+        """
         try:            
-            if self.last_verdict != None:
-                #print Malicious IPs
-                if verbose > 0 and self.last_verdict.lower() == 'malicious':
-                    print red("\t+{} verdict:{} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
-                    if verbose > 1:
-                        for tuple4 in self.tuples.keys():
-                            tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
-                            # Is at least one tuple detected?
-                            if tuple_result[0] != 0:
-                                #Shall we use whois?
-                                if use_whois:
-                                    whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
-                                    print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
-                                else:
-                                    print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
-                                if verbose > 2:
-                                    for detection in self.tuples[tuple4]:
-                                        #check if detection fits in the TW
-                                        if (detection[2] >= start_time and detection[2] < end_time):
-                                            print("\t\t\tDstIP: {}, Label:{}, Detection Time:{}, State(100 max):{}").format(detection[3], detection[0], detection[2], detection[4][:100])
-                #print normal IPs
-                if verbose > 3 and self.last_verdict.lower() != 'malicious':
-                    print green("\t+{} verdict:{} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
-                    if verbose > 4:
-                        for tuple4 in self.tuples.keys():
-                            tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
-                            # Is at least one tuple checked?
-                            if tuple_result[1] != 0:
-                                #Shall we use whois?
-                                if use_whois:
-                                    whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
-                                    print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
-                                else:
-                                    print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
-                                if verbose > 5:
-                                    for detection in self.tuples[tuple4]:
-                                        #check if detection fits in the TW
-                                        if (detection[2] >= start_time and detection[2] < end_time):
-                                            print("\t\t\tDstIP: {}, Label:{}, Detection Time:{}, State(100 max) :{}").format(detection[3], detection[0], detection[2], detection[4][:100])
+            # Print Malicious IPs
+            if self.last_verdict.lower() == 'malicious' and verbose > 0:
+                print red("\t+{} verdict: {} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
+                if verbose > 1:
+                    for tuple4 in self.tuples.keys():
+                        tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
+                        # Is at least one tuple detected?
+                        if tuple_result[0] != 0:
+                            #Shall we use whois?
+                            if use_whois:
+                                whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
+                                print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
+                            else:
+                                print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
+                            if verbose > 2:
+                                for detection in self.tuples[tuple4]:
+                                    #check if detection fits in the TW
+                                    if (detection[2] >= start_time and detection[2] < end_time):
+                                        print("\t\t\tDstIP: {}, Label:{:>40} , Detection Time:{}, State(100 max): {}").format(detection[3], detection[0], detection[2], detection[4][:100])
+            # Print normal IPs
+            elif verbose > 3:
+                try: 
+                    last_tw_result_0 = self.last_tw_result[0]
+                except TypeError:
+                    last_tw_result_0 = ""
+                try: 
+                    last_tw_result_1 = self.last_tw_result[1]
+                except TypeError:
+                    last_tw_result_1 = ""
+                try: 
+                    last_tw_result_2 = self.last_tw_result[2]
+                except TypeError:
+                    last_tw_result_2 = ""
+
+                print green("\t+{} verdict: {} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, last_tw_result_0, last_tw_result_1, last_tw_result_2))
+                if verbose > 4:
+                    for tuple4 in self.tuples.keys():
+                        tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
+                        # Is at least one tuple checked?
+                        if tuple_result[1] != 0:
+                            #Shall we use whois?
+                            if use_whois:
+                                whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
+                                print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
+                            else:
+                                print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
+                            if verbose > 5:
+                                for detection in self.tuples[tuple4]:
+                                    #check if detection fits in the TW
+                                    if (detection[2] >= start_time and detection[2] < end_time):
+                                        print("\t\t\tDstIP: {}, Label:{:>40} , Detection Time:{}, State(100 max): {}").format(detection[3], detection[0], detection[2], detection[4][:100])
         except Exception as inst:
             print '\tProblem with print_last_result() in ip_handler.py'
             print type(inst)     # the exception instance
