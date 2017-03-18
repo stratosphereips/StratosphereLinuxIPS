@@ -42,45 +42,6 @@ class IpAddress(object):
         self.verbose = verbose
         self.debug = debug
 
-    def get_whois_data(self, ip):
-        """ Get the whois data. This should be an independent function"""
-        try:
-            import ipwhois
-        except ImportError:
-            print 'The ipwhois library is not install. pip install ipwhois'
-            return False
-        # is the ip in the cache
-        try:
-            self.desc = whois_cache[ip]
-            return self.desc
-        except KeyError:
-            # Is not, so just ask for it
-            try:
-                obj = ipwhois.IPWhois(ip)
-                data = obj.lookup_whois()
-                try:
-                    self.desc = data['nets'][0]['description'].strip().replace('\n',' ') + ',' + data['nets'][0]['country']
-                except AttributeError:
-                    # There is no description field
-                    self.desc = ""
-            except ValueError:
-                # Not a real IP, maybe a MAC
-                pass
-            except IndexError:
-                # Some problem with the whois info. Continue
-                pass        
-            except ipwhois.IPDefinedError as e:
-                if 'Multicast' in e:
-                    self.desc = 'Multicast'
-                self.desc = 'Private Use'
-            except ipwhois.ipwhois.WhoisLookupError:
-                print 'Error looking the whois of {}'.format(ip)
-                # continue with the work\
-                pass
-            # Store in the cache
-            whois_cache[ip] = self.desc
-            return self.desc
-
     def add_detection(self, label, tuple, n_chars, input_time, dest_add, state, tw_index):
         # The detection structure is a 3-tuple of a label, the number of chars when it was detected and when it was detected
         detection = (label, n_chars, input_time,dest_add,state)
@@ -192,18 +153,26 @@ class IpAddress(object):
     def print_last_result(self, verbose, start_time, end_time, threshold, use_whois, whois_handler):
         """ Print information about the IPs. Both during the time window and at the end. Do the verbose printings better"""
         try:            
+            print '0'
             if self.last_verdict != None:
+                print '1'
                 #print Malicious IPs
                 if verbose > 0 and self.last_verdict.lower() == 'malicious':
+                    print '2'
                     print red("\t+{} verdict:{} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
                     if verbose > 1:
+                        print '3'
                         for tuple4 in self.tuples.keys():
+                            print '4'
                             tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
                             if tuple_result != None:
+                                print '5'
                                 #Shall we use whois?
                                 if use_whois:
+                                    print '6'
                                     whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
                                     print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
+                                    print 'A'
                                 else:
                                     print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
                                 if verbose > 2:
@@ -220,7 +189,7 @@ class IpAddress(object):
                             if tuple_result != None:
                                 #Shall we use whois?
                                 if use_whois:
-                                    whois = self.get_whois_data(self.tuples[tuple4][0][3])
+                                    whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
                                     print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
                                 else:
                                     print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
@@ -262,12 +231,12 @@ class IpHandler(object):
             print "\nFinal summary using the complete capture as a unique Time Window (Threshold = %f):" %(threshold)
         # For all the addresses stored in total
         for address in self.addresses.values():
-           # print "********BEGINNIG {} *******".format(address.address)
+            # print "********BEGINNIG {} *******".format(address.address)
             # Process this IP for the time window specified. So we can compute the detection value.
             address.process_timewindow(start_time, end_time, tw_index, 10, threshold)
             # Get a printable version of this IP's data
             #string = address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois, print_all, True)
-            address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois,self.whois_handler)
+            address.print_last_result(self.verbose, start_time, end_time, threshold, self.whois, self.whois_handler)
             #print "***********************"
 
     def get_ip(self, ip_string):
