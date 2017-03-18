@@ -95,3 +95,4 @@ ENV/
 
 # slips logs
 logs/
+*.swp
