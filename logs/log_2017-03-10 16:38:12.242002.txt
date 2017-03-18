@@ -1,6 +1,0 @@
-DATE:	2017/03/10 16:38:19.389872
-Summary of adresses in this capture:
-
-Alerts:
-	 - 192.168.1.128
-		[33m*192.168.1.128 detected with score 0.00186260909774	time: 2017/03/10 16:38:13.415619*[0m
