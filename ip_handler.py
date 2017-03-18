@@ -64,9 +64,6 @@ class IpAddress(object):
                     count += 1
                     if detection[0] != False:
                         n_malicious += 1
-            #if count == 0:
-                #return None
-            #else:
             return (n_malicious, count)
         except Exception as inst:
             print '\tProblem with result_per_tuple() in ip_handler.py'
@@ -166,9 +163,9 @@ class IpAddress(object):
             # Print Malicious IPs
             if self.last_verdict.lower() == 'malicious' and verbose > 0:
                 print red("\t+{} verdict: {} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
-                if verbose > 1:
+                if verbose > 1 and verbose <= 3:
                     for tuple4 in self.tuples.keys():
-                        tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
+                        tuple_result = self.result_per_tuple(tuple4, start_time, end_time)
                         # Is at least one tuple detected?
                         if tuple_result[0] != 0:
                             #Shall we use whois?
@@ -182,6 +179,21 @@ class IpAddress(object):
                                     #check if detection fits in the TW
                                     if (detection[2] >= start_time and detection[2] < end_time):
                                         print("\t\t\tDstIP: {}, Label:{:>40} , Detection Time:{}, State(100 max): {}").format(detection[3], detection[0], detection[2], detection[4][:100])
+                elif verbose > 3:
+                    for tuple4 in self.tuples.keys():
+                        tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
+                        # Print all tuples
+                        #Shall we use whois?
+                        if use_whois:
+                            whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
+                            print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
+                        else:
+                            print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
+                        if verbose > 2:
+                            for detection in self.tuples[tuple4]:
+                                #check if detection fits in the TW
+                                if (detection[2] >= start_time and detection[2] < end_time):
+                                    print("\t\t\tDstIP: {}, Label:{:>40} , Detection Time:{}, State(100 max): {}").format(detection[3], detection[0], detection[2], detection[4][:100])
             # Print normal IPs
             elif verbose > 3:
                 try: 
