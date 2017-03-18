@@ -72,10 +72,6 @@ class WhoisHandler(object):
                 if 'Multicast' in e:
                     desc = 'Multicast'
                 desc = 'Private Use'
-            except ipwhois.ipwhois.WhoisLookupError:
-                print 'Error looking the whois of {}'.format(ip)
-                # continue with the work\
-                pass
             # Store in the cache
             self.whois_data[ip] = desc
             return desc
