@@ -4,6 +4,7 @@
 # Author: Sebastian Garcia. eldraco@gmail.com , sebastian.garcia@agents.fel.cvut.cz
 
 import sys
+import signal
 from colors import *
 from datetime import datetime
 from datetime import timedelta
@@ -15,13 +16,13 @@ from modules.markov_models_1 import __markov_models__
 from os import listdir
 from os.path import isfile, join
 from ip_handler import IpHandler
+from utils import SignalHandler
 
 
 import random
 
 version = '0.4'
-
-###################
+#Tuple
 class Tuple(object):
     """ The class to simply handle tuples """
     def __init__(self, tuple4):
@@ -368,11 +369,9 @@ class Tuple(object):
             print '\tPrint tuple {}'.format(self.get_id())
 
 # Process
-
-
 class Processor(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect, threshold, debug, whitelist):
+    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect, threshold, debug, whitelist, sdw_width):
         multiprocessing.Process.__init__(self)
         self.get_whois = get_whois
         self.verbose = verbose
@@ -386,11 +385,13 @@ class Processor(multiprocessing.Process):
         self.slot_endtime = -1
         self.slot_width = slot_width
         self.dontdetect = dontdetect
-        self.ip_handler = IpHandler(self.verbose, self.debug)
+        self.ip_handler = IpHandler(self.verbose, self.debug,self.get_whois)
         self.detection_threshold = threshold;
         # Used to keep track of the number of time window we are currently in (also total amount of tw)
         self.tw_index = 0
         self.ip_whitelist = whitelist
+        #CHANGE THIS
+        self.sdw_width = sdw_width
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -432,7 +433,7 @@ class Processor(multiprocessing.Process):
                         tuple.dont_print()
                 """
             # Print all the addresses in this time window
-            self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.tw_index, self.detection_threshold, False)
+            self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.tw_index, self.detection_threshold, self.sdw_width, False)
             # Add 1 to the time window index 
             self.tw_index +=1
             """
@@ -442,7 +443,7 @@ class Processor(multiprocessing.Process):
                 # We cut the strings of letters regardless of it being detected before.
                 if self.tuples[tuple].amount_of_flows > 100:
                     if self.debug > 3:
-                        print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
+                           print 'Delete all the letters because there were more than 100 and it was detected. Start again with this tuple.'
                     ids_to_delete.append(self.tuples[tuple].get_id())
             # Actually delete them
             for id in ids_to_delete:
@@ -470,7 +471,7 @@ class Processor(multiprocessing.Process):
                 # Ask for the IpAddress object for this source IP
                 ip_address = self.ip_handler.get_ip(column_values[3])
                 # Store detection result into Ip_address
-                ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime, column_values[6])
+                ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime, column_values[6], tuple.get_state_detected_last(), self.tw_index)
         except Exception as inst:
             print 'Problem in process_out_of_time_slot() in class Processor'
             print type(inst)     # the exception instance
@@ -493,7 +494,10 @@ class Processor(multiprocessing.Process):
                     """
                     # Set the detection state len
                     tuple.set_best_model_matching_len(statelen)
+
                     """
+                    #print tuple.state[:statelen]
+                    #print tuple.state[len(tuple.state)-statelen:-1]
                     if self.debug > 5:
                         print 'Last flow: Detected with {}'.format(label)
                     # Play sound
@@ -545,8 +549,7 @@ class Processor(multiprocessing.Process):
                                             tuple.set_color(red)
                                     tuple.add_new_flow(column_values)
                                     """
-                                    # Dont print it until it is tried to be detected
-                                    # tuple.dont_print()
+                                    tuple.do_print()
                                     """
                                     # After the flow has been added to the tuple, only work with the ones having more than X amount of flows
                                     # Check that this is working correclty comparing it to the old program
@@ -559,7 +562,7 @@ class Processor(multiprocessing.Process):
                                         # Ask for IpAddress object 
                                         ip_address = self.ip_handler.get_ip(column_values[3])
                                         # Store detection result into Ip_address
-                                        ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime,column_values[6])
+                                        ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime,column_values[6], tuple.get_state_detected_last(),self.tw_index)
                                 elif flowtime > self.slot_endtime:
                                     # Out of time slot
                                     self.process_out_of_time_slot(column_values, last_tw = False)
@@ -580,12 +583,11 @@ class Processor(multiprocessing.Process):
                             # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
                         # Just Return
                         return True
-
         except KeyboardInterrupt:
             # Print Summary of detections in the last Time Window
-            self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold, True)
+            #self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold,self.sdw_width, True)
             # Print final Alerts
-            self.ip_handler.print_alerts()
+            #self.ip_handler.print_alerts()
             return True
         except Exception as inst:
             print '\tProblem with Processor()'
@@ -595,90 +597,91 @@ class Processor(multiprocessing.Process):
             sys.exit(1)
 
 
-
-
-
 ####################
 # Main
 ####################
-print 'Stratosphere Linux IPS. Version {}'.format(version)
-print('https://stratosphereips.org')
-print
-
-# Parse the parameters
-parser = argparse.ArgumentParser()
-parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
-parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', default=1, required=False, type=int)
-parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the flows.', action='store', default=0, required=False, type=int)
-parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=5, required=False, type=int)
-parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
-parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows using the models. Just print the connections.', default=False, action='store_true', required=False)
-parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
-parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
-parser.add_argument('-t', '--threshold', help='Threshold for detection with IPHandler', action='store', default=0.002, required=False, type=float)
-parser.add_argument('-S', '--slidingwindowwidth', help='Width of sliding window. The unit is in \time windows\'. So a -S 10 and a -w 5, means a sliding window of 50 minutes.', action='store', default=10, required=False, type=float)
-parser.add_argument('-W','--whitelist',help="File with the IP addresses to whitelist. One per line.",action='store',required=False)
-
-args = parser.parse_args()
-
-# Check the verbose level
-if args.verbose < 1:
-    args.verbose = 1
-
-# Check the debug level
-if args.debug < 0:
-    args.debug = 0
-
-if args.dontdetect:
-    print 'Warning: No detections will be done. Only the behaviors are printed.'
+if __name__ == '__main__':  
+    print 'Stratosphere Linux IPS. Version {}'.format(version)
+    print('https://stratosphereips.org')
     print
-    # If the folder with models was specified, just ignore it
-    args.folder = False
 
-# Do we need sound?
-if args.sound:
-    import pygame.mixer
-    pygame.mixer.init(44100)
-    pygame.mixer.music.load('periodic.ogg')
+    # Parse the parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
+    parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', default=1, required=False, type=int)
+    parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the flows.', action='store', default=0, required=False, type=int)
+    parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=5, required=False, type=int)
+    parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
+    parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows using the models. Just print the connections.', default=False, action='store_true', required=False)
+    parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
+    parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
+    parser.add_argument('-t', '--threshold', help='Threshold for detection with IPHandler', action='store', default=0.002, required=False, type=float)
+    parser.add_argument('-S', '--sdw_width', help='Width of sliding window. The unit is in \time windows\'. So a -S 10 and a -w 5, means a sliding window of 50 minutes.', action='store', default=10, required=False, type=int)
+    parser.add_argument('-W','--whitelist',help="File with the IP addresses to whitelist. One per line.",action='store',required=False)
+
+    args = parser.parse_args()
+
+    # Check the verbose level
+    if args.verbose < 1:
+        args.verbose = 1
+
+    # Check the debug level
+    if args.debug < 0:
+        args.debug = 0
+
+    if args.dontdetect:
+        print 'Warning: No detections will be done. Only the behaviors are printed.'
+        print
+        # If the folder with models was specified, just ignore it
+        args.folder = False
+
+    # Do we need sound?
+    if args.sound:
+        import pygame.mixer
+        pygame.mixer.init(44100)
+        pygame.mixer.music.load('periodic.ogg')
 
 
-# Read the folder with models if specified
-if args.folder:
-    onlyfiles = [f for f in listdir(args.folder) if isfile(join(args.folder, f))]
-    if args.verbose > 2:
-        print 'Detecting malicious behaviors with the following models:'
-    for file in onlyfiles:
-        __markov_models__.set_verbose(args.verbose)
-        __markov_models__.set_debug(args.debug)
-        __markov_models__.set_model_to_detect(join(args.folder, file))
+    # Read the folder with models if specified
+    if args.folder:
+        onlyfiles = [f for f in listdir(args.folder) if isfile(join(args.folder, f))]
+        if args.verbose > 2:
+            print 'Detecting malicious behaviors with the following models:'
+        for file in onlyfiles:
+            __markov_models__.set_verbose(args.verbose)
+            __markov_models__.set_debug(args.debug)
+            __markov_models__.set_model_to_detect(join(args.folder, file))
 
-# Create the queue
-queue = Queue()
+    # Create the queue
+    queue = Queue()
 
-#Read whitelist
-whitelist = []
-if args.whitelist:
-    try:
-        content = [line.rstrip('\n') for line in open(args.whitelist)]
-        if len(content) > 0:
-            if args.verbose > 1:
-                print blue("Whitelisted IPs:")
-            for item in content:
+    #Read whitelist
+    whitelist = set()
+    if args.whitelist:
+        try:
+            content = set(line.rstrip('\n') for line in open(args.whitelist))
+            if len(content) > 0:
                 if args.verbose > 1:
-                    print blue("\t" + item)
-            whitelist = content
-    except Exception as e:
-        print blue("Whitelist file '{}' not found!".format(args.whitelist))
+                    print blue("Whitelisted IPs:")
+                for item in content:
+                    if args.verbose > 1:
+                        print blue("\t" + item)
+                whitelist = content
+        except Exception as e:
+            print blue("Whitelist file '{}' not found!".format(args.whitelist))
 
-# Create the thread and start it
-processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect, args.threshold, args.debug, whitelist)
-processorThread.start()
 
-# Just put the lines in the queue as fast as possible
-for line in sys.stdin:
-    queue.put(line)
-if args.verbose > 2:
-    print 'Finished receiving the input.'
-# Shall we wait? Not sure. Seems that not
-time.sleep(1)
-queue.put('stop')
+    # Create the thread and start it
+    processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect, args.threshold, args.debug, whitelist,args.sdw_width)
+    SH = SignalHandler(processorThread)
+    SH.register_signal(signal.SIGINT)
+    processorThread.start()
+
+    # Just put the lines in the queue as fast as possible
+    for line in sys.stdin:
+        queue.put(line)
+    if args.verbose > 2:
+        print 'Finished receiving the input.'
+    # Shall we wait? Not sure. Seems that not
+    time.sleep(1)
+    queue.put('stop')
