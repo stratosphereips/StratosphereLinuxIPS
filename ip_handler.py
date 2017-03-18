@@ -30,11 +30,9 @@ class IpAddress(object):
     #TODO: storing ip as string? maybe there is a better way?
     def __init__(self, address, verbose, debug):
         self.address = address
-
         self.tuples = {}
         self.alerts = []
         self.ws_per_tw = {}
-
         self.last_tw_result = None
         self.last_verdict = None
         self.last_time = None
@@ -56,18 +54,20 @@ class IpAddress(object):
     def result_per_tuple(self, tuple, start_time, end_time):       
         """ TODO: Put description """
         try:
+            # This counts the amount of times this tuple was detected by any model
             n_malicious = 0
+            # This counts the amount of times this tuple was checked
             count = 0
             for detection in self.tuples[tuple]:
-                #check this detection belongs to the TimeWindow
+                #check if this detection belongs to the TimeWindow
                 if (detection[2] >= start_time and detection[2] < end_time):
                     count += 1
                     if detection[0] != False:
                         n_malicious += 1
-            if count == 0:
-                return None
-            else:
-                return (n_malicious, count)
+            #if count == 0:
+                #return None
+            #else:
+            return (n_malicious, count)
         except Exception as inst:
             print '\tProblem with result_per_tuple() in ip_handler.py'
             print type(inst)     # the exception instance
@@ -87,6 +87,8 @@ class IpAddress(object):
         """ What is the tuple score: Explain"""
         """ What is the weigthed score: Explain"""
         """ Returns the weighted score for the time windows specified"""
+        if self.debug > 0:
+            print '\tCompute the detection score for {}'.format(self.address)
         tuple_ratios_sum = 0 
         n_malicious_connections= 0
         n_connections = 0
@@ -96,8 +98,9 @@ class IpAddress(object):
         for tuple4 in self.tuples.keys():
             #get result for this tuple
             tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
-            if tuple_result != None: #There is at least one detection
-                #Increment tuple counter in fro this TW
+            # if there is at least one detection
+            if tuple_result[0] != 0: 
+                # Increment tuple counter for this TW
                 n_tuples_in_tw +=1
                 #Compute the ratio of the detections of this tuple - TupleRatio
                 tuple_ratio = tuple_result[0]/ float(tuple_result[1])
@@ -114,11 +117,11 @@ class IpAddress(object):
             self.ws_per_tw[tw_index] = weighted_score
             self.last_tw_result = (weighted_score,tuple_ratios_sum,detected_tuples_perc)
             if self.debug > 0:
-                print "\t\t\t#tuples: {}, WS:{} = {}(tuple ratios sum) x {} (detected tuple percentage)".format(n_tuples_in_tw,weighted_score,tuple_ratios_sum,detected_tuples_perc)
+                print "\t\t\t#tuples: {}, WS:{} = {} (sum of detected tuple ratios) x {} (percentage of detected tuples over total tuples)".format(n_tuples_in_tw,weighted_score,tuple_ratios_sum,detected_tuples_perc)
         else:
-            if True or debug:
+            if self.debug:
+                #No detections in this TW
                 self.last_tw_result = None
-                "No detections in this TW"
 
     def get_verdict(self, start_time, end_time, tw_index, sdw_width, threshold):
         """This function uses sliding detection window (SDW) to compute mean of last n time windows weighted score"""
@@ -136,10 +139,10 @@ class IpAddress(object):
                 # If it doesn't have the key? Add a try
             mean = sum(sdw) / float(sdw_width)
             if self.debug > 3:
-                print self.address
-                print "\tSDW startindex:{}. SDW endindex:{}.".format(startindex, tw_index)
-                print "\t\t " +str(sdw)
-                print "\t\tMean of SDW:{}, THRESHOLD:{}.".format(mean,threshold)
+                print '\t' + self.address
+                print "\tSDW startindex:{} . SDW endindex:{}".format(startindex, tw_index)
+                print "\t\tSliding window:" + str(sdw)
+                print "\t\tMean of SDW: {}, THRESHOLD: {}.".format(mean,threshold)
             # Did we detect it?
             if mean < threshold:
                 # No
@@ -163,7 +166,8 @@ class IpAddress(object):
                     if verbose > 1:
                         for tuple4 in self.tuples.keys():
                             tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
-                            if tuple_result != None:
+                            # Is at least one tuple detected?
+                            if tuple_result[0] != 0:
                                 #Shall we use whois?
                                 if use_whois:
                                     whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
@@ -174,14 +178,15 @@ class IpAddress(object):
                                     for detection in self.tuples[tuple4]:
                                         #check if detection fits in the TW
                                         if (detection[2] >= start_time and detection[2] < end_time):
-                                            print("\t\t\tDstIP: {}, Label:{}, Detection Time:{}, State:{}").format(detection[3], detection[0], detection[2], detection[4])
+                                            print("\t\t\tDstIP: {}, Label:{}, Detection Time:{}, State(100 max):{}").format(detection[3], detection[0], detection[2], detection[4][:100])
                 #print normal IPs
                 if verbose > 3 and self.last_verdict.lower() != 'malicious':
                     print green("\t+{} verdict:{} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
                     if verbose > 4:
                         for tuple4 in self.tuples.keys():
                             tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
-                            if tuple_result != None:
+                            # Is at least one tuple checked?
+                            if tuple_result[1] != 0:
                                 #Shall we use whois?
                                 if use_whois:
                                     whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
@@ -192,7 +197,7 @@ class IpAddress(object):
                                     for detection in self.tuples[tuple4]:
                                         #check if detection fits in the TW
                                         if (detection[2] >= start_time and detection[2] < end_time):
-                                            print("\t\t\t"+ str(detection))
+                                            print("\t\t\tDstIP: {}, Label:{}, Detection Time:{}, State(100 max) :{}").format(detection[3], detection[0], detection[2], detection[4][:100])
         except Exception as inst:
             print '\tProblem with print_last_result() in ip_handler.py'
             print type(inst)     # the exception instance
@@ -202,7 +207,6 @@ class IpAddress(object):
 
     def process_timewindow(self, start_time, end_time, tw_index, sdw_width, swd_threshold,):
         """ For this IP, see if we should report a detection or not based on the thresholds and TW"""
-        #self.get_weighted_score(start_time, end_time, tw_index)
         self.get_verdict(start_time, end_time, tw_index, sdw_width, swd_threshold)
 
     def get_alerts(self):
