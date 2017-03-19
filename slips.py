@@ -524,9 +524,7 @@ class Processor(multiprocessing.Process):
                         try:
                             column_values = nline.split(',')
                             # 0:starttime, 1:dur, 2:proto, 3:saddr, 4:sport, 5:dir, 6:daddr: 7:dport, 8:state, 9:stos,  10:dtos, 11:pkts, 12:bytes
-                            #check if ip is not in whitelist
-                            # TODO, transform the whitelist check into a has_key() so is faster.
-                            #if not self.ip_whitelist.has_key(column_values[3]):
+                            # check if ip is not in whitelist
                             if not column_values[3] in self.ip_whitelist:
                                 if self.slot_starttime == -1:
                                     # First flow
