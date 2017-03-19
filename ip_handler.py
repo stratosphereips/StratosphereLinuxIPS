@@ -123,7 +123,6 @@ class IpAddress(object):
                 n_infected_tuples += 1
         if n_tuples_in_tw > 0:            
             # Comupte percentage of detected tuples in this TW
-            print float(n_infected_tuples), n_tuples_in_tw
             detected_tuples_perc = float(n_infected_tuples) / n_tuples_in_tw
             # Compute weigted score of the IP in this TW (WS = tuple_ratios_sum*detected_tuples_perc)
             weighted_score = tuple_ratios_sum * detected_tuples_perc
