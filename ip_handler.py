@@ -43,6 +43,7 @@ class IpAddress(object):
         self.address = address
         self.tuples = {}
         self.alerts = []
+        # What is this variable for?
         self.ws_per_tw = {}
         self.last_tw_result = None
         self.last_verdict = None
@@ -135,13 +136,12 @@ class IpAddress(object):
         """This function uses sliding detection window (SDW) to compute mean of last n time windows weighted score"""
         # Get the weighted score
         self.get_weighted_score(start_time,end_time,tw_index)
-        
         if self.ws_per_tw.has_key(tw_index): #traffic in this TW
-            startindex = tw_index-sdw_width #compute SDW indices
+            startindex = tw_index - sdw_width #compute SDW indices
             if startindex < 0:
                 startindex = 0
             sdw = []
-            for i in range (startindex,tw_index+1): #fill the sdw
+            for i in range (startindex, tw_index): #fill the sdw
                 if self.ws_per_tw.has_key(i):
                     sdw.append(self.ws_per_tw[i])
                 # If it doesn't have the key? Add a try
