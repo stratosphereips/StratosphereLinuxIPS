@@ -526,6 +526,7 @@ class Processor(multiprocessing.Process):
                             # 0:starttime, 1:dur, 2:proto, 3:saddr, 4:sport, 5:dir, 6:daddr: 7:dport, 8:state, 9:stos,  10:dtos, 11:pkts, 12:bytes
                             #check if ip is not in whitelist
                             # TODO, transform the whitelist check into a has_key() so is faster.
+                            #if not self.ip_whitelist.has_key(column_values[3]):
                             if not column_values[3] in self.ip_whitelist:
                                 if self.slot_starttime == -1:
                                     # First flow
@@ -652,10 +653,11 @@ if __name__ == '__main__':
     # Create the queue
     queue = Queue()
 
-    #Read whitelist
+    # Read whitelist
     whitelist = set()
     if args.whitelist:
         try:
+            #whitelist = set()
             content = set(line.rstrip('\n') for line in open(args.whitelist))
             if len(content) > 0:
                 if args.verbose > 1:
@@ -669,7 +671,7 @@ if __name__ == '__main__':
 
 
     # Create the thread and start it
-    processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect, args.threshold, args.debug, whitelist,args.sdw_width)
+    processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect, args.threshold, args.debug, whitelist, args.sdw_width)
     SH = SignalHandler(processorThread)
     SH.register_signal(signal.SIGINT)
     processorThread.start()
