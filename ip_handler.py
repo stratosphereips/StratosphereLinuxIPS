@@ -174,6 +174,7 @@ class IpAddress(object):
             # Print Malicious IPs
             if self.last_verdict.lower() == 'malicious' and verbose > 0:
                 print red("\t+{} verdict: {} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
+                # Print those tuples that have at least 1 detection
                 if verbose > 1 and verbose <= 3:
                     for tuple4 in self.tuples.keys():
                         # Here we are checking for all the tuples of this IP in all the capture!! this is veryyy inefficient
@@ -191,11 +192,11 @@ class IpAddress(object):
                                     #check if detection fits in the TW
                                     if (detection[2] >= start_time and detection[2] < end_time):
                                         print("\t\t\tDstIP: {}, Label:{:>40} , Detection Time:{}, State(100 max): {}").format(detection[3], detection[0], detection[2], detection[4][:100])
+                # Print those tuples that have at least 1 detection and also the ones that were not detected
                 elif verbose > 3:
                     for tuple4 in self.tuples.keys():
                         tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
-                        # Print all tuples
-                        #Shall we use whois?
+                        # Shall we use whois?
                         if use_whois:
                             whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
                             print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
