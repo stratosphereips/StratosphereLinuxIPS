@@ -385,7 +385,7 @@ class Processor(multiprocessing.Process):
         self.dontdetect = dontdetect
         self.ip_handler = IpHandler(self.verbose, self.debug,self.get_whois)
         self.detection_threshold = threshold;
-        # Used to keep track of the number of time window we are currently in (also total amount of tw)
+        # Used to keep track in which time window we are currently in (also total amount of tw)
         self.tw_index = 0
         self.ip_whitelist = whitelist
         #CHANGE THIS
