@@ -101,35 +101,36 @@ class IpAddress(object):
         n_malicious_connections= 0
         n_connections = 0
         n_infected_tuples = 0
-        n_tuples_in_tw= 0
+        n_tuples_in_tw = 0
+        weighted_score = 0
+        detected_tuples_perc = 0
         # For each tuple stored for this IP, compute the tuple score.
         for tuple4 in self.tuples.keys():
-            #get result for this tuple
-            tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
+            if self.debug > 1:
+                print '\t\tChecking the detection score for tuple {}'.format(tuple4)
+            # Get result for this tuple
+            (times_detected, times_checked) = self.result_per_tuple(tuple4,start_time,end_time)
+            # Increment tuple counter for this TW. This should be done before checking if there are detections
+            n_tuples_in_tw += 1
             # if there is at least one detection
-            if tuple_result[0] != 0: 
-                # Increment tuple counter for this TW
-                n_tuples_in_tw +=1
-                #Compute the ratio of the detections of this tuple - TupleRatio
-                tuple_ratio = tuple_result[0]/ float(tuple_result[1])
+            if times_detected != 0: 
+                # Compute the ratio of the detections of this tuple - TupleRatio
+                tuple_ratio = times_detected / float(times_checked)
                 tuple_ratios_sum += tuple_ratio
                 if self.debug > 0:
-                    print '\t\tTuple: {}, ratio: {} ({}/{})'.format(tuple4, tuple_ratio, tuple_result[0], tuple_result[1])
-                if tuple_ratio > 0: #There was at least one positive detection in this tuple
-                    n_infected_tuples += 1
+                    print '\t\tTuple: {}, ratio: {} ({}/{})'.format(tuple4, tuple_ratio, times_detected, times_checked)
+                # Add 1 to the number of tuples in total for this IP
+                n_infected_tuples += 1
         if n_tuples_in_tw > 0:            
-            #Comupte percentage of detected tuples in this TW
+            # Comupte percentage of detected tuples in this TW
+            print float(n_infected_tuples), n_tuples_in_tw
             detected_tuples_perc = float(n_infected_tuples) / n_tuples_in_tw
-            #Compute weigted score of the IP in this TW (WS = tuple_ratios_sum*detected_tuples_perc)
-            weighted_score = tuple_ratios_sum*detected_tuples_perc
+            # Compute weigted score of the IP in this TW (WS = tuple_ratios_sum*detected_tuples_perc)
+            weighted_score = tuple_ratios_sum * detected_tuples_perc
             self.ws_per_tw[tw_index] = weighted_score
-            self.last_tw_result = (weighted_score, tuple_ratios_sum, detected_tuples_perc)
             if self.debug > 0:
                 print "\t\t\t#tuples: {}, WS:{} = {} (sum of detected tuple ratios) x {} (percentage of detected tuples over total tuples)".format(n_tuples_in_tw,weighted_score,tuple_ratios_sum,detected_tuples_perc)
-        else:
-            if self.debug:
-                #No detections in this TW
-                self.last_tw_result = None
+        self.last_tw_result = (weighted_score, tuple_ratios_sum, detected_tuples_perc)
 
     def get_verdict(self, start_time, end_time, tw_index, sdw_width, threshold):
         """This function uses sliding detection window (SDW) to compute mean of last n time windows weighted score"""
@@ -264,11 +265,12 @@ class IpHandler(object):
         self.whois_handler = WhoisHandler("WhoisData.txt")
 
     # Using this decorator we can measure the time of a function
-    #@timing
+    # @timing
     def print_addresses(self, start_time, end_time, tw_index, threshold, sdw_width, print_all):
         """ Print information about all the IP addresses in the time window specified in the parameters."""
         if self.debug:
             print "\tTimewindow index:{}, threshold:{},SDW width: {}".format(tw_index,threshold,sdw_width)
+        # If we should print all the addresses, because we finish processing.
         if print_all:
             print "\nFinal summary using the complete capture as a unique Time Window (Threshold = %f):" %(threshold)
             # For all the addresses stored in total
@@ -280,6 +282,7 @@ class IpHandler(object):
                 #string = address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois, print_all, True)
                 address.print_last_result(self.verbose, start_time, end_time, threshold, self.whois, self.whois_handler)
                 #print "***********************"
+        # If we should NOT print all the addresses, because we are inside a time window
         if not print_all:
             # We should not process all the ips here...
             for address in self.addresses.values():
