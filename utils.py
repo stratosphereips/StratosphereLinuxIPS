@@ -13,6 +13,7 @@ class SignalHandler(object):
             self.process = process
 
     def register_signal(self, signal_n):
+        """Adds signal  to the handler to proccess it"""
             signal.signal(signal_n,self.process_signal)
 
     def process_signal(self,signal, frame):
