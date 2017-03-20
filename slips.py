@@ -433,7 +433,7 @@ class Processor(multiprocessing.Process):
                         tuple.dont_print()
                 """
             # Print all the addresses in this time window
-            self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.tw_index, self.detection_threshold,self.sdw_width, False)
+            self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.tw_index, self.detection_threshold,self.sdw_width)
             # Add 1 to the time window index 
             self.tw_index +=1
             """
@@ -463,6 +463,7 @@ class Processor(multiprocessing.Process):
                     if len(tuple.state) == 0:
                         tuple.set_color(red)
                 """
+                self.ip_handler.close_time_window()
                 tuple.add_new_flow(column_values)
                 # Detect the first flow of the future timeslot
                 self.detect(tuple)
@@ -583,12 +584,6 @@ class Processor(multiprocessing.Process):
                                 # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
                             # Just Return
                             return True
-            except KeyboardInterrupt:
-                # Print Summary of detections in the last Time Window
-                #self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold,self.sdw_width, True)
-                # Print final Alerts
-                #self.ip_handler.print_alerts()
-                return True
             except Exception as inst:
                 print '\tProblem with Processor()'
                 print type(inst)     # the exception instance

@@ -157,10 +157,7 @@ class IpAddress(object):
                 "No detections in this TW"
 
     def get_verdict(self, start_time, end_time, tw_index, sdw_width, threshold):
-        """This function uses sliding detection window (SDW) to compute mean of last n time windows weighted score"""
-        #compute weighted score for the last TW
-        self.get_weighted_score(start_time,end_time,tw_index)
-        
+        """This function uses sliding detection window (SDW) to compute mean of last n time windows weighted score"""        
         if self.ws_per_tw.has_key(tw_index): #traffic in this TW
             startindex = tw_index-sdw_width #compute SDW indices
             if startindex < 0:
@@ -200,6 +197,7 @@ class IpAddress(object):
                     if verbose > 1:
                         for tuple4 in self.tuples.keys():
                             tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
+                        
                             if tuple_result != None:
                                 #Shall we use whois?
                                 if use_whois:
@@ -207,11 +205,13 @@ class IpAddress(object):
                                     print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
                                 else:
                                     print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
+                                    
                                 if verbose > 2:
                                     for detection in self.tuples[tuple4]:
                                         #check if detection fits in the TW
                                         if (detection[2] >= start_time and detection[2] < end_time):
                                             print("\t\t\t"+ str(detection))
+                                
                 #print normal IPs
                 if verbose > 3 and self.last_verdict.lower() != 'malicious':
                     print green("\t+{} verdict:{} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
@@ -254,36 +254,36 @@ class IpHandler(object):
         self.debug = debug
         self.whois = whois
         self.whois_handler = WhoisHandler("WhoisData.txt")
+        self.active_adresses = set()
 
-    def print_addresses(self, start_time, end_time, tw_index, threshold, sdw_width, print_all):
+    def print_addresses(self, start_time, end_time, tw_index, threshold, sdw_width):
         """ Print information about all the IP addresses in the time window specified in the parameters."""
         if self.debug:
             print "Timewindow index:{}, threshold:{},SDW width: {}".format(tw_index,threshold,sdw_width)
-        if print_all:
-            print "\nFinal summary using the complete capture as a unique Time Window (Threshold = %f):" %(threshold)
-        # For all the addresses stored in total
-        for address in self.addresses.values():
-           # print "********BEGINNIG {} *******".format(address.address)
-            # Process this IP for the time window specified. So we can compute the detection value.
-            address.process_timewindow(start_time, end_time, tw_index, 10, threshold)
+        # For all the addresses active in this TW
+        for ip in self.active_adresses:
+            #get IpAddress object
+            address = self.addresses[ip]
+            address.process_timewindow(start_time, end_time, tw_index, sdw_width, threshold)
             # Get a printable version of this IP's data
-            #string = address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois, print_all, True)
             address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois,self.whois_handler)
             #print "***********************"
 
     def get_ip(self, ip_string):
-        """ TODO put description here"""
+        """ Returns IpAddress object from self.addresses. If there is no such object new instance is created."""
         #Have I seen this IP before?
         try:
             ip = self.addresses[ip_string]
+            self.active_adresses.add(ip_string)
         # No, create it
         except KeyError:
             ip = IpAddress(ip_string, self.verbose, self.debug)
             self.addresses[ip_string] = ip
+            self.active_adresses.add(ip_string)
         return ip
 
     def print_alerts(self):
-        """ TODO put description here"""
+        """ Checks each IpAddress for alerts and print them."""
         detected_counter = 0
         self.whois_handler.store_whois_data_in_file()
         print '\nFinal Alerts generated:'
@@ -303,3 +303,9 @@ class IpHandler(object):
         f.write(s)
         print s
         f.close()
+
+    def close_time_window(self):
+        """Clear the set of active addresses"""
+        if self.debug:
+            "Active addresses cleared -#items:{}".format(len(self.active_adresses))
+        self.active_adresses.clear()
