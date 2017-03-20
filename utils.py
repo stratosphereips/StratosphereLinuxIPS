@@ -43,6 +43,7 @@ class WhoisHandler(object):
                     s = re.split("\t",line.strip())
                     if len(s) > 1:
                         self.whois_data[s[0]] = s[1]
+            print "Whois file '{}' loaded successfully".format(whois_file)            
         except IOError:
             print "Whois informaton file:'{}' doesn't exist!".format(self.filename)
             pass
@@ -70,7 +71,6 @@ class WhoisHandler(object):
                     desc = ""
                 except TypeError:
                     #There is a None somewhere, just continue..
-                    print "SHIT"
                     desc = ""
             except ValueError:
                 # Not a real IP, maybe a MAC
@@ -100,7 +100,7 @@ class WhoisHandler(object):
                 f.write('{}\t{}\n'.format(item[0],item[1]));
             f.close();
         else:
-            "No new stuff in the dictionary"
+            print "No new stuff in the dictionary"
 
 
 

@@ -227,7 +227,7 @@ class MarkovModelsDetection():
                         prob_distance = test_prob / training_original_prob
                     except ZeroDivisionError:
                         prob_distance = -1
-                if self.debug > 2:
+                if self.debug > 3:
                     print '\t\tTrained Model: {}. Label: {}. Threshold: {}, State: {}'.format(model.get_id(), model.get_label(), model.get_threshold(), train_sequence)
                     print '\t\t\tTest Model: {}. State: {}'.format(tuple.get_id(), tuple.get_state())
                     print '\t\t\tTrain prob: {}'.format(training_original_prob)
@@ -247,13 +247,13 @@ class MarkovModelsDetection():
                     best_distance_so_far = prob_distance
                     if self.debug > 3:
                         print '\t\t\t\tThis model is the best so far. State len: {}'.format(len(tuple.get_state()))
+                    # New decision. If one model matched, just stop checking the rest of the models
+                    break
             # If we detected something
             if best_model_so_far:
                 return (best_model_so_far.matched, best_model_so_far.get_label(), best_model_so_far.get_best_model_matching_len())
-                #return (best_model_so_far.matched, best_model_so_far.get_label())
             else:
                 return (False, False, False)
-                #return (False, False)
         except Exception as inst:
             print 'Problem in detect() in markov_models_1'
             print type(inst)     # the exception instance
