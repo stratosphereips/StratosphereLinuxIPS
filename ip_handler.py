@@ -42,8 +42,9 @@ class IpAddress(object):
     def __init__(self, address, verbose, debug):
         self.address = address
         self.tuples = {}
+        self.active_tuples = set()
         self.alerts = []
-        # What is this variable for?
+        # What is this variable for? ANSWER: It is used to store weigted scores results indexed by TW index.
         self.ws_per_tw = {}
         self.last_tw_result = None
         self.last_verdict = None
@@ -62,6 +63,13 @@ class IpAddress(object):
             self.tuples[tuple] = []
         #add detection to array
         self.tuples[tuple].append(detection)
+        self.active_tuples.add(tuple)
+
+    def close_time_window(self):
+        """Removes all active tuples in this tw"""
+        if self.debug:
+            print "#Active tuples in ip:{} = {}".format(self.address,len(self.active_tuples))
+        self.active_tuples.clear()
 
     def result_per_tuple(self, tuple, start_time, end_time):       
         """Compute ratio of malicious detection per tuple in timewindow determined by start_time & end_time"""
@@ -99,7 +107,7 @@ class IpAddress(object):
         weighted_score = 0
         detected_tuples_perc = 0
         # For each tuple stored for this IP, compute the tuple score.
-        for tuple4 in self.tuples.keys():
+        for tuple4 in self.active_tuples:
             if self.debug > 1:
                 print '\t\tChecking the detection score for tuple {}'.format(tuple4)
             # Get result for this tuple
@@ -165,7 +173,7 @@ class IpAddress(object):
         try:            
             # Print Malicious IPs
             if self.last_verdict.lower() == 'malicious' and verbose > 0:
-                print red("\t+{} verdict: {} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
+                print red("\t+ {} verdict: {} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
                 # Print those tuples that have at least 1 detection
                 if verbose > 1 and verbose <= 3:
                     for tuple4 in self.tuples.keys():
@@ -277,7 +285,9 @@ class IpHandler(object):
         # If we should NOT print all the addresses, because we are inside a time window
         if not print_all:
             # We should not process all the ips here...
-            for address in self.addresses.values():
+           for ip in self.active_addresses:
+                #Get the IpAddress object
+                address = self.addresses[ip]
                 # Process this IP for the time window specified. So we can compute the detection value.
                 address.process_timewindow(start_time, end_time, tw_index, sdw_width, threshold)
                 # Get a printable version of this IP's data
@@ -293,6 +303,8 @@ class IpHandler(object):
         except KeyError:
             ip = IpAddress(ip_string, self.verbose, self.debug)
             self.addresses[ip_string] = ip
+        #register ip as active in this TW
+        self.active_addresses.add(ip_string)
         return ip
 
     def print_alerts(self):
@@ -316,3 +328,13 @@ class IpHandler(object):
         f.write(s)
         print s
         f.close()
+
+    def close_time_window(self):
+        """Clears all the active objects in the timewindow. Should be called at the end of every TW"""
+        #close tw in all active IpAddress objects
+        for ip in self.active_addresses:
+            self.addresses[ip].close_time_window()
+        #clear the active_addresses set
+        if self.debug:
+            print "# active IPs: {}".format(len(self.active_addresses))
+        self.active_addresses.clear()

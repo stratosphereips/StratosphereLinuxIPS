@@ -450,6 +450,8 @@ class Processor(multiprocessing.Process):
             # Move the time window times
             self.slot_starttime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
             self.slot_endtime = self.slot_starttime + self.slot_width
+            #Clear previous TW in ip_handler
+            self.ip_handler.close_time_window()
 
             # If not the last TW. Put the last flow received in the next slot, because it overcome the threshold and it was not processed
             if not last_tw:
