@@ -14,7 +14,7 @@ class SignalHandler(object):
 
     def register_signal(self, signal_n):
         """Adds signal  to the handler to proccess it"""
-            signal.signal(signal_n,self.process_signal)
+        signal.signal(signal_n,self.process_signal)
 
     def process_signal(self,signal, frame):
         #print "signal:{},frame:{},time:{}.".format(signal,frame,datetime.now())
