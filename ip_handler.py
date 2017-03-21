@@ -54,7 +54,7 @@ class IpAddress(object):
         self.debug = debug
 
     def add_detection(self, label, tuple, n_chars, input_time, dest_add, state, tw_index):
-        """ Stores new derection with timestamp"""
+        """ Stores new detection with timestamp"""
         # The detection structure is a 3-tuple of a label, the number of chars when it was detected and when it was detected
         detection = (label, n_chars, input_time, dest_add, state)
         self.last_time = input_time
@@ -108,6 +108,7 @@ class IpAddress(object):
         detected_tuples_perc = 0
         # For each tuple stored for this IP, compute the tuple score.
         for tuple4 in self.active_tuples:
+
             if self.debug > 1:
                 print '\t\tChecking the detection score for tuple {}'.format(tuple4)
             # Get result for this tuple
@@ -173,7 +174,7 @@ class IpAddress(object):
         try:            
             # Print Malicious IPs
             if self.last_verdict.lower() == 'malicious' and verbose > 0:
-                print red("\t+ {} verdict: {} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))                      
+                print red("\t+ {} verdict: {} (SDW score: {:.5f}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_SDW_score, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))
                 # Print those tuples that have at least 1 detection
                 if verbose > 1 and verbose <= 3:
                     for tuple4 in self.tuples.keys():

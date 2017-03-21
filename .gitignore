@@ -96,4 +96,7 @@ ENV/
 # slips logs
 logs/
 *.swp
+<<<<<<< HEAD
 *.txt
+=======
+>>>>>>> bd286aa42fe13d4b0d797d10224277bf4b485648
