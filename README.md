@@ -38,7 +38,7 @@ The core of the slips program is not only the machine learning algorithm, but mo
 The behavioral models are stored in the __models__ folder and will be updated regularly. In this version you should pull the git repository by hand to update the models.
 
 ## Features 
-This alpha version of slips comes with the following features:
+This version of slips comes with the following features:
 
 - If you execute slips without the -m parameter it will __not__ detect any behavior in the network but just print the tuples (see the Stratosphere web page for more information). So actually you can also use slips to see what is happening in your network even without detection.
 - Use -a to restrict the minimum amount of letters that the tuples had to have to be considered for detection. The default is a minimum of 3 letters which is enough for having at least one periodic letter.
@@ -86,8 +86,11 @@ This alpha version of slips comes with the following features:
 ### Roadmap
 
 ### Changelog
-
+- 0.3.4
+    - This is a mayor version change. Implementing new algorithms for analyzing the results, management of IPs, connections, whois database and more features.
+    - 
 - 0.3.3alpha
+    - First stable version with a minimal algorithm for detecting behavioral threats.
 
 
 
