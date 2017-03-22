@@ -19,7 +19,7 @@ from ip_handler import IpHandler
 from utils import SignalHandler
 import random
 
-version = '0.4'
+version = '0.3.4'
 
 def timing(f):
     """ Function to measure the time another function takes."""
