@@ -143,10 +143,10 @@ class IpAddress(object):
             if startindex < 0:
                 startindex = 0
             sdw = []
-            for i in range (startindex, tw_index): #fill the sdw
+            for i in range (startindex+1, tw_index+1): #fill the sdw
                 if self.ws_per_tw.has_key(i):
                     sdw.append(self.ws_per_tw[i])
-                # If it doesn't have the key? Add a try
+                # If it doesn't have the key? Add a tryf
             mean = sum(sdw) / float(sdw_width)
             if self.debug > 3:
                 print '\t' + self.address
@@ -160,7 +160,7 @@ class IpAddress(object):
                 self.last_SDW_score = mean;
             else:
                 # Yes 
-                self.alerts.append(IpDetectionAlert(datetime.now(),self.address,mean))
+                self.alerts.append(IpDetectionAlert(start_time,self.address,mean))
                 self.last_verdict = "Malicious"
                 self.last_SDW_score = mean
         else:
