@@ -499,7 +499,7 @@ class Processor(multiprocessing.Process):
                     if self.debug > 5:
                         print 'Last flow: Detected with {}'.format(label)
                     # Play sound
-                    if args.sound:
+                    if play_sound:
                         pygame.mixer.music.play()
                 elif not detected:
                     # Not detected by any reason. No model matching but also the state len is too short.
@@ -592,7 +592,7 @@ class Processor(multiprocessing.Process):
             print inst           # __str__ allows args to printed directly
             sys.exit(1)
 
-
+play_sound = False
 ####################
 # Main
 ####################
@@ -636,6 +636,7 @@ if __name__ == '__main__':
         import pygame.mixer
         pygame.mixer.init(44100)
         pygame.mixer.music.load('periodic.ogg')
+        play_sound = True
 
 
     # Read the folder with models if specified
