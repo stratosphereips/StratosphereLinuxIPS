@@ -88,7 +88,8 @@ This version of slips comes with the following features:
 ### Changelog
 - 0.3.4
     - This is a mayor version change. Implementing new algorithms for analyzing the results, management of IPs, connections, whois database and more features.
-    - 
+    - A new parameter to specify the file (-r). This is as fast as reading the file from stdin.
+    - Now we have a configuration file slips.conf. In there you can specify from fixed parameters, the time formats, to the columns in the flow file.
 - 0.3.3alpha
     - First stable version with a minimal algorithm for detecting behavioral threats.
 
