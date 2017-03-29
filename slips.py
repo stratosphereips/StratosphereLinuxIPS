@@ -21,6 +21,9 @@ import ConfigParser
 from ip_handler import IpHandler
 from utils import SignalHandler
 import random
+# Optional memory profiling
+#from memory_profiler import profile
+# Use with @profile
 
 version = '0.3.4'
 logging.basicConfig(filename='slips.log', level=logging.ERROR)
@@ -629,17 +632,6 @@ class Processor(multiprocessing.Process):
             print inst           # __str__ allows args to printed directly
             sys.exit(1)
 
-def readFileContent(path):
-    """ TODO: add description """
-    print path
-    try:
-        with open(path) as f:
-            content = f.readlines()
-            f.close()
-            return [x.strip() for x in content]
-    except Exception:
-        logger.error("Error opening flow file.", exc_info=True)
-
 ####################
 # Main
 ####################
@@ -662,8 +654,8 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--threshold', help='Threshold for detection with IPHandler', action='store', default=0.002, required=False, type=float)
     parser.add_argument('-S', '--sdw_width', help='Width of sliding window. The unit is in \time windows\'. So a -S 10 and a -w 5, means a sliding window of 50 minutes.', action='store', default=10, required=False, type=int)
     parser.add_argument('-W','--whitelist',help="File with the IP addresses to whitelist. One per line.",action='store',required=False)
-    parser.add_argument('-o', '--offline', help='Process flows in offline mode.', action='store_true', default=False, required=False)
-    parser.add_argument('-p', '--path', help='Path to the flow file.', required=False)
+    #parser.add_argument('-o', '--offline', help='Process flows in offline mode.', action='store_true', default=False, required=False)
+    parser.add_argument('-r', '--filepath', help='Path to the binetflow file to be read.', required=False)
     args = parser.parse_args()
 
     # Read the config file
@@ -743,24 +735,25 @@ if __name__ == '__main__':
     SH.register_signal(signal.SIGINT)
     processorThread.start()
 
-    if args.offline:
-        print 'Working in offline mode'
-        if args.path:
-            content = readFileContent(args.path)
-            for line in content:
-                try:
-                    queue.put(line)
-                except Exception:
-                    logger.error("Failed to put the line into queue.",  exc_info=True)
+    if args.filepath:
+        if args.verbose > 2:
+            print 'Working with the file {} as parameter'.format(args.filepath)
+        f = open(args.filepath)
+        line = f.readline().strip()
+        while line:
+            queue.put(line)
+            line = f.readline().strip()
+        f.close()
+        if args.verbose > 2:
             print "Finished reading the file. "
-        else:
-            logging.error("A path to the flow file should be provided in the offline mode.")
-
-    # Just put the lines in the queue as fast as possible
-    for line in sys.stdin:
-        queue.put(line)
-    if args.verbose > 2:
-        print 'Finished receiving the input.'
-    # Shall we wait? Not sure. Seems that not
-    time.sleep(1)
-    queue.put('stop')
+        time.sleep(1)
+        queue.put('stop')
+    else:
+        # Just put the lines in the queue as fast as possible
+        for line in sys.stdin:
+            queue.put(line)
+        if args.verbose > 2:
+            print 'Finished receiving the input.'
+        # Shall we wait? Not sure. Seems that not
+        time.sleep(1)
+        queue.put('stop')
