@@ -27,9 +27,6 @@ import random
 
 version = '0.3.4'
 
-logging.basicConfig(filename='slips.log', level=logging.ERROR)
-logger = logging.getLogger(__name__)
-timeStampFormat = '%Y/%m/%d %H:%M:%S.%f'  # default format is overwritten by the value from the config file (if specified)
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -384,7 +381,7 @@ class Tuple(object):
 # Process
 class Processor(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect, threshold, debug, whitelist, sdw_width, config):
+    def __init__(self, queue, slot_width, get_whois, verbose, amount, dontdetect, threshold, debug, whitelist, sdw_width, config, parsingfunction):
         multiprocessing.Process.__init__(self)
         self.get_whois = get_whois
         self.verbose = verbose
@@ -406,6 +403,7 @@ class Processor(multiprocessing.Process):
         #CHANGE THIS
         self.sdw_width = sdw_width
         self.config = config
+        self.parsingfunction = parsingfunction
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -529,26 +527,6 @@ class Processor(multiprocessing.Process):
             print inst           # __str__ allows args to printed directly
             sys.exit(1)
 
-    def parseFlow(self, line):
-        """ A function to read the config file and parse the incoming flows according to the config file"""
-        """ THIS SHOULD BE CALLED ONCE"""
-        if (config.has_option('delimiter', 'regex')):
-            try:
-                fdelimiter = config.get('delimiter', 'regex')
-                return re.split(fdelimiter, line)
-            except Exception:
-                logger.error("Invalid delimiter has been specified: " + fdelimiter)
-                sys.exit(-1)
-        if (config.has_option('delimiter', 'string')):
-            try:
-                fdelimiter = config.get('delimiter', 'string')
-            except Exception:
-                logger.error("Invalid delimiter has been specified: " + fdelimiter)
-                sys.exit(-1)
-        else:
-            nline = ','.join(line.strip().split(',')[:13])
-            return nline.split(',')
-
     def run(self):
         try:
             while True:
@@ -556,25 +534,23 @@ class Processor(multiprocessing.Process):
                     line = self.queue.get()
                     if 'stop' != line:
                         # Process this flow
-                        column_values = self.parseFlow(line)
+                        column_values = self.parsingfunction(line)
                         try:
                             # check if the Ip is not in the whitelist
                             if not column_values[3] in self.ip_whitelist:
+                                # Get some way of not having this if here for every line
                                 if self.slot_starttime == -1:
                                     # First flow
                                     try:
-                                        if config.has_option('timestamp', 'format'):
-                                            timeStampFormat = config.get('timestamp', 'format')
                                         self.slot_starttime = datetime.strptime(column_values[0], timeStampFormat)
                                     except ValueError:
-                                        logger.error("Invalid timestamp format: " + timeStampFormat)
-                                        # Should this be a continue or pass?
+                                        # This should be a continue because this is the first flow, usually the header
                                         continue
                                     self.slot_endtime = self.slot_starttime + self.slot_width
                                 try:
                                     flowtime = datetime.strptime(column_values[0], timeStampFormat)
                                 except ValueError:
-                                    logger.error("Invalid timestamp format: " + timeStampFormat)
+                                    logger.error("Invalid timestamp format: {}. Line: {}".format(timeStampFormat, line))
                                 if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
                                     # Inside the slot
                                     tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
@@ -645,8 +621,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
     parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False) 
-    parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', default=1, required=False, type=int)
-    parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the flows.', action='store', default=0, required=False, type=int)
+    parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
+    parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the flows.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=5, required=False, type=int)
     parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
     parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows using the models. Just print the connections.', default=False, action='store_true', required=False)
@@ -658,41 +634,111 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--filepath', help='Path to the binetflow file to be read.', required=False)
     args = parser.parse_args()
 
-    # Read the config file
+    # Read the config file from the parameter
     if args.config:
         try:
             config = ConfigParser.ConfigParser()
             with open(args.config) as source:
                 config.readfp(source)
-                logger.info("Successfully read the config file.")
         except IOError:
-            logger.error("Could not find the config file.")
+            pass
     else:
+        # If the config file is not specified, search for it in the home folder, in /etc/slips or in the SLIPS_CONF environmental variable
         for loc in os.curdir, os.path.expanduser("~"), "/etc/slips", os.environ.get("SLIPS_CONF"):
             if loc:
                 try:
                     with open(os.path.join(loc, "slips.conf")) as source:
                         config.readfp(source)
-                        logger.info("Successfully read the config file.")
                         break
                 except IOError:
+                    # ?
                     pass
+                
+    # Get the log file
+    try:
+        logfile = str(config.get('logging', 'logfile'))
+        try:
+            loglevel = config.get('logging', 'loglevel')
+            # Acceptable levels to log
+            # logger.debug('debug-1')
+            # logger.info('info-1')
+            # logger.warning('warning-1')
+            # logger.error('error-1')
+            # logger.critical('critical-1')
+        except ConfigParser.NoOptionError:
+            # By default
+            loglevel = 'ERROR'
+        #logging.basicConfig(filename=logfile)
+        logger = logging.getLogger(__name__)
+        logger.setLevel(loglevel)
+        logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
+        fileHandler = logging.FileHandler("{0}".format(logfile))
+        fileHandler.setFormatter(logFormatter)
+        logger.addHandler(fileHandler)
 
-    # Check the verbose level
+        consoleHandler = logging.StreamHandler()
+        consoleHandler.setLevel(logging.CRITICAL)
+        consoleHandler.setFormatter(logFormatter)
+        logger.addHandler(consoleHandler)
+    except ConfigParser.NoOptionError:
+        logger = None
+
+    # Get the timestamp format
+    try:
+        timeStampFormat = config.get('timestamp', 'format')
+    except ConfigParser.NoOptionError:
+        timeStampFormat = '%Y/%m/%d %H:%M:%S.%f'
+
+    # Get the verbosity 
+    if args.verbose == None:
+        # No args verbose specified. Read the verbosity from the config
+        try:
+            args.verbose = int(config.get('parameters', 'verbose'))
+        except ConfigParser.NoOptionError:
+            args.verbose = 1
+    # Limit any verbosity to > 0
     if args.verbose < 1:
         args.verbose = 1
 
-    # Check the debug level
+    # Get the Debugging 
+    if args.debug == None:
+        # No args debug specified. Read the debug from the config
+        try:
+            args.debug = int(config.get('parameters', 'debug'))
+        except ConfigParser.NoOptionError:
+            args.debug = 0
+    # Limit any verbosity to > 0
     if args.debug < 0:
         args.debug = 0
 
+    # Get the parsing for each line
+    if config.has_option('delimiter', 'string'):
+        try:
+            fdelimiter = config.get('delimiter', 'string')
+            parsingfunction = lambda line: line.split(fdelimiter)
+        except Exception:
+            logger.error("Invalid delimiter has been specified as a string: " + fdelimiter)
+            sys.exit(-1)
+    elif config.has_option('delimiter', 'regex'):
+        try:
+            fdelimiter = str(config.get('delimiter', 'regex'))
+            pattern = re.compile(fdelimiter)
+            parsingfunction = lambda line: pattern.split(line)
+        except Exception:
+            logger.error("Invalid delimiter has been specified for the regex: " + fdelimiter)
+            sys.exit(-1)
+    else:
+        # Defaults to split by comma
+        parsingfunction = lambda line: line.split(',')
+
+    # Just show the letters. No detection
     if args.dontdetect:
-        print 'Warning: No detections will be done. Only the behaviors are printed.'
-        print
-        # If the folder with models was specified, just ignore it
+        if args.verbose:
+            print 'Warning: No models will be used for detection. Only the behavioral letters will be printed.'
+        # If the folder with models was specified, just ignore it.
         args.folder = False
 
-    # Do we need sound?
+    # Do we need sound for each detection?
     if args.sound:
         import pygame.mixer
         pygame.mixer.init(44100)
@@ -709,14 +755,13 @@ if __name__ == '__main__':
             __markov_models__.set_debug(args.debug)
             __markov_models__.set_model_to_detect(join(args.folder, file))
 
-    # Create the queue
+    # Create the queue for the thread
     queue = Queue()
 
-    # Read whitelist
+    # Read whitelist of IPs to ignore as source IPs
     whitelist = set()
     if args.whitelist:
         try:
-            #whitelist = set()
             content = set(line.rstrip('\n') for line in open(args.whitelist))
             if len(content) > 0:
                 if args.verbose > 1:
@@ -730,7 +775,7 @@ if __name__ == '__main__':
 
 
     # Create the thread and start it
-    processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect, args.threshold, args.debug, whitelist, args.sdw_width, config)
+    processorThread = Processor(queue, timedelta(minutes=args.width), args.datawhois, args.verbose, args.amount, args.dontdetect, args.threshold, args.debug, whitelist, args.sdw_width, config, parsingfunction)
     SH = SignalHandler(processorThread)
     SH.register_signal(signal.SIGINT)
     processorThread.start()
@@ -739,10 +784,10 @@ if __name__ == '__main__':
         if args.verbose > 2:
             print 'Working with the file {} as parameter'.format(args.filepath)
         f = open(args.filepath)
-        line = f.readline().strip()
+        line = f.readline()
         while line:
             queue.put(line)
-            line = f.readline().strip()
+            line = f.readline()
         f.close()
         if args.verbose > 2:
             print "Finished reading the file. "
