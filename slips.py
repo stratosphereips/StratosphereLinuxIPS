@@ -26,6 +26,7 @@ import random
 # Use with @profile
 
 version = '0.3.4'
+
 logging.basicConfig(filename='slips.log', level=logging.ERROR)
 logger = logging.getLogger(__name__)
 timeStampFormat = '%Y/%m/%d %H:%M:%S.%f'  # default format is overwritten by the value from the config file (if specified)
@@ -654,14 +655,13 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--threshold', help='Threshold for detection with IPHandler', action='store', default=0.002, required=False, type=float)
     parser.add_argument('-S', '--sdw_width', help='Width of sliding window. The unit is in \time windows\'. So a -S 10 and a -w 5, means a sliding window of 50 minutes.', action='store', default=10, required=False, type=int)
     parser.add_argument('-W','--whitelist',help="File with the IP addresses to whitelist. One per line.",action='store',required=False)
-    #parser.add_argument('-o', '--offline', help='Process flows in offline mode.', action='store_true', default=False, required=False)
     parser.add_argument('-r', '--filepath', help='Path to the binetflow file to be read.', required=False)
     args = parser.parse_args()
 
     # Read the config file
-    config = ConfigParser.ConfigParser()
     if args.config:
         try:
+            config = ConfigParser.ConfigParser()
             with open(args.config) as source:
                 config.readfp(source)
                 logger.info("Successfully read the config file.")
