@@ -635,7 +635,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Read the config file from the parameter
-    print 'a'
     config = ConfigParser.ConfigParser()
     try:
         with open(args.config) as source:
