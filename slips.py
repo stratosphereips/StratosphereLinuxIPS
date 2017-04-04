@@ -642,17 +642,6 @@ if __name__ == '__main__':
                 config.readfp(source)
         except IOError:
             pass
-    else:
-        # If the config file is not specified, search for it in the home folder, in /etc/slips or in the SLIPS_CONF environmental variable
-        for loc in os.curdir, os.path.expanduser("~"), "/etc/slips", os.environ.get("SLIPS_CONF"):
-            if loc:
-                try:
-                    with open(os.path.join(loc, "slips.conf")) as source:
-                        config.readfp(source)
-                        break
-                except IOError:
-                    # ?
-                    pass
                 
     # Get the log file
     try:
