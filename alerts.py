@@ -19,7 +19,7 @@ class Alert(object):
 class IpDetectionAlert(Alert):
     def __init__(self, time, source, score):
         super(IpDetectionAlert, self).__init__(time,source)
-        self.score = score
+        self.risk = score
 
     def __str__(self):
-        return yellow('*detected with score {}\ttime: {}*'.format(self.score,self.time.strftime('%Y/%m/%d %H:%M:%S')))
+        return yellow('*Labeled with risk {}\ttime: {}*'.format(self.risk,self.time.strftime('%Y/%m/%d %H:%M:%S')))

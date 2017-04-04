@@ -19,6 +19,7 @@ from ip_handler import IpHandler
 from utils import SignalHandler
 import random
 
+
 version = '0.4'
 
 def timing(f):
@@ -601,7 +602,6 @@ class Processor(multiprocessing.Process):
 if __name__ == '__main__':  
     print 'Stratosphere Linux IPS. Version {}'.format(version)
     print('https://stratosphereips.org')
-    print
 
     # Parse the parameters
     parser = argparse.ArgumentParser()

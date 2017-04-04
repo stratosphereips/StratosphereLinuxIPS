@@ -5,11 +5,14 @@
 
 import signal
 import re
+import time
+import sys
 
 class SignalHandler(object):
     """Used for asynchronous control of the program -e.g. premature interrupting with CTRL+C """
     def __init__(self,process):
             self.process = process
+            self.active =True;
 
     def register_signal(self, signal_n):
         """Adds signal  to the handler to proccess it"""
@@ -17,16 +20,17 @@ class SignalHandler(object):
 
     def process_signal(self,signal, frame):
         #print "signal:{},frame:{},time:{}.".format(signal,frame,datetime.now())
-        try:
-            print "\nInterupting SLIPS"
-            self.process.ip_handler.print_alerts()
-            time.sleep(0.5)
-        except Exception:
-            print "Sth went wrong"
-        #self.process.stop()
-        self.process.terminate()
-        time.sleep(1)
-        sys.exit(0)
+        if(self.active):
+            self.process.queue.close()
+            try:
+                print "\nInterupting SLIPS"
+                self.process.ip_handler.print_alerts()
+                time.sleep(0.5)
+            except Exception:
+                print "Sth went wrong"
+            time.sleep(1)
+            sys.exit(0)
+
 
 class WhoisHandler(object):
     """This class is used for getting the whois information. Since queries to whois service takes too much time it stores all the information localy in the txt file.

@@ -1,14 +1,93 @@
-195.113.232.96	CESNET, z.s.p.o. Prague 6,CZ
-91.190.216.26	Skype Lu,LU
+192.168.1.113	Private Use
+192.168.1.110	Private Use
+ff02::1:ff76:2c5a	Private Use
 52.166.196.194	Microsoft Corporation,US
-216.58.201.67	Google Inc.,US
-ff02::1:3	Private Use
-54.243.202.165	Amazon Technologies Inc.,US
-85.207.12.62	Konica Minolta,Brno,CZ
-224.0.0.252	Private Use
-192.168.1.255	Private Use
-54.146.151.35	Amazon Technologies Inc.,US
-207.46.101.29	Microsoft Corporation,US
 40.101.61.114	Microsoft Corporation,US
-ff02::fb	Private Use
+ff02::1:ffe8:612	Private Use
+00:00:00:00:00:00	Not an IP
+ff02::1:ff00:2c6	Private Use
+ff02::1:ff00:480	Private Use
+54.146.151.35	Amazon Technologies Inc.,US
+ff02::1:ffbd:f5d0	Private Use
+ff02::1:ff87:cbf8	Private Use
+ff02::1:ff00:c04	Private Use
+31.13.69.55	Facebook,US
+ff02::1:ffe2:60b5	Private Use
+ff02::1:ff1e:d1e1	Private Use
+195.113.232.96	CESNET, z.s.p.o. Prague 6,CZ
+ff02::1:ff00:b30	Private Use
+ff02::1:ff60:e3aa	Private Use
+ff02::1:ff3e:dd3c	Private Use
+ff02::1:ff3c:c77f	Private Use
+ff02::1:ffcd:badf	Private Use
+ff02::1:ff2b:7a21	Private Use
+224.0.0.1	Private Use
+207.46.101.29	Microsoft Corporation,US
+ff02::1:ff00:d25	Private Use
+239.255.255.250	Private Use
+ff02::1:ffe1:811e	Private Use
+ff02::1:ff21:ab75	Private Use
+ff02::1:ff0b:2224	Private Use
+ff02::1:ffc6:1d14	Private Use
+ff02::1:ff4b:1942	Private Use
+fd2d:ab8c:225:0:1dd1:f146:ce60:e3aa	Private Use
 ff02::1:2	Private Use
+ff02::1:3	Private Use
+ff02::1:ff00:fa9	Private Use
+ff02::1:ff00:280	Private Use
+ff02::1:ff00:fa5	Private Use
+ff02::1:ff05:44da	Private Use
+ff02::1:ff00:3a7	Private Use
+195.113.214.245	CESNET, z.s.p.o. Prague 6,CZ
+ff02::1:ffd0:42d3	Private Use
+224.0.0.251	Private Use
+224.0.0.252	Private Use
+ff02::1	Private Use
+ff02::2	Private Use
+ff02::1:ff00:99e	Private Use
+ff02::1:ff00:76e	Private Use
+ff02::1:ff00:7f6	Private Use
+ff02::1:ff00:4f7	Private Use
+54.243.202.165	Amazon Technologies Inc.,US
+ff02::1:ff87:1f07	Private Use
+ff02::1:ff1b:7767	Private Use
+ff02::1:ff6d:a0f6	Private Use
+ff02::1:ffba:1f64	Private Use
+85.207.12.62	Konica Minolta,Brno,CZ
+ff02::1:ff37:5ebb	Private Use
+ff02::1:ffd5:db1c	Private Use
+ff02::c	Private Use
+31.13.78.71	Facebook,US
+8.8.8.8	Level 3 Communications, Inc.,US
+ff05::1:3	Private Use
+ff02::1:ff01:fcd7	Private Use
+ff02::1:ff00:cc7	Private Use
+ff02::1:ff55:d2c5	Private Use
+ff02::1:ffc5:e99d	Private Use
+ff02::1:ff77:f6f3	Private Use
+192.168.1.255	Private Use
+ff02::1:ff00:974	Private Use
+91.190.216.26	Skype Lu,LU
+ff02::1:ff90:cb4a	Private Use
+fe80::3d1a:8135:9ed5:db1c	Private Use
+ff02::1:ffae:f4cb	Private Use
+ff02::fb	Private Use
+ff02::1:ff00:ab7	Private Use
+ff02::1:ff00:f72	Private Use
+ff02::1:ff00:1	Private Use
+ff02::1:ff00:0	Private Use
+ff02::1:ff7f:abb3	Private Use
+ff02::1:ff00:c5c	Private Use
+ff02::1:ffff:4cef	Private Use
+ff02::1:fffd:b32c	Private Use
+ff02::1:ff19:1034	Private Use
+ff02::1:ff00:994	Private Use
+192.168.1.2	Private Use
+192.168.1.128	Private Use
+ff02::1:ffee:80be	Private Use
+ff02::1:ff00:f69	Private Use
+216.58.201.67	Google Inc.,US
+ff02::1:ff2a:7fb1	Private Use
+ff02::1:ff95:f857	Private Use
+49.99.52.57	NTT DOCOMO,INC. Sannno Park Tower Bldg.11-1 Nagatacho 2-chome hiyoda-ku,Tokyo Japan,JP
+fd2d:ab8c:225::1	Private Use
