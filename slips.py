@@ -635,90 +635,95 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Read the config file from the parameter
-    if args.config:
-        try:
-            config = ConfigParser.ConfigParser()
-            with open(args.config) as source:
-                config.readfp(source)
-        except IOError:
-            pass
-                
-    # Get the log file
+    print 'a'
+    config = ConfigParser.ConfigParser()
+    try:
+        with open(args.config) as source:
+            config.readfp(source)
+    except IOError:
+        pass
+    except TypeError:
+        # No conf file provided
+        pass
+    
+    # Get the log file from the config. (so far, no log file if you are not using the configuration)
     try:
         logfile = str(config.get('logging', 'logfile'))
-        try:
-            loglevel = config.get('logging', 'loglevel')
-            # Acceptable levels to log
-            # logger.debug('debug-1')
-            # logger.info('info-1')
-            # logger.warning('warning-1')
-            # logger.error('error-1')
-            # logger.critical('critical-1')
-        except ConfigParser.NoOptionError:
-            # By default
-            loglevel = 'ERROR'
-        #logging.basicConfig(filename=logfile)
-        logger = logging.getLogger(__name__)
-        logger.setLevel(loglevel)
-        logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
-        fileHandler = logging.FileHandler("{0}".format(logfile))
-        fileHandler.setFormatter(logFormatter)
-        logger.addHandler(fileHandler)
-
-        consoleHandler = logging.StreamHandler()
-        consoleHandler.setLevel(logging.CRITICAL)
-        consoleHandler.setFormatter(logFormatter)
-        logger.addHandler(consoleHandler)
-    except ConfigParser.NoOptionError:
-        logger = None
+    except (ConfigParser.NoOptionError, ConfigParser.NoSectionError, NameError):
+        # There is a conf, but there is no option, or no section or no configuration file specified
+        logfile = './slips.log'
+    try:
+        loglevel = config.get('logging', 'loglevel')
+        # Acceptable levels to log
+        # logger.debug('debug-1')
+        # logger.info('info-1')
+        # logger.warning('warning-1')
+        # logger.error('error-1')
+        # logger.critical('critical-1')
+    except (ConfigParser.NoOptionError, ConfigParser.NoSectionError, NameError):
+        # There is a conf, but there is no option, or no section or no configuration file specified
+        # By default
+        loglevel = 'ERROR'
+    logger = logging.getLogger(__name__)
+    logger.setLevel(loglevel)
+    logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
+    fileHandler = logging.FileHandler("{0}".format(logfile))
+    fileHandler.setFormatter(logFormatter)
+    logger.addHandler(fileHandler)
+    consoleHandler = logging.StreamHandler()
+    consoleHandler.setLevel(logging.CRITICAL)
+    consoleHandler.setFormatter(logFormatter)
+    logger.addHandler(consoleHandler)
 
     # Get the timestamp format
     try:
         timeStampFormat = config.get('timestamp', 'format')
-    except ConfigParser.NoOptionError:
+    except (ConfigParser.NoOptionError, ConfigParser.NoSectionError, NameError):
+        # There is a conf, but there is no option, or no section or no configuration file specified
         timeStampFormat = '%Y/%m/%d %H:%M:%S.%f'
 
-    # Get the verbosity 
+    # Get the verbosity, if it was not specified as a parameter 
     if args.verbose == None:
         # No args verbose specified. Read the verbosity from the config
         try:
             args.verbose = int(config.get('parameters', 'verbose'))
         except ConfigParser.NoOptionError:
             args.verbose = 1
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            pass
     # Limit any verbosity to > 0
     if args.verbose < 1:
         args.verbose = 1
 
-    # Get the Debugging 
+    # Get the Debugging, if it was not specified as a parameter 
     if args.debug == None:
         # No args debug specified. Read the debug from the config
         try:
             args.debug = int(config.get('parameters', 'debug'))
         except ConfigParser.NoOptionError:
             args.debug = 0
-    # Limit any verbosity to > 0
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            pass
+    # Limit any debuggisity to > 0
     if args.debug < 0:
         args.debug = 0
 
     # Get the parsing for each line
-    if config.has_option('delimiter', 'string'):
-        try:
-            fdelimiter = config.get('delimiter', 'string')
-            parsingfunction = lambda line: line.split(fdelimiter)
-        except Exception:
-            logger.error("Invalid delimiter has been specified as a string: " + fdelimiter)
-            sys.exit(-1)
-    elif config.has_option('delimiter', 'regex'):
+    try:
+        fdelimiter = config.get('delimiter', 'string')
+        parsingfunction = lambda line: line.split(fdelimiter)
+    except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
+        # There is a conf, but there is no option or section for string delimiter. Search for regex
         try:
             fdelimiter = str(config.get('delimiter', 'regex'))
             pattern = re.compile(fdelimiter)
             parsingfunction = lambda line: pattern.split(line)
-        except Exception:
-            logger.error("Invalid delimiter has been specified for the regex: " + fdelimiter)
-            sys.exit(-1)
-    else:
-        # Defaults to split by comma
-        parsingfunction = lambda line: line.split(',')
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
+            # There is a conf, but there is no option or section for regex
+            # Defaults to split by comma
+            parsingfunction = lambda line: line.split(',')
 
     # Just show the letters. No detection
     if args.dontdetect:
