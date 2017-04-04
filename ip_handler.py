@@ -42,12 +42,13 @@ def timing(f):
 class IpAddress(object):
     """IpAddress stores every detection and alerts """
     #TODO: storing ip as string? maybe there is a better way?
-    def __init__(self, address, debug):
+    def __init__(self, address, prior_malicious, debug):
         self.address = address
         self.tuples = {}
         self.active_tuples = set()
         self.alerts = []
         self.last_time = None
+        self.prior_malicious = prior_malicious
         # What is this variable for? ANSWER: It is used to store weigted scores results indexed by TW index.
         #self.comulative_sum_log_likelihood_ratio = 0;
         self.ws_per_tw = {}
@@ -236,7 +237,7 @@ class IpAddress(object):
         u = float((x-mu) / abs(sigma))
         pdf = exp(-u*u/2) / (sqrt(2*pi) * abs(sigma))
         return pdf
-        
+
     def get_bayesian_verdict(self, ws, fp_cost, fn_cost, mean_malicious, sd_malicious, mean_normal, sd_normal, prior_malicious):
         #count contidional probability
         conditional_probability_malicious = self.normpdf(ws,mean_malicious,sd_malicious)
@@ -246,7 +247,7 @@ class IpAddress(object):
         #count Bayessian risk
         risk_normal = fp_cost*prior_malicious*conditional_probability_malicious*1.
         risk_malicious = fn_cost*(1-prior_malicious)*conditional_probability_normal*1.
-        if True or self.debug:
+        if self.debug:
             print "R_NORMAL:{}, R_MALICIOUS:{}".format(risk_normal,risk_malicious)
         #choose the verdict with the lowest risk
         if risk_malicious < risk_normal:
@@ -304,7 +305,7 @@ class IpHandler(object):
         self.whois = whois
         self.whois_handler = WhoisHandler("WhoisData.txt")
         self.prior_probabilities = {}
-        self.default_prior = 0.5
+        self.default_prior = 0.0001
 
 
         #read prior probabilities
@@ -358,7 +359,10 @@ class IpHandler(object):
             ip = self.addresses[ip_string]
         # No, create it
         except KeyError:
-            ip = IpAddress(ip_string, self.debug)
+            if self.prior_probabilities.has_key(ip_string):
+                ip = IpAddress(ip_string,self.prior_probabilities[ip_string] ,self.debug)
+            else:
+                ip = IpAddress(ip_string,self.default_prior,self.debug)
             self.addresses[ip_string] = ip
         #register ip as active in this TW
         self.active_addresses.add(ip_string)
