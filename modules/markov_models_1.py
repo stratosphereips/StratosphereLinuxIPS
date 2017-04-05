@@ -196,7 +196,7 @@ class MarkovModelsDetection():
             self.verbose = verbose
             self.debug = debug
             # Only detect states with more than 3 letters
-            if len(tuple.get_state()) < 4:
+            if len(tuple.get_state()) < 7:
                 if self.debug > 3:
                     print '\t-> State too small'
                 return (False, False, False)
