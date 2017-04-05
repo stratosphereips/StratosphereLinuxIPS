@@ -25,8 +25,7 @@ import random
 #from memory_profiler import profile
 # Use with @profile
 
-version = '0.3.4'
-
+version = '0.3.5'
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -464,6 +463,8 @@ class Processor(multiprocessing.Process):
             # Move the time window times
             self.slot_starttime = datetime.strptime(column_values[0], timeStampFormat)
             self.slot_endtime = self.slot_starttime + self.slot_width
+            #Clear previous TW in ip_handler
+            self.ip_handler.close_time_window()
 
             # If not the last TW. Put the last flow received in the next slot, because it overcome the threshold and it was not processed
             if not last_tw:
@@ -615,7 +616,6 @@ class Processor(multiprocessing.Process):
 if __name__ == '__main__':  
     print 'Stratosphere Linux IPS. Version {}'.format(version)
     print('https://stratosphereips.org')
-    print
 
     # Parse the parameters
     parser = argparse.ArgumentParser()

@@ -8,7 +8,7 @@ from time import gmtime, strftime
 from colors import *
 
 class Alert(object):
-    """docstring for Alert"""
+    """Basic object of type Alert. DO NOT CREATE INSTANCES OF THIS CLASS - use derived classes instead!"""
     def __init__(self, time,source):
         self.time = time
         self.source = source
@@ -17,16 +17,9 @@ class Alert(object):
         return  NotImplemented
 
 class IpDetectionAlert(Alert):
-    """docstring for IpDetectionAlert"""
     def __init__(self, time, source, score):
         super(IpDetectionAlert, self).__init__(time,source)
-        self.score = score
+        self.risk = score
 
     def __str__(self):
-        return yellow('*detected with score {}\ttime: {}*'.format(self.score,self.time.strftime('%Y/%m/%d %H:%M:%S')))
-
-class TupleDetectionAlert(object):
-    """docstring for TupleDetectionAlert"""
-    def __init__(self, time, source,model):
-        super(TupleDetectionAlert, self).__init__(time,source)
-        self.model = model
+        return yellow('*Labeled with risk {}\ttime: {}*'.format(self.risk,self.time.strftime('%Y/%m/%d %H:%M:%S')))
