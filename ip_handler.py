@@ -223,14 +223,14 @@ class IpAddress(object):
         """ For this IP, see if we should report a detection or not based on the thresholds and TW"""
         #self.get_verdict(start_time, end_time, tw_index, sdw_width, swd_threshold)
         ws = self.get_weighted_score(start_time,end_time,tw_index)
-        self.last_verdict = self.get_bayesian_verdict(ws,3,1,0.005,0.5,0,0.01,0.0001)
         #self.last_verdict = self.SPRT_verdict(0.9,0.5,0.005,0.5,0,0.01)
+        # ws, fp_cost, fn_cost, mean_malicious, sd_malicious, mean_normal, sd_normal, prior_malicious
+        self.last_verdict = self.get_bayesian_verdict(ws,3,1,0.005,0.5,0,0.01,0.0001)
+        #self.last_verdict = self.get_bayesian_verdict(ws, 100, 1, 1, 1, 1, 1, 0.00000000001)
     
     def get_alerts(self):
         """ Returns all the alerts stored in the IP object"""
         return self.alerts
-
-
 
     #NEW STUFF FOR BAYESIAN DECISION
     def normpdf(self, x, mu, sigma):
@@ -243,12 +243,12 @@ class IpAddress(object):
         conditional_probability_malicious = self.normpdf(ws,mean_malicious,sd_malicious)
         conditional_probability_normal = self.normpdf(ws,mean_normal,sd_normal)
         if self.debug:
-            print "NORMAL:{}, MALICIOUS:{}".format(conditional_probability_normal,conditional_probability_malicious)
+            print "Likelihood given NORMAL:{}, Likelihood given MALICIOUS:{}".format(conditional_probability_normal,conditional_probability_malicious)
         #count Bayessian risk
         risk_normal = fp_cost*prior_malicious*conditional_probability_malicious*1.
         risk_malicious = fn_cost*(1-prior_malicious)*conditional_probability_normal*1.
         if self.debug:
-            print "R_NORMAL:{}, R_MALICIOUS:{}".format(risk_normal,risk_malicious)
+            print "Risk NORMAL:{}, Risk MALICIOUS:{}".format(risk_normal,risk_malicious)
         #choose the verdict with the lowest risk
         if risk_malicious < risk_normal:
             self.alerts.append(IpDetectionAlert(datetime.now(),self.address,risk_malicious))
