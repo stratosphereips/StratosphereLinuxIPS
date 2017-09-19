@@ -539,14 +539,16 @@ class Processor(multiprocessing.Process):
                         try:
                             # check if the Ip is not in the whitelist
                             if not column_values[3] in self.ip_whitelist:
+                                if 'Start' in column_values[0]:
+                                    continue
                                 # Get some way of not having this if here for every line
                                 if self.slot_starttime == -1:
                                     # First flow
-                                    try:
-                                        self.slot_starttime = datetime.strptime(column_values[0], timeStampFormat)
-                                    except ValueError:
-                                        # This should be a continue because this is the first flow, usually the header
-                                        continue
+                                    #try:
+                                    self.slot_starttime = datetime.strptime(column_values[0], timeStampFormat)
+                                    #except ValueError:
+                                    #    # This should be a continue because this is the first flow, usually the header
+                                    #    continue
                                     self.slot_endtime = self.slot_starttime + self.slot_width
                                 try:
                                     flowtime = datetime.strptime(column_values[0], timeStampFormat)
