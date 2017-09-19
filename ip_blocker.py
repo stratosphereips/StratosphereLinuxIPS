@@ -12,6 +12,7 @@ def add_reject_rule(address):
         else:
             command = 'iptables -I FORWARD 3 -s 192.168.1.213 -j REJECT'
             subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
+            return True
 
 def remove_reject_rule(address):
     #command = 'ipset del blacklist '+ address
