@@ -150,12 +150,13 @@ class IpAddress(object):
                 print red("\t+ {} verdict: {} (Risk: {}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_risk, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))
                 # Detection!!! Here we unblock you if you matched the model. So far is a 'normal' model... (file name Malicious thou)
                 # Before unblocking you
-                print cyan('\t\tAt {}, your IP address {} is not blocked'.format(datetime.now(), self.address))
-                file = open('block.log','a')
-                file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked\n'.format(datetime.now(), start_time, end_time, self.address))
-                file.flush()
-                file.close()
-                ip_blocker.remove_reject_rule(self.address)
+                if self.address == '192.168.1.213':
+                    print cyan('\t\tAt {}, your IP address {} is not blocked'.format(datetime.now(), self.address))
+                    file = open('block.log','a')
+                    file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked\n'.format(datetime.now(), start_time, end_time, self.address))
+                    file.flush()
+                    file.close()
+                    ip_blocker.remove_reject_rule(self.address)
                 # Print those tuples that have at least 1 detection
                 if verbose > 1 and verbose <= 3:
                     for tuple4 in self.tuples.keys():
@@ -192,20 +193,21 @@ class IpAddress(object):
             elif self.last_verdict.lower() != 'malicious':
                 # Not malicious
                 # Before blocking check that it is not blocked already. For the adversarial example
-                if not self.blocked:
-                    print yellow('At {}, your IP address {} is blocked!'.format(datetime.now(), self.address))
-                    file = open('block.log','a')
-                    file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was blocked\n'.format(datetime.now(), start_time, end_time, self.address))
-                    file.flush()
-                    file.close()
-                    ip_blocker.add_reject_rule(self.address)
-                if self.blocked:
-                    print cyan('\t\tAt {}, your IP address {} is not blocked BECAUSE you were blocked in the last evaluation'.format(datetime.now(), self.address))
-                    file = open('block.log','a')
-                    file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked because in the last evaluation it was blocked.\n'.format(datetime.now(), start_time, end_time, self.address))
-                    file.flush()
-                    file.close()
-                    ip_blocker.remove_reject_rule(self.address)
+                if self.address == '192.168.1.213':
+                    if not self.blocked:
+                        print yellow('At {}, your IP address {} is blocked!'.format(datetime.now(), self.address))
+                        file = open('block.log','a')
+                        file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was blocked\n'.format(datetime.now(), start_time, end_time, self.address))
+                        file.flush()
+                        file.close()
+                        ip_blocker.add_reject_rule(self.address)
+                    if self.blocked:
+                        print cyan('\t\tAt {}, your IP address {} is not blocked BECAUSE you were blocked in the last evaluation'.format(datetime.now(), self.address))
+                        file = open('block.log','a')
+                        file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked because in the last evaluation it was blocked.\n'.format(datetime.now(), start_time, end_time, self.address))
+                        file.flush()
+                        file.close()
+                        ip_blocker.remove_reject_rule(self.address)
             # Print normal IPs
             elif verbose > 3:
                 # Since the value of self.last_tw_result can be None of a 3-tuple of strings, we need to check before
