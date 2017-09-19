@@ -149,6 +149,10 @@ class IpAddress(object):
                 print red("\t+ {} verdict: {} (Risk: {}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_risk, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))
                 # Detection!!!
                 print cyan('\t\tAt {}, your IP address {} is not blocked'.format(datetime.now(), self.address))
+                file = open('block.log','a')
+                file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked\n'.format(datetime.now(), start_time, end_time, self.address))
+                file.flush()
+                file.close()
                 ip_blocker.remove_reject_rule(self.address)
                 # Print those tuples that have at least 1 detection
                 if verbose > 1 and verbose <= 3:
@@ -186,6 +190,10 @@ class IpAddress(object):
             elif self.last_verdict.lower() != 'malicious':
                 # Not malicious
                 print yellow('At {}, your IP address {} is blocked!'.format(datetime.now(), self.address))
+                file = open('block.log','a')
+                file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was blocked\n'.format(datetime.now(), start_time, end_time, self.address))
+                file.flush()
+                file.close()
                 ip_blocker.add_reject_rule(self.address)
             # Print normal IPs
             elif verbose > 3:
