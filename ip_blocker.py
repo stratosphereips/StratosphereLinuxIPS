@@ -1,9 +1,11 @@
 import sys, subprocess
+from subprocess import Popen, PIPE
 
 def add_reject_rule(address):
     #command = 'ipset add blacklist '+ address
     command_test = 'iptables -v -S FORWARD'
-    for line in command_test:
+    results = Popen(command_test, shell=True, stdin=PIPE, stdout=PIPE).communicate()[0].split('\n')
+    for line in results:
         if '192.168.1.214' in line and 'REJECT' in line:
             # We are already blocking
             return True
