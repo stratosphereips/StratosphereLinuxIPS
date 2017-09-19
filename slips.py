@@ -426,8 +426,8 @@ class Processor(multiprocessing.Process):
             # Outside the slot
             if self.verbose > 1:
                 print cyan('Time Window Started: {}, finished: {}. ({} connections)'.format(self.slot_starttime, self.slot_endtime, len(self.tuples_in_this_time_slot)))
-            for tuple4 in self.tuples:
-                tuple = self.get_tuple(tuple4)
+            #for tuple4 in self.tuples:
+                #tuple = self.get_tuple(tuple4)
                 """
                     # Print the tuple and search its whois only if it has more than X amount of letters.
                     # This was the old way of stopping the system of analyzing tuples with less than amount of letters. Now should not be done here.
@@ -460,6 +460,9 @@ class Processor(multiprocessing.Process):
             for id in ids_to_delete:
                 del self.tuples[id]
             """
+            self.tuples_in_this_time_slot = {}
+            self.tuples = {}
+
             # Move the time window times
             self.slot_starttime = datetime.strptime(column_values[0], timeStampFormat)
             self.slot_endtime = self.slot_starttime + self.slot_width
@@ -479,7 +482,6 @@ class Processor(multiprocessing.Process):
                 tuple.add_new_flow(column_values)
                 # Detect the first flow of the future timeslot
                 self.detect(tuple)
-                self.tuples_in_this_time_slot = {}
                 flowtime = datetime.strptime(column_values[0], '%Y/%m/%d %H:%M:%S.%f')
                 # Ask for the IpAddress object for this source IP
                 ip_address = self.ip_handler.get_ip(column_values[3])
