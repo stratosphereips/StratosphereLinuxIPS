@@ -20,6 +20,7 @@ from alerts import *
 import time
 import re
 from math import *
+import ip_blocker
 
 #bayess
 #check if the log directory exists, if not, create it
@@ -146,6 +147,9 @@ class IpAddress(object):
             # Print Malicious IPs
             if self.last_verdict.lower() == 'malicious' and verbose > 0:
                 print red("\t+ {} verdict: {} (Risk: {}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_risk, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))
+                # Detection!!!
+                print cyan('\t\tAt {}, your IP address {} is not blocked'.format(datetime.now(), self.address))
+                ip_blocker.remove_reject_rule(self.address)
                 # Print those tuples that have at least 1 detection
                 if verbose > 1 and verbose <= 3:
                     for tuple4 in self.tuples.keys():
@@ -179,6 +183,10 @@ class IpAddress(object):
                                 #check if detection fits in the TW
                                 if (detection[2] >= start_time and detection[2] < end_time):
                                     print("\t\t\tDstIP: {}, Label:{:>40} , Detection Time:{}, State(100 max): {}").format(detection[3], detection[0], detection[2], detection[4][:100])
+            elif self.last_verdict.lower() != 'malicious':
+                # Not malicious
+                print yellow('At {}, your IP address {} is blocked!'.format(datetime.now(), self.address))
+                ip_blocker.add_reject_rule(self.address)
             # Print normal IPs
             elif verbose > 3:
                 # Since the value of self.last_tw_result can be None of a 3-tuple of strings, we need to check before
@@ -219,7 +227,7 @@ class IpAddress(object):
             print inst           # __str__ allows args to printed directly
             sys.exit(1)
 
-    def process_timewindow(self, start_time, end_time, tw_index, sdw_width, swd_threshold,):
+    def process_timewindow(self, start_time, end_time, tw_index, sdw_width, swd_threshold):
         """ For this IP, see if we should report a detection or not based on the thresholds and TW"""
         #self.get_verdict(start_time, end_time, tw_index, sdw_width, swd_threshold)
         ws = self.get_weighted_score(start_time,end_time,tw_index)
