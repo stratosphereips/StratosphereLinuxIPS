@@ -6,7 +6,7 @@ def add_reject_rule(address):
     command_test = 'iptables -v -S FORWARD'
     results = Popen(command_test, shell=True, stdin=PIPE, stdout=PIPE).communicate()[0].split('\n')
     for line in results:
-        if '192.168.1.214' in line and 'REJECT' in line:
+        if '192.168.1.213' in line and 'REJECT' in line:
             # We are already blocking
             return True
         else:
