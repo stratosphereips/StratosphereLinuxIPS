@@ -443,8 +443,20 @@ class Processor(multiprocessing.Process):
                     if tuple.should_be_printed:
                         tuple.dont_print()
                 """
-            # Print all the addresses in this time window
+            # Unblock all the IP that were blocked before this. Before seeing if we need to lock them again.
+            for ip in self.ip_handler.addresses:
+                ip_data = self.ip_handler.addresses[ip]
+                if ip_data.blocked:
+                    ip_handler.unblock(ip)
+                    print cyan('\t\tUnblocking the ip {} on {}'.format(ip, datetime.now()))
+                    file = open('block.log','a')
+                    file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked because it was blocked in the last TW. And only because of this.\n'.format(datetime.now(), start_time, end_time, ip))
+                    file.flush()
+                    file.close()
+
+            # Print all the addresses in this time window. Here also happens the blocking now
             self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.tw_index, self.detection_threshold, self.sdw_width, False)
+
             # Add 1 to the time window index 
             self.tw_index +=1
             """
@@ -470,6 +482,7 @@ class Processor(multiprocessing.Process):
             self.ip_handler.close_time_window()
 
             # If not the last TW. Put the last flow received in the next slot, because it overcome the threshold and it was not processed
+            # Only to add the 1st flow in the new TW!!
             if not last_tw:
                 tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
                 tuple = self.get_tuple(tuple4)
