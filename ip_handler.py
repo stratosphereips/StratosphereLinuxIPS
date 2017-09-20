@@ -339,7 +339,6 @@ class IpHandler(object):
         self.prior_probabilities = {}
         self.default_prior = 0.0001
 
-
         #read prior probabilities
         filename = "priors.txt"
         try:
@@ -354,6 +353,14 @@ class IpHandler(object):
             print "Prior propabilities file:'{}' doesn't exist!".format(filename)
             pass
 
+    def unblock(self, ip):
+        """ Unblock this ip """
+        print cyan('\t\tAt {}, your IP address {} is not blocked'.format(datetime.now(), ip))
+        file = open('block.log','a')
+        file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked because it was blocked in the last TW\n'.format(datetime.now(), start_time, end_time, ip))
+        file.flush()
+        file.close()
+        ip_blocker.remove_reject_rule(ip)
 
     # Using this decorator we can measure the time of a function
     # @timing
