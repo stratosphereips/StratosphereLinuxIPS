@@ -453,6 +453,7 @@ class Processor(multiprocessing.Process):
                     file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked because it was blocked in the last TW. And only because of this.\n'.format(datetime.now(), start_time, end_time, ip))
                     file.flush()
                     file.close()
+                    ip_data.blocked = False
 
             # Print all the addresses in this time window. Here also happens the blocking now
             self.ip_handler.print_addresses(self.slot_starttime, self.slot_endtime, self.tw_index, self.detection_threshold, self.sdw_width, False)
