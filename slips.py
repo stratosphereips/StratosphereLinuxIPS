@@ -403,7 +403,7 @@ class Processor(multiprocessing.Process):
         self.sdw_width = sdw_width
         self.config = config
         self.parsingfunction = parsingfunction
-        self.ip_handler.unblock('192.168.1.213')
+        self.ip_handler.unblock('192.168.1.213',True)
 
     def get_tuple(self, tuple4):
         """ Get the values and return the correct tuple for them """
@@ -445,15 +445,17 @@ class Processor(multiprocessing.Process):
                         tuple.dont_print()
                 """
             # Unblock all the IP that were blocked before this. Before seeing if we need to lock them again.
+
             for ip in self.ip_handler.addresses.keys():
                 ip_data = self.ip_handler.addresses[ip]
+
                 if ip_data.blocked:
                     self.ip_handler.unblock(ip)
                     print cyan('\t\tUnblocking the ip {} on {}'.format(ip, datetime.now()))
-                    file = open('block.log','a')
-                    file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked because it was blocked in the last TW. And only because of this.\n'.format(datetime.now(), start_time, end_time, ip))
+                    """file = open('block.log','a')
+                    file.write('Real time {}.The IP address {} was UNblocked because it was blocked in the last TW. And only because of this.\n'.format(datetime.now(), ip))
                     file.flush()
-                    file.close()
+                    file.close()"""
                     ip_data.blocked = False
 
             # Print all the addresses in this time window. Here also happens the blocking now
