@@ -353,11 +353,14 @@ class IpHandler(object):
             print "Prior propabilities file:'{}' doesn't exist!".format(filename)
             pass
 
-    def unblock(self, ip):
+    def unblock(self, ip, unblocking_at_start=False):
         """ Unblock this ip """
         print cyan('\t\tAt {}, your IP address {} is not blocked'.format(datetime.now(), ip))
         file = open('block.log','a')
-        file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked because it was blocked in the last TW\n'.format(datetime.now(), start_time, end_time, ip))
+        if unblocking_at_start:
+            file.write('Real time {}.The IP address {} UNBLOCKED when SLIPS started\n'.format(datetime.now(),ip))
+        else:    
+            file.write('Real time {}. The IP address {} was UNblocked because it was blocked in the last TW\n'.format(datetime.now(), ip))
         file.flush()
         file.close()
         ip_blocker.remove_reject_rule(ip)
