@@ -157,6 +157,7 @@ class IpAddress(object):
                     file.flush()
                     file.close()
                     ip_blocker.remove_reject_rule(self.address)
+                    self.blocked = False
                 # Print those tuples that have at least 1 detection
                 if verbose > 1 and verbose <= 3:
                     for tuple4 in self.tuples.keys():
@@ -201,13 +202,15 @@ class IpAddress(object):
                         file.flush()
                         file.close()
                         ip_blocker.add_reject_rule(self.address)
-                    if self.blocked:
+                        self.blocked = True
+                    elif self.blocked:
                         print cyan('\t\tAt {}, your IP address {} is not blocked BECAUSE you were blocked in the last evaluation'.format(datetime.now(), self.address))
                         file = open('block.log','a')
                         file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked because in the last evaluation it was blocked.\n'.format(datetime.now(), start_time, end_time, self.address))
                         file.flush()
                         file.close()
                         ip_blocker.remove_reject_rule(self.address)
+                        self.blocked = False
             # Print normal IPs
             elif verbose > 3:
                 # Since the value of self.last_tw_result can be None of a 3-tuple of strings, we need to check before
