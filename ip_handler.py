@@ -57,6 +57,8 @@ class IpAddress(object):
         self.last_verdict = None
         self.debug = debug
         self.blocked = False
+        #for mari's experiment
+        self.allow_blocking = False
 
     def add_detection(self, label, tuple, n_chars, input_time, dest_add, state, tw_index):
         """ Stores new detection with timestamp"""
@@ -75,8 +77,10 @@ class IpAddress(object):
         if self.debug:
             print "#Active tuples in ip:{} = {}".format(self.address,len(self.active_tuples))
         self.active_tuples.clear()
+        self.allow_blocking = False
 
-    def result_per_tuple(self, tuple, start_time, end_time):       
+    def result_per_tuple(self, tuple, start_time, end_time):
+        FLU_SERVER = '54.93.32.228'
         """Compute ratio of malicious detection per tuple in timewindow determined by start_time & end_time"""
         try:
             # This counts the amount of times this tuple was detected by any model
@@ -89,6 +93,8 @@ class IpAddress(object):
                     count += 1
                     if detection[0] != False:
                         n_malicious += 1
+            if FLU_SERVER in tuple and count > 3:
+                self.allow_blocking = True
             return (n_malicious, count)
         except Exception as inst:
             print '\tProblem with result_per_tuple() in ip_handler.py'
@@ -196,13 +202,16 @@ class IpAddress(object):
                 # Before blocking check that it is not blocked already. For the adversarial example
                 if self.address == '192.168.1.213':
                     if not self.blocked:
-                        print yellow('At {}, your IP address {} is blocked!'.format(datetime.now(), self.address))
-                        file = open('block.log','a')
-                        file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was blocked\n'.format(datetime.now(), start_time, end_time, self.address))
-                        file.flush()
-                        file.close()
-                        ip_blocker.add_reject_rule(self.address)
-                        self.blocked = True
+                        if self.allow_blocking:
+                            print yellow('At {}, your IP address {} is blocked!'.format(datetime.now(), self.address))
+                            file = open('block.log','a')
+                            file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was blocked\n'.format(datetime.now(), start_time, end_time, self.address))
+                            file.flush()
+                            file.close()
+                            ip_blocker.add_reject_rule(self.address)
+                            self.blocked = True
+                        else:
+                            print yellow('At {}, NOT ENNOUGH EVIDENCE for your IP address {}'.format(datetime.now(), self.address))
                     elif self.blocked:
                         print cyan('\t\tAt {}, your IP address {} is not blocked BECAUSE you were blocked in the last evaluation'.format(datetime.now(), self.address))
                         file = open('block.log','a')
