@@ -59,7 +59,7 @@ class Model():
         # Assign the first letter prob
         probability = init_letter_prob
         # We should have more than 2 states at least
-        while i < len(state) and len(state) > 1:
+        while i < len(state) and len(state) > 2:
             try:
                 vector = state[i] + state[i+1]
                 # growing_v = state[0:i+2]
