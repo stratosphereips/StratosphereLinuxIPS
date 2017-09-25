@@ -21,6 +21,7 @@ import ConfigParser
 from ip_handler import IpHandler
 from utils import SignalHandler
 import random
+import socket
 # Optional memory profiling
 #from memory_profiler import profile
 # Use with @profile
@@ -452,7 +453,7 @@ class Processor(multiprocessing.Process):
 
                 if ip_data.blocked:
                     self.ip_handler.unblock(ip)
-                    print cyan('\t\tUnblocking the ip {} on {}'.format(ip, datetime.now()))
+                    print cyan('\t\tUnblocking the ip {} on {} [TEMPORARILY]'.format(ip, datetime.now()))
                     """file = open('block.log','a')
                     file.write('Real time {}.The IP address {} was UNblocked because it was blocked in the last TW. And only because of this.\n'.format(datetime.now(), ip))
                     file.flush()
@@ -554,6 +555,7 @@ class Processor(multiprocessing.Process):
             while True:
                 if not self.queue.empty():
                     line = self.queue.get()
+                    #print "IN THE PROCESS AT:{} flow: *{}*".format(datetime.now(), line)
                     if 'stop' != line:
                         if '54.93.32.228' in line or '31.13.91.6' in line:
                             # Process this flow
@@ -609,6 +611,7 @@ class Processor(multiprocessing.Process):
                                         print blue("Skipping flow with whitelisted ip: {}".format(column_values[3]))
                             except UnboundLocalError:
                                 print 'Probably empty file.'
+                        #print "FINISH PROCESSING AT:{} flow: *{}*".format(datetime.now(), line)
                     else:
                         try:
                             # Process the last flows in the last time slot
@@ -811,11 +814,42 @@ if __name__ == '__main__':
         time.sleep(1)
         queue.put('stop')
     else:
+        
         # Just put the lines in the queue as fast as possible
-        for line in sys.stdin:
+        #for line in sys.stdin:
+        while True:
+            line = sys.stdin.readline()
+            #print "RECEIVED AT:{} flow: *{}*".format(datetime.now(), line)
             queue.put(line)
         if args.verbose > 2:
             print 'Finished receiving the input.'
+        """
+        #####ONDRAS CODE######
+        s =socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #s.setblocking(0)
+        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        s.bind(('0.0.0.0', 9000))
+        s.listen(2)
+        try:
+            while True:
+                #do we have a connection?
+                try:
+                    c, addr = s.accept()
+                    line = c.recv(4096)
+                    if line:
+                        queue.put(line)
+                    #no, just wait
+                    pass
+                except socket.error:
+                    #no, just wait
+                    pass
+        except KeyboardInterrupt:
+            s.close()
+            sys.exit()
+        finally:
+            s.close()
+        ####################################################################
+        """
         # Shall we wait? Not sure. Seems that not
         time.sleep(1)
         queue.put('stop')
