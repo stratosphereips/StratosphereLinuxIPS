@@ -16,7 +16,7 @@ from datetime import datetime
 from time import gmtime, strftime
 from colors import *
 from utils import WhoisHandler
-from alerts import *
+from alert import *
 import time
 
 #check if the log directory exists, if not, create it
@@ -138,10 +138,10 @@ class IpAddress(object):
         self.get_weighted_score(start_time,end_time,tw_index)
         if self.ws_per_tw.has_key(tw_index): #traffic in this TW
             startindex = tw_index - sdw_width #compute SDW indices
-            if startindex < 0:
-                startindex = 0
+            if startindex <= 0:
+                startindex = -1
             sdw = []
-            for i in range (startindex, tw_index): #fill the sdw
+            for i in range (startindex+1, tw_index+1): #fill the sdw
                 if self.ws_per_tw.has_key(i):
                     sdw.append(self.ws_per_tw[i])
                 # If it doesn't have the key? Add a try
@@ -277,7 +277,7 @@ class IpHandler(object):
             for address in self.addresses.values():
                 # print "********BEGINNIG {} *******".format(address.address)
                 # Process this IP for the time window specified. So we can compute the detection value.
-                address.process_timewindow(start_time, end_time, tw_index, 10, threshold)
+                address.process_timewindow(start_time, end_time, tw_index, sdw_width, threshold)
                 # Get a printable version of this IP's data
                 #string = address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois, print_all, True)
                 address.print_last_result(self.verbose, start_time, end_time, threshold, self.whois, self.whois_handler)
@@ -288,7 +288,7 @@ class IpHandler(object):
             for address in self.addresses.values():
                 # print "********BEGINNIG {} *******".format(address.address)
                 # Process this IP for the time window specified. So we can compute the detection value.
-                address.process_timewindow(start_time, end_time, tw_index, 10, threshold)
+                address.process_timewindow(start_time, end_time, tw_index, sdw_width, threshold)
                 # Get a printable version of this IP's data
                 #string = address.print_last_result(self.verbose, start_time, end_time, threshold,self.whois, print_all, True)
                 address.print_last_result(self.verbose, start_time, end_time, threshold, self.whois, self.whois_handler)
