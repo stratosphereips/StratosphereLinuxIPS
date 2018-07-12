@@ -22,7 +22,9 @@ import re
 from math import *
 import ip_blocker
 
-#bayess
+#IP OF FLU VM
+flu_ip = '192.168.1.123'
+
 #check if the log directory exists, if not, create it
 logdir_path = "./logs"
 if not os.path.exists(logdir_path):
@@ -43,13 +45,12 @@ def timing(f):
 class IpAddress(object):
     """IpAddress stores every detection and alerts """
     #TODO: storing ip as string? maybe there is a better way?
-    def __init__(self, address, prior_malicious, debug):
+    def __init__(self, address, debug):
         self.address = address
         self.tuples = {}
         self.active_tuples = set()
         self.alerts = []
         self.last_time = None
-        self.prior_malicious = prior_malicious
         # What is this variable for? ANSWER: It is used to store weigted scores results indexed by TW index.
         #self.comulative_sum_log_likelihood_ratio = 0;
         self.ws_per_tw = {}
@@ -57,6 +58,7 @@ class IpAddress(object):
         self.last_verdict = None
         self.debug = debug
         self.blocked = False
+
         #for mari's experiment
         self.allow_blocking = False
 
@@ -66,7 +68,7 @@ class IpAddress(object):
         detection = (label, n_chars, input_time, dest_add, state)
         self.last_time = input_time
         #first time we see this tuple
-        if(not self.tuples.has_key(tuple)):
+        if not self.tuples.has_key(tuple):
             self.tuples[tuple] = []
         #add detection to array
         self.tuples[tuple].append(detection)
@@ -80,7 +82,6 @@ class IpAddress(object):
         self.allow_blocking = False
 
     def result_per_tuple(self, tuple, start_time, end_time):
-        FLU_SERVER = '54.93.32.228'
         """Compute ratio of malicious detection per tuple in timewindow determined by start_time & end_time"""
         try:
             # This counts the amount of times this tuple was detected by any model
@@ -93,7 +94,7 @@ class IpAddress(object):
                     count += 1
                     if detection[0] != False:
                         n_malicious += 1
-            if FLU_SERVER in tuple and count > 3:
+            if flu_ip in tuple and count > 3:
                 self.allow_blocking = True
             return (n_malicious, count)
         except Exception as inst:
@@ -102,50 +103,7 @@ class IpAddress(object):
             print inst.args      # arguments stored in .args
             print inst           # __str__ allows args to printed directly
             sys.exit(1)
-
-    def get_weighted_score(self, start_time, end_time, tw_index):
-        """ This is the main function that computes if the IP should be detected or not based on the tw, the thresholds, the average, etc."""
-        """ What is the tuple score: Explain"""
-        """ What is the weigthed score: Explain"""
-        """ Returns the weighted score for the time windows specified"""
-        if self.debug > 0:
-            print '\tCompute the detection score for {}'.format(self.address)
-        tuple_ratios_sum = 0 
-        n_malicious_connections= 0
-        n_connections = 0
-        n_infected_tuples = 0
-        n_tuples_in_tw = 0
-        weighted_score = 0
-        detected_tuples_perc = 0
-        # For each tuple stored for this IP, compute the tuple score.
-        for tuple4 in self.active_tuples:
-
-            if self.debug > 1:
-                print '\t\tChecking the detection score for tuple {}'.format(tuple4)
-            # Get result for this tuple
-            (times_detected, times_checked) = self.result_per_tuple(tuple4,start_time,end_time)
-            # Increment tuple counter for this TW. This should be done before checking if there are detections
-            n_tuples_in_tw += 1
-            # if there is at least one detection
-            if times_detected != 0: 
-                # Compute the ratio of the detections of this tuple - TupleRatio
-                tuple_ratio = times_detected / float(times_checked)
-                tuple_ratios_sum += tuple_ratio
-                if self.debug > 0:
-                    print '\t\tTuple: {}, ratio: {} ({}/{})'.format(tuple4, tuple_ratio, times_detected, times_checked)
-                # Add 1 to the number of tuples in total for this IP
-                n_infected_tuples += 1
-        if n_tuples_in_tw > 0:            
-            # Comupte percentage of detected tuples in this TW
-            detected_tuples_perc = float(n_infected_tuples) / n_tuples_in_tw
-            # Compute weigted score of the IP in this TW (WS = tuple_ratios_sum*detected_tuples_perc)
-            weighted_score = tuple_ratios_sum * detected_tuples_perc
-            self.ws_per_tw[tw_index] = weighted_score
-            if self.debug > 0:
-                print "\t\t\t#tuples: {}, WS:{} = {} (sum of detected tuple ratios) x {} (percentage of detected tuples over total tuples)".format(n_tuples_in_tw,weighted_score,tuple_ratios_sum,detected_tuples_perc)
-        self.last_tw_result = (weighted_score, tuple_ratios_sum, detected_tuples_perc)
-        return weighted_score
- 
+    
     def print_last_result(self, verbose, start_time, end_time, threshold, use_whois, whois_handler):
         """ 
         Print analysis of this IP in the last time window. Verbosity level modifies amount of information printed.
@@ -153,10 +111,10 @@ class IpAddress(object):
         try:            
             # Print Malicious IPs
             if self.last_verdict.lower() == 'malicious' and verbose > 0:
-                print red("\t+ {} verdict: {} (Risk: {}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_risk, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))
+                #print red("\t+ {} verdict: {} (Risk: {}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_risk, self.last_tw_result[0], self.last_tw_result[1], self.last_tw_result[2]))
                 # Detection!!! Here we unblock you if you matched the model. So far is a 'normal' model... (file name Malicious thou)
                 # Before unblocking you
-                if self.address == '192.168.1.213':
+                if self.address == flu_ip:
                     print cyan('\t\tAt {}, your IP address {} is not blocked'.format(datetime.now(), self.address))
                     file = open('block.log','a')
                     file.write('Real time {}. TW start: {}. TW end: {}. The IP address {} was UNblocked\n'.format(datetime.now(), start_time, end_time, self.address))
@@ -164,43 +122,11 @@ class IpAddress(object):
                     file.close()
                     ip_blocker.remove_reject_rule(self.address)
                     self.blocked = False
-                # Print those tuples that have at least 1 detection
-                if verbose > 1 and verbose <= 3:
-                    for tuple4 in self.tuples.keys():
-                        # Here we are checking for all the tuples of this IP in all the capture!! this is veryyy inefficient
-                        tuple_result = self.result_per_tuple(tuple4, start_time, end_time)
-                        # Is at least one tuple detected?
-                        if tuple_result[0] != 0:
-                            #Shall we use whois?
-                            if use_whois:
-                                whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
-                                print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
-                            else:
-                                print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
-                            if verbose > 2:
-                                for detection in self.tuples[tuple4]:
-                                    #check if detection fits in the TW
-                                    if (detection[2] >= start_time and detection[2] < end_time):
-                                        print("\t\t\tDstIP: {}, Label:{:>40} , Detection Time:{}, State(100 max): {}").format(detection[3], detection[0], detection[2], detection[4][:100])
-                # Print those tuples that have at least 1 detection and also the ones that were not detected
-                elif verbose > 3:
-                    for tuple4 in self.tuples.keys():
-                        tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
-                        # Shall we use whois?
-                        if use_whois:
-                            whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
-                            print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
-                        else:
-                            print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
-                        if verbose > 2:
-                            for detection in self.tuples[tuple4]:
-                                #check if detection fits in the TW
-                                if (detection[2] >= start_time and detection[2] < end_time):
-                                    print("\t\t\tDstIP: {}, Label:{:>40} , Detection Time:{}, State(100 max): {}").format(detection[3], detection[0], detection[2], detection[4][:100])
+        
             elif self.last_verdict.lower() != 'malicious':
                 # Not malicious
                 # Before blocking check that it is not blocked already. For the adversarial example
-                if self.address == '192.168.1.213':
+                if self.address == flu_ip:
                     if not self.blocked:
                         if self.allow_blocking:
                             print yellow('At {}, your IP address {} is blocked!'.format(datetime.now(), self.address))
@@ -220,39 +146,7 @@ class IpAddress(object):
                         file.close()
                         ip_blocker.remove_reject_rule(self.address)
                         self.blocked = False
-            # Print normal IPs
-            elif verbose > 3:
-                # Since the value of self.last_tw_result can be None of a 3-tuple of strings, we need to check before
-                try: 
-                    last_tw_result_0 = self.last_tw_result[0]
-                except TypeError:
-                    last_tw_result_0 = ""
-                try: 
-                    last_tw_result_1 = self.last_tw_result[1]
-                except TypeError:
-                    last_tw_result_1 = ""
-                try: 
-                    last_tw_result_2 = self.last_tw_result[2]
-                except TypeError:
-                    last_tw_result_2 = ""
 
-                print green("\t+{} verdict: {} (Risk score: {}) | TW weighted score: {} = {} x {}".format(self.address, self.last_verdict, self.last_risk, last_tw_result_0, last_tw_result_1, last_tw_result_2))
-                if verbose > 4:
-                    for tuple4 in self.tuples.keys():
-                        tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
-                        # Is at least one tuple checked?
-                        if tuple_result[1] != 0:
-                            #Shall we use whois?
-                            if use_whois:
-                                whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
-                                print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
-                            else:
-                                print "\t\t{} ({}/{})".format(tuple4,tuple_result[0],tuple_result[1])
-                            if verbose > 5:
-                                for detection in self.tuples[tuple4]:
-                                    #check if detection fits in the TW
-                                    if (detection[2] >= start_time and detection[2] < end_time):
-                                        print("\t\t\tDstIP: {}, Label:{:>40} , Detection Time:{}, State(100 max): {}").format(detection[3], detection[0], detection[2], detection[4][:100])
         except Exception as inst:
             print '\tProblem with print_last_result() in ip_handler.py'
             print type(inst)     # the exception instance
@@ -262,80 +156,17 @@ class IpAddress(object):
 
     def process_timewindow(self, start_time, end_time, tw_index, sdw_width, swd_threshold):
         """ For this IP, see if we should report a detection or not based on the thresholds and TW"""
-        #self.get_verdict(start_time, end_time, tw_index, sdw_width, swd_threshold)
-        ws = self.get_weighted_score(start_time,end_time,tw_index)
-        #self.last_verdict = self.SPRT_verdict(0.9,0.5,0.005,0.5,0,0.01)
-        # ws, fp_cost, fn_cost, mean_malicious, sd_malicious, mean_normal, sd_normal, prior_malicious
-        self.last_verdict = self.get_bayesian_verdict(ws,3,1,0.005,0.5,0,0.01,0.0001)
-        #self.last_verdict = self.get_bayesian_verdict(ws, 100, 1, 1, 1, 1, 1, 0.00000000001)
+        self.last_verdict = 'normal'
+        for t in self.active_tuples:
+            (malicious, normal) = self.result_per_tuple(t,start_time,end_time)
+            if malicious > 0:
+                self.last_verdict = 'malicious'
+                break
     
     def get_alerts(self):
         """ Returns all the alerts stored in the IP object"""
         return self.alerts
 
-    #NEW STUFF FOR BAYESIAN DECISION
-    def normpdf(self, x, mu, sigma):
-        u = float((x-mu) / abs(sigma))
-        pdf = exp(-u*u/2) / (sqrt(2*pi) * abs(sigma))
-        return pdf
-
-    def get_bayesian_verdict(self, ws, fp_cost, fn_cost, mean_malicious, sd_malicious, mean_normal, sd_normal, prior_malicious):
-        #count contidional probability
-        conditional_probability_malicious = self.normpdf(ws,mean_malicious,sd_malicious)
-        conditional_probability_normal = self.normpdf(ws,mean_normal,sd_normal)
-        if self.debug:
-            print "Likelihood given NORMAL:{}, Likelihood given MALICIOUS:{}".format(conditional_probability_normal,conditional_probability_malicious)
-        #count Bayessian risk
-        risk_normal = fp_cost*prior_malicious*conditional_probability_malicious*1.
-        risk_malicious = fn_cost*(1-prior_malicious)*conditional_probability_normal*1.
-        if self.debug:
-            print "Risk NORMAL:{}, Risk MALICIOUS:{}".format(risk_normal,risk_malicious)
-        #choose the verdict with the lowest risk
-        if risk_malicious < risk_normal:
-            self.alerts.append(IpDetectionAlert(datetime.now(),self.address,risk_malicious))
-            self.last_risk = risk_malicious
-            return 'Malicious'
-        else:
-            self.last_risk = risk_normal
-            return 'Normal'
-
-    """
-
-    def get_log_likelihood_ratio(self, mean_malicious, sd_malicious, mean_normal, sd_normal):
-        product_normal = 1
-        product_malicious = 1;
-        for ws in self.ws_per_tw.values():
-            product_normal *= self.normpdf(ws,mean_normal,sd_normal)
-            product_malicious *= self.normpdf(ws,mean_malicious,sd_malicious)
-        #print product_normal
-        #print product_malicious
-        try:
-            ratio = product_malicious/product_normal
-        except ZeroDivisionError:
-            print "Zero division"
-            #ratio = float('inf')
-            ratio = product_malicious/0.0000000000000000000000001
-        return log(ratio)
-
-
-    def SPRT_verdict(self, alpha, beta, mean_malicious, sd_malicious, mean_normal, sd_normal):
-        #get the bounds
-        A= (1-beta)/alpha
-        B = beta/(1-alpha)
-        print "A:%f, B:%f"%(A,B)
-        #take into account new evidence
-        self.comulative_sum_log_likelihood_ratio += self.get_log_likelihood_ratio(mean_malicious,sd_malicious,mean_normal,sd_normal)
-        #assign label
-        if self.comulative_sum_log_likelihood_ratio <= B:
-            return 'Normal'
-        elif self.comulative_sum_log_likelihood_ratio >= A:
-            self.alerts.append(IpDetectionAlert(datetime.now(),self.address,self.comulative_sum_log_likelihood_ratio))
-            return 'Malicious'
-        else:
-            #not sure yet, w8 for more evidence
-            return 'Unknown'
-    """
-        
 class IpHandler(object):
     """Class which handles all IP actions for slips. Stores every IP object in the session, provides summary, statistics etc."""
     def __init__(self, verbose, debug, whois):
@@ -345,22 +176,7 @@ class IpHandler(object):
         self.debug = debug
         self.whois = whois
         self.whois_handler = WhoisHandler("WhoisData.txt")
-        self.prior_probabilities = {}
-        self.default_prior = 0.0001
-
-        #read prior probabilities
-        filename = "priors.txt"
-        try:
-            with open(filename) as f:
-                for line in f:
-                    s = re.split("\t",line.strip())
-                    if len(s) > 1:
-                        self.prior_probabilities[s[0]] = s[1]
-                        print "{} with prior {}".format(s[0], s[1])
-            print "Prior probabilities file '{}' loaded successfully".format(filename)            
-        except IOError:
-            print "Prior propabilities file:'{}' doesn't exist!".format(filename)
-            pass
+        
 
     def unblock(self, ip, unblocking_at_start=False):
         """ Unblock this ip """
@@ -376,6 +192,7 @@ class IpHandler(object):
 
     # Using this decorator we can measure the time of a function
     # @timing
+
     def print_addresses(self, start_time, end_time, tw_index, threshold, sdw_width, print_all):
         """ Print information about all the IP addresses in the time window specified in the parameters."""
         if self.debug:
@@ -401,21 +218,15 @@ class IpHandler(object):
                 address.process_timewindow(start_time, end_time, tw_index, sdw_width, threshold)
                 # Get a printable version of this IP's data
                 address.print_last_result(self.verbose, start_time, end_time, threshold, self.whois, self.whois_handler)
-                #print "***********************"
 
     def get_ip(self, ip_string):
         """Get the IpAddress object with id 'ip_string'. If it doesn't exists, create it"""
         #Have I seen this IP before?
-        try:
-            ip = self.addresses[ip_string]
-        # No, create it
-        except KeyError:
-            if self.prior_probabilities.has_key(ip_string):
-                ip = IpAddress(ip_string,self.prior_probabilities[ip_string] ,self.debug)
-            else:
-                ip = IpAddress(ip_string,self.default_prior,self.debug)
+        ip = None
+        if ip_string not in self.addresses.keys():
+            ip = IpAddress(ip_string,self.debug)
             self.addresses[ip_string] = ip
-        #register ip as active in this TW
+        ip = self.addresses[ip_string]
         self.active_addresses.add(ip_string)
         return ip
 
@@ -425,7 +236,7 @@ class IpHandler(object):
         self.whois_handler.store_whois_data_in_file()
         print '\nFinal Alerts generated:'
         f = open(filename,"w")
-        f.write("DATE:\t{}\nSummary of adresses in this capture:\n\n".format(datetime.now().strftime('%Y/%m/%d %H:%M:%S')))
+        f.write("DATE:\t{}\nSummary of addresses in this capture:\n\n".format(datetime.now().strftime('%Y/%m/%d %H:%M:%S')))
         f.write('Alerts:\n')
         for ip in self.addresses.values():
             if len(ip.alerts) > 0:
