@@ -21,12 +21,10 @@ class SignalHandler(object):
         signal.signal(signal_n,self.process_signal)
 
     def process_signal(self,signal, frame):
-        #print "signal:{},frame:{},time:{}.".format(signal,frame,datetime.now())
-        if(self.active):
+        if (self.active):
             self.process.queue.close()
             try:
                 print "\nInterupting SLIPS"
-                self.process.ip_handler.print_alerts()
                 time.sleep(0.5)
             except Exception:
                 print "Sth went wrong"
