@@ -4,12 +4,15 @@
 # Author: Sebastian Garcia. eldraco@gmail.com , sebastian.garcia@agents.fel.cvut.cz
 
 import sys
+import os
 import argparse
 import multiprocessing
 from multiprocessing import Queue
 import configparser
 import globaldata
-from inputProcessing import InputProcessing
+from inputProcess import InputProcess
+from outputProcess import OutputProcess
+from profilerProcess import ProfilerProcess
 
 version = '0.5'
 
@@ -27,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False) 
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the flows.', action='store', required=False, type=int)
-    parser.add_argument('-w', '--width', help='Width of the time slot used for the analysis. In minutes.', action='store', default=5, required=False, type=int)
+    parser.add_argument('-w', '--width', help='Width of the time window used. In minutes. Defaults to 60.', action='store', default=60, required=False, type=int)
     parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
     parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows using the models. Just print the connections.', default=False, action='store_true', required=False)
     parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
@@ -77,13 +80,31 @@ if __name__ == '__main__':
     elif args.debug < 0:
         args.debug = 0
 
-    # Create the queue for the thread
-    inputProcessingqueue = Queue()
+    ##
+    # Creation of the threads
+    ##
 
-    globaldata.ip_profiles['1'] = 'test'
+    # Output thread
+    # Create the queue for the output thread
+    outputProcessQueue = Queue()
+    # Create the output thread and start it
+    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
+    outputProcessThread.start()
+    outputProcessQueue.put('Started output thread')
 
-    # Create the thread and start it
-    inputProcessThread = InputProcessing(inputProcessingqueue, args.verbose, args.debug, config)
+    # Profile thread
+    # Create the queue for the profile thread
+    profilerProcessQueue = Queue()
+    # Create the profile thread and start it
+    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config, args.width)
+    profilerProcessThread.start()
+    outputProcessQueue.put('Started profiler thread')
+
+    # Input thread
+    # Create the queue for the input thread
+    newstdin = os.fdopen(os.dup(sys.stdin.fileno()))
+    inputProcessQueue = Queue()
+    # Create the input thread and start it
+    inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, args.verbose, args.debug, newstdin, config)
     inputProcessThread.start()
-
-    inputProcessingqueue.put('hi')
+    outputProcessQueue.put('Started input thread')

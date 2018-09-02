@@ -1,41 +1,22 @@
-# Stratosphere Linux IPS (slips) Version 0.3.4
-This is the linux version of the Stratosphere IPS, a behavioral-based intrusion detection and prevention system that uses machine learning algorithms to detect malicious behaviors. It is part of a larger suite of programs that include the [Stratosphere Windows IPS] and the [Stratosphere Testing Framework].
+# Stratosphere Linux IPS (slips) Version 0.5
+This is the new version of the Stratosphere IPS, a behavioral-based intrusion detection and prevention system that uses machine learning algorithms to detect malicious behaviors. It is part of a larger suite of programs that include the [Stratosphere Windows IPS] and the [Stratosphere Testing Framework].
 
-This alpha version receives flows from a ra client ([Argus] Suite) and process them using a specific algorithm. The purpose of the Alpha version is to get feedback from the community, please send us your bug reports, feature requests and ideas. See the [Stratosphere IPS Website](https://stratosphereips.org).
 
-## Platform
-Slips (using argus) has been tested on Linux Debian 8 and Apple IOS 10.9.5 so far.
 
-## Architecture
-The idea of slips is to focus on the machine learning part of the detection and not in capturing the network traffic. That is why the traffic is received from an external Argus instance. Argus captures the packets in the networks and makes them _available_ to anyone connecting to the Argus port. Argus do not send the packets until somebody ask for them.
+## Architecture of operation
 
-The basic architecture is to read the flows from an Argus instance using the __ra__ tool and to send the flows to slips as standard input. This way of working is very good because we can analyze the traffic of our own computer, and also we can analyze the traffic of a remote network or any other computer where an Argus instance is running. Actually if you run the Argus program in any Windows, Mac or router, slips can analyze the traffic.
+- The data collected and used is on the _profile_ level and up. Slips does not work with data at the _flow_ level or _packet_ level to classify. This means that the simplest data structure available inside slips is the profile of an IP address. The modules can not access individual flows.
+
 
 ## Usage
-To use this alpha version you will need an argus instance running and listening in one port.
 
-- If you don't have an Argus instance, first install it:
-    - Source install from [Argus].
-    - In Debian and Ubuntu you can do
-        - sudo apt-get install argus argus-clients
 
-- To run argus in your own computer you should do:
-    - argus -B localhost -F [slipsfolder]/argus.conf
-
-    This will run argus in your interface, open the port 561 in the localhost address only and run in background. See the argus configuration file and the Argus documentation for more information. (port 561 is used because is not in the default port list of nmap, so there are fewer chances that anybody will find it).
-
-- Then you start the slips program receiving packets from a ra client.
-
-    ra -F [slipsfolder]/ra.conf -n -Z b -S 127.0.0.1:561 | [slipsfolder]/./slips.py -f [slipsfolder]/models -d
-
-    This will read the network traffic in your computer and try to detect some malicious behavior by applying the models in the folder __models__.
-
-    > Warning! You should wait at least one hour before Argus starts sending flows to slips. After this first hour the flows will arrive continually, but Argus is configured to read packets for one hour before it can create the flows. The best way of avoiding this is to let Argus run in the computer all the time and just connect with slips when you want. Remember: when is running Argus do not store the packets.
 
 ## Detection Models
 The core of the slips program is not only the machine learning algorithm, but more importantly the __behavioral models__. The behavioral models are created with the [Stratosphere Testing Framework] and are exported by our research team. This is very important because the models are _curated_ to maximize the detection. If you want to play and create your own behavioral models see the Stratosphere Testing Framework documentation.
 
 The behavioral models are stored in the __models__ folder and will be updated regularly. In this version you should pull the git repository by hand to update the models.
+
 
 ## Features 
 This version of slips comes with the following features:
@@ -50,30 +31,10 @@ This version of slips comes with the following features:
 - If you want to anonymize the source IP addresses before doing any processing, you can use -A. This will force all the source IPs to be hashed to MD5 in memory. Also a file is created in the current folder with the relationship of original IP addresses and new hashed IP addresses. So you can later relate the detections.
 
 
+
 ## The use of verbose (-v)
 
-- -v 0: 
-    - In each time window shows:
-        - Print the detected source IP address, together with info about the thresholds and scores.
-- -v 1: 
-    - In each time window shows:
-        - Print the detected source IP address, together with info about the thresholds and scores.
-- -v 2: 
-    - For each detected source IP, print also the detected connections.
-- -v 3: 
-    - For each detected connection, print also the which model matched that connection and when.
-- -v 4: 
-    - Print the source IP addresses that were NOT detected.
-- -v 5: 
-    - For the NOT detected IP, print the connections
-- -v 6: 
-    - For the NOT detected IP, print each NOT detected test for each connection
 
-
-
-[Argus]: http://qosient.com/argus/ "Argus"
-[Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
-[Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
 
 ### Where does it work
 - Slips runs in 
@@ -83,9 +44,14 @@ This version of slips comes with the following features:
 - To try:
     - Android
     - IOS
+
+
 ### Roadmap
 
 ### Changelog
+- 0.5 Completely renewed architecture and code.
+- 0.4 was never reached
+- 0.3.5
 - 0.3.4
     - This is a mayor version change. Implementing new algorithms for analyzing the results, management of IPs, connections, whois database and more features.
     - A new parameter to specify the file (-r). This is as fast as reading the file from stdin.
@@ -96,10 +62,9 @@ This version of slips comes with the following features:
 
 
 ### TODO
-- Make a good reference to the installation of argus 3.x
+-  
 - Create a local DB of IPs so we can rememeber info about them (sqlite)
-- Add priories to the log: CRITIAL, etc.
-- If even the format of the flows change during the read, one idea is to search for an exception in the read of the format and then check which is the new format in the flow. Only check when there is an exception.
+
 
 ### Author and Contributors
 
@@ -108,3 +73,8 @@ This version of slips comes with the following features:
 - Elaheh Biglar Beigi
 - MariaRigaki 
 - kartik88363
+
+
+[Argus]: http://qosient.com/argus/ "Argus"
+[Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
+[Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
