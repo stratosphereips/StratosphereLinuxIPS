@@ -289,7 +289,6 @@ class ProfilerProcess(multiprocessing.Process):
                         # Extract the columns smartly
                         # self.outputqueue.put('New line: {}'.format(line))
                         if self.process_columns(line):
-                            #self.outputqueue.put('\tLast SrcIP: {}'.format(self.column_values['saddr']))
                             # See if we have this IP profile yet, and if not create it
                             ip_profile = self.get_profile(self.column_values['saddr'])
                             # Add the flow to the profile
@@ -328,7 +327,7 @@ class IPProfile(object):
         # Extract the features that belong to the IP profile
         # Extract the features that belong to the current TW
         tw = self.get_timewindow(columns['starttime'])
-        #tw.add_flow(columns)
+        tw.add_flow(columns)
         # Add the destination IP to this IP profile
         self.dst_ips[columns['daddr']] = ''
 
@@ -393,6 +392,10 @@ class IPProfile(object):
         text += 'Dst IPs:\n'
         for dip in self.dst_ips:
             text += '	{}\n'.format(dip)
+        text += '\n'
+        text += 'Time Windows in this Profile:\n'
+        for tw in self.time_windows:
+            text += '{}\n'.format(self.time_windows[tw].describe())
         return text
 
 
@@ -429,12 +432,13 @@ class TimeWindows(object):
     def describe(self):
         """ Print a description of the profile """
         text =  ''
-        text += 'Time Windows starting on {}\n'.format(self.starttime)
-        text += '---------------\n'
-        text += 'Dst IPs:\n'
+        text += '\tTime Windows start: {}\n'.format(self.starttime)
+        text += '\tTime Windows end: {}\n'.format(self.endtime)
+        text += '\t---------------\n'
+        text += '\tDst IPs:\n'
         for dip in self.dst_ips:
-            text += '	{}\n'.format(dip)
-        text += 'Dst Ports:\n'
+            text += '\t\t{}\n'.format(dip)
+        text += '\tDst Ports:\n'
         for port in self.dst_ports:
-            text += '{}, '.format(port)
+            text += '\t\t{},'.format(port)
         return text
