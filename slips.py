@@ -102,9 +102,12 @@ if __name__ == '__main__':
 
     # Input thread
     # Create the queue for the input thread
-    newstdin = os.fdopen(os.dup(sys.stdin.fileno()))
     inputProcessQueue = Queue()
     # Create the input thread and start it
-    inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, args.verbose, args.debug, newstdin, config)
+    if args.filepath:
+        inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, args.verbose, args.debug, args.filepath, config)
+    else:
+        newstdin = os.fdopen(os.dup(sys.stdin.fileno()))
+        inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, args.verbose, args.debug, newstdin, config)
     inputProcessThread.start()
     outputProcessQueue.put('Started input thread')
