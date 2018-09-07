@@ -341,6 +341,7 @@ class IPProfile(object):
         # First check of we are not in the last TW
         try:
             lasttw = self.time_windows[list(self.time_windows.keys())[-1]]
+            # We have the last TW
             self.outputqueue.put('TW endtime: {}'.format(lasttw.get_endtime()))
             self.outputqueue.put('TW starttime: {}'.format(lasttw.get_starttime()))
             if lasttw.get_endtime() >= flowtime and lasttw.get_starttime() < flowtime:
@@ -349,6 +350,7 @@ class IPProfile(object):
             elif flowtime > lasttw.get_endtime():
                 # Then check if we are not a NEW tw
                 self.outputqueue.put('We need to create a new TW')
+                self.outputqueue.put('aaaaaaaaaabbbbbbbbbba')
                 tw = TimeWindows(self.outputqueue, starttime, self.width)
                 self.time_windows[tw.get_endtime()] = tw
                 self.outputqueue.put('New TW endtime: {}'.format(tw.get_endtime()))
