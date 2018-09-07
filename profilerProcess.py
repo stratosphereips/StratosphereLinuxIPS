@@ -250,10 +250,10 @@ class ProfilerProcess(multiprocessing.Process):
                             self.column_idx['bytes'] = nline.index(field)
                 self.columns_defined = True
             except Exception as inst:
-                print('\tProblem in process_columns() in profilerProcess')
-                print(type(inst))
-                print(inst.args)
-                print(inst)
+                self.outputqueue.put('\tProblem in process_columns() in profilerProcess')
+                self.outputqueue.put(type(inst))
+                self.outputqueue.put(inst.args)
+                self.outputqueue.put(inst)
                 sys.exit(1)
             # This is the return when the columns were not defined. False
             return False
@@ -276,14 +276,15 @@ class ProfilerProcess(multiprocessing.Process):
             while True:
                 # While the input communication queue is empty
                 if self.inputqueue.empty():
+                    # Wait to get something
                     pass
                 else:
                     # The input communication queue is not empty
                     line = self.inputqueue.get()
                     if 'stop' == line:
-                        print('Stopping Profiler Process')
+                        self.outputqueue.put('Stopping Profiler Process')
                         return True
-                    else:
+                    elif line:
                         # Received new data
                         # Extract the columns smartly
                         # self.outputqueue.put('New line: {}'.format(line))
@@ -297,10 +298,10 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            print('\tProblem with Profiler Process()')
-            print(type(inst))
-            print(inst.args)
-            print(inst)
+            self.outputqueue.put('\tProblem with Profiler Process()')
+            self.outputqueue.put(type(inst))
+            self.outputqueue.put(inst.args)
+            self.outputqueue.put(inst)
             sys.exit(1)
 
 
@@ -350,11 +351,20 @@ class IPProfile(object):
             elif flowtime > lasttw.get_endtime():
                 # Then check if we are not a NEW tw
                 self.outputqueue.put('We need to create a new TW')
-                self.outputqueue.put('aaaaaaaaaabbbbbbbbbba')
-                tw = TimeWindows(self.outputqueue, starttime, self.width)
-                self.time_windows[tw.get_endtime()] = tw
+                # Create as many TW as we need until we reach the time of the current flow. Each tw should start where the last on ended
+                tw = TimeWindows(self.outputqueue, lasttw.get_endtime(), self.width)
                 self.outputqueue.put('New TW endtime: {}'.format(tw.get_endtime()))
                 self.outputqueue.put('New TW starttime: {}'.format(tw.get_starttime()))
+                while tw.get_endtime() < flowtime:
+                    # The flow is still more in the future, create another TW
+                    self.outputqueue.put('The new TW didn\'t reach the time of the current flow. Creating another TW')
+                    self.time_windows[tw.get_endtime()] = tw
+                    lasttw = tw
+                    tw = TimeWindows(self.outputqueue, lasttw.get_endtime(), self.width)
+                    self.outputqueue.put('New TW endtime: {}'.format(tw.get_endtime()))
+                    self.outputqueue.put('New TW starttime: {}'.format(tw.get_starttime()))
+                # We are supposed to be in the TW corresponding to the current flow
+                self.time_windows[tw.get_endtime()] = tw
                 return tw
         except IndexError:
             # There are no TW yet. Create the first 
@@ -428,16 +438,3 @@ class TimeWindows(object):
         for port in self.dst_ports:
             text += '{}, '.format(port)
         return text
-
-
-
-
-
-
-
-
-
-
-
-
-
