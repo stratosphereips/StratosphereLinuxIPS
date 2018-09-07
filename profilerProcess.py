@@ -348,7 +348,7 @@ class IPProfile(object):
                 self.outputqueue.put('The flow is on the last time windows')
                 return lasttw
             elif flowtime > lasttw.get_endtime():
-                # Then check if we are not a NEW tw
+                # Then check if we dont' need a NEW tw in the future
                 self.outputqueue.put('We need to create a new TW')
                 # Create as many TW as we need until we reach the time of the current flow. Each tw should start where the last on ended
                 tw = TimeWindows(self.outputqueue, lasttw.get_endtime(), self.width)
@@ -365,6 +365,31 @@ class IPProfile(object):
                 # We are supposed to be in the TW corresponding to the current flow
                 self.time_windows[tw.get_endtime()] = tw
                 return tw
+            elif flowtime < lasttw.get_starttime():
+                # This flow came out of order. Its before the start of the last TW. Search for the correct TW and add it there. This is SLOW
+                list_tw_time = list(self.time_windows.keys())
+                list_tw_time.reverse()
+                for tw_time in list_tw_time:
+                    if flowtime >= self.time_windows[tw_time].get_starttime():
+                        # We found the past TW where this flow belongs
+                        tw = self.time_windows[tw_time]
+                        return tw
+                    # Continue looking in the for...
+                # Out of the for
+                # We couldn't find the TW in the past because the flow was the first in time and before the first TW, so we need to create a new TWs until we find its place
+                # tw_time holds the endtime of the first TW
+                start_of_first_tw = tw_time - timedelta(seconds=self.width*60)
+                start_of_new_tw_in_past = start_of_first_tw - timedelta(seconds=self.width*60)
+                tw = TimeWindows(self.outputqueue, start_of_new_tw_in_past, self.width)
+                self.outputqueue.put('A New past TW created')
+                self.time_windows[tw.get_endtime()] = tw
+                while flowtime < tw.get_starttime():
+                    lasttw = tw
+                    # If still our flow in more in the past, continue creatting TW for it
+                    tw = TimeWindows(self.outputqueue, lasttw.get_starttime() - timedelta(seconds=self.width*60), self.width)
+                    self.outputqueue.put('A New past TW created')
+                    self.time_windows[tw.get_endtime()] = tw
+                return tw
         except IndexError:
             # There are no TW yet. Create the first 
             self.outputqueue.put('\n-> There was no first TW. Creating one')
@@ -375,14 +400,6 @@ class IPProfile(object):
             self.outputqueue.put('First TW endtime: {}'.format(ntw.get_endtime()))
             return ntw
 
-        # Then search for older tw
-        #for tw in self.time_windows[:-2]:
-            #self.outputqueue.put('TW endtime: {}'.format(tw.get_endtime()))
-            #self.outputqueue.put('TW starttime: {}'.format(tw.get_starttime()))
-            #if lasttw.get_endtime() < flowtime and lasttw.get_starttime() >= flowtime:
-                ## We are in the last time window
-                #self.outputqueue.put('The flow is on the last time windows: {}'.format(tw.get_endtime()))
-                #return tw
 
     def describe(self):
         """ Print a description of the profile """
@@ -432,13 +449,11 @@ class TimeWindows(object):
     def describe(self):
         """ Print a description of the profile """
         text =  ''
-        text += '\tTime Windows start: {}\n'.format(self.starttime)
-        text += '\tTime Windows end: {}\n'.format(self.endtime)
-        text += '\t---------------\n'
+        text += '\tTime Windows start: {} (ends: {})\n'.format(self.starttime, self.endtime)
         text += '\tDst IPs:\n'
         for dip in self.dst_ips:
             text += '\t\t{}\n'.format(dip)
-        text += '\tDst Ports:\n'
+        text += '\tDst Ports: '
         for port in self.dst_ports:
-            text += '\t\t{},'.format(port)
+            text += '{},'.format(port)
         return text
