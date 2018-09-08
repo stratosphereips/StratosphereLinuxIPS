@@ -13,22 +13,59 @@ class OutputProcess(multiprocessing.Process):
         self.config = config
         self.linesprocessed = 0
 
+    def process_line(self, line):
+        """
+        Extract the verbosity level, the sender and the message from the line.
+        The line is separated by | and the fields are:
+        1. The level
+        2. The sender
+        3. The message
+
+        The level is always an integer from 0 to 10
+        """
+        try:
+            level = int(line.split('|')[0])
+            if int(level) < 0 or int(level) > 100:
+                level = 0
+        except TypeError:
+            print('Error in the level sent to the Output Process')
+        except KeyError:
+            level = 0
+            print('The level passed to OutputProcess was wrongly formated.')
+        try:
+            sender = line.split('|')[1]
+        except KeyError:
+            sender = ''
+            print('The sender passed to OutputProcess was wrongly formated.')
+        try:
+            # If there are more | inside he msg, we don't care, just print them
+            msg = ''.join(line.split('|')[2:])
+        except KeyError:
+            msg = ''
+            print('The message passed to OutputProcess was wrongly formated.')
+        return (level, sender, msg)
+
     def run(self):
         try:
             while True:
                 if not self.queue.empty():
                     line = self.queue.get()
                     if 'stop' != line:
-                        print(line)
-                        self.linesprocessed += 1
+                        (level, sender, msg) = self.process_line(line)
+                        if level <= self.verbose:
+                            print(msg)
+                        # This is to test if we are reading the flows completely
+                        if self.debug:
+                            self.linesprocessed += 1
                     else:
                         print('Stopping the output thread')
                         return True
         except KeyboardInterrupt:
-            print('Lines processed in output: {}'.format(self.linesprocessed))
+            if self.debug:
+                print('Lines processed in output: {}'.format(self.linesprocessed))
             return True
         except Exception as inst:
-            print('\tProblem with OutputProcessing()')
+            print('\tProblem with OutputProcess()')
             print(type(inst))
             print(inst.args)
             print(inst)

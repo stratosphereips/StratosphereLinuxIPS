@@ -10,10 +10,8 @@ import configparser
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
     """ A class to create the profiles for IPs and the rest of data """
-    def __init__(self, inputqueue, outputqueue, verbose, debug, config, width):
+    def __init__(self, inputqueue, outputqueue, config, width):
         multiprocessing.Process.__init__(self)
-        self.verbose = verbose
-        self.debug = debug
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.config = config
@@ -222,7 +220,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Tabs is the separator
                         self.separator = '	'
                     else:
-                        outputqueue.put('Error. The file is not comma or tab separated.')
+                        outputqueue.put('0|profiler|Error. The file is not comma or tab separated.')
                         return -2
                     nline = line.strip().split(self.separator)
                     for field in nline:
@@ -250,10 +248,10 @@ class ProfilerProcess(multiprocessing.Process):
                             self.column_idx['bytes'] = nline.index(field)
                 self.columns_defined = True
             except Exception as inst:
-                self.outputqueue.put('\tProblem in process_columns() in profilerProcess')
-                self.outputqueue.put(type(inst))
-                self.outputqueue.put(inst.args)
-                self.outputqueue.put(inst)
+                self.outputqueue.put('0|profiler|Problem in process_columns() in profilerProcess')
+                self.outputqueue.put('0|profiler|' + str(type(inst)))
+                self.outputqueue.put('0|profiler|' + str(inst.args))
+                self.outputqueue.put('0|profiler|' + str(inst))
                 sys.exit(1)
             # This is the return when the columns were not defined. False
             return False
@@ -282,7 +280,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # The input communication queue is not empty
                     line = self.inputqueue.get()
                     if 'stop' == line:
-                        self.outputqueue.put('Stopping Profiler Process')
+                        self.outputqueue.put('0|profiler|Stopping Profiler Process')
                         return True
                     elif line:
                         # Received new data
@@ -293,14 +291,14 @@ class ProfilerProcess(multiprocessing.Process):
                             ip_profile = self.get_profile(self.column_values['saddr'])
                             # Add the flow to the profile
                             ip_profile.add_flow(self.column_values)
-                            self.outputqueue.put(ip_profile.describe())
+                            self.outputqueue.put('3|profiler|' + ip_profile.describe())
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            self.outputqueue.put('\tProblem with Profiler Process()')
-            self.outputqueue.put(type(inst))
-            self.outputqueue.put(inst.args)
-            self.outputqueue.put(inst)
+            self.outputqueue.put('0|profiler|Problem with Profiler Process()')
+            self.outputqueue.put('0|profiler|' + str(type(inst)))
+            self.outputqueue.put('0|profiler|' + str(inst.args))
+            self.outputqueue.put('0|profiler|' + str(inst))
             sys.exit(1)
 
 
@@ -317,7 +315,7 @@ class IPProfile(object):
         self.dst_nets = OrderedDict()
         self.time_windows = OrderedDict()
         # Debug data
-        self.outputqueue.put('A new Profile was created for the IP {}, with time window width {}'.format(self.ip, self.width))
+        self.outputqueue.put('1|profiler|A new Profile was created for the IP {}, with time window width {}'.format(self.ip, self.width))
 
     def add_flow(self, columns):
         """  
@@ -336,32 +334,28 @@ class IPProfile(object):
         This function should get or create the time windows need, accordingly to the current time of the flow
         Returns the time window object
         """
-        self.outputqueue.put('\n##########################')
-        self.outputqueue.put('Current time of the flow: {}'.format(flowtime))
+        self.outputqueue.put('2|profiler|\n##########################')
+        self.outputqueue.put('2|profiler|Current time of the flow: {}'.format(flowtime))
         # First check of we are not in the last TW
         try:
             lasttw = self.time_windows[list(self.time_windows.keys())[-1]]
             # We have the last TW
-            self.outputqueue.put('TW endtime: {}'.format(lasttw.get_endtime()))
-            self.outputqueue.put('TW starttime: {}'.format(lasttw.get_starttime()))
+            self.outputqueue.put('3|profiler|Found last TW. TW starttime: {}, end {}'.format(lasttw.get_starttime(), lasttw.get_endtime()))
             if lasttw.get_endtime() >= flowtime and lasttw.get_starttime() < flowtime:
-                self.outputqueue.put('The flow is on the last time windows')
+                self.outputqueue.put('3|profiler|The flow is on the last time windows')
                 return lasttw
             elif flowtime > lasttw.get_endtime():
                 # Then check if we dont' need a NEW tw in the future
-                self.outputqueue.put('We need to create a new TW')
                 # Create as many TW as we need until we reach the time of the current flow. Each tw should start where the last on ended
                 tw = TimeWindows(self.outputqueue, lasttw.get_endtime(), self.width)
-                self.outputqueue.put('New TW endtime: {}'.format(tw.get_endtime()))
-                self.outputqueue.put('New TW starttime: {}'.format(tw.get_starttime()))
+                self.outputqueue.put('3|profiler|Next TW created. TW starttime: {}, end {}'.format(tw.get_starttime(), tw.get_endtime()))
                 while tw.get_endtime() < flowtime:
                     # The flow is still more in the future, create another TW
-                    self.outputqueue.put('The new TW didn\'t reach the time of the current flow. Creating another TW')
+                    self.outputqueue.put('3|profiler|The new TW didn\'t reach the time of the current flow. Creating another TW')
                     self.time_windows[tw.get_endtime()] = tw
                     lasttw = tw
                     tw = TimeWindows(self.outputqueue, lasttw.get_endtime(), self.width)
-                    self.outputqueue.put('New TW endtime: {}'.format(tw.get_endtime()))
-                    self.outputqueue.put('New TW starttime: {}'.format(tw.get_starttime()))
+                    self.outputqueue.put('3|profiler|Next TW created. TW starttime: {}, end {}'.format(tw.get_starttime(), tw.get_endtime()))
                 # We are supposed to be in the TW corresponding to the current flow
                 self.time_windows[tw.get_endtime()] = tw
                 return tw
@@ -381,24 +375,22 @@ class IPProfile(object):
                 start_of_first_tw = tw_time - timedelta(seconds=self.width*60)
                 start_of_new_tw_in_past = start_of_first_tw - timedelta(seconds=self.width*60)
                 tw = TimeWindows(self.outputqueue, start_of_new_tw_in_past, self.width)
-                self.outputqueue.put('A New past TW created')
+                self.outputqueue.put('3|profiler|Past TW created. TW starttime: {}, end {}'.format(tw.get_starttime(), tw.get_endtime()))
                 self.time_windows[tw.get_endtime()] = tw
                 while flowtime < tw.get_starttime():
                     lasttw = tw
                     # If still our flow in more in the past, continue creatting TW for it
                     tw = TimeWindows(self.outputqueue, lasttw.get_starttime() - timedelta(seconds=self.width*60), self.width)
-                    self.outputqueue.put('A New past TW created')
+                    self.outputqueue.put('3|profiler|Past TW created. TW starttime: {}, end {}'.format(tw.get_starttime(), tw.get_endtime()))
                     self.time_windows[tw.get_endtime()] = tw
                 return tw
         except IndexError:
             # There are no TW yet. Create the first 
-            self.outputqueue.put('\n-> There was no first TW. Creating one')
-            ntw = TimeWindows(self.outputqueue, flowtime, self.width)
-            self.outputqueue.put('\n-> Created')
-            self.time_windows[ntw.get_endtime()] = ntw
-            self.outputqueue.put('First TW starttime: {}'.format(ntw.get_starttime()))
-            self.outputqueue.put('First TW endtime: {}'.format(ntw.get_endtime()))
-            return ntw
+            self.outputqueue.put('3|profiler|\n-> There was no first TW. Creating one')
+            tw = TimeWindows(self.outputqueue, flowtime, self.width)
+            self.time_windows[tw.get_endtime()] = tw
+            self.outputqueue.put('3|profiler|First TW created. TW starttime: {}, end {}'.format(tw.get_starttime(), tw.get_endtime()))
+            return tw
 
 
     def describe(self):
@@ -427,8 +419,6 @@ class TimeWindows(object):
         self.dst_ips = OrderedDict()
         self.dst_ports = []
         self.dst_nets = OrderedDict()
-        # Debug data
-        self.outputqueue.put('A new Time Window was created. Start: {}. Width: {}. Endtime: {}'.format(self.starttime, self.width, self.endtime))
 
     def add_flow(self, columns):
         """  

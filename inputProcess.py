@@ -5,10 +5,8 @@ import sys
 # Input Process
 class InputProcess(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, inputqueue, outputqueue, profilerqueue, verbose, debug, input, config):
+    def __init__(self, inputqueue, outputqueue, profilerqueue, input, config):
         multiprocessing.Process.__init__(self)
-        self.verbose = verbose
-        self.debug = debug
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue

@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
     parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False) 
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
-    parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the flows.', action='store', required=False, type=int)
+    parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In minutes. Defaults to 60.', action='store', default=60, required=False, type=int)
     parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
     parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows using the models. Just print the connections.', default=False, action='store_true', required=False)
@@ -52,16 +52,14 @@ if __name__ == '__main__':
         # No conf file provided
         pass
     
-    # Get the verbosity, if it was not specified as a parameter 
+    # Get the verbosity, if it was not specified as a parameter
     if args.verbose == None:
         # No args verbose specified. Read the verbosity from the config
         try:
             args.verbose = int(config.get('parameters', 'verbose'))
-        except configparser.NoOptionError:
-            args.verbose = 1
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            pass
+            args.verbose = 1
     # Limit any verbosity to > 0
     elif args.verbose < 1:
         args.verbose = 1
@@ -71,11 +69,9 @@ if __name__ == '__main__':
         # No args debug specified. Read the debug from the config
         try:
             args.debug = int(config.get('parameters', 'debug'))
-        except configparser.NoOptionError:
-            args.debug = 0
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            pass
+            args.debug = 0
     # Limit any debuggisity to > 0
     elif args.debug < 0:
         args.debug = 0
@@ -90,24 +86,24 @@ if __name__ == '__main__':
     # Create the output thread and start it
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
-    outputProcessQueue.put('Started output thread')
+    outputProcessQueue.put('4|main|Started output thread')
 
     # Profile thread
     # Create the queue for the profile thread
     profilerProcessQueue = Queue()
     # Create the profile thread and start it
-    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config, args.width)
+    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
     profilerProcessThread.start()
-    outputProcessQueue.put('Started profiler thread')
+    outputProcessQueue.put('4|main|Started profiler thread')
 
     # Input thread
     # Create the queue for the input thread
     inputProcessQueue = Queue()
     # Create the input thread and start it
     if args.filepath:
-        inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, args.verbose, args.debug, args.filepath, config)
+        inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, args.filepath, config)
     else:
         newstdin = os.fdopen(os.dup(sys.stdin.fileno()))
-        inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, args.verbose, args.debug, newstdin, config)
+        inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, newstdin, config)
     inputProcessThread.start()
-    outputProcessQueue.put('Started input thread')
+    outputProcessQueue.put('4|main|Started input thread')
