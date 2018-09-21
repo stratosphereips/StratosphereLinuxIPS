@@ -5,18 +5,18 @@ import sys
 # Input Process
 class InputProcess(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, inputqueue, outputqueue, profilerqueue, input, config):
+    def __init__(self, inputqueue, outputqueue, profilerqueue, stdinput, config):
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
         self.config = config
-        self.input = input
+        self.stdinput = stdinput
 
     def run(self):
         try:
-            if type(self.input) == str:
-                filed = open(self.input)
+            if type(self.stdinput) == str:
+                filed = open(self.stdinput)
                 try:
                     line  = filed.readline()
                 except EOFError:
@@ -39,7 +39,7 @@ class InputProcess(multiprocessing.Process):
                 while True:
                     # While the communication queue is empty
                     if self.inputqueue.empty():
-                            for line in self.input:
+                            for line in self.stdinput:
                                 self.profilerqueue.put(line)
                     else:
                         # The communication queue is not empty process
