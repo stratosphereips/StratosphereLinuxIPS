@@ -62,8 +62,8 @@ This version of slips comes with the following features:
 
 
 ### TODO
--  
 - Create a local DB of IPs so we can rememeber info about them (sqlite)
+- Be aware that the user did not give us a file or stdinput, so go out.
 
 
 ### Author and Contributors
