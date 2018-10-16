@@ -23,8 +23,8 @@ class InputProcess(multiprocessing.Process):
                     line  = filed.readline()
                 except EOFError:
                     return True
-                while True:
-                    # While the communication queue is empty
+                while line != '':
+                    # While the input communication queue is empty
                     if self.inputqueue.empty():
                         # Send the line to the profiler
                         self.profilerqueue.put(line)
@@ -38,6 +38,11 @@ class InputProcess(multiprocessing.Process):
                         if 'stop' == line:
                             print('Stopping Input Process')
                             return True
+                # Now this is disable because the output does not know how to handle a 'stop' while still receiving lines. We don't know how to wait a little for
+                # the input to finish
+                # When the file ends, finish everything
+                #if line == '':
+                #    self.outputqueue.put("stop")
             else:
                 # The input is not str, so it may/should be standard input
                 while True:
