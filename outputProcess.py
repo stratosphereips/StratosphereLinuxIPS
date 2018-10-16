@@ -62,22 +62,27 @@ class OutputProcess(multiprocessing.Process):
             print(inst)
             sys.exit(1)
 
+    def output_line(self, line):
+        """ Get a line of text and output it correctly """
+        (level, sender, msg) = self.process_line(line)
+        if level > 0 and level < 10 and level <= self.verbose:
+            print(msg)
+        if level > 10 and level < 19 and level <= self.debug:
+            # For now print DEBUG, then we can use colors or something
+            print(msg)
+        # This is to test if we are reading the flows completely
+        if self.debug:
+            self.linesprocessed += 1
+
     def run(self):
         try:
             while True:
                 if not self.queue.empty():
                     line = self.queue.get()
                     if 'stop' != line:
-                        (level, sender, msg) = self.process_line(line)
-                        if level > 0 and level < 10 and level <= self.verbose:
-                            print(msg)
-                        if level > 10 and level < 19 and level <= self.debug:
-                            # For now print DEBUG, then we can use colors or something
-                            print(msg)
-                        # This is to test if we are reading the flows completely
-                        if self.debug:
-                            self.linesprocessed += 1
+                        self.output_line(line)
                     else:
+                        # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
                         print('Stopping the output thread')
                         return True
         except KeyboardInterrupt:
