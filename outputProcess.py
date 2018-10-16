@@ -24,26 +24,38 @@ class OutputProcess(multiprocessing.Process):
         The level is always an integer from 0 to 10
         """
         try:
-            level = int(line.split('|')[0])
-            if int(level) < 0 or int(level) > 100:
+            try:
+                level = int(line.split('|')[0])
+                if int(level) < 0 or int(level) > 100:
+                    level = 0
+            except TypeError:
+                print('Error in the level sent to the Output Process')
+            except KeyError:
                 level = 0
-        except TypeError:
-            print('Error in the level sent to the Output Process')
-        except KeyError:
-            level = 0
-            print('The level passed to OutputProcess was wrongly formated.')
-        try:
-            sender = line.split('|')[1]
-        except KeyError:
-            sender = ''
-            print('The sender passed to OutputProcess was wrongly formated.')
-        try:
-            # If there are more | inside he msg, we don't care, just print them
-            msg = ''.join(line.split('|')[2:])
-        except KeyError:
-            msg = ''
-            print('The message passed to OutputProcess was wrongly formated.')
-        return (level, sender, msg)
+                print('The level passed to OutputProcess was wrongly formated.')
+            except ValueError as inst:
+                # We probably received some text instead of an int()
+                print('Error receiving a text to output. Check that you are sending the format of the msg correctly: level|sender|msg')
+                print(inst)
+                sys.exit(-1)
+            try:
+                sender = line.split('|')[1]
+            except KeyError:
+                sender = ''
+                print('The sender passed to OutputProcess was wrongly formated.')
+            try:
+                # If there are more | inside he msg, we don't care, just print them
+                msg = ''.join(line.split('|')[2:])
+            except KeyError:
+                msg = ''
+                print('The message passed to OutputProcess was wrongly formated.')
+            return (level, sender, msg)
+        except Exception as inst:
+            print('\tProblem with process line in OutputProcess()')
+            print(type(inst))
+            print(inst.args)
+            print(inst)
+            sys.exit(1)
 
     def run(self):
         try:
