@@ -75,6 +75,8 @@ if __name__ == '__main__':
     # Limit any debuggisity to > 0
     elif args.debug < 0:
         args.debug = 0
+    # Since the debuging level in the output process goes from 10 to 19, we sum here 10 to the debug level.
+    args.debug = args.debug + 10
 
     ##
     # Creation of the threads
