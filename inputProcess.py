@@ -26,25 +26,25 @@ class InputProcess(multiprocessing.Process):
                 while True:
                     # While the communication queue is empty
                     if self.inputqueue.empty():
+                        # Send the line to the profiler
                         self.profilerqueue.put(line)
                         try:
                             line  = filed.readline()
                         except EOFError:
                             return True
                     else:
-                        # The communication queue is not empty process
+                        # The communication queue is not empty. So process it
                         line = self.inputqueue.get()
                         if 'stop' == line:
                             print('Stopping Input Process')
                             return True
             else:
-                print(type(self.datainput))
-                # Std input
+                # The input is not str, so it may/should be standard input
                 while True:
-                    # While the communication queue is empty
                     if self.inputqueue.empty():
-                            for line in self.datainput:
-                                self.profilerqueue.put(line)
+                        # While the communication queue is empty, we can read from the file/input
+                        for line in self.datainput:
+                            self.profilerqueue.put(line)
                     else:
                         # The communication queue is not empty process
                         line = self.inputqueue.get()
