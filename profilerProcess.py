@@ -272,11 +272,11 @@ class ProfilerProcess(multiprocessing.Process):
     def run(self):
         try:
             while True:
-                # While the input communication queue is empty
+                # If the input communication queue is empty, just wait
                 if self.inputqueue.empty():
                     pass
                 else:
-                    # The input communication queue is not empty
+                    # The input communication queue is not empty, we are receiving
                     line = self.inputqueue.get()
                     if 'stop' == line:
                         print('Stopping Profiler Process')
@@ -295,10 +295,10 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            print('\tProblem with Profiler Process()')
-            print(type(inst))
-            print(inst.args)
-            print(inst)
+            self.outputqueue.put('\tProblem with Profiler Process')
+            self.outputqueue.put(type(inst))
+            self.outputqueue.put(inst.args)
+            self.outputqueue.put(inst)
             sys.exit(1)
 
 
