@@ -17,7 +17,10 @@ class OutputProcess(multiprocessing.Process):
         """
         Extract the verbosity level, the sender and the message from the line.
         The line is separated by | and the fields are:
-        1. The level
+        1. The level. It means the importance/verbosity we should be. Going from 0 to 100. The lower the less important
+            From 0 to 9 we have verbosity levels. 0 is show nothing, 10 show everything
+            From 10 to 19 we have debuging levels. 10 is no debug, 19 is all debug
+            Messages should be about verbosity or debugging, but not both simultaneously
         2. The sender
         3. The message
 
@@ -43,12 +46,14 @@ class OutputProcess(multiprocessing.Process):
             except KeyError:
                 sender = ''
                 print('The sender passed to OutputProcess was wrongly formated.')
+                sys.exit(-1)
             try:
                 # If there are more | inside he msg, we don't care, just print them
                 msg = ''.join(line.split('|')[2:])
             except KeyError:
                 msg = ''
                 print('The message passed to OutputProcess was wrongly formated.')
+                sys.exit(-1)
             return (level, sender, msg)
         except Exception as inst:
             print('\tProblem with process line in OutputProcess()')
@@ -64,7 +69,10 @@ class OutputProcess(multiprocessing.Process):
                     line = self.queue.get()
                     if 'stop' != line:
                         (level, sender, msg) = self.process_line(line)
-                        if level <= self.verbose:
+                        if level > 0 and level < 10 and level <= self.verbose:
+                            print(msg)
+                        if level > 10 and level < 19 and level <= self.debug:
+                            # For now print DEBUG, then we can use colors or something
                             print(msg)
                         # This is to test if we are reading the flows completely
                         if self.debug:
