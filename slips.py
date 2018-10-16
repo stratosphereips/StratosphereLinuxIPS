@@ -28,7 +28,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
     parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False) 
-    parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
+    parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int, default=1)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In minutes. Defaults to 60.', action='store', default=60, required=False, type=int)
     parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
@@ -88,7 +88,7 @@ if __name__ == '__main__':
     # Create the output thread and start it
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
-    outputProcessQueue.put('4|main|Started output thread')
+    outputProcessQueue.put('10|main|Started output thread')
 
     # Profile thread
     # Create the queue for the profile thread
@@ -96,7 +96,7 @@ if __name__ == '__main__':
     # Create the profile thread and start it
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
     profilerProcessThread.start()
-    outputProcessQueue.put('4|main|Started profiler thread')
+    outputProcessQueue.put('10|main|Started profiler thread')
 
     # Input thread
     # Create the queue for the input thread
@@ -108,4 +108,4 @@ if __name__ == '__main__':
         newstdin = os.fdopen(os.dup(sys.stdin.fileno()))
         inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, newstdin, config)
     inputProcessThread.start()
-    outputProcessQueue.put('4|main|Started input thread')
+    outputProcessQueue.put('10|main|Started input thread')
