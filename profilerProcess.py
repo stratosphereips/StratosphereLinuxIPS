@@ -10,10 +10,8 @@ import configparser
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
     """ A class to create the profiles for IPs and the rest of data """
-    def __init__(self, inputqueue, outputqueue, verbose, debug, config, width):
+    def __init__(self, inputqueue, outputqueue, config, width):
         multiprocessing.Process.__init__(self)
-        self.verbose = verbose
-        self.debug = debug
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.config = config
