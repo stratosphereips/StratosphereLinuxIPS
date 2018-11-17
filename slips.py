@@ -39,6 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('-S', '--sdw_width', help='Width of sliding window. The unit is in \time windows\'. So a -S 10 and a -w 5, means a sliding window of 50 minutes.', action='store', default=10, required=False, type=int)
     parser.add_argument('-W','--whitelist',help="File with the IP addresses to whitelist. One per line.",action='store',required=False)
     parser.add_argument('-r', '--filepath', help='Path to the binetflow file to be read.', required=False)
+    parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
     args = parser.parse_args()
 
     # Read the config file from the parameter
@@ -78,6 +79,12 @@ if __name__ == '__main__':
     # Since the debuging level in the output process goes from 10 to 19, we sum here 10 to the debug level.
     args.debug = args.debug + 10
 
+    # Get the type of output from the parameters
+    if args.curses:
+        type_of_output = 'Curses'
+    else:
+        type_of_output = 'Text'
+
     ##
     # Creation of the threads
     ##
@@ -86,7 +93,7 @@ if __name__ == '__main__':
     # Create the queue for the output thread
     outputProcessQueue = Queue()
     # Create the output thread and start it
-    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
+    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config, type_of_output)
     outputProcessThread.start()
     outputProcessQueue.put('10|main|Started output thread')
 
