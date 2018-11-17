@@ -2,7 +2,9 @@ import multiprocessing
 import globaldata
 import sys
 from cursesProcess import CursesProcess
+from logsProcess import LogsProcess
 from multiprocessing import Queue
+
 
 # Output Process
 class OutputProcess(multiprocessing.Process):
@@ -15,11 +17,17 @@ class OutputProcess(multiprocessing.Process):
         self.config = config
         self.linesprocessed = 0
         self.type_of_output = type_of_output
+        # Several combinations of outputs can be used
         # If curses, start the curses thread
-        if self.type_of_output == 'Curses':
+        if 'Curses' in self.type_of_output:
             self.cursesProcessQueue = Queue()
             self.cursesProcessThread = CursesProcess(self.cursesProcessQueue, self.verbose, self.debug, config)
             self.cursesProcessThread.start()
+        # If logs, start the logs thread
+        elif 'Logs' in self.type_of_output:
+            self.logsProcessQueue = Queue()
+            self.logsProcessThread = LogsProcess(self.logsProcessQueue, self.verbose, self.debug, config)
+            self.logsProcessThread.start()
 
     def process_line(self, line):
         """
