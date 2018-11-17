@@ -61,11 +61,6 @@ This version of slips comes with the following features:
 
 
 
-### TODO
-- Create a local DB of IPs so we can rememeber info about them (sqlite)
-- Be aware that the user did not give us a file or stdinput, so go out.
-
-
 ### Author and Contributors
 
 - The author of the project is Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. (Send an email for bugs, reports, ideas or comments)
