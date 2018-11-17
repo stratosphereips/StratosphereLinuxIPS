@@ -1,17 +1,25 @@
 import multiprocessing
 import globaldata
 import sys
+from cursesProcess import CursesProcess
+from multiprocessing import Queue
 
 # Output Process
 class OutputProcess(multiprocessing.Process):
     """ A class process to output everything we need. Manages all the output """
-    def __init__(self, queue, verbose, debug, config):
+    def __init__(self, queue, verbose, debug, config, type_of_output):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
         self.queue = queue
         self.config = config
         self.linesprocessed = 0
+        self.type_of_output = type_of_output
+        # If curses, start the curses thread
+        if self.type_of_output == 'Curses':
+            cursesProcessQueue = Queue()
+            cursesProcessThread = CursesProcess(cursesProcessQueue, self.verbose, self.debug, config)
+            cursesProcessThread.start()
 
     def process_line(self, line):
         """
@@ -66,10 +74,12 @@ class OutputProcess(multiprocessing.Process):
         """ Get a line of text and output it correctly """
         (level, sender, msg) = self.process_line(line)
         if level > 0 and level < 10 and level <= self.verbose:
-            print(msg)
+            if self.type_of_output == 'Text':
+                print(msg)
         if level > 10 and level < 19 and level <= self.debug:
             # For now print DEBUG, then we can use colors or something
-            print(msg)
+            if self.type_of_output == 'Text':
+                print(msg)
         # This is to test if we are reading the flows completely
         if self.debug:
             self.linesprocessed += 1
