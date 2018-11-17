@@ -1,7 +1,12 @@
 # Stratosphere Linux IPS (slips) Version 0.5
 This is the new version of the Stratosphere IPS, a behavioral-based intrusion detection and prevention system that uses machine learning algorithms to detect malicious behaviors. It is part of a larger suite of programs that include the [Stratosphere Windows IPS] and the [Stratosphere Testing Framework].
 
+## Install
 
+### Dependencies
+
+- py37-redis
+    
 
 ## Architecture of operation
 
