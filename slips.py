@@ -40,6 +40,7 @@ if __name__ == '__main__':
     parser.add_argument('-W','--whitelist',help="File with the IP addresses to whitelist. One per line.",action='store',required=False)
     parser.add_argument('-r', '--filepath', help='Path to the binetflow file to be read.', required=False)
     parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
+    parser.add_argument('-l', '--logfiles', help='Create log files with all the info and detections.', required=False, default=False, action='store_true')
     args = parser.parse_args()
 
     # Read the config file from the parameter
@@ -82,6 +83,8 @@ if __name__ == '__main__':
     # Get the type of output from the parameters
     if args.curses:
         type_of_output = 'Curses'
+    elif args.logfiles:
+        type_of_output = 'Logs'
     else:
         type_of_output = 'Text'
 
