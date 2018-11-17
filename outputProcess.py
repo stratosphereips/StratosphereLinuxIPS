@@ -17,9 +17,9 @@ class OutputProcess(multiprocessing.Process):
         self.type_of_output = type_of_output
         # If curses, start the curses thread
         if self.type_of_output == 'Curses':
-            cursesProcessQueue = Queue()
-            cursesProcessThread = CursesProcess(cursesProcessQueue, self.verbose, self.debug, config)
-            cursesProcessThread.start()
+            self.cursesProcessQueue = Queue()
+            self.cursesProcessThread = CursesProcess(self.cursesProcessQueue, self.verbose, self.debug, config)
+            self.cursesProcessThread.start()
 
     def process_line(self, line):
         """
@@ -76,10 +76,14 @@ class OutputProcess(multiprocessing.Process):
         if level > 0 and level < 10 and level <= self.verbose:
             if self.type_of_output == 'Text':
                 print(msg)
+            elif self.type_of_output == 'Curses':
+                self.cursesProcessQueue.put(msg)
         if level > 10 and level < 19 and level <= self.debug:
             # For now print DEBUG, then we can use colors or something
             if self.type_of_output == 'Text':
                 print(msg)
+            elif self.type_of_output == 'Curses':
+                self.cursesProcessQueue.put(msg)
         # This is to test if we are reading the flows completely
         if self.debug:
             self.linesprocessed += 1
