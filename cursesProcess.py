@@ -6,6 +6,8 @@ import curses.panel
 from datetime import datetime
 from datetime import timedelta
 import select
+from string import Template
+
 
 # Curses output Process
 class CursesProcess(multiprocessing.Process):
@@ -21,20 +23,22 @@ class CursesProcess(multiprocessing.Process):
         try:
             self.ui = ui()
             self.ui.update_status('Detecting...')
-            self.ui.update_status('otherr!')
             while True:
+                #self.ui.update_hour()
                 if not self.queue.empty():
                     line = self.queue.get()
                     if 'stop' != line:
-                        self.ui.update_status('do stuffff')
-
+                        self.ui.update_status('Receiving something')
+                        for substr in line.split('\n'):
+                            self.ui.update_histogram(substr)
                     else:
                         # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
-                        print('Stopping the curses thread')
+                        self.queue.put('stop')
                         return True
                 elif self.queue.empty():
                     self.ui.update_status('checking queue')
                     # Manage the online keys
+                    """
                     while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
                         self.ui.update_hour()
                         char = sys.stdin.read(1)
@@ -45,6 +49,7 @@ class CursesProcess(multiprocessing.Process):
                             # Send the signal back that we are stopping
                             self.queue.put('stop')
                             break
+                    """
                     self.ui.refresh()
         except KeyboardInterrupt:
             return True
@@ -101,6 +106,7 @@ class ui:
         self.win2.refresh()
 
     def update_status(self, text):
+        text = str(text)
         status = '{:15.15}'.format(text)
         self.win2.addstr(1, 1, "Status: {}".format(status), curses.color_pair(2))
         self.refresh()
@@ -113,14 +119,24 @@ class ui:
         """
         Put one more line in the histogram
         """
-        self.hist_lines.append(text)
+        # Create a string line that has at the end empty spaces. The amount of empty spaces vary dynamically with the size of the screen
+        templ_string = '{:$size}'
+        # I don't know why 8 works. Less than that and part of the screen is deleted
+        templ_string1 = Template(templ_string).substitute(size=self.w1width - 8)
+        newtext = templ_string1.format(text)
+
+        self.hist_lines.append(newtext)
         # Redraw the complete histogram, from bottom up
         for lpos in range(self.w1height - 2, 2, -1):
             try:
                 # -1 is to start from the last line
                 # - so we go down the list
-                # height of the window - 
-                self.win1.addstr(lpos, 1, str(self.hist_lines[-1 - (self.w1height - 2 - lpos)])[:self.w1width - 2], curses.color_pair(7))
+                # height of the window - 2 (2 for the line border around the win)
+                #self.win1.addstr(lpos, 1, str(self.hist_lines[-1 - (self.w1height - 2 - lpos)])[:self.w1width - 2], curses.color_pair(7))
+                # These -2 both in height and width are because of the linex in the border of the windows. The windows are a little smaller
+                # The self.w1width - 2 is to limit the text to the max amount of screen available
+                linetoput = str(self.hist_lines[-1 - (self.w1height - 2 - lpos)])[:self.w1width - 2]
+                self.win1.addstr(lpos, 1, linetoput, curses.color_pair(7))
             except IndexError:
                 pass
             self.refresh()
