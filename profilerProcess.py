@@ -17,7 +17,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.config = config
         self.width = width
         self.columns_defined = False
-        self.read_configuration()
         self.timeformat = ''
         # Read the configuration
         self.read_configuration()
