@@ -281,14 +281,15 @@ class ProfilerProcess(multiprocessing.Process):
                         self.outputqueue.put("10|profiler|Stopping Profiler Process.")
                         return True
                     else:
-                        # Received new data
+                        # Received new input data
                         # Extract the columns smartly
                         if self.process_columns(line):
                             # See if we have this IP profile yet, and if not create it
                             ip_profile = self.get_profile(self.column_values['saddr'])
+                            print(globaldata.ip_profiles)
                             # Add the flow to the profile
                             ip_profile.add_flow(self.column_values)
-                            self.outputqueue.put("1|profiler|"+ip_profile.describe())
+                            #self.outputqueue.put("1|profiler|"+ip_profile.describe())
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -421,13 +422,6 @@ class TimeWindows(object):
         for port in self.dst_ports:
             text += '{}, '.format(port)
         return text
-
-
-
-
-
-
-
 
 
 
