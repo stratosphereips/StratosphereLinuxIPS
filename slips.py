@@ -9,10 +9,11 @@ import argparse
 import multiprocessing
 from multiprocessing import Queue
 import configparser
-import globaldata
 from inputProcess import InputProcess
 from outputProcess import OutputProcess
 from profilerProcess import ProfilerProcess
+from cursesProcess import CursesProcess
+from logsProcess import LogsProcess
 
 version = '0.5'
 
@@ -80,25 +81,37 @@ if __name__ == '__main__':
     # Since the debuging level in the output process goes from 10 to 19, we sum here 10 to the debug level.
     args.debug = args.debug + 10
 
-    # Get the type of output from the parameters
-    if args.curses:
-        type_of_output = 'Curses'
-    elif args.logfiles:
-        type_of_output = 'Logs'
-    else:
-        type_of_output = 'Text'
 
     ##
     # Creation of the threads
     ##
 
     # Output thread
-    # Create the queue for the output thread
+    # Create the queue for the output thread first. Later the output process is created after we defined which type of output we have
     outputProcessQueue = Queue()
     # Create the output thread and start it
-    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config, type_of_output)
+    # We need to tell the output process the type of output so he know if it should print in console or send the data to another process
+    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
     outputProcessQueue.put('10|main|Started output thread')
+
+    # Get the type of output from the parameters
+    # Several combinations of outputs should be able to be used
+    if args.curses:
+        # Create the curses thread
+        cursesProcessQueue = Queue()
+        cursesProcessThread = CursesProcess(cursesProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+        cursesProcessThread.start()
+        outputProcessQueue.put('10|main|Started Curses thread')
+    elif args.logfiles:
+        # Create the logsfile thread
+        logsProcessQueue = Queue()
+        logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+        logsProcessThread.start()
+        outputProcessQueue.put('10|main|Started logsfiles thread')
+    else:
+        # Text?
+        pass
 
     # Profile thread
     # Create the queue for the profile thread
