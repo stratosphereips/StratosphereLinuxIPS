@@ -15,6 +15,10 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
 
 ## Usage
 
+- Start Redis
+    - In macos
+        - redis-server /opt/local/etc/redis.conf
+        - sudo port load redis
 
 
 ## Detection Models
