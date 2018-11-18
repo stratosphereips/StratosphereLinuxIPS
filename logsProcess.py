@@ -1,17 +1,16 @@
 import multiprocessing
-import globaldata
-from globaldata import ip_profiles
 import sys
 from datetime import datetime
 from datetime import timedelta
 import os
 import threading
+import time
 
 
 # Logs output Process
 class LogsProcess(multiprocessing.Process):
     """ A class to output data in logs files """
-    def __init__(self, inputqueue, verbose, debug, config ):
+    def __init__(self, inputqueue, verbose, debug, config):
         multiprocessing.Process.__init__(self)
         self.queue = inputqueue
         self.verbose = verbose
@@ -47,12 +46,17 @@ class LogsProcess(multiprocessing.Process):
                         self.queue.put('stop')
                         return True
                 elif self.queue.empty():
-                    # Do stuff
                     pass
+            # Stop the timer
+            timer.shutdown()
 
         except KeyboardInterrupt:
+            # Stop the timer
+            timer.shutdown()
             return True
         except Exception as inst:
+            # Stop the timer
+            timer.shutdown()
             print('\tProblem with LogsProcess()')
             print(type(inst))
             print(inst.args)
@@ -61,12 +65,8 @@ class LogsProcess(multiprocessing.Process):
 
     def process_global_data(self):
         """ Read the global data and output it on logs """
-        global ip_profiles
         try:
-            print(ip_profiles)
-            #for profile in ip_profiles:
-                #print('asdf')
-                #self.queue.put('10|logs|' + str(profile))
+            print('doing...')
 
         except KeyboardInterrupt:
             return True
