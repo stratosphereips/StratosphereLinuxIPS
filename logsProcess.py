@@ -73,10 +73,18 @@ class LogsProcess(multiprocessing.Process):
         try:
             #print('doing...')
             # Get the list of profiles so far
-            profiles = str(__database__.getProfiles())
+            temp_profs = __database__.getProfiles()
+            if not temp_profs:
+                return True
+            profiles = list(temp_profs)
             #self.outputqueue.put('1|logs|Profiles: ' + profiles)
             profilesLen = str(__database__.getProfilesLen())
             self.outputqueue.put('1|logs|# of Profiles: ' + profilesLen)
+            # For each profile, get the amount of tw
+            for pname in profiles:
+                profilename = pname.decode('utf-8')
+                twLen = str(__database__.getAmountTW(profilename))
+                self.outputqueue.put('2|logs|Profile: ' + profilename + '. ' + twLen + ' timewindows')
 
         except KeyboardInterrupt:
             return True
