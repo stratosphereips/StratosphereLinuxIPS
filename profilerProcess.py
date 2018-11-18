@@ -1,5 +1,4 @@
 import multiprocessing
-import globaldata
 import json
 from datetime import datetime
 from datetime import timedelta
@@ -20,6 +19,8 @@ class ProfilerProcess(multiprocessing.Process):
         self.timeformat = ''
         # Read the configuration
         self.read_configuration()
+        # Delete this when the db is up
+        self.ip_profiles = {}
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -260,12 +261,12 @@ class ProfilerProcess(multiprocessing.Process):
     def get_profile(self, saddr):
         """ See if we have an ip profile for this ip. If not, create it. Store it in the global variables """
         try:
-            ipprofile = globaldata.ip_profiles[saddr]
+            ipprofile = self.ip_profiles[saddr]
             # We got it
             return ipprofile
         except KeyError:
             ipprofile = IPProfile(self.outputqueue, saddr, self.width, self.timeformat)
-            globaldata.ip_profiles[saddr] = ipprofile
+            self.ip_profiles[saddr] = ipprofile
             return ipprofile
 
     def run(self):
@@ -286,10 +287,8 @@ class ProfilerProcess(multiprocessing.Process):
                         if self.process_columns(line):
                             # See if we have this IP profile yet, and if not create it
                             ip_profile = self.get_profile(self.column_values['saddr'])
-                            print(globaldata.ip_profiles)
                             # Add the flow to the profile
                             ip_profile.add_flow(self.column_values)
-                            #self.outputqueue.put("1|profiler|"+ip_profile.describe())
         except KeyboardInterrupt:
             return True
         except Exception as inst:
