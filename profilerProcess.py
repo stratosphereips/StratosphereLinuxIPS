@@ -5,6 +5,7 @@ from datetime import timedelta
 import sys
 from collections import OrderedDict
 import configparser
+from slips.core.database import __database__
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -19,8 +20,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.timeformat = ''
         # Read the configuration
         self.read_configuration()
-        # Delete this when the db is up
-        self.ip_profiles = {}
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -258,16 +257,22 @@ class ProfilerProcess(multiprocessing.Process):
         # This is the return when the columns were defined. True
         return True
 
-    def get_profile(self, saddr):
+    def add_flow_to_profile(self, columns):
         """ See if we have an ip profile for this ip. If not, create it. Store it in the global variables """
-        try:
-            ipprofile = self.ip_profiles[saddr]
+        self.outputqueue.put('1|profiler|Received flow')
+        saddr = columns['saddr']
+        profilename = 'profile:' + str(saddr)
+
+        if __database__.hasProfile(profilename):
             # We got it
-            return ipprofile
-        except KeyError:
-            ipprofile = IPProfile(self.outputqueue, saddr, self.width, self.timeformat)
-            self.ip_profiles[saddr] = ipprofile
-            return ipprofile
+            pass
+        else:
+            # we don't have this profile yet. Add it
+            __database__.addProfile(profilename)
+        # List all profiles
+        #profiles = __database__.getProfiles()
+        #self.outputqueue.put('1|profiler|All profiles:' + str(profiles))
+        #self.outputqueue.put('1|profiler|----------------\n')
 
     def run(self):
         try:
@@ -285,10 +290,8 @@ class ProfilerProcess(multiprocessing.Process):
                         # Received new input data
                         # Extract the columns smartly
                         if self.process_columns(line):
-                            # See if we have this IP profile yet, and if not create it
-                            ip_profile = self.get_profile(self.column_values['saddr'])
                             # Add the flow to the profile
-                            ip_profile.add_flow(self.column_values)
+                            self.add_flow_to_profile(self.column_values)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
