@@ -34,4 +34,8 @@ class Database(object):
         """ Check if we have the given profile """
         return self.r.sismember('profiles', profileid)
 
+    def getProfilesLen(self ):
+        """ Return the amount of profiles. Redis should be faster than python to do this count """
+        return self.r.scard('profiles')
+
 __database__ = Database()
