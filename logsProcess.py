@@ -5,19 +5,21 @@ from datetime import timedelta
 import os
 import threading
 import time
+from slips.core.database import __database__
 
 
 # Logs output Process
 class LogsProcess(multiprocessing.Process):
     """ A class to output data in logs files """
-    def __init__(self, inputqueue, verbose, debug, config):
+    def __init__(self, inputqueue, outputqueue, verbose, debug, config):
         multiprocessing.Process.__init__(self)
-        self.queue = inputqueue
         self.verbose = verbose
         self.debug = debug
         self.config = config
         # From the config, read the timeout to read logs. Now defaults to 5 seconds
         self.read_timeout = 5
+        self.inputqueue = inputqueue
+        self.outputqueue = outputqueue
 
     def run(self):
         try:
@@ -36,16 +38,19 @@ class LogsProcess(multiprocessing.Process):
             timer.start()
 
             while True:
-                if not self.queue.empty():
-                    line = self.queue.get()
+                if not self.inputqueue.empty():
+                    line = self.inputqueue.get()
                     if 'stop' != line:
                         # we are not processing input from the queue yet
+                        # without this line the complete output thread does not work!!
+                        print(line)
                         pass
                     else:
                         # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
-                        self.queue.put('stop')
+                        self.outputqueue.put('stop')
                         return True
-                elif self.queue.empty():
+                elif self.inputqueue.empty():
+                    # Nothing to do here either now
                     pass
             # Stop the timer
             timer.shutdown()
@@ -66,7 +71,10 @@ class LogsProcess(multiprocessing.Process):
     def process_global_data(self):
         """ Read the global data and output it on logs """
         try:
-            print('doing...')
+            #print('doing...')
+            # Get the list of profiles so far
+            profiles = str(__database__.getProfiles())
+            self.outputqueue.put('1|logs|Profiles: ' + profiles)
 
         except KeyboardInterrupt:
             return True
