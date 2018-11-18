@@ -74,7 +74,9 @@ class LogsProcess(multiprocessing.Process):
             #print('doing...')
             # Get the list of profiles so far
             profiles = str(__database__.getProfiles())
-            self.outputqueue.put('1|logs|Profiles: ' + profiles)
+            #self.outputqueue.put('1|logs|Profiles: ' + profiles)
+            profilesLen = str(__database__.getProfilesLen())
+            self.outputqueue.put('1|logs|# of Profiles: ' + profilesLen)
 
         except KeyboardInterrupt:
             return True
