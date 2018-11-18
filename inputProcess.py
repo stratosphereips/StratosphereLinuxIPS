@@ -1,5 +1,4 @@
 import multiprocessing
-import globaldata
 import sys
 
 # Input Process
