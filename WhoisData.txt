@@ -1,5 +1,7 @@
 31.210.126.10	INTER NET BILGISAYAR LTD STI,TR
 209.237.150.20	Web.com, Inc.,US
+176.31.62.78	The servers used for sinkholing projects,GB
+45.33.109.129	Linode,US
 52.215.41.155	Amazon Data Services Ireland Limited,IE
 91.190.218.40	Skype Du,IE
 90.182.119.13	Google global cache,CZ
@@ -8,18 +10,21 @@
 90.182.119.18	Google global cache,CZ
 157.55.130.173	Microsoft Corporation,US
 172.217.22.110	Google LLC,US
-23.53.187.27	Akamai Technologies, Inc.,US
+10.0.2.103	Private Use
 104.16.85.20	Cloudflare, Inc.,US
+151.80.78.61	OVH Static IP,GB
 00:00:00:00:00:00	Not an IP
 31.211.152.64	5KOM OOD,BG
 23.239.65.186	Nodes Direct,US
-91.190.217.143	Skype Lu,LU
+23.53.187.27	Akamai Technologies, Inc.,US
+159.224.140.219	
+108.160.172.204	Dropbox, Inc.,US
 213.199.179.171	Microsoft Internet Data Center,IE
 213.199.179.173	Microsoft Internet Data Center,IE
-8.8.8.8	Level 3 Communications, Inc.,US
 157.56.114.105	Microsoft Corporation,US
-157.55.56.149	Microsoft Corporation,US
+178.136.241.135	VEGA LVIV,UA
 38.90.226.37	PSINet, Inc.,US
+176.36.152.181	Lanet Network Ltd,UA
 157.55.56.140	Microsoft Corporation,US
 157.55.56.141	Microsoft Corporation,US
 157.55.56.142	Microsoft Corporation,US
@@ -29,15 +34,18 @@
 65.55.223.27	Microsoft Corporation,US
 52.218.64.140	Amazon Technologies Inc.,US
 77.75.76.72	Seznam.cz,CZ
-64.4.23.155	Microsoft Corporation,US
 104.127.48.56	Akamai International, BV,NL
+213.111.186.148	
+91.244.27.225	
 65.167.76.114	Sprint,US
 10.0.2.113	Private Use
 157.55.130.145	Microsoft Corporation,US
+111.221.77.162	Microsoft Microsoft Corp, Singapore,SG
 52.85.172.58	Amazon Technologies Inc.,US
 172.217.22.106	Google LLC,US
 172.217.22.101	Google LLC,US
 213.199.179.159	Microsoft Internet Data Center,IE
+94.76.98.197	for Freenet customers and infrastructure #3,UA
 111.221.77.144	Microsoft Microsoft Corp, Singapore,SG
 65.55.246.149	Microsoft Corporation,US
 93.89.224.62	ISIMTESCIL,CY
@@ -46,6 +54,7 @@
 195.113.232.90	CESNET, z.s.p.o. Prague 6,CZ
 195.113.232.91	CESNET, z.s.p.o. Prague 6,CZ
 87.97.173.26	Blizoo Media and Broadband EAD Blizoo Docsys Sunny Beach,BG
+94.158.152.144	
 202.6.226.62	Padi Internet, PT Internet Service Provider Mayjen Sungkono no.83 Surabaya 60242 Indonesia,ID
 31.193.142.216	Canonical range for H4,GB
 192.35.177.64	IdenTrust,US
@@ -62,6 +71,8 @@
 54.230.46.90	Amazon Technologies Inc.,US
 216.58.209.163	Google LLC,US
 216.58.206.3	Google LLC,US
+172.217.22.99	Google LLC,US
+111.221.77.153	Microsoft Microsoft Corp, Singapore,SG
 239.255.255.250	Private Use
 157.55.130.153	Microsoft Corporation,US
 54.240.162.20	Amazon Technologies Inc.,US
@@ -70,7 +81,9 @@
 216.58.214.238	Google LLC,US
 52.18.63.80	Amazon Technologies Inc.,US
 172.217.23.142	Google LLC,US
+106.188.50.67	KDDI CORPORATION GARDEN AIR TOWER,3-10-10,Iidabashi,Chiyoda-ku,Tokyo,JP
 61.219.141.68	Data Communication Business Group, Chunghwa Telecom Co.,Ltd. No.21, Sec.1, Xinyi Rd., Taipei City 10048, Taiwan,TW
+77.122.205.79	Volia Krivoy Rog,UA
 91.190.216.212	Skype Lu,LU
 195.113.232.82	CESNET, z.s.p.o. Prague 6,CZ
 111.221.77.167	Microsoft Microsoft Corp, Singapore,SG
@@ -84,8 +97,8 @@ ff02::1:2	Private Use
 ff02::1:3	Private Use
 64.4.23.153	Microsoft Corporation,US
 74.125.71.239	Google LLC,US
-45.32.148.9	Choopa, LLC,US
-37.48.125.108	
+64.4.23.155	Microsoft Corporation,US
+193.34.60.15	
 23.74.24.171	Akamai International, BV,NL
 40.77.226.250	Microsoft Corporation,US
 10.0.2.200	Private Use
@@ -93,16 +106,16 @@ ff02::1:3	Private Use
 216.58.209.174	Google LLC,US
 40.114.149.220	Microsoft Corporation,US
 10.0.2.2	Private Use
+45.32.148.9	Choopa, LLC,US
 157.56.52.32	Microsoft Corporation,US
 ff02::1:ff78:1b2d	Private Use
 178.32.203.161	OVH Sp. z o. o.,PL
 104.96.129.73	Akamai International, BV,NL
-195.113.232.73	CESNET, z.s.p.o. Prague 6,CZ
 192.168.8.11	Private Use
-23.239.66.26	Nodes Direct,US
 64.233.166.95	Google LLC,US
 52.26.186.108	Amazon Technologies Inc.,US
 ff02::16	Private Use
+173.237.190.72	TierPoint, LLC,US
 65.55.223.36	Microsoft Corporation,US
 173.194.76.100	Google LLC,US
 172.217.22.35	Google LLC,US
@@ -117,23 +130,27 @@ ff02::16	Private Use
 71.215.55.70	Qwest Communications Company, LLC,US
 ff02::2	Private Use
 111.221.77.164	Microsoft Microsoft Corp, Singapore,SG
-108.160.172.204	Dropbox, Inc.,US
-172.217.22.99	Google LLC,US
+93.170.152.201	PE Kostenko Dmitriy Alekseevich,UA
+37.25.102.37	WildPark Co PROVIDER Local Registry,UA
 157.56.52.20	Microsoft Corporation,US
 157.56.52.25	Microsoft Corporation,US
 8.8.4.4	Level 3 Parent, LLC,US
 157.56.52.27	Microsoft Corporation,US
 97.117.157.55	Qwest Communications Company, LLC,US
 157.56.52.29	Microsoft Corporation,US
-91.190.218.59	Skype Du,IE
+111.221.77.161	Microsoft Microsoft Corp, Singapore,SG
 188.121.36.239	Infrastructure,NL
-111.221.77.153	Microsoft Microsoft Corp, Singapore,SG
+93.171.19.129	APEX-CRIMEA Ltd.,RU
 74.125.206.99	Google LLC,US
-111.221.77.155	Microsoft Microsoft Corp, Singapore,SG
+157.55.56.149	Microsoft Corporation,US
 74.125.206.94	Google LLC,US
+176.124.9.44	
+77.75.79.9	Seznam.cz,CZ
 94.31.29.96	Public Services,GB
 64.4.23.172	Microsoft Corporation,US
 52.178.178.16	Microsoft Corporation,US
+91.218.89.197	
+37.25.109.92	WildPark Co PROVIDER Local Registry,UA
 157.56.114.104	Microsoft Corporation,US
 188.152.203.20	IP addresses allocated to DSL customers,IT
 64.4.23.175	Microsoft Corporation,US
@@ -141,53 +158,68 @@ ff02::2	Private Use
 46.240.37.149	Broadband IP Range,SA
 72.167.239.239	GoDaddy.com, LLC,US
 176.58.89.38	Host Virtual, Inc,NL
-157.55.56.162	Microsoft Corporation,US
-65.55.223.43	Microsoft Corporation,US
+91.190.217.143	Skype Lu,LU
+111.221.77.155	Microsoft Microsoft Corp, Singapore,SG
+109.87.13.95	
+31.131.113.60	
 65.55.223.47	Microsoft Corporation,US
 65.55.223.44	Microsoft Corporation,US
 65.55.223.45	Microsoft Corporation,US
+65.55.223.22	Microsoft Corporation,US
 157.55.56.168	Microsoft Corporation,US
 157.55.56.169	Microsoft Corporation,US
 23.51.123.27	Akamai International, BV,NL
 64.4.23.173	Microsoft Corporation,US
 65.55.252.71	Microsoft Corporation,US
+178.158.116.211	
+178.136.222.110	VEGA TG Odessa,UA
 88.221.92.185	Akamai Technologies,EU
 ff02::c	Private Use
+216.218.206.85	Hurricane Electric, Inc.,US
 108.177.15.100	Google LLC,US
-65.55.223.22	Microsoft Corporation,US
+31.128.104.215	
+8.8.8.8	Level 3 Communications, Inc.,US
+109.200.148.27	
 111.221.77.141	Microsoft Microsoft Corp, Singapore,SG
 111.221.77.140	Microsoft Microsoft Corp, Singapore,SG
 111.221.77.143	Microsoft Microsoft Corp, Singapore,SG
 104.123.211.39	Akamai Technologies, Inc.,US
+4.4.4.4	Level 3 Parent, LLC,US
 216.58.198.99	Google LLC,US
 111.221.77.147	Microsoft Microsoft Corp, Singapore,SG
+10.0.2.255	Private Use
 111.221.77.149	Microsoft Microsoft Corp, Singapore,SG
 185.35.56.228	VENOMIT Webservers,GB
 255.255.255.255	Private Use
 172.217.18.68	Google LLC,US
 13.107.3.128	Microsoft Corporation,US
+109.254.37.12	DEC Broadband customers Shirokiy region,UA
 182.74.32.234	MASTER CAPITAL SERVICES LTD n/a IDC 4, Dhirubhai Ambani Knowledge City Thane- Belapur Road, Koparkhairane Mumbai MAHARASHTRA India Contact Person: TARANJEET SINGH Email: taranjeet@mastertrust.co.in Phone: 9814999973,IN
+37.115.172.216	Kyivstar GSM Ukrainian mobile phone operator,UA
 85.232.230.227	Gemius SA Postepu 18B 02-676 Warszawa,PL
 151.101.36.102	Fastly,US
 80.252.91.52	TeleCity Group Customer - Sizmek Technologies LTD,NL
-77.75.79.9	Seznam.cz,CZ
+46.211.22.141	Kyivstar GSM Ukrainian mobile phone operator,UA
+65.55.223.43	Microsoft Corporation,US
 168.63.124.19	Microsoft Corp,US
 ff02::1:ff32:1a73	Private Use
 157.56.192.186	Microsoft Corporation,US
-10.0.2.255	Private Use
+178.215.190.133	Private Enterprise Firma Fenix VT,UA
+ff02::1:ff49:8c14	Private Use
 104.20.30.249	Cloudflare, Inc.,US
 10.0.2.15	Private Use
 111.221.77.174	Microsoft Microsoft Corp, Singapore,SG
 ff02::fb	Private Use
 168.63.15.132	Microsoft Corp,US
 52.85.176.207	Amazon Technologies Inc.,US
-111.221.77.173	Microsoft Microsoft Corp, Singapore,SG
+89.252.42.242	o3_core,UA
 157.56.52.47	Microsoft Corporation,US
-103.6.85.35	Host Virtual, Inc,HK
+176.31.62.77	The servers used for sinkholing projects,GB
 131.253.61.82	Microsoft Corp,US
-83.167.233.168	Internet Ventures s.r.o. Praha,CZ
+5.248.60.97	Kyivstar GSM Ukrainian mobile phone operator,UA
 104.238.150.145	Vultr Holdings, LLC,JP
 216.58.206.13	Google LLC,US
+193.106.222.251	
 180.144.109.152	K-Opticom Corporation K-Opti.com BLDG.18F,2-1-5 Shiromi,chuo-ku,Osaka 530-6116, Japan,JP
 111.221.77.171	Microsoft Microsoft Corp, Singapore,SG
 213.199.179.150	Microsoft Internet Data Center,IE
@@ -196,32 +228,39 @@ ff02::fb	Private Use
 213.199.179.155	Microsoft Internet Data Center,IE
 191.239.211.246	Microsoft Informatica Ltda,BR
 52.85.173.90	Amazon Technologies Inc.,US
-216.218.206.85	Hurricane Electric, Inc.,US
+111.221.77.173	Microsoft Microsoft Corp, Singapore,SG
 0.0.0.2	Private Use
 64.4.23.168	Microsoft Corporation,US
-106.188.50.67	KDDI CORPORATION GARDEN AIR TOWER,3-10-10,Iidabashi,Chiyoda-ku,Tokyo,JP
-45.33.109.129	Linode,US
-157.55.56.158	Microsoft Corporation,US
-195.113.214.219	CESNET, z.s.p.o. Prague 6,CZ
-52.88.7.60	Amazon Technologies Inc.,US
+157.55.56.162	Microsoft Corporation,US
 224.0.0.252	Private Use
+178.165.36.80	Maxnet Ltd., Kharkiv Unity Of Digital Technologies +380.577209723 Block #2, network 1,UA
+157.55.56.158	Microsoft Corporation,US
+91.190.218.59	Skype Du,IE
+103.6.85.35	Host Virtual, Inc,HK
+52.88.7.60	Amazon Technologies Inc.,US
+87.98.254.64	OVH Ltd,GB
+23.239.66.26	Nodes Direct,US
 111.221.77.169	Microsoft Microsoft Corp, Singapore,SG
 89.248.172.154	QUASI,SC
+178.150.195.215	
 1.1.1.1	APNIC and Cloudflare DNS Resolver project Routed globally by AS13335/Cloudflare Research prefix for APNIC Labs,AU
 147.32.3.248	Prague,CZ
-111.221.77.162	Microsoft Microsoft Corp, Singapore,SG
-111.221.77.161	Microsoft Microsoft Corp, Singapore,SG
+83.167.233.168	Internet Ventures s.r.o. Praha,CZ
+157.55.130.160	Microsoft Corporation,US
 157.55.130.161	Microsoft Corporation,US
 0.0.0.1	Private Use
 157.55.56.153	Microsoft Corporation,US
 13.79.239.69	Microsoft Corporation,US
 52.212.19.208	Amazon Data Services Ireland Limited,IE
+195.113.214.219	CESNET, z.s.p.o. Prague 6,CZ
 91.190.216.24	Skype Lu,LU
 195.113.232.75	CESNET, z.s.p.o. Prague 6,CZ
+176.8.238.120	Kyivstar GSM Ukrainian mobile phone operator,UA
 195.113.214.206	CESNET, z.s.p.o. Prague 6,CZ
-157.55.130.160	Microsoft Corporation,US
+195.113.232.73	CESNET, z.s.p.o. Prague 6,CZ
 213.199.179.140	Microsoft Internet Data Center,IE
 213.199.179.143	Microsoft Internet Data Center,IE
+134.249.30.72	Kyivstar GSM Ukrainian mobile phone operator,UA
 95.76.243.38	UPC Romania DHCP Pool,RO
 109.160.93.209	LanULTRA Varna ISP in Varna for Asparuhovo and Galata regions,BG
 213.199.179.147	Microsoft Internet Data Center,IE
