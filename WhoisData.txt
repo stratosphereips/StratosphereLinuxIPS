@@ -1,3 +1,38 @@
+54.251.42.211	Amazon.com, Inc.,US
+91.6.12.5	Deutsche Telekom AG,DE
+154.226.31.210	Airtel Uganda Limited,UG
+76.6.64.103	Embarq Corporation,US
+161.165.242.217	Wal-Mart Stores, Inc.,US
+192.168.100.103	Private Use
+130.241.105.107	Goteborgs universitet IT-enheten, Box 100 Goteborg, Sweden,SE
+79.254.212.39	Deutsche Telekom AG,DE
+104.136.194.198	BRIGHT HOUSE NETWORKS, LLC,US
+148.125.75.97	DoD Network Information Center,US
+67.181.19.38	Comcast Cable Communications, Inc,US
+82.221.117.108	
+205.73.61.78	Navy Network Information Center (NNIC),US
+165.217.77.245	Marcam Corporation,US
+109.103.97.142	Romtelecom data customers,RO
+23.102.45.204	Microsoft Corporation,US
+198.53.225.239	TELUS-HSIA-CNMRAB02,CA
+224.239.71.178	Private Use
+157.106.249.253	Mitsui Engineering & Shipbuilding Co., Ltd.,JP
+94.200.195.93	Emirates Integrated Telecommunications Company PJSC (EITC-DU),AE
+118.209.140.150	iiNet Limited Accounts Payable Department Locked Bag 16,AU
+88.152.5.128	Unitymedia,DE
+102.17.30.55	AfriNIC - www.afrinic.net Allocation for Africa - This block is in use by AfriNIC for allocating/assigning to networks in the AfriNIC service region. More information - whois.afrinic.net. Abuse - please querry the whois db for the contacts of the assigned/allocated prefix.,MU
+94.133.79.227	NOS COMUNICACOES S.A.,PT
+28.84.125.112	DoD Network Information Center,US
+179.198.18.52	Telemar Norte Leste S.A.,BR
+196.121.88.205	2G/3G/4G Mobile Costumers,MA
+227.162.152.222	Private Use
+188.238.0.52	TeliaSonera Finland Oyj Mobility Services Helsinki,FI
+167.7.248.59	State of South Carolina,US
+164.90.28.202	SpaceLabs Medical, Inc.,US
+57.154.140.216	
+168.160.2.156	imported inetnum object for ISSTCC,CN
+98.253.0.167	Comcast Cable Communications, Inc.,US
+184.146.57.215	Bell Canada,CA
 31.210.126.10	INTER NET BILGISAYAR LTD STI,TR
 209.237.150.20	Web.com, Inc.,US
 176.31.62.78	The servers used for sinkholing projects,GB
