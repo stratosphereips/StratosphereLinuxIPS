@@ -266,57 +266,60 @@ class ProfilerProcess(multiprocessing.Process):
         starttime = time.mktime(columns['starttime'].timetuple())
 
         # The steps for adding a flow in a profile should be
-        # 1. Add the profile. If it exists, nothing happens
-        __database__.addProfile(profilename)
-        # 2. For this profile, find the id in the databse of the tw where the flow belongs.
+        # 1. Add the profile to the DB. If it exists, nothing happens. So now profilename is the id of the profile to work with
+        __database__.addProfile(profilename, starttime)
+        # Crate two fake tw
+        __database__.addNewTW(profilename, 'timewindow1', starttime, self.width)
+        __database__.addNewTW(profilename, 'timewindow2', time.mktime(datetime.strptime('2015-07-26T10:12:53.784566', '%Y-%m-%dT%H:%M:%S.%f').timetuple()), self.width)
+
+        # 2. Get all previous info inside this profile, such as the width of the time window, etc.
+        profileJSON = __database__.getProfileData(profilename)
+
+        # 3. For this profile, find the id in the databse of the tw where the flow belongs.
         twId = self.get_timewindow(starttime, profilename)
-        # 3. For this TW extract all the information we need
+
+        # 4. For this TW extract all the information we need
+
+        # For debugging Print profiles...
+        print('Data of profile: {}:{}'.format(profilename,profileJSON))
+        print(__database__.getProfiles())
 
     def get_timewindow(self, flowtime, profilename):
         """" 
         This function should get the id of the TW in the database where the flow belong.
         If the TW is not there, we create as many tw as necessary in the future or past until we get the correct TW for this flow.
         Returns the time window id
+        - We use this function to avoid retrieving all the data from the DB for the complete profile. We use a separate table for the TW per profile.
         """
         # First check of we are not in the last TW
-        try:
-            lasttw = __database__.getLastTWforProfile(profilename)
-            if lasttw:
-                # There was a last TW, so check if the current flow belongs here.
-                twid = lasttw
-                pass
-            elif not lasttw:
-                # There was no last TW. Create the first one
-                twid = 'timewindow1'
-                startoftw = flowtime
-                # Add this TW, of this profile, to the DB
-                __database__.addNewTW(profilename, twid, startoftw, self.width)
+        lasttw = __database__.getLastTWforProfile(profilename)
+        if lasttw:
+            # There was a last TW, so check if the current flow belongs here.
+            twid = lasttw
+            pass
+        elif not lasttw:
+            # There was no last TW. Create the first one
+            twid = 'timewindow1'
+            startoftw = flowtime
+            # Add this TW, of this profile, to the DB
+            __database__.addNewTW(profilename, twid, startoftw, self.width)
 
-            """
-            # We have the last TW
-            self.outputqueue.put("12|profiler|" + 'Found a TW. {} -> {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
-            if lasttw.get_endtime() >= flowtime and lasttw.get_starttime() < flowtime:
-                self.outputqueue.put("11|profiler|The flow is on the last time windows")
-                return lasttw
-            elif flowtime > lasttw.get_endtime():
-                # Then check if we are not a NEW tw
-                self.outputqueue.put("11|profiler|We need to create a new TW")
-                tw = TimeWindows(self.outputqueue, starttime, self.width)
-                self.time_windows[tw.get_endtime()] = tw
-                self.outputqueue.put("12|profiler|" + 'Create a TW. Starttime: {}, Endtime: {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
-                self.outputqueue.put("1|profiler|" + 'TW. {} -> {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
-                return tw
-            """
-            return twid
-        except IndexError:
-            # There are no TW yet. Create the first 
-            self.outputqueue.put("12|profiler|\n-> There was no first TW. Creating one")
-            ntw = TimeWindows(self.outputqueue, flowtime, self.width)
-            self.outputqueue.put("12|profiler|\n-> Created")
-            self.time_windows[ntw.get_endtime()] = ntw
-            self.outputqueue.put("12|profiler|" + 'Create the first TW. Starttime: {}, Endtime: {}'.format(ntw.get_starttime(),ntw.get_endtime()))
-            self.outputqueue.put("1|profiler|" + 'TW. {} -> {}'.format(ntw.get_starttime(),ntw.get_endtime()))
-            return ntw
+        """
+        # We have the last TW
+        self.outputqueue.put("12|profiler|" + 'Found a TW. {} -> {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
+        if lasttw.get_endtime() >= flowtime and lasttw.get_starttime() < flowtime:
+            self.outputqueue.put("11|profiler|The flow is on the last time windows")
+            return lasttw
+        elif flowtime > lasttw.get_endtime():
+            # Then check if we are not a NEW tw
+            self.outputqueue.put("11|profiler|We need to create a new TW")
+            tw = TimeWindows(self.outputqueue, starttime, self.width)
+            self.time_windows[tw.get_endtime()] = tw
+            self.outputqueue.put("12|profiler|" + 'Create a TW. Starttime: {}, Endtime: {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
+            self.outputqueue.put("1|profiler|" + 'TW. {} -> {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
+            return tw
+        """
+        return twid
 
         # Then search for older tw
         #for tw in self.time_windows[:-2]:
@@ -331,6 +334,7 @@ class ProfilerProcess(multiprocessing.Process):
 
 
     def run(self):
+        # Main loop function
         try:
             while True:
                 # If the input communication queue is empty, just wait
