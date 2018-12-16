@@ -285,8 +285,13 @@ class ProfilerProcess(multiprocessing.Process):
         # For debugging Print profiles...
         # Get all previous info inside this profile, such as the width of the time window, etc.
         profileJSON = __database__.getProfileData(profileid)
-        print('Data of profile: {}:{}'.format(profileid,profileJSON))
-        print(__database__.getProfiles())
+        print('Data of profile: {}:{}'.format(profileid, profileJSON))
+        for profileid in __database__.getProfiles():
+            profileid = profileid.decode("utf-8") 
+            twid = __database__.getLastTWforProfile(profileid)
+            data = __database__.getTWProfileData(profileid, twid)
+            for ip in data:
+                print('\tDst IP: ' + ip.decode("utf-8"))
 
     def get_timewindow(self, flowtime, profileid):
         """" 
