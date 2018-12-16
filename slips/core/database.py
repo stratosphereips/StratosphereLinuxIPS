@@ -58,6 +58,14 @@ class Database(object):
         else:
             return False
 
+    def getTWProfileData(self, profileid, twid):
+        """
+        Get all the data for a specific TW for a specific profileid
+        """
+        if type(twid) == list:
+            twid = twid[0].decode("utf-8") 
+        return self.r.smembers(profileid + ':' + twid + ':' + 'DstIPs')
+
     def hasProfile(self, profileid):
         """ Check if we have the given profile """
         return self.r.sismember('profiles', profileid)
@@ -80,7 +88,7 @@ class Database(object):
             # Get the last twid and obtain the new tw id
             lastid = self.getLastTWforProfile(profileid)
             # Take it out of the list
-            if lastid != []:
+            if lastid == list() and lastid != []:
                 lastid = lastid[0].decode("utf-8") 
                 twid = 'timewindow' + str(int(lastid.split('timewindow')[1]) + 1)
             else:
@@ -103,28 +111,14 @@ class Database(object):
         Add the dstip to this tw in this profile
         """
         try:
-            twid = twid[0].decode("utf-8") 
-            self.r.sadd( profileid + ':' + twid + ':' + 'DstIPs' , daddr)
+            if type(twid) == list:
+                twid = twid[0].decode("utf-8") 
+            self.r.sadd( profileid + ':' + twid + ':' + 'DstIPs', daddr)
+            #self.r.sadd( profileid + ':' + twid + ':' + 'DstIPs', '1.1.1.1')
+            #print(self.getTWProfileData(profileid, twid))
         except Exception as inst:
             print('Error in add_dstips')
             print(inst)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
