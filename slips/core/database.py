@@ -1,13 +1,8 @@
 import redis
-
-"""
-Connection Pools
-Behind the scenes, redis-py uses a connection pool to manage connections to a Redis server. By default, each Redis instance you create will in turn create its own connection pool. You can override this behavior and use an existing connection pool by passing an already created connection pool instance to the connection_pool argument of the Redis class. You may choose to do this in order to implement client side sharding or have finer grain control of how connections are managed.
-
-pool = redis.ConnectionPool(host='localhost', port=6379, db=0)
-r = redis.Redis(connection_pool=pool)
-"""
-
+# delete these
+import time
+from datetime import datetime
+from datetime import timedelta
 
 # Struture of the DB
 # Set 'profile'
@@ -23,15 +18,29 @@ class Database(object):
         # For now, do not remember between runs of slips. Just delete the database when we start with flushdb
         self.r.flushdb()
 
-    def addProfile(self, profileid, starttime):
-        """ Add a new profile to the DB. Both the list of profiles and the hasmap of profile data"""
-        if not self.r.sismember('profiles', str(profileid)):
-            self.r.sadd('profiles', str(profileid))
-            self.r.hset(profileid, 'Starttime', starttime)
-            # For now duration of the TW is fixed
-            self.r.hset(profileid, 'duration', 60)
-            # The name of the list with the dstips
-            self.r.hset(profileid, 'DstIps', 'DstIps')
+    def addProfile(self, profileid, starttime, duration):
+        """ 
+        Add a new profile to the DB. Both the list of profiles and the hasmap of profile data
+        Profiles are stored in two structures. A list of profiles (index) and individual hashmaps for each profile (like a table)
+        """
+        try:
+            if not self.r.sismember('profiles', str(profileid)):
+                # Add the profile to the index. The index is called 'profiles'
+                self.r.sadd('profiles', str(profileid))
+                # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
+                self.r.hset(profileid, 'Starttime', starttime)
+                # For now duration of the TW is fixed
+                self.r.hset(profileid, 'duration', duration)
+                # The name of the list with the dstips
+                #self.r.hset(profileid, 'DstIps', 'DstIps')
+
+            # debugging
+            # Crate two fake tw
+            self.addNewTW(profileid, starttime, 60)
+            self.addNewTW(profileid, time.mktime(datetime.strptime('2015-07-26T10:12:53.784566', '%Y-%m-%dT%H:%M:%S.%f').timetuple()), 60)
+        except redis.exceptions.ResponseError as e:
+            print('Error in addProfile')
+            print(e)
 
     def getProfiles(self):
         """ Get a list of all the profiles """
@@ -59,14 +68,28 @@ class Database(object):
    
     def getLastTWforProfile(self, profileid):
         """ Return the last TW id for the given profile id """
-        return self.r.zrange('tws'+profileid, -1, -1)
+        # We add [0] at the end so we return a byte string and not a list
+        return self.r.zrange('tws' + profileid, -1, -1)
 
-    def addNewTW(self, profileid, twid, startoftw, width):
+    def addNewTW(self, profileid, startoftw, width):
         try:
-            """ Add the twid to the ordered set of a given profile """
-            self.r.zadd('tws'+profileid, float(startoftw), twid)
-            # Add this TW to the hasmap of profiles
-            self.r.hset(profileid, twid, 'Created')
+            """ 
+            Creates or adds a new timewindow to the list of tw for the given profile
+            Add the twid to the ordered set of a given profile 
+            """
+            # Get the last twid and obtain the new tw id
+            lastid = self.getLastTWforProfile(profileid)
+            # Take it out of the list
+            if lastid != []:
+                lastid = lastid[0].decode("utf-8") 
+                twid = 'timewindow' + str(int(lastid.split('timewindow')[1]) + 1)
+            else:
+                twid = 'timewindow1'
+            # Add the new TW to the index of TW
+            self.r.zadd('tws' + profileid, float(startoftw), twid)
+        except Exception as inst:
+            print('Error in AddNewTW')
+            print(inst)
         except redis.exceptions.ResponseError as e:
             print('Error in addNewTW')
             print(e)
@@ -74,6 +97,39 @@ class Database(object):
     def getAmountTW(self, profileid):
         """ Return the amount of tw for this profile id """
         return self.r.zcard('tws'+profileid)
+
+    def add_dstips(self, profileid, twid, daddr):
+        """
+        Add the dstip to this tw in this profile
+        """
+        try:
+            twid = twid[0].decode("utf-8") 
+            self.r.sadd( profileid + ':' + twid + ':' + 'DstIPs' , daddr)
+        except Exception as inst:
+            print('Error in add_dstips')
+            print(inst)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
