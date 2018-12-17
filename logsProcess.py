@@ -1,3 +1,6 @@
+# This file takes care of creating the log files with information
+# Every X amount of time it goes to the database and reports
+
 import multiprocessing
 import sys
 from datetime import datetime
@@ -23,8 +26,8 @@ class LogsProcess(multiprocessing.Process):
 
     def run(self):
         try:
-            # Before going into a loop
             # Create our main output folder. The current datetime with microseconds
+            # TODO. Do not create the folder if there is no data? (not sure how to)
             self.mainfoldername = datetime.now().strftime('%Y-%m-%d--%H:%M:%s')
             if not os.path.exists(self.mainfoldername):
                     os.makedirs(self.mainfoldername)
@@ -68,24 +71,61 @@ class LogsProcess(multiprocessing.Process):
             print(inst)
             sys.exit(1)
 
-    def process_global_data(self):
-        """ Read the global data and output it on logs """
+    def createProfileFolder(self, profileid):
+        """
+        Receive a profile id, create a folder if its not there. Create the log files.
+        """
+        # Profileid is like 'profile:10.0.0.2'
+        profilefolder = profileid.split('|')[1]
+        if not os.path.exists(profilefolder):
+            os.makedirs(profilefolder)
+            self.addDataToProfileLog(profileid, 'Profileid : ' + profileid)
+
+    def addDataToProfileLog(self, profileid, data):
+        """
+        Receive data and append it in the general log of this profile
+        """
         try:
-            #print('doing...')
+            # go into the folder
+            profilefolder = profileid.split('|')[1]
+            os.chdir(profilefolder)
+            file = open('data', 'a+')
+            file.write(data + '\n')
+            file.flush()
+            file.close()
+            os.chdir('..')
+        except Exception as inst:
+            print('\tProblem with addDataToProfileLog in logsProcess()')
+            print(type(inst))
+            print(inst.args)
+            print(inst)
+            sys.exit(1)
+
+    def process_global_data(self):
+        """ 
+        This is the main function called by the timer process
+        Read the global data and output it on logs 
+        """
+        try:
             # Get the list of profiles so far
             temp_profs = __database__.getProfiles()
             if not temp_profs:
                 return True
             profiles = list(temp_profs)
-            #self.outputqueue.put('1|logs|Profiles: ' + profiles)
             profilesLen = str(__database__.getProfilesLen())
             self.outputqueue.put('1|logs|# of Profiles: ' + profilesLen)
             # For each profile, get the amount of tw
-            for pname in profiles:
-                profilename = pname.decode('utf-8')
-                twLen = str(__database__.getAmountTW(profilename))
-                self.outputqueue.put('2|logs|Profile: ' + profilename + '. ' + twLen + ' timewindows')
-
+            for profileid in profiles:
+                profileid = profileid.decode('utf-8')
+                # Create the folder for this profile
+                self.createProfileFolder(profileid)
+                # Send data to this profile log
+                twLen = str(__database__.getAmountTW(profileid))
+                self.outputqueue.put('2|logs|Profile: ' + profileid + '. ' + twLen + ' timewindows')
+                twid = __database__.getLastTWforProfile(profileid)
+                twdata = __database__.getTWProfileDstIPs(profileid, twid)
+                for ip in twdata:
+                    self.outputqueue.put('2|logs|\tDstIP: ' + ip.decode("utf-8"))
         except KeyboardInterrupt:
             return True
         except Exception as inst:
