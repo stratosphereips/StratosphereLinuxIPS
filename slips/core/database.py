@@ -51,14 +51,25 @@ class Database(object):
             return False
 
     def getProfileData(self, profileid):
-        """ Get all the data for this particular profile """
+        """ Get all the data for this particular profile.
+        Returns:
+        A json formated representation of the hashmap with all the data of the profile
+            
+        """
         profile = self.r.hgetall(profileid)
         if profile != set():
             return profile
         else:
             return False
 
-    def getTWProfileDstIPs(self, profileid, twid):
+    def getTWsfromProfile(self, profileid):
+        """
+        Receives a profile id and returns the list of all the TW in that profile
+
+        """
+        return self.r.zrange('tws' + profileid, 0, -1, withscores=True)
+
+    def getDstIPsfromProfileTW(self, profileid, twid):
         """
         Get all the data for a specific TW for a specific profileid
         """
