@@ -79,6 +79,7 @@ class LogsProcess(multiprocessing.Process):
         profilefolder = profileid.split('|')[1]
         if not os.path.exists(profilefolder):
             os.makedirs(profilefolder)
+            # If we create the folder, add once there the profileid
             self.addDataToProfileLog(profileid, 'Profileid : ' + profileid)
 
     def addDataToProfileLog(self, profileid, data):
@@ -101,31 +102,58 @@ class LogsProcess(multiprocessing.Process):
             print(inst)
             sys.exit(1)
 
+    def addDataToTWLogofProfile(self, profileid, twlog, data):
+        """
+        Receive data and append it in the log of this tw in this profile this profile
+        """
+        try:
+            # go into the profile folder
+            profilefolder = profileid.split('|')[1]
+            os.chdir(profilefolder)
+            file = open(twlog, 'a+')
+            file.write(data + '\n')
+            file.flush()
+            file.close()
+            os.chdir('..')
+        except Exception as inst:
+            print('\tProblem with addDataToTWLogofProfile in logsProcess()')
+            print(type(inst))
+            print(inst.args)
+            print(inst)
+            sys.exit(1)
+
     def process_global_data(self):
         """ 
         This is the main function called by the timer process
         Read the global data and output it on logs 
         """
         try:
-            # Get the list of profiles so far
+            #1. Get the list of profiles so far
             temp_profs = __database__.getProfiles()
             if not temp_profs:
                 return True
             profiles = list(temp_profs)
+            # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             self.outputqueue.put('1|logs|# of Profiles: ' + profilesLen)
-            # For each profile, get the amount of tw
+            # For each profile, get the tw
             for profileid in profiles:
                 profileid = profileid.decode('utf-8')
-                # Create the folder for this profile
+                # Create the folder for this profile if it doesn't exist
                 self.createProfileFolder(profileid)
-                # Send data to this profile log
                 twLen = str(__database__.getAmountTW(profileid))
                 self.outputqueue.put('2|logs|Profile: ' + profileid + '. ' + twLen + ' timewindows')
-                twid = __database__.getLastTWforProfile(profileid)
-                twdata = __database__.getTWProfileDstIPs(profileid, twid)
-                for ip in twdata:
-                    self.outputqueue.put('2|logs|\tDstIP: ' + ip.decode("utf-8"))
+                # For each TW in this profile
+                TWforProfile = __database__.getTWsfromProfile(profileid)
+                for (twid, twtime) in TWforProfile:
+                    twid = twid.decode("utf-8")
+                    twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
+                    twlog = twid + '.' + twtime
+                    # Add data into profile log
+                    twdata = __database__.getDstIPsfromProfileTW(profileid, twid)
+                    for ip in twdata:
+                        self.addDataToTWLogofProfile(profileid, twlog, 'DstIP: '+ ip.decode("utf-8"))
+                        self.outputqueue.put('2|logs|\tDstIP: ' + ip.decode("utf-8"))
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -134,8 +162,6 @@ class LogsProcess(multiprocessing.Process):
             print(inst.args)
             print(inst)
             sys.exit(1)
-
-
 
 
 class TimerThread(threading.Thread):
