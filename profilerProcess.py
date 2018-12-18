@@ -282,17 +282,6 @@ class ProfilerProcess(multiprocessing.Process):
         # - DstIPs
         __database__.add_dstips(profileid, twid, daddr)
 
-        # For debugging Print profiles...
-        # Get all previous info inside this profile, such as the width of the time window, etc.
-        #profileJSON = __database__.getProfileData(profileid)
-        #print('Data of profile: {}:{}'.format(profileid, profileJSON))
-        #for profileid in __database__.getProfiles():
-            #profileid = profileid.decode("utf-8") 
-            #twid = __database__.getLastTWforProfile(profileid)
-            #data = __database__.getTWProfileDstIPs(profileid, twid)
-            #for ip in data:
-                #print('\tDst IP: ' + ip.decode("utf-8"))
-
     def get_timewindow(self, flowtime, profileid):
         """" 
         This function should get the id of the TW in the database where the flow belong.
