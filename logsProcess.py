@@ -9,7 +9,17 @@ import os
 import threading
 import time
 from slips.core.database import __database__
+import configparser
 
+def timing(f):
+    """ Function to measure the time another function takes. It should be used as decorator: @timing"""
+    def wrap(*args):
+        time1 = time.time()
+        ret = f(*args)
+        time2 = time.time()
+        print('function took {:.3f} ms'.format((time2-time1)*1000.0))
+        return ret
+    return wrap
 
 # Logs output Process
 class LogsProcess(multiprocessing.Process):
@@ -20,9 +30,19 @@ class LogsProcess(multiprocessing.Process):
         self.debug = debug
         self.config = config
         # From the config, read the timeout to read logs. Now defaults to 5 seconds
-        self.read_timeout = 5
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
+        # Read the configuration
+        self.read_configuration()
+
+    def read_configuration(self):
+        """ Read the configuration file for what we need """
+        # Get the time of log report
+        try:
+            self.report_time = int(self.config.get('parameters', 'log_report_time'))
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.report_time = 5
 
     def run(self):
         try:
@@ -37,7 +57,7 @@ class LogsProcess(multiprocessing.Process):
             # Process the data with different strategies
             # Strategy 1: Every X amount of time
             # Create a timer to process the data every X seconds
-            timer = TimerThread(self.read_timeout, self.process_global_data)
+            timer = TimerThread(self.report_time, self.process_global_data)
             timer.start()
 
             while True:
@@ -79,48 +99,24 @@ class LogsProcess(multiprocessing.Process):
         profilefolder = profileid.split('|')[1]
         if not os.path.exists(profilefolder):
             os.makedirs(profilefolder)
-            # If we create the folder, add once there the profileid
-            self.addDataToProfileLog(profileid, 'Profileid : ' + profileid)
+            # If we create the folder, add once there the profileid. We have to do this here if we want to do it once.
+            self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Profileid : ' + profileid)
+        return profilefolder
 
-    def addDataToProfileLog(self, profileid, data):
+    def addDataToFile(self, filename, data):
         """
         Receive data and append it in the general log of this profile
+        If the filename was not opened yet, then open it, write the data and return the file object.
+        Do not close the file
         """
         try:
-            # go into the folder
-            profilefolder = profileid.split('|')[1]
-            os.chdir(profilefolder)
-            file = open('data', 'a+')
-            file.write(data + '\n')
-            file.flush()
-            file.close()
-            os.chdir('..')
-        except Exception as inst:
-            print('\tProblem with addDataToProfileLog in logsProcess()')
-            print(type(inst))
-            print(inst.args)
-            print(inst)
-            sys.exit(1)
-
-    def addDataToTWLogofProfile(self, profileid, twlog, data):
-        """
-        Receive data and append it in the log of this tw in this profile this profile
-        """
-        try:
-            # go into the profile folder
-            profilefolder = profileid.split('|')[1]
-            os.chdir(profilefolder)
-            file = open(twlog, 'a+')
-            file.write(data + '\n')
-            file.flush()
-            file.close()
-            os.chdir('..')
-        except Exception as inst:
-            print('\tProblem with addDataToTWLogofProfile in logsProcess()')
-            print(type(inst))
-            print(inst.args)
-            print(inst)
-            sys.exit(1)
+            filename.write(data + '\n')
+            return filename
+        except (NameError, AttributeError) as e:
+            # The file was not opened
+            fileobj = open(filename, 'a+')
+            fileobj.write(data + '\n')
+            return fileobj
 
     def process_global_data(self):
         """ 
@@ -128,6 +124,7 @@ class LogsProcess(multiprocessing.Process):
         Read the global data and output it on logs 
         """
         try:
+            print('Start: ' + str(datetime.now()))
             #1. Get the list of profiles so far
             temp_profs = __database__.getProfiles()
             if not temp_profs:
@@ -135,25 +132,29 @@ class LogsProcess(multiprocessing.Process):
             profiles = list(temp_profs)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
+            # Debug
             self.outputqueue.put('1|logs|# of Profiles: ' + profilesLen)
             # For each profile, get the tw
             for profileid in profiles:
                 profileid = profileid.decode('utf-8')
                 # Create the folder for this profile if it doesn't exist
-                self.createProfileFolder(profileid)
+                profilefolder = self.createProfileFolder(profileid)
                 twLen = str(__database__.getAmountTW(profileid))
                 self.outputqueue.put('2|logs|Profile: ' + profileid + '. ' + twLen + ' timewindows')
                 # For each TW in this profile
                 TWforProfile = __database__.getTWsfromProfile(profileid)
                 for (twid, twtime) in TWforProfile:
+                    #print('6: ' + str(datetime.now()))
                     twid = twid.decode("utf-8")
                     twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
-                    twlog = twid + '.' + twtime
+                    twlog = twtime + '.' + twid
                     # Add data into profile log
                     twdata = __database__.getDstIPsfromProfileTW(profileid, twid)
+                    #print('7: ' + str(datetime.now()))
                     for ip in twdata:
-                        self.addDataToTWLogofProfile(profileid, twlog, 'DstIP: '+ ip.decode("utf-8"))
+                        self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: '+ ip.decode("utf-8"))
                         self.outputqueue.put('2|logs|\tDstIP: ' + ip.decode("utf-8"))
+                    #print('8: ' + str(datetime.now()))
         except KeyboardInterrupt:
             return True
         except Exception as inst:
