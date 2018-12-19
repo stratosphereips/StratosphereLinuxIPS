@@ -22,15 +22,15 @@ class ProfilerProcess(multiprocessing.Process):
         self.timeformat = ''
         # Read the configuration
         self.read_configuration()
-        # Get the home net if we have one from the config
-        try:
-            self.home_net = ipaddress.ip_network(config.get('parameters', 'home_network'))
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.home_net = False
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
+        # Get the home net if we have one from the config
+        try:
+            self.home_net = ipaddress.ip_network(self.config.get('parameters', 'home_network'))
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.home_net = False
         # Get the time window width, if it was not specified as a parameter 
         if self.width == None:
             try:
@@ -281,7 +281,12 @@ class ProfilerProcess(multiprocessing.Process):
             saddr_as_obj = ipaddress.IPv4Address(saddr) 
             # Is ipv4
         except ipaddress.AddressValueError:
-            saddr_as_obj = ipaddress.IPv6Address(saddr) 
+            # Is it ipv6?
+            try:
+                saddr_as_obj = ipaddress.IPv6Address(saddr) 
+            except ipaddress.AddressValueError:
+                # Its a mac
+                return False
 
         if self.home_net and saddr_as_obj in self.home_net:
             # The steps for adding a flow in a profile should be
