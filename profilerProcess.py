@@ -7,6 +7,7 @@ from collections import OrderedDict
 import configparser
 from slips.core.database import __database__
 import time
+import ipaddress
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -21,6 +22,12 @@ class ProfilerProcess(multiprocessing.Process):
         self.timeformat = ''
         # Read the configuration
         self.read_configuration()
+        # Get the home net if we have one from the config
+        try:
+            self.home_net = ipaddress.ip_network(config.get('parameters', 'home_network'))
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.home_net = False
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -269,18 +276,40 @@ class ProfilerProcess(multiprocessing.Process):
         daddr = columns['daddr']
         profileid = 'profile|' + str(saddr)
         starttime = time.mktime(columns['starttime'].timetuple())
+        # In the future evaluate
+        try:
+            saddr_as_obj = ipaddress.IPv4Address(saddr) 
+            # Is ipv4
+        except ipaddress.AddressValueError:
+            saddr_as_obj = ipaddress.IPv6Address(saddr) 
 
-        # The steps for adding a flow in a profile should be
-        # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
-        # The width is unique for all the timewindow in this profile
-        __database__.addProfile(profileid, starttime, self.width)
+        if self.home_net and saddr_as_obj in self.home_net:
+            # The steps for adding a flow in a profile should be
+            # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
+            # The width is unique for all the timewindow in this profile
+            __database__.addProfile(profileid, starttime, self.width)
 
-        # 3. For this profile, find the id in the databse of the tw where the flow belongs.
-        twid = self.get_timewindow(starttime, profileid)
+            # 3. For this profile, find the id in the databse of the tw where the flow belongs.
+            twid = self.get_timewindow(starttime, profileid)
 
-        # 4. Put information from the flow in this tw for this profile
-        # - DstIPs
-        __database__.add_dstips(profileid, twid, daddr)
+            # 4. Put information from the flow in this tw for this profile
+            # - DstIPs
+            __database__.add_dstips(profileid, twid, daddr)
+        elif self.home_net and saddr_as_obj not in self.home_net:
+            # Here we should pick up the profile of the dstip, and add this as being 'received' by our saddr
+            pass
+        elif not self.home_net:
+            # The steps for adding a flow in a profile should be
+            # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
+            # The width is unique for all the timewindow in this profile
+            __database__.addProfile(profileid, starttime, self.width)
+
+            # 3. For this profile, find the id in the databse of the tw where the flow belongs.
+            twid = self.get_timewindow(starttime, profileid)
+
+            # 4. Put information from the flow in this tw for this profile
+            # - DstIPs
+            __database__.add_dstips(profileid, twid, daddr)
 
     def get_timewindow(self, flowtime, profileid):
         """" 
