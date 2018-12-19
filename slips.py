@@ -33,11 +33,6 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In minutes. Defaults to 60.', action='store', default=60, required=False, type=int)
     parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
-    parser.add_argument('-D', '--dontdetect', help='Dont detect the malicious behavior in the flows using the models. Just print the connections.', default=False, action='store_true', required=False)
-    parser.add_argument('-f', '--folder', help='Folder with models to apply for detection.', action='store', required=False)
-    parser.add_argument('-s', '--sound', help='Play a small sound when a periodic connections is found.', action='store_true', default=False, required=False)
-    parser.add_argument('-t', '--threshold', help='Threshold for detection with IPHandler', action='store', default=0.002, required=False, type=float)
-    parser.add_argument('-S', '--sdw_width', help='Width of sliding window. The unit is in \time windows\'. So a -S 10 and a -w 5, means a sliding window of 50 minutes.', action='store', default=10, required=False, type=int)
     parser.add_argument('-W','--whitelist',help="File with the IP addresses to whitelist. One per line.",action='store',required=False)
     parser.add_argument('-r', '--filepath', help='Path to the binetflow file to be read.', required=False)
     parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
@@ -48,7 +43,7 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     try:
         with open(args.config) as source:
-            config.readfp(source)
+            config.read_file(source)
     except IOError:
         pass
     except TypeError:
