@@ -4,10 +4,22 @@ import time
 from datetime import datetime
 from datetime import timedelta
 
+
 # Struture of the DB
 # Set 'profile'
 #  Holds a set of all profile ids
 # For each profile, there is a set for the timewindows. The name of the sets is the names of profiles
+
+
+def timing(f):
+    """ Function to measure the time another function takes."""
+    def wrap(*args):
+        time1 = time.time()
+        ret = f(*args)
+        time2 = time.time()
+        print('function took {:.3f} ms'.format((time2-time1)*1000.0))
+        return ret
+    return wrap
 
 class Database(object):
     """ Database object management """
