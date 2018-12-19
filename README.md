@@ -4,7 +4,8 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
 ## Install
 
 ### Dependencies
-
+- python3.6 or greater
+- Be sure that you install the redis libraries for your python3 version. This can be done with pip3, but your 'python3' executable in your path should point to the version of python you are using, such as python3.7
 - py37-redis
     
 
