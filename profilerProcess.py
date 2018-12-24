@@ -327,37 +327,44 @@ class ProfilerProcess(multiprocessing.Process):
         -- Returns the time window id
         """
         try:
-            # First check of we are not in the last TW
+            # First check of we are not in the last TW. Since this will be the majority of cases
             try:
-                [(lasttw, lasttw_time)] = __database__.getLastTWforProfile(profileid)
+                [(lasttw, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
                 lasttw = lasttw.decode("utf-8")
+                lasttw_start_time = float(lasttw_start_time)
+                lasttw_end_time = lasttw_start_time + float(self.width)
+                flowtime = float(flowtime)
                 # There was a last TW, so check if the current flow belongs here.
-                twid = lasttw
+                self.outputqueue.put("11|profiler|LasttwStart {}, lasttwEnd {}, Flowtime {}".format(lasttw_start_time, lasttw_end_time, flowtime))
+                if lasttw_end_time > flowtime and lasttw_start_time <= flowtime:
+                    self.outputqueue.put("11|profiler|The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time))
+                    twid = lasttw
+                elif lasttw_end_time <= flowtime:
+                    # The flow was not in the last TW, its NEWER than it
+                    self.outputqueue.put("11|profiler|The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time))
+                    amount_of_new_tw = int(flowtime / self.width)
+                    self.outputqueue.put("11|profiler|Create {} TW".format(amount_of_new_tw))
+                    temp_end = lasttw_end_time
+                    for id in range(1, amount_of_new_tw + 1):
+                        new_start = temp_end 
+                        twid = __database__.addNewTW(profileid, new_start, self.width)
+                        temp_end = new_start + self.width
+                    # Now get the id of the last TW so we can return it
+                elif lasttw_start_time > flowtime:
+                    # The flow was not in the last TW, its OLDER that it
+                    self.outputqueue.put("11|profiler|The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time))
+                    amount_of_new_tw = int(flowtime / self.width)
+                    twid = '0'
             except ValueError:
                 # There is no last tw. So create the first TW
-                startoftw = flowtime
-                twid = '1'
+                startoftw = float(flowtime)
                 # Add this TW, of this profile, to the DB
-                __database__.addNewTW(profileid, startoftw, self.width)
-
-            """
-            # We have the last TW
-            self.outputqueue.put("12|profiler|" + 'Found a TW. {} -> {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
-            if lasttw.get_endtime() >= flowtime and lasttw.get_starttime() < flowtime:
-                self.outputqueue.put("11|profiler|The flow is on the last time windows")
-                return lasttw
-            elif flowtime > lasttw.get_endtime():
-                # Then check if we are not a NEW tw
-                self.outputqueue.put("11|profiler|We need to create a new TW")
-                tw = TimeWindows(self.outputqueue, starttime, self.width)
-                self.time_windows[tw.get_endtime()] = tw
-                self.outputqueue.put("12|profiler|" + 'Create a TW. Starttime: {}, Endtime: {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
-                self.outputqueue.put("1|profiler|" + 'TW. {} -> {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
-                return tw
-            """
+                twid = __database__.addNewTW(profileid, startoftw, self.width)
+                self.outputqueue.put("11|profiler|First TW created for profile {}.".format(profileid))
             return twid
-        except IndexError:
+        except Exception as e:
             print('Error in get_timewindow()')
+            print(e)
 
 
     def run(self):
