@@ -155,7 +155,7 @@ class LogsProcess(multiprocessing.Process):
                         # Mark it as not modified anymore
                         __database__.markProfileTWAsNotModified(profileid, twid)
                         for ip in twdata:
-                            self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: '+ ip.decode("utf-8"))
+                            self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: '+ ip.decode("utf-8"), mode='a+')
                             self.outputqueue.put('2|logs|\tDstIP: ' + ip.decode("utf-8"))
         except KeyboardInterrupt:
             return True
