@@ -288,6 +288,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # Its a mac
                 return False
 
+        # Check if the ip received is part of our home network. We only crate profiles for our home network
         if self.home_net and saddr_as_obj in self.home_net:
             # The steps for adding a flow in a profile should be
             # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
@@ -301,9 +302,11 @@ class ProfilerProcess(multiprocessing.Process):
             # - DstIPs
             __database__.add_dstips(profileid, twid, daddr)
         elif self.home_net and saddr_as_obj not in self.home_net:
-            # Here we should pick up the profile of the dstip, and add this as being 'received' by our saddr
+            # The src ip is not in our home net
+            # Here we should pick up the profile of the dstip, and add this as being 'received' by our saddr. TODO
             pass
         elif not self.home_net:
+            # We don't have a home net, so create profiles for everyone
             # The steps for adding a flow in a profile should be
             # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
             # The width is unique for all the timewindow in this profile
@@ -325,17 +328,17 @@ class ProfilerProcess(multiprocessing.Process):
         """
         try:
             # First check of we are not in the last TW
-            lasttw = __database__.getLastTWforProfile(profileid)
-            if lasttw:
+            try:
+                [(lasttw, lasttw_time)] = __database__.getLastTWforProfile(profileid)
+                lasttw = lasttw.decode("utf-8")
                 # There was a last TW, so check if the current flow belongs here.
                 twid = lasttw
-                pass
-            elif not lasttw:
-                # There was no last TW. Create the first one
+            except ValueError:
+                # There is no last tw. So create the first TW
                 startoftw = flowtime
+                twid = '1'
                 # Add this TW, of this profile, to the DB
                 __database__.addNewTW(profileid, startoftw, self.width)
-            # For now always use the lasttw, we need to put the logic here later
 
             """
             # We have the last TW
