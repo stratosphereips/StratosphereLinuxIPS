@@ -48,8 +48,8 @@ class Database(object):
 
             # debugging
             # Crate two fake tw
-            self.addNewTW(profileid, starttime, 60)
-            self.addNewTW(profileid, time.mktime(datetime.strptime('2015-07-26T10:12:53.784566', '%Y-%m-%dT%H:%M:%S.%f').timetuple()), 60)
+            #self.addNewTW(profileid, starttime, 60)
+            #self.addNewTW(profileid, time.mktime(datetime.strptime('2015-07-26T10:12:53.784566', '%Y-%m-%dT%H:%M:%S.%f').timetuple()), 60)
         except redis.exceptions.ResponseError as e:
             print('Error in addProfile')
             print(e)
@@ -98,26 +98,30 @@ class Database(object):
         return self.r.scard('profiles') 
    
     def getLastTWforProfile(self, profileid):
-        """ Return the last TW id for the given profile id """
+        """ Return the last TW id and the time for the given profile id """
         # We add [0] at the end so we return a byte string and not a list
-        return self.r.zrange('tws' + profileid, -1, -1)
+        return self.r.zrange('tws' + profileid, -1, -1, withscores=True)
 
     def addNewTW(self, profileid, startoftw, width):
         try:
             """ 
             Creates or adds a new timewindow to the list of tw for the given profile
             Add the twid to the ordered set of a given profile 
+            Return the id of the timewindow just created
             """
             # Get the last twid and obtain the new tw id
-            lastid = self.getLastTWforProfile(profileid)
-            # Take it out of the list
-            if lastid == list() and lastid != []:
-                lastid = lastid[0].decode("utf-8") 
+            try:
+                (lastid, lastid_time) = self.getLastTWforProfile(profileid)[0]
+                # We have a last id
+                lastid = lastid.decode("utf-8") 
+                # Increment it
                 twid = 'timewindow' + str(int(lastid.split('timewindow')[1]) + 1)
-            else:
+            except IndexError:
+                # There is no first TW, create it
                 twid = 'timewindow1'
             # Add the new TW to the index of TW
             self.r.zadd('tws' + profileid, float(startoftw), twid)
+            return twid
         except Exception as inst:
             print('Error in AddNewTW')
             print(inst)
@@ -129,6 +133,10 @@ class Database(object):
         """ Return the amount of tw for this profile id """
         return self.r.zcard('tws'+profileid)
 
+    def wasProfileTWModified(self, profileid, twid):
+        """ Retrieve from the db if this TW of this profile was modified """
+        return self.r.smembers(profileid + '|' + twid + '|' + 'Modified')
+
     def add_dstips(self, profileid, twid, daddr):
         """
         Add the dstip to this tw in this profile
@@ -137,8 +145,8 @@ class Database(object):
             if type(twid) == list:
                 twid = twid[0].decode("utf-8") 
             self.r.sadd( profileid + '|' + twid + '|' + 'DstIPs', daddr)
-            #self.r.sadd( profileid + '|' + twid + '|' + 'DstIPs', '1.1.1.1')
-            #print(self.getTWProfileData(profileid, twid))
+            # Save in the profile that it was modified, so we know we should report on this
+            self.r.sadd( profileid + '|' + twid + '|' + 'Modified', 'True')
         except Exception as inst:
             print('Error in add_dstips')
             print(inst)
