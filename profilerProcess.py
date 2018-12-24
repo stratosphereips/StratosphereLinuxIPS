@@ -338,7 +338,7 @@ class ProfilerProcess(multiprocessing.Process):
                 lasttw_end_time = lasttw_start_time + float(self.width)
                 flowtime = float(flowtime)
                 # There was a last TW, so check if the current flow belongs here.
-                self.outputqueue.put("11|profiler|LasttwStart {}, lasttwEnd {}, Flowtime {}".format(lasttw_start_time, lasttw_end_time, flowtime))
+                #self.outputqueue.put("11|profiler|LasttwStart {}, lasttwEnd {}, Flowtime {}".format(lasttw_start_time, lasttw_end_time, flowtime))
                 if lasttw_end_time > flowtime and lasttw_start_time <= flowtime:
                     self.outputqueue.put("11|profiler|The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time))
                     twid = lasttw
@@ -399,65 +399,3 @@ class ProfilerProcess(multiprocessing.Process):
             self.outputqueue.put("10|profiler|"+str(inst.args))
             self.outputqueue.put("10|profiler|"+str(inst))
             sys.exit(1)
-
-
-class IPProfile(object):
-    """ A Class for managing the complete profile of an IP. Including the TimeWindows""" 
-    def __init__(self, outputqueue, ip, width, timeformat):
-        self.ip = ip
-        self.width = width
-        self.outputqueue = outputqueue
-        self.timeformat = timeformat
-        # Some features belong to the IP as a whole. Some features belong to an individual time window. 
-        # Also the time windows can be of any length, including 'infinite' which means one time window in the complete capture.
-        self.dst_ips = OrderedDict()
-        self.dst_nets = OrderedDict()
-        self.time_windows = OrderedDict()
-        # Debug data
-        self.outputqueue.put("1|profiler|" + 'A new Profile was created for the IP {}, with time window width {}'.format(self.ip, self.width))
-
-    def add_flow(self, columns):
-        """  
-        This should be the first, and probably only, function to be called in this object
-        Receive the columns of a flow and manage all the data and insertions 
-        """
-        # Extract the features that belong to the IP profile
-        # Extract the features that belong to the current TW
-        tw = self.get_timewindow(columns['starttime'])
-        #tw.add_flow(columns)
-        # Add the destination IP to this IP profile
-        self.dst_ips[columns['daddr']] = ''
-
-    def get_timewindow(self, flowtime):
-        """" 
-        This function should get or create the time windows need, accordingly to the current time of the flow
-        Returns the time window object
-        """
-        #self.outputqueue.put("12|profiler|\n##########################")
-        self.outputqueue.put("4|profiler|" + 'Current time of the flow: {}'.format(flowtime))
-        # First check of we are not in the last TW
-        try:
-            lasttw = self.time_windows[list(self.time_windows.keys())[-1]]
-            # We have the last TW
-            self.outputqueue.put("12|profiler|" + 'Found a TW. {} -> {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
-            if lasttw.get_endtime() >= flowtime and lasttw.get_starttime() < flowtime:
-                self.outputqueue.put("11|profiler|The flow is on the last time windows")
-                return lasttw
-            elif flowtime > lasttw.get_endtime():
-                # Then check if we are not a NEW tw
-                self.outputqueue.put("11|profiler|We need to create a new TW")
-                tw = TimeWindows(self.outputqueue, starttime, self.width)
-                self.time_windows[tw.get_endtime()] = tw
-                self.outputqueue.put("12|profiler|" + 'Create a TW. Starttime: {}, Endtime: {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
-                self.outputqueue.put("1|profiler|" + 'TW. {} -> {}'.format(lasttw.get_starttime(),lasttw.get_endtime()))
-                return tw
-        except IndexError:
-            # There are no TW yet. Create the first 
-            self.outputqueue.put("12|profiler|\n-> There was no first TW. Creating one")
-            ntw = TimeWindows(self.outputqueue, flowtime, self.width)
-            self.outputqueue.put("12|profiler|\n-> Created")
-            self.time_windows[ntw.get_endtime()] = ntw
-            self.outputqueue.put("12|profiler|" + 'Create the first TW. Starttime: {}, Endtime: {}'.format(ntw.get_starttime(),ntw.get_endtime()))
-            self.outputqueue.put("1|profiler|" + 'TW. {} -> {}'.format(ntw.get_starttime(),ntw.get_endtime()))
-            return ntw
-
