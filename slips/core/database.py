@@ -121,6 +121,8 @@ class Database(object):
                 twid = 'timewindow1'
             # Add the new TW to the index of TW
             self.r.zadd('tws' + profileid, float(startoftw), twid)
+            # Mark the TW as modified
+            self.r.set(profileid + '|' + twid + '|' + 'Modified', '1')
             return twid
         except Exception as inst:
             print('Error in AddNewTW')
@@ -135,7 +137,12 @@ class Database(object):
 
     def wasProfileTWModified(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
-        return self.r.smembers(profileid + '|' + twid + '|' + 'Modified')
+        data = self.r.get(profileid + '|' + twid + '|' + 'Modified')
+        return bool(int(data.decode("utf-8")))
+
+    def markProfileTWAsNotModified(self, profileid, twid):
+        """ Mark a TW in a profile as not modified """
+        self.r.set( profileid + '|' + twid + '|' + 'Modified', '0')
 
     def add_dstips(self, profileid, twid, daddr):
         """
@@ -146,7 +153,7 @@ class Database(object):
                 twid = twid[0].decode("utf-8") 
             self.r.sadd( profileid + '|' + twid + '|' + 'DstIPs', daddr)
             # Save in the profile that it was modified, so we know we should report on this
-            self.r.sadd( profileid + '|' + twid + '|' + 'Modified', 'True')
+            self.r.set(profileid + '|' + twid + '|' + 'Modified', '1')
         except Exception as inst:
             print('Error in add_dstips')
             print(inst)
