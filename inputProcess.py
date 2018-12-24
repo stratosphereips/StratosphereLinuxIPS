@@ -14,6 +14,7 @@ class InputProcess(multiprocessing.Process):
 
     def run(self):
         try:
+            lines = 0
             # Check if the input its a file or stdinput
             if type(self.datainput) == str:
                 # Its a File
@@ -27,6 +28,7 @@ class InputProcess(multiprocessing.Process):
                     if self.inputqueue.empty():
                         # Send the line to the profiler
                         self.profilerqueue.put(line)
+                        lines += 1
                         try:
                             line  = filed.readline()
                         except EOFError:
@@ -36,6 +38,7 @@ class InputProcess(multiprocessing.Process):
                         line = self.inputqueue.get()
                         if 'stop' == line:
                             print('Stopping Input Process')
+                            print('Sent {} lines'.format(lines))
                             return True
                 # Now this is disable because the output does not know how to handle a 'stop' while still receiving lines. We don't know how to wait a little for
                 # the input to finish
@@ -44,20 +47,28 @@ class InputProcess(multiprocessing.Process):
                 #    self.outputqueue.put("stop")
             else:
                 # The input is not str, so it may/should be standard input
+                lines = 0
                 while True:
                     if self.inputqueue.empty():
                         # While the communication queue is empty, we can read from the file/input
                         for line in self.datainput:
+                            self.outputqueue.put("10|input|Sent Line: {}".format(line))
                             self.profilerqueue.put(line)
+                            lines += 1
                     else:
                         # The communication queue is not empty process
                         line = self.inputqueue.get()
                         if 'stop' == line:
+                            print('Sent {} lines'.format(lines))
                             print('Stopping Input Process')
                             return True
         except KeyboardInterrupt:
+            print('Sent {} lines'.format(lines))
+            print('Stopping Input Process')
             return True
         except Exception as inst:
+            print('Sent {} lines'.format(lines))
+            print('Stopping Input Process')
             print('\tProblem with Input Process()')
             print(type(inst))
             print(inst.args)
