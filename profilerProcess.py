@@ -375,6 +375,7 @@ class ProfilerProcess(multiprocessing.Process):
     def run(self):
         # Main loop function
         try:
+            rec_lines = 0
             while True:
                 # If the input communication queue is empty, just wait
                 if self.inputqueue.empty():
@@ -384,16 +385,22 @@ class ProfilerProcess(multiprocessing.Process):
                     line = self.inputqueue.get()
                     if 'stop' == line:
                         self.outputqueue.put("10|profiler|Stopping Profiler Process.")
+                        print('Received {} lines'.format(rec_lines))
                         return True
                     else:
                         # Received new input data
                         # Extract the columns smartly
+                        self.outputqueue.put("10|profiler|Received Line: {}".format(line))
                         if self.process_columns(line):
                             # Add the flow to the profile
                             self.add_flow_to_profile(self.column_values)
+                            rec_lines += 1
+            BIG PROBLEM... WE ARE NOT RECEIVEING ALL LINES HERE???? 
         except KeyboardInterrupt:
+            print('Received {} lines'.format(rec_lines))
             return True
         except Exception as inst:
+            print('Received {} lines'.format(rec_lines))
             self.outputqueue.put("10|profiler|\tProblem with Profiler Process.")
             self.outputqueue.put("10|profiler|"+str(type(inst)))
             self.outputqueue.put("10|profiler|"+str(inst.args))
