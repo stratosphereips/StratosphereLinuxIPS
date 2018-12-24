@@ -45,11 +45,6 @@ class Database(object):
                 self.r.hset(profileid, 'duration', duration)
                 # The name of the list with the dstips
                 #self.r.hset(profileid, 'DstIps', 'DstIps')
-
-            # debugging
-            # Crate two fake tw
-            #self.addNewTW(profileid, starttime, 60)
-            #self.addNewTW(profileid, time.mktime(datetime.strptime('2015-07-26T10:12:53.784566', '%Y-%m-%dT%H:%M:%S.%f').timetuple()), 60)
         except redis.exceptions.ResponseError as e:
             print('Error in addProfile')
             print(e)
@@ -102,7 +97,7 @@ class Database(object):
         # We add [0] at the end so we return a byte string and not a list
         return self.r.zrange('tws' + profileid, -1, -1, withscores=True)
 
-    def addNewTW(self, profileid, startoftw, width):
+    def addNewTW(self, profileid, startoftw):
         try:
             """ 
             Creates or adds a new timewindow to the list of tw for the given profile
