@@ -103,7 +103,7 @@ class LogsProcess(multiprocessing.Process):
             self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Profileid : ' + profileid)
         return profilefolder
 
-    def addDataToFile(self, filename, data):
+    def addDataToFile(self, filename, data, mode='w+'):
         """
         Receive data and append it in the general log of this profile
         If the filename was not opened yet, then open it, write the data and return the file object.
@@ -114,8 +114,9 @@ class LogsProcess(multiprocessing.Process):
             return filename
         except (NameError, AttributeError) as e:
             # The file was not opened
-            fileobj = open(filename, 'a+')
+            fileobj = open(filename, mode)
             fileobj.write(data + '\n')
+            # For some reason the files are closed and flushed correclty.
             return fileobj
 
     def process_global_data(self):
@@ -124,7 +125,6 @@ class LogsProcess(multiprocessing.Process):
         Read the global data and output it on logs 
         """
         try:
-            print('Start: ' + str(datetime.now()))
             #1. Get the list of profiles so far
             temp_profs = __database__.getProfiles()
             if not temp_profs:
@@ -144,17 +144,19 @@ class LogsProcess(multiprocessing.Process):
                 # For each TW in this profile
                 TWforProfile = __database__.getTWsfromProfile(profileid)
                 for (twid, twtime) in TWforProfile:
-                    #print('6: ' + str(datetime.now()))
                     twid = twid.decode("utf-8")
                     twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
                     twlog = twtime + '.' + twid
                     # Add data into profile log
-                    twdata = __database__.getDstIPsfromProfileTW(profileid, twid)
-                    #print('7: ' + str(datetime.now()))
-                    for ip in twdata:
-                        self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: '+ ip.decode("utf-8"))
-                        self.outputqueue.put('2|logs|\tDstIP: ' + ip.decode("utf-8"))
-                    #print('8: ' + str(datetime.now()))
+                    modified = __database__.wasProfileTWModified(profileid, twid)
+                    self.outputqueue.put('2|logs|Profile: {}. TW {}. Modified {}'.format(profileid, twid, modified))
+                    if modified: 
+                        twdata = __database__.getDstIPsfromProfileTW(profileid, twid)
+                        # Mark it as not modified anymore
+                        __database__.markProfileTWAsNotModified(profileid, twid)
+                        for ip in twdata:
+                            self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: '+ ip.decode("utf-8"))
+                            self.outputqueue.put('2|logs|\tDstIP: ' + ip.decode("utf-8"))
         except KeyboardInterrupt:
             return True
         except Exception as inst:
