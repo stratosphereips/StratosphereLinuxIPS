@@ -385,17 +385,17 @@ class ProfilerProcess(multiprocessing.Process):
                     line = self.inputqueue.get()
                     if 'stop' == line:
                         self.outputqueue.put("10|profiler|Stopping Profiler Process.")
-                        print('Received {} lines'.format(rec_lines))
+                        self.outputqueue.put("10|profiler|Total Received Lines: {}".format(rec_lines))
                         return True
                     else:
                         # Received new input data
                         # Extract the columns smartly
-                        self.outputqueue.put("10|profiler|Received Line: {}".format(line))
+                        self.outputqueue.put("12|profiler|Received Line: {}".format(line))
                         if self.process_columns(line):
                             # Add the flow to the profile
                             self.add_flow_to_profile(self.column_values)
                             rec_lines += 1
-            BIG PROBLEM... WE ARE NOT RECEIVEING ALL LINES HERE???? 
+                            #BIG PROBLEM... WE ARE NOT RECEIVEING ALL LINES HERE???? 
         except KeyboardInterrupt:
             print('Received {} lines'.format(rec_lines))
             return True
