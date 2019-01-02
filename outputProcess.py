@@ -12,7 +12,6 @@ class OutputProcess(multiprocessing.Process):
         self.debug = debug
         self.queue = inputqueue
         self.config = config
-        self.linesprocessed = 0
 
     def process_line(self, line):
         """
@@ -56,6 +55,8 @@ class OutputProcess(multiprocessing.Process):
                 print('The message passed to OutputProcess was wrongly formated.')
                 sys.exit(-1)
             return (level, sender, msg)
+        except KeyboardInterrupt:
+            return True
         except Exception as inst:
             print('\tProblem with process line in OutputProcess()')
             print(type(inst))
@@ -72,8 +73,6 @@ class OutputProcess(multiprocessing.Process):
             # For now print DEBUG, then we can use colors or something
             print(msg)
         # This is to test if we are reading the flows completely
-        if self.debug:
-            self.linesprocessed += 1
 
     def run(self):
         try:
@@ -87,8 +86,6 @@ class OutputProcess(multiprocessing.Process):
                         print('Stopping the output thread')
                         return True
         except KeyboardInterrupt:
-            if self.debug:
-                print('Lines processed in output: {}'.format(self.linesprocessed))
             return True
         except Exception as inst:
             print('\tProblem with OutputProcess()')
