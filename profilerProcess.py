@@ -345,10 +345,11 @@ class ProfilerProcess(multiprocessing.Process):
                 elif lasttw_end_time <= flowtime:
                     # The flow was not in the last TW, its NEWER than it
                     self.outputqueue.put("11|profiler|The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time))
-                    amount_of_new_tw = int(flowtime / self.width)
+                    #amount_of_new_tw = int(flowtime / self.width)
+                    amount_of_new_tw = int((flowtime - lasttw_end_time) / self.width)
                     self.outputqueue.put("11|profiler|Create {} TW".format(amount_of_new_tw))
                     temp_end = lasttw_end_time
-                    for id in range(1, amount_of_new_tw + 1):
+                    for id in range(0, amount_of_new_tw + 1):
                         new_start = temp_end 
                         twid = __database__.addNewTW(profileid, new_start)
                         temp_end = new_start + self.width
@@ -356,7 +357,8 @@ class ProfilerProcess(multiprocessing.Process):
                 elif lasttw_start_time > flowtime:
                     # The flow was not in the last TW, its OLDER that it
                     self.outputqueue.put("11|profiler|The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time))
-                    amount_of_new_tw = int(self.width / flowtime)
+                    amount_of_new_tw = int((lasttw_end_time - flowtime) / self.width)
+                    #amount_of_new_tw = int(self.width / flowtime)
                     self.outputqueue.put("11|profiler|new TW: {} ".format(amount_of_new_tw))
                     twid = '0'
                     # FIX HERE THE PAST TW
@@ -395,7 +397,6 @@ class ProfilerProcess(multiprocessing.Process):
                             # Add the flow to the profile
                             self.add_flow_to_profile(self.column_values)
                             rec_lines += 1
-                            #BIG PROBLEM... WE ARE NOT RECEIVEING ALL LINES HERE???? 
         except KeyboardInterrupt:
             print('Received {} lines'.format(rec_lines))
             return True
