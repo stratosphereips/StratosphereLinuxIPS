@@ -94,8 +94,8 @@ class Database(object):
    
     def getLastTWforProfile(self, profileid):
         """ Return the last TW id and the time for the given profile id """
-        # We add [0] at the end so we return a byte string and not a list
-        return self.r.zrange('tws' + profileid, -1, -1, withscores=True)
+        data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
+        return data
 
     def addNewTW(self, profileid, startoftw):
         try:
@@ -115,16 +115,18 @@ class Database(object):
                 # There is no first TW, create it
                 twid = 'timewindow1'
             # Add the new TW to the index of TW
-            self.r.zadd('tws' + profileid, float(startoftw), twid)
+            data = {}
+            data[twid] = float(startoftw)
+            self.r.zadd('tws' + profileid, data)
             # Mark the TW as modified
             self.r.set(profileid + '|' + twid + '|' + 'Modified', '1')
             return twid
-        except Exception as inst:
-            print('Error in AddNewTW')
-            print(inst)
         except redis.exceptions.ResponseError as e:
             print('Error in addNewTW')
             print(e)
+        #except Exception as inst:
+            #print('Error in AddNewTW in database.py')
+            #print(inst)
 
     def getAmountTW(self, profileid):
         """ Return the amount of tw for this profile id """
