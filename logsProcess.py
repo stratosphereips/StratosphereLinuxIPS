@@ -118,6 +118,8 @@ class LogsProcess(multiprocessing.Process):
             fileobj.write(data + '\n')
             # For some reason the files are closed and flushed correclty.
             return fileobj
+        except KeyboardInterrupt:
+            return True
 
     def process_global_data(self):
         """ 
@@ -181,12 +183,15 @@ class TimerThread(threading.Thread):
         self._finished.set()
     
     def run(self):
-        while 1:
-            if self._finished.isSet(): return
-            self.task()
-            
-            # sleep for interval or until shutdown
-            self._finished.wait(self._interval)
+        try:
+            while 1:
+                if self._finished.isSet(): return
+                self.task()
+                
+                # sleep for interval or until shutdown
+                self._finished.wait(self._interval)
+        except KeyboardInterrupt:
+            return True
     
     def task(self):
         self.function()
