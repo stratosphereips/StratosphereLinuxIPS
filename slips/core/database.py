@@ -94,7 +94,7 @@ class Database(object):
    
     def getLastTWforProfile(self, profileid):
         """ Return the last TW id and the time for the given profile id """
-        data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
+        data = self.r.zrange('tws' + profileid, -1, 1, withscores=True)
         return data
 
     def addNewTW(self, profileid, startoftw):
