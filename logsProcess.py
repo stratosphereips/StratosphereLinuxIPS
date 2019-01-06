@@ -136,14 +136,14 @@ class LogsProcess(multiprocessing.Process):
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             # Debug
-            self.outputqueue.put('1|logs|Logs Creation: # of Profiles: ' + profilesLen)
+            self.outputqueue.put('10|logs|Logs Creation: # of Profiles: ' + profilesLen)
             # For each profile, get the tw
             for profileid in profiles:
                 profileid = profileid.decode('utf-8')
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
                 twLen = str(__database__.getAmountTW(profileid))
-                self.outputqueue.put('2|logs|Logs Creation: Profile: ' + profileid + '. ' + twLen + ' timewindows')
+                self.outputqueue.put('20|logs|Logs Creation: Profile: ' + profileid + '. ' + twLen + ' timewindows')
                 # For each TW in this profile
                 TWforProfile = __database__.getTWsfromProfile(profileid)
                 for (twid, twtime) in TWforProfile:
@@ -152,15 +152,15 @@ class LogsProcess(multiprocessing.Process):
                     twlog = twtime + '.' + twid
                     # Add data into profile log
                     modified = __database__.wasProfileTWModified(profileid, twid)
-                    self.outputqueue.put('2|logs|Logs Creation: Profile: {}. TW {}. Modified {}'.format(profileid, twid, modified))
+                    self.outputqueue.put('20|logs|Logs Creation: Profile: {}. TW {}. Modified {}'.format(profileid, twid, modified))
                     if modified: 
-                        self.outputqueue.put('2|logs|Logs Creation: Profile: {}. TW {}. Was Modified. So process it'.format(profileid, twid))
+                        self.outputqueue.put('20|logs|Logs Creation: Profile: {}. TW {}. Was Modified. So process it'.format(profileid, twid))
                         twdata = __database__.getDstIPsfromProfileTW(profileid, twid)
                         # Mark it as not modified anymore
                         __database__.markProfileTWAsNotModified(profileid, twid)
                         for ip in twdata:
                             self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: '+ ip.decode("utf-8"), mode='a+')
-                            self.outputqueue.put('2|logs|\tLogs Creation: DstIP: ' + ip.decode("utf-8"))
+                            self.outputqueue.put('20|logs|\tLogs Creation: DstIP: ' + ip.decode("utf-8"))
         except KeyboardInterrupt:
             return True
         except Exception as inst:
