@@ -67,9 +67,11 @@ class OutputProcess(multiprocessing.Process):
     def output_line(self, line):
         """ Get a line of text and output it correctly """
         (level, sender, msg) = self.process_line(line)
-        if level > 0 and level < 10 and level <= self.verbose:
+        verbose_level = int(int(level) / 10)
+        debug_level = int(int(level) - (verbose_level * 10))
+        if verbose_level > 0 and verbose_level <= 9 and verbose_level <= self.verbose:
             print(msg)
-        if level >= 10 and level < 19 and level <= self.debug:
+        if debug_level > 0 and debug_level <= 9 and debug_level <= self.debug:
             # For now print DEBUG, then we can use colors or something
             print(msg)
         # This is to test if we are reading the flows completely
