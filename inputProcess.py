@@ -52,7 +52,7 @@ class InputProcess(multiprocessing.Process):
                     if self.inputqueue.empty():
                         # While the communication queue is empty, we can read from the file/input
                         for line in self.datainput:
-                            self.outputqueue.put("10|input|Sent Line: {}".format(line))
+                            self.outputqueue.put("30|input|Sent Line: {}".format(line))
                             self.profilerqueue.put(line)
                             lines += 1
                     else:
