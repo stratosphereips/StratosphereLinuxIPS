@@ -337,41 +337,41 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             # First check of we are not in the last TW. Since this will be the majority of cases
             try:
-                [(lasttw, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
-                lasttw = lasttw.decode("utf-8")
+                [(lasttwid, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
+                lasttwid = lasttwid.decode("utf-8")
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + float(self.width)
                 flowtime = float(flowtime)
+                self.outputqueue.put("01|profiler|The last TW id was {}. Start:{}. End: {}".format(lasttwid, lasttw_start_time, lasttw_end_time ))
                 # There was a last TW, so check if the current flow belongs here.
                 if lasttw_end_time > flowtime and lasttw_start_time <= flowtime:
                     self.outputqueue.put("01|profiler|The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time))
-                    twid = lasttw
+                    twid = lasttwid
                 elif lasttw_end_time <= flowtime:
                     # The flow was not in the last TW, its NEWER than it
                     self.outputqueue.put("01|profiler|The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time))
-                    #amount_of_new_tw = int(flowtime / self.width)
                     amount_of_new_tw = int((flowtime - lasttw_end_time) / self.width)
-                    self.outputqueue.put("01|profiler|Create {} TW".format(amount_of_new_tw))
+                    self.outputqueue.put("01|profiler|We have to create {} empty TWs in the midle.".format(amount_of_new_tw))
                     temp_end = lasttw_end_time
                     for id in range(0, amount_of_new_tw + 1):
                         new_start = temp_end 
                         twid = __database__.addNewTW(profileid, new_start)
+                        self.outputqueue.put("01|profiler|Creating the TW id {}. Start: {}.".format(twid, new_start))
                         temp_end = new_start + self.width
                     # Now get the id of the last TW so we can return it
                 elif lasttw_start_time > flowtime:
                     # The flow was not in the last TW, its OLDER that it
                     self.outputqueue.put("01|profiler|The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time))
                     amount_of_new_tw = int((lasttw_end_time - flowtime) / self.width)
-                    #amount_of_new_tw = int(self.width / flowtime)
                     self.outputqueue.put("01|profiler|new TW: {} ".format(amount_of_new_tw))
-                    twid = '0'
+                    twid = 'timewindow0'
                     # FIX HERE THE PAST TW
             except ValueError:
                 # There is no last tw. So create the first TW
                 startoftw = float(flowtime)
                 # Add this TW, of this profile, to the DB
                 twid = __database__.addNewTW(profileid, startoftw)
-                self.outputqueue.put("01|profiler|First TW created for profile {}.".format(profileid))
+                #self.outputqueue.put("01|profiler|First TW ({}) created for profile {}.".format(twid, profileid))
             return twid
         except Exception as e:
             print('Error in get_timewindow()')
