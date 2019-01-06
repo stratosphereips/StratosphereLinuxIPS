@@ -47,7 +47,7 @@ class ProfilerProcess(multiprocessing.Process):
         else:
             self.width = 300
         # Report the time window width
-        self.outputqueue.put("10|profiler|Time Windows Width used: {}.".format(self.width))
+        self.outputqueue.put("10|profiler|Time Windows Width used: {} minutes.".format(self.width))
 
         # Get the format of the time in the flows
         try:
@@ -279,7 +279,8 @@ class ProfilerProcess(multiprocessing.Process):
         # Get data
         saddr = columns['saddr']
         daddr = columns['daddr']
-        profileid = 'profile|' + str(saddr)
+        separator = __database__.getFieldSeparator()
+        profileid = 'profile' + separator + str(saddr)
         starttime = time.mktime(columns['starttime'].timetuple())
         # In the future evaluate
         try:
