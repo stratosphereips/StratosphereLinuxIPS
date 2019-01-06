@@ -29,6 +29,7 @@ class Database(object):
         self.r = redis.StrictRedis(host='localhost', port=6379, db=0) #password='password')
         # For now, do not remember between runs of slips. Just delete the database when we start with flushdb
         self.r.flushdb()
+        self.separator = '_'
 
     def addProfile(self, profileid, starttime, duration):
         """ 
@@ -82,7 +83,7 @@ class Database(object):
         """
         if type(twid) == list:
             twid = twid[0].decode("utf-8") 
-        return self.r.smembers(profileid + '|' + twid + '|' + 'DstIPs')
+        return self.r.smembers(profileid + self.separator + twid + self.separator + 'DstIPs')
 
     def hasProfile(self, profileid):
         """ Check if we have the given profile """
@@ -119,7 +120,7 @@ class Database(object):
             data[twid] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
             # Mark the TW as modified
-            self.r.set(profileid + '|' + twid + '|' + 'Modified', '1')
+            self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
             return twid
         except redis.exceptions.ResponseError as e:
             print('Error in addNewTW')
@@ -134,12 +135,12 @@ class Database(object):
 
     def wasProfileTWModified(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
-        data = self.r.get(profileid + '|' + twid + '|' + 'Modified')
+        data = self.r.get(profileid + self.separator + twid + self.separator + 'Modified')
         return bool(int(data.decode("utf-8")))
 
     def markProfileTWAsNotModified(self, profileid, twid):
         """ Mark a TW in a profile as not modified """
-        self.r.set( profileid + '|' + twid + '|' + 'Modified', '0')
+        self.r.set( profileid + self.separator + twid + self.separator + 'Modified', '0')
 
     def add_dstips(self, profileid, twid, daddr):
         """
@@ -148,19 +149,16 @@ class Database(object):
         try:
             if type(twid) == list:
                 twid = twid[0].decode("utf-8") 
-            self.r.sadd( profileid + '|' + twid + '|' + 'DstIPs', daddr)
+            self.r.sadd( profileid + self.separator + twid + self.separator + 'DstIPs', daddr)
             # Save in the profile that it was modified, so we know we should report on this
-            self.r.set(profileid + '|' + twid + '|' + 'Modified', '1')
+            self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
         except Exception as inst:
             print('Error in add_dstips')
             print(inst)
 
-
-
-
-
-
-
+    def getFieldSeparator(self):
+        """ Return the field separator """
+        return self.separator
 
 
 
