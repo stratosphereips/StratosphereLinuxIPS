@@ -153,6 +153,7 @@ class LogsProcess(multiprocessing.Process):
                     modified = __database__.wasProfileTWModified(profileid, twid)
                     self.outputqueue.put('2|logs|Profile: {}. TW {}. Modified {}'.format(profileid, twid, modified))
                     if modified: 
+                        self.outputqueue.put('2|logs|Profile: {}. TW {}. Was Modified. So process it'.format(profileid, twid))
                         twdata = __database__.getDstIPsfromProfileTW(profileid, twid)
                         # Mark it as not modified anymore
                         __database__.markProfileTWAsNotModified(profileid, twid)
