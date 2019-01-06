@@ -95,7 +95,7 @@ class Database(object):
    
     def getLastTWforProfile(self, profileid):
         """ Return the last TW id and the time for the given profile id """
-        data = self.r.zrange('tws' + profileid, -1, 1, withscores=True)
+        data = self.r.zrange('tws' + profileid, -1, -1, withscores=True)
         return data
 
     def addNewTW(self, profileid, startoftw):
@@ -119,6 +119,7 @@ class Database(object):
             data = {}
             data[twid] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
+            #print('In DB: Created and added to DB the TW with id {}. Time: {} '.format(twid, startoftw))
             # Mark the TW as modified
             self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
             return twid
@@ -153,7 +154,8 @@ class Database(object):
             # Save in the profile that it was modified, so we know we should report on this
             self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
         except Exception as inst:
-            print('Error in add_dstips')
+            print('Error in add_dstips in database.py')
+            print(type(inst))
             print(inst)
 
     def getFieldSeparator(self):
