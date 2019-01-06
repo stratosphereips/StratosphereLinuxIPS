@@ -52,25 +52,25 @@ class InputProcess(multiprocessing.Process):
                     if self.inputqueue.empty():
                         # While the communication queue is empty, we can read from the file/input
                         for line in self.datainput:
-                            self.outputqueue.put("30|input|Sent Line: {}".format(line))
+                            self.outputqueue.put("03|input| > Sent Line: {}".format(line.replace('\n','')))
                             self.profilerqueue.put(line)
                             lines += 1
                     else:
                         # The communication queue is not empty process
                         line = self.inputqueue.get()
                         if 'stop' == line:
-                            print('Sent {} lines'.format(lines))
-                            print('Stopping Input Process')
+                            self.outputqueue.put("03|input|Sent {} lines.".format(lines))
+                            self.outputqueue.put("04|input|Stopping the Input Process.")
                             return True
         except KeyboardInterrupt:
-            print('Sent {} lines'.format(lines))
-            print('Stopping Input Process')
+            self.outputqueue.put("03|input|Sent {} lines.".format(lines))
+            self.outputqueue.put("04|input|Stopping the Input Process.")
             return True
         except Exception as inst:
-            print('Sent {} lines'.format(lines))
-            print('Stopping Input Process')
-            print('\tProblem with Input Process()')
-            print(type(inst))
-            print(inst.args)
-            print(inst)
+            self.outputqueue.put("03|input|Sent {} lines.".format(lines))
+            self.outputqueue.put("04|input|Stopping the Input Process.")
+            self.outputqueue.put("01|input|Problem with Input Process.")
+            self.outputqueue.put("01|input|" + type(inst))
+            self.outputqueue.put("01|input|" + inst.args)
+            self.outputqueue.put("01|input|" + inst)
             sys.exit(1)
