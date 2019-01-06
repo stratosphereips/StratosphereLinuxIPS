@@ -46,6 +46,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.width = 300
         else:
             self.width = 300
+        # Report the time window width
+        self.outputqueue.put("10|profiler|Time Windows Width used: {}.".format(self.width))
 
         # Get the format of the time in the flows
         try:
