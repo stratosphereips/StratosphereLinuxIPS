@@ -77,6 +77,13 @@ class Database(object):
         """
         return self.r.zrange('tws' + profileid, 0, -1, withscores=True)
 
+    def getamountTWsfromProfile(self, profileid):
+        """
+        Receives a profile id and returns the list of all the TW in that profile
+
+        """
+        return len(self.r.zrange('tws' + profileid, 0, -1, withscores=True))
+
     def getDstIPsfromProfileTW(self, profileid, twid):
         """
         Get all the data for a specific TW for a specific profileid
@@ -98,6 +105,55 @@ class Database(object):
         data = self.r.zrange('tws' + profileid, -1, -1, withscores=True)
         return data
 
+    def getFirstTWforProfile(self, profileid):
+        """ Return the first TW id and the time for the given profile id """
+        data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
+        return data
+
+    def getTWforScore(self, profileid, time):
+        """ Return the TW id and the time for the TW that includes the given time.
+        The score in the DB is the start of the timewindow, so we should search a TW that includes 
+        the given time by making sure the start of the TW is < time, and the end of the TW is > time.
+        """
+        # [-1] so we bring the last TW that matched this time.
+        try:
+            data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)[-1]
+        except IndexError:
+            # There is no TW that has this time inside it
+            data = []
+        return data
+
+    def addNewOlderTW(self, profileid, startoftw):
+        try:
+            """ 
+            Creates or adds a new timewindow that is OLDER than the first we have
+            Return the id of the timewindow just created
+            """
+            # Get the first twid and obtain the new tw id
+            try:
+                (firstid, firstid_time) = self.getFirstTWforProfile(profileid)[0]
+                # We have a first id
+                firstid = firstid.decode("utf-8") 
+                # Decrement it!!
+                twid = 'timewindow' + str(int(firstid.split('timewindow')[1]) - 1)
+            except IndexError:
+                # Very weird error, since the first TW MUST exist. What are we doing here?
+                pass
+            # Add the new TW to the index of TW
+            data = {}
+            data[str(twid)] = float(startoftw)
+            self.r.zadd('tws' + profileid, data)
+            print('In DB: Created and added to DB the new older TW with id {}. Time: {} '.format(twid, startoftw))
+            # Mark the TW as modified
+            self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
+            return twid
+        except redis.exceptions.ResponseError as e:
+            print('Error in addNewTW')
+            print(e)
+        #except Exception as inst:
+            #print('Error in AddNewTW in database.py')
+            #print(inst)
+
     def addNewTW(self, profileid, startoftw):
         try:
             """ 
@@ -117,9 +173,9 @@ class Database(object):
                 twid = 'timewindow1'
             # Add the new TW to the index of TW
             data = {}
-            data[twid] = float(startoftw)
+            data[str(twid)] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
-            #print('In DB: Created and added to DB the TW with id {}. Time: {} '.format(twid, startoftw))
+            print('In DB: Created and added to DB the TW with id {}. Time: {} '.format(twid, startoftw))
             # Mark the TW as modified
             self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
             return twid
