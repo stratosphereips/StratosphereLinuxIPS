@@ -232,7 +232,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Tabs is the separator
                         self.separator = '	'
                     else:
-                        self.outputqueue.put("10|profiler|Error. The file is not comma or tab separated.")
+                        self.outputqueue.put("00|profiler|Error. The file is not comma or tab separated.")
                         return -2
                     nline = line.strip().split(self.separator)
                     for field in nline:
@@ -260,10 +260,10 @@ class ProfilerProcess(multiprocessing.Process):
                             self.column_idx['bytes'] = nline.index(field)
                 self.columns_defined = True
             except Exception as inst:
-                self.outputqueue.put("10|profiler|\tProblem in process_columns() in profilerProcess.")
-                self.outputqueue.put("10|profiler|"+str(type(inst)))
-                self.outputqueue.put("10|profiler|"+str(inst.args))
-                self.outputqueue.put("10|profiler|"+str(inst))
+                self.outputqueue.put("00|profiler|\tProblem in process_columns() in profilerProcess.")
+                self.outputqueue.put("00|profiler|"+str(type(inst)))
+                self.outputqueue.put("00|profiler|"+str(inst.args))
+                self.outputqueue.put("00|profiler|"+str(inst))
                 sys.exit(1)
             # This is the return when the columns were not defined. False
             return False
@@ -275,7 +275,6 @@ class ProfilerProcess(multiprocessing.Process):
         This is the main function that takes a flow and does all the magic to convert it into a working data in our system. 
         It includes checking if the profile exists and how to put the flow correctly.
         """
-        self.outputqueue.put('5|profiler|Received flow')
         # Get data
         saddr = columns['saddr']
         daddr = columns['daddr']
@@ -344,16 +343,15 @@ class ProfilerProcess(multiprocessing.Process):
                 lasttw_end_time = lasttw_start_time + float(self.width)
                 flowtime = float(flowtime)
                 # There was a last TW, so check if the current flow belongs here.
-                #self.outputqueue.put("11|profiler|LasttwStart {}, lasttwEnd {}, Flowtime {}".format(lasttw_start_time, lasttw_end_time, flowtime))
                 if lasttw_end_time > flowtime and lasttw_start_time <= flowtime:
-                    self.outputqueue.put("11|profiler|The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time))
+                    self.outputqueue.put("01|profiler|The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time))
                     twid = lasttw
                 elif lasttw_end_time <= flowtime:
                     # The flow was not in the last TW, its NEWER than it
-                    self.outputqueue.put("11|profiler|The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time))
+                    self.outputqueue.put("01|profiler|The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time))
                     #amount_of_new_tw = int(flowtime / self.width)
                     amount_of_new_tw = int((flowtime - lasttw_end_time) / self.width)
-                    self.outputqueue.put("11|profiler|Create {} TW".format(amount_of_new_tw))
+                    self.outputqueue.put("01|profiler|Create {} TW".format(amount_of_new_tw))
                     temp_end = lasttw_end_time
                     for id in range(0, amount_of_new_tw + 1):
                         new_start = temp_end 
@@ -362,10 +360,10 @@ class ProfilerProcess(multiprocessing.Process):
                     # Now get the id of the last TW so we can return it
                 elif lasttw_start_time > flowtime:
                     # The flow was not in the last TW, its OLDER that it
-                    self.outputqueue.put("11|profiler|The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time))
+                    self.outputqueue.put("01|profiler|The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time))
                     amount_of_new_tw = int((lasttw_end_time - flowtime) / self.width)
                     #amount_of_new_tw = int(self.width / flowtime)
-                    self.outputqueue.put("11|profiler|new TW: {} ".format(amount_of_new_tw))
+                    self.outputqueue.put("01|profiler|new TW: {} ".format(amount_of_new_tw))
                     twid = '0'
                     # FIX HERE THE PAST TW
             except ValueError:
@@ -373,7 +371,7 @@ class ProfilerProcess(multiprocessing.Process):
                 startoftw = float(flowtime)
                 # Add this TW, of this profile, to the DB
                 twid = __database__.addNewTW(profileid, startoftw)
-                self.outputqueue.put("11|profiler|First TW created for profile {}.".format(profileid))
+                self.outputqueue.put("01|profiler|First TW created for profile {}.".format(profileid))
             return twid
         except Exception as e:
             print('Error in get_timewindow()')
@@ -392,13 +390,13 @@ class ProfilerProcess(multiprocessing.Process):
                     # The input communication queue is not empty, we are receiving
                     line = self.inputqueue.get()
                     if 'stop' == line:
-                        self.outputqueue.put("10|profiler|Stopping Profiler Process.")
+                        self.outputqueue.put("01|profiler|Stopping Profiler Process.")
                         self.outputqueue.put("10|profiler|Total Received Lines: {}".format(rec_lines))
                         return True
                     else:
                         # Received new input data
                         # Extract the columns smartly
-                        self.outputqueue.put("12|profiler|Received Line: {}".format(line))
+                        self.outputqueue.put("03|profiler| < Received Line: {}".format(line.replace('\n','')))
                         if self.process_columns(line):
                             # Add the flow to the profile
                             self.add_flow_to_profile(self.column_values)
@@ -408,8 +406,8 @@ class ProfilerProcess(multiprocessing.Process):
             return True
         except Exception as inst:
             print('Received {} lines'.format(rec_lines))
-            self.outputqueue.put("10|profiler|\tProblem with Profiler Process.")
-            self.outputqueue.put("10|profiler|"+str(type(inst)))
-            self.outputqueue.put("10|profiler|"+str(inst.args))
-            self.outputqueue.put("10|profiler|"+str(inst))
+            self.outputqueue.put("00|profiler|\tProblem with Profiler Process.")
+            self.outputqueue.put("00|profiler|"+str(type(inst)))
+            self.outputqueue.put("00|profiler|"+str(inst.args))
+            self.outputqueue.put("00|profiler|"+str(inst))
             sys.exit(1)
