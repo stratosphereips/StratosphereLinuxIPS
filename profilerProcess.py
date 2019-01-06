@@ -330,6 +330,9 @@ class ProfilerProcess(multiprocessing.Process):
         If the TW is not there, we create as many tw as necessary in the future or past until we get the correct TW for this flow.
         - We use this function to avoid retrieving all the data from the DB for the complete profile. We use a separate table for the TW per profile.
         -- Returns the time window id
+        THIS IS NOT WORKING:
+        - The empty profiles in the middle are not being created!!!
+        - The Dtp ips are stored in the first time win
         """
         try:
             # First check of we are not in the last TW. Since this will be the majority of cases
