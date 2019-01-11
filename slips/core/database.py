@@ -50,6 +50,18 @@ class Database(object):
             print('Error in addProfile')
             print(e)
 
+    def getProfileIdFromIP(self, daddr_as_obj):
+        """ Receive an IP and we want the profileid"""
+        try:
+            temp_id = 'profile' + self.separator + str(daddr_as_obj)
+            data = self.r.sismember('profiles', temp_id)
+            if data:
+                return temp_id
+            return False
+        except redis.exceptions.ResponseError as e:
+            print('Error in addProfile')
+            print(e)
+
     def getProfiles(self):
         """ Get a list of all the profiles """
         profiles = self.r.smembers('profiles')
@@ -84,9 +96,17 @@ class Database(object):
         """
         return len(self.r.zrange('tws' + profileid, 0, -1, withscores=True))
 
+    def getSrcIPsfromProfileTW(self, profileid, twid):
+        """
+        Get the src ip for a specific TW for a specific profileid
+        """
+        if type(twid) == list:
+            twid = twid[0].decode("utf-8") 
+        return self.r.smembers(profileid + self.separator + twid + self.separator + 'SrcIPs')
+
     def getDstIPsfromProfileTW(self, profileid, twid):
         """
-        Get all the data for a specific TW for a specific profileid
+        Get the dst ip for a specific TW for a specific profileid
         """
         if type(twid) == list:
             twid = twid[0].decode("utf-8") 
@@ -143,7 +163,7 @@ class Database(object):
             data = {}
             data[str(twid)] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
-            print('In DB: Created and added to DB the new older TW with id {}. Time: {} '.format(twid, startoftw))
+            #print('In DB: Created and added to DB the new older TW with id {}. Time: {} '.format(twid, startoftw))
             # Mark the TW as modified
             self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
             return twid
@@ -175,7 +195,7 @@ class Database(object):
             data = {}
             data[str(twid)] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
-            print('In DB: Created and added to DB the TW with id {}. Time: {} '.format(twid, startoftw))
+            #print('In DB: Created and added to DB the TW with id {}. Time: {} '.format(twid, startoftw))
             # Mark the TW as modified
             self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
             return twid
@@ -206,7 +226,22 @@ class Database(object):
         try:
             if type(twid) == list:
                 twid = twid[0].decode("utf-8") 
-            self.r.sadd( profileid + self.separator + twid + self.separator + 'DstIPs', daddr)
+            self.r.sadd( profileid + self.separator + twid + self.separator + 'DstIPs', str(daddr))
+            # Save in the profile that it was modified, so we know we should report on this
+            self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
+        except Exception as inst:
+            print('Error in add_dstips in database.py')
+            print(type(inst))
+            print(inst)
+
+    def add_srcips(self, profileid, twid, saddr):
+        """
+        Add the srcip to this tw in this profile
+        """
+        try:
+            if type(twid) == list:
+                twid = twid[0].decode("utf-8") 
+            self.r.sadd( profileid + self.separator + twid + self.separator + 'SrcIPs', str(saddr))
             # Save in the profile that it was modified, so we know we should report on this
             self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
         except Exception as inst:
