@@ -277,24 +277,30 @@ class ProfilerProcess(multiprocessing.Process):
         """
         # Get data
         saddr = columns['saddr']
+        sport = columns['sport']
         daddr = columns['daddr']
+        dport = columns['dport']
         separator = __database__.getFieldSeparator()
         profileid = 'profile' + separator + str(saddr)
         starttime = time.mktime(columns['starttime'].timetuple())
-        # In the future evaluate
+        # Create the objects of IPs
         try:
             saddr_as_obj = ipaddress.IPv4Address(saddr) 
+            daddr_as_obj = ipaddress.IPv4Address(daddr) 
             # Is ipv4
         except ipaddress.AddressValueError:
             # Is it ipv6?
             try:
                 saddr_as_obj = ipaddress.IPv6Address(saddr) 
+                daddr_as_obj = ipaddress.IPv6Address(daddr) 
             except ipaddress.AddressValueError:
                 # Its a mac
                 return False
 
         # Check if the ip received is part of our home network. We only crate profiles for our home network
         if self.home_net and saddr_as_obj in self.home_net:
+            # Its in our Home network
+
             # The steps for adding a flow in a profile should be
             # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
             # The width is unique for all the timewindow in this profile
@@ -303,15 +309,35 @@ class ProfilerProcess(multiprocessing.Process):
             # 3. For this profile, find the id in the databse of the tw where the flow belongs.
             twid = self.get_timewindow(starttime, profileid)
 
-            # 4. Put information from the flow in this tw for this profile
-            # - DstIPs
-            __database__.add_dstips(profileid, twid, daddr)
         elif self.home_net and saddr_as_obj not in self.home_net:
             # The src ip is not in our home net
-            # Here we should pick up the profile of the dstip, and add this as being 'received' by our saddr. TODO
-            pass
+
+            # Check that the dst IP is in our home net
+            if daddr_as_obj in self.home_net:
+                self.outputqueue.put("07|profiler|Flow with dstip in homenet: srcip {}, dstip {}".format(saddr_as_obj, daddr_as_obj))
+                # The dst ip is in the home net. So register this as going to it
+                # 1. Get the profile of the dst ip.
+                profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                if not profileid:
+                    # We do not have yet the profile of the dst ip that is in our home net
+                    self.outputqueue.put("07|profiler|The dstip profile was not here... create")
+                    temp_profileid = 'profile' + separator + str(daddr_as_obj)
+                    #self.outputqueue.put("01|profiler|Created profileid for dstip: {}".format(temp_profileid))
+                    __database__.addProfile(temp_profileid, starttime, self.width)
+                    # Try again
+                    profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                    if not profileid:
+                        # Too many errors. We should not be here
+                        return False
+                self.outputqueue.put("07|profiler|Profile for dstip {} : {}".format(daddr_as_obj, profileid))
+                # 2. For this profile, find the id in the databse of the tw where the flow belongs.
+                twid = self.get_timewindow(starttime, profileid)
+            elif daddr_as_obj not in self.home_net:
+                # The dst ip is also not part of our home net. So ignore completely
+                return False
         elif not self.home_net:
             # We don't have a home net, so create profiles for everyone
+
             # The steps for adding a flow in a profile should be
             # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
             # The width is unique for all the timewindow in this profile
@@ -320,9 +346,14 @@ class ProfilerProcess(multiprocessing.Process):
             # 3. For this profile, find the id in the databse of the tw where the flow belongs.
             twid = self.get_timewindow(starttime, profileid)
 
-            # 4. Put information from the flow in this tw for this profile
-            # - DstIPs
-            __database__.add_dstips(profileid, twid, daddr)
+        # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
+        self.outputqueue.put("07|profiler|Storing data in the profile: {}".format(profileid))
+        # - DstIPs and Srcip
+        if saddr_as_obj in self.home_net:
+            __database__.add_dstips(profileid, twid, daddr_as_obj)
+        # Only add the Src ip if the flow goes TO the IP in the src net
+        elif daddr_as_obj in self.home_net:
+            __database__.add_srcips(profileid, twid, saddr_as_obj)
 
     def get_timewindow(self, flowtime, profileid):
         """" 
