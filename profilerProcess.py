@@ -22,6 +22,8 @@ class ProfilerProcess(multiprocessing.Process):
         self.timeformat = ''
         # Read the configuration
         self.read_configuration()
+        # Set the database
+        __database__.setOutputQueue(self.outputqueue)
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -232,7 +234,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Tabs is the separator
                         self.separator = '	'
                     else:
-                        self.outputqueue.put("00|profiler|Error. The file is not comma or tab separated.")
+                        self.outputqueue.put("01|profiler|Error. The file is not comma or tab separated.")
                         return -2
                     nline = line.strip().split(self.separator)
                     for field in nline:
@@ -260,10 +262,9 @@ class ProfilerProcess(multiprocessing.Process):
                             self.column_idx['bytes'] = nline.index(field)
                 self.columns_defined = True
             except Exception as inst:
-                self.outputqueue.put("00|profiler|\tProblem in process_columns() in profilerProcess.")
-                self.outputqueue.put("00|profiler|"+str(type(inst)))
-                self.outputqueue.put("00|profiler|"+str(inst.args))
-                self.outputqueue.put("00|profiler|"+str(inst))
+                self.outputqueue.put("01|profiler|\tProblem in process_columns() in profilerProcess.")
+                self.outputqueue.put("01|profiler|"+str(type(inst)))
+                self.outputqueue.put("01|profiler|"+str(inst))
                 sys.exit(1)
             # This is the return when the columns were not defined. False
             return False
@@ -276,84 +277,100 @@ class ProfilerProcess(multiprocessing.Process):
         It includes checking if the profile exists and how to put the flow correctly.
         """
         # Get data
-        saddr = columns['saddr']
-        sport = columns['sport']
-        daddr = columns['daddr']
-        dport = columns['dport']
-        separator = __database__.getFieldSeparator()
-        profileid = 'profile' + separator + str(saddr)
-        starttime = time.mktime(columns['starttime'].timetuple())
-        # Create the objects of IPs
         try:
-            saddr_as_obj = ipaddress.IPv4Address(saddr) 
-            daddr_as_obj = ipaddress.IPv4Address(daddr) 
-            # Is ipv4
-        except ipaddress.AddressValueError:
-            # Is it ipv6?
+            saddr = columns['saddr']
+            sport = columns['sport']
+            daddr = columns['daddr']
+            dport = columns['dport']
+            separator = __database__.getFieldSeparator()
+            profileid = 'profile' + separator + str(saddr)
+            starttime = time.mktime(columns['starttime'].timetuple())
+            # Create the objects of IPs
             try:
-                saddr_as_obj = ipaddress.IPv6Address(saddr) 
-                daddr_as_obj = ipaddress.IPv6Address(daddr) 
+                saddr_as_obj = ipaddress.IPv4Address(saddr) 
+                daddr_as_obj = ipaddress.IPv4Address(daddr) 
+                # Is ipv4
             except ipaddress.AddressValueError:
-                # Its a mac
-                return False
+                # Is it ipv6?
+                try:
+                    saddr_as_obj = ipaddress.IPv6Address(saddr) 
+                    daddr_as_obj = ipaddress.IPv6Address(daddr) 
+                except ipaddress.AddressValueError:
+                    # Its a mac
+                    return False
 
-        # Check if the ip received is part of our home network. We only crate profiles for our home network
-        if self.home_net and saddr_as_obj in self.home_net:
-            # Its in our Home network
+            # Check if the ip received is part of our home network. We only crate profiles for our home network
+            if self.home_net and saddr_as_obj in self.home_net:
+                # Its in our Home network
 
-            # The steps for adding a flow in a profile should be
-            # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
-            # The width is unique for all the timewindow in this profile
-            __database__.addProfile(profileid, starttime, self.width)
+                # The steps for adding a flow in a profile should be
+                # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
+                # The width is unique for all the timewindow in this profile
+                __database__.addProfile(profileid, starttime, self.width)
 
-            # 3. For this profile, find the id in the databse of the tw where the flow belongs.
-            twid = self.get_timewindow(starttime, profileid)
+                # 3. For this profile, find the id in the databse of the tw where the flow belongs.
+                twid = self.get_timewindow(starttime, profileid)
 
-        elif self.home_net and saddr_as_obj not in self.home_net:
-            # The src ip is not in our home net
+            elif self.home_net and saddr_as_obj not in self.home_net:
+                # The src ip is not in our home net
 
-            # Check that the dst IP is in our home net
-            if daddr_as_obj in self.home_net:
-                self.outputqueue.put("07|profiler|Flow with dstip in homenet: srcip {}, dstip {}".format(saddr_as_obj, daddr_as_obj))
-                # The dst ip is in the home net. So register this as going to it
-                # 1. Get the profile of the dst ip.
-                profileid = __database__.getProfileIdFromIP(daddr_as_obj)
-                if not profileid:
-                    # We do not have yet the profile of the dst ip that is in our home net
-                    self.outputqueue.put("07|profiler|The dstip profile was not here... create")
-                    temp_profileid = 'profile' + separator + str(daddr_as_obj)
-                    #self.outputqueue.put("01|profiler|Created profileid for dstip: {}".format(temp_profileid))
-                    __database__.addProfile(temp_profileid, starttime, self.width)
-                    # Try again
+                # Check that the dst IP is in our home net
+                if daddr_as_obj in self.home_net:
+                    self.outputqueue.put("07|profiler|Flow with dstip in homenet: srcip {}, dstip {}".format(saddr_as_obj, daddr_as_obj))
+                    # The dst ip is in the home net. So register this as going to it
+                    # 1. Get the profile of the dst ip.
                     profileid = __database__.getProfileIdFromIP(daddr_as_obj)
                     if not profileid:
-                        # Too many errors. We should not be here
-                        return False
-                self.outputqueue.put("07|profiler|Profile for dstip {} : {}".format(daddr_as_obj, profileid))
-                # 2. For this profile, find the id in the databse of the tw where the flow belongs.
+                        # We do not have yet the profile of the dst ip that is in our home net
+                        self.outputqueue.put("07|profiler|The dstip profile was not here... create")
+                        temp_profileid = 'profile' + separator + str(daddr_as_obj)
+                        #self.outputqueue.put("01|profiler|Created profileid for dstip: {}".format(temp_profileid))
+                        __database__.addProfile(temp_profileid, starttime, self.width)
+                        # Try again
+                        profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                        if not profileid:
+                            # Too many errors. We should not be here
+                            return False
+                    self.outputqueue.put("07|profiler|Profile for dstip {} : {}".format(daddr_as_obj, profileid))
+                    # 2. For this profile, find the id in the databse of the tw where the flow belongs.
+                    twid = self.get_timewindow(starttime, profileid)
+                elif daddr_as_obj not in self.home_net:
+                    # The dst ip is also not part of our home net. So ignore completely
+                    return False
+            elif not self.home_net:
+                # We don't have a home net, so create profiles for everyone
+
+                # The steps for adding a flow in a profile should be
+                # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
+                # The width is unique for all the timewindow in this profile
+                __database__.addProfile(profileid, starttime, self.width)
+
+                # 3. For this profile, find the id in the databse of the tw where the flow belongs.
                 twid = self.get_timewindow(starttime, profileid)
-            elif daddr_as_obj not in self.home_net:
-                # The dst ip is also not part of our home net. So ignore completely
-                return False
-        elif not self.home_net:
-            # We don't have a home net, so create profiles for everyone
 
-            # The steps for adding a flow in a profile should be
-            # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
-            # The width is unique for all the timewindow in this profile
-            __database__.addProfile(profileid, starttime, self.width)
-
-            # 3. For this profile, find the id in the databse of the tw where the flow belongs.
-            twid = self.get_timewindow(starttime, profileid)
-
-        # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
-        self.outputqueue.put("07|profiler|Storing data in the profile: {}".format(profileid))
-        # - DstIPs and Srcip
-        if saddr_as_obj in self.home_net:
-            __database__.add_dstips(profileid, twid, daddr_as_obj)
-        # Only add the Src ip if the flow goes TO the IP in the src net
-        elif daddr_as_obj in self.home_net:
-            __database__.add_srcips(profileid, twid, saddr_as_obj)
+            ##########################################
+            # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
+            self.outputqueue.put("07|profiler|Storing data in the profile: {}".format(profileid))
+            # Was the flow coming FROM the profile ip?
+            if saddr_as_obj in self.home_net:
+                self.outputqueue.put("08|profiler|Storing all the data Out")
+                # The srcip was in the homenet
+                __database__.add_out_dstips(profileid, twid, daddr_as_obj)
+                self.outputqueue.put("08|profiler|Storing all the data out2")
+                __database__.add_out_dstport(profileid, twid, dport)
+                self.outputqueue.put("08|profiler|Storing all the data out3")
+                __database__.add_out_srcport(profileid, twid, sport)
+            # Was the flow coming TO the profile ip?
+            elif daddr_as_obj in self.home_net:
+                # The dstip was in the homenet
+                __database__.add_in_srcips(profileid, twid, saddr_as_obj)
+                __database__.add_in_dstport(profileid, twid, dport)
+                __database__.add_in_srcport(profileid, twid, sport)
+        except Exception as inst:
+            # For some reason we can not use the output queue here.. check
+            self.outputqueue.put("01|profiler|Error in add_flow_to_profile profilerProcess.")
+            self.outputqueue.put("01|profiler|{}".format((type(inst))))
+            self.outputqueue.put("01|profiler|{}".format(inst))
 
     def get_timewindow(self, flowtime, profileid):
         """" 
@@ -459,8 +476,8 @@ class ProfilerProcess(multiprocessing.Process):
             return True
         except Exception as inst:
             print('Received {} lines'.format(rec_lines))
-            self.outputqueue.put("00|profiler|\tProblem with Profiler Process.")
-            self.outputqueue.put("00|profiler|"+str(type(inst)))
-            self.outputqueue.put("00|profiler|"+str(inst.args))
-            self.outputqueue.put("00|profiler|"+str(inst))
+            self.outputqueue.put("01|profiler|\tProblem with Profiler Process.")
+            self.outputqueue.put("01|profiler|"+str(type(inst)))
+            self.outputqueue.put("01|profiler|"+str(inst.args))
+            self.outputqueue.put("01|profiler|"+str(inst))
             sys.exit(1)
