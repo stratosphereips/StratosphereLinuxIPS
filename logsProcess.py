@@ -158,13 +158,13 @@ class LogsProcess(multiprocessing.Process):
                         dstips = __database__.getDstIPsfromProfileTW(profileid, twid)
                         # Mark it as not modified anymore
                         __database__.markProfileTWAsNotModified(profileid, twid)
-                        for ip in dstips:
-                            self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: '+ ip.decode("utf-8"), mode='a+')
-                            self.outputqueue.put('60|logs|\t\tLogs Creation: DstIP: ' + ip.decode("utf-8"))
+                        #for ip in dstips:
+                        self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: ' + dstips, mode='a+')
+                        self.outputqueue.put('60|logs|\t\tLogs Creation: DstIP: ' + dstips)
                         srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
-                        for ip in srcips:
-                            self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP: '+ ip.decode("utf-8"), mode='a+')
-                            self.outputqueue.put('60|logs|\t\tLogs Creation: SrcIP: ' + ip.decode("utf-8"))
+                        #for ip in srcips:
+                        self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP: '+ srcips, mode='a+')
+                        self.outputqueue.put('60|logs|\t\tLogs Creation: SrcIP: ' + srcips)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
