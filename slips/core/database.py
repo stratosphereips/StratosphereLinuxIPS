@@ -3,12 +3,25 @@ import redis
 import time
 from datetime import datetime
 from datetime import timedelta
+import json
 
 
 # Struture of the DB
 # Set 'profile'
 #  Holds a set of all profile ids
 # For each profile, there is a set for the timewindows. The name of the sets is the names of profiles
+# The data for a profile in general is hold in a hash
+# The data for each timewindow in a profile is hold in a hash
+ # profile|10.0.0.1|timewindow1
+ # In this hash there are strings:
+  # dstips_in -> '{'1.1.1.1':10, '2.2.2.2':20}'
+  # srcips_in -> '{'3.3.3.3':30, '4.4.4.4':40}'
+  # dstports_in -> '{'22':30, '21':40}'
+  # dstports_in -> '{'22':30, '21':40}'
+  # dstips_out -> '{'1.1.1.1':10, '2.2.2.2':20}'
+  # srcips_out -> '{'3.3.3.3':30, '4.4.4.4':40}'
+  # dstports_out -> '{'22':30, '21':40}'
+  # dstports_out -> '{'22':30, '21':40}'
 
 
 def timing(f):
@@ -17,7 +30,7 @@ def timing(f):
         time1 = time.time()
         ret = f(*args)
         time2 = time.time()
-        print('function took {:.3f} ms'.format((time2-time1)*1000.0))
+        self.outputqueue.put('01|database|Function took {:.3f} ms'.format((time2-time1)*1000.0))
         return ret
     return wrap
 
@@ -30,6 +43,10 @@ class Database(object):
         # For now, do not remember between runs of slips. Just delete the database when we start with flushdb
         self.r.flushdb()
         self.separator = '_'
+
+    def setOutputQueue(self, outputqueue):
+        """ Set the output queue"""
+        self.outputqueue = outputqueue
 
     def addProfile(self, profileid, starttime, duration):
         """ 
@@ -46,9 +63,10 @@ class Database(object):
                 self.r.hset(profileid, 'duration', duration)
                 # The name of the list with the dstips
                 #self.r.hset(profileid, 'DstIps', 'DstIps')
-        except redis.exceptions.ResponseError as e:
-            print('Error in addProfile')
-            print(e)
+        except redis.exceptions.ResponseError as inst:
+            self.outputqueue.put('00|database|Error in addProfile in database.py')
+            self.outputqueue.put('00|database|{}'.format(type(inst)))
+            self.outputqueue.put('00|database|{}'.format(inst))
 
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
@@ -58,9 +76,10 @@ class Database(object):
             if data:
                 return temp_id
             return False
-        except redis.exceptions.ResponseError as e:
-            print('Error in addProfile')
-            print(e)
+        except redis.exceptions.ResponseError as inst:
+            self.outputqueue.put('00|database|error in addprofileidfromip in database.py')
+            self.outputqueue.put('00|database|{}'.format(type(inst)))
+            self.outputqueue.put('00|database|{}'.format(inst))
 
     def getProfiles(self):
         """ Get a list of all the profiles """
@@ -100,17 +119,27 @@ class Database(object):
         """
         Get the src ip for a specific TW for a specific profileid
         """
-        if type(twid) == list:
-            twid = twid[0].decode("utf-8") 
-        return self.r.smembers(profileid + self.separator + twid + self.separator + 'SrcIPs')
+        #if type(twid) == list:
+        #    twid = twid[0].decode("utf-8") 
+        #return self.r.smembers(profileid + self.separator + twid + self.separator + 'SrcIPs')
+        data = self.r.hget(profileid + self.separator + twid, 'SrcIPs')
+        if data:
+            return data.decode('utf-8')
+        else:
+            return ''
 
     def getDstIPsfromProfileTW(self, profileid, twid):
         """
         Get the dst ip for a specific TW for a specific profileid
         """
-        if type(twid) == list:
-            twid = twid[0].decode("utf-8") 
-        return self.r.smembers(profileid + self.separator + twid + self.separator + 'DstIPs')
+        #if type(twid) == list:
+        #    twid = twid[0].decode("utf-8") 
+        #return self.r.smembers(profileid + self.separator + twid + self.separator + 'DstIPs')
+        data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
+        if data:
+            return data.decode('utf-8')
+        else:
+            return ''
 
     def hasProfile(self, profileid):
         """ Check if we have the given profile """
@@ -163,16 +192,14 @@ class Database(object):
             data = {}
             data[str(twid)] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
-            #print('In DB: Created and added to DB the new older TW with id {}. Time: {} '.format(twid, startoftw))
-            # Mark the TW as modified
-            self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
+            self.outputqueue.put('04|database|[DB]: Created and added to DB the new older TW with id {}. Time: {} '.format(twid, startoftw))
+            # Create the hash for the timewindow and mark it as modified
+            self.markProfileTWAsModified(profileid, twid)
             return twid
         except redis.exceptions.ResponseError as e:
-            print('Error in addNewTW')
-            print(e)
-        #except Exception as inst:
-            #print('Error in AddNewTW in database.py')
-            #print(inst)
+            self.outputqueue.put('00|database|error in addNewOlderTW in database.py')
+            self.outputqueue.put('00|database|{}'.format(type(inst)))
+            self.outputqueue.put('00|database|{}'.format(inst))
 
     def addNewTW(self, profileid, startoftw):
         try:
@@ -195,16 +222,13 @@ class Database(object):
             data = {}
             data[str(twid)] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
-            #print('In DB: Created and added to DB the TW with id {}. Time: {} '.format(twid, startoftw))
-            # Mark the TW as modified
-            self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
+            self.outputqueue.put('04|database|[DB]: Created and added to DB the TW with id {}. Time: {} '.format(twid, startoftw))
+            # Create the hash for the timewindow and mark it as modified
+            self.markProfileTWAsModified(profileid, twid)
             return twid
         except redis.exceptions.ResponseError as e:
-            print('Error in addNewTW')
-            print(e)
-        #except Exception as inst:
-            #print('Error in AddNewTW in database.py')
-            #print(inst)
+            self.outputqueue.put('01|database|Error in addNewTW')
+            self.outputqueue.put('01|database|{}'.format(e))
 
     def getAmountTW(self, profileid):
         """ Return the amount of tw for this profile id """
@@ -212,42 +236,99 @@ class Database(object):
 
     def wasProfileTWModified(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
-        data = self.r.get(profileid + self.separator + twid + self.separator + 'Modified')
-        return bool(int(data.decode("utf-8")))
+        data = self.r.hget(profileid + self.separator + twid, 'Modified')
+        return bool(int(data))
 
     def markProfileTWAsNotModified(self, profileid, twid):
         """ Mark a TW in a profile as not modified """
-        self.r.set( profileid + self.separator + twid + self.separator + 'Modified', '0')
+        self.r.hset( profileid + self.separator + twid, 'Modified', '0')
 
-    def add_dstips(self, profileid, twid, daddr):
+    def markProfileTWAsModified(self, profileid, twid):
+        """ 
+        Mark a TW in a profile as not modified 
+        As a side effect, it can create it if its not there
         """
+        self.r.hset( profileid + self.separator + twid, 'Modified', '1')
+
+    def add_out_dstips(self, profileid, twid, daddr_as_obj):
+        """
+        Function if the flow is going out from the profile IP
         Add the dstip to this tw in this profile
         """
         try:
-            if type(twid) == list:
-                twid = twid[0].decode("utf-8") 
-            self.r.sadd( profileid + self.separator + twid + self.separator + 'DstIPs', str(daddr))
-            # Save in the profile that it was modified, so we know we should report on this
-            self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
+            # Get the hash of the timewindow
+            hash_id = profileid + self.separator + twid
+            data = self.r.hget(hash_id, 'DstIPs')
+            if not data:
+                data = {}
+            try:
+                temp_data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
+                # Convert the json str to a dictionary
+                data = json.loads(temp_data)
+                # Add 1 because we found this ip again
+                data[str(daddr_as_obj)] += 1
+                #self.outputqueue.put('03|database|[DB]: Not the first time. Add 1 to {}'.format(daddr_as_obj))
+            except (KeyError, TypeError) as e:
+                data[str(daddr_as_obj)] = 1
+                # Convet the dictionary to json
+                data = json.dumps(data)
+            #self.outputqueue.put('03|database|[DB]: Data to store back in the hash {}'.format(data))
+            self.r.hset( profileid + self.separator + twid, 'DstIPs', str(data))
+            # Mark the tw as modified
+            self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
-            print('Error in add_dstips in database.py')
-            print(type(inst))
-            print(inst)
+            self.outputqueue.put('01|database|Error in add_dstips in database.py')
+            self.outputqueue.put('01|database|{}'.format(type(inst)))
+            self.outputqueue.put('01|database|{}'.format(inst))
 
-    def add_srcips(self, profileid, twid, saddr):
+    def add_out_dstport(self, profileid, twid, dport):
+        """ """
+        pass
+
+    def add_out_srcport(self, profileid, twid, sport):
+        """ """
+        pass
+
+    def add_in_srcips(self, profileid, twid, saddr_as_obj):
         """
+        Function if the flow is going in to the profile IP
         Add the srcip to this tw in this profile
         """
         try:
-            if type(twid) == list:
-                twid = twid[0].decode("utf-8") 
-            self.r.sadd( profileid + self.separator + twid + self.separator + 'SrcIPs', str(saddr))
-            # Save in the profile that it was modified, so we know we should report on this
-            self.r.set(profileid + self.separator + twid + self.separator + 'Modified', '1')
+            # Get the hash of the timewindow
+            hash_id = profileid + self.separator + twid
+            data = self.r.hget(hash_id, 'SrcIPs')
+            if not data:
+                data = {}
+            try:
+                temp_data = self.r.hget(profileid + self.separator + twid, 'SrcIPs')
+                # Convert the json str to a dictionary
+                data = json.loads(temp_data)
+                # Add 1 because we found this ip again
+                data[str(saddr_as_obj)] += 1
+            except (KeyError, TypeError) as e:
+                data[str(saddr_as_obj)] = 1
+                # Convet the dictionary to json
+                data = json.dumps(data)
+            self.r.hset( profileid + self.separator + twid, 'SrcIPs', str(data))
+            # Mark the tw as modified
+            self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
-            print('Error in add_dstips in database.py')
-            print(type(inst))
-            print(inst)
+            self.outputqueue.put('01|database|Error in add_dstips in database.py')
+            self.outputqueue.put('01|database|{}'.format(type(inst)))
+            self.outputqueue.put('01|database|{}'.format(inst))
+
+    def add_in_dstport(self, profileid, twid, dport):
+        """ """
+        pass
+
+    def add_in_srcport(self, profileid, twid, sport):
+        """ """
+        pass
+
+    def add_srcips(self, profileid, twid, saddr):
+        """ """
+        pass
 
     def getFieldSeparator(self):
         """ Return the field separator """
