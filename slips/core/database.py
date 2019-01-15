@@ -223,8 +223,6 @@ class Database(object):
             data[str(twid)] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
             self.outputqueue.put('04|database|[DB]: Created and added to DB the TW with id {}. Time: {} '.format(twid, startoftw))
-            # Create the hash for the timewindow and mark it as modified
-            self.markProfileTWAsModified(profileid, twid)
             return twid
         except redis.exceptions.ResponseError as e:
             self.outputqueue.put('01|database|Error in addNewTW')
