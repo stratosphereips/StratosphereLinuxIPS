@@ -24,6 +24,7 @@ class InputProcess(multiprocessing.Process):
                 except EOFError:
                     return True
                 while line != '':
+                    # TODO Convert this to a for so we know when the file ends...
                     # While the input communication queue is empty
                     if self.inputqueue.empty():
                         # Send the line to the profiler
