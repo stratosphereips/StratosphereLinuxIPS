@@ -10,6 +10,7 @@ import threading
 import time
 from slips.core.database import __database__
 import configparser
+import pprint
 
 def timing(f):
     """ Function to measure the time another function takes. It should be used as decorator: @timing"""
@@ -40,6 +41,7 @@ class LogsProcess(multiprocessing.Process):
         # Get the time of log report
         try:
             self.report_time = int(self.config.get('parameters', 'log_report_time'))
+            self.outputqueue.put('10|logs|Log Report time: {} seconds'.format(self.report_time))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.report_time = 5
@@ -48,7 +50,7 @@ class LogsProcess(multiprocessing.Process):
         try:
             # Create our main output folder. The current datetime with microseconds
             # TODO. Do not create the folder if there is no data? (not sure how to)
-            self.mainfoldername = datetime.now().strftime('%Y-%m-%d--%H:%M:%s')
+            self.mainfoldername = datetime.now().strftime('%Y-%m-%d--%H:%M:%S')
             if not os.path.exists(self.mainfoldername):
                     os.makedirs(self.mainfoldername)
             # go into this folder
@@ -66,6 +68,7 @@ class LogsProcess(multiprocessing.Process):
                     if 'stop' != line:
                         # we are not processing input from the queue yet
                         # without this line the complete output thread does not work!!
+                        # WTF???????
                         print(line)
                         pass
                     else:
@@ -85,10 +88,9 @@ class LogsProcess(multiprocessing.Process):
         except Exception as inst:
             # Stop the timer
             timer.shutdown()
-            print('\tProblem with LogsProcess()')
-            print(type(inst))
-            print(inst.args)
-            print(inst)
+            self.outputqueue.put('01|logs|\t[Logs] Error with LogsProcess')
+            self.outputqueue.put('01|logs|\t[Logs] {}'.format(type(inst)))
+            self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))
             sys.exit(1)
 
     def createProfileFolder(self, profileid):
@@ -104,19 +106,26 @@ class LogsProcess(multiprocessing.Process):
             self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Profileid : ' + profileid)
         return profilefolder
 
-    def addDataToFile(self, filename, data, mode='w+'):
+    def addDataToFile(self, filename, data, file_mode='w+', data_type='txt', data_mode='text'):
         """
         Receive data and append it in the general log of this profile
         If the filename was not opened yet, then open it, write the data and return the file object.
         Do not close the file
+        In data_mode = 'text', we add a \n at the end
+        In data_mode = 'raw', we do not add a \n at the end
         """
+        if data_type == 'json':
+            # Implement some fancy print from json data
+            data = data
+        if data_mode == 'text':
+            data = data + '\n'
         try:
-            filename.write(data + '\n')
+            filename.write(data)
             return filename
         except (NameError, AttributeError) as e:
             # The file was not opened
-            fileobj = open(filename, mode)
-            fileobj.write(data + '\n')
+            fileobj = open(filename, file_mode)
+            fileobj.write(data)
             # For some reason the files are closed and flushed correclty.
             return fileobj
         except KeyboardInterrupt:
@@ -136,14 +145,14 @@ class LogsProcess(multiprocessing.Process):
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             # Debug
-            self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: ' + profilesLen)
+            self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {} ({})'.format(profilesLen, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
             # For each profile, get the tw
             for profileid in profiles:
                 profileid = profileid.decode('utf-8')
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
                 twLen = str(__database__.getAmountTW(profileid))
-                self.outputqueue.put('30|logs|\t[Logs] Profile: ' + profileid + '. ' + twLen + ' timewindows')
+                self.outputqueue.put('01|logs|\t[Logs] Profile: {} has {} timewindows'.format(profileid, twLen))
                 # For each TW in this profile
                 TWforProfile = __database__.getTWsfromProfile(profileid)
                 for (twid, twtime) in TWforProfile:
@@ -152,30 +161,30 @@ class LogsProcess(multiprocessing.Process):
                     twlog = twtime + '.' + twid
                     # Add data into profile log
                     modified = __database__.wasProfileTWModified(profileid, twid)
-                    self.outputqueue.put('40|logs|\t[Logs] Profile: {}. TW {}. Modified {}'.format(profileid, twid, modified))
+                    self.outputqueue.put('02|logs|\t[Logs] Profile: {}. TW {}. Modified {}'.format(profileid, twid, modified))
                     if modified: 
-                        self.outputqueue.put('50|logs|\t[Logs] Profile: {}. TW {}. Was Modified. So process it'.format(profileid, twid))
+                        # Once we know the tw was modified, we erase its file and save the data again
+                        self.addDataToFile(profilefolder + '/' + twlog, '', file_mode='w+', data_mode = 'raw')
                         dstips = __database__.getDstIPsfromProfileTW(profileid, twid)
                         if dstips:
                             # Add dstips
-                            self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: ' + dstips, mode='a+')
-                            self.outputqueue.put('60|logs|\t\t[Logs] DstIP: ' + dstips)
+                            self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: ' + dstips, file_mode='a+', data_type='json')
+                            self.outputqueue.put('03|logs|\t\t[Logs] DstIP: ' + dstips)
                             # Mark it as not modified anymore
                             __database__.markProfileTWAsNotModified(profileid, twid)
                         # Add srcips
                         srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
                         if srcips:
-                            self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP: '+ srcips, mode='a+')
-                            self.outputqueue.put('60|logs|\t\t[Logs] SrcIP: ' + srcips)
+                            self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP: '+ srcips, file_mode='a+', data_type='json')
+                            self.outputqueue.put('03|logs|\t\t[Logs] SrcIP: ' + srcips)
                             # Mark it as not modified anymore
                             __database__.markProfileTWAsNotModified(profileid, twid)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            print('\tProblem with process_gloabl_data in LogsProcess()')
-            print(type(inst))
-            print(inst.args)
-            print(inst)
+            self.outputqueue.put('01|logs|\t[Logs] Error in process_global_data in LogsProcess')
+            self.outputqueue.put('01|logs|\t[Logs] {}'.format(type(inst)))
+            self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))
             sys.exit(1)
 
 
