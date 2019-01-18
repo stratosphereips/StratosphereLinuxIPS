@@ -119,9 +119,6 @@ class Database(object):
         """
         Get the src ip for a specific TW for a specific profileid
         """
-        #if type(twid) == list:
-        #    twid = twid[0].decode("utf-8") 
-        #return self.r.smembers(profileid + self.separator + twid + self.separator + 'SrcIPs')
         data = self.r.hget(profileid + self.separator + twid, 'SrcIPs')
         if data:
             return data.decode('utf-8')
@@ -132,9 +129,6 @@ class Database(object):
         """
         Get the dst ip for a specific TW for a specific profileid
         """
-        #if type(twid) == list:
-        #    twid = twid[0].decode("utf-8") 
-        #return self.r.smembers(profileid + self.separator + twid + self.separator + 'DstIPs')
         data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
         if data:
             return data.decode('utf-8')
@@ -193,8 +187,7 @@ class Database(object):
             data[str(twid)] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
             self.outputqueue.put('04|database|[DB]: Created and added to DB the new older TW with id {}. Time: {} '.format(twid, startoftw))
-            # Create the hash for the timewindow and mark it as modified
-            self.markProfileTWAsModified(profileid, twid)
+            # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
             return twid
         except redis.exceptions.ResponseError as e:
             self.outputqueue.put('00|database|error in addNewOlderTW in database.py')
@@ -223,6 +216,7 @@ class Database(object):
             data[str(twid)] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
             self.outputqueue.put('04|database|[DB]: Created and added to DB the TW with id {}. Time: {} '.format(twid, startoftw))
+            # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
             return twid
         except redis.exceptions.ResponseError as e:
             self.outputqueue.put('01|database|Error in addNewTW')
@@ -235,6 +229,9 @@ class Database(object):
     def wasProfileTWModified(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
         data = self.r.hget(profileid + self.separator + twid, 'Modified')
+        if not data:
+            # If for some reason we don't have the modified bit set, then it was not modified.
+            data = 0
         return bool(int(data))
 
     def markProfileTWAsNotModified(self, profileid, twid):
@@ -255,29 +252,37 @@ class Database(object):
         """
         try:
             # Get the hash of the timewindow
+            self.outputqueue.put('03|database|[DB]: Add_out_dstips called with profileid {}, twid {}, daddr_as_obj {}'.format(profileid, twid, str(daddr_as_obj)))
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, 'DstIPs')
+            # Sometimes (always?) the data is of type bytes, if so, decode it so we can work with strings
             if not data:
                 data = {}
+            elif type(data) == bytes:
+                data = data.decode('utf-8')
+                # For some weird reason (error?) the json library expects the keys to be delimited with double-quotes and not single-quotes.
+                # Not sure how our single quotes got here. Fix this better
+                data = data.replace('\'','"')
             try:
-                temp_data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
                 # Convert the json str to a dictionary
-                data = json.loads(temp_data)
+                data = json.loads(data)
                 # Add 1 because we found this ip again
+                self.outputqueue.put('03|database|[DB]: Not the first time for this daddr. Add 1 to {}'.format(str(daddr_as_obj)))
                 data[str(daddr_as_obj)] += 1
-                #self.outputqueue.put('03|database|[DB]: Not the first time. Add 1 to {}'.format(daddr_as_obj))
-            except (KeyError, TypeError) as e:
+            except (TypeError, KeyError) as e:
+                # There was no previous data stored in the DB
+                self.outputqueue.put('03|database|[DB]: First time for this daddr. Make it 1 to {}'.format(str(daddr_as_obj)))
                 data[str(daddr_as_obj)] = 1
                 # Convet the dictionary to json
                 data = json.dumps(data)
-            #self.outputqueue.put('03|database|[DB]: Data to store back in the hash {}'.format(data))
             self.r.hset( profileid + self.separator + twid, 'DstIPs', str(data))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
-            self.outputqueue.put('01|database|Error in add_dstips in database.py')
-            self.outputqueue.put('01|database|{}'.format(type(inst)))
-            self.outputqueue.put('01|database|{}'.format(inst))
+            self.outputqueue.put('01|database|[DB] Error in add_out_dstips in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
 
     def add_out_dstport(self, profileid, twid, dport):
         """ """
@@ -298,10 +303,14 @@ class Database(object):
             data = self.r.hget(hash_id, 'SrcIPs')
             if not data:
                 data = {}
+            elif type(data) == bytes:
+                data = data.decode('utf-8')
+                # For some weird reason (error?) the json library expects the keys to be delimited with double-quotes and not single-quotes.
+                # Not sure how our single quotes got here. Fix this better
+                data = data.replace('\'','"')
             try:
-                temp_data = self.r.hget(profileid + self.separator + twid, 'SrcIPs')
                 # Convert the json str to a dictionary
-                data = json.loads(temp_data)
+                data = json.loads(data)
                 # Add 1 because we found this ip again
                 data[str(saddr_as_obj)] += 1
             except (KeyError, TypeError) as e:
@@ -312,7 +321,7 @@ class Database(object):
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
-            self.outputqueue.put('01|database|Error in add_dstips in database.py')
+            self.outputqueue.put('01|database|Error in add_in_srcips in database.py')
             self.outputqueue.put('01|database|{}'.format(type(inst)))
             self.outputqueue.put('01|database|{}'.format(inst))
 
