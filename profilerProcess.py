@@ -9,6 +9,16 @@ from slips.core.database import __database__
 import time
 import ipaddress
 
+def timing(f):
+    """ Function to measure the time another function takes."""
+    def wrap(*args):
+        time1 = time.time()
+        ret = f(*args)
+        time2 = time.time()
+        print('Function took {:.3f} ms'.format((time2-time1)*1000.0))
+        return ret
+    return wrap
+
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
     """ A class to create the profiles for IPs and the rest of data """
@@ -49,7 +59,7 @@ class ProfilerProcess(multiprocessing.Process):
         else:
             self.width = 300.0
         # Report the time window width
-        self.outputqueue.put("10|profiler|Time Windows Width used: {} minutes.".format(self.width))
+        self.outputqueue.put("10|profiler|Time Windows Width used: {} seconds.".format(self.width))
 
         # Get the format of the time in the flows
         try:
@@ -353,12 +363,9 @@ class ProfilerProcess(multiprocessing.Process):
             self.outputqueue.put("07|profiler|Storing data in the profile: {}".format(profileid))
             # Was the flow coming FROM the profile ip?
             if saddr_as_obj in self.home_net:
-                self.outputqueue.put("08|profiler|Storing all the data Out")
                 # The srcip was in the homenet
                 __database__.add_out_dstips(profileid, twid, daddr_as_obj)
-                self.outputqueue.put("08|profiler|Storing all the data out2")
                 __database__.add_out_dstport(profileid, twid, dport)
-                self.outputqueue.put("08|profiler|Storing all the data out3")
                 __database__.add_out_srcport(profileid, twid, sport)
             # Was the flow coming TO the profile ip?
             elif daddr_as_obj in self.home_net:
