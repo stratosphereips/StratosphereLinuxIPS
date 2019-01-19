@@ -28,6 +28,7 @@ class InputProcess(multiprocessing.Process):
                     # While the input communication queue is empty
                     if self.inputqueue.empty():
                         # Send the line to the profiler
+                        self.outputqueue.put("03|input| > Sent Line: {}".format(line.replace('\n','')))
                         self.profilerqueue.put(line)
                         lines += 1
                         try:
