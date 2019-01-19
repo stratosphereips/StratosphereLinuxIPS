@@ -28,7 +28,7 @@ class InputProcess(multiprocessing.Process):
                     # While the input communication queue is empty
                     if self.inputqueue.empty():
                         # Send the line to the profiler
-                        self.outputqueue.put("03|input| > Sent Line: {}".format(line.replace('\n','')))
+                        self.outputqueue.put("03|input|[In] > Sent Line: {}".format(line.replace('\n','')))
                         self.profilerqueue.put(line)
                         lines += 1
                         try:
@@ -57,14 +57,14 @@ class InputProcess(multiprocessing.Process):
                     if self.inputqueue.empty():
                         # While the communication queue is empty, we can read from the file/input
                         for line in self.datainput:
-                            self.outputqueue.put("03|input| > Sent Line: {}".format(line.replace('\n','')))
+                            self.outputqueue.put("03|input|[In] > Sent Line: {}".format(line.replace('\n','')))
                             self.profilerqueue.put(line)
                             lines += 1
                     else:
                         # The communication queue is not empty process
                         line = self.inputqueue.get()
                         if 'stop' == line:
-                            self.outputqueue.put("03|input|Sent {} lines.".format(lines))
+                            self.outputqueue.put("03|input|[In] Sent {} lines.".format(lines))
                             self.outputqueue.put("04|input|Stopping the Input Process.")
                             return True
         except KeyboardInterrupt:
