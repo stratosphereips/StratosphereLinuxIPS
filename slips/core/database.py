@@ -222,28 +222,43 @@ class Database(object):
             self.outputqueue.put('01|database|Error in addNewTW')
             self.outputqueue.put('01|database|{}'.format(e))
 
+    def getTimeTW(self, profileid, twid):
+        """ Return the time when this TW in this profile was created """
+        # Get all the TW for this profile
+        # We need to encode it to 'search' because the data in the sorted set is encoded
+        data = self.r.zscore('tws' + profileid, twid.encode('utf-8'))
+        return data
+
     def getAmountTW(self, profileid):
         """ Return the amount of tw for this profile id """
         return self.r.zcard('tws'+profileid)
 
+    def getModifiedTW(self):
+        """ Return all the list of modified tw """
+        return self.r.smembers('ModifiedTW')
+
     def wasProfileTWModified(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
-        data = self.r.hget(profileid + self.separator + twid, 'Modified')
+        data = self.r.sismember('ModifiedTW', profileid + self.separator + twid)
+        #data = self.r.hget(profileid + self.separator + twid, 'Modified')
         if not data:
             # If for some reason we don't have the modified bit set, then it was not modified.
             data = 0
-        return bool(int(data))
+        #return bool(int(data))
+        return bool(data)
 
     def markProfileTWAsNotModified(self, profileid, twid):
         """ Mark a TW in a profile as not modified """
-        self.r.hset( profileid + self.separator + twid, 'Modified', '0')
+        #self.r.hset( profileid + self.separator + twid, 'Modified', '0')
+        self.r.srem('ModifiedTW', profileid + self.separator + twid)
 
     def markProfileTWAsModified(self, profileid, twid):
         """ 
         Mark a TW in a profile as not modified 
         As a side effect, it can create it if its not there
         """
-        self.r.hset( profileid + self.separator + twid, 'Modified', '1')
+        #self.r.hset( profileid + self.separator + twid, 'Modified', '1')
+        self.r.sadd('ModifiedTW', profileid + self.separator + twid)
 
     def add_out_dstips(self, profileid, twid, daddr_as_obj):
         """
