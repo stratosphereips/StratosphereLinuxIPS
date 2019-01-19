@@ -244,7 +244,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Tabs is the separator
                         self.separator = '	'
                     else:
-                        self.outputqueue.put("01|profiler|Error. The file is not comma or tab separated.")
+                        self.outputqueue.put("01|profiler|[Profiler] Error. The file is not comma or tab separated.")
                         return -2
                     nline = line.strip().split(self.separator)
                     for field in nline:
@@ -326,13 +326,13 @@ class ProfilerProcess(multiprocessing.Process):
 
                 # Check that the dst IP is in our home net
                 if daddr_as_obj in self.home_net:
-                    self.outputqueue.put("07|profiler|Flow with dstip in homenet: srcip {}, dstip {}".format(saddr_as_obj, daddr_as_obj))
+                    self.outputqueue.put("07|profiler|[Profiler] Flow with dstip in homenet: srcip {}, dstip {}".format(saddr_as_obj, daddr_as_obj))
                     # The dst ip is in the home net. So register this as going to it
                     # 1. Get the profile of the dst ip.
                     profileid = __database__.getProfileIdFromIP(daddr_as_obj)
                     if not profileid:
                         # We do not have yet the profile of the dst ip that is in our home net
-                        self.outputqueue.put("07|profiler|The dstip profile was not here... create")
+                        self.outputqueue.put("07|profiler|[Profiler] The dstip profile was not here... create")
                         temp_profileid = 'profile' + separator + str(daddr_as_obj)
                         #self.outputqueue.put("01|profiler|Created profileid for dstip: {}".format(temp_profileid))
                         __database__.addProfile(temp_profileid, starttime, self.width)
@@ -341,7 +341,7 @@ class ProfilerProcess(multiprocessing.Process):
                         if not profileid:
                             # Too many errors. We should not be here
                             return False
-                    self.outputqueue.put("07|profiler|Profile for dstip {} : {}".format(daddr_as_obj, profileid))
+                    self.outputqueue.put("07|profiler|[Profile] Profile for dstip {} : {}".format(daddr_as_obj, profileid))
                     # 2. For this profile, find the id in the databse of the tw where the flow belongs.
                     twid = self.get_timewindow(starttime, profileid)
                 elif daddr_as_obj not in self.home_net:
@@ -360,7 +360,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             ##########################################
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
-            self.outputqueue.put("07|profiler|Storing data in the profile: {}".format(profileid))
+            self.outputqueue.put("07|profiler|[Profiler] Storing data in the profile: {}".format(profileid))
             # Was the flow coming FROM the profile ip?
             if saddr_as_obj in self.home_net:
                 # The srcip was in the homenet
@@ -397,26 +397,26 @@ class ProfilerProcess(multiprocessing.Process):
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
                 flowtime = float(flowtime)
-                self.outputqueue.put("01|profiler|The last TW id was {}. Start:{}. End: {}".format(lasttwid, lasttw_start_time, lasttw_end_time ))
+                self.outputqueue.put("04|profiler|[Profiler] The last TW id was {}. Start:{}. End: {}".format(lasttwid, lasttw_start_time, lasttw_end_time ))
                 # There was a last TW, so check if the current flow belongs here.
                 if lasttw_end_time > flowtime and lasttw_start_time <= flowtime:
-                    self.outputqueue.put("01|profiler|The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time))
+                    self.outputqueue.put("04|profiler|[Profiler] The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time))
                     twid = lasttwid
                 elif lasttw_end_time <= flowtime:
                     # The flow was not in the last TW, its NEWER than it
-                    self.outputqueue.put("01|profiler|The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time))
+                    self.outputqueue.put("04|profiler|[Profiler] The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time))
                     amount_of_new_tw = int((flowtime - lasttw_end_time) / self.width)
-                    self.outputqueue.put("01|profiler|We have to create {} empty TWs in the midle.".format(amount_of_new_tw))
+                    self.outputqueue.put("04|profiler|[Profiler] We have to create {} empty TWs in the midle.".format(amount_of_new_tw))
                     temp_end = lasttw_end_time
                     for id in range(0, amount_of_new_tw + 1):
                         new_start = temp_end 
                         twid = __database__.addNewTW(profileid, new_start)
-                        self.outputqueue.put("01|profiler|Creating the TW id {}. Start: {}.".format(twid, new_start))
+                        self.outputqueue.put("04|profiler|[Profiler] Creating the TW id {}. Start: {}.".format(twid, new_start))
                         temp_end = new_start + self.width
                     # Now get the id of the last TW so we can return it
                 elif lasttw_start_time > flowtime:
                     # The flow was not in the last TW, its OLDER that it
-                    self.outputqueue.put("01|profiler|The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time))
+                    self.outputqueue.put("04|profiler|[Profiler] The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time))
                     # Find out if we already have this TW in the past
                     data = __database__.getTWforScore(profileid, flowtime)
                     if data:
@@ -430,7 +430,7 @@ class ProfilerProcess(multiprocessing.Process):
                         amount_of_new_tw = int((lasttw_end_time - flowtime) / self.width)
                         amount_of_current_tw = __database__.getamountTWsfromProfile(profileid)
                         diff = amount_of_new_tw - amount_of_current_tw
-                        self.outputqueue.put("01|profiler|We need to create {} TW before the first".format(diff))
+                        self.outputqueue.put("05|profiler|[Profiler] We need to create {} TW before the first".format(diff))
                         # Get the first TW
                         [(firsttwid, firsttw_start_time)] = __database__.getFirstTWforProfile(profileid)
                         firsttwid = firsttwid.decode("utf-8")
@@ -441,7 +441,7 @@ class ProfilerProcess(multiprocessing.Process):
                             new_start = temp_start
                             # The method to add an older TW is the same as to add a new one, just the starttime changes
                             twid = __database__.addNewOlderTW(profileid, new_start)
-                            self.outputqueue.put("01|profiler|Creating the new older TW id {}. Start: {}.".format(twid, new_start))
+                            self.outputqueue.put("02|profiler|[Profiler] Creating the new older TW id {}. Start: {}.".format(twid, new_start))
                             temp_start = new_start - self.width
             except ValueError:
                 # There is no last tw. So create the first TW
