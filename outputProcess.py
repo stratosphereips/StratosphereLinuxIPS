@@ -75,7 +75,7 @@ class OutputProcess(multiprocessing.Process):
         # There should be a level 0 that we never print. So its >, and not >=
         if verbose_level > 0 and verbose_level <= 9 and verbose_level <= self.verbose:
             print(msg)
-        if debug_level > 0 and debug_level <= 9 and debug_level <= self.debug:
+        elif debug_level > 0 and debug_level <= 9 and debug_level <= self.debug:
             # For now print DEBUG, then we can use colors or something
             print(msg)
         # This is to test if we are reading the flows completely
