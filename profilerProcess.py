@@ -311,6 +311,7 @@ class ProfilerProcess(multiprocessing.Process):
             sport = columns['sport']
             daddr = columns['daddr']
             dport = columns['dport']
+            proto = columns['proto']
             separator = __database__.getFieldSeparator()
             profileid = 'profile' + separator + str(saddr)
             starttime = time.mktime(columns['starttime'].timetuple())
@@ -384,22 +385,33 @@ class ProfilerProcess(multiprocessing.Process):
             # In which analysis mode are we?
             if self.analysis_direction == 'out':
                 if saddr_as_obj in self.home_net:
-                    # The srcip was in the homenet
+                    # Add the tuple
+                    __database__.add_out_tuple(profileid, twid, daddr_as_obj, dport, proto)
+                    # Add the dstip
                     __database__.add_out_dstips(profileid, twid, daddr_as_obj)
+                    # Add the dstport
                     __database__.add_out_dstport(profileid, twid, dport)
+                    # Add the srcport
                     __database__.add_out_srcport(profileid, twid, sport)
             elif self.analysis_direction == 'all':
                 # Was the flow coming FROM the profile ip?
                 if saddr_as_obj in self.home_net:
-                    # The srcip was in the homenet
+                    # Add the tuple
+                    __database__.add_out_tuple(profileid, twid, daddr_as_obj, dport, proto)
+                    # Add the dstip
                     __database__.add_out_dstips(profileid, twid, daddr_as_obj)
+                    # Add the dstport
                     __database__.add_out_dstport(profileid, twid, dport)
+                    # Add the srcport
                     __database__.add_out_srcport(profileid, twid, sport)
                 # Was the flow coming TO the profile ip?
                 elif daddr_as_obj in self.home_net:
                     # The dstip was in the homenet
+                    # Add the srcip
                     __database__.add_in_srcips(profileid, twid, saddr_as_obj)
+                    # Add the dstport
                     __database__.add_in_dstport(profileid, twid, dport)
+                    # Add the srcport
                     __database__.add_in_srcport(profileid, twid, sport)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
