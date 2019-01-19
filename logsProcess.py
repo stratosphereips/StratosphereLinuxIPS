@@ -35,6 +35,7 @@ class LogsProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         # Read the configuration
         self.read_configuration()
+        self.fieldseparator = __database__.getFieldSeparator()
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -98,8 +99,7 @@ class LogsProcess(multiprocessing.Process):
         Receive a profile id, create a folder if its not there. Create the log files.
         """
         # Ask the field separator to the db
-        separator = __database__.getFieldSeparator()
-        profilefolder = profileid.split(separator)[1]
+        profilefolder = profileid.split(self.fieldseparator)[1]
         if not os.path.exists(profilefolder):
             os.makedirs(profilefolder)
             # If we create the folder, add once there the profileid. We have to do this here if we want to do it once.
@@ -138,47 +138,50 @@ class LogsProcess(multiprocessing.Process):
         """
         try:
             #1. Get the list of profiles so far
-            temp_profs = __database__.getProfiles()
-            if not temp_profs:
-                return True
-            profiles = list(temp_profs)
+            #temp_profs = __database__.getProfiles()
+            #if not temp_profs:
+            #    return True
+            #profiles = list(temp_profs)
+
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
-            # Debug
-            self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {} ({})'.format(profilesLen, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
-            # For each profile, get the tw
-            for profileid in profiles:
-                profileid = profileid.decode('utf-8')
+            # Get the list of all the modifed TW for all the profiles
+            TWforProfile = __database__.getModifiedTW()
+            amount_of_modified = len(TWforProfile)
+            self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {}. Modified TWs: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+            for profileTW in TWforProfile:
+                # Get the profileid and twid
+                profileTW = profileTW.decode('utf-8')
+                profileid = profileTW.split(self.fieldseparator)[0] + self.fieldseparator + profileTW.split(self.fieldseparator)[1]
+                twid = profileTW.split(self.fieldseparator)[2]
+                # Get the time of this TW. For the file name
+                twtime = __database__.getTimeTW(profileid, twid)
+                twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
+                self.outputqueue.put('02|logs|\t[Logs] Storing Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime))
+                #twLen = str(__database__.getAmountTW(profileid))
+                #self.outputqueue.put('30|logs|\t[Logs] Profile: {} has {} timewindows'.format(profileid, twLen))
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
-                twLen = str(__database__.getAmountTW(profileid))
-                self.outputqueue.put('01|logs|\t[Logs] Profile: {} has {} timewindows'.format(profileid, twLen))
-                # For each TW in this profile
-                TWforProfile = __database__.getTWsfromProfile(profileid)
-                for (twid, twtime) in TWforProfile:
-                    twid = twid.decode("utf-8")
-                    twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
-                    twlog = twtime + '.' + twid
-                    # Add data into profile log
-                    modified = __database__.wasProfileTWModified(profileid, twid)
-                    self.outputqueue.put('02|logs|\t[Logs] Profile: {}. TW {}. Modified {}'.format(profileid, twid, modified))
-                    if modified: 
-                        # Once we know the tw was modified, we erase its file and save the data again
-                        self.addDataToFile(profilefolder + '/' + twlog, '', file_mode='w+', data_mode = 'raw')
-                        dstips = __database__.getDstIPsfromProfileTW(profileid, twid)
-                        if dstips:
-                            # Add dstips
-                            self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: ' + dstips, file_mode='a+', data_type='json')
-                            self.outputqueue.put('03|logs|\t\t[Logs] DstIP: ' + dstips)
-                            # Mark it as not modified anymore
-                            __database__.markProfileTWAsNotModified(profileid, twid)
-                        # Add srcips
-                        srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
-                        if srcips:
-                            self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP: '+ srcips, file_mode='a+', data_type='json')
-                            self.outputqueue.put('03|logs|\t\t[Logs] SrcIP: ' + srcips)
-                            # Mark it as not modified anymore
-                            __database__.markProfileTWAsNotModified(profileid, twid)
+                twlog = twtime + '.' + twid
+                # Add data into profile log file
+                # First Erase its file and save the data again
+                self.addDataToFile(profilefolder + '/' + twlog, '', file_mode='w+', data_mode = 'raw')
+                #
+                # Save in the log file all parts of the profile
+                # 1. DstIPs
+                dstips = __database__.getDstIPsfromProfileTW(profileid, twid)
+                if dstips:
+                    # Add dstips to log file
+                    self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: ' + dstips, file_mode='a+', data_type='json')
+                    self.outputqueue.put('03|logs|\t\t[Logs] DstIP: ' + dstips)
+                srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
+                # 2. SrcIPs
+                if srcips:
+                    # Add srcips
+                    self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP: '+ srcips, file_mode='a+', data_type='json')
+                    self.outputqueue.put('03|logs|\t\t[Logs] SrcIP: ' + srcips)
+                # Mark it as not modified anymore
+                __database__.markProfileTWAsNotModified(profileid, twid)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
