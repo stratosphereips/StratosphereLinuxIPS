@@ -23,7 +23,7 @@ version = '0.5'
 ####################
 if __name__ == '__main__':  
     print('Stratosphere Linux IPS. Version {}'.format(version))
-    print('https://stratosphereips.org')
+    print('https://stratosphereips.org\n')
 
     # Parse the parameters
     parser = argparse.ArgumentParser()
