@@ -271,7 +271,6 @@ class Database(object):
             self.outputqueue.put('03|database|[DB]: Add_out_dstips called with profileid {}, twid {}, daddr_as_obj {}'.format(profileid, twid, str(daddr_as_obj)))
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, 'DstIPs')
-            # Sometimes (always?) the data is of type bytes, if so, decode it so we can work with strings
             if not data:
                 data = {}
             elif type(data) == bytes:
@@ -299,6 +298,47 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
+    def add_out_tuple(self, profileid, twid, daddr_as_obj, dport, proto):
+        """ Add the tuple going out for this profile """
+        try:
+            self.outputqueue.put('03|database|[DB]: Add_out_tuple called with profileid {}, twid {}, daddr_as_obj {}, dport {}, proto {}'.format(profileid, twid, str(daddr_as_obj), dport, proto))
+            hash_id = profileid + self.separator + twid
+            tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + str(proto)
+            data = self.r.hget(hash_id, 'OutTuples')
+            if not data:
+                data = {}
+            elif type(data) == bytes:
+                data = data.decode('utf-8')
+                # For some weird reason (error?) the json library expects the keys to be delimited with double-quotes and not single-quotes.
+                # Not sure how our single quotes got here. Fix this better
+                data = data.replace('\'','"')
+            try:
+                # Convert the json str to a dictionary
+                data = json.loads(data)
+                # Add 1 because we found it
+                self.outputqueue.put('03|database|[DB]: Not the first time for tuple {}. Add 1'.format(tupleid))
+                data[tupleid] += 1
+            except (TypeError, KeyError) as e:
+                # There was no previous data stored in the DB
+                self.outputqueue.put('03|database|[DB]: First time for tuple {}. Put 1'.format(tupleid))
+                data[tupleid] = 1
+                # Convet the dictionary to json
+                data = json.dumps(data)
+            self.r.hset( profileid + self.separator + twid, 'OutTuples', str(data))
+            # Mark the tw as modified
+            self.markProfileTWAsModified(profileid, twid)
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in add_out_tuple in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
+    def getOutTuplesfromProfileTW(self, profileid, twid):
+        """ Get the tuples """
+        data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
+        if data:
+            return data.decode('utf-8')
+        else:
+            return ''
 
     def add_out_dstport(self, profileid, twid, dport):
         """ """
