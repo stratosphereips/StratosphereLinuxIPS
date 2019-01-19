@@ -39,13 +39,16 @@ class InputProcess(multiprocessing.Process):
                         line = self.inputqueue.get()
                         if 'stop' == line:
                             print('Stopping Input Process')
-                            print('Sent {} lines'.format(lines))
+                            self.outputqueue.put("01|input|[In] Stopping input process")
+                            self.outputqueue.put("01|input|[In] Sent {} lines.".format(lines))
                             return True
-                # Now this is disable because the output does not know how to handle a 'stop' while still receiving lines. We don't know how to wait a little for
-                # the input to finish
                 # When the file ends, finish everything
-                #if line == '':
-                #    self.outputqueue.put("stop")
+                if line == '':
+                    # Send stop to the input queue
+                    self.inputqueue.put("stop")
+                    self.outputqueue.put("01|input|[In] No more input. Stopping input process.")
+                    self.outputqueue.put("01|input|[In] Sent {} lines.".format(lines))
+                    return True
             else:
                 # The input is not str, so it may/should be standard input
                 lines = 0
