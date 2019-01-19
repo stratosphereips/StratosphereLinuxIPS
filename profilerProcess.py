@@ -43,6 +43,7 @@ class ProfilerProcess(multiprocessing.Process):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.home_net = False
+
         # Get the time window width, if it was not specified as a parameter 
         if not self.width:
             try:
@@ -76,6 +77,15 @@ class ProfilerProcess(multiprocessing.Process):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.timeformat = '%Y/%m/%d %H:%M:%S.%f'
+
+        ##
+        # Get the direction of analysis
+        try:
+            self.analysis_direction = self.config.get('parameters', 'analysis_direction')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            # By default 
+            self.analysis_direction = 'all'
 
     def process_columns(self, line):
         """
@@ -371,18 +381,26 @@ class ProfilerProcess(multiprocessing.Process):
             ##########################################
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
             self.outputqueue.put("07|profiler|[Profiler] Storing data in the profile: {}".format(profileid))
-            # Was the flow coming FROM the profile ip?
-            if saddr_as_obj in self.home_net:
-                # The srcip was in the homenet
-                __database__.add_out_dstips(profileid, twid, daddr_as_obj)
-                __database__.add_out_dstport(profileid, twid, dport)
-                __database__.add_out_srcport(profileid, twid, sport)
-            # Was the flow coming TO the profile ip?
-            elif daddr_as_obj in self.home_net:
-                # The dstip was in the homenet
-                __database__.add_in_srcips(profileid, twid, saddr_as_obj)
-                __database__.add_in_dstport(profileid, twid, dport)
-                __database__.add_in_srcport(profileid, twid, sport)
+            # In which analysis mode are we?
+            if self.analysis_direction == 'out':
+                if saddr_as_obj in self.home_net:
+                    # The srcip was in the homenet
+                    __database__.add_out_dstips(profileid, twid, daddr_as_obj)
+                    __database__.add_out_dstport(profileid, twid, dport)
+                    __database__.add_out_srcport(profileid, twid, sport)
+            elif self.analysis_direction == 'all':
+                # Was the flow coming FROM the profile ip?
+                if saddr_as_obj in self.home_net:
+                    # The srcip was in the homenet
+                    __database__.add_out_dstips(profileid, twid, daddr_as_obj)
+                    __database__.add_out_dstport(profileid, twid, dport)
+                    __database__.add_out_srcport(profileid, twid, sport)
+                # Was the flow coming TO the profile ip?
+                elif daddr_as_obj in self.home_net:
+                    # The dstip was in the homenet
+                    __database__.add_in_srcips(profileid, twid, saddr_as_obj)
+                    __database__.add_in_dstport(profileid, twid, dport)
+                    __database__.add_in_srcport(profileid, twid, sport)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.outputqueue.put("01|profiler|Error in add_flow_to_profile profilerProcess.")
