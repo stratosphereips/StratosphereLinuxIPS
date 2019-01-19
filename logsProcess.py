@@ -180,6 +180,13 @@ class LogsProcess(multiprocessing.Process):
                     # Add srcips
                     self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP: '+ srcips, file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] SrcIP: ' + srcips)
+                # 3. Tuples
+                tuples = __database__.getOutTuplesfromProfileTW(profileid, twid)
+                if tuples:
+                    # Add tuples
+                    self.addDataToFile(profilefolder + '/' + twlog, 'OutTuples: '+ tuples, file_mode='a+', data_type='json')
+                    self.outputqueue.put('03|logs|\t\t[Logs] Tuples: ' + tuples)
+
                 # Mark it as not modified anymore
                 __database__.markProfileTWAsNotModified(profileid, twid)
         except KeyboardInterrupt:
