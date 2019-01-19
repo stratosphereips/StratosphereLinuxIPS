@@ -46,7 +46,13 @@ class ProfilerProcess(multiprocessing.Process):
         # Get the time window width, if it was not specified as a parameter 
         if not self.width:
             try:
-                self.width = float(self.config.get('parameters', 'time_window_width'))
+                data = self.config.get('parameters', 'time_window_width')
+                self.width = float(data)
+            except ValueError:
+                # Its not a float
+                if 'only_one_tw' in data:
+                    # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
+                    self.width = 9999999999
             except configparser.NoOptionError:
                 # By default we use 300 seconds, 5minutes
                 self.width = 300.0
@@ -59,7 +65,10 @@ class ProfilerProcess(multiprocessing.Process):
         else:
             self.width = 300.0
         # Report the time window width
-        self.outputqueue.put("10|profiler|Time Windows Width used: {} seconds.".format(self.width))
+        if self.width == 9999999999:
+            self.outputqueue.put("10|profiler|Time Windows Width used: Only 1 time windows. Dates in the names of files are 100 years in the past.".format(self.width))
+        else:
+            self.outputqueue.put("10|profiler|Time Windows Width used: {} seconds.".format(self.width))
 
         # Get the format of the time in the flows
         try:
@@ -315,7 +324,8 @@ class ProfilerProcess(multiprocessing.Process):
 
                 # The steps for adding a flow in a profile should be
                 # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
-                # The width is unique for all the timewindow in this profile
+                # The width is unique for all the timewindow in this profile. 
+                # Also we only need to pass the width for registration in the DB. Nothing operational
                 __database__.addProfile(profileid, starttime, self.width)
 
                 # 3. For this profile, find the id in the databse of the tw where the flow belongs.
@@ -445,7 +455,13 @@ class ProfilerProcess(multiprocessing.Process):
                             temp_start = new_start - self.width
             except ValueError:
                 # There is no last tw. So create the first TW
-                startoftw = float(flowtime)
+                # If the option for only-one-tw was selected, we should create the TW at least 100 years before the flowtime, to cover for
+                # 'flows in the past'. Which means we should cover for any flow that is coming later with time before the first flow
+                if self.width == 9999999999:
+                    # Seconds in 1 year = 31536000
+                    startoftw = float(flowtime - (31536000 * 100))
+                else:
+                    startoftw = float(flowtime)
                 # Add this TW, of this profile, to the DB
                 twid = __database__.addNewTW(profileid, startoftw)
                 #self.outputqueue.put("01|profiler|First TW ({}) created for profile {}.".format(twid, profileid))
