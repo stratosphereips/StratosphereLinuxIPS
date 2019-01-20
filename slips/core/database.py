@@ -136,6 +136,24 @@ class Database(object):
         else:
             return ''
 
+    def getT2ForProfileTW(self, profileid, twid, tupleid):
+        """
+        Get T1 and the previous_time for this previous_time, twid and tupleid
+        """
+        try:
+            self.outputqueue.put('01|database|[DB] BB: {}, {}, {}'.format(profileid, twid, tupleid))
+            hash_id = profileid + self.separator + twid
+            data = self.r.hget(hash_id, 'OutTuples')
+            if not data:
+                return (False, False)
+            self.outputqueue.put('01|database|[DB] Data in the tuple: {}'.format(data[tupleid]))
+            ( _ , previous_time, T1) = data[tupleid]
+            return (previous_time, T1)
+        except Exception as e:
+            self.outputqueue.put('01|database|[DB] Error in getT2ForProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
+            self.outputqueue.put('01|database|[DB] {}'.format(e))
+
     def hasProfile(self, profileid):
         """ Check if we have the given profile """
         return self.r.sismember('profiles', profileid)
@@ -298,12 +316,11 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def add_out_tuple(self,  profileid, twid, daddr_as_obj, dport, proto, dur, state, size, starttime):
+    def add_out_tuple(self,  profileid, twid, tupleid, data_tuple):
         """ Add the tuple going out for this profile """
         try:
-            self.outputqueue.put('03|database|[DB]: Add_out_tuple called with profileid {}, twid {}, daddr_as_obj {}, dport {}, proto {}'.format(profileid, twid, str(daddr_as_obj), dport, proto))
+            self.outputqueue.put('03|database|[DB]: Add_out_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple))
             hash_id = profileid + self.separator + twid
-            tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + str(proto)
             data = self.r.hget(hash_id, 'OutTuples')
             if not data:
                 data = {}
@@ -315,13 +332,22 @@ class Database(object):
             try:
                 # Convert the json str to a dictionary
                 data = json.loads(data)
-                # Add 1 because we found it
-                self.outputqueue.put('03|database|[DB]: Not the first time for tuple {}. Add 1'.format(tupleid))
-                data[tupleid] += 1
+                # Disasemble the input
+                (symbol_to_add, previous_time, T2)  = data_tuple
+                self.outputqueue.put('03|database|[DB]: Not the first time for tuple {}. Add the symbol: {}. Store previous_time: {}, T2: {}'.format(tupleid, symbol_to_add, previous_time, T2))
+                # Get the last symbols of letters in the DB
+                prev_symbols = data[tupleid][0]
+                # Add it to form the string of letters
+                new_symbol = prev_symbols + symbol_to_add
+                # Bundle the data together
+                new_data = (new_symbol, previous_time, T2)
+                data[tupleid] = newdata
+                self.outputqueue.put('04|database|[DB]: Letters so far for tuple {}: {}'.format(tupleid, new_symbol))
             except (TypeError, KeyError) as e:
                 # There was no previous data stored in the DB
-                self.outputqueue.put('03|database|[DB]: First time for tuple {}. Put 1'.format(tupleid))
-                data[tupleid] = 1
+                self.outputqueue.put('03|database|[DB]: First time for tuple {}'.format(tupleid))
+                new_data = (symbol_to_add, previous_time, T2)
+                data[tupleid] = new_data
                 # Convet the dictionary to json
                 data = json.dumps(data)
             self.r.hset( profileid + self.separator + twid, 'OutTuples', str(data))
