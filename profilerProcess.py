@@ -385,8 +385,8 @@ class ProfilerProcess(multiprocessing.Process):
             # In which analysis mode are we?
             if self.analysis_direction == 'out':
                 if saddr_as_obj in self.home_net:
-                    # Add the tuple
-                    __database__.add_out_tuple(profileid, twid, daddr_as_obj, dport, proto)
+                    # Add the out tuple
+                    __database__.add_out_tuple(profileid, twid, daddr_as_obj, dport, columns['proto'], columns['dur'], columns['state'], columns['bytes'], columns['starttime']])
                     # Add the dstip
                     __database__.add_out_dstips(profileid, twid, daddr_as_obj)
                     # Add the dstport
@@ -396,7 +396,7 @@ class ProfilerProcess(multiprocessing.Process):
             elif self.analysis_direction == 'all':
                 # Was the flow coming FROM the profile ip?
                 if saddr_as_obj in self.home_net:
-                    # Add the tuple
+                    # Add the out tuple
                     __database__.add_out_tuple(profileid, twid, daddr_as_obj, dport, proto)
                     # Add the dstip
                     __database__.add_out_dstips(profileid, twid, daddr_as_obj)
