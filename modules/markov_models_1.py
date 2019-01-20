@@ -6,7 +6,7 @@ import cPickle
 import math
 from os import listdir
 from os.path import isfile, join
-import stf.common.markov_chains as mc
+import slips.common.markov_chains as mc
 
 
 class Model():
