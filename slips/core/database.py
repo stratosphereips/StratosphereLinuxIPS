@@ -298,7 +298,7 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def add_out_tuple(self, profileid, twid, daddr_as_obj, dport, proto):
+    def add_out_tuple(self,  profileid, twid, daddr_as_obj, dport, proto, dur, state, size, starttime):
         """ Add the tuple going out for this profile """
         try:
             self.outputqueue.put('03|database|[DB]: Add_out_tuple called with profileid {}, twid {}, daddr_as_obj {}, dport {}, proto {}'.format(profileid, twid, str(daddr_as_obj), dport, proto))
