@@ -1,5 +1,6 @@
 import multiprocessing
 import sys
+from datetime import datetime
 
 # Input Process
 class InputProcess(multiprocessing.Process):
@@ -24,7 +25,6 @@ class InputProcess(multiprocessing.Process):
                 except EOFError:
                     return True
                 while line != '':
-                    # TODO Convert this to a for so we know when the file ends...
                     # While the input communication queue is empty
                     if self.inputqueue.empty():
                         # Send the line to the profiler
@@ -40,15 +40,14 @@ class InputProcess(multiprocessing.Process):
                         line = self.inputqueue.get()
                         if 'stop' == line:
                             print('Stopping Input Process')
-                            self.outputqueue.put("01|input|[In] Stopping input process")
-                            self.outputqueue.put("01|input|[In] Sent {} lines.".format(lines))
+                            self.outputqueue.put("01|input|[In] Stopping input process. Sent {} lines ({}).".format(lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
                             return True
-                # When the file ends, finish everything
+                # When the file ends, finish everything. Probably we can avoid the if...
                 if line == '':
                     # Send stop to the input queue
                     self.inputqueue.put("stop")
-                    self.outputqueue.put("01|input|[In] No more input. Stopping input process.")
-                    self.outputqueue.put("01|input|[In] Sent {} lines.".format(lines))
+                    self.profilerqueue.put("stop")
+                    self.outputqueue.put("01|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
                     return True
             else:
                 # The input is not str, so it may/should be standard input
@@ -64,16 +63,14 @@ class InputProcess(multiprocessing.Process):
                         # The communication queue is not empty process
                         line = self.inputqueue.get()
                         if 'stop' == line:
-                            self.outputqueue.put("03|input|[In] Sent {} lines.".format(lines))
+                            self.outputqueue.put("03|input|[In] Sent {} lines. ({})".format(lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
                             self.outputqueue.put("04|input|Stopping the Input Process.")
                             return True
         except KeyboardInterrupt:
-            self.outputqueue.put("03|input|Sent {} lines.".format(lines))
-            self.outputqueue.put("04|input|Stopping the Input Process.")
+            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(lines))
             return True
         except Exception as inst:
-            self.outputqueue.put("03|input|Sent {} lines.".format(lines))
-            self.outputqueue.put("04|input|Stopping the Input Process.")
+            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(lines))
             self.outputqueue.put("01|input|Problem with Input Process.")
             self.outputqueue.put("01|input|" + type(inst))
             self.outputqueue.put("01|input|" + inst.args)
