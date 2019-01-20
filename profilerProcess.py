@@ -310,8 +310,6 @@ class ProfilerProcess(multiprocessing.Process):
             saddr = columns['saddr']
             sport = columns['sport']
             daddr = columns['daddr']
-            dport = columns['dport']
-            proto = columns['proto']
             separator = __database__.getFieldSeparator()
             profileid = 'profile' + separator + str(saddr)
             starttime = time.mktime(columns['starttime'].timetuple())
@@ -379,45 +377,61 @@ class ProfilerProcess(multiprocessing.Process):
                 # 3. For this profile, find the id in the databse of the tw where the flow belongs.
                 twid = self.get_timewindow(starttime, profileid)
 
+            def store_features_going_out():
+                """
+                This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
+                """
+                # Add the out tuple
+                __database__.add_out_tuple(profileid, twid, daddr_as_obj, columns['dport'], columns['proto'], columns['dur'], columns['state'], columns['bytes'], columns['starttime'])
+                # Add the dstip
+                __database__.add_out_dstips(profileid, twid, daddr_as_obj)
+                # Add the dstport
+                __database__.add_out_dstport(profileid, twid, columns['dport'])
+                # Add the srcport
+                __database__.add_out_srcport(profileid, twid, sport)
+
+            def store_features_going_in():
+                """
+                This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
+                """
+                # Add the srcip
+                __database__.add_in_srcips(profileid, twid, saddr_as_obj)
+                # Add the dstport
+                __database__.add_in_dstport(profileid, twid, columns['dport'])
+                # Add the srcport
+                __database__.add_in_srcport(profileid, twid, sport)
+
             ##########################################
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
             self.outputqueue.put("07|profiler|[Profiler] Storing data in the profile: {}".format(profileid))
             # In which analysis mode are we?
+
+            # Mode 'out'
             if self.analysis_direction == 'out':
-                if saddr_as_obj in self.home_net:
-                    # Add the out tuple
-                    __database__.add_out_tuple(profileid, twid, daddr_as_obj, dport, columns['proto'], columns['dur'], columns['state'], columns['bytes'], columns['starttime']])
-                    # Add the dstip
-                    __database__.add_out_dstips(profileid, twid, daddr_as_obj)
-                    # Add the dstport
-                    __database__.add_out_dstport(profileid, twid, dport)
-                    # Add the srcport
-                    __database__.add_out_srcport(profileid, twid, sport)
+                # If we have a home net and the flow comes from it, or if we don't have a home net
+                if (self.home_net and saddr_as_obj in self.home_net) or not self.home_net:
+                    store_features_going_out()
+
+            # Mode 'all'
             elif self.analysis_direction == 'all':
-                # Was the flow coming FROM the profile ip?
-                if saddr_as_obj in self.home_net:
-                    # Add the out tuple
-                    __database__.add_out_tuple(profileid, twid, daddr_as_obj, dport, proto)
-                    # Add the dstip
-                    __database__.add_out_dstips(profileid, twid, daddr_as_obj)
-                    # Add the dstport
-                    __database__.add_out_dstport(profileid, twid, dport)
-                    # Add the srcport
-                    __database__.add_out_srcport(profileid, twid, sport)
-                # Was the flow coming TO the profile ip?
-                elif daddr_as_obj in self.home_net:
+                # If we don't have a home net, just try to store everything coming OUT and IN to the IP
+                if not self.home_net:
+                    # Out features
+                    store_features_going_out()
+                    # IN features
+                    store_features_going_in()
+                # If we have a home net and the flow comes from it. Only the features going out of the IP
+                elif self.home_net and saddr_as_obj in self.home_net:
+                    store_features_going_out()
+                # If we have a home net and the flow comes to it. Only the features going in of the IP
+                elif self.home_net and daddr_as_obj in self.home_net:
                     # The dstip was in the homenet
-                    # Add the srcip
-                    __database__.add_in_srcips(profileid, twid, saddr_as_obj)
-                    # Add the dstport
-                    __database__.add_in_dstport(profileid, twid, dport)
-                    # Add the srcport
-                    __database__.add_in_srcport(profileid, twid, sport)
+                    store_features_going_in()
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
-            self.outputqueue.put("01|profiler|Error in add_flow_to_profile profilerProcess.")
-            self.outputqueue.put("01|profiler|{}".format((type(inst))))
-            self.outputqueue.put("01|profiler|{}".format(inst))
+            self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess.")
+            self.outputqueue.put("01|profiler|[Profile] {}".format((type(inst))))
+            self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
 
     def get_timewindow(self, flowtime, profileid):
         """" 
@@ -497,9 +511,8 @@ class ProfilerProcess(multiprocessing.Process):
                 #self.outputqueue.put("01|profiler|First TW ({}) created for profile {}.".format(twid, profileid))
             return twid
         except Exception as e:
-            print('Error in get_timewindow()')
-            print(e)
-
+            self.outputqueue.put("01|profiler|[Profile] Error in get_timewindow().".format(rec_lines))
+            self.outputqueue.put("01|profiler|{}".format(e))
 
     def run(self):
         # Main loop function
@@ -513,24 +526,23 @@ class ProfilerProcess(multiprocessing.Process):
                     # The input communication queue is not empty, we are receiving
                     line = self.inputqueue.get()
                     if 'stop' == line:
-                        self.outputqueue.put("01|profiler|Stopping Profiler Process.")
-                        self.outputqueue.put("10|profiler|Total Received Lines: {}".format(rec_lines))
+                        self.outputqueue.put("01|profiler|[Profile] Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
                         return True
                     else:
                         # Received new input data
                         # Extract the columns smartly
                         self.outputqueue.put("03|profiler| < Received Line: {}".format(line.replace('\n','')))
+                        rec_lines += 1
                         if self.process_columns(line):
                             # Add the flow to the profile
                             self.add_flow_to_profile(self.column_values)
-                            rec_lines += 1
         except KeyboardInterrupt:
-            print('Received {} lines'.format(rec_lines))
+            self.outputqueue.put("01|profiler|[Profile] Received {} lines.".format(rec_lines))
             return True
         except Exception as inst:
-            print('Received {} lines'.format(rec_lines))
+            self.outputqueue.put("01|profiler|[Profile] Error. Stopped Profiler Process. Received {} lines".format(rec_lines))
             self.outputqueue.put("01|profiler|\tProblem with Profiler Process.")
             self.outputqueue.put("01|profiler|"+str(type(inst)))
             self.outputqueue.put("01|profiler|"+str(inst.args))
             self.outputqueue.put("01|profiler|"+str(inst))
-            sys.exit(1)
+            return True
