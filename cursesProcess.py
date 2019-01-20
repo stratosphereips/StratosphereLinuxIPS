@@ -1,5 +1,4 @@
 import multiprocessing
-import globaldata
 import sys
 import curses
 import curses.panel
