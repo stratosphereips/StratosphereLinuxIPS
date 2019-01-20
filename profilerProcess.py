@@ -381,8 +381,12 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
+                # Tuple
+                tupleid = str(daddr_as_obj) + ':' + columns['dport']+ ':' + columns['proto']
+                # Compute the symbol for this flow, for this TW, for this profile
+                symbol = self.compute_symbol(profileid, twid, tupleid, columns['starttime'], columns['dur'], columns['bytes'])
                 # Add the out tuple
-                __database__.add_out_tuple(profileid, twid, daddr_as_obj, columns['dport'], columns['proto'], columns['dur'], columns['state'], columns['bytes'], columns['starttime'])
+                __database__.add_out_tuple(profileid, twid, tupleid, symbol)
                 # Add the dstip
                 __database__.add_out_dstips(profileid, twid, daddr_as_obj)
                 # Add the dstport
@@ -432,6 +436,263 @@ class ProfilerProcess(multiprocessing.Process):
             self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess.")
             self.outputqueue.put("01|profiler|[Profile] {}".format((type(inst))))
             self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
+
+    def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size):
+        """ 
+        This function computes the new symbol for the tuple according to the original stratosphere ips model of letters
+        Here we do not apply any detection model, we just create the letters as one more feature
+        """
+        try:
+            current_duration = float(current_duration)
+            current_size = int(current_size)
+            self.outputqueue.put("01|profiler|[Profile] Starting compute symbol. Tupleid {}, time:{} ({}), dur:{}, size:{}".format(tupleid, current_time, type(current_time), current_duration, current_size))
+            # Variables for computing the symbol of each tuple
+            T2 = False
+            TD = False
+            # Thresholds learng from Stratosphere ips first version
+            # Timeout time, after 1hs
+            tto = timedelta(seconds=3600)
+            tt1 = float(1.05)
+            tt2 = float(1.3)
+            tt3 = float(5)
+            td1 = float(0.1)
+            td2 = float(10)
+            ts1 = float(250)
+            ts2 = float(1100)
+            letter = ''
+            symbol = ''
+            timechar = ''
+
+            # Get T1 (the time diff between the past flow and the past-past flow) from this tuple. T1 is a float in the db. Also get the time of the last flow in this tuple. In the DB prev time is a str
+            self.outputqueue.put("01|profiler|[Profile] AAA ")
+            (T1, previous_time) = __database__.getT2ForProfileTW(profileid, twid, tupleid)
+            BE SURE THAT HERE WE RECEIVE THE PROPER DATA
+            #T1 = timedelta(seconds=10)
+            #previous_time = datetime.now() - timedelta(seconds=3600)
+            self.outputqueue.put("01|profiler|[Profile] T1:{}, previous_time:{}".format(T1, previous_time))
+
+
+            def compute_periodicity():
+                """ Function to compute the periodicity """
+                # If either T1 or T2 are False
+                #if (isinstance(T1, bool) and T1 == False) or (isinstance(T2, bool) and T2 == False):
+                if T1 == False or T2 == False:
+                    periodicity = -1
+                elif T2 >= tto:
+                    t2_in_hours = T2.total_seconds() / tto.total_seconds()
+                    # Should be int always
+                    for i in range(int(t2_in_hours)):
+                        # Add the 0000 to the symbol object
+                        symbol += '0'
+                # Why to recompute the 0000 with T1 again??? this should have been done when processing the previous flow
+                #elif T1 >= tto:
+                    #t1_in_hours = T1.total_seconds() / tto.total_seconds()
+                    ## Should be int always
+                    #for i in range(int(t1_in_hours)):
+                        #state += '0'
+                if not isinstance(T1, bool) and not isinstance(T2, bool):
+                    try:
+                        if T2 >= T1:
+                            TD = timedelta(seconds=(T2.total_seconds() / T1.total_seconds())).total_seconds()
+                        else:
+                            TD = timedelta(seconds=(T1.total_seconds() / T2.total_seconds())).total_seconds()
+                    except ZeroDivisionError:
+                        TD = 1
+                    # Decide the periodic based on TD and the thresholds
+                    if TD <= tt1:
+                        # Strongly periodicity
+                        return 1
+                    elif TD < tt2:
+                        # Weakly periodicity
+                        return 2
+                    elif TD < tt3:
+                        # Weakly not periodicity
+                        return 3
+                    else:
+                        return 4
+
+            def compute_duration():
+                """ Function to compute letter of the duration """
+                if current_duration <= td1:
+                    return 1
+                elif current_duration > td1 and current_duration <= td2:
+                    return 2
+                elif current_duration > td2:
+                    return 3
+
+            def compute_size():
+                """ Function to compute letter of the size """
+                if current_size <= ts1:
+                    return 1
+                elif current_size > ts1 and current_size <= ts2:
+                    return 2
+                elif current_size > ts2:
+                    return 3
+
+            def compute_letter():
+                """ Function to compute letter """
+                if periodicity == -1:
+                    if size == 1:
+                        if duration == 1:
+                            return '1'
+                        elif duration == 2:
+                            return '2'
+                        elif duration == 3:
+                            return '3'
+                    elif size == 2:
+                        if duration == 1:
+                            return '4'
+                        elif duration == 2:
+                            return '5'
+                        elif duration == 3:
+                            return '6'
+                    elif size == 3:
+                        if duration == 1:
+                            return '7'
+                        elif duration == 2:
+                            return '8'
+                        elif duration == 3:
+                            return '9'
+                elif periodicity == 1:
+                    if size == 1:
+                        if duration == 1:
+                            return 'a'
+                        elif duration == 2:
+                            return 'b'
+                        elif duration == 3:
+                            return 'c'
+                    elif size == 2:
+                        if duration == 1:
+                            return 'd'
+                        elif duration == 2:
+                            return 'e'
+                        elif duration == 3:
+                            return 'f'
+                    elif size == 3:
+                        if duration == 1:
+                            return 'g'
+                        elif duration == 2:
+                            return 'h'
+                        elif duration == 3:
+                            return 'i'
+                elif periodicity == 2:
+                    if size == 1:
+                        if duration == 1:
+                            return 'A'
+                        elif duration == 2:
+                            return 'B'
+                        elif duration == 3:
+                            return 'C'
+                    elif size == 2:
+                        if duration == 1:
+                            return 'D'
+                        elif duration == 2:
+                            return 'E'
+                        elif duration == 3:
+                            return 'F'
+                    elif size == 3:
+                        if duration == 1:
+                            return 'G'
+                        elif duration == 2:
+                            return 'H'
+                        elif duration == 3:
+                            return 'I'
+                elif periodicity == 3:
+                    if size == 1:
+                        if duration == 1:
+                            return 'r'
+                        elif duration == 2:
+                            return 's'
+                        elif duration == 3:
+                            return 't'
+                    elif size == 2:
+                        if duration == 1:
+                            return 'u'
+                        elif duration == 2:
+                            return 'v'
+                        elif duration == 3:
+                            return 'w'
+                    elif size == 3:
+                        if duration == 1:
+                            return 'x'
+                        elif duration == 2:
+                            return 'y'
+                        elif duration == 3:
+                            return 'z'
+                elif periodicity == 4:
+                    if size == 1:
+                        if duration == 1:
+                            return 'R'
+                        elif duration == 2:
+                            return 'S'
+                        elif duration == 3:
+                            return 'T'
+                    elif size == 2:
+                        if duration == 1:
+                            return 'U'
+                        elif duration == 2:
+                            return 'V'
+                        elif duration == 3:
+                            return 'W'
+                    elif size == 3:
+                        if duration == 1:
+                            return 'X'
+                        elif duration == 2:
+                            return 'Y'
+                        elif duration == 3:
+                            return 'Z'
+
+            def compute_timechar():
+                """ Function to compute the timechar """
+                if not isinstance(T2, bool):
+                    if T2 <= timedelta(seconds=5):
+                        return  '.'
+                    elif T2 <= timedelta(seconds=60):
+                        return ','
+                    elif T2 <= timedelta(seconds=300):
+                        return '+'
+                    elif T2 <= timedelta(seconds=3600):
+                        return '*'
+
+            # Here begins the function's code
+            try:
+                # Update value of T2
+                T2 = current_time - previous_time
+                # Are flows sorted?
+                if T2.total_seconds() < 0:
+                    # Flows are not sorted!
+                    # What is going on here when the flows are not ordered?? Are we losing flows?
+                    # Put a warning
+                    pass
+            except TypeError:
+                T2 = False
+            self.outputqueue.put("01|profiler|[Profile] T2:{}".format(T2))
+
+            # Compute the rest
+            periodicity = compute_periodicity()
+            self.outputqueue.put("01|profiler|[Profile] Periodicity:{}".format(periodicity))
+            duration = compute_duration()
+            self.outputqueue.put("01|profiler|[Profile] Duration:{}".format(duration))
+            size = compute_size()
+            self.outputqueue.put("01|profiler|[Profile] Size:{}".format(size))
+            letter = compute_letter()
+            self.outputqueue.put("01|profiler|[Profile] Letter:{}".format(letter))
+            timechar = compute_timechar()
+            self.outputqueue.put("01|profiler|[Profile] TimeChar:{}".format(timechar))
+
+            symbol = letter + timechar
+            T1 = T1.total_seconds()
+            current_time = current_time.strftime(self.timeformat)
+            self.outputqueue.put("01|profiler|[Profile] To Store. symbol: {}, current_time: {}, T1: {} ({})".format(symbol, current_time, T1, type(T1)))
+            # Return the symbol, the current time of the flow and the T1 value
+            return (symbol, str(current_time), T1)
+            # End of the compute_symbol function
+        except Exception as inst:
+            # For some reason we can not use the output queue here.. check
+            self.outputqueue.put("01|profiler|[Profile] Error in compute_symbol in profilerProcess.")
+            self.outputqueue.put("01|profiler|[Profile] {}".format((type(inst))))
+            self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
+
 
     def get_timewindow(self, flowtime, profileid):
         """" 
