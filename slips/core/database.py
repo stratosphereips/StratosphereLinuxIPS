@@ -414,6 +414,13 @@ class Database(object):
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
         return data
 
+    def setFakeNow(self, time):
+        """ Set the fake now time """
+        self.r.set('fakenow', time)
+
+    def getFakeNow(self):
+        """ Get the fake now time """
+        return self.r.get('fakenow')
 
 
 
