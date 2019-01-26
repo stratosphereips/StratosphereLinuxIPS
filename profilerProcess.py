@@ -691,7 +691,7 @@ class ProfilerProcess(multiprocessing.Process):
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.outputqueue.put("01|profiler|[Profile] Error in compute_symbol in profilerProcess.")
-            self.outputqueue.put("01|profiler|[Profile] {}".format((type(inst))))
+            self.outputqueue.put("01|profiler|[Profile] {}".format(type(inst)))
             self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
 
 
@@ -709,7 +709,6 @@ class ProfilerProcess(multiprocessing.Process):
             # First check of we are not in the last TW. Since this will be the majority of cases
             try:
                 [(lasttwid, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
-                lasttwid = lasttwid.decode("utf-8")
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
                 flowtime = float(flowtime)
@@ -738,7 +737,6 @@ class ProfilerProcess(multiprocessing.Process):
                     if data:
                         # We found a TW where this flow belongs to
                         (twid, tw_start_time) = data
-                        twid = twid.decode("utf-8")
                         return twid
                     else:
                         # There was no TW that included the time of this flow, so create them in the past
@@ -749,7 +747,6 @@ class ProfilerProcess(multiprocessing.Process):
                         self.outputqueue.put("05|profiler|[Profiler] We need to create {} TW before the first".format(diff))
                         # Get the first TW
                         [(firsttwid, firsttw_start_time)] = __database__.getFirstTWforProfile(profileid)
-                        firsttwid = firsttwid.decode("utf-8")
                         firsttw_start_time = float(firsttw_start_time)
                         # The start of the new older TW should be the first - the width
                         temp_start = firsttw_start_time - self.width
@@ -773,8 +770,8 @@ class ProfilerProcess(multiprocessing.Process):
                 #self.outputqueue.put("01|profiler|First TW ({}) created for profile {}.".format(twid, profileid))
             return twid
         except Exception as e:
-            self.outputqueue.put("01|profiler|[Profile] Error in get_timewindow().".format(rec_lines))
-            self.outputqueue.put("01|profiler|{}".format(e))
+            self.outputqueue.put("01|profiler|[Profile] Error in get_timewindow().")
+            self.outputqueue.put("01|profiler|[Profile] {}".format(e))
 
     def run(self):
         # Main loop function
@@ -793,7 +790,7 @@ class ProfilerProcess(multiprocessing.Process):
                     else:
                         # Received new input data
                         # Extract the columns smartly
-                        self.outputqueue.put("03|profiler| < Received Line: {}".format(line.replace('\n','')))
+                        self.outputqueue.put("03|profiler|[Profile] < Received Line: {}".format(line.replace('\n','')))
                         rec_lines += 1
                         if self.process_columns(line):
                             # Add the flow to the profile
