@@ -395,6 +395,18 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
+    def setEvidenceForTW(self, profileid, twid, data):
+        """ Get the evidence for this TW for this Profile """
+        data = {}
+        data['Port Scan'] = [0.5, 1]
+        data = json.dumps(data)
+        self.r.hset(profileid + self.separator + twid, 'Evidence', str(data))
+
+    def getEvidenceForTW(self, profileid, twid):
+        """ Get the evidence for this TW for this Profile """
+        data = self.r.hget(profileid + self.separator + twid, 'Evidence')
+        return data
+
 
 
 
