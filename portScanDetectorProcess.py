@@ -22,7 +22,7 @@ class PortScanProcess(multiprocessing.Process):
                 if self.inputqueue.empty():
                     # Do stuff
                     try:
-                        self.outputqueue.put('30|'+self.processname+'|['+self.processname+'] ' + 'Detecting port scans')
+                        self.outputqueue.put('50|'+self.processname+'|['+self.processname+'] ' + 'Detecting port scans')
                         # Get all the profiles
                         profiles = __database__.getProfiles()
                         for profileid in profiles:
@@ -33,7 +33,11 @@ class PortScanProcess(multiprocessing.Process):
                             # Get the dstips statistics for this profile
                             dstips = __database__.getDstIPsfromProfileTW(profileid, lasttw_id)
                             # Convert to python data
-                            dstips = json.loads(dstips)
+                            try:
+                                dstips = json.loads(dstips)
+                            except TypeError:
+                                # The dstips is empty
+                                pass
                             #self.outputqueue.put('10|'+self.processname+'|['+self.processname+'] ' + 'DstIps: {}'.format(dstips))
                             for dstip in dstips:
                                 amount = dstips[dstip]
@@ -46,7 +50,7 @@ class PortScanProcess(multiprocessing.Process):
                                     type_detection = 'Port Scan from this Profile'
                                     threat_level = 0.5
                                     __database__.setEvidenceForTW(profileid, lasttw_id, type_detection, threat_level, confidence)
-                                    self.outputqueue.put('30|'+self.processname+'|['+self.processname+'] ' + 'Port scan detected for IP: {}. Amount: {}'.format(dstip, amount))
+                                    self.outputqueue.put('40|'+self.processname+'|['+self.processname+'] ' + 'Port scan detected for IP: {}. Amount: {}'.format(dstip, amount))
                             # We need to do the same but for the srcips comming to this profile
                             
                             # Search for portscans... 
