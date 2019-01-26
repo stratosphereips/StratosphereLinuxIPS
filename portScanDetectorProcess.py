@@ -22,7 +22,7 @@ class PortScanProcess(multiprocessing.Process):
                 if self.inputqueue.empty():
                     # Do stuff
                     try:
-                        self.outputqueue.put('10|'+self.processname+'|['+self.processname+'] ' + 'Detecting port scans')
+                        self.outputqueue.put('30|'+self.processname+'|['+self.processname+'] ' + 'Detecting port scans')
                         # Get all the profiles
                         profiles = __database__.getProfiles()
                         for profileid in profiles:
@@ -38,12 +38,16 @@ class PortScanProcess(multiprocessing.Process):
                             for dstip in dstips:
                                 amount = dstips[dstip]
                                 if amount >= 3:
+                                    if amount >= 10:
+                                        confidence = 1
+                                    else:
+                                        confidence = amount / 10.0
                                     # very stupid port scan
-                                    type_detection = 'Port Scan'
+                                    type_detection = 'Port Scan from this Profile'
                                     threat_level = 0.5
-                                    confidence = 0.3
                                     __database__.setEvidenceForTW(profileid, lasttw_id, type_detection, threat_level, confidence)
                                     self.outputqueue.put('30|'+self.processname+'|['+self.processname+'] ' + 'Port scan detected for IP: {}. Amount: {}'.format(dstip, amount))
+                            # We need to do the same but for the srcips comming to this profile
                             
                             # Search for portscans... 
                     except Exception as inst:
