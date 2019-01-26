@@ -151,7 +151,7 @@ class LogsProcess(multiprocessing.Process):
             self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {}. Modified TWs: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
             for profileTW in TWforProfile:
                 # Get the profileid and twid
-                profileTW = profileTW.decode('utf-8')
+                #profileTW = profileTW.decode('utf-8')
                 profileid = profileTW.split(self.fieldseparator)[0] + self.fieldseparator + profileTW.split(self.fieldseparator)[1]
                 twid = profileTW.split(self.fieldseparator)[2]
                 # Get the time of this TW. For the file name
