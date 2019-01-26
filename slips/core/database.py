@@ -401,13 +401,24 @@ class Database(object):
 
     def setEvidenceForTW(self, profileid, twid, type_detection, threat_level, confidence):
         """ Get the evidence for this TW for this Profile """
-        data = {}
-        inner_data = []
-        inner_data.append(threat_level)
-        inner_data.append(confidence)
-        data[type_detection] = inner_data
-        data = json.dumps(data)
-        self.r.hset(profileid + self.separator + twid, 'Evidence', str(data))
+        # Get the current evidence
+        current_evidence = self.getEvidenceForTW(profileid, twid)
+        if current_evidence:
+            current_evidence = json.loads(current_evidence)
+        else:
+            current_evidence = []
+        # Convert the given data into our array
+        data = []
+        data.append(type_detection)
+        data.append(threat_level)
+        data.append(confidence)
+        # Append the new data into the current one
+        current_evidence.append(data)
+        if not current_evidence:
+            self.outputqueue.put('01|database|[DB] CHECK {}'.format(current_evidence))
+            current_evidence = ''
+        current_evidence = json.dumps(current_evidence)
+        self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence))
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -421,7 +432,6 @@ class Database(object):
     def getFakeNow(self):
         """ Get the fake now time """
         return self.r.get('fakenow')
-
 
 
 
