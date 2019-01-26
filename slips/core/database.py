@@ -381,7 +381,6 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] {}'.format(inst))
             self.outputqueue.put('01|database|[DB] Data after error: {}'.format(data))
-            
 
     def add_in_dstport(self, profileid, twid, dport):
         """ """
@@ -415,7 +414,6 @@ class Database(object):
         # Append the new data into the current one
         current_evidence.append(data)
         if not current_evidence:
-            self.outputqueue.put('01|database|[DB] CHECK {}'.format(current_evidence))
             current_evidence = ''
         current_evidence = json.dumps(current_evidence)
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence))
@@ -427,7 +425,13 @@ class Database(object):
 
     def setFakeNow(self, time):
         """ Set the fake now time """
-        self.r.set('fakenow', time)
+        # Only update the fake now, when it goes forward
+        current_fake_now = self.getFakeNow()
+        try:
+            if current_fake_now < time:
+                self.r.set('fakenow', time)
+        except TypeError:
+            self.r.set('fakenow', time)
 
     def getFakeNow(self):
         """ Get the fake now time """
