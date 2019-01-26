@@ -14,6 +14,7 @@ from outputProcess import OutputProcess
 from profilerProcess import ProfilerProcess
 from cursesProcess import CursesProcess
 from logsProcess import LogsProcess
+from evidenceUpdate import EvidenceProcess
 
 version = '0.5'
 
@@ -112,6 +113,14 @@ if __name__ == '__main__':
     # Create the profile thread and start it
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
     profilerProcessThread.start()
+    outputProcessQueue.put('10|main|Started profiler thread')
+
+    # Evidence thread
+    # Create the queue for the evidence thread
+    evidenceProcessQueue = Queue()
+    # Create the thread and start it
+    evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config)
+    evidenceProcessThread.start()
     outputProcessQueue.put('10|main|Started profiler thread')
 
     # Input thread
