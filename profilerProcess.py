@@ -384,7 +384,8 @@ class ProfilerProcess(multiprocessing.Process):
                 # Tuple
                 tupleid = str(daddr_as_obj) + ':' + columns['dport']+ ':' + columns['proto']
                 # Compute the symbol for this flow, for this TW, for this profile
-                symbol = self.compute_symbol(profileid, twid, tupleid, columns['starttime'], columns['dur'], columns['bytes'])
+                #symbol = self.compute_symbol(profileid, twid, tupleid, columns['starttime'], columns['dur'], columns['bytes'])
+                symbol = ('a', '2019-01-26--13:31:09', 1)
                 # Add the out tuple
                 __database__.add_out_tuple(profileid, twid, tupleid, symbol)
                 # Add the dstip
@@ -466,7 +467,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Get T1 (the time diff between the past flow and the past-past flow) from this tuple. T1 is a float in the db. Also get the time of the last flow in this tuple. In the DB prev time is a str
             self.outputqueue.put("01|profiler|[Profile] AAA ")
             (T1, previous_time) = __database__.getT2ForProfileTW(profileid, twid, tupleid)
-            BE SURE THAT HERE WE RECEIVE THE PROPER DATA
+            ## BE SURE THAT HERE WE RECEIVE THE PROPER DATA
             #T1 = timedelta(seconds=10)
             #previous_time = datetime.now() - timedelta(seconds=3600)
             self.outputqueue.put("01|profiler|[Profile] T1:{}, previous_time:{}".format(T1, previous_time))
