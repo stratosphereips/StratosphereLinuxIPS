@@ -172,7 +172,11 @@ class Database(object):
         the given time by making sure the start of the TW is < time, and the end of the TW is > time.
         """
         # [-1] so we bring the last TW that matched this time.
-        data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)[-1]
+        try:
+            data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)[-1]
+        except IndexError:
+            # We dont have any last tw?
+            data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)
         return data
 
     def addNewOlderTW(self, profileid, startoftw):
