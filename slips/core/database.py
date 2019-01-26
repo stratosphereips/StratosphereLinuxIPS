@@ -399,10 +399,13 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
-    def setEvidenceForTW(self, profileid, twid, data):
+    def setEvidenceForTW(self, profileid, twid, type_detection, threat_level, confidence):
         """ Get the evidence for this TW for this Profile """
         data = {}
-        data['Port Scan'] = [0.5, 1]
+        inner_data = []
+        inner_data.append(threat_level)
+        inner_data.append(confidence)
+        data[type_detection] = inner_data
         data = json.dumps(data)
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(data))
 
