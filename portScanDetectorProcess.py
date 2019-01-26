@@ -23,15 +23,29 @@ class PortScanProcess(multiprocessing.Process):
                     # Do stuff
                     try:
                         self.outputqueue.put('10|'+self.processname+'|['+self.processname+'] ' + 'Detecting port scans')
+                        # Get all the profiles
                         profiles = __database__.getProfiles()
                         for profileid in profiles:
-                            self.outputqueue.put('10|'+self.processname+'|['+self.processname+'] ' + 'Profile: {}'.format(profileid))
+                            #self.outputqueue.put('10|'+self.processname+'|['+self.processname+'] ' + 'Profile: {}'.format(profileid))
+                            # Get the last tw for this profile
                             lasttw = __database__.getLastTWforProfile(profileid)
                             lasttw_id, lasttw_time = lasttw[0]
+                            # Get the dstips statistics for this profile
                             dstips = __database__.getDstIPsfromProfileTW(profileid, lasttw_id)
                             # Convert to python data
                             dstips = json.loads(dstips)
-                            self.outputqueue.put('10|'+self.processname+'|['+self.processname+'] ' + 'Tuples: {}'.format(dstips))
+                            #self.outputqueue.put('10|'+self.processname+'|['+self.processname+'] ' + 'DstIps: {}'.format(dstips))
+                            for dstip in dstips:
+                                amount = dstips[dstip]
+                                if amount >= 3:
+                                    # very stupid port scan
+                                    type_detection = 'Port Scan'
+                                    threat_level = 0.5
+                                    confidence = 0.3
+                                    __database__.setEvidenceForTW(profileid, lasttw_id, type_detection, threat_level, confidence)
+                                    self.outputqueue.put('30|'+self.processname+'|['+self.processname+'] ' + 'Port scan detected for IP: {}. Amount: {}'.format(dstip, amount))
+                            
+                            # Search for portscans... 
                     except Exception as inst:
                         self.outputqueue.put('01|'+self.processname+'|['+self.processname+'] ' + 'Error in run() of '+self.processname)
                         self.outputqueue.put('01|'+self.processname+'|['+self.processname+'] ' + '{}'.format(type(inst)))
