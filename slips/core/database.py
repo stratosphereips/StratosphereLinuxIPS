@@ -433,6 +433,4 @@ class Database(object):
         """ Get the fake now time """
         return self.r.get('fakenow')
 
-
-
 __database__ = Database()
