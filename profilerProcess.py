@@ -795,6 +795,10 @@ class ProfilerProcess(multiprocessing.Process):
                         if self.process_columns(line):
                             # Add the flow to the profile
                             self.add_flow_to_profile(self.column_values)
+                            # Update the fake now time. This is used for knowing when is 'now' when reading a file. 
+                            # WE NEED TO MEASURE HOW THIS AFFECTS THE SPEED OF THE TOOL
+                            time = self.column_values
+                            __database__.setFakeNow(str(self.column_values['starttime']))
         except KeyboardInterrupt:
             self.outputqueue.put("01|profiler|[Profile] Received {} lines.".format(rec_lines))
             return True
