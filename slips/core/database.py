@@ -120,37 +120,15 @@ class Database(object):
         """
         Get the src ip for a specific TW for a specific profileid
         """
-        try:
-            data = self.r.hget(profileid + self.separator + twid, 'SrcIPs')
-            if data:
-                return data.decode('utf-8')
-            else:
-                return ''
-        except AttributeError:
-            # This is for empty lists
-            return data
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getSrcIPsfromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+        data = self.r.hget(profileid + self.separator + twid, 'SrcIPs')
+        return data
 
     def getDstIPsfromProfileTW(self, profileid, twid):
         """
         Get the dst ip for a specific TW for a specific profileid
         """
-        try:
-            data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
-            if data:
-                return data.decode('utf-8')
-            else:
-                return ''
-        except AttributeError:
-            # This is for empty lists
-            return data
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstIPsfromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+        data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
+        return data
 
     def getT2ForProfileTW(self, profileid, twid, tupleid):
         """
@@ -180,37 +158,13 @@ class Database(object):
    
     def getLastTWforProfile(self, profileid):
         """ Return the last TW id and the time for the given profile id """
-        try:
-            data = self.r.zrange('tws' + profileid, -1, -1, withscores=True)
-            if data:
-                (twid, time) = data[0]
-                twid = twid.decode('utf-8')
-                data[0] = (twid, time)
-            return data
-        except AttributeError:
-            # This is for empty lists
-            return data
-        except Exception as e:
-            self.outputqueue.put('01|database|[DB] Error in getLastTWforProfile in database.py')
-            self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
-            self.outputqueue.put('01|database|[DB] {}'.format(e))
+        data = self.r.zrange('tws' + profileid, -1, -1, withscores=True)
+        return data
 
     def getFirstTWforProfile(self, profileid):
         """ Return the first TW id and the time for the given profile id """
-        try:
-            data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
-            if data:
-                (twid, time) = data[0]
-                twid = twid.decode('utf-8')
-                data[0] = (twid, time)
-            return data
-        except AttributeError:
-            # This is for empty lists
-            return data
-        except Exception as e:
-            self.outputqueue.put('01|database|[DB] Error in getFirstTWforProfile in database.py')
-            self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
-            self.outputqueue.put('01|database|[DB] {}'.format(e))
+        data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
+        return data
 
     def getTWforScore(self, profileid, time):
         """ Return the TW id and the time for the TW that includes the given time.
@@ -218,24 +172,8 @@ class Database(object):
         the given time by making sure the start of the TW is < time, and the end of the TW is > time.
         """
         # [-1] so we bring the last TW that matched this time.
-        try:
-            data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)[-1]
-            if data:
-                (twid, time) = data[0]
-                twid = twid.decode('utf-8')
-                data[0] = (twid, time)
-            return data
-        except IndexError:
-            # There is no TW that has this time inside it
-            data = []
-            return data
-        except AttributeError:
-            # This is for empty lists
-            return data
-        except Exception as e:
-            self.outputqueue.put('01|database|[DB] Error in getLastTWforProfile in database.py')
-            self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
-            self.outputqueue.put('01|database|[DB] {}'.format(e))
+        data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)[-1]
+        return data
 
     def addNewOlderTW(self, profileid, startoftw):
         try:
@@ -337,8 +275,6 @@ class Database(object):
             data = self.r.hget(hash_id, 'DstIPs')
             if not data:
                 data = {}
-            elif type(data) == bytes:
-                data = data.decode('utf-8')
             try:
                 # Convert the json str to a dictionary
                 data = json.loads(data)
@@ -370,8 +306,6 @@ class Database(object):
             (symbol_to_add, previous_time, T2)  = data_tuple
             if not data:
                 data = {}
-            elif type(data) == bytes:
-                data = data.decode('utf-8')
             try:
                 # Convert the json str to a dictionary
                 data = json.loads(data)
@@ -403,19 +337,8 @@ class Database(object):
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """ Get the tuples """
-        try:
-            data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
-            if data:
-                return data.decode('utf-8')
-            else:
-                return ''
-        except AttributeError:
-            # This is for empty lists
-            return data
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getOutTuplesfromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+        data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
+        return data
 
     def add_out_dstport(self, profileid, twid, dport):
         """ """
@@ -436,8 +359,6 @@ class Database(object):
             data = self.r.hget(hash_id, 'SrcIPs')
             if not data:
                 data = {}
-            elif type(data) == bytes:
-                data = data.decode('utf-8')
             try:
                 # Convert the json str to a dictionary
                 data = json.loads(data)
