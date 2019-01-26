@@ -25,14 +25,16 @@ class EvidenceProcess(multiprocessing.Process):
                         for profileid in profiles:
                             self.outputqueue.put('10|evidence|[Evidence] Profile: {}'.format(profileid))
                             lasttw = __database__.getLastTWforProfile(profileid)
-                            self.outputqueue.put('10|evidence|[Evidence] TW: {}'.format(lasttw))
+                            lasttw_id, lasttw_time = lasttw[0]
+                            evidence = __database__.getEvidenceForTW(profileid, lasttw_id)
+                            self.outputqueue.put('10|evidence|[Evidence] TW: {}. Evidence: {}'.format(lasttw_id, evidence))
                             
                     except Exception as inst:
                         self.outputqueue.put('01|evidence|[Evidence] Error in run() of EvidenceProcess')
                         self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
                         self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
 
-                    time.sleep(1)
+                    time.sleep(2)
 
                 elif not self.inputqueue.empty():
                     line = self.queue.get()
