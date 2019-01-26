@@ -322,6 +322,7 @@ class Database(object):
             self.outputqueue.put('03|database|[DB]: Add_out_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple))
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, 'OutTuples')
+            (symbol_to_add, previous_time, T2)  = data_tuple
             if not data:
                 data = {}
             elif type(data) == bytes:
@@ -333,7 +334,6 @@ class Database(object):
                 # Convert the json str to a dictionary
                 data = json.loads(data)
                 # Disasemble the input
-                (symbol_to_add, previous_time, T2)  = data_tuple
                 self.outputqueue.put('03|database|[DB]: Not the first time for tuple {}. Add the symbol: {}. Store previous_time: {}, T2: {}'.format(tupleid, symbol_to_add, previous_time, T2))
                 # Get the last symbols of letters in the DB
                 prev_symbols = data[tupleid][0]
