@@ -14,7 +14,8 @@ from outputProcess import OutputProcess
 from profilerProcess import ProfilerProcess
 from cursesProcess import CursesProcess
 from logsProcess import LogsProcess
-from evidenceUpdate import EvidenceProcess
+from evidenceProcess import EvidenceProcess
+from portScanDetectorProcess import PortScanProcess
 
 version = '0.5'
 
@@ -121,7 +122,15 @@ if __name__ == '__main__':
     # Create the thread and start it
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config)
     evidenceProcessThread.start()
-    outputProcessQueue.put('10|main|Started profiler thread')
+    outputProcessQueue.put('10|main|Started Evidence thread')
+
+    # Port scan thread. Should be a module
+    # Create the queue for the evidence thread
+    portscanProcessQueue = Queue()
+    # Create the thread and start it
+    portscanProcessThread = PortScanProcess(portscanProcessQueue, outputProcessQueue, config)
+    portscanProcessThread.start()
+    outputProcessQueue.put('10|main|Started port scan thread')
 
     # Input thread
     # Create the queue for the input thread
