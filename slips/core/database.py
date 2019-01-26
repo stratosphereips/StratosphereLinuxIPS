@@ -39,7 +39,7 @@ class Database(object):
 
     def __init__(self):
         # Get the connection to redis database
-        self.r = redis.StrictRedis(host='localhost', port=6379, db=0) #password='password')
+        self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
         # For now, do not remember between runs of slips. Just delete the database when we start with flushdb
         self.r.flushdb()
         self.separator = '_'
@@ -88,7 +88,7 @@ class Database(object):
         if profiles != set():
             return profiles
         else:
-            return False
+            return {}
 
     def getProfileData(self, profileid):
         """ Get all the data for this particular profile.
@@ -120,21 +120,37 @@ class Database(object):
         """
         Get the src ip for a specific TW for a specific profileid
         """
-        data = self.r.hget(profileid + self.separator + twid, 'SrcIPs')
-        if data:
-            return data.decode('utf-8')
-        else:
-            return ''
+        try:
+            data = self.r.hget(profileid + self.separator + twid, 'SrcIPs')
+            if data:
+                return data.decode('utf-8')
+            else:
+                return ''
+        except AttributeError:
+            # This is for empty lists
+            return data
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getSrcIPsfromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
     def getDstIPsfromProfileTW(self, profileid, twid):
         """
         Get the dst ip for a specific TW for a specific profileid
         """
-        data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
-        if data:
-            return data.decode('utf-8')
-        else:
-            return ''
+        try:
+            data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
+            if data:
+                return data.decode('utf-8')
+            else:
+                return ''
+        except AttributeError:
+            # This is for empty lists
+            return data
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getDstIPsfromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
     def getT2ForProfileTW(self, profileid, twid, tupleid):
         """
@@ -164,13 +180,37 @@ class Database(object):
    
     def getLastTWforProfile(self, profileid):
         """ Return the last TW id and the time for the given profile id """
-        data = self.r.zrange('tws' + profileid, -1, -1, withscores=True)
-        return data
+        try:
+            data = self.r.zrange('tws' + profileid, -1, -1, withscores=True)
+            if data:
+                (twid, time) = data[0]
+                twid = twid.decode('utf-8')
+                data[0] = (twid, time)
+            return data
+        except AttributeError:
+            # This is for empty lists
+            return data
+        except Exception as e:
+            self.outputqueue.put('01|database|[DB] Error in getLastTWforProfile in database.py')
+            self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
+            self.outputqueue.put('01|database|[DB] {}'.format(e))
 
     def getFirstTWforProfile(self, profileid):
         """ Return the first TW id and the time for the given profile id """
-        data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
-        return data
+        try:
+            data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
+            if data:
+                (twid, time) = data[0]
+                twid = twid.decode('utf-8')
+                data[0] = (twid, time)
+            return data
+        except AttributeError:
+            # This is for empty lists
+            return data
+        except Exception as e:
+            self.outputqueue.put('01|database|[DB] Error in getFirstTWforProfile in database.py')
+            self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
+            self.outputqueue.put('01|database|[DB] {}'.format(e))
 
     def getTWforScore(self, profileid, time):
         """ Return the TW id and the time for the TW that includes the given time.
@@ -180,10 +220,22 @@ class Database(object):
         # [-1] so we bring the last TW that matched this time.
         try:
             data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)[-1]
+            if data:
+                (twid, time) = data[0]
+                twid = twid.decode('utf-8')
+                data[0] = (twid, time)
+            return data
         except IndexError:
             # There is no TW that has this time inside it
             data = []
-        return data
+            return data
+        except AttributeError:
+            # This is for empty lists
+            return data
+        except Exception as e:
+            self.outputqueue.put('01|database|[DB] Error in getLastTWforProfile in database.py')
+            self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
+            self.outputqueue.put('01|database|[DB] {}'.format(e))
 
     def addNewOlderTW(self, profileid, startoftw):
         try:
@@ -195,7 +247,6 @@ class Database(object):
             try:
                 (firstid, firstid_time) = self.getFirstTWforProfile(profileid)[0]
                 # We have a first id
-                firstid = firstid.decode("utf-8") 
                 # Decrement it!!
                 twid = 'timewindow' + str(int(firstid.split('timewindow')[1]) - 1)
             except IndexError:
@@ -224,7 +275,6 @@ class Database(object):
             try:
                 (lastid, lastid_time) = self.getLastTWforProfile(profileid)[0]
                 # We have a last id
-                lastid = lastid.decode("utf-8") 
                 # Increment it
                 twid = 'timewindow' + str(int(lastid.split('timewindow')[1]) + 1)
             except IndexError:
@@ -259,16 +309,13 @@ class Database(object):
     def wasProfileTWModified(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
         data = self.r.sismember('ModifiedTW', profileid + self.separator + twid)
-        #data = self.r.hget(profileid + self.separator + twid, 'Modified')
         if not data:
             # If for some reason we don't have the modified bit set, then it was not modified.
             data = 0
-        #return bool(int(data))
         return bool(data)
 
     def markProfileTWAsNotModified(self, profileid, twid):
         """ Mark a TW in a profile as not modified """
-        #self.r.hset( profileid + self.separator + twid, 'Modified', '0')
         self.r.srem('ModifiedTW', profileid + self.separator + twid)
 
     def markProfileTWAsModified(self, profileid, twid):
@@ -276,7 +323,6 @@ class Database(object):
         Mark a TW in a profile as not modified 
         As a side effect, it can create it if its not there
         """
-        #self.r.hset( profileid + self.separator + twid, 'Modified', '1')
         self.r.sadd('ModifiedTW', profileid + self.separator + twid)
 
     def add_out_dstips(self, profileid, twid, daddr_as_obj):
@@ -293,21 +339,20 @@ class Database(object):
                 data = {}
             elif type(data) == bytes:
                 data = data.decode('utf-8')
-                # For some weird reason (error?) the json library expects the keys to be delimited with double-quotes and not single-quotes.
-                # Not sure how our single quotes got here. Fix this better
-                data = data.replace('\'','"')
             try:
                 # Convert the json str to a dictionary
                 data = json.loads(data)
                 # Add 1 because we found this ip again
                 self.outputqueue.put('03|database|[DB]: Not the first time for this daddr. Add 1 to {}'.format(str(daddr_as_obj)))
                 data[str(daddr_as_obj)] += 1
+                data = json.dumps(data)
             except (TypeError, KeyError) as e:
                 # There was no previous data stored in the DB
                 self.outputqueue.put('03|database|[DB]: First time for this daddr. Make it 1 to {}'.format(str(daddr_as_obj)))
                 data[str(daddr_as_obj)] = 1
                 # Convet the dictionary to json
                 data = json.dumps(data)
+            # Store the dstips in the dB
             self.r.hset( profileid + self.separator + twid, 'DstIPs', str(data))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
@@ -316,7 +361,7 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def add_out_tuple(self,  profileid, twid, tupleid, data_tuple):
+    def add_out_tuple(self, profileid, twid, tupleid, data_tuple):
         """ Add the tuple going out for this profile """
         try:
             self.outputqueue.put('03|database|[DB]: Add_out_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple))
@@ -327,9 +372,6 @@ class Database(object):
                 data = {}
             elif type(data) == bytes:
                 data = data.decode('utf-8')
-                # For some weird reason (error?) the json library expects the keys to be delimited with double-quotes and not single-quotes.
-                # Not sure how our single quotes got here. Fix this better
-                data = data.replace('\'','"')
             try:
                 # Convert the json str to a dictionary
                 data = json.loads(data)
@@ -341,8 +383,9 @@ class Database(object):
                 new_symbol = prev_symbols + symbol_to_add
                 # Bundle the data together
                 new_data = (new_symbol, previous_time, T2)
-                data[tupleid] = newdata
+                data[tupleid] = new_data
                 self.outputqueue.put('04|database|[DB]: Letters so far for tuple {}: {}'.format(tupleid, new_symbol))
+                data = json.dumps(data)
             except (TypeError, KeyError) as e:
                 # There was no previous data stored in the DB
                 self.outputqueue.put('03|database|[DB]: First time for tuple {}'.format(tupleid))
@@ -360,11 +403,19 @@ class Database(object):
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """ Get the tuples """
-        data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
-        if data:
-            return data.decode('utf-8')
-        else:
-            return ''
+        try:
+            data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
+            if data:
+                return data.decode('utf-8')
+            else:
+                return ''
+        except AttributeError:
+            # This is for empty lists
+            return data
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getOutTuplesfromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
     def add_out_dstport(self, profileid, twid, dport):
         """ """
@@ -387,14 +438,12 @@ class Database(object):
                 data = {}
             elif type(data) == bytes:
                 data = data.decode('utf-8')
-                # For some weird reason (error?) the json library expects the keys to be delimited with double-quotes and not single-quotes.
-                # Not sure how our single quotes got here. Fix this better
-                data = data.replace('\'','"')
             try:
                 # Convert the json str to a dictionary
                 data = json.loads(data)
                 # Add 1 because we found this ip again
                 data[str(saddr_as_obj)] += 1
+                data = json.dumps(data)
             except (KeyError, TypeError) as e:
                 data[str(saddr_as_obj)] = 1
                 # Convet the dictionary to json
@@ -403,9 +452,11 @@ class Database(object):
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
-            self.outputqueue.put('01|database|Error in add_in_srcips in database.py')
-            self.outputqueue.put('01|database|{}'.format(type(inst)))
-            self.outputqueue.put('01|database|{}'.format(inst))
+            self.outputqueue.put('01|database|[DB] Error in add_in_srcips in database.py')
+            self.outputqueue.put('01|database|[DB] {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] {}'.format(inst))
+            self.outputqueue.put('01|database|[DB] Data after error: {}'.format(data))
+            
 
     def add_in_dstport(self, profileid, twid, dport):
         """ """
