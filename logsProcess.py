@@ -186,6 +186,11 @@ class LogsProcess(multiprocessing.Process):
                     # Add tuples
                     self.addDataToFile(profilefolder + '/' + twlog, 'OutTuples: '+ tuples, file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] Tuples: ' + tuples)
+                blocking = __database__.getBlockingRequest(profileid, twid)
+                # 4. Detections to block
+                if blocking:
+                    self.addDataToFile(profilefolder + '/' + twlog, 'Blocking Request: ' + str(blocking), file_mode='a+', data_type='json')
+                    self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
 
                 # Mark it as not modified anymore
                 __database__.markProfileTWAsNotModified(profileid, twid)
