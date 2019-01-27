@@ -437,4 +437,13 @@ class Database(object):
         """ Get the fake now time """
         return self.r.get('fakenow')
 
+    def setBlockingRequest(self, profileid, twid):
+        """ Set the request to block this profile. found in this time window """
+        self.r.hset(profileid + self.separator + twid, 'BlockRequest', 'True')
+
+    def getBlockingRequest(self, profileid, twid):
+        """ Get the request to block this profile. found in this time window """
+        data = self.r.hget(profileid + self.separator + twid, 'BlockRequest')
+        return data
+
 __database__ = Database()
