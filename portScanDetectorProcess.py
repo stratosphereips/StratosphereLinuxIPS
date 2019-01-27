@@ -26,34 +26,35 @@ class PortScanProcess(multiprocessing.Process):
                         # Get all the profiles
                         profiles = __database__.getProfiles()
                         for profileid in profiles:
-                            #self.outputqueue.put('10|'+self.processname+'|['+self.processname+'] ' + 'Profile: {}'.format(profileid))
+                            self.outputqueue.put('02|'+self.processname+'|['+self.processname+'] ' + 'Profile: {}'.format(profileid))
                             # Get the last tw for this profile
                             lasttw = __database__.getLastTWforProfile(profileid)
                             lasttw_id, lasttw_time = lasttw[0]
                             # Get the dstips statistics for this profile
                             dstips = __database__.getDstIPsfromProfileTW(profileid, lasttw_id)
-                            # Convert to python data
-                            try:
-                                dstips = json.loads(dstips)
-                            except TypeError:
-                                # The dstips is empty
-                                pass
-                            #self.outputqueue.put('10|'+self.processname+'|['+self.processname+'] ' + 'DstIps: {}'.format(dstips))
-                            for dstip in dstips:
-                                amount = dstips[dstip]
-                                if amount >= 3:
-                                    if amount >= 10:
-                                        confidence = 1
-                                    else:
-                                        confidence = amount / 10.0
-                                    # very stupid port scan
-                                    type_detection = 'Port Scan from this Profile'
-                                    threat_level = 0.5
-                                    __database__.setEvidenceForTW(profileid, lasttw_id, type_detection, threat_level, confidence)
-                                    self.outputqueue.put('40|'+self.processname+'|['+self.processname+'] ' + 'Port scan detected for IP: {}. Amount: {}'.format(dstip, amount))
-                            # We need to do the same but for the srcips comming to this profile
-                            
-                            # Search for portscans... 
+                            if dstips:
+                                # Convert to python data
+                                try:
+                                    dstips = json.loads(dstips)
+                                except TypeError:
+                                    # The dstips is empty
+                                    pass
+                                self.outputqueue.put('03|'+self.processname+'|['+self.processname+'] ' + 'DstIps: {}'.format(dstips))
+                                # Search for portscans... 
+                                for dstip in dstips:
+                                    amount = dstips[dstip]
+                                    if amount >= 3:
+                                        if amount >= 10:
+                                            confidence = 1
+                                        else:
+                                            confidence = amount / 10.0
+                                        # very stupid port scan
+                                        type_detection = 'Port Scan from this Profile'
+                                        threat_level = 0.5
+                                        __database__.setEvidenceForTW(profileid, lasttw_id, type_detection, threat_level, confidence)
+                                        self.outputqueue.put('40|'+self.processname+'|['+self.processname+'] ' + 'Port scan detected for IP: {}. Amount: {}'.format(dstip, amount))
+                                # We need to do the same but for the srcips comming to this profile
+                                
                     except Exception as inst:
                         self.outputqueue.put('01|'+self.processname+'|['+self.processname+'] ' + 'Error in run() of '+self.processname)
                         self.outputqueue.put('01|'+self.processname+'|['+self.processname+'] ' + '{}'.format(type(inst)))
