@@ -23,12 +23,6 @@ class EvidenceProcess(multiprocessing.Process):
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
-        # Get the detection threshold
-        try:
-            self.detection_threshold = float(self.config.get('detection', 'evidence_detection_threshold'))
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified, by default...
-            self.detection_threshold = 2
         # Get the format of the time in the flows
         try:
             self.timeformat = config.get('timestamp', 'format')
@@ -54,6 +48,15 @@ class EvidenceProcess(multiprocessing.Process):
         # Limit any width to be > 0. By default we use 300 seconds, 5minutes
         if self.width < 0:
             self.width = 300.0
+
+        # Get the detection threshold
+        try:
+            self.detection_threshold = float(self.config.get('detection', 'evidence_detection_threshold'))
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified, by default...
+            self.detection_threshold = 2
+        self.outputqueue.put('10|evidence|Detection Threshold: {} attacks per minute ({} in the current time window width)'.format(self.detection_threshold, self.detection_threshold * self.width / 60 ))
+
 
     def run(self):
         try:
@@ -103,8 +106,15 @@ class EvidenceProcess(multiprocessing.Process):
                                 self.outputqueue.put('30|evidence|[Evidence] IP: {}. TW: {}. Accumulated Threat Level: {}'.format(ip, lasttw_id, accumulated_threat_level))
                                 #self.outputqueue.put('10|evidence|[Evidence] Accumulated evidence: {}, threshold: {}'.format(accumulated_threat_level, self.detected))
                                 # This is the part to detect if the accumulated evidence was enough for generating a detection
-                                if accumulated_threat_level >= self.detection_threshold:
+                                # The detection should be done in attacks per minute. The paramater in the configuration is attacks per minute
+                                # So find out how many attacks corresponds to the width we are using
+                                # 60 because the width is specified in seconds
+                                detection_threshold_in_this_width = self.detection_threshold * self.width / 60
+                                if accumulated_threat_level >= detection_threshold_in_this_width:
                                     self.outputqueue.put('10|evidence|[Evidence] DETECTED IP: {}. Accumulated evidence: {}'.format(ip, accumulated_threat_level))
+                                    __database__.setBlockingRequest(profileid, lasttw_id)
+                                    # We also need to mark the TW as processed, because when the stdin does not receive any more traffic, we just keep thinking
+                                    # that the last TW is the last tw....... and the fake time does not advance
                             
                     except Exception as inst:
                         self.outputqueue.put('01|evidence|[Evidence] Error in run() of EvidenceProcess')
