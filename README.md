@@ -13,6 +13,20 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
 
 - The data collected and used is on the _profile_ level and up. Slips does not work with data at the _flow_ level or _packet_ level to classify. This means that the simplest data structure available inside slips is the profile of an IP address. The modules can not access individual flows.
 
+## Usage
+To use this alpha version you will need an argus instance running and listening in one port.
+
+- If you don't have an Argus instance, first install it:
+    - Source install from [Argus].
+    - In Debian and Ubuntu you can do
+        ```
+        sudo apt-get install argus argus-clients
+        ```
+
+- To run argus in your own computer you should do:
+    ```
+    argus -B localhost -F [slipsfolder]/argus.conf
+    ```
 
 ## Usage
 
@@ -21,9 +35,9 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
         - redis-server /opt/local/etc/redis.conf
         - sudo port load redis
 2. Use slips
-    '''
+    ```
     cat test-flows/test3.binetflow | ./slips.py -l -c slips.conf -v 2 -e 1
-    '''
+    ```
 
 
 
