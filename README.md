@@ -104,7 +104,7 @@ This version of slips comes with the following features:
 ### Author and Contributors
 
 - The author of the project is Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. (Send an email for bugs, reports, ideas or comments)
-- Ondrej Lukas: New detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classs, etc. 
+- Ondrej Lukas: New detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classes, etc.
 - Elaheh Biglar Beigi
 - MariaRigaki 
 - kartik88363
