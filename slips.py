@@ -61,8 +61,9 @@ if __name__ == '__main__':
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default, 1
             args.verbose = 1
+
     # Limit any verbosity to > 0
-    elif args.verbose < 1:
+    if args.verbose < 1:
         args.verbose = 1
 
     # Any verbosity passed as parameter overrides the configuration. Only check its value
@@ -74,8 +75,9 @@ if __name__ == '__main__':
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default, 0
             args.debug = 0
+
     # Limit any debuggisity to > 0
-    elif args.debug < 0:
+    if args.debug < 0:
         args.debug = 0
 
 
