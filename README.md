@@ -7,7 +7,7 @@ This alpha version receives flows from a ra client ([Argus] Suite) and process t
 Slips (using argus) has been tested on Linux Debian 8 and Apple IOS 10.9.5 so far.
 
 ## Architecture
-The idea of slips is to focus on the machine learning part of the detection and not in capturing the network traffic. That is why the traffic is received from an external Argus instance. Argus captures the packets in the networks and makes them _available_ to anyone connecting to the Argus port. Argus do not send the packets until somebody ask for them.
+The idea of slips is to focus on the machine learning part of the detection and not in capturing the network traffic. That is why the traffic is received from an external Argus instance. Argus captures the packets in the networks and makes them _available_ to anyone connecting to the Argus port. Argus does not send the packets until somebody ask for them.
 
 The basic architecture is to read the flows from an Argus instance using the __ra__ tool and to send the flows to slips as standard input. This way of working is very good because we can analyze the traffic of our own computer, and also we can analyze the traffic of a remote network or any other computer where an Argus instance is running. Actually if you run the Argus program in any Windows, Mac or router, slips can analyze the traffic.
 
