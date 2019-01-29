@@ -17,16 +17,22 @@ To use this alpha version you will need an argus instance running and listening 
 - If you don't have an Argus instance, first install it:
     - Source install from [Argus].
     - In Debian and Ubuntu you can do
-        - sudo apt-get install argus argus-clients
+        ```
+        sudo apt-get install argus argus-clients
+        ```
 
 - To run argus in your own computer you should do:
-    - argus -B localhost -F [slipsfolder]/argus.conf
+    ```
+    argus -B localhost -F [slipsfolder]/argus.conf
+    ```
 
     This will run argus in your interface, open the port 561 in the localhost address only and run in background. See the argus configuration file and the Argus documentation for more information. (port 561 is used because is not in the default port list of nmap, so there are fewer chances that anybody will find it).
 
 - Then you start the slips program receiving packets from a ra client.
 
+    ```
     ra -F [slipsfolder]/ra.conf -n -Z b -S 127.0.0.1:561 | [slipsfolder]/./slips.py -f [slipsfolder]/models -d
+    ```
 
     This will read the network traffic in your computer and try to detect some malicious behavior by applying the models in the folder __models__.
 
