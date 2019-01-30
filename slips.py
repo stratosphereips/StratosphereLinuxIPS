@@ -53,7 +53,7 @@ if __name__ == '__main__':
         pass
     
     # Any verbosity passed as parameter overrides the configuration. Only check its value
-    if not args.verbose:
+    if args.verbose == None:
         # Read the verbosity from the config
         try:
             args.verbose = int(config.get('parameters', 'verbose'))
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         args.verbose = 1
 
     # Any verbosity passed as parameter overrides the configuration. Only check its value
-    if not args.debug:
+    if args.debug == None:
         # Read the debug from the config
         try:
             args.debug = int(config.get('parameters', 'debug'))
