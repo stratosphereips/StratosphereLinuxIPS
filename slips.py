@@ -57,7 +57,7 @@ if __name__ == '__main__':
         # Read the verbosity from the config
         try:
             args.verbose = int(config.get('parameters', 'verbose'))
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default, 1
             args.verbose = 1
@@ -71,7 +71,7 @@ if __name__ == '__main__':
         # Read the debug from the config
         try:
             args.debug = int(config.get('parameters', 'debug'))
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default, 0
             args.debug = 0
