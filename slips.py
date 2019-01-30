@@ -31,8 +31,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
     parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False) 
-    parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int, default=1)
-    parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int, default=0)
+    parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
+    parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
     parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
     parser.add_argument('-W', '--whitelist', help="File with the IP addresses to whitelist. One per line.", action='store', required=False)
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         pass
     
     # Any verbosity passed as parameter overrides the configuration. Only check its value
-    if args.verbose:
+    if not args.verbose:
         # Read the verbosity from the config
         try:
             args.verbose = int(config.get('parameters', 'verbose'))
@@ -66,7 +66,7 @@ if __name__ == '__main__':
         args.verbose = 1
 
     # Any verbosity passed as parameter overrides the configuration. Only check its value
-    if args.debug:
+    if not args.debug:
         # Read the debug from the config
         try:
             args.debug = int(config.get('parameters', 'debug'))
