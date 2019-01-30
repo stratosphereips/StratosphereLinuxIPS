@@ -60,7 +60,7 @@ class PortScanProcess(multiprocessing.Process):
                         self.outputqueue.put('01|'+self.processname+'|['+self.processname+'] ' + '{}'.format(type(inst)))
                         self.outputqueue.put('01|'+self.processname+'|['+self.processname+'] ' + '{}'.format(inst))
 
-                    time.sleep(2)
+                    time.sleep(60)
 
                 elif not self.inputqueue.empty():
                     line = self.queue.get()
