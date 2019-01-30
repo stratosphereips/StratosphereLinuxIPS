@@ -688,11 +688,9 @@ if __name__ == '__main__':
         # No args verbose specified. Read the verbosity from the config
         try:
             args.verbose = int(config.get('parameters', 'verbose'))
-        except ConfigParser.NoOptionError:
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError, NameError, ValueError):
             args.verbose = 1
-        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            pass
+
     # Limit any verbosity to > 0
     if args.verbose < 1:
         args.verbose = 1
@@ -702,11 +700,9 @@ if __name__ == '__main__':
         # No args debug specified. Read the debug from the config
         try:
             args.debug = int(config.get('parameters', 'debug'))
-        except ConfigParser.NoOptionError:
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError, NameError, ValueError):
             args.debug = 0
-        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            pass
+
     # Limit any debuggisity to > 0
     if args.debug < 0:
         args.debug = 0
