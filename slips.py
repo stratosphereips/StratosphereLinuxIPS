@@ -52,25 +52,27 @@ if __name__ == '__main__':
         # No conf file provided
         pass
     
-    # Get the verbosity, if it was not specified as a parameter
-    if args.verbose == None:
-        # No args verbose specified. Read the verbosity from the config
+    # Any verbosity passed as parameter overrides the configuration. Only check its value
+    if args.verbose:
+        # Read the verbosity from the config
         try:
             args.verbose = int(config.get('parameters', 'verbose'))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
+            # By default, 1
             args.verbose = 1
     # Limit any verbosity to > 0
     elif args.verbose < 1:
         args.verbose = 1
 
-    # Get the Debugging, if it was not specified as a parameter 
-    if args.debug == None:
-        # No args debug specified. Read the debug from the config
+    # Any verbosity passed as parameter overrides the configuration. Only check its value
+    if args.debug:
+        # Read the debug from the config
         try:
             args.debug = int(config.get('parameters', 'debug'))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
+            # By default, 0
             args.debug = 0
     # Limit any debuggisity to > 0
     elif args.debug < 0:
