@@ -122,7 +122,7 @@ class EvidenceProcess(multiprocessing.Process):
                         self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
                         #self.outputqueue.put('01|evidence|[Evidence] After Error Evidence {}'.format(evidence))
 
-                    time.sleep(2)
+                    time.sleep(60)
 
                 elif not self.inputqueue.empty():
                     line = self.queue.get()
