@@ -114,3 +114,4 @@ This version of slips comes with the following features:
 - Elaheh Biglar Beigi
 - MariaRigaki 
 - kartik88363
+- arkamar
