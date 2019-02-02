@@ -327,7 +327,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # Its a mac
                     return False
 
-            # Check if the ip received is part of our home network. We only crate profiles for our home network
+            # Check if the ip received (src_ip) is part of our home network. We only crate profiles for our home network
             if self.home_net and saddr_as_obj in self.home_net:
                 # Its in our Home network
 
@@ -343,68 +343,74 @@ class ProfilerProcess(multiprocessing.Process):
             elif self.home_net and saddr_as_obj not in self.home_net:
                 # The src ip is not in our home net
 
-                # Check that the dst IP is in our home net
+                # Check that the dst IP is in our home net. Like the flow is 'going' to it.
                 if daddr_as_obj in self.home_net:
                     self.outputqueue.put("07|profiler|[Profiler] Flow with dstip in homenet: srcip {}, dstip {}".format(saddr_as_obj, daddr_as_obj))
                     # The dst ip is in the home net. So register this as going to it
                     # 1. Get the profile of the dst ip.
-                    profileid = __database__.getProfileIdFromIP(daddr_as_obj)
-                    if not profileid:
+                    rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                    if not rev_profileid:
                         # We do not have yet the profile of the dst ip that is in our home net
                         self.outputqueue.put("07|profiler|[Profiler] The dstip profile was not here... create")
-                        temp_profileid = 'profile' + separator + str(daddr_as_obj)
-                        #self.outputqueue.put("01|profiler|Created profileid for dstip: {}".format(temp_profileid))
-                        __database__.addProfile(temp_profileid, starttime, self.width)
+                        # Create a reverse profileid for managing the data going to the dstip. 
+                        # With the rev_profileid we can now work with data in relation to the dst ip
+                        rev_profileid = 'profile' + separator + str(daddr_as_obj)
+                        __database__.addProfile(rev_profileid, starttime, self.width)
                         # Try again
-                        profileid = __database__.getProfileIdFromIP(daddr_as_obj)
-                        if not profileid:
+                        rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                        # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
+                        rev_twid = self.get_timewindow(starttime, rev_profileid)
+                        if not rev_profileid:
                             # Too many errors. We should not be here
                             return False
                     self.outputqueue.put("07|profiler|[Profile] Profile for dstip {} : {}".format(daddr_as_obj, profileid))
                     # 2. For this profile, find the id in the databse of the tw where the flow belongs.
-                    twid = self.get_timewindow(starttime, profileid)
+                    rev_twid = self.get_timewindow(starttime, profileid)
                 elif daddr_as_obj not in self.home_net:
                     # The dst ip is also not part of our home net. So ignore completely
                     return False
             elif not self.home_net:
                 # We don't have a home net, so create profiles for everyone
 
-                # The steps for adding a flow in a profile should be
-                # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
-                # The width is unique for all the timewindow in this profile
+                # Add the profile for the srcip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
                 __database__.addProfile(profileid, starttime, self.width)
+                # Add the profile for the dstip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
+                rev_profileid = 'profile' + separator + str(daddr_as_obj)
+                __database__.addProfile(rev_profileid, starttime, self.width)
 
-                # 3. For this profile, find the id in the databse of the tw where the flow belongs.
+                # For the profile from the srcip , find the id in the database of the tw where the flow belongs.
                 twid = self.get_timewindow(starttime, profileid)
+                # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
+                rev_twid = self.get_timewindow(starttime, rev_profileid)
 
-            def store_features_going_out():
+            def store_features_going_out(profile, tw):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
                 # Tuple
                 tupleid = str(daddr_as_obj) + ':' + columns['dport']+ ':' + columns['proto']
                 # Compute the symbol for this flow, for this TW, for this profile
-                #symbol = self.compute_symbol(profileid, twid, tupleid, columns['starttime'], columns['dur'], columns['bytes'])
+                #symbol = self.compute_symbol(profile, tw, tupleid, columns['starttime'], columns['dur'], columns['bytes'])
                 symbol = ('a', '2019-01-26--13:31:09', 1)
                 # Add the out tuple
-                __database__.add_out_tuple(profileid, twid, tupleid, symbol)
+                __database__.add_out_tuple(profile, tw, tupleid, symbol)
                 # Add the dstip
-                __database__.add_out_dstips(profileid, twid, daddr_as_obj)
+                __database__.add_out_dstips(profile, tw, daddr_as_obj)
                 # Add the dstport
-                __database__.add_out_dstport(profileid, twid, columns['dport'])
+                __database__.add_out_dstport(profile, tw, columns['dport'])
                 # Add the srcport
-                __database__.add_out_srcport(profileid, twid, sport)
+                __database__.add_out_srcport(profile, tw, sport)
 
-            def store_features_going_in():
+            def store_features_going_in(profile, tw):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
                 # Add the srcip
-                __database__.add_in_srcips(profileid, twid, saddr_as_obj)
+                __database__.add_in_srcips(profile, tw, saddr_as_obj)
                 # Add the dstport
-                __database__.add_in_dstport(profileid, twid, columns['dport'])
+                __database__.add_in_dstport(profile, tw, columns['dport'])
                 # Add the srcport
-                __database__.add_in_srcport(profileid, twid, sport)
+                __database__.add_in_srcport(profile, tw, sport)
 
             ##########################################
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
@@ -413,25 +419,28 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Mode 'out'
             if self.analysis_direction == 'out':
-                # If we have a home net and the flow comes from it, or if we don't have a home net
+                # Only take care of the stuff going out. Here we don't keep track of the stuff going in
+                # If we have a home net and the flow comes from it, or if we don't have a home net and we are in out out.
                 if (self.home_net and saddr_as_obj in self.home_net) or not self.home_net:
-                    store_features_going_out()
+                    store_features_going_out(profileid, twid)
 
             # Mode 'all'
             elif self.analysis_direction == 'all':
-                # If we don't have a home net, just try to store everything coming OUT and IN to the IP
+                # Take care of both the stuff going out and in. In case the profile is for the srcip and for the dstip 
                 if not self.home_net:
+                    # If we don't have a home net, just try to store everything coming OUT and IN to the IP
                     # Out features
-                    store_features_going_out()
+                    store_features_going_out(profileid, twid)
                     # IN features
-                    store_features_going_in()
+                    store_features_going_in(rev_profileid, rev_twid)
+
                 # If we have a home net and the flow comes from it. Only the features going out of the IP
                 elif self.home_net and saddr_as_obj in self.home_net:
-                    store_features_going_out()
+                    store_features_going_out(profileid, twid)
                 # If we have a home net and the flow comes to it. Only the features going in of the IP
                 elif self.home_net and daddr_as_obj in self.home_net:
-                    # The dstip was in the homenet
-                    store_features_going_in()
+                    # The dstip was in the homenet. Add the src info to the dst profile
+                    store_features_going_in(rev_profileid, rev_twid)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess.")
