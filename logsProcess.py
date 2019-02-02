@@ -42,10 +42,10 @@ class LogsProcess(multiprocessing.Process):
         # Get the time of log report
         try:
             self.report_time = int(self.config.get('parameters', 'log_report_time'))
-            self.outputqueue.put('10|logs|Log Report time: {} seconds'.format(self.report_time))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.report_time = 5
+        self.outputqueue.put('01|logs|Logs Process configured to report every: {} seconds'.format(self.report_time))
 
     def run(self):
         try:
