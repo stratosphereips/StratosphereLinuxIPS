@@ -397,7 +397,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # Add the dstip
                 __database__.add_out_dstips(profile, tw, daddr_as_obj)
                 # Add the dstport
-                __database__.add_out_dstport(profile, tw, columns['dport'])
+                __database__.add_out_dstport(profile, tw, columns['dport'], columns['bytes'], columns['sbytes'], columns['pkts'], columns['spkts'], columns['state'], columns['proto'])
                 # Add the srcport
                 __database__.add_out_srcport(profile, tw, sport)
 
