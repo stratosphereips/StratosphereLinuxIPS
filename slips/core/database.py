@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from datetime import timedelta
 import json
+import sys
 
 
 # Struture of the DB
@@ -344,9 +345,216 @@ class Database(object):
         data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
         return data
 
-    def add_out_dstport(self, profileid, twid, dport):
-        """ """
-        pass
+    def getFinalStateFromFlags(self, state):
+        """ 
+        Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags
+        """
+        try:
+            self.outputqueue.put('03|database|[DB]: State received {}'.format(state))
+            pre = state.split('_')[0]
+            try:
+                suf = state.split('_')[1]
+                if 'S' in pre and 'A' in pre and 'S' in suf and 'A' in suf:
+                    """
+                    Examples:
+                    SA_SA
+                    SR_SA
+                    FSRA_SA
+                    SPA_SPA
+                    SRA_SPA
+                    FSA_FSA
+                    FSA_FSPA
+                    SAEC_SPA
+                    SRPA_SPA
+                    FSPA_SPA
+                    FSRPA_SPA
+                    FSPA_FSPA
+                    FSRA_FSPA
+                    SRAEC_SPA
+                    FSPA_FSRPA
+                    FSAEC_FSPA
+                    FSRPA_FSPA
+                    SRPAEC_SPA
+                    FSPAEC_FSPA
+                    SRPAEC_FSRPA
+                    """
+                    return 'Established'
+                elif 'PA' in pre and 'PA' in suf:
+                    # Tipical flow that was reported in the middle
+                    """
+                    Examples:
+                    PA_PA
+                    FPA_FPA
+                    """
+                    return 'Established'
+                else:
+                    """
+                    Examples:
+                    S_RA
+                    S_R
+                    A_R
+                    S_SA 
+                    SR_SA
+                    FA_FA
+                    SR_RA
+                    SEC_RA
+                    """
+                    return 'NotEstablished'
+            except IndexError:
+                # suf does not exist, which means that this is some ICMP or no response was sent for UDP or TCP
+                if 'ECO' in pre:
+                    # ICMP
+                    return 'Established'
+                elif 'UNK' in pre:
+                    # ICMP6 unknown upper layer
+                    return 'Established'
+                elif 'CON' in pre:
+                    # UDP
+                    return 'Established'
+                elif 'EST' in pre:
+                    # TCP
+                    return 'Established'
+                else:
+                    """
+                    Examples:
+                    S_
+                    FA_
+                    PA_
+                    FSA_
+                    SEC_
+                    SRPA_
+                    """
+                    return 'NotEstablished'
+            self.outputqueue.put('01|database|[DB] Funcion getFinalStateFromFlags() We didnt catch the state. We should never be here')
+            return None
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getFinalStateFromFlags() in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
+
+    def add_out_dstport(self, profileid, twid, dport, totbytes, sbytes, pkts, spkts, state, proto):
+        """ 
+        Store info about the dst port when the flow goes out, which means we are the client sending it.
+        """
+        try:
+            hosttype = 'Client'
+            # Get the state
+            summaryState = __database__.getFinalStateFromFlags(state)
+            # Create the key
+            key = hosttype + proto.upper() + summaryState
+            #self.outputqueue.put('03|database|[DB]: Storing info about dst port for {}. Key: {}.'.format(profileid, key))
+            # Get the previous data about this key
+            functionName = 'getDstPort' + key + 'FromProfileTW'
+            # This is a trick to call different functions based on what we were given
+            try:
+                function = getattr(self, functionName)
+                prev_data = function(profileid, twid)
+            except AttributeError:
+                # Some protocols we still dont process, such as IPV6-ICMP. So we don't have the function getDstPortClientIPV6-ICMPEstablishedFromProfileTW
+                return True
+            try:
+                innerdata = prev_data[dport]
+                #self.outputqueue.put('03|database|[DB]: Adding for port {}. PRE Data: {}'.format(dport, innerdata))
+                # We had this port
+                # We need to add all the data
+                innerdata['totalflows'] += 1
+                innerdata['totalpkt'] += int(pkts)
+                innerdata['totalbytes'] = int(totbytes)
+                prev_data[dport] = innerdata
+                #self.outputqueue.put('03|database|[DB]: Adding for port {}. POST Data: {}'.format(dport, innerdata))
+            except KeyError:
+                # First time for this flow
+                innerdata = {}
+                innerdata['totalflows'] = 1
+                innerdata['totalpkt'] = int(pkts)
+                innerdata['totalbytes'] = int(totbytes)
+                #self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
+                prev_data[dport] = innerdata
+            # Convet the dictionary to json
+            data = json.dumps(prev_data)
+            # Store it
+            self.r.hset( profileid + self.separator + twid, key, str(data))
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in add_out_dstport in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
+    def getDstPortClientTCPEstablishedFromProfileTW(self, profileid, twid):
+        """ 
+        Get the info about the dst port. TCP established
+        """
+        try:
+            key = 'ClientTCPEstablished'
+            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            data = self.r.hget( profileid + self.separator + twid, key)
+            value = {}
+            if data:
+                # Convet the dictionary to json
+                portdata = json.loads(data)
+                value = portdata
+            return value
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getDstPortClientTCPEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
+    def getDstPortClientTCPNotEstablishedFromProfileTW(self, profileid, twid):
+        """ 
+        Get the info about the dst port. TCP not established
+        """
+        try:
+            key = 'ClientTCPNotEstablished'
+            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            data = self.r.hget( profileid + self.separator + twid, key)
+            value = {}
+            if data:
+                # Convet the dictionary to json
+                portdata = json.loads(data)
+                value = portdata
+            return value
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getDstPortClientTCPNotEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
+    def getDstPortClientUDPNotEstablishedFromProfileTW(self, profileid, twid):
+        """ 
+        Get the info about the dst port. udp. not established
+        """
+        try:
+            key = 'ClientUDPNotEstablished'
+            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            data = self.r.hget( profileid + self.separator + twid, key)
+            value = {}
+            if data:
+                # Convet the dictionary to json
+                portdata = json.loads(data)
+                value = portdata
+            return value
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getDstPortClientUDPNotEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
+    def getDstPortClientUDPEstablishedFromProfileTW(self, profileid, twid):
+        """ 
+        Get the info about the dst port. UDP established
+        """
+        try:
+            key = 'ClientUDPEstablished'
+            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            data = self.r.hget( profileid + self.separator + twid, key)
+            value = {}
+            if data:
+                # Convet the dictionary to json
+                portdata = json.loads(data)
+                value = portdata
+            return value
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getDstPortClientUDPEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
     def add_out_srcport(self, profileid, twid, sport):
         """ """
