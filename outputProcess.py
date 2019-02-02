@@ -11,7 +11,7 @@ class OutputProcess(multiprocessing.Process):
         self.debug = debug
         self.queue = inputqueue
         self.config = config
-        if self.verbose > 0:
+        if self.verbose > 2:
             print('Verbose Level: ' + str(self.verbose))
             print('Debug Level: ' + str(self.debug))
 
