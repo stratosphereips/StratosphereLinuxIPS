@@ -90,7 +90,7 @@ if __name__ == '__main__':
     # We need to tell the output process the type of output so he know if it should print in console or send the data to another process
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
-    outputProcessQueue.put('10|main|Started output thread')
+    outputProcessQueue.put('30|main|Started output thread')
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
@@ -99,13 +99,13 @@ if __name__ == '__main__':
         cursesProcessQueue = Queue()
         cursesProcessThread = CursesProcess(cursesProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
         cursesProcessThread.start()
-        outputProcessQueue.put('10|main|Started Curses thread')
+        outputProcessQueue.put('30|main|Started Curses thread')
     elif args.logfiles:
         # Create the logsfile thread
         logsProcessQueue = Queue()
         logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
         logsProcessThread.start()
-        outputProcessQueue.put('10|main|Started logsfiles thread')
+        outputProcessQueue.put('30|main|Started logsfiles thread')
     else:
         # Text?
         pass
@@ -116,7 +116,7 @@ if __name__ == '__main__':
     # Create the profile thread and start it
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
     profilerProcessThread.start()
-    outputProcessQueue.put('10|main|Started profiler thread')
+    outputProcessQueue.put('30|main|Started profiler thread')
 
     # Evidence thread
     # Create the queue for the evidence thread
@@ -124,7 +124,7 @@ if __name__ == '__main__':
     # Create the thread and start it
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config)
     evidenceProcessThread.start()
-    outputProcessQueue.put('10|main|Started Evidence thread')
+    outputProcessQueue.put('30|main|Started Evidence thread')
 
     # Port scan thread. Should be a module
     # Create the queue for the evidence thread
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     # Create the thread and start it
     portscanProcessThread = PortScanProcess(portscanProcessQueue, outputProcessQueue, config)
     portscanProcessThread.start()
-    outputProcessQueue.put('10|main|Started port scan thread')
+    outputProcessQueue.put('30|main|Started port scan thread')
 
     # Input thread
     # Create the queue for the input thread
@@ -144,4 +144,4 @@ if __name__ == '__main__':
         newstdin = os.fdopen(os.dup(sys.stdin.fileno()))
         inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, newstdin, config)
     inputProcessThread.start()
-    outputProcessQueue.put('10|main|Started input thread')
+    outputProcessQueue.put('30|main|Started input thread')
