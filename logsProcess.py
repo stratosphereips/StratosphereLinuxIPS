@@ -36,6 +36,8 @@ class LogsProcess(multiprocessing.Process):
         # Read the configuration
         self.read_configuration()
         self.fieldseparator = __database__.getFieldSeparator()
+        # For some weird reason the database loses its outputqueue and we have to re set it here.......
+        __database__.setOutputQueue(self.outputqueue)
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -158,7 +160,6 @@ class LogsProcess(multiprocessing.Process):
                 twtime = __database__.getTimeTW(profileid, twid)
                 twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
                 self.outputqueue.put('02|logs|\t[Logs] Storing Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime))
-                #twLen = str(__database__.getAmountTW(profileid))
                 #self.outputqueue.put('30|logs|\t[Logs] Profile: {} has {} timewindows'.format(profileid, twLen))
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
@@ -172,25 +173,46 @@ class LogsProcess(multiprocessing.Process):
                 dstips = __database__.getDstIPsfromProfileTW(profileid, twid)
                 if dstips:
                     # Add dstips to log file
-                    self.addDataToFile(profilefolder + '/' + twlog, 'DstIP: ' + dstips, file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'DstIP:\n' + dstips, file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] DstIP: ' + dstips)
-                srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
                 # 2. SrcIPs
+                srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
                 if srcips:
                     # Add srcips
-                    self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP: '+ srcips, file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP:\n'+ srcips, file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] SrcIP: ' + srcips)
                 # 3. Tuples
                 tuples = __database__.getOutTuplesfromProfileTW(profileid, twid)
                 if tuples:
                     # Add tuples
-                    self.addDataToFile(profilefolder + '/' + twlog, 'OutTuples: '+ tuples, file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'OutTuples:\n'+ tuples, file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] Tuples: ' + tuples)
-                blocking = __database__.getBlockingRequest(profileid, twid)
                 # 4. Detections to block
+                blocking = __database__.getBlockingRequest(profileid, twid)
                 if blocking:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'Blocking Request: ' + str(blocking), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'Blocking Request:\n' + str(blocking), file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
+                # 5. Info of dstport as client, tcp, established
+                dstportdata = __database__.getDstPortClientTCPEstablishedFromProfileTW(profileid, twid)
+                if dstportdata:
+                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortTCPEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
+                # 6. Info of dstport as client, udp, established
+                dstportdata = __database__.getDstPortClientUDPEstablishedFromProfileTW(profileid, twid)
+                if dstportdata:
+                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortUDPEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
+                # 7. Info of dstport as client, tcp, notestablished
+                dstportdata = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, twid)
+                if dstportdata:
+                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortTCPNotEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
+                # 8. Info of dstport as client, udp, notestablished
+                dstportdata = __database__.getDstPortClientUDPNotEstablishedFromProfileTW(profileid, twid)
+                if dstportdata:
+                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortUDPNotEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
+
 
                 # Mark it as not modified anymore
                 __database__.markProfileTWAsNotModified(profileid, twid)
