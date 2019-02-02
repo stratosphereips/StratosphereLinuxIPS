@@ -22,14 +22,26 @@ class PortScanProcess(multiprocessing.Process):
                 if self.inputqueue.empty():
                     # Do stuff
                     try:
+                        # Start of the port scan detection
                         self.outputqueue.put('50|'+self.processname+'|['+self.processname+'] ' + 'Detecting port scans')
                         # Get all the profiles
                         profiles = __database__.getProfiles()
                         for profileid in profiles:
+                            # For each profile
                             self.outputqueue.put('02|'+self.processname+'|['+self.processname+'] ' + 'Profile: {}'.format(profileid))
                             # Get the last tw for this profile
                             lasttw = __database__.getLastTWforProfile(profileid)
                             lasttw_id, lasttw_time = lasttw[0]
+                            # For port scan detection, we will measure different things:
+                            # Vertical port scan:
+                            # - When 1 srcip contacts (established or not) > 3 ports in the same dstip (any number of packets)
+                            # Horizontal port scan:
+                            # - When 1 srcip contacts (established or not) the same port in > 3 different dstip (any number of packets)
+                            # Other things to detect may be
+                            # - If a dstip is port scanned by a src ip
+                            # - The same srcip connecting to the same dst port in the same ip > 3 packets as not established
+                            # - Slow port scan. Same as the others but distributed in multiple time windows
+                            # 
                             # Get the dstips statistics for this profile
                             dstips = __database__.getDstIPsfromProfileTW(profileid, lasttw_id)
                             if dstips:
