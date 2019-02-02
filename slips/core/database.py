@@ -358,6 +358,7 @@ class Database(object):
         Add the srcip to this tw in this profile
         """
         try:
+            self.outputqueue.put('03|database|[DB]: Add_in_srcips called with profileid {}, twid {}, saddr_as_obj {}'.format(profileid, twid, str(saddr_as_obj)))
             # Get the hash of the timewindow
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, 'SrcIPs')
@@ -367,9 +368,11 @@ class Database(object):
                 # Convert the json str to a dictionary
                 data = json.loads(data)
                 # Add 1 because we found this ip again
+                self.outputqueue.put('03|database|[DB]: Not the first time for this saddr. Add 1 to {}'.format(str(saddr_as_obj)))
                 data[str(saddr_as_obj)] += 1
                 data = json.dumps(data)
             except (KeyError, TypeError) as e:
+                self.outputqueue.put('03|database|[DB]: First time for this saddr. Make it 1 to {}'.format(str(saddr_as_obj)))
                 data[str(saddr_as_obj)] = 1
                 # Convet the dictionary to json
                 data = json.dumps(data)
