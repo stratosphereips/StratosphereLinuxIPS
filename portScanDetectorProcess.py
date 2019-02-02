@@ -33,15 +33,34 @@ class PortScanProcess(multiprocessing.Process):
                             lasttw = __database__.getLastTWforProfile(profileid)
                             lasttw_id, lasttw_time = lasttw[0]
                             # For port scan detection, we will measure different things:
-                            # Vertical port scan:
-                            # - When 1 srcip contacts (established or not) > 3 ports in the same dstip (any number of packets)
-                            # Horizontal port scan:
-                            # - When 1 srcip contacts (established or not) the same port in > 3 different dstip (any number of packets)
+                            # 1. Vertical port scan:
+                            #  - When 1 srcip contacts (established or not) > 3 ports in the same dstip (any number of packets)
+                            # 2. Horizontal port scan:
+                            #  - When 1 srcip contacts (established or not) the same port in > 3 different dstip (any number of packets)
                             # Other things to detect may be
-                            # - If a dstip is port scanned by a src ip
-                            # - The same srcip connecting to the same dst port in the same ip > 3 packets as not established
-                            # - Slow port scan. Same as the others but distributed in multiple time windows
+                            # 4. If a dstip is port scanned by a src ip
+                            # 3. The same srcip connecting to the same dst port in the same ip > 3 packets as not established
+                            # 5. Slow port scan. Same as the others but distributed in multiple time windows
                             # 
+                            # To detect 2. and 3. togethe we can use the ClientDstPortTCPNotEstablished
+                            # Get the ClientDstPortTCPNotEstablished
+                            data = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, lasttw_id)
+                            for dport in data.keys():
+                                totalpkts = int(data[dport]['totalpkt'])
+                                # Fixed threshold for now.
+                                if totalpkts > 3:
+                                    if totalpkts >= 10:
+                                        confidence = 1
+                                    else:
+                                        confidence = amount / 10.0
+                                    # very stupid port scan
+                                    type_detection = 'Too many not established TCP conn to the same port'
+                                    threat_level = 50
+                                    __database__.setEvidenceForTW(profileid, lasttw_id, type_detection, threat_level, confidence)
+                                    
+                                    self.outputqueue.put('40|'+self.processname+'|['+self.processname+'] ' + 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts))
+
+
                             # Get the dstips statistics for this profile
                             dstips = __database__.getDstIPsfromProfileTW(profileid, lasttw_id)
                             if dstips:
@@ -62,7 +81,8 @@ class PortScanProcess(multiprocessing.Process):
                                             confidence = amount / 10.0
                                         # very stupid port scan
                                         type_detection = 'Port Scan from this Profile'
-                                        threat_level = 0.5
+                                        #threat_level = 0.5
+                                        threat_level = 10
                                         __database__.setEvidenceForTW(profileid, lasttw_id, type_detection, threat_level, confidence)
                                         self.outputqueue.put('40|'+self.processname+'|['+self.processname+'] ' + 'Port scan detected for IP: {}. Amount: {}'.format(dstip, amount))
                                 # We need to do the same but for the srcips comming to this profile
