@@ -16,10 +16,15 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
 
 ## Usage
 
-- Start Redis
+1. Start Redis
     - In macos
         - redis-server /opt/local/etc/redis.conf
         - sudo port load redis
+2. Use slips
+    '''
+    cat test-flows/test3.binetflow | ./slips.py -l -c slips.conf -v 2 -e 1
+    '''
+
 
 
 ## Detection Models
