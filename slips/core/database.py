@@ -345,9 +345,10 @@ class Database(object):
         data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
         return data
 
-    def getFinalStateFromFlags(self, state):
+    def getFinalStateFromFlags(self, state, pkts):
         """ 
         Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags
+        We receive the pakets to distinguish some Reset connections
         """
         try:
             self.outputqueue.put('03|database|[DB]: State received {}'.format(state))
@@ -414,6 +415,22 @@ class Database(object):
                 elif 'EST' in pre:
                     # TCP
                     return 'Established'
+                elif 'RST' in pre:
+                    # TCP. When -z B is not used in argus, states are single words. Most connections are reseted when finished and therefore are established
+                    # It can happen that is reseted being not established, but we can't tell without -z b.
+                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
+                    if int(pkts) <= 3:
+                        return 'NotEstablished'
+                    else:
+                        return 'Established'
+                elif 'FIN' in pre:
+                    # TCP. When -z B is not used in argus, states are single words. Most connections are finished with FIN when finished and therefore are established
+                    # It can happen that is finished being not established, but we can't tell without -z b.
+                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
+                    if int(pkts) <= 3:
+                        return 'NotEstablished'
+                    else:
+                        return 'Established'
                 else:
                     """
                     Examples:
@@ -440,7 +457,7 @@ class Database(object):
         try:
             hosttype = 'Client'
             # Get the state
-            summaryState = __database__.getFinalStateFromFlags(state)
+            summaryState = __database__.getFinalStateFromFlags(state, pkts)
             # Create the key
             key = hosttype + proto.upper() + summaryState
             #self.outputqueue.put('03|database|[DB]: Storing info about dst port for {}. Key: {}.'.format(profileid, key))
