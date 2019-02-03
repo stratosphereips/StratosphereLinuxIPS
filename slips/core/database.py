@@ -203,9 +203,9 @@ class Database(object):
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
             return twid
         except redis.exceptions.ResponseError as e:
-            self.outputqueue.put('00|database|error in addNewOlderTW in database.py')
-            self.outputqueue.put('00|database|{}'.format(type(inst)))
-            self.outputqueue.put('00|database|{}'.format(inst))
+            self.outputqueue.put('01|database|error in addNewOlderTW in database.py')
+            self.outputqueue.put('01|database|{}'.format(type(inst)))
+            self.outputqueue.put('01|database|{}'.format(inst))
 
     def addNewTW(self, profileid, startoftw):
         try:
@@ -275,7 +275,7 @@ class Database(object):
         """
         try:
             # Get the hash of the timewindow
-            self.outputqueue.put('03|database|[DB]: Add_out_dstips called with profileid {}, twid {}, daddr_as_obj {}'.format(profileid, twid, str(daddr_as_obj)))
+            self.outputqueue.put('05|database|[DB]: Add_out_dstips called with profileid {}, twid {}, daddr_as_obj {}'.format(profileid, twid, str(daddr_as_obj)))
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, 'DstIPs')
             if not data:
@@ -284,12 +284,12 @@ class Database(object):
                 # Convert the json str to a dictionary
                 data = json.loads(data)
                 # Add 1 because we found this ip again
-                self.outputqueue.put('03|database|[DB]: Not the first time for this daddr. Add 1 to {}'.format(str(daddr_as_obj)))
+                self.outputqueue.put('05|database|[DB]: Not the first time for this daddr. Add 1 to {}'.format(str(daddr_as_obj)))
                 data[str(daddr_as_obj)] += 1
                 data = json.dumps(data)
             except (TypeError, KeyError) as e:
                 # There was no previous data stored in the DB
-                self.outputqueue.put('03|database|[DB]: First time for this daddr. Make it 1 to {}'.format(str(daddr_as_obj)))
+                self.outputqueue.put('05|database|[DB]: First time for this daddr. Make it 1 to {}'.format(str(daddr_as_obj)))
                 data[str(daddr_as_obj)] = 1
                 # Convet the dictionary to json
                 data = json.dumps(data)
@@ -305,7 +305,7 @@ class Database(object):
     def add_out_tuple(self, profileid, twid, tupleid, data_tuple):
         """ Add the tuple going out for this profile """
         try:
-            self.outputqueue.put('03|database|[DB]: Add_out_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple))
+            self.outputqueue.put('05|database|[DB]: Add_out_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple))
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, 'OutTuples')
             (symbol_to_add, previous_time, T2)  = data_tuple
@@ -315,7 +315,7 @@ class Database(object):
                 # Convert the json str to a dictionary
                 data = json.loads(data)
                 # Disasemble the input
-                self.outputqueue.put('03|database|[DB]: Not the first time for tuple {}. Add the symbol: {}. Store previous_time: {}, T2: {}'.format(tupleid, symbol_to_add, previous_time, T2))
+                self.outputqueue.put('05|database|[DB]: Not the first time for tuple {}. Add the symbol: {}. Store previous_time: {}, T2: {}'.format(tupleid, symbol_to_add, previous_time, T2))
                 # Get the last symbols of letters in the DB
                 prev_symbols = data[tupleid][0]
                 # Add it to form the string of letters
@@ -323,11 +323,11 @@ class Database(object):
                 # Bundle the data together
                 new_data = (new_symbol, previous_time, T2)
                 data[tupleid] = new_data
-                self.outputqueue.put('04|database|[DB]: Letters so far for tuple {}: {}'.format(tupleid, new_symbol))
+                self.outputqueue.put('06|database|[DB]: Letters so far for tuple {}: {}'.format(tupleid, new_symbol))
                 data = json.dumps(data)
             except (TypeError, KeyError) as e:
                 # There was no previous data stored in the DB
-                self.outputqueue.put('03|database|[DB]: First time for tuple {}'.format(tupleid))
+                self.outputqueue.put('05|database|[DB]: First time for tuple {}'.format(tupleid))
                 new_data = (symbol_to_add, previous_time, T2)
                 data[tupleid] = new_data
                 # Convet the dictionary to json
@@ -351,7 +351,7 @@ class Database(object):
         We receive the pakets to distinguish some Reset connections
         """
         try:
-            self.outputqueue.put('03|database|[DB]: State received {}'.format(state))
+            self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
             pre = state.split('_')[0]
             try:
                 suf = state.split('_')[1]
@@ -497,8 +497,10 @@ class Database(object):
                 prev_data[dport] = innerdata
             # Convet the dictionary to json
             data = json.dumps(prev_data)
-            # Store it
+            # Store this data in the profile hash
             self.r.hset( profileid + self.separator + twid, key, str(data))
+            # Mark the tw as modified
+            self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
             self.outputqueue.put('01|database|[DB] Error in add_out_dstport in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
@@ -510,7 +512,7 @@ class Database(object):
         """
         try:
             key = 'ClientTCPEstablished'
-            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
@@ -529,7 +531,7 @@ class Database(object):
         """
         try:
             key = 'ClientTCPNotEstablished'
-            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
@@ -547,7 +549,7 @@ class Database(object):
         """
         try:
             key = 'ClientIPV6ICMPNotEstablished'
-            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
@@ -567,7 +569,7 @@ class Database(object):
         """
         try:
             key = 'ClientIPV6ICMPEstablished'
-            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
@@ -586,7 +588,7 @@ class Database(object):
         """
         try:
             key = 'ClientICMPNotEstablished'
-            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
@@ -606,7 +608,7 @@ class Database(object):
         """
         try:
             key = 'ClientICMPEstablished'
-            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
@@ -625,7 +627,7 @@ class Database(object):
         """
         try:
             key = 'ClientUDPNotEstablished'
-            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
@@ -644,7 +646,7 @@ class Database(object):
         """
         try:
             key = 'ClientUDPEstablished'
-            self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
@@ -667,7 +669,7 @@ class Database(object):
         Add the srcip to this tw in this profile
         """
         try:
-            self.outputqueue.put('03|database|[DB]: Add_in_srcips called with profileid {}, twid {}, saddr_as_obj {}'.format(profileid, twid, str(saddr_as_obj)))
+            #self.outputqueue.put('03|database|[DB]: Add_in_srcips called with profileid {}, twid {}, saddr_as_obj {}'.format(profileid, twid, str(saddr_as_obj)))
             # Get the hash of the timewindow
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, 'SrcIPs')
@@ -677,11 +679,11 @@ class Database(object):
                 # Convert the json str to a dictionary
                 data = json.loads(data)
                 # Add 1 because we found this ip again
-                self.outputqueue.put('03|database|[DB]: Not the first time for this saddr. Add 1 to {}'.format(str(saddr_as_obj)))
+                #self.outputqueue.put('05|database|[DB]: Not the first time for this saddr. Add 1 to {}'.format(str(saddr_as_obj)))
                 data[str(saddr_as_obj)] += 1
                 data = json.dumps(data)
             except (KeyError, TypeError) as e:
-                self.outputqueue.put('03|database|[DB]: First time for this saddr. Make it 1 to {}'.format(str(saddr_as_obj)))
+                #self.outputqueue.put('05|database|[DB]: First time for this saddr. Make it 1 to {}'.format(str(saddr_as_obj)))
                 data[str(saddr_as_obj)] = 1
                 # Convet the dictionary to json
                 data = json.dumps(data)
@@ -751,11 +753,26 @@ class Database(object):
 
     def setBlockingRequest(self, profileid, twid):
         """ Set the request to block this profile. found in this time window """
+        # Store the blockrequest in the TW itself
         self.r.hset(profileid + self.separator + twid, 'BlockRequest', 'True')
+        # Add this profile and tw to the list of blocked
+        self.markProfileTWAsBlocked(profileid, twid)
+        # Mark the tw as modified
+        self.markProfileTWAsModified(profileid, twid)
 
     def getBlockingRequest(self, profileid, twid):
         """ Get the request to block this profile. found in this time window """
         data = self.r.hget(profileid + self.separator + twid, 'BlockRequest')
         return data
+
+    def markProfileTWAsBlocked(self, profileid, twid):
+        """ Add this profile and tw to the list of blocked """
+        self.r.sadd('BlockedProfTW', profileid + self.separator + twid)
+
+    def getBlockedTW(self):
+        """ Return all the list of blocked tws """
+        data = self.r.smembers('BlockedProfTW')
+        return data
+
 
 __database__ = Database()
