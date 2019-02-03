@@ -243,7 +243,7 @@ class LogsProcess(multiprocessing.Process):
             # Create the file of blocked data
             if TWforProfileBlocked:
                 self.addDataToFile('Blocked.txt', str(TWforProfileBlocked) + '\n', file_mode='w+', data_type='json')
-                self.outputqueue.put('01|logs|\t\t[Logs]: Blocked file updated: {}'.format(TWforProfileBlocked))
+                self.outputqueue.put('03|logs|\t\t[Logs]: Blocked file updated: {}'.format(TWforProfileBlocked))
 
         except KeyboardInterrupt:
             return True
