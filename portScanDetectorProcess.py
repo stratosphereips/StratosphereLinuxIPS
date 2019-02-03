@@ -41,7 +41,8 @@ class PortScanProcess(multiprocessing.Process):
                             # 4. If a dstip is port scanned by a src ip
                             # 3. The same srcip connecting to the same dst port in the same ip > 3 packets as not established
                             # 5. Slow port scan. Same as the others but distributed in multiple time windows
-                            # 
+                            
+                            ###
                             # To detect 2. and 3. togethe we can use the ClientDstPortTCPNotEstablished
                             # Get the ClientDstPortTCPNotEstablished
                             data = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, lasttw_id)
@@ -52,7 +53,7 @@ class PortScanProcess(multiprocessing.Process):
                                     if totalpkts >= 10:
                                         confidence = 1
                                     else:
-                                        confidence = amount / 10.0
+                                        confidence = totalpkts / 10.0
                                     # very stupid port scan
                                     type_detection = 'Too many not established TCP conn to the same port'
                                     threat_level = 50
@@ -60,32 +61,6 @@ class PortScanProcess(multiprocessing.Process):
                                     
                                     self.outputqueue.put('40|'+self.processname+'|['+self.processname+'] ' + 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts))
 
-
-                            # Get the dstips statistics for this profile
-                            dstips = __database__.getDstIPsfromProfileTW(profileid, lasttw_id)
-                            if dstips:
-                                # Convert to python data
-                                try:
-                                    dstips = json.loads(dstips)
-                                except TypeError:
-                                    # The dstips is empty
-                                    pass
-                                self.outputqueue.put('03|'+self.processname+'|['+self.processname+'] ' + 'DstIps: {}'.format(dstips))
-                                # Search for portscans... 
-                                for dstip in dstips:
-                                    amount = dstips[dstip]
-                                    if amount >= 3:
-                                        if amount >= 10:
-                                            confidence = 1
-                                        else:
-                                            confidence = amount / 10.0
-                                        # very stupid port scan
-                                        type_detection = 'Port Scan from this Profile'
-                                        #threat_level = 0.5
-                                        threat_level = 10
-                                        __database__.setEvidenceForTW(profileid, lasttw_id, type_detection, threat_level, confidence)
-                                        self.outputqueue.put('40|'+self.processname+'|['+self.processname+'] ' + 'Port scan detected for IP: {}. Amount: {}'.format(dstip, amount))
-                                # We need to do the same but for the srcips comming to this profile
                                 
                     except Exception as inst:
                         self.outputqueue.put('01|'+self.processname+'|['+self.processname+'] ' + 'Error in run() of '+self.processname)
