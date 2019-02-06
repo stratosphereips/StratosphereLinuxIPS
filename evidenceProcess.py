@@ -124,7 +124,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                     time.sleep(60)
 
-                elif not self.inputqueue.empty():
+                else:
                     line = self.queue.get()
                     if 'stop' != line:
                         self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')

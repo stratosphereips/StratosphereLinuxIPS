@@ -66,21 +66,17 @@ class LogsProcess(multiprocessing.Process):
             timer.start()
 
             while True:
-                if not self.inputqueue.empty():
-                    line = self.inputqueue.get()
-                    if 'stop' != line:
-                        # we are not processing input from the queue yet
-                        # without this line the complete output thread does not work!!
-                        # WTF???????
-                        print(line)
-                        pass
-                    else:
-                        # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
-                        self.outputqueue.put('stop')
-                        return True
-                elif self.inputqueue.empty():
-                    # Nothing to do here either now
+                line = self.inputqueue.get()
+                if 'stop' != line:
+                    # we are not processing input from the queue yet
+                    # without this line the complete output thread does not work!!
+                    # WTF???????
+                    print(line)
                     pass
+                else:
+                    # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
+                    self.outputqueue.put('stop')
+                    return True
             # Stop the timer
             timer.shutdown()
 

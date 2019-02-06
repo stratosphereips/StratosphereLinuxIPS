@@ -82,14 +82,13 @@ class OutputProcess(multiprocessing.Process):
     def run(self):
         try:
             while True:
-                if not self.queue.empty():
-                    line = self.queue.get()
-                    if 'stop' != line:
-                        self.output_line(line)
-                    else:
-                        # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
-                        print('Stopping the output thread')
-                        return True
+                line = self.queue.get()
+                if 'stop' != line:
+                    self.output_line(line)
+                else:
+                    # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
+                    print('Stopping the output thread')
+                    return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:

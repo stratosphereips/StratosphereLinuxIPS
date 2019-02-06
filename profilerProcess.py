@@ -787,27 +787,22 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             rec_lines = 0
             while True:
-                # If the input communication queue is empty, just wait
-                if self.inputqueue.empty():
-                    pass
+                line = self.inputqueue.get()
+                if 'stop' == line:
+                    self.outputqueue.put("01|profiler|[Profile] Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+                    return True
                 else:
-                    # The input communication queue is not empty, we are receiving
-                    line = self.inputqueue.get()
-                    if 'stop' == line:
-                        self.outputqueue.put("01|profiler|[Profile] Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
-                        return True
-                    else:
-                        # Received new input data
-                        # Extract the columns smartly
-                        self.outputqueue.put("03|profiler|[Profile] < Received Line: {}".format(line.replace('\n','')))
-                        rec_lines += 1
-                        if self.process_columns(line):
-                            # Add the flow to the profile
-                            self.add_flow_to_profile(self.column_values)
-                            # Update the fake now time. This is used for knowing when is 'now' when reading a file. 
-                            # WE NEED TO MEASURE HOW THIS AFFECTS THE SPEED OF THE TOOL
-                            fake_now = str(self.column_values['starttime'])
-                            __database__.setFakeNow(fake_now)
+                    # Received new input data
+                    # Extract the columns smartly
+                    self.outputqueue.put("03|profiler|[Profile] < Received Line: {}".format(line.replace('\n','')))
+                    rec_lines += 1
+                    if self.process_columns(line):
+                        # Add the flow to the profile
+                        self.add_flow_to_profile(self.column_values)
+                        # Update the fake now time. This is used for knowing when is 'now' when reading a file.
+                        # WE NEED TO MEASURE HOW THIS AFFECTS THE SPEED OF THE TOOL
+                        fake_now = str(self.column_values['starttime'])
+                        __database__.setFakeNow(fake_now)
         except KeyboardInterrupt:
             self.outputqueue.put("01|profiler|[Profile] Received {} lines.".format(rec_lines))
             return True
