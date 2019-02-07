@@ -1,5 +1,6 @@
 import multiprocessing
 import sys
+import os
 from datetime import datetime
 
 # Input Process
@@ -15,6 +16,8 @@ class InputProcess(multiprocessing.Process):
 
     def run(self):
         try:
+            sys.stdin.close()
+            sys.stdin = os.fdopen(0, 'r')
             file_stream = sys.stdin
             lines = 0
 
@@ -28,6 +31,9 @@ class InputProcess(multiprocessing.Process):
 
             self.profilerqueue.put("stop")
             self.outputqueue.put("01|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+
+            self.outputqueue.close()
+            self.profilerqueue.close()
 
             return True
 
