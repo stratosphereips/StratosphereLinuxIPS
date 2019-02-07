@@ -112,20 +112,13 @@ if __name__ == '__main__':
         # Text?
         pass
 
-    # Profile thread
-    # Create the queue for the profile thread
-    profilerProcessQueue = Queue()
-    # Create the profile thread and start it
-    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
-    profilerProcessThread.start()
-    outputProcessQueue.put('30|main|Started profiler thread')
-
     # Evidence thread
     # Create the queue for the evidence thread
     evidenceProcessQueue = Queue()
     # Create the thread and start it
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config)
     evidenceProcessThread.start()
+    evidenceProcessQueue.close()
     outputProcessQueue.put('30|main|Started Evidence thread')
 
     # Port scan thread. Should be a module
@@ -134,7 +127,16 @@ if __name__ == '__main__':
     # Create the thread and start it
     portscanProcessThread = PortScanProcess(portscanProcessQueue, outputProcessQueue, config)
     portscanProcessThread.start()
+    portscanProcessQueue.close()
     outputProcessQueue.put('30|main|Started port scan thread')
+
+    # Profile thread
+    # Create the queue for the profile thread
+    profilerProcessQueue = Queue()
+    # Create the profile thread and start it
+    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
+    profilerProcessThread.start()
+    outputProcessQueue.put('30|main|Started profiler thread')
 
     # Input thread
     # Create the queue for the input thread
@@ -147,3 +149,6 @@ if __name__ == '__main__':
         inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, newstdin, config)
     inputProcessThread.start()
     outputProcessQueue.put('30|main|Started input thread')
+
+    profilerProcessQueue.close()
+    outputProcessQueue.close()
