@@ -138,12 +138,10 @@ if __name__ == '__main__':
     profilerProcessThread.start()
     outputProcessQueue.put('30|main|Started profiler thread')
 
-    # Input thread
-    # Create the queue for the input thread
-    inputProcessQueue = Queue()
-    # Create the input thread and start it
-    inputProcessThread = InputProcess(inputProcessQueue, outputProcessQueue, profilerProcessQueue, args.filepath, config)
-    inputProcessThread.start()
+    # Input process
+    # Create the input process and start it
+    inputProcess = InputProcess(None, outputProcessQueue, profilerProcessQueue, args.filepath, config)
+    inputProcess.start()
     outputProcessQueue.put('30|main|Started input thread')
 
     profilerProcessQueue.close()
