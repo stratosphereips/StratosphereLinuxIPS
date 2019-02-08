@@ -784,7 +784,5 @@ if __name__ == '__main__':
 
     if args.verbose > 2:
         print 'Finished receiving the input.'
-    # Shall we wait? Not sure. Seems that not
-    time.sleep(1)
 
     queue.put('stop')
