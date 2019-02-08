@@ -531,74 +531,73 @@ class Processor(multiprocessing.Process):
     def run(self):
         try:
             while True:
-                if not self.queue.empty():
-                    line = self.queue.get()
-                    if 'stop' != line:
-                        # Process this flow
-                        column_values = self.parsingfunction(line)
-                        try:
-                            # check if the Ip is not in the whitelist
-                            if not column_values[3] in self.ip_whitelist:
-                                if 'Start' in column_values[0]:
-                                    continue
-                                # Get some way of not having this if here for every line
-                                if self.slot_starttime == -1:
-                                    # First flow
-                                    #try:
-                                    self.slot_starttime = datetime.strptime(column_values[0], timeStampFormat)
-                                    #except ValueError:
-                                    #    # This should be a continue because this is the first flow, usually the header
-                                    #    continue
-                                    self.slot_endtime = self.slot_starttime + self.slot_width
-                                try:
-                                    flowtime = datetime.strptime(column_values[0], timeStampFormat)
-                                except ValueError:
-                                    logger.error("Invalid timestamp format: {}. Line: {}".format(timeStampFormat, line))
-                                if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
-                                    # Inside the slot
-                                    tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
-                                    tuple = self.get_tuple(tuple4)
-                                    self.tuples_in_this_time_slot[tuple.get_id()] = tuple
-                                    # If this is the first time the tuple appears in this time windows, put it in red
-                                    if self.verbose:
-                                        if len(tuple.state) == 0:
-                                            tuple.set_color(red)
-                                    tuple.add_new_flow(column_values)
+                line = self.queue.get()
+                if 'stop' != line:
+                    # Process this flow
+                    column_values = self.parsingfunction(line)
+                    try:
+                        # check if the Ip is not in the whitelist
+                        if not column_values[3] in self.ip_whitelist:
+                            if 'Start' in column_values[0]:
+                                continue
+                            # Get some way of not having this if here for every line
+                            if self.slot_starttime == -1:
+                                # First flow
+                                #try:
+                                self.slot_starttime = datetime.strptime(column_values[0], timeStampFormat)
+                                #except ValueError:
+                                #    # This should be a continue because this is the first flow, usually the header
+                                #    continue
+                                self.slot_endtime = self.slot_starttime + self.slot_width
+                            try:
+                                flowtime = datetime.strptime(column_values[0], timeStampFormat)
+                            except ValueError:
+                                logger.error("Invalid timestamp format: {}. Line: {}".format(timeStampFormat, line))
+                            if flowtime >= self.slot_starttime and flowtime < self.slot_endtime:
+                                # Inside the slot
+                                tuple4 = column_values[3]+'-'+column_values[6]+'-'+column_values[7]+'-'+column_values[2]
+                                tuple = self.get_tuple(tuple4)
+                                self.tuples_in_this_time_slot[tuple.get_id()] = tuple
+                                # If this is the first time the tuple appears in this time windows, put it in red
+                                if self.verbose:
+                                    if len(tuple.state) == 0:
+                                        tuple.set_color(red)
+                                tuple.add_new_flow(column_values)
+                                """
+                                tuple.do_print()
+                                """
+                                # After the flow has been added to the tuple, only work with the ones having more than X amount of flows
+                                # Check that this is working correclty comparing it to the old program
+                                if len(tuple.state) >= self.amount:
                                     """
                                     tuple.do_print()
                                     """
-                                    # After the flow has been added to the tuple, only work with the ones having more than X amount of flows
-                                    # Check that this is working correclty comparing it to the old program
-                                    if len(tuple.state) >= self.amount:
-                                        """
-                                        tuple.do_print()
-                                        """
-                                        # Detection
-                                        self.detect(tuple)
-                                        # Ask for IpAddress object 
-                                        ip_address = self.ip_handler.get_ip(column_values[3])
-                                        # Store detection result into Ip_address
-                                        ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime,column_values[6], tuple.get_state_detected_last(),self.tw_index)
-                                elif flowtime > self.slot_endtime:
-                                    # Out of time slot
-                                    self.process_out_of_time_slot(column_values, last_tw = False)
-                            else:
-                                if self.debug:
-                                    print blue("Skipping flow with whitelisted ip: {}".format(column_values[3]))
-                        except UnboundLocalError:
-                            print 'Probably empty file.'
-                    else:
-                        try:
-                            # Process the last flows in the last time slot
-                            self.process_out_of_time_slot(column_values, last_tw = True)
-                            # There was an error here that we were calling self.ip_handler.print_addresses. But we should NOT call it here. The last flow was already taken care.
-                            # Print final Alerts
-                            self.ip_handler.print_alerts()
-                        except UnboundLocalError:
-                            print 'Probably empty file...'
-                            # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
-                        # Just Return
-                        return True
+                                    # Detection
+                                    self.detect(tuple)
+                                    # Ask for IpAddress object
+                                    ip_address = self.ip_handler.get_ip(column_values[3])
+                                    # Store detection result into Ip_address
+                                    ip_address.add_detection(tuple.detected_label, tuple.id, tuple.current_size, flowtime,column_values[6], tuple.get_state_detected_last(),self.tw_index)
+                            elif flowtime > self.slot_endtime:
+                                # Out of time slot
+                                self.process_out_of_time_slot(column_values, last_tw = False)
+                        else:
+                            if self.debug:
+                                print blue("Skipping flow with whitelisted ip: {}".format(column_values[3]))
+                    except UnboundLocalError:
+                        print 'Probably empty file.'
+                else:
+                    try:
+                        # Process the last flows in the last time slot
+                        self.process_out_of_time_slot(column_values, last_tw = True)
+                        # There was an error here that we were calling self.ip_handler.print_addresses. But we should NOT call it here. The last flow was already taken care.
+                        # Print final Alerts
+                        self.ip_handler.print_alerts()
+                    except UnboundLocalError:
+                        print 'Probably empty file...'
+                        # Here for some reason we still miss the last flow. But since is just one i will let it go for now.
+                    # Just Return
+                    return True
         except KeyboardInterrupt:
             # Print Summary of detections in the last Time Window
             #self.ip_handler.print_addresses(flowtime, flowtime, self.detection_threshold,self.sdw_width, True)
