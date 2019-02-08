@@ -770,25 +770,21 @@ if __name__ == '__main__':
     SH.register_signal(signal.SIGINT)
     processorThread.start()
 
+    # The input is received from standard input by default
+    f = sys.stdin
+
     if args.filepath:
         if args.verbose > 2:
             print 'Working with the file {} as parameter'.format(args.filepath)
         f = open(args.filepath)
-        line = f.readline()
-        while line:
-            queue.put(line)
-            line = f.readline()
-        f.close()
-        if args.verbose > 2:
-            print "Finished reading the file. "
-        time.sleep(1)
-        queue.put('stop')
-    else:
-        # Just put the lines in the queue as fast as possible
-        for line in sys.stdin:
-            queue.put(line)
-        if args.verbose > 2:
-            print 'Finished receiving the input.'
-        # Shall we wait? Not sure. Seems that not
-        time.sleep(1)
-        queue.put('stop')
+
+    # Just put the lines in the queue as fast as possible
+    for line in f:
+        queue.put(line)
+
+    if args.verbose > 2:
+        print 'Finished receiving the input.'
+    # Shall we wait? Not sure. Seems that not
+    time.sleep(1)
+
+    queue.put('stop')
