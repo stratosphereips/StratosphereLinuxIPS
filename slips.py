@@ -19,6 +19,15 @@ from portScanDetectorProcess import PortScanProcess
 
 version = '0.5'
 
+def read_configuration(config, section, name):
+    """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
+    # Get if we are going to create log files or not
+    try:
+        return bool(config.get(section, name))
+    except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        # There is a conf, but there is no option, or no section or no configuration file specified
+        return False
+
 
 ####################
 # Main
@@ -38,7 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('-W', '--whitelist', help="File with the IP addresses to whitelist. One per line.", action='store', required=False)
     parser.add_argument('-r', '--filepath', help='Path to the binetflow file to be read.', required=False)
     parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
-    parser.add_argument('-l', '--logfiles', help='Create log files with all the info and detections.', required=False, default=False, action='store_true')
+    parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the info and detections.', required=False, default=False, action='store_true')
     args = parser.parse_args()
 
     # Read the config file from the parameter
@@ -102,15 +111,15 @@ if __name__ == '__main__':
         cursesProcessThread = CursesProcess(cursesProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
         cursesProcessThread.start()
         outputProcessQueue.put('30|main|Started Curses thread')
-    elif args.logfiles:
-        # Create the logsfile thread
-        logsProcessQueue = Queue()
-        logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
-        logsProcessThread.start()
-        outputProcessQueue.put('30|main|Started logsfiles thread')
-    else:
-        # Text?
-        pass
+    elif not args.nologfiles:
+        # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
+        if read_configuration(config, 'parameters', 'create_log_files'):
+            # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
+            logsProcessQueue = Queue()
+            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+            logsProcessThread.start()
+            outputProcessQueue.put('30|main|Started logsfiles thread')
+        # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
 
     # Evidence thread
     # Create the queue for the evidence thread
