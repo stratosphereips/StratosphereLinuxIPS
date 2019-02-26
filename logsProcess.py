@@ -189,17 +189,22 @@ class LogsProcess(multiprocessing.Process):
                 tuples = __database__.getOutTuplesfromProfileTW(profileid, twid)
                 if tuples:
                     # Add tuples
-                    self.addDataToFile(profilefolder + '/' + twlog, 'OutTuples:\n'+ tuples, file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'OutTuples:', file_mode='a+', data_type='text')
+                    data = json.loads(tuples)
+                    for key in data:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] Tuples: ' + tuples)
                 # 4. Detections to block
                 blocking = __database__.getBlockingRequest(profileid, twid)
                 if blocking:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'Blocking Request:\n' + str(blocking), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'Was requested to block in this time window: ' + str(blocking), file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
                 # 5. Info of dstport as client, tcp, established
                 dstportdata = __database__.getDstPortClientTCPEstablishedFromProfileTW(profileid, twid)
                 if dstportdata:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortTCPEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'As a client, Dst Ports we connected with TCP Established flows:', file_mode='a+', data_type='text')
+                    for port in dstportdata:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}'.format(port, dstportdata[port]['totalflows'], dstportdata[port]['totalpkt'], dstportdata[port]['totalbytes']), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
                 # 6. Info of dstport as client, udp, established
                 dstportdata = __database__.getDstPortClientUDPEstablishedFromProfileTW(profileid, twid)
