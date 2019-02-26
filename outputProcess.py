@@ -12,8 +12,7 @@ class OutputProcess(multiprocessing.Process):
         self.queue = inputqueue
         self.config = config
         if self.verbose > 2:
-            print('Verbose Level: ' + str(self.verbose))
-            print('Debug Level: ' + str(self.debug))
+            print('Verbosity: {}. Debugging: {}'.format(str(self.verbose), str(self.debug)))
 
     def process_line(self, line):
         """
