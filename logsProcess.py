@@ -180,7 +180,10 @@ class LogsProcess(multiprocessing.Process):
                 srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
                 if srcips:
                     # Add srcips
-                    self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP:\n'+ srcips, file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP:', file_mode='a+', data_type='text')
+                    data = json.loads(srcips)
+                    for key in data:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({} times)'.format(key, data[key]), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] SrcIP: ' + srcips)
                 # 3. Tuples
                 tuples = __database__.getOutTuplesfromProfileTW(profileid, twid)
