@@ -97,3 +97,6 @@ ENV/
 logs/
 *.swp
 *.pyc
+*.xml
+.idea/StratosphereLinuxIPS.iml
+dump.rdb
