@@ -11,6 +11,7 @@ import time
 from slips.core.database import __database__
 import configparser
 import pprint
+import json
 
 def timing(f):
     """ Function to measure the time another function takes. It should be used as decorator: @timing"""
@@ -169,7 +170,11 @@ class LogsProcess(multiprocessing.Process):
                 dstips = __database__.getDstIPsfromProfileTW(profileid, twid)
                 if dstips:
                     # Add dstips to log file
-                    self.addDataToFile(profilefolder + '/' + twlog, 'DstIP:\n' + dstips, file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'DstIP:', file_mode='a+', data_type='text')
+                    data = json.loads(dstips)
+                    # Better printing of data
+                    for key in data:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({} times)'.format(key, data[key]), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] DstIP: ' + dstips)
                 # 2. SrcIPs
                 srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
