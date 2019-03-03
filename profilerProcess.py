@@ -721,7 +721,7 @@ class ProfilerProcess(multiprocessing.Process):
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
                 flowtime = float(flowtime)
-                self.outputqueue.put("04|profiler|[Profiler] The last TW id was {}. Start:{}. End: {}".format(lasttwid, lasttw_start_time, lasttw_end_time ))
+                self.outputqueue.put("04|profiler|[Profiler] The last TW id was {}. Start:{}. End: {}".format(lasttwid, lasttw_start_time, lasttw_end_time))
                 # There was a last TW, so check if the current flow belongs here.
                 if lasttw_end_time > flowtime and lasttw_start_time <= flowtime:
                     self.outputqueue.put("04|profiler|[Profiler] The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time))
