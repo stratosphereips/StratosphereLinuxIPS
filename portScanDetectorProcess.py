@@ -15,6 +15,8 @@ class PortScanProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.config = config
         self.processname = 'portscan'
+        # Get from the database the separator used to separate the IP and the word profile
+        self.fieldseparator = __database__.getFieldSeparator()
 
     def run(self):
         try:
@@ -23,15 +25,15 @@ class PortScanProcess(multiprocessing.Process):
                     # Do stuff
                     try:
                         # Start of the port scan detection
-                        self.outputqueue.put('50|'+self.processname+'|['+self.processname+'] ' + 'Detecting port scans')
-                        # Get all the profiles
-                        profiles = __database__.getProfiles()
-                        for profileid in profiles:
+                        self.outputqueue.put('50|'+self.processname+'|['+self.processname+'] ' + 'Running the detection of portscans in all modified TW')
+                        # Get the list of all the modifed TW for all the profiles for PortScan
+                        TWforProfile = __database__.getModifiedTWPortScan()
+                        for profileTW in TWforProfile:
+                            # Get the profileid and twid
+                            profileid = profileTW.split(self.fieldseparator)[0] + self.fieldseparator + profileTW.split(self.fieldseparator)[1]
+                            twid = profileTW.split(self.fieldseparator)[2]
                             # For each profile
-                            self.outputqueue.put('02|'+self.processname+'|['+self.processname+'] ' + 'Profile: {}'.format(profileid))
-                            # Get the last tw for this profile
-                            lasttw = __database__.getLastTWforProfile(profileid)
-                            lasttw_id, lasttw_time = lasttw[0]
+                            #self.outputqueue.put('02|'+self.processname+'|['+self.processname+'] ' + 'Profile: {}'.format(profileid))
                             # For port scan detection, we will measure different things:
                             # 1. Vertical port scan:
                             #  - When 1 srcip contacts (established or not) > 3 ports in the same dstip (any number of packets)
@@ -45,10 +47,11 @@ class PortScanProcess(multiprocessing.Process):
                             ###
                             # To detect 2. and 3. togethe we can use the ClientDstPortTCPNotEstablished
                             # Get the ClientDstPortTCPNotEstablished
-                            data = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, lasttw_id)
+                            data = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, twid)
                             for dport in data.keys():
                                 totalpkts = int(data[dport]['totalpkt'])
                                 # Fixed threshold for now.
+                                #self.outputqueue.put('04|'+self.processname+'|['+self.processname+'] ' + 'Checking profile {}, TW {}. Dport {}. Packets {}'.format(profileid, twid, dport, totalpkts))
                                 if totalpkts > 3:
                                     if totalpkts >= 10:
                                         confidence = 1
@@ -57,9 +60,12 @@ class PortScanProcess(multiprocessing.Process):
                                     # very stupid port scan
                                     type_detection = 'Too many not established TCP conn to the same port'
                                     threat_level = 50
-                                    __database__.setEvidenceForTW(profileid, lasttw_id, type_detection, threat_level, confidence)
+                                    __database__.setEvidenceForTW(profileid, twid, type_detection, threat_level, confidence)
                                     
                                     self.outputqueue.put('40|'+self.processname+'|['+self.processname+'] ' + 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts))
+
+                            # Mark the TW as not modified for port scan
+                            __database__.markProfileTWAsNotModifiedPortScan(profileid, twid)
 
                                 
                     except Exception as inst:
