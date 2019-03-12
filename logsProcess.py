@@ -145,7 +145,7 @@ class LogsProcess(multiprocessing.Process):
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             # Get the list of all the modifed TW for all the profiles
-            TWforProfile = __database__.getModifiedTW()
+            TWforProfile = __database__.getModifiedTWLogs()
             amount_of_modified = len(TWforProfile)
             self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {}. Modified TWs: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
             for profileTW in TWforProfile:
@@ -244,7 +244,7 @@ class LogsProcess(multiprocessing.Process):
 
 
                 # Mark it as not modified anymore
-                __database__.markProfileTWAsNotModified(profileid, twid)
+                __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
 
 
             # Create the file of the blocked profiles and TW
