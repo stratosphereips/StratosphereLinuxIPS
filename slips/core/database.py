@@ -213,6 +213,7 @@ class Database(object):
             Creates or adds a new timewindow to the list of tw for the given profile
             Add the twid to the ordered set of a given profile 
             Return the id of the timewindow just created
+            We should not mark the TW as modified here, since there is still no data on it, and it may remain without data.
             """
             # Get the last twid and obtain the new tw id
             try:
@@ -245,28 +246,45 @@ class Database(object):
         """ Return the amount of tw for this profile id """
         return self.r.zcard('tws'+profileid)
 
-    def getModifiedTW(self):
+    def getModifiedTWLogs(self):
         """ Return all the list of modified tw """
-        return self.r.smembers('ModifiedTW')
+        return self.r.smembers('ModifiedTWForLogs')
 
-    def wasProfileTWModified(self, profileid, twid):
+    def getModifiedTWPortScan(self):
+        """ Return all the list of modified tw """
+        return self.r.smembers('ModifiedTWForPortScan')
+
+    def wasProfileTWModifiedLogs(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
-        data = self.r.sismember('ModifiedTW', profileid + self.separator + twid)
+        data = self.r.sismember('ModifiedTWForLogs', profileid + self.separator + twid)
         if not data:
             # If for some reason we don't have the modified bit set, then it was not modified.
             data = 0
         return bool(data)
 
-    def markProfileTWAsNotModified(self, profileid, twid):
-        """ Mark a TW in a profile as not modified """
-        self.r.srem('ModifiedTW', profileid + self.separator + twid)
+    def markProfileTWAsNotModifiedLogs(self, profileid, twid):
+        """ 
+        Mark a TW in a profile as not modified after the log file is outputed
+        """
+        self.r.srem('ModifiedTWForLogs', profileid + self.separator + twid)
+
+    def markProfileTWAsNotModifiedPortScan(self, profileid, twid):
+        """ 
+        Mark a TW in a profile as not modified after the portscan module process it.
+        """
+        self.r.srem('ModifiedTWForPortScan', profileid + self.separator + twid)
 
     def markProfileTWAsModified(self, profileid, twid):
         """ 
         Mark a TW in a profile as not modified 
-        As a side effect, it can create it if its not there
+        (As a side effect, it can create it if its not there (What does this meas?))
+
+        The TW are marked for different processes because some of them 'wake up' 
+        every X amount of time and need to check what was modified from their
+        points of view. This is why we are putting mark for different modules
         """
-        self.r.sadd('ModifiedTW', profileid + self.separator + twid)
+        self.r.sadd('ModifiedTWForLogs', profileid + self.separator + twid)
+        self.r.sadd('ModifiedTWForPortScan', profileid + self.separator + twid)
 
     def add_out_dstips(self, profileid, twid, daddr_as_obj):
         """
