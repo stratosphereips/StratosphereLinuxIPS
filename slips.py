@@ -16,6 +16,7 @@ from cursesProcess import CursesProcess
 from logsProcess import LogsProcess
 from evidenceProcess import EvidenceProcess
 from portScanDetectorProcess import PortScanProcess
+from detection1Process import Detection1Process
 
 version = '0.5'
 
@@ -138,6 +139,15 @@ if __name__ == '__main__':
     portscanProcessThread.start()
     portscanProcessQueue.close()
     outputProcessQueue.put('30|main|Started port scan thread')
+
+    # Detection 1 thread. Should be a module
+    # Create the queue for the evidence thread
+    detection1ProcessQueue = Queue()
+    # Create the thread and start it
+    detection1ProcessThread = Detection1Process(detection1ProcessQueue, outputProcessQueue, config)
+    detection1ProcessThread.start()
+    detection1ProcessQueue.close()
+    outputProcessQueue.put('30|main|Started detection 1 thread')
 
     # Profile thread
     # Create the queue for the profile thread
