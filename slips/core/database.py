@@ -792,5 +792,18 @@ class Database(object):
         data = self.r.smembers('BlockedProfTW')
         return data
 
+    def addFlowVerbatim(self, line):
+        """
+        Receives a verbatim flow and stores it in a structure that expires flows in time
+        """
+        self.r.rpush('Flows', line)
+
+    def getNextFlowVerbatim(self):
+        """
+        Receives a verbatim flow and stores it in a structure that expires flows in time
+        """
+        return self.r.rpop('Flows')
+
+
 
 __database__ = Database()
