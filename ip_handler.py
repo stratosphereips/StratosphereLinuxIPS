@@ -16,6 +16,7 @@ from datetime import datetime
 from time import gmtime, strftime
 from colors import *
 from utils import WhoisHandler
+from slips.core.database import __database__
 from alerts import *
 import time
 import re
@@ -304,7 +305,7 @@ class IpHandler(object):
         self.verbose = verbose
         self.debug = debug
         self.whois = whois
-        self.whois_handler = WhoisHandler("WhoisData.txt")
+        self.whois_handler = WhoisHandler(__database__)
         self.prior_probabilities = {}
         self.default_prior = 0.0001
 
