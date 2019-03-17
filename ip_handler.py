@@ -27,7 +27,7 @@ logdir_path = "./logs"
 if not os.path.exists(logdir_path):
     os.makedirs(logdir_path)
 #file for logging
-filename = logdir_path+"/" + 'log_' + datetime.now().strftime('%Y-%m-%d %H:%M:%S')+'.txt'; 
+filename = logdir_path+"/" + 'log_' + datetime.now().strftime('%Y-%m-%d %H:%M:%S')+'.txt'
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -38,6 +38,7 @@ def timing(f):
         print '%s function took %0.3f ms' % (f.func_name, (time2-time1)*1000.0)
         return ret
     return wrap
+
 
 class IpAddress(object):
     """IpAddress stores every detection and alerts """
@@ -371,7 +372,6 @@ class IpHandler(object):
     def print_alerts(self):
         """ Gater all the alerts in the handler and print them"""
         detected_counter = 0
-        self.whois_handler.store_whois_data_in_file()
         print '\nFinal Alerts generated:'
         f = open(filename,"w")
         f.write("DATE:\t{}\nSummary of adresses in this capture:\n\n".format(datetime.now().strftime('%Y/%m/%d %H:%M:%S')))

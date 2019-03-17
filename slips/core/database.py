@@ -24,6 +24,7 @@ import sys
   # dstports_out -> '{'22':30, '21':40}'
   # dstports_out -> '{'22':30, '21':40}'
 
+WHOIS_PREFIX = "whois-"
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -34,6 +35,7 @@ def timing(f):
         self.outputqueue.put('01|database|Function took {:.3f} ms'.format((time2-time1)*1000.0))
         return ret
     return wrap
+
 
 class Database(object):
     """ Database object management """
@@ -791,6 +793,14 @@ class Database(object):
         """ Return all the list of blocked tws """
         data = self.r.smembers('BlockedProfTW')
         return data
+
+    def getWhoisData(self, ip):
+        key = WHOIS_PREFIX + ip
+        return self.r.get(key)
+
+    def setWhoisData(self, ip, data):
+        key = WHOIS_PREFIX + ip
+        return self.r.set(key, data)
 
 
 __database__ = Database()

@@ -6,22 +6,23 @@
 # Sebastian Garcia - sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com
 
 import signal
-import re
+import whois
 import time
 import sys
 
+
 class SignalHandler(object):
     """Used for asynchronous control of the program -e.g. premature interrupting with CTRL+C """
-    def __init__(self,process):
-            self.process = process
-            self.active =True;
+    def __init__(self, process):
+        self.process = process
+        self.active = True
 
     def register_signal(self, signal_n):
         """Adds signal  to the handler to proccess it"""
-        signal.signal(signal_n,self.process_signal)
+        signal.signal(signal_n, self.process_signal)
 
-    def process_signal(self,signal, frame):
-        if (self.active):
+    def process_signal(self, signal, frame):
+        if self.active:
             self.process.queue.close()
             try:
                 print "\nInterupting SLIPS"
@@ -33,37 +34,19 @@ class SignalHandler(object):
 
 
 class WhoisHandler(object):
-    """This class is used for getting the whois information. Since queries to whois service takes too much time it stores all the information localy in the txt file.
-     Structure of the file:
-     [ip address][TAB][Description][\n]"""
+    """This class is used for getting the whois information.
+     Since queries to whois service takes too much time
+     it stores all the information in the redis database with the prefix whois-<ip>"""
 
-    def __init__(self,whois_file):
-        self.whois_data = {}
-        self.filename = whois_file
+    def __init__(self, db):
+        self.db = db
         self.new_item = False
-        try:
-            with open(whois_file) as f:
-                for line in f:
-                    s = re.split("\t",line.strip())
-                    if len(s) > 1:
-                        self.whois_data[s[0]] = s[1]
-            print "Whois file '{}' loaded successfully".format(whois_file)            
-        except IOError:
-            print "Whois informaton file:'{}' doesn't exist!".format(self.filename)
-            pass
-    
-    def get_whois_data(self,ip):
-        #do we have it in the cache?
-        try:
-            import ipwhois
-        except ImportError:
-            print 'The ipwhois library is not install. pip install ipwhois'
-            return False
-        # is the ip in the cache
-        try:
-            desc = self.whois_data[ip]
+
+    def get_whois_data(self, ip):
+        desc = self.db.getWhoisData()
+        if desc is not None:
             return desc
-        except KeyError:
+        else:
             # Is not, so just ask for it
             try:
                 obj = ipwhois.IPWhois(ip)
@@ -74,7 +57,6 @@ class WhoisHandler(object):
                     # There is no description field
                     desc = ""
                 except TypeError:
-                    #There is a None somewhere, just continue..
                     desc = ""
             except ValueError:
                 # Not a real IP, maybe a MAC
@@ -82,7 +64,7 @@ class WhoisHandler(object):
                 pass
             except IndexError:
                 # Some problem with the whois info. Continue
-                pass        
+                pass
             except ipwhois.IPDefinedError as e:
                 if 'Multicast' in e:
                     desc = 'Multicast'
@@ -92,26 +74,10 @@ class WhoisHandler(object):
                 # continue with the work\
                 pass
             # Store in the cache
-            self.whois_data[ip] = desc
-            self.new_item = True;
+            self.db.setWhoisData(ip, desc)
+            self.new_item = True
             return desc
-        except Exception as inst:
-            print '\tProblem with get_whois_data() in utils.py'
-            print type(inst)     # the exception instance
-            print inst.args      # arguments stored in .args
-            print inst           # __str__ allows args to printed directly
-            sys.exit(1)
 
-
-    def store_whois_data_in_file(self):
-        """Writes whois information in the file"""
-        if self.new_item:
-            f = open(self.filename,"w")
-            for item in self.whois_data.items():
-                f.write('{}\t{}\n'.format(item[0],item[1]));
-            f.close();
-        else:
-            print "No new stuff in the dictionary"
 
 def deep_getsizeof(o, ids):
     """
