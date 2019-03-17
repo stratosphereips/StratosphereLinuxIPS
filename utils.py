@@ -40,7 +40,6 @@ class WhoisHandler(object):
 
     def __init__(self, db):
         self.db = db
-        self.new_item = False
 
     def get_whois_data(self, ip):
         desc = self.db.getWhoisData()
@@ -75,7 +74,6 @@ class WhoisHandler(object):
                 pass
             # Store in the cache
             self.db.setWhoisData(ip, desc)
-            self.new_item = True
             return desc
 
 
