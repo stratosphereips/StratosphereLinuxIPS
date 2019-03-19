@@ -409,7 +409,7 @@ class Database(object):
             self.outputqueue.put('05|database|[DB]: Add_out_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple))
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, 'OutTuples')
-            (symbol_to_add, previous_time, T2)  = data_tuple
+            (symbol_to_add, previous_time, T2) = data_tuple
             if not data:
                 data = {}
             try:
@@ -613,7 +613,7 @@ class Database(object):
                 # We need to add all the data
                 innerdata['totalflows'] += 1
                 innerdata['totalpkt'] += int(pkts)
-                innerdata['totalbytes'] = int(totbytes)
+                innerdata['totalbytes'] += int(totbytes)
                 temp_dstips = innerdata['dstips']
                 try:
                     temp_dstips[str(daddr)] += int(pkts)
