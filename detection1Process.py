@@ -15,8 +15,6 @@ from sklearn.preprocessing import StandardScaler
 import pickle
 import pandas as pd
 
-
-
 class Detection1Process(multiprocessing.Process):
     """ """
     def __init__(self, inputqueue, outputqueue, config):
@@ -30,11 +28,14 @@ class Detection1Process(multiprocessing.Process):
         self.fieldseparator = __database__.getFieldSeparator()
         # For some weird reason the database loses its outputqueue and we have to re set it here.......
         __database__.setOutputQueue(self.outputqueue)
-        f = open('scale.bin', 'rb')
+        f = open('scale-new.bin', 'rb')
         self.scaler = pickle.load(f)
         f.close()
-        f = open('model.bin', 'rb')
+        f = open('model-new.bin', 'rb')
         self.clf = pickle.load(f)
+        f.close()
+        f = open('categories.bin', 'rb')
+        self.categories = pickle.load(f)
         f.close()
 
     def read_configuration(self):
@@ -80,17 +81,6 @@ class Detection1Process(multiprocessing.Process):
             self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))
             sys.exit(1)
 
-    def make_categorical(self, dataset, cat):
-        '''
-        Convert one column to a categorical type
-        '''
-        # Converts the column to cotegorical
-        dataset[cat] = pd.Categorical(dataset[cat])
-        # Convert the categories to int. Use this with caution!! we don't want an algorithm
-        # to learn that an Orange=1 is less than a pearl=2
-        dataset[cat] = dataset[cat].cat.codes
-        return dataset
-
     def process_features(self, dataset):
         '''
         Discards some features of the dataset and can create new.
@@ -122,30 +112,50 @@ class Detection1Process(multiprocessing.Process):
           pass
         # Create categorical features
         try:
-          dataset = self.make_categorical(dataset, 'Dir')
+          dataset.Dir = self.categories['Dir'].codes
         except ValueError:
           pass
         try:
-          dataset = self.make_categorical(dataset, 'Proto')
-        except ValueError:
-          pass
-        try:
-          # Convert the ports to categorical codes because some ports are not numbers. For exmaple, ICMP has ports with 0x03
-          dataset = self.make_categorical(dataset, 'Sport')
-        except ValueError:
-          pass
-        try:
-          dataset = self.make_categorical(dataset, 'State')
+          dataset.Proto = self.categories['Proto'].codes
         except ValueError:
           pass
         try:
           # Convert the ports to categorical codes because some ports are not numbers. For exmaple, ICMP has ports with 0x03
-          dataset = self.make_categorical(dataset, 'Dport')
+          dataset.Sport = self.categories['Sport'].codes
+        except ValueError:
+          pass
+        try:
+          dataset.State = self.categories['State'].codes
+        except ValueError:
+          pass
+        try:
+          # Convert the ports to categorical codes because some ports are not numbers. For exmaple, ICMP has ports with 0x03
+          dataset.Dport = self.categories['Dport'].codes
         except ValueError:
           pass
         try:
           # Convert Dur to float
-          dataset.Dur = dataset.Dur.astype('float64')
+          dataset.Dur = dataset.Dur.astype('float')
+        except ValueError:
+          pass
+        try:
+          # Convert TotPkts to float
+          dataset.Dur = dataset.TotPkts.astype('float')
+        except ValueError:
+          pass
+        try:
+          # Convert SrcPkts to float
+          dataset.Dur = dataset.SrcPkts.astype('float')
+        except ValueError:
+          pass
+        try:
+          # Convert TotBytes to float
+          dataset.Dur = dataset.TotBytes.astype('float')
+        except ValueError:
+          pass
+        try:
+          # Convert SrcBytes to float
+          dataset.Dur = dataset.SrcBytes.astype('float')
         except ValueError:
           pass
         return dataset
@@ -153,30 +163,31 @@ class Detection1Process(multiprocessing.Process):
     def process_flow(self):
         """ 
         """
+        # Discard the headers
+        flow = __database__.getNextFlowVerbatim()
+        # Discard the man flow
+        flow = __database__.getNextFlowVerbatim()
         # Read all the pending flows
         flow = __database__.getNextFlowVerbatim()
         while flow:
-            self.outputqueue.put('03|detection1|\t[detec1] Flow read: {}'.format(flow))
-            flow = __database__.getNextFlowVerbatim()
-            # convert the flow to a pandas dataframe
-            try:
-                #sflow = flow.split(',')
-                sflow = flow.split('	')
-            except AttributeError:
-                return True
+            #self.outputqueue.put('01|detection1|\t[detect1] Flow read: {}'.format(flow))
+            # Since the flow is verbatim we need to split it here 
+            #sflow = flow.split('	')
+            sflow = flow.split(',')
+            #self.outputqueue.put('01|detection1|\t[detect1] sflow: {}'.format(sflow))
 
+            # convert the flow to a pandas dataframe
             dflow = pd.DataFrame([sflow], columns=['StartTime','Dur','Proto','SrcAddr','Sport','Dir','DstAddr','Dport','State','sTos','dTos','TotPkts','TotBytes','SrcBytes','SrcPkts','Label'])
+            # Process features
             dflow = self.process_features(dflow)
 
-            #self.outputqueue.put('03|detection1|\t[detec1] Pandas flow: {}'.format(dflow))
+            #self.outputqueue.put('01|detection1|\t[detect1] dflow: {}'.format(dflow))
+            flow_std = self.scaler.transform(dflow)
+            #self.outputqueue.put('01|detection1|\t[detect1] flow std: {}'.format(flow_std))
 
-            try:
-                flow_std = self.scaler.transform(dflow);
-            except ValueError:
-                continue
-
-            pred = self.clf.predict(dflow[0:1])
-            self.outputqueue.put('10|detection1|\t[detec1] Prediction of flow: {}. -> {}'.format(flow[:-1], pred))
+            pred = self.clf.predict(flow_std)
+            self.outputqueue.put('01|detection1|\t[detect1] Prediction of flow: {}. -> {}'.format(flow[:-1], pred))
+            flow = __database__.getNextFlowVerbatim()
 
 
 
