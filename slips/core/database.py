@@ -802,7 +802,7 @@ class Database(object):
         """
         Receives a verbatim flow and stores it in a structure that expires flows in time
         """
-        return self.r.rpop('Flows')
+        return self.r.lpop('Flows')
 
 
 
