@@ -17,7 +17,7 @@ from logsProcess import LogsProcess
 from evidenceProcess import EvidenceProcess
 from portScanDetectorProcess import PortScanProcess
 
-version = '0.5'
+version = '0.5.1'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the info and detections.', required=False, default=False, action='store_true')
     args = parser.parse_args()
 
-    # Read the config file from the parameter
+    # Read the config file name given from the parameters
     config = configparser.ConfigParser()
     try:
         with open(args.config) as source:
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     if args.verbose < 1:
         args.verbose = 1
 
-    # Any verbosity passed as parameter overrides the configuration. Only check its value
+    # Any debuggsity passed as parameter overrides the configuration. Only check its value
     if args.debug == None:
         # Read the debug from the config
         try:
@@ -152,6 +152,25 @@ if __name__ == '__main__':
     inputProcess = InputProcess(None, outputProcessQueue, profilerProcessQueue, args.filepath, config)
     inputProcess.start()
     outputProcessQueue.put('30|main|Started input thread')
+
+    # Start each module in the folder modules
+    outputProcessQueue.put('01|main|[main] Searching for modules')
+    if os.path.isdir('modules'):
+        # Itereate over all the files and folders in the modules folder
+        for modulefoldername in os.listdir('modules'):
+            # For each of them, check that they are a folder first
+            if os.path.isdir('modules/' + modulefoldername):
+                # If it is a folder, load its module that is named as the folder
+                modulename = 'modules/' + modulefoldername + '/' + modulefoldername 
+                outputProcessQueue.put('02|main|[main] Module to load: '+modulename)
+                from modulename import modulefoldername
+                moduleProcess = InputProcess(None, outputProcessQueue, profilerProcessQueue, args.filepath, config)
+                inputProcess.start()
+                outputProcessQueue.put('30|main|Started input thread')
+
+    else:
+        outputProcessQueue.put('01|main|[main] No modules folder found. No modules will be loaded')
+
 
     profilerProcessQueue.close()
     outputProcessQueue.close()
