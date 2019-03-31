@@ -1,8 +1,5 @@
 import redis
-# delete these
 import time
-from datetime import datetime
-from datetime import timedelta
 import json
 import sys
 
