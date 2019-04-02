@@ -37,7 +37,7 @@ def load_modules():
         for member_name, member_object in inspect.getmembers(module):
             # Check if current member is a class.
             if inspect.isclass(member_object):
-                if issubclass(member_object, Module):
+                if issubclass(member_object, Module) and member_object is not Module:
                     plugins[member_object.name] = dict(obj=member_object, description=member_object.description)
 
     return plugins
