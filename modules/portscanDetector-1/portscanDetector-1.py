@@ -20,6 +20,8 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.config = config
         # Get from the database the separator used to separate the IP and the word profile
         self.fieldseparator = __database__.getFieldSeparator()
+        # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
+        self.c1 = __database__.subscribe('tw_modified')
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -39,6 +41,13 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def run(self):
         while True:
+            # Wait for a message from the channel.
+            message = self.c1.get_message(timeout=None)
+            #message = self.c1.get_message()
+            self.print('Message received!!: {}'.format(message))
+
+
+            """
             # Do stuff
             try:
                 # Start of the port scan detection
@@ -93,4 +102,5 @@ class PortScanProcess(Module, multiprocessing.Process):
                 self.print(inst, 0, 1)
 
             time.sleep(60)
+            """
 
