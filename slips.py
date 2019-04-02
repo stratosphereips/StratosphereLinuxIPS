@@ -16,6 +16,8 @@ from cursesProcess import CursesProcess
 from logsProcess import LogsProcess
 from evidenceProcess import EvidenceProcess
 from portScanDetectorProcess import PortScanProcess
+# This plugins import will automatially load the modules and put them in the __modules__ variable
+from slips.core.plugins import __modules__
 
 version = '0.5.1'
 
@@ -154,23 +156,12 @@ if __name__ == '__main__':
     outputProcessQueue.put('30|main|Started input thread')
 
     # Start each module in the folder modules
-    outputProcessQueue.put('01|main|[main] Searching for modules')
-    if os.path.isdir('modules'):
-        # Itereate over all the files and folders in the modules folder
-        for modulefoldername in os.listdir('modules'):
-            # For each of them, check that they are a folder first
-            if os.path.isdir('modules/' + modulefoldername):
-                # If it is a folder, load its module that is named as the folder
-                modulename = 'modules/' + modulefoldername + '/' + modulefoldername 
-                outputProcessQueue.put('02|main|[main] Module to load: '+modulename)
-                from modulename import modulefoldername
-                moduleProcess = InputProcess(None, outputProcessQueue, profilerProcessQueue, args.filepath, config)
-                inputProcess.start()
-                outputProcessQueue.put('30|main|Started input thread')
-
-    else:
-        outputProcessQueue.put('01|main|[main] No modules folder found. No modules will be loaded')
-
+    outputProcessQueue.put('01|main|[main] Starting the modules')
+    for module_name in __modules__:
+        outputProcessQueue.put('01|main|\t[main] Starting the module {} ({})'.format(module_name, __modules__[module_name]['description']))
+        module_class = __modules__[module_name]['obj']
+        ModuleProcess = module_class(outputProcessQueue, config)
+        ModuleProcess.start()
 
     profilerProcessQueue.close()
     outputProcessQueue.close()
