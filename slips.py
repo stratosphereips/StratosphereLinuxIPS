@@ -15,7 +15,6 @@ from profilerProcess import ProfilerProcess
 from cursesProcess import CursesProcess
 from logsProcess import LogsProcess
 from evidenceProcess import EvidenceProcess
-from portScanDetectorProcess import PortScanProcess
 # This plugins import will automatially load the modules and put them in the __modules__ variable
 from slips.core.plugins import __modules__
 
@@ -132,15 +131,6 @@ if __name__ == '__main__':
     evidenceProcessQueue.close()
     outputProcessQueue.put('30|main|Started Evidence thread')
 
-    # Port scan thread. Should be a module
-    # Create the queue for the evidence thread
-    portscanProcessQueue = Queue()
-    # Create the thread and start it
-    portscanProcessThread = PortScanProcess(portscanProcessQueue, outputProcessQueue, config)
-    portscanProcessThread.start()
-    portscanProcessQueue.close()
-    outputProcessQueue.put('30|main|Started port scan thread')
-
     # Profile thread
     # Create the queue for the profile thread
     profilerProcessQueue = Queue()
@@ -156,7 +146,7 @@ if __name__ == '__main__':
     outputProcessQueue.put('30|main|Started input thread')
 
     # Start each module in the folder modules
-    outputProcessQueue.put('01|main|[main] Starting the modules')
+    outputProcessQueue.put('01|main|[main] Starting modules')
     for module_name in __modules__:
         if not 'Template' in module_name:
             outputProcessQueue.put('01|main|\t[main] Starting the module {} ({})'.format(module_name, __modules__[module_name]['description']))
