@@ -4,8 +4,8 @@
 # This is the abstract Module class to check against. Do not modify
 class Module(object):
     name = ''
-    description = 'Template module'
-    authors = ['Template Author']
+    description = 'Template abstract module'
+    authors = ['Template abstract Author']
     output = []
 
     def __init__(self):
