@@ -158,10 +158,11 @@ if __name__ == '__main__':
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting the modules')
     for module_name in __modules__:
-        outputProcessQueue.put('01|main|\t[main] Starting the module {} ({})'.format(module_name, __modules__[module_name]['description']))
-        module_class = __modules__[module_name]['obj']
-        ModuleProcess = module_class(outputProcessQueue, config)
-        ModuleProcess.start()
+        if not 'Template' in module_name:
+            outputProcessQueue.put('01|main|\t[main] Starting the module {} ({})'.format(module_name, __modules__[module_name]['description']))
+            module_class = __modules__[module_name]['obj']
+            ModuleProcess = module_class(outputProcessQueue, config)
+            ModuleProcess.start()
 
     profilerProcessQueue.close()
     outputProcessQueue.close()
