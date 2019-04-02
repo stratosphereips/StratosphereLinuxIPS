@@ -22,9 +22,8 @@ version = '0.5.1'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
-    # Get if we are going to create log files or not
     try:
-        return bool(config.get(section, name))
+        return config.get(section, name)
     except (configparser.NoOptionError, configparser.NoSectionError, NameError):
         # There is a conf, but there is no option, or no section or no configuration file specified
         return False
@@ -114,7 +113,8 @@ if __name__ == '__main__':
         outputProcessQueue.put('30|main|Started Curses thread')
     elif not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
-        if read_configuration(config, 'parameters', 'create_log_files'):
+        do_logs = read_configuration(config, 'parameters', 'create_log_files')
+        if do_logs == 'yes':
             # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
             logsProcessQueue = Queue()
             logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
