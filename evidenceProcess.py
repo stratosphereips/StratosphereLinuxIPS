@@ -13,6 +13,7 @@ class EvidenceProcess(multiprocessing.Process):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
     def __init__(self, inputqueue, outputqueue, config):
+        self.name = 'Evidence'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -22,6 +23,22 @@ class EvidenceProcess(multiprocessing.Process):
         self.read_configuration()
         # Subscribe to channel 'tw_modified'
         self.c1 = __database__.subscribe('tw_modified')
+
+    def print(self, text, verbose=1, debug=0):
+        """ 
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the prcocesses into account
+
+        Input
+         verbose: is the minimum verbosity level required for this text to be printed
+         debug: is the minimum debugging level required for this text to be printed
+         text: text to print. Can include format like 'Test {}'.format('here')
+        
+        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+        """
+
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -65,7 +82,6 @@ class EvidenceProcess(multiprocessing.Process):
             while True:
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=None)
-                #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
                 if message['channel'] == 'tw_modified':
                     # Get the profileid and twid
                     try:
@@ -74,33 +90,35 @@ class EvidenceProcess(multiprocessing.Process):
                     except AttributeError:
                         # When the channel is created the data '1' is sent
                         continue
-                    self.outputqueue.put('50|evidence|[Evidence] Processing the Evidence')
-                    ip = profileid.split(self.separator)[1]
                     evidence = __database__.getEvidenceForTW(profileid, twid)
                     if evidence:
                         evidence = json.loads(evidence)
-                        self.outputqueue.put('40|evidence|[Evidence] Evidence for IP: {}. TW: {}. Evidence: {}'.format(ip, twid, evidence))
+                        # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
-                        for pieceEvid in evidence:
-                            self.outputqueue.put('50|evidence|[Evidence] \tPiece of Evidence: {}'.format(pieceEvid))
-                            type_of_alert = pieceEvid[0]
-                            threat_level = float(pieceEvid[1])
-                            confidence = float(pieceEvid[2])
+                        ip = profileid.split(self.separator)[1]
+                        self.print('Evidence for IP {}'.format(ip), 5, 0)
+                        for key in evidence:
+                            data = evidence[key]
+                            self.print('\tEvidence for key {}'.format(key), 5, 0)
+                            confidence = float(data[0])
+                            threat_level = float(data[1])
+                            description = data[2]
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
-                            self.outputqueue.put('50|evidence|[Evidence] \tPiece Threat Level: {}'.format(new_threat_level))
+                            self.print('\t\tWeighted Threat Level: {}'.format(new_threat_level), 5, 0)
                             accumulated_threat_level += new_threat_level
-                            self.outputqueue.put('50|evidence|[Evidence] \tAccumulated Threat Level: {}'.format(accumulated_threat_level))
-                        self.outputqueue.put('30|evidence|[Evidence] IP: {}. TW: {}. Accumulated Threat Level: {}'.format(ip, twid, accumulated_threat_level))
+                            self.print('\t\tAccumulated Threat Level: {}'.format(accumulated_threat_level), 5, 0)
 
                         # This is the part to detect if the accumulated evidence was enough for generating a detection
-                        # The detection should be done in attacks per minute. The paramater in the configuration is attacks per minute
+                        # The detection should be done in attacks per minute. The parameter in the configuration is attacks per minute
                         # So find out how many attacks corresponds to the width we are using
                         # 60 because the width is specified in seconds
                         detection_threshold_in_this_width = self.detection_threshold * self.width / 60
                         if accumulated_threat_level >= detection_threshold_in_this_width:
-                            self.outputqueue.put('10|evidence|[Evidence] DETECTED IP: {}. Accumulated evidence: {}'.format(ip, accumulated_threat_level))
-                            __database__.setBlockingRequest(profileid, twid)
+                            # if this profile was not already blocked in this TW
+                            if not __database__.getBlockingRequest(profileid, twid):
+                                self.print('\tDETECTED IP: {}. Accumulated evidence: {}'.format(ip, accumulated_threat_level), 1,0)
+                                __database__.setBlockingRequest(profileid, twid)
                             
         except KeyboardInterrupt:
             self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
