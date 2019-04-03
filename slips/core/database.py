@@ -28,7 +28,7 @@ def timing(f):
         time1 = time.time()
         ret = f(*args)
         time2 = time.time()
-        self.outputqueue.put('01|database|Function took {:.3f} ms'.format((time2-time1)*1000.0))
+        Database.outputqueue.put('01|database|Function took {:.3f} ms'.format((time2-time1)*1000.0))
         return ret
     return wrap
 
@@ -485,7 +485,7 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
 
-    def add_out_dstport(self, profileid, twid, dport, totbytes, sbytes, pkts, spkts, state, proto, daddr):
+    def add_out_dstport(self, profileid, twid, columns):
         """
         Store info learned from the dst port and other data from the flow.
         When the flow goes out, which means we are the client sending it.
@@ -507,6 +507,7 @@ class Database(object):
             spkts = columns['spkts']
             state = columns['state']
             proto = columns['proto']
+            daddr = columns['daddr']
 
             hosttype = 'Client'
             # Get the state
