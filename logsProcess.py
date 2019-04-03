@@ -27,6 +27,7 @@ def timing(f):
 class LogsProcess(multiprocessing.Process):
     """ A class to output data in logs files """
     def __init__(self, inputqueue, outputqueue, verbose, debug, config):
+        self.name = 'Logs'
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
@@ -49,6 +50,22 @@ class LogsProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.report_time = 5
         self.outputqueue.put('01|logs|Logs Process configured to report every: {} seconds'.format(self.report_time))
+
+    def print(self, text, verbose=1, debug=0):
+        """ 
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the prcocesses into account
+
+        Input
+         verbose: is the minimum verbosity level required for this text to be printed
+         debug: is the minimum debugging level required for this text to be printed
+         text: text to print. Can include format like 'Test {}'.format('here')
+        
+        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+        """
+
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
 
     def run(self):
         try:
@@ -245,8 +262,8 @@ class LogsProcess(multiprocessing.Process):
                 if evidence:
                     evidence = json.loads(evidence)
                     self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
-                    for data in evidence:
-                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence: {}'.format(data[0]), file_mode='a+', data_type='text')
+                    for key in evidence:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence key: {}. Description: {}. Confidence: {}. Threat Level: {}'.format(key, evidence[key][2], evidence[key][0], evidence[key][1]), file_mode='a+', data_type='text')
 
 
                 # Mark it as not modified anymore
@@ -257,8 +274,10 @@ class LogsProcess(multiprocessing.Process):
             TWforProfileBlocked = __database__.getBlockedTW()
             # Create the file of blocked data
             if TWforProfileBlocked:
-                self.addDataToFile('Blocked.txt', str(TWforProfileBlocked) + '\n', file_mode='w+', data_type='json')
-                self.outputqueue.put('03|logs|\t\t[Logs]: Blocked file updated: {}'.format(TWforProfileBlocked))
+                self.addDataToFile('Blocked.txt', 'Detections:\n', file_mode='w+', data_type='text')
+                for blocked in TWforProfileBlocked:
+                    self.addDataToFile('Blocked.txt', '\t' + str(blocked).split('_')[1] + ': ' + str(blocked).split('_')[2], file_mode='a+', data_type='json')
+                    #self.outputqueue.put('03|logs|\t\t[Logs]: Blocked file updated: {}'.format(TWforProfileBlocked))
 
         except KeyboardInterrupt:
             return True
