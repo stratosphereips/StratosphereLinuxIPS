@@ -627,7 +627,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # Also we only need to pass the width for registration in the DB. Nothing operational
                 __database__.addProfile(profileid, starttime, self.width)
 
-                # 3. For this profile, find the id in the databse of the tw where the flow belongs.
+                # 3. For this profile, find the id in the database of the tw where the flow belongs.
                 twid = self.get_timewindow(starttime, profileid)
 
             elif self.home_net and saddr_as_obj not in self.home_net:
@@ -680,7 +680,6 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
-
                 if 'conn' in flow_type  or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
@@ -710,6 +709,13 @@ class ProfilerProcess(multiprocessing.Process):
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
                 if 'conn' in flow_type  or 'argus' in flow_type:
+                    # Tuple
+                    tupleid = str(saddr_as_obj) + ':' + sport + ':' + columns['proto']
+                    # Compute symbols.
+                    symbol = ('a', '2019-01-26--13:31:09', 1)
+
+                    # Add the src tuple
+                    __database__.add_in_tuple(profileid, tw, tupleid, symbol)
                     # Add the srcip
                     __database__.add_in_srcips(profileid, twid, saddr_as_obj)
                     # Add the dstport
@@ -718,7 +724,6 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_in_srcport(profileid, twid, sport)
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, label=self.label)
-
 
             ##########################################
             # 5th. Store the data according to the paremeters
@@ -742,15 +747,21 @@ class ProfilerProcess(multiprocessing.Process):
                     store_features_going_out(profileid, twid)
                     # IN features
                     store_features_going_in(rev_profileid, rev_twid)
-
-                # If we have a home net and the flow comes from it. Only the features going out of the IP
-                elif self.home_net and saddr_as_obj in self.home_net:
-                    store_features_going_out(profileid, twid)
-                # If we have a home net and the flow comes to it. Only the features going in of the IP
-                elif self.home_net and daddr_as_obj in self.home_net:
-                    # The dstip was in the homenet. Add the src info to the dst profile
-                    store_features_going_in(rev_profileid, rev_twid)
-
+                else:
+                    """
+                    The flow is going TO homenet or FROM homenet or BOTH together.
+                    """
+                    # If we have a home net and the flow comes from it. Only the features going out of the IP
+                    if saddr_as_obj in self.home_net:
+                        store_features_going_out(profileid, twid)
+                    # If we have a home net and the flow comes to it. Only the features going in of the IP
+                    elif daddr_as_obj in self.home_net:
+                        # The dstip was in the homenet. Add the src info to the dst profile
+                        store_features_going_in(rev_profileid, rev_twid)
+                    # If the flow is going from homenet to homenet.
+                    elif daddr_as_obj in self.home_net and saddr_as_obj in self.home_net:
+                        store_features_going_out(profileid, twid)
+                        store_features_going_in(rev_profileid, rev_twid)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess.")
