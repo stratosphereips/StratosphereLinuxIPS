@@ -23,6 +23,7 @@ def timing(f):
 class ProfilerProcess(multiprocessing.Process):
     """ A class to create the profiles for IPs and the rest of data """
     def __init__(self, inputqueue, outputqueue, config, width):
+        self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -34,6 +35,22 @@ class ProfilerProcess(multiprocessing.Process):
         self.read_configuration()
         # Set the database
         __database__.setOutputQueue(self.outputqueue)
+
+    def print(self, text, verbose=1, debug=0):
+        """ 
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the prcocesses into account
+
+        Input
+         verbose: is the minimum verbosity level required for this text to be printed
+         debug: is the minimum debugging level required for this text to be printed
+         text: text to print. Can include format like 'Test {}'.format('here')
+        
+        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+        """
+
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -802,10 +819,6 @@ class ProfilerProcess(multiprocessing.Process):
                     if self.process_columns(line):
                         # Add the flow to the profile
                         self.add_flow_to_profile(self.column_values)
-                        # Update the fake now time. This is used for knowing when is 'now' when reading a file.
-                        # WE NEED TO MEASURE HOW THIS AFFECTS THE SPEED OF THE TOOL
-                        fake_now = str(self.column_values['starttime'])
-                        __database__.setFakeNow(fake_now)
         except KeyboardInterrupt:
             self.outputqueue.put("01|profiler|[Profile] Received {} lines.".format(rec_lines))
             return True
