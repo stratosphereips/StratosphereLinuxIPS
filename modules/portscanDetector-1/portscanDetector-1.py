@@ -40,67 +40,56 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
 
     def run(self):
-        while True:
-            # Wait for a message from the channel.
-            message = self.c1.get_message(timeout=None)
-            #message = self.c1.get_message()
-            self.print('Message received!!: {}'.format(message))
-
-
-            """
-            # Do stuff
-            try:
-                # Start of the port scan detection
-                self.print('Running the detection of portscans in all modified TW', 5, 0)
-                # Get the list of all the modifed TW for all the profiles for PortScan
-                TWforProfile = __database__.getModifiedTWPortScan()
-                for profileTW in TWforProfile:
+        try:
+            while True:
+                # Wait for a message from the channel that a TW was modified
+                message = self.c1.get_message(timeout=None)
+                #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
+                if message['channel'] == 'tw_modified':
+                    # 'profile_147.32.81.134:timewindow0'
                     # Get the profileid and twid
-                    profileid = profileTW.split(self.fieldseparator)[0] + self.fieldseparator + profileTW.split(self.fieldseparator)[1]
-                    twid = profileTW.split(self.fieldseparator)[2]
-                    # For each profile
-                    #self.outputqueue.put('02|'+self.processname+'|['+self.processname+'] ' + 'Profile: {}'.format(profileid))
-                    # For port scan detection, we will measure different things:
-                    # 1. Vertical port scan:
-                    #  - When 1 srcip contacts (established or not) > 3 ports in the same dstip (any number of packets)
-                    # 2. Horizontal port scan:
-                    #  - When 1 srcip contacts (established or not) the same port in > 3 different dstip (any number of packets)
-                    # Other things to detect may be
-                    # 4. If a dstip is port scanned by a src ip
-                    # 3. The same srcip connecting to the same dst port in the same ip > 3 packets as not established
-                    # 5. Slow port scan. Same as the others but distributed in multiple time windows
-                    
-                    ###
-                    # To detect 2. and 3. togethe we can use the ClientDstPortTCPNotEstablished
-                    # Get the ClientDstPortTCPNotEstablished
-                    data = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, twid)
-                    for dport in data.keys():
-                        totalpkts = int(data[dport]['totalpkt'])
-                        # Fixed threshold for now.
-                        #self.outputqueue.put('04|'+self.processname+'|['+self.processname+'] ' + 'Checking profile {}, TW {}. Dport {}. Packets {}'.format(profileid, twid, dport, totalpkts))
-                        if totalpkts > 3:
-                            if totalpkts >= 10:
-                                confidence = 1
-                            else:
-                                confidence = totalpkts / 10.0
-                            # very stupid port scan
-                            type_detection = 'Too many not established TCP conn to the same port'
-                            threat_level = 50
-                            __database__.setEvidenceForTW(profileid, twid, type_detection, threat_level, confidence)
-                            
-                            self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),4,0)
+                    try:
+                        profileid = message['data'].split(':')[0]
+                        twid = message['data'].split(':')[1]
+                    except AttributeError:
+                        # When the channel is created the data '1' is sent
+                        continue
 
-                    # Mark the TW as not modified for port scan
-                    __database__.markProfileTWAsNotModifiedPortScan(profileid, twid)
-
-            except KeyboardInterrupt:
-                self.print('Stopping the process', 0, 1)
-                return True
-            except Exception as inst:
-                self.print('Error in run() of ', 0, 1)
-                self.print(type(inst), 0, 1)
-                self.print(inst, 0, 1)
-
-            time.sleep(60)
-            """
+                # Start of the port scan detection
+                self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 5, 0)
+                # For port scan detection, we will measure different things:
+                # 1. Vertical port scan:
+                #  - When 1 srcip contacts (established or not) > 3 ports in the same dstip (any number of packets)
+                # 2. Horizontal port scan:
+                #  - When 1 srcip contacts (established or not) the same port in > 3 different dstip (any number of packets)
+                # Other things to detect may be
+                # 4. If a dstip is port scanned by a src ip
+                # 3. The same srcip connecting to the same dst port in the same ip > 3 packets as not established
+                # 5. Slow port scan. Same as the others but distributed in multiple time windows
+                
+                ###
+                # To detect 2. and 3. togethe we can use the ClientDstPortTCPNotEstablished
+                # Get the ClientDstPortTCPNotEstablished
+                data = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, twid)
+                for dport in data.keys():
+                    totalpkts = int(data[dport]['totalpkt'])
+                    # Fixed threshold for now.
+                    if totalpkts > 3:
+                        if totalpkts >= 10:
+                            confidence = 1
+                        else:
+                            confidence = totalpkts / 10.0
+                        # very stupid port scan
+                        type_detection = 'Too many not established TCP conn to the same port'
+                        threat_level = 50
+                        __database__.setEvidenceForTW(profileid, twid, type_detection, threat_level, confidence)
+                        
+                        self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),4,0)
+        except KeyboardInterrupt:
+            self.print('Stopping the process', 0, 1)
+            return True
+        except Exception as inst:
+            self.print('Error in run() of ', 0, 1)
+            self.print(type(inst), 0, 1)
+            self.print(inst, 0, 1)
 
