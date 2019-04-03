@@ -73,45 +73,57 @@ class PortScanProcess(Module, multiprocessing.Process):
                 data = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, twid)
                 # For each port, see if the amount is over the threshold
                 for dport in data.keys():
+                    """
                     ###
                     # PortScan Type 3. Direction OUT
                     # Considering all the flows in this TW, for all the Dst IP, get the sum of all the pkts send to each dst port TCP No tEstablished
                     totalpkts = int(data[dport]['totalpkt'])
                     # If for each port, more than X amount of packets were sent, report an evidence
                     if totalpkts > 3:
-                        # Now that we have evidence, see how important it is by counting how much we are over the threshold. 
+                        # Type of evidence
+                        type_evidence = 'PortScanType3'
+                        # Key
+                        key = 'dport' + ':' + dport + ':' + type_evidence
+                        # Description
+                        description = 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts)
+                        # Threat level
+                        threat_level = 50
+                        # Confidence. By counting how much we are over the threshold. 
                         if totalpkts >= 10:
                             # 10 pkts or more, receive the max confidence
                             confidence = 1
                         else:
                             # Between 3 and 10 pkts compute a kind of linear grow
                             confidence = totalpkts / 10.0
-                        # very stupid port scan
-                        type_detection = 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts)
-                        # The threat_level of a port scan is defined at 50
-                        threat_level = 50
-                        __database__.setEvidenceForTW(profileid, twid, type_detection, threat_level, confidence)
+                        __database__.setEvidenceForTW(profileid, twid, type_evidence, threat_level, confidence)
                         self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
 
+                    """
                     ### PortScan Type 2. Direction OUT
                     dstips = data[dport]['dstips']
                     amount_of_dips = len(dstips)
                     # If we contacted more than 3 dst IPs on this port with not established connections.. we have evidence
                     if amount_of_dips > 3:
-                        threat_level = 70
+                        # Type of evidence
+                        type_evidence = 'PortScanType2'
+                        # Key
+                        key = 'dport' + ':' + dport + ':' + type_evidence
+                        # Threat level
+                        threat_level = 50
                         # Compute the confidence
                         pkts_sent = 0
                         for dip in dstips:
                             # Get the total amount of pkts sent to the same port to all IPs
                             pkts_sent += dstips[dip]
-                        type_detection = 'Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent)
                         if pkts_sent > 10:
                             confidence = 1
                         else:
                             # Between 3 and 10 pkts compute a kind of linear grow
                             confidence = pkts_sent / 10.0
-                        __database__.setEvidenceForTW(profileid, twid, type_detection, threat_level, confidence)
-                        self.print('Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent),6,0)
+                        # Description
+                        description = 'Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
+                        __database__.setEvidenceForTW(profileid, twid, key, threat_level, confidence, description)
+                        self.print('Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts setn all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent),5,0)
 
 
 
