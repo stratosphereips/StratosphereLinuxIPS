@@ -91,7 +91,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         # The threat_level of a port scan is defined at 50
                         threat_level = 50
                         __database__.setEvidenceForTW(profileid, twid, type_detection, threat_level, confidence)
-                        self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),3,0)
+                        self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
 
                     ### PortScan Type 2. Direction OUT
                     dstips = data[dport]['dstips']
@@ -111,7 +111,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             # Between 3 and 10 pkts compute a kind of linear grow
                             confidence = pkts_sent / 10.0
                         __database__.setEvidenceForTW(profileid, twid, type_detection, threat_level, confidence)
-                        self.print('Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent),3,0)
+                        self.print('Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent),6,0)
 
 
 
