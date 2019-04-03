@@ -302,8 +302,9 @@ class ProfilerProcess(multiprocessing.Process):
 
     def add_flow_to_profile(self, columns):
         """ 
-        This is the main function that takes a flow and does all the magic to convert it into a working data in our system. 
+        This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
         It includes checking if the profile exists and how to put the flow correctly.
+        It interprets each colum
         """
         # Get data
         try:
@@ -399,7 +400,6 @@ class ProfilerProcess(multiprocessing.Process):
                 __database__.add_out_dstips(profile, tw, daddr_as_obj)
                 # Add the dstport
                 __database__.add_out_dstport(profile, tw, columns)
-
 
             def store_features_going_in(profile, tw):
                 """
@@ -808,6 +808,8 @@ class ProfilerProcess(multiprocessing.Process):
                     # Extract the columns smartly
                     self.outputqueue.put("03|profiler|[Profile] < Received Line: {}".format(line.replace('\n','')))
                     rec_lines += 1
+                    # The received flow is in the line variable.
+                    # Extract the columns of the flow
                     if self.process_columns(line):
                         # Add the flow to the profile
                         self.add_flow_to_profile(self.column_values)

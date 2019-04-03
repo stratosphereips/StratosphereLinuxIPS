@@ -15,15 +15,15 @@ from profilerProcess import ProfilerProcess
 from cursesProcess import CursesProcess
 from logsProcess import LogsProcess
 from evidenceProcess import EvidenceProcess
-from portScanDetectorProcess import PortScanProcess
+# This plugins import will automatially load the modules and put them in the __modules__ variable
+from slips.core.plugins import __modules__
 
-version = '0.5'
+version = '0.5.1'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
-    # Get if we are going to create log files or not
     try:
-        return bool(config.get(section, name))
+        return config.get(section, name)
     except (configparser.NoOptionError, configparser.NoSectionError, NameError):
         # There is a conf, but there is no option, or no section or no configuration file specified
         return False
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the info and detections.', required=False, default=False, action='store_true')
     args = parser.parse_args()
 
-    # Read the config file from the parameter
+    # Read the config file name given from the parameters
     config = configparser.ConfigParser()
     try:
         with open(args.config) as source:
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     if args.verbose < 1:
         args.verbose = 1
 
-    # Any verbosity passed as parameter overrides the configuration. Only check its value
+    # Any debuggsity passed as parameter overrides the configuration. Only check its value
     if args.debug == None:
         # Read the debug from the config
         try:
@@ -113,7 +113,8 @@ if __name__ == '__main__':
         outputProcessQueue.put('30|main|Started Curses thread')
     elif not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
-        if read_configuration(config, 'parameters', 'create_log_files'):
+        do_logs = read_configuration(config, 'parameters', 'create_log_files')
+        if do_logs == 'yes':
             # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
             logsProcessQueue = Queue()
             logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
@@ -130,15 +131,6 @@ if __name__ == '__main__':
     evidenceProcessQueue.close()
     outputProcessQueue.put('30|main|Started Evidence thread')
 
-    # Port scan thread. Should be a module
-    # Create the queue for the evidence thread
-    portscanProcessQueue = Queue()
-    # Create the thread and start it
-    portscanProcessThread = PortScanProcess(portscanProcessQueue, outputProcessQueue, config)
-    portscanProcessThread.start()
-    portscanProcessQueue.close()
-    outputProcessQueue.put('30|main|Started port scan thread')
-
     # Profile thread
     # Create the queue for the profile thread
     profilerProcessQueue = Queue()
@@ -152,6 +144,15 @@ if __name__ == '__main__':
     inputProcess = InputProcess(None, outputProcessQueue, profilerProcessQueue, args.filepath, config)
     inputProcess.start()
     outputProcessQueue.put('30|main|Started input thread')
+
+    # Start each module in the folder modules
+    outputProcessQueue.put('01|main|[main] Starting modules')
+    for module_name in __modules__:
+        if not 'Template' in module_name:
+            outputProcessQueue.put('01|main|\t[main] Starting the module {} ({})'.format(module_name, __modules__[module_name]['description']))
+            module_class = __modules__[module_name]['obj']
+            ModuleProcess = module_class(outputProcessQueue, config)
+            ModuleProcess.start()
 
     profilerProcessQueue.close()
     outputProcessQueue.close()

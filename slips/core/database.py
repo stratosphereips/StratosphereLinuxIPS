@@ -1,8 +1,5 @@
 import redis
-# delete these
 import time
-from datetime import datetime
-from datetime import timedelta
 import json
 import sys
 
@@ -39,11 +36,29 @@ class Database(object):
     """ Database object management """
 
     def __init__(self):
-        # Get the connection to redis database
+        # The name is used to print in the outputprocess
+        self.name = 'DB'
         self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+        # IMPORTANT
         # For now, do not remember between runs of slips. Just delete the database when we start with flushdb
         self.r.flushdb()
         self.separator = '_'
+
+    def print(self, text, verbose=1, debug=0):
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the prcocesses into account
+
+        Input
+         verbose: is the minimum verbosity level required for this text to be printed
+         debug: is the minimum debugging level required for this text to be printed
+         text: text to print. Can include format like 'Test {}'.format('here')
+
+        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+        """
+
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
 
     def setOutputQueue(self, outputqueue):
         """ Set the output queue"""
@@ -285,6 +300,7 @@ class Database(object):
         """
         self.r.sadd('ModifiedTWForLogs', profileid + self.separator + twid)
         self.r.sadd('ModifiedTWForPortScan', profileid + self.separator + twid)
+        self.publish_tw_modified(profileid + ':' + twid)
 
     def add_out_dstips(self, profileid, twid, daddr_as_obj):
         """
@@ -468,16 +484,19 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def add_out_dstport(self, profileid, twid, columns):
+
+    def add_out_dstport(self, profileid, twid, dport, totbytes, sbytes, pkts, spkts, state, proto, daddr):
         """
-        Store info learned from the dst port and other data from the flow. When the flow goes out, which means we are the client sending it.
+        Store info learned from the dst port and other data from the flow.
+        When the flow goes out, which means we are the client sending it.
+
         Here we store in the DB the features :
         ClientUDPEstablished
         ClientUDPNotEstablished
-        ClientTCPNotEstablished
         ClientTCPEstablished
         ClientICMPEstablished
         ClientIPV6-ICMPEstablished
+        ClientTCPNotEstablished
         """
         try:
 
@@ -512,6 +531,13 @@ class Database(object):
                 innerdata['totalflows'] += 1
                 innerdata['totalpkt'] += int(pkts)
                 innerdata['totalbytes'] += int(totbytes)
+                temp_dstips = innerdata['dstips']
+                try:
+                    temp_dstips[str(daddr)] += int(pkts)
+                except KeyError:
+                    # First time for this ip in the inner dictionary
+                    temp_dstips[str(daddr)] = int(pkts)
+                innerdata['dstips'] = temp_dstips
                 prev_data[dport] = innerdata
                 #self.outputqueue.put('03|database|[DB]: Adding for port {}. POST Data: {}'.format(dport, innerdata))
             except KeyError:
@@ -520,6 +546,9 @@ class Database(object):
                 innerdata['totalflows'] = 1
                 innerdata['totalpkt'] = int(pkts)
                 innerdata['totalbytes'] = int(totbytes)
+                temp_dstips = {}
+                temp_dstips[str(daddr)] = int(pkts)
+                innerdata['dstips'] = temp_dstips
                 #self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
                 prev_data[dport] = innerdata
             # Convet the dictionary to json
@@ -554,7 +583,7 @@ class Database(object):
 
     def getSrcDstPortTCPNotEstablishedFromProfileTW(self, profileid, twid, client_or_server):
         """ 
-        Get the info about the dst port. TCP not established
+        Get the info about all the dst port TCP not established in this TW. For all the flows sent.
         """
         try:
             key = client_or_server + 'TCPNotEstablished'
@@ -901,6 +930,19 @@ class Database(object):
         """ Return all the list of blocked tws """
         data = self.r.smembers('BlockedProfTW')
         return data
+
+    def subscribe(self, channel):
+        """ Subscribe to channel """
+        pubsub = self.r.pubsub()
+        # For when a TW is modified
+        if 'tw_modified' in channel:
+            pubsub.subscribe(channel)
+        return pubsub
+
+    def publish_tw_modified(self, data):
+        """ Publish something """
+        self.r.publish('tw_modified', data)
+
 
 
 __database__ = Database()

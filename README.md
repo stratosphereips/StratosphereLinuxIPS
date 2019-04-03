@@ -85,7 +85,6 @@ To read your own packets you can do:
     Which means run argus in eth0, report flows every 5s, give them to ra, ra only prints the flows, and slips works with them.
 
 
-
 ## Detection Models
 [rewrite]
 The core of the slips program is not only the machine learning algorithm, but more importantly the __behavioral models__. The behavioral models are created with the [Stratosphere Testing Framework] and are exported by our research team. This is very important because the models are _curated_ to maximize the detection. If you want to play and create your own behavioral models see the Stratosphere Testing Framework documentation.
@@ -94,6 +93,12 @@ The behavioral models are stored in the __models__ folder and will be updated re
 
 
 ## Features 
+- The database is Redis
+- For now, everytime slips starts the database is deleted.
+- Slips can detect port scans. For now the types detected are:
+ - Horizontal port scans. Same src ip, sending TCP not established flows, to more than 3 dst ips. The amount of packetes is the confidence.
+ - Too many not established connections. This is a type of detection that focuses on the same dst ip. If > 3 packets are sent in not establised tcp flows to the same dst port, then this is triggered.
+
 [rewrite]
 This version of slips comes with the following features:
 

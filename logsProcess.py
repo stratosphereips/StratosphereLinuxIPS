@@ -150,7 +150,6 @@ class LogsProcess(multiprocessing.Process):
             self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {}. Modified TWs: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
             for profileTW in TWforProfile:
                 # Get the profileid and twid
-                #profileTW = profileTW.decode('utf-8')
                 profileid = profileTW.split(self.fieldseparator)[0] + self.fieldseparator + profileTW.split(self.fieldseparator)[1]
                 twid = profileTW.split(self.fieldseparator)[2]
                 # Get the time of this TW. For the file name
@@ -241,6 +240,13 @@ class LogsProcess(multiprocessing.Process):
                 if dstportdata:
                     self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortIPV6ICMPNotEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
+                # 13. Info about the evidence so far for this TW. 
+                evidence = __database__.getEvidenceForTW(profileid, twid)
+                if evidence:
+                    evidence = json.loads(evidence)
+                    self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
+                    for data in evidence:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence: {}'.format(data[0]), file_mode='a+', data_type='text')
 
 
                 # Mark it as not modified anymore
