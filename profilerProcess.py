@@ -73,7 +73,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         # Get the format of the time in the flows
         try:
-            self.timeformat = config.get('timestamp', 'format')
+            self.timeformat = self.config.get('timestamp', 'format')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.timeformat = '%Y/%m/%d %H:%M:%S.%f'
@@ -244,7 +244,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.column_values['dport'] = data['dest_port']
                     except KeyError:
                         # Some protocols like icmp dont have ports
-                        column_values['dport'] = '0'
+                        self.column_values['dport'] = '0'
                     self.column_values['state'] = data['flow']['state']
                     self.column_values['pkts'] = int(data['flow']['pkts_toserver']) + int(data['flow']['pkts_toclient'])
                     self.column_values['spkts'] = int(data['flow']['pkts_toserver'])
