@@ -484,20 +484,22 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
 
-    def add_out_dstport(self, profileid, twid, dport, totbytes, sbytes, pkts, spkts, state, proto):
+    def add_out_dstport(self, profileid, twid, dport, totbytes, sbytes, pkts, spkts, state, proto, daddr):
         """ 
-        Store info learned from the dst port and other data from the flow. When the flow goes out, which means we are the client sending it.
+        Store info learned from the dst port and other data from the flow.
+        When the flow goes out, which means we are the client sending it.
+
         Here we store in the DB the features :
         ClientUDPEstablished
         ClientUDPNotEstablished
-        ClientTCPNotEstablished
         ClientTCPEstablished
         ClientICMPEstablished
         ClientIPV6-ICMPEstablished
+        ClientTCPNotEstablished
         """
         try:
             hosttype = 'Client'
-            # Get the state
+            # Get the state. Established, NotEstablished
             summaryState = __database__.getFinalStateFromFlags(state, pkts)
             # Create the key. The key is one of the names of the features
             key = hosttype + proto.upper() + summaryState
@@ -519,6 +521,13 @@ class Database(object):
                 innerdata['totalflows'] += 1
                 innerdata['totalpkt'] += int(pkts)
                 innerdata['totalbytes'] = int(totbytes)
+                temp_dstips = innerdata['dstips']
+                try:
+                    temp_dstips[str(daddr)] += int(pkts)
+                except KeyError:
+                    # First time for this ip in the inner dictionary
+                    temp_dstips[str(daddr)] = int(pkts)
+                innerdata['dstips'] = temp_dstips
                 prev_data[dport] = innerdata
                 #self.outputqueue.put('03|database|[DB]: Adding for port {}. POST Data: {}'.format(dport, innerdata))
             except KeyError:
@@ -527,6 +536,9 @@ class Database(object):
                 innerdata['totalflows'] = 1
                 innerdata['totalpkt'] = int(pkts)
                 innerdata['totalbytes'] = int(totbytes)
+                temp_dstips = {}
+                temp_dstips[str(daddr)] = int(pkts)
+                innerdata['dstips'] = temp_dstips
                 #self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
                 prev_data[dport] = innerdata
             # Convet the dictionary to json
@@ -561,7 +573,7 @@ class Database(object):
 
     def getDstPortClientTCPNotEstablishedFromProfileTW(self, profileid, twid):
         """ 
-        Get the info about the dst port. TCP not established
+        Get the info about all the dst port TCP not established in this TW. For all the flows sent.
         """
         try:
             key = 'ClientTCPNotEstablished'
