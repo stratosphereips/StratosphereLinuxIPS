@@ -47,7 +47,7 @@ class PortScanProcess(multiprocessing.Process):
                             ###
                             # To detect 2. and 3. togethe we can use the ClientDstPortTCPNotEstablished
                             # Get the ClientDstPortTCPNotEstablished
-                            data = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, twid)
+                            data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
                             for dport in data.keys():
                                 totalpkts = int(data[dport]['totalpkt'])
                                 # Fixed threshold for now.
