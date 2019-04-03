@@ -75,7 +75,8 @@ class PortScanProcess(Module, multiprocessing.Process):
 
 
                 # Get the list of dports that we connected as client using TCP not established
-                data = __database__.getClientTCPNotEstablishedFromProfileTW('DstPort', profileid, twid)
+                # old data = __database__.getClientTCPNotEstablishedFromProfileTW('DstPort', profileid, twid)
+                data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
                 # For each port, see if the amount is over the threshold
                 for dport in data.keys():
                     """
@@ -143,7 +144,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                         self.cache_det_thresholds[cache_key] = amount_of_dips
 
                 # Get the list of dstips that we connected as client using TCP not established, and their ports
-                data = __database__.getClientTCPNotEstablishedFromProfileTW('DstIP', profileid, twid)
+                #old data = __database__.getClientTCPNotEstablishedFromProfileTW('DstIP', profileid, twid)
+                data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
                 # For each dstip, see if the amount of ports connections is over the threshold
                 for dstip in data.keys():
                     ### PortScan Type 1. Direction OUT
