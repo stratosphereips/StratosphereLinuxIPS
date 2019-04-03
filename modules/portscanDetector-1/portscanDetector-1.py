@@ -92,4 +92,3 @@ class PortScanProcess(Module, multiprocessing.Process):
             self.print('Error in run() of ', 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
-
