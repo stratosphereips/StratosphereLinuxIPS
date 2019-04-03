@@ -37,13 +37,14 @@ class PortScanProcess(Module, multiprocessing.Process):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def run(self):
         try:
             while True:
                 # Wait for a message from the channel that a TW was modified
-                message = self.c1.get_message(timeout=None)
+                # IMPORTANT the function: self.c1.get_message(timeout=None) does not work. So I put there timeout=1 second.
+                message = self.c1.get_message(timeout=1)
                 #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
                 if message['channel'] == 'tw_modified':
                     # 'profile_147.32.81.134:timewindow0'
@@ -70,7 +71,7 @@ class PortScanProcess(Module, multiprocessing.Process):
 
 
                 
-                data = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, twid)
+                data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
                 # For each port, see if the amount is over the threshold
                 for dport in data.keys():
                     ###
