@@ -265,10 +265,6 @@ class Database(object):
         """ Return all the list of modified tw """
         return self.r.smembers('ModifiedTWForLogs')
 
-    def getModifiedTWPortScan(self):
-        """ Return all the list of modified tw """
-        return self.r.smembers('ModifiedTWForPortScan')
-
     def wasProfileTWModifiedLogs(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
         data = self.r.sismember('ModifiedTWForLogs', profileid + self.separator + twid)
@@ -283,12 +279,6 @@ class Database(object):
         """
         self.r.srem('ModifiedTWForLogs', profileid + self.separator + twid)
 
-    def markProfileTWAsNotModifiedPortScan(self, profileid, twid):
-        """ 
-        Mark a TW in a profile as not modified after the portscan module process it.
-        """
-        self.r.srem('ModifiedTWForPortScan', profileid + self.separator + twid)
-
     def markProfileTWAsModified(self, profileid, twid):
         """ 
         Mark a TW in a profile as not modified 
@@ -299,7 +289,6 @@ class Database(object):
         points of view. This is why we are putting mark for different modules
         """
         self.r.sadd('ModifiedTWForLogs', profileid + self.separator + twid)
-        self.r.sadd('ModifiedTWForPortScan', profileid + self.separator + twid)
         self.publish_tw_modified(profileid + ':' + twid)
 
     def add_out_dstips(self, profileid, twid, daddr_as_obj):
@@ -782,20 +771,6 @@ class Database(object):
         """ Get the evidence for this TW for this Profile """
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
         return data
-
-    def setFakeNow(self, time):
-        """ Set the fake now time """
-        # Only update the fake now, when it goes forward
-        current_fake_now = self.getFakeNow()
-        try:
-            if current_fake_now < time:
-                self.r.set('fakenow', time)
-        except TypeError:
-            self.r.set('fakenow', time)
-
-    def getFakeNow(self):
-        """ Get the fake now time """
-        return self.r.get('fakenow')
 
     def setBlockingRequest(self, profileid, twid):
         """ Set the request to block this profile. found in this time window """
