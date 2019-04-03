@@ -87,23 +87,24 @@ class PortScanProcess(Module, multiprocessing.Process):
                             # Between 3 and 10 pkts compute a kind of linear grow
                             confidence = totalpkts / 10.0
                         # very stupid port scan
-                        type_detection = 'Too many not established TCP conn to the same port'
+                        type_detection = 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts)
                         # The threat_level of a port scan is defined at 50
                         threat_level = 50
                         __database__.setEvidenceForTW(profileid, twid, type_detection, threat_level, confidence)
                         self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),3,0)
+
                     ### PortScan Type 2. Direction OUT
                     dstips = data[dport]['dstips']
                     amount_of_dips = len(dstips)
                     # If we contacted more than 3 dst IPs on this port with not established connections.. we have evidence
                     if amount_of_dips > 3:
-                        type_detection = 'Horizontal Port Scan. Not Estab. TCP. Diff dst IPs.'
-                        threat_level = 50
+                        threat_level = 70
                         # Compute the confidence
                         pkts_sent = 0
                         for dip in dstips:
                             # Get the total amount of pkts sent to the same port to all IPs
                             pkts_sent += dstips[dip]
+                        type_detection = 'Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent)
                         if pkts_sent > 10:
                             confidence = 1
                         else:
