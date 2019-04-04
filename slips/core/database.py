@@ -4,23 +4,6 @@ import json
 import sys
 
 
-# Struture of the DB
-# Set 'profile'
-#  Holds a set of all profile ids
-# For each profile, there is a set for the timewindows. The name of the sets is the names of profiles
-# The data for a profile in general is hold in a hash
-# The data for each timewindow in a profile is hold in a hash
- # profile|10.0.0.1|timewindow1
- # In this hash there are strings:
-  # dstips_in -> '{'1.1.1.1':10, '2.2.2.2':20}'
-  # srcips_in -> '{'3.3.3.3':30, '4.4.4.4':40}'
-  # dstports_in -> '{'22':30, '21':40}'
-  # dstports_in -> '{'22':30, '21':40}'
-  # dstips_out -> '{'1.1.1.1':10, '2.2.2.2':20}'
-  # srcips_out -> '{'3.3.3.3':30, '4.4.4.4':40}'
-  # dstports_out -> '{'22':30, '21':40}'
-  # dstports_out -> '{'22':30, '21':40}'
-
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -289,7 +272,7 @@ class Database(object):
         points of view. This is why we are putting mark for different modules
         """
         self.r.sadd('ModifiedTWForLogs', profileid + self.separator + twid)
-        self.publish_tw_modified(profileid + ':' + twid)
+        self.publish('tw_modified', profileid + ':' + twid)
 
     def add_out_dstips(self, profileid, twid, daddr_as_obj, state, pkts, proto, dport):
         """
@@ -847,6 +830,8 @@ class Database(object):
 
         current_evidence = json.dumps(current_evidence)
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence))
+        # Tell everyone an evidence was added
+        self.publish('evidence_added', profileid + ':' + twid)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -878,15 +863,17 @@ class Database(object):
 
     def subscribe(self, channel):
         """ Subscribe to channel """
-        pubsub = self.r.pubsub()
         # For when a TW is modified
+        pubsub = self.r.pubsub()
         if 'tw_modified' in channel:
+            pubsub.subscribe(channel)
+        elif 'evidence_added' in channel:
             pubsub.subscribe(channel)
         return pubsub
 
-    def publish_tw_modified(self, data):
+    def publish(self, channel, data):
         """ Publish something """
-        self.r.publish('tw_modified', data)
+        self.r.publish(channel, data)
 
 
 
