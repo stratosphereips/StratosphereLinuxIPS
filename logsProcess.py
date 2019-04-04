@@ -154,11 +154,6 @@ class LogsProcess(multiprocessing.Process):
         """
         try:
             #1. Get the list of profiles so far
-            #temp_profs = __database__.getProfiles()
-            #if not temp_profs:
-            #    return True
-            #profiles = list(temp_profs)
-
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             # Get the list of all the modifed TW for all the profiles
@@ -176,8 +171,18 @@ class LogsProcess(multiprocessing.Process):
                 #self.outputqueue.put('30|logs|\t[Logs] Profile: {} has {} timewindows'.format(profileid, twLen))
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
+                # Add more data into the file that is only for the global profile of this IP, without any time window
+                # Add the info we have about this IP
+                ip = profileTW.split(self.fieldseparator)[1]
+                ip_info = __database__.getIPData(ip)
+                printable_ip_info = ''
+                if ip_info:
+                    printable_ip_info = ', '.join('{} {}'.format(k, v) for k, v in ip_info.items())
+                    self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Info about this IP : ' + printable_ip_info, file_mode='a+')
+
+            
+                # Add the rest of data into profile log file
                 twlog = twtime + '.' + twid
-                # Add data into profile log file
                 # First Erase its file and save the data again
                 self.addDataToFile(profilefolder + '/' + twlog, '', file_mode='w+', data_mode = 'raw')
                 #
