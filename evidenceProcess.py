@@ -22,7 +22,7 @@ class EvidenceProcess(multiprocessing.Process):
         # Read the configuration
         self.read_configuration()
         # Subscribe to channel 'tw_modified'
-        self.c1 = __database__.subscribe('tw_modified')
+        self.c1 = __database__.subscribe('evidence_added')
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -82,7 +82,7 @@ class EvidenceProcess(multiprocessing.Process):
             while True:
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=None)
-                if message['channel'] == 'tw_modified':
+                if message['channel'] == 'evidence_added':
                     # Get the profileid and twid
                     try:
                         profileid = message['data'].split(':')[0]
