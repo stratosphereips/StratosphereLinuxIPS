@@ -190,9 +190,11 @@ class LogsProcess(multiprocessing.Process):
                     data = json.loads(dstips)
                     # Better printing of data
                     for key in data:
-                        ip = key
-                        ip_info = __database__.getIPData(ip)
-                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({} times). Info: {}'.format(key, data[key], ip_info), file_mode='a+', data_type='text')
+                        ip_info = __database__.getIPData(key)
+                        printable_ip_info = ''
+                        if ip_info:
+                            printable_ip_info = ', '.join('{} {}'.format(k, v) for k, v in ip_info.items())
+                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({} times). Info: {}'.format(key, data[key], printable_ip_info), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] DstIP: ' + dstips)
                 # 2. SrcIPs
                 srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
@@ -201,7 +203,11 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(profilefolder + '/' + twlog, 'SrcIP:', file_mode='a+', data_type='text')
                     data = json.loads(srcips)
                     for key in data:
-                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({} times)'.format(key, data[key]), file_mode='a+', data_type='text')
+                        ip_info = __database__.getIPData(key)
+                        printable_ip_info = ''
+                        if ip_info:
+                            printable_ip_info = ', '.join('{} {}'.format(k, v) for k, v in ip_info.items())
+                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({} times). Info: {}'.format(key, data[key], printable_ip_info), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] SrcIP: ' + srcips)
                 # 3. Tuples
                 tuples = __database__.getOutTuplesfromProfileTW(profileid, twid)
