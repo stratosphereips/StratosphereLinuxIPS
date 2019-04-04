@@ -284,6 +284,13 @@ class Database(object):
         """
         try:
             #############
+            # Store the Dst as IP address and notify in the channel
+            hash_id = 'IPs'
+            data = {}
+            data = json.dumps(data)
+            data = self.r.hset(hash_id, str(daddr_as_obj), data)
+
+            #############
             # 1- Count the dstips and store them
             # Get the hash of the timewindow
             # TODO: Retire this info after we finish 2-. Because its duplicated
@@ -306,7 +313,7 @@ class Database(object):
                 # Convet the dictionary to json
                 data = json.dumps(data)
             # Store the dstips in the dB
-            self.r.hset( profileid + self.separator + twid, 'DstIPs', str(data))
+            self.r.hset(profileid + self.separator + twid, 'DstIPs', str(data))
 
 
             #############
@@ -860,6 +867,10 @@ class Database(object):
         """ Return all the list of blocked tws """
         data = self.r.smembers('BlockedProfTW')
         return data
+
+    def getIPData(self, IP):
+        """ Return information about this IP from the IPs has """
+        data = self.r.hget('IPs', IP)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
