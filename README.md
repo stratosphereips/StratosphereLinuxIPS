@@ -144,8 +144,6 @@ This version of slips comes with the following features:
 - 0.3.3alpha
     - First stable version with a minimal algorithm for detecting behavioral threats.
 
-
-
 ### Author and Contributors
 [rewrite]
 
