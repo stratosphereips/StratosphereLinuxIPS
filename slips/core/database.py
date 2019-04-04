@@ -285,10 +285,7 @@ class Database(object):
         try:
             #############
             # Store the Dst as IP address and notify in the channel
-            hash_id = 'IPs'
-            data = {}
-            data = json.dumps(data)
-            data = self.r.hset(hash_id, str(daddr_as_obj), data)
+            self.setNewIP(str(daddr_as_obj))
 
             #############
             # 1- Count the dstips and store them
@@ -758,6 +755,10 @@ class Database(object):
         Add the srcip to this tw in this profile
         """
         try:
+            #############
+            # Store the Src as IP address and notify in the channel
+            self.setNewIP(str(saddr_as_obj))
+
             #self.outputqueue.put('03|database|[DB]: Add_in_srcips called with profileid {}, twid {}, saddr_as_obj {}'.format(profileid, twid, str(saddr_as_obj)))
             # Get the hash of the timewindow
             hash_id = profileid + self.separator + twid
@@ -869,8 +870,44 @@ class Database(object):
         return data
 
     def getIPData(self, IP):
-        """ Return information about this IP from the IPs has """
+        """ 
+        Return information about this IP from the IPs has 
+        Returns a dictionary
+        """
         data = self.r.hget('IPs', IP)
+        if data:
+            data = json.loads(data)
+        # Always return a dictionary
+        return data
+
+    def getallIPs(self):
+        """ Return list of all IPs in the DB """
+        data = self.r.hgetall('IPs')
+        return data
+
+    def setNewIP(self, ip):
+        """ Store this new ip in the IPs hash """
+        #self.print('New IP stored: {}'.format(ip),1,0)
+        self.r.hset('IPs', ip, '{}')
+        # Publish in the new_ip channel
+        self.publish('new_ip', ip)
+
+    def setInfoForIPs(self, ip, ipdata):
+        """ 
+        Store information for this IP 
+        We receive a dictionary, such as {'geocountry': 'rumania'} that we are going to store for this IP. 
+        If it was not there before we store it. If it was there before, we overwrite it
+
+        """
+        # Get the previous info already stored
+        data = self.getIPData(ip)
+        if not data:
+            data = {}
+        # Append the new data
+        data.update(ipdata)
+        data = json.dumps(data)
+        #self.print('Storing info for IP {}: {}'.format(ip, ipdata),1,0)
+        self.r.hset('IPs', ip, data)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
@@ -879,6 +916,8 @@ class Database(object):
         if 'tw_modified' in channel:
             pubsub.subscribe(channel)
         elif 'evidence_added' in channel:
+            pubsub.subscribe(channel)
+        elif 'new_ip' in channel:
             pubsub.subscribe(channel)
         return pubsub
 
