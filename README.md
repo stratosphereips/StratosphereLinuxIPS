@@ -13,6 +13,7 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
 - python3.6 or greater
 - py37-redis (Be sure that you install the redis libraries for your python3 version. This can be done with pip3, but your 'python3' executable in your path should point to the version of python you are using, such as python3.7)
 - redis database
+- maxminddb (pip install maxminddb) For the GeoIP module (you can also ignore this module in the conf)
 
 #### Installing dependencies    
 The new version of slips uses redis as a backend database, so you need to have redis running.
