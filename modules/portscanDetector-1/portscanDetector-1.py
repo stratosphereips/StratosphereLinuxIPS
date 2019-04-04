@@ -105,32 +105,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # If we contacted more than 3 dst IPs on this port with not established connections.. we have evidence
                     if amount_of_dips > 3:
                         # Type of evidence
-                        type_evidence = 'PortScanType1'
-                        # Key
-                        key = 'dport' + ':' + dport + ':' + type_evidence
-                        # Threat level
-                        threat_level = 50
-                        # Compute the confidence
-                        pkts_sent = 0
-                        for dip in dstips:
-                            # Get the total amount of pkts sent to the same port to all IPs
-                            pkts_sent += dstips[dip]
-                        if pkts_sent > 10:
-                            confidence = 1
-                        else:
-                            # Between 3 and 10 pkts compute a kind of linear grow
-                            confidence = pkts_sent / 10.0
-                        # Description
-                        description = 'Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
-                        __database__.setEvidenceForTW(profileid, twid, key, threat_level, confidence, description)
-                        self.print('Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts setn all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent),5,0)
-
-                    ### PortScan Type 1. Direction OUT
-                    dstips = data[dport]['dstips']
-                    amount_of_dips = len(dstips)
-                    # If we contacted more than 3 dst IPs on this port with not established connections.. we have evidence
-                    if amount_of_dips > 3:
-                        # Type of evidence
                         type_evidence = 'PortScanType2'
                         # Key
                         key = 'dport' + ':' + dport + ':' + type_evidence
@@ -149,7 +123,40 @@ class PortScanProcess(Module, multiprocessing.Process):
                         # Description
                         description = 'Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
                         __database__.setEvidenceForTW(profileid, twid, key, threat_level, confidence, description)
-                        self.print('Horizontal Port Scan to port {}. Not Estab TCP from IP: {}. Tot pkts setn all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent),5,0)
+                        self.print(description ,3,0)
+
+
+                # Get the list of dstips that we connected as client using TCP not established, and their ports
+                data = __database__.getClientTCPNotEstablishedFromProfileTW('DstIP', profileid, twid)
+                # For each dstip, see if the amount of ports connections is over the threshold
+                #self.print(str(data),4,0)
+                for dstip in data.keys():
+                    ### PortScan Type 1. Direction OUT
+                    # dstports is a dict
+                    dstports = data[dstip]['dstports']
+                    amount_of_dports = len(dstports)
+                    # If we contacted more than 3 dst ports on this ip with not established connections.. we have evidence
+                    if amount_of_dports > 3:
+                        # Type of evidence
+                        type_evidence = 'PortScanType1'
+                        # Key
+                        key = 'dstip' + ':' + dstip + ':' + type_evidence
+                        # Threat level
+                        threat_level = 50
+                        # Compute the confidence
+                        pkts_sent = 0
+                        for dport in dstports:
+                            # Get the total amount of pkts sent to the same port to all IPs
+                            pkts_sent += dstports[dport]
+                        if pkts_sent > 10:
+                            confidence = 1
+                        else:
+                            # Between 3 and 10 pkts compute a kind of linear grow
+                            confidence = pkts_sent / 10.0
+                        # Description
+                        description = 'Vertical Port Scan to IP {} from {}. Total {} dst ports. Not Estab TCP. Tot pkts sent all ports: {}'.format(dstip, profileid.split(self.fieldseparator)[1], amount_of_dports, pkts_sent, confidence)
+                        __database__.setEvidenceForTW(profileid, twid, key, threat_level, confidence, description)
+                        self.print(description, 3, 0)
 
 
         except KeyboardInterrupt:
