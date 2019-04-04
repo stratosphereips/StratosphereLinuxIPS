@@ -293,11 +293,17 @@ class Database(object):
 
     def add_out_dstips(self, profileid, twid, daddr_as_obj):
         """
-        Function if the flow is going out from the profile IP
-        Add the dstip to this tw in this profile
+        Function to add all the info about the dstip if the flow is going out from the profile IP
+        This function does two things:
+            1- Add the dstip to this tw in this profile, counting how many times it was contacted, and storing it in the key 'DstIPs' in the hash of the profile
+            2- Use the dstip as a key to count how many times that IP was contacted on each dstport. We store it like this because its the 
+               pefect structure to detect vertical port scans later on
         """
         try:
+            #############
+            # 1- Count the dstips and store them
             # Get the hash of the timewindow
+            # TODO: Retire this info after we finish 2-. Because its duplicated
             self.outputqueue.put('05|database|[DB]: Add_out_dstips called with profileid {}, twid {}, daddr_as_obj {}'.format(profileid, twid, str(daddr_as_obj)))
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, 'DstIPs')
@@ -318,6 +324,42 @@ class Database(object):
                 data = json.dumps(data)
             # Store the dstips in the dB
             self.r.hset( profileid + self.separator + twid, 'DstIPs', str(data))
+
+
+            """
+            #############
+            # 2- Store for each dstip how many times each port was contacted
+            # Do this for each of the 8 possible protocols and states:
+            #    ClientTCPEstablished
+            #    ClientTCPNotEstablished
+            #    ClientUDPEstablished
+            #    ClientUDPNotEstablished
+            #    ClientICMPEstablished
+            #    ClientICMPNotEstablished
+            #    ClientICMPv6Established
+            #    ClientICMPv6NotEstablished
+            # 
+            # We do this automatically searching which functions retrieve the data. just as in add_out_dstport
+            feature = 'DstIP'
+            hosttype = 'Client'
+            # Get the state. Established, NotEstablished
+            summaryState = __database__.getFinalStateFromFlags(state, pkts)
+            # Create the key. The key is one of the names of the features
+            key = hosttype + proto.upper() + summaryState
+            #self.outputqueue.put('03|database|[DB]: Storing info about dst port for {}. Key: {}.'.format(profileid, key))
+            # Get the previous data about this key
+            functionName = 'get' + feature + key + 'FromProfileTW'
+            # This is a trick to call different functions based on what we were given
+            try:
+                function = getattr(self, functionName)
+                prev_data = function(profileid, twid)
+            except AttributeError:
+                # Some protocols we still dont process, such as IPV6-ICMP. So we don't have the function getClientIPV6-ICMPEstablishedFromProfileTW
+                return True
+            self.print('Prev data from {}: {}'.format(functionName, prev_data,1,0)
+
+
+            """
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
@@ -482,25 +524,27 @@ class Database(object):
         ClientUDPEstablished
         ClientUDPNotEstablished
         ClientTCPEstablished
-        ClientICMPEstablished
-        ClientIPV6-ICMPEstablished
         ClientTCPNotEstablished
+        ClientICMPEstablished
+        ClientICMPNotEstablished
+        ClientIPV6-ICMPEstablished
+        ClientIPV6-ICMPNotEstablished
         """
         try:
+            feature = 'DstPort'
             hosttype = 'Client'
             # Get the state. Established, NotEstablished
             summaryState = __database__.getFinalStateFromFlags(state, pkts)
             # Create the key. The key is one of the names of the features
-            key = hosttype + proto.upper() + summaryState
-            #self.outputqueue.put('03|database|[DB]: Storing info about dst port for {}. Key: {}.'.format(profileid, key))
+            dbkey = feature + hosttype + proto.upper() + summaryState
             # Get the previous data about this key
-            functionName = 'getDstPort' + key + 'FromProfileTW'
+            functionName = 'get' + hosttype + proto.upper() + summaryState + 'FromProfileTW'
             # This is a trick to call different functions based on what we were given
             try:
                 function = getattr(self, functionName)
-                prev_data = function(profileid, twid)
+                prev_data = function(feature, profileid, twid)
             except AttributeError:
-                # Some protocols we still dont process, such as IPV6-ICMP. So we don't have the function getDstPortClientIPV6-ICMPEstablishedFromProfileTW
+                # Some protocols we still dont process, such as IPV6-ICMP. So we don't have the function getClientIPV6-ICMPEstablishedFromProfileTW
                 return True
             try:
                 innerdata = prev_data[dport]
@@ -533,7 +577,7 @@ class Database(object):
             # Convet the dictionary to json
             data = json.dumps(prev_data)
             # Store this data in the profile hash
-            self.r.hset( profileid + self.separator + twid, key, str(data))
+            self.r.hset( profileid + self.separator + twid, dbkey, str(data))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
@@ -541,12 +585,12 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def getDstPortClientTCPEstablishedFromProfileTW(self, profileid, twid):
+    def getClientTCPEstablishedFromProfileTW(self, feature, profileid, twid):
         """ 
-        Get the info about the dst port. TCP established
+        Get the info about this feature for. TCP established
         """
         try:
-            key = 'ClientTCPEstablished'
+            key = str(feature) + 'ClientTCPEstablished'
             #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
@@ -556,16 +600,16 @@ class Database(object):
                 value = portdata
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientTCPEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Error in getClientTCPEstFromProfileTW in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def getDstPortClientTCPNotEstablishedFromProfileTW(self, profileid, twid):
+    def getClientTCPNotEstablishedFromProfileTW(self, feature, profileid, twid):
         """ 
-        Get the info about all the dst port TCP not established in this TW. For all the flows sent.
+        Get the info about all the info TCP not established in this TW. For all the flows sent.
         """
         try:
-            key = 'ClientTCPNotEstablished'
+            key = str(feature) + 'ClientTCPNotEstablished'
             #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
@@ -575,15 +619,15 @@ class Database(object):
                 value = portdata
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientTCPNotEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Error in getClientTCPNotEstFromProfileTW in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
 
-    def getDstPortClientIPV6ICMPNotEstablishedFromProfileTW(self, profileid, twid):
+    def getClientIPV6ICMPNotEstablishedFromProfileTW(self, feature, profileid, twid):
         """ 
-        Get the info about the dst port. ipv6-icmp. not established
+        Get the info about all the info. ipv6-icmp. not established
         """
         try:
-            key = 'ClientIPV6ICMPNotEstablished'
+            key = str(feature) + 'ClientIPV6ICMPNotEstablished'
             #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
@@ -593,36 +637,17 @@ class Database(object):
                 value = portdata
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientIPV6ICMPNotEstFromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-
-    def getDstPortClientIPV6ICMPEstablishedFromProfileTW(self, profileid, twid):
-        """ 
-        Get the info about the dst port. ipv6-icmp. established
-        """
-        try:
-            key = 'ClientIPV6ICMPEstablished'
-            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
-            data = self.r.hget( profileid + self.separator + twid, key)
-            value = {}
-            if data:
-                # Convet the dictionary to json
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientIPV6ICMPEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Error in getClientIPV6ICMPNotEstFromProfileTW in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def getDstPortClientICMPNotEstablishedFromProfileTW(self, profileid, twid):
+
+    def getClientIPV6ICMPEstablishedFromProfileTW(self, feature, profileid, twid):
         """ 
-        Get the info about the dst port. icmp. not established
+        Get the info about the info. ipv6-icmp. established
         """
         try:
-            key = 'ClientICMPNotEstablished'
+            key = str(feature) + 'ClientIPV6ICMPEstablished'
             #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
@@ -632,18 +657,37 @@ class Database(object):
                 value = portdata
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientICMPNotEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Error in getClientIPV6ICMPEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
+    def getClientICMPNotEstablishedFromProfileTW(self, feature, profileid, twid):
+        """ 
+        Get the info about the info. icmp. not established
+        """
+        try:
+            key = str(feature) + 'ClientICMPNotEstablished'
+            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            data = self.r.hget( profileid + self.separator + twid, key)
+            value = {}
+            if data:
+                # Convet the dictionary to json
+                portdata = json.loads(data)
+                value = portdata
+            return value
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getClientICMPNotEstFromProfileTW in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def getDstPortClientICMPEstablishedFromProfileTW(self, profileid, twid):
+    def getClientICMPEstablishedFromProfileTW(self, feature, profileid, twid):
         """ 
-        Get the info about the dst port. icmp. established
+        Get the info about the info. icmp. established
         """
         try:
-            key = 'ClientICMPEstablished'
-            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
+            key = str(feature) + 'ClientICMPEstablished'
+            self.print('Key: {}. Geting info about dst port for Profile {} TW {}. Key: {}'.format(key, profileid, twid, key), 0, 3)
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
@@ -652,16 +696,16 @@ class Database(object):
                 value = portdata
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientICMPEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Error in getClientICMPEstFromProfileTW in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def getDstPortClientUDPNotEstablishedFromProfileTW(self, profileid, twid):
+    def getClientUDPNotEstablishedFromProfileTW(self, feature, profileid, twid):
         """ 
-        Get the info about the dst port. udp. not established
+        Get the info about the info. udp. not established
         """
         try:
-            key = 'ClientUDPNotEstablished'
+            key = str(feature) + 'ClientUDPNotEstablished'
             #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
@@ -671,16 +715,16 @@ class Database(object):
                 value = portdata
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientUDPNotEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Error in getClientUDPNotEstFromProfileTW in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def getDstPortClientUDPEstablishedFromProfileTW(self, profileid, twid):
+    def getClientUDPEstablishedFromProfileTW(self, feature, profileid, twid):
         """ 
-        Get the info about the dst port. UDP established
+        Get the info about the info. UDP established
         """
         try:
-            key = 'ClientUDPEstablished'
+            key = str(feature) + 'ClientUDPEstablished'
             #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
@@ -690,7 +734,7 @@ class Database(object):
                 value = portdata
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientUDPEstFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Error in getClientUDPEstFromProfileTW in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
