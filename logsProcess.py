@@ -190,7 +190,9 @@ class LogsProcess(multiprocessing.Process):
                     data = json.loads(dstips)
                     # Better printing of data
                     for key in data:
-                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({} times)'.format(key, data[key]), file_mode='a+', data_type='text')
+                        ip = key
+                        ip_info = __database__.getIPData(ip)
+                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({} times). Info: {}'.format(key, data[key], ip_info), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] DstIP: ' + dstips)
                 # 2. SrcIPs
                 srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
@@ -275,6 +277,7 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
                     for key in evidence:
                         self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence Description: {}. Confidence: {}. Threat Level: {} (key:{})'.format(evidence[key][2], evidence[key][0], evidence[key][1], key), file_mode='a+', data_type='text')
+
 
 
 
