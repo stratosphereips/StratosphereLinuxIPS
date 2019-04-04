@@ -216,47 +216,63 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(profilefolder + '/' + twlog, 'Was requested to block in this time window: ' + str(blocking), file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
                 # 5. Info of dstport as client, tcp, established
-                dstportdata = __database__.getDstPortClientTCPEstablishedFromProfileTW(profileid, twid)
+                dstportdata = __database__.getClientTCPEstablishedFromProfileTW('DstPort', profileid, twid)
                 if dstportdata:
                     self.addDataToFile(profilefolder + '/' + twlog, 'As a client, Dst Ports we connected with TCP Established flows:', file_mode='a+', data_type='text')
                     for port in dstportdata:
                         self.addDataToFile(profilefolder + '/' + twlog, '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}'.format(port, dstportdata[port]['totalflows'], dstportdata[port]['totalpkt'], dstportdata[port]['totalbytes']), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
                 # 6. Info of dstport as client, udp, established
-                dstportdata = __database__.getDstPortClientUDPEstablishedFromProfileTW(profileid, twid)
+                dstportdata = __database__.getClientUDPEstablishedFromProfileTW('DstPort', profileid, twid)
                 if dstportdata:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortUDPEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'As a client, Dst Ports we connected with UDP Established flows:', file_mode='a+', data_type='text')
+                    for port in dstportdata:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}'.format(port, dstportdata[port]['totalflows'], dstportdata[port]['totalpkt'], dstportdata[port]['totalbytes']), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
                 # 7. Info of dstport as client, tcp, notestablished
-                dstportdata = __database__.getDstPortClientTCPNotEstablishedFromProfileTW(profileid, twid)
+                dstportdata = __database__.getClientTCPNotEstablishedFromProfileTW('DstPort', profileid, twid)
                 if dstportdata:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortTCPNotEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'As a client, Dst Ports we connected with TCP NOT Established flows:', file_mode='a+', data_type='text')
+                    for port in dstportdata:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}'.format(port, dstportdata[port]['totalflows'], dstportdata[port]['totalpkt'], dstportdata[port]['totalbytes']), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
+
                 # 8. Info of dstport as client, udp, notestablished
-                dstportdata = __database__.getDstPortClientUDPNotEstablishedFromProfileTW(profileid, twid)
+                dstportdata = __database__.getClientUDPNotEstablishedFromProfileTW('DstPort', profileid, twid)
                 if dstportdata:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortUDPNotEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'As a client, Dst Ports we connected with UDP NOT Established flows:', file_mode='a+', data_type='text')
+                    for port in dstportdata:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}'.format(port, dstportdata[port]['totalflows'], dstportdata[port]['totalpkt'], dstportdata[port]['totalbytes']), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
                 # 9. Info of dstport as client, icmp, established
-                dstportdata = __database__.getDstPortClientICMPEstablishedFromProfileTW(profileid, twid)
+                dstportdata = __database__.getClientICMPEstablishedFromProfileTW('DstPort', profileid, twid)
                 if dstportdata:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortICMPEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'As a client, type of ICMP we connected with ICMP Established flows:', file_mode='a+', data_type='text')
+                    for port in dstportdata:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}'.format(port, dstportdata[port]['totalflows'], dstportdata[port]['totalpkt'], dstportdata[port]['totalbytes']), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
                 # 10. Info of dstport as client, icmp, notestablished
-                dstportdata = __database__.getDstPortClientICMPNotEstablishedFromProfileTW(profileid, twid)
+                dstportdata = __database__.getClientICMPNotEstablishedFromProfileTW('DstPort', profileid, twid)
                 if dstportdata:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortICMPNotEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'As a client, type of ICMP we connected with ICMP NOT Established flows:', file_mode='a+', data_type='text')
+                    for port in dstportdata:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}'.format(port, dstportdata[port]['totalflows'], dstportdata[port]['totalpkt'], dstportdata[port]['totalbytes']), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
                 # 11. Info of dstport as client, ipv6-icmp, established
-                dstportdata = __database__.getDstPortClientIPV6ICMPEstablishedFromProfileTW(profileid, twid)
+                dstportdata = __database__.getClientIPV6ICMPEstablishedFromProfileTW('DstPort', profileid, twid)
                 if dstportdata:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortIPV6ICMPEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'As a client, type of ICMP we connected with ICMPv6 Established flows:', file_mode='a+', data_type='text')
+                    for port in dstportdata:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}'.format(port, dstportdata[port]['totalflows'], dstportdata[port]['totalpkt'], dstportdata[port]['totalbytes']), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
                 # 12. Info of dstport as client, ipv6icmp, notestablished
-                dstportdata = __database__.getDstPortClientIPV6ICMPNotEstablishedFromProfileTW(profileid, twid)
+                dstportdata = __database__.getClientIPV6ICMPNotEstablishedFromProfileTW('DstPort', profileid, twid)
                 if dstportdata:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'ClientDstPortIPV6ICMPNotEstablished:\n' + str(dstportdata), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'As a client, type of ICMP we connected with ICMPv6 NOT Established flows:', file_mode='a+', data_type='text')
+                    for port in dstportdata:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}'.format(port, dstportdata[port]['totalflows'], dstportdata[port]['totalpkt'], dstportdata[port]['totalbytes']), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs]: DstPortData: {}'.format(dstportdata))
+
                 # 13. Info about the evidence so far for this TW. 
                 evidence = __database__.getEvidenceForTW(profileid, twid)
                 if evidence:
