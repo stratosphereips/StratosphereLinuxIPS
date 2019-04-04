@@ -61,8 +61,10 @@ class Database(object):
                 self.r.hset(profileid, 'Starttime', starttime)
                 # For now duration of the TW is fixed
                 self.r.hset(profileid, 'duration', duration)
-                # The name of the list with the dstips
-                #self.r.hset(profileid, 'DstIps', 'DstIps')
+                # The IP of the profile should also be added as a new IP we know about.
+                ip = profileid.split(self.separator)[1]
+                self.setNewIP(ip)
+
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put('00|database|Error in addProfile in database.py')
             self.outputqueue.put('00|database|{}'.format(type(inst)))
@@ -877,6 +879,8 @@ class Database(object):
         data = self.r.hget('IPs', IP)
         if data:
             data = json.loads(data)
+        else:
+            data = {}
         # Always return a dictionary
         return data
 
