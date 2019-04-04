@@ -210,11 +210,6 @@ class LogsProcess(multiprocessing.Process):
                     for key in data:
                         self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]), file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] Tuples: ' + tuples)
-                # 4. Detections to block
-                blocking = __database__.getBlockingRequest(profileid, twid)
-                if blocking:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'Was requested to block in this time window: ' + str(blocking), file_mode='a+', data_type='json')
-                    self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
                 # 5. Info of dstport as client, tcp, established
                 dstportdata = __database__.getClientTCPEstablishedFromProfileTW('DstPort', profileid, twid)
                 if dstportdata:
@@ -279,8 +274,16 @@ class LogsProcess(multiprocessing.Process):
                     evidence = json.loads(evidence)
                     self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
                     for key in evidence:
-                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence key: {}. Description: {}. Confidence: {}. Threat Level: {}'.format(key, evidence[key][2], evidence[key][0], evidence[key][1]), file_mode='a+', data_type='text')
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence Description: {}. Confidence: {}. Threat Level: {} (key:{})'.format(evidence[key][2], evidence[key][0], evidence[key][1], key), file_mode='a+', data_type='text')
 
+
+
+
+                # 4. This should be last. Detections to block
+                blocking = __database__.getBlockingRequest(profileid, twid)
+                if blocking:
+                    self.addDataToFile(profilefolder + '/' + twlog, 'Was requested to block in this time window: ' + str(blocking), file_mode='a+', data_type='json')
+                    self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
 
                 # Mark it as not modified anymore
                 __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
