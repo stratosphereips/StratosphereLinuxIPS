@@ -28,6 +28,12 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
+        # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
+        # The options change, so the last list is on the slips/core/database.py file. However common options are:
+        # - new_ip
+        # - tw_modified
+        # - evidence_added
+        self.c1 = __database__.subscribe('new_ip')
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -43,17 +49,18 @@ class Module(Module, multiprocessing.Process):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def run(self):
         try:
             # Main loop function
             while True:
-
-                # Example of printing the number of profiles in the Database every second
-                data = len(__database__.getProfiles())
-                self.print('Amount of profiles: {}'.format(data))
-                time.sleep(1)
+                message = self.c1.get_message(timeout=None)
+                # Check that the message is for you. Probably unnecessary...
+                if message['channel'] == 'new_ip':
+                    # Example of printing the number of profiles in the Database every second
+                    data = len(__database__.getProfiles())
+                    self.print('Amount of profiles: {}'.format(data))
 
         except KeyboardInterrupt:
             return True
