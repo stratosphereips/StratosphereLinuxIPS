@@ -815,6 +815,8 @@ class ProfilerProcess(multiprocessing.Process):
                     self.outputqueue.put("03|profiler|[Profile] < Received Line: {}".format(line.replace('\n','')))
                     rec_lines += 1
                     # The received flow is in the line variable.
+                    # Send the flow verbatim to the database
+                    __database__.addFlowVerbatim(line)
                     # Extract the columns of the flow
                     if self.process_columns(line):
                         # Add the flow to the profile
