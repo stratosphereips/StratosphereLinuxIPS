@@ -923,6 +923,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_ip' in channel:
             pubsub.subscribe(channel)
+        elif 'new_flow' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -940,6 +942,17 @@ class Database(object):
         Receives a verbatim flow and stores it in a structure that expires flows in time
         """
         return self.r.lpop('Flows')
+
+    def get_flow(self, profileid, twid, stime):
+        """
+        Returns the flow in the specific time
+        The format is a dictionary
+        """
+        data = {}
+        temp = self.r.hget(profileid + self.separator + twid, stime)
+        data[stime] = temp
+        # Get the dictionary format
+        return data
 
     def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto=''):
         """
@@ -959,8 +972,13 @@ class Database(object):
         data['spkts'] = spkts
         data['sbytes'] = sbytes
         data['appproto'] = appproto
+        # Convert to json string
         data = json.dumps(data)
         self.r.hset(profileid + self.separator + twid, stime, data)
-
+        # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
+        flow = self.get_flow(profileid, twid, stime)
+        # Get the dictionary and convert to json string
+        flow = json.dumps(flow)
+        self.publish('new_flow', flow)
 
 __database__ = Database()
