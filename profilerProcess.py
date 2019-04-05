@@ -323,14 +323,30 @@ class ProfilerProcess(multiprocessing.Process):
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each colum 
         """
-        # Get data
         try:
+            #########
+            # 1st. Get the data from the interpreted columns
+            separator = __database__.getFieldSeparator()
+            starttime = time.mktime(columns['starttime'].timetuple())
+            dur = columns['dur']
             saddr = columns['saddr']
+            profileid = 'profile' + separator + str(saddr)
             sport = columns['sport']
             daddr = columns['daddr']
-            separator = __database__.getFieldSeparator()
-            profileid = 'profile' + separator + str(saddr)
-            starttime = time.mktime(columns['starttime'].timetuple())
+            dport = columns['dport']
+            sport = columns['sport']
+            proto = columns['proto']
+            state = columns['state']
+            pkts = columns['pkts']
+            allbytes = columns['bytes']
+            spkts = columns['spkts']
+            sbytes = columns['sbytes']
+            endtime = columns['endtime']
+            appproto = columns['appproto']
+            direction = columns['dir']
+            dpkts = columns['dpkts']
+            dbytes = columns['dbytes']
+
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(saddr) 
@@ -345,6 +361,8 @@ class ProfilerProcess(multiprocessing.Process):
                     # Its a mac
                     return False
 
+            ##############
+            # 2nd. Check home network
             # Check if the ip received (src_ip) is part of our home network. We only crate profiles for our home network
             if self.home_net and saddr_as_obj in self.home_net:
                 # Its in our Home network
@@ -401,23 +419,30 @@ class ProfilerProcess(multiprocessing.Process):
                 # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
                 rev_twid = self.get_timewindow(starttime, rev_profileid)
 
+
+            ##############
+            # 4th Define help functions
             def store_features_going_out(profile, tw):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
                 # Tuple
-                tupleid = str(daddr_as_obj) + ':' + columns['dport']+ ':' + columns['proto']
+                tupleid = str(daddr_as_obj) + ':' + dport + ':' + proto
+
                 # Compute the symbol for this flow, for this TW, for this profile
-                #symbol = self.compute_symbol(profile, tw, tupleid, columns['starttime'], columns['dur'], columns['bytes'])
+                # FIX
                 symbol = ('a', '2019-01-26--13:31:09', 1)
+
                 # Add the out tuple
                 __database__.add_out_tuple(profile, tw, tupleid, symbol)
                 # Add the dstip
-                __database__.add_out_dstips(profile, tw, daddr_as_obj, columns['state'], columns['pkts'], columns['proto'], columns['dport'])
+                __database__.add_out_dstips(profile, tw, daddr_as_obj, state, pkts, proto, dport)
                 # Add the dstport
-                __database__.add_out_dstport(profile, tw, columns['dport'], columns['bytes'], columns['sbytes'], columns['pkts'], columns['spkts'], columns['state'], columns['proto'], daddr_as_obj)
+                __database__.add_out_dstport(profile, tw, dport, allbytes, sbytes, pkts, spkts, state, proto, daddr_as_obj)
                 # Add the srcport
                 __database__.add_out_srcport(profile, tw, sport)
+                # Add the flow with all the fields interpreted
+                __database__.add_flow(profileid=profile, twid=tw, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto)
 
             def store_features_going_in(profile, tw):
                 """
@@ -426,15 +451,19 @@ class ProfilerProcess(multiprocessing.Process):
                 # Add the srcip
                 __database__.add_in_srcips(profile, tw, saddr_as_obj)
                 # Add the dstport
-                __database__.add_in_dstport(profile, tw, columns['dport'])
+                __database__.add_in_dstport(profile, tw, dport)
                 # Add the srcport
                 __database__.add_in_srcport(profile, tw, sport)
+                # Add the flow with all the fields interpreted
+                __database__.add_flow(profileid=profile, twid=tw, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto)
+
 
             ##########################################
+            # 5th. Store the data according to the paremeters
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
             self.outputqueue.put("07|profiler|[Profiler] Storing data in the profile: {}".format(profileid))
-            # In which analysis mode are we?
 
+            # In which analysis mode are we?
             # Mode 'out'
             if self.analysis_direction == 'out':
                 # Only take care of the stuff going out. Here we don't keep track of the stuff going in
@@ -459,6 +488,7 @@ class ProfilerProcess(multiprocessing.Process):
                 elif self.home_net and daddr_as_obj in self.home_net:
                     # The dstip was in the homenet. Add the src info to the dst profile
                     store_features_going_in(rev_profileid, rev_twid)
+
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess.")
@@ -815,8 +845,8 @@ class ProfilerProcess(multiprocessing.Process):
                     self.outputqueue.put("03|profiler|[Profile] < Received Line: {}".format(line.replace('\n','')))
                     rec_lines += 1
                     # The received flow is in the line variable.
-                    # Send the flow verbatim to the database
-                    __database__.addFlowVerbatim(line)
+                    # Send the flow verbatim to the database, without processing.
+                    #__database__.addFlowVerbatim(line)
                     # Extract the columns of the flow
                     if self.process_columns(line):
                         # Add the flow to the profile
