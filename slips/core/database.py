@@ -816,6 +816,7 @@ class Database(object):
             spkts = columns['spkts']
             state = columns['state']
             proto = columns['proto']
+            saddr = columns['saddr']
 
             hosttype = 'Server'
             # Get the state
@@ -840,6 +841,13 @@ class Database(object):
                 innerdata['totalflows'] += 1
                 innerdata['totalpkt'] += int(pkts)
                 innerdata['totalbytes'] += int(totbytes)
+                temp_srcips = innerdata['srcips']
+                try:
+                    temp_srcips[str(saddr)] += int(pkts)
+                except KeyError:
+                    # First time for this ip in the inner dictionary
+                    temp_srcips[str(saddr)] = int(pkts)
+                innerdata['srcips'] = temp_srcips
                 prev_data[sport] = innerdata
                 # self.outputqueue.put('03|database|[DB]: Adding for port {}. POST Data: {}'.format(dport, innerdata))
             except KeyError:
@@ -848,6 +856,9 @@ class Database(object):
                 innerdata['totalflows'] = 1
                 innerdata['totalpkt'] = int(pkts)
                 innerdata['totalbytes'] = int(totbytes)
+                temp_srcips = {}
+                temp_srcips[str(saddr)] = int(pkts)
+                innerdata['srcips'] = temp_srcips
                 # self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
                 prev_data[sport] = innerdata
             # Convet the dictionary to json
