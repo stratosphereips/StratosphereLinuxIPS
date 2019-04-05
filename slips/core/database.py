@@ -941,6 +941,26 @@ class Database(object):
         """
         return self.r.lpop('Flows')
 
+    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto=''):
+        """
+        Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
+
+        """
+        data = {}
+        data['dur'] = dur
+        data['saddr'] = saddr
+        data['sport'] = sport
+        data['daddr'] = daddr
+        data['dport'] = dport
+        data['proto'] = proto
+        data['state'] = state
+        data['pkts'] = pkts
+        data['allbytes'] = allbytes
+        data['spkts'] = spkts
+        data['sbytes'] = sbytes
+        data['appproto'] = appproto
+        data = json.dumps(data)
+        self.r.hset(profileid + self.separator + twid, stime, data)
 
 
 __database__ = Database()
