@@ -465,6 +465,11 @@ class Database(object):
         data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
         return data
 
+    def getInTuplesfromProfileTW(self, profileid, twid):
+        """ Get the tuples """
+        data = self.r.hget(profileid + self.separator + twid, 'InTuples')
+        return data
+
     def getFinalStateFromFlags(self, state, pkts):
         """ 
         Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags
@@ -660,7 +665,7 @@ class Database(object):
             # Convet the dictionary to json
             data = json.dumps(prev_data)
             # Store this data in the profile hash
-            self.r.hset( profileid + self.separator + twid, key, str(data))
+            self.r.hset( profileid + self.separator + twid, hosttype + key, str(data))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
@@ -749,13 +754,13 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
     def getSrcDstPortICMPNotEstablishedFromProfileTW(self, profileid, twid, client_or_server):
-        """ 
-        Get the info about the info. icmp. not established
+        """
+        Get the info about the dst port. icmp. not established
         """
         try:
             key = client_or_server + 'ICMPNotEstablished'
             #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
-            data = self.r.hget( profileid + self.separator + twid, key)
+            data = self.r.hget(profileid + self.separator + twid, key)
             value = {}
             if data:
                 self.print('Key: {}. Getting info about dst port for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
@@ -974,7 +979,7 @@ class Database(object):
             # Convet the dictionary to json
             data = json.dumps(prev_data)
             # Store this data in the profile hash
-            self.r.hset(profileid + self.separator + twid, key, str(data))
+            self.r.hset(profileid + self.separator + twid, hosttype + key, str(data))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
