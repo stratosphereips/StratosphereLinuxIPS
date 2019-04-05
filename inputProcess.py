@@ -16,12 +16,15 @@ class InputProcess(multiprocessing.Process):
 
     def run(self):
         try:
-            sys.stdin.close()
-            sys.stdin = os.fdopen(0, 'r')
-            file_stream = sys.stdin
             lines = 0
+            if not self.datainput:
+                # By default read the stdin
+                sys.stdin.close()
+                sys.stdin = os.fdopen(0, 'r')
+                file_stream = sys.stdin
 
-            if self.datainput:
+            # If we were given a filename, manage the input from a file instead
+            elif self.datainput:
                 file_stream = open(self.datainput)
 
             for line in file_stream:
