@@ -56,42 +56,62 @@ class Module(Module, multiprocessing.Process):
             saddr = flow_dict['saddr']
             sport = flow_dict['sport']
             daddr = flow_dict['daddr']
+            daddr_data = __database__.getIPData(daddr)
+            try:
+                daddr_country = daddr_data['geocountry']
+            except KeyError:
+                daddr_country = 'Unknown'
             dport = flow_dict['dport']
             proto = flow_dict['proto']
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
+            if int(allbytes) < 1024:
+                # In bytes
+                allbytes_human = '{:.2f}{}'.format(float(allbytes),'b')
+            elif int(allbytes) > 1024 and int(allbytes) < 1048576 :
+                # In Kb
+                allbytes_human = '{:.2f}{}'.format(float(allbytes) / 1024,'Kb')
+            elif int(allbytes) > 1048576 and int(allbytes) < 1073741824:
+                # In Mb
+                allbytes_human = '{:.2f}{}'.format(float(allbytes) / 1024 / 1024, 'Mb')
+            elif int(allbytes) > 1073741824:
+                # In Bg
+                allbytes_human = '{:.2f}{}'.format(float(allbytes) / 1024 / 1024 / 1024, 'Gb')
             spkts = flow_dict['spkts']
             sbytes = flow_dict['sbytes']
             appproto = flow_dict['appproto']
 
-            #key = profileid + '_' + twid
             key = profileid
-            #self.print('Profileid: {}, TWid: {}, Flow: {}. key: {}'.format(profileid, twid, flow, stime))
 
             activity = ''
             if 'udp' in proto and '53' in dport and 'est' in state.lower():
-                activity = 'DNS asked to {}'.format(daddr)
+                activity = 'DNS asked to {} {}/udp (Country: {})'.format(daddr, dport, daddr_country)
             elif 'udp' in proto and '53' in dport and not 'est' in state.lower():
-                activity = 'Not Established DNS asked to {}'.format(daddr)
+                activity = 'Not Established DNS asked to {} {}/udp (Country: {})'.format(daddr, dport, daddr_country)
             elif 'udp' in proto and '123' in dport and 'est' in state.lower():
-                activity = 'NTP asked to {}'.format(daddr)
+                activity = 'NTP asked to {} {}/udp (Country: {})'.format(daddr, dport, daddr_country)
             elif 'tcp' in proto and '80' in dport and 'est' in state.lower():
-                activity = 'HTTP asked to {}'.format(daddr)
+                activity = 'HTTP asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
             elif 'tcp' in proto and '80' in dport and 'est' not in state.lower():
-                activity = 'Not Established HTTP asked to {}'.format(daddr)
+                activity = 'Not Established HTTP asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
             elif 'tcp' in proto and '443' in dport and 'est' in state.lower():
-                activity = 'HTTPS asked to {}'.format(daddr)
+                activity = 'HTTPS asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
             elif 'tcp' in proto and '443' in dport and 'est' not in state.lower():
-                activity = 'Not Established HTTPS asked to {}'.format(daddr)
+                activity = 'Not Established HTTPS asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
+            elif 'udp' in proto and '443' in dport and 'est' in state.lower():
+                activity = 'QUICK asked to {} {}/udp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
+            elif 'udp' in proto and '443' in dport and 'est' not in state.lower():
+                activity = 'Not Established QUICK asked to {} {}/udp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
             elif 'tcp' in proto and '5228' in dport and 'est' in state.lower():
-                activity = 'Google Playstore or Google Talk or Google Chrome Sync to {}'.format(daddr)
+                activity = 'Google Playstore or Google Talk or Google Chrome Sync to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
             else:
                 activity = 'Not recognized activity on flow {}'.format(flow)
 
             if activity:
                 # Store the activity in the DB for this profileid and twid
                 __database__.add_timeline_line(profileid, twid, activity)
+            self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
         except KeyboardInterrupt:
             return True
