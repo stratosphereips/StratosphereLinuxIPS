@@ -120,6 +120,14 @@ class LogsProcess(multiprocessing.Process):
             os.makedirs(profilefolder)
             # If we create the folder, add once there the profileid. We have to do this here if we want to do it once.
             self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Profileid : ' + profileid)
+            # Add more data into the file that is only for the global profile of this IP, without any time window
+            # Add the info we have about this IP
+            ip = profileid.split(self.fieldseparator)[1]
+            ip_info = __database__.getIPData(ip)
+            printable_ip_info = ''
+            if ip_info:
+                printable_ip_info = ', '.join('{} {}'.format(k, v) for k, v in ip_info.items())
+                self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Info about this IP : ' + printable_ip_info, file_mode='a+')
         return profilefolder
 
     def addDataToFile(self, filename, data, file_mode='w+', data_type='txt', data_mode='text'):
@@ -173,14 +181,6 @@ class LogsProcess(multiprocessing.Process):
 
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
-                # Add more data into the file that is only for the global profile of this IP, without any time window
-                # Add the info we have about this IP
-                ip = profileTW.split(self.fieldseparator)[1]
-                ip_info = __database__.getIPData(ip)
-                printable_ip_info = ''
-                if ip_info:
-                    printable_ip_info = ', '.join('{} {}'.format(k, v) for k, v in ip_info.items())
-                    self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Info about this IP : ' + printable_ip_info, file_mode='a+')
 
             
                 # Add the rest of data into profile log file
