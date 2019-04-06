@@ -139,71 +139,71 @@ class ProfilerProcess(multiprocessing.Process):
             nline = line.strip().split(self.separator)
             try:
                 self.column_values['starttime'] = datetime.strptime(nline[self.column_idx['starttime']], self.timeformat)
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['endtime'] = nline[self.column_idx['endtime']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['dur'] = nline[self.column_idx['dur']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['proto'] = nline[self.column_idx['proto']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['appproto'] = nline[self.column_idx['appproto']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['saddr'] = nline[self.column_idx['saddr']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['sport'] = nline[self.column_idx['sport']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['dir'] = nline[self.column_idx['dir']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['daddr'] = nline[self.column_idx['daddr']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['dport'] = nline[self.column_idx['dport']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['state'] = nline[self.column_idx['state']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['pkts'] = nline[self.column_idx['pkts']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['spkts'] = nline[self.column_idx['spkts']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['dpkts'] = nline[self.column_idx['dpkts']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['bytes'] = nline[self.column_idx['bytes']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['sbytes'] = nline[self.column_idx['sbytes']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['dbytes'] = nline[self.column_idx['dbytes']]
-            except IndexError:
+            except KeyError:
                 pass
         else:
             # Find the type of lines, and the columns indexes
@@ -306,6 +306,14 @@ class ProfilerProcess(multiprocessing.Process):
                             self.column_idx['pkts'] = nline.index(field)
                         elif 'totbytes' in field.lower():
                             self.column_idx['bytes'] = nline.index(field)
+                    # Some of the fields were not found probably, so just delete them from the index if their value is False. If not we will believe that we have data on them
+                    # We need a temp dict because we can not change the size of dict while analyzing it
+                    temp_dict = {}
+                    for i in self.column_idx:
+                        if type(self.column_idx[i]) == bool and self.column_idx[i] == False:
+                            continue
+                        temp_dict[i] = self.column_idx[i]
+                    self.column_idx = temp_dict
                 self.columns_defined = True
             except Exception as inst:
                 self.outputqueue.put("01|profiler|\tProblem in process_columns() in profilerProcess.")
