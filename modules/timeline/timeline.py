@@ -25,6 +25,8 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
+        # To store the timelines of each profileid_twid
+        self.profiles_tw = {}
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -42,6 +44,82 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def process_flow(self, profileid, twid, flow):
+        """
+        Receives a flow and it process it for this profileid and twid
+        """
+        try:
+            stime = next(iter(flow))
+            flow_dict = json.loads(flow[stime])
+            
+            dur = flow_dict['dur']
+            saddr = flow_dict['saddr']
+            sport = flow_dict['sport']
+            daddr = flow_dict['daddr']
+            dport = flow_dict['dport']
+            proto = flow_dict['proto']
+            state = flow_dict['state']
+            pkts = flow_dict['pkts']
+            allbytes = flow_dict['allbytes']
+            spkts = flow_dict['spkts']
+            sbytes = flow_dict['sbytes']
+            appproto = flow_dict['appproto']
+
+            #key = profileid + '_' + twid
+            key = profileid
+            #self.print('Profileid: {}, TWid: {}, Flow: {}. key: {}'.format(profileid, twid, flow, stime))
+
+            activity = ''
+            if 'udp' in proto and '53' in dport and 'est' in state.lower():
+                activity = 'DNS asked to {}'.format(daddr)
+            elif 'udp' in proto and '123' in dport and 'est' in state.lower():
+                activity = 'NTP asked to {}'.format(daddr)
+            elif 'tcp' in proto and '80' in dport and 'est' in state.lower():
+                activity = 'HTTP asked to {}'.format(daddr)
+            elif 'tcp' in proto and '443' in dport and 'est' in state.lower():
+                activity = 'HTTPS asked to {}'.format(daddr)
+            elif 'tcp' in proto and '5228' in dport and 'est' in state.lower():
+                activity = 'Google Playstore or Google Talk or Google Chrome Sync to {}'.format(daddr)
+            #else:
+            #    activity = 'Not recongnized activity on flow {}'.format(flow)
+
+            if activity:
+                try:
+                    data = self.profiles_tw[key]
+                except KeyError:
+                    data = []
+                data.append(activity)
+                self.profiles_tw[key] = data
+
+            self.print('Profileid: {}, TWid: {}, Activity: {}'.format(profileid, twid, self.profiles_tw[key][-1]))
+
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            self.print('Problem on process_flow()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
+
+    def show_profile(self, profileid):
+        """ Show the timeline of this profile """
+        try:
+            data = self.profiles_tw[profileid][-1]
+            #for i in data:
+            #self.print('Profileid: {}, TWid: {}, Activity: {}. Flow: {}'.format(profileid, twid, self.profiles_tw[key][-1], flow))
+            self.print('Profileid: {:45}, Activity: {}'.format(profileid, data))
+        except KeyError:
+            pass
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            self.print('Problem on show_profile()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
+
     def run(self):
         try:
             # Main loop function
@@ -50,9 +128,20 @@ class Module(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message['channel'] == 'new_flow' and message['data'] != 1:
                     # Example of printing the number of profiles in the Database every second
-                    data = message['data']
-                    data = json.loads(data)
-                    self.print('Data: {}'.format(data))
+                    mdata = message['data']
+                    # Convert from json to dict
+                    mdata = json.loads(mdata)
+                    profileid = mdata['profileid']
+                    twid = mdata['twid']
+                    # Get flow as a json
+                    flow = mdata['flow']
+                    # Convert flow to a dict
+                    flow = json.loads(flow)
+                    # Process the flow
+                    self.process_flow(profileid, twid, flow)
+
+                    # Print one profile
+                    #self.show_profile('profile_2001:718:2:1611::1:0:90')
 
         except KeyboardInterrupt:
             return True
