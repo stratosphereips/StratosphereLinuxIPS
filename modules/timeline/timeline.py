@@ -72,12 +72,18 @@ class Module(Module, multiprocessing.Process):
             activity = ''
             if 'udp' in proto and '53' in dport and 'est' in state.lower():
                 activity = 'DNS asked to {}'.format(daddr)
+            eif 'udp' in proto and '53' in dport and not 'est' in state.lower():
+                activity = 'Not Established DNS asked to {}'.format(daddr)
             elif 'udp' in proto and '123' in dport and 'est' in state.lower():
                 activity = 'NTP asked to {}'.format(daddr)
             elif 'tcp' in proto and '80' in dport and 'est' in state.lower():
                 activity = 'HTTP asked to {}'.format(daddr)
+            elif 'tcp' in proto and '80' in dport and 'est' not in state.lower():
+                activity = 'Not Established HTTP asked to {}'.format(daddr)
             elif 'tcp' in proto and '443' in dport and 'est' in state.lower():
                 activity = 'HTTPS asked to {}'.format(daddr)
+            elif 'tcp' in proto and '443' in dport and 'est' not in state.lower():
+                activity = 'Not Established HTTPS asked to {}'.format(daddr)
             elif 'tcp' in proto and '5228' in dport and 'est' in state.lower():
                 activity = 'Google Playstore or Google Talk or Google Chrome Sync to {}'.format(daddr)
             else:
