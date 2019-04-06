@@ -65,6 +65,19 @@ To run argus in your own computer you should do:
     ```
 
 ## Usage
+Start redis
+
+    In macos using ports, if you prefer to start a redis server manually, rather than using 'port load', then use this command:
+
+        redis-server /opt/local/etc/redis.conf
+
+    A startup item has been generated that will aid in starting redis with launchd. It is disabled by default. Execute the following command to start it, and to cause it to launch at startup:
+
+        sudo port load redis
+
+
+
+
 Slips can be used by passing flows in its stdin, like this:
 
     ```
