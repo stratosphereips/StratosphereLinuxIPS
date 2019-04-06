@@ -80,7 +80,7 @@ class Module(Module, multiprocessing.Process):
                                 data = {}
                                 data['geocountry'] = 'Unknown'
                             __database__.setInfoForIPs(ip, data)
-                            #self.print('Found country of IP {}: {}'.format(ip, countryname), 1, 0)
+                            self.print('Found country of IP {}: {}'.format(ip, data['geocountry']), 5, 0)
 
         except KeyboardInterrupt:
             if self.reader:
