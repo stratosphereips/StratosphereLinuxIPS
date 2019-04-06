@@ -81,40 +81,16 @@ class Module(Module, multiprocessing.Process):
             elif 'tcp' in proto and '5228' in dport and 'est' in state.lower():
                 activity = 'Google Playstore or Google Talk or Google Chrome Sync to {}'.format(daddr)
             #else:
-            #    activity = 'Not recongnized activity on flow {}'.format(flow)
+            #    activity = 'Not recognized activity on flow {}'.format(flow)
 
             if activity:
-                try:
-                    data = self.profiles_tw[key]
-                except KeyError:
-                    data = []
-                data.append(activity)
-                self.profiles_tw[key] = data
-
-            self.print('Profileid: {}, TWid: {}, Activity: {}'.format(profileid, twid, self.profiles_tw[key][-1]))
+                # Store the activity in the DB for this profileid and twid
+                __database__.add_timeline_line(profileid, twid, activity)
 
         except KeyboardInterrupt:
             return True
         except Exception as inst:
             self.print('Problem on process_flow()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
-
-    def show_profile(self, profileid):
-        """ Show the timeline of this profile """
-        try:
-            data = self.profiles_tw[profileid][-1]
-            #for i in data:
-            #self.print('Profileid: {}, TWid: {}, Activity: {}. Flow: {}'.format(profileid, twid, self.profiles_tw[key][-1], flow))
-            self.print('Profileid: {:45}, Activity: {}'.format(profileid, data))
-        except KeyError:
-            pass
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on show_profile()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -139,9 +115,6 @@ class Module(Module, multiprocessing.Process):
                     flow = json.loads(flow)
                     # Process the flow
                     self.process_flow(profileid, twid, flow)
-
-                    # Print one profile
-                    #self.show_profile('profile_2001:718:2:1611::1:0:90')
 
         except KeyboardInterrupt:
             return True
