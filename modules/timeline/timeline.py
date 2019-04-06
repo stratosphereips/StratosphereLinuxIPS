@@ -66,6 +66,7 @@ class Module(Module, multiprocessing.Process):
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
+            allbytes_human = 0.0
             if int(allbytes) < 1024:
                 # In bytes
                 allbytes_human = '{:.2f}{}'.format(float(allbytes),'b')
@@ -85,25 +86,25 @@ class Module(Module, multiprocessing.Process):
             key = profileid
 
             activity = ''
-            if 'udp' in proto and '53' in dport and 'est' in state.lower():
+            if 'udp' in proto and '53' in dport and state.lower() == 'established':
                 activity = 'DNS asked to {} {}/udp (Country: {})'.format(daddr, dport, daddr_country)
-            elif 'udp' in proto and '53' in dport and not 'est' in state.lower():
+            elif 'udp' in proto and '53' in dport and 'NotEst' in state.lower():
                 activity = 'Not Established DNS asked to {} {}/udp (Country: {})'.format(daddr, dport, daddr_country)
-            elif 'udp' in proto and '123' in dport and 'est' in state.lower():
+            elif 'udp' in proto and '123' in dport and state.lower() == 'established':
                 activity = 'NTP asked to {} {}/udp (Country: {})'.format(daddr, dport, daddr_country)
-            elif 'tcp' in proto and '80' in dport and 'est' in state.lower():
+            elif 'tcp' in proto and '80' in dport and state.lower() == 'established':
                 activity = 'HTTP asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'tcp' in proto and '80' in dport and 'est' not in state.lower():
+            elif 'tcp' in proto and '80' in dport and 'NotEst' in state.lower():
                 activity = 'Not Established HTTP asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'tcp' in proto and '443' in dport and 'est' in state.lower():
+            elif 'tcp' in proto and '443' in dport and state.lower() == 'established':
                 activity = 'HTTPS asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'tcp' in proto and '443' in dport and 'est' not in state.lower():
+            elif 'tcp' in proto and '443' in dport and 'NotEst' in state.lower():
                 activity = 'Not Established HTTPS asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'udp' in proto and '443' in dport and 'est' in state.lower():
+            elif 'udp' in proto and '443' in dport and state.lower() == 'established':
                 activity = 'QUICK asked to {} {}/udp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'udp' in proto and '443' in dport and 'est' not in state.lower():
+            elif 'udp' in proto and '443' in dport and 'NotEst' in state.lower():
                 activity = 'Not Established QUICK asked to {} {}/udp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'tcp' in proto and '5228' in dport and 'est' in state.lower():
+            elif 'tcp' in proto and '5228' in dport and state.lower() == 'established':
                 activity = 'Google Playstore or Google Talk or Google Chrome Sync to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
             else:
                 activity = 'Not recognized activity on flow {}'.format(flow)
