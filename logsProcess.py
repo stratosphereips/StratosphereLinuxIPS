@@ -161,6 +161,7 @@ class LogsProcess(multiprocessing.Process):
             amount_of_modified = len(TWforProfile)
             self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {}. Modified TWs: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
             for profileTW in TWforProfile:
+
                 # Get the profileid and twid
                 profileid = profileTW.split(self.fieldseparator)[0] + self.fieldseparator + profileTW.split(self.fieldseparator)[1]
                 twid = profileTW.split(self.fieldseparator)[2]
@@ -169,6 +170,7 @@ class LogsProcess(multiprocessing.Process):
                 twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
                 self.outputqueue.put('02|logs|\t[Logs] Storing Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime))
                 #self.outputqueue.put('30|logs|\t[Logs] Profile: {} has {} timewindows'.format(profileid, twLen))
+
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
                 # Add more data into the file that is only for the global profile of this IP, without any time window
@@ -301,6 +303,17 @@ class LogsProcess(multiprocessing.Process):
 
                 # Mark it as not modified anymore
                 __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
+
+
+                ###########
+                # Timeline
+                # Store the timeline in the DB in a file for each profile and tw
+                data = __database__.get_timeline_all_lines(profileid, twid)
+                if data:
+                    self.addDataToFile(profilefolder + '/' + 'timeline.txt', 'TimeLine of this IP on this TimeWindow\n' , file_mode='w+')
+                    for line in data:
+                        self.addDataToFile(profilefolder + '/' + 'timeline.txt', line , file_mode='a+')
+                        #self.print('TIMELINE Profileid: {:45}, twid: {}. Activity: {}'.format(profileid, twid, data))
 
 
             # Create the file of the blocked profiles and TW
