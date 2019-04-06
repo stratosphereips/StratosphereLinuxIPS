@@ -989,4 +989,25 @@ class Database(object):
         to_send = json.dumps(to_send)
         self.publish('new_flow', to_send)
 
+    def add_timeline_line(self, profileid, twid, data):
+        """ Add a line to the time line of this profileid and twid """
+        # There is a bug in redis that some keys can not be saved. Concatenating something at the end solves it
+        stupid_bit = '.'
+        key = str(profileid + self.separator + twid + stupid_bit) 
+        self.r.rpush(key, str(data))
+
+    def get_timeline_last_line(self, profileid, twid):
+        """ Add a line to the time line of this profileid and twid """
+        stupid_bit = '.'
+        key = str(profileid + self.separator + twid + stupid_bit) 
+        data = self.r.lrange(key, -1, -1)
+        return data
+
+    def get_timeline_all_lines(self, profileid, twid):
+        """ Add a line to the time line of this profileid and twid """
+        stupid_bit = '.'
+        key = str(profileid + self.separator + twid + stupid_bit) 
+        data = self.r.lrange(key, 0, -1)
+        return data
+
 __database__ = Database()
