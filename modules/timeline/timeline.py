@@ -80,8 +80,8 @@ class Module(Module, multiprocessing.Process):
                 activity = 'HTTPS asked to {}'.format(daddr)
             elif 'tcp' in proto and '5228' in dport and 'est' in state.lower():
                 activity = 'Google Playstore or Google Talk or Google Chrome Sync to {}'.format(daddr)
-            #else:
-            #    activity = 'Not recognized activity on flow {}'.format(flow)
+            else:
+                activity = 'Not recognized activity on flow {}'.format(flow)
 
             if activity:
                 # Store the activity in the DB for this profileid and twid
