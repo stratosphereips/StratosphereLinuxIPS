@@ -72,7 +72,7 @@ class Module(Module, multiprocessing.Process):
             activity = ''
             if 'udp' in proto and '53' in dport and 'est' in state.lower():
                 activity = 'DNS asked to {}'.format(daddr)
-            eif 'udp' in proto and '53' in dport and not 'est' in state.lower():
+            elif 'udp' in proto and '53' in dport and not 'est' in state.lower():
                 activity = 'Not Established DNS asked to {}'.format(daddr)
             elif 'udp' in proto and '123' in dport and 'est' in state.lower():
                 activity = 'NTP asked to {}'.format(daddr)
