@@ -966,7 +966,9 @@ class Database(object):
         data['daddr'] = daddr
         data['dport'] = dport
         data['proto'] = proto
-        data['state'] = state
+        # Store the interpreted state, not the raw one
+        summaryState = __database__.getFinalStateFromFlags(state, pkts)
+        data['state'] = summaryState 
         data['pkts'] = pkts
         data['allbytes'] = allbytes
         data['spkts'] = spkts
@@ -979,6 +981,12 @@ class Database(object):
         flow = self.get_flow(profileid, twid, stime)
         # Get the dictionary and convert to json string
         flow = json.dumps(flow)
-        self.publish('new_flow', flow)
+        # Prepare the data to publish.
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['flow'] = flow
+        to_send = json.dumps(to_send)
+        self.publish('new_flow', to_send)
 
 __database__ = Database()
