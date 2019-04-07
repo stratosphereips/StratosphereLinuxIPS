@@ -27,6 +27,25 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_flow')
         # To store the timelines of each profileid_twid
         self.profiles_tw = {}
+        # Load the list of common known ports
+        self.load_ports()
+
+    def load_ports(self):
+        """ Load the known ports from a file """
+        try:
+            f = open('services.csv')
+            for line in f:
+                name = line.split(',')[0]
+                port = line.split(',')[1]
+                proto = line.split(',')[2]
+                descr = line.split(',')[3]
+                __database__.set_port_info(port+'/'+proto, name)
+        except Exception as inst:
+            self.print('Problem on load_ports()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -63,6 +82,15 @@ class Module(Module, multiprocessing.Process):
                 daddr_country = 'Unknown'
             dport = flow_dict['dport']
             proto = flow_dict['proto']
+            if 'icmp' in proto:
+                if '0x0008' in sport:
+                    dport_name = 'PING echo'
+                else:
+                    dport_name = 'ICMP'
+            elif 'igmp' in proto:
+                dport_name = 'IGMP'
+            else:
+                dport_name = __database__.get_port_info(dport+'/'+proto)
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
@@ -86,29 +114,12 @@ class Module(Module, multiprocessing.Process):
             key = profileid
 
             activity = ''
-            # We use \n at the end because the lines are saved to file using writelines()
-            if 'udp' in proto and '53' in dport and state.lower() == 'established':
-                activity = 'DNS asked to {} {}/udp (Country: {})\n'.format(daddr, dport, daddr_country)
-            elif 'udp' in proto and '53' in dport and 'NotEst' in state.lower():
-                activity = 'Not Established DNS asked to {} {}/udp (Country: {})\n'.format(daddr, dport, daddr_country)
-            elif 'udp' in proto and '123' in dport and state.lower() == 'established':
-                activity = 'NTP asked to {} {}/udp (Country: {})\n'.format(daddr, dport, daddr_country)
-            elif 'tcp' in proto and '80' in dport and state.lower() == 'established':
-                activity = 'HTTP asked to {} {}/tcp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'tcp' in proto and '80' in dport and 'notest' in state.lower():
-                activity = 'Not Established HTTP asked to {} {}/tcp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'tcp' in proto and '443' in dport and state.lower() == 'established':
-                activity = 'HTTPS asked to {} {}/tcp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'tcp' in proto and '443' in dport and 'notest' in state.lower():
-                activity = 'Not Established HTTPS asked to {} {}/tcp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'udp' in proto and '443' in dport and state.lower() == 'established':
-                activity = 'QUICK asked to {} {}/udp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'udp' in proto and '443' in dport and 'notest' in state.lower():
-                activity = 'Not Established QUICK asked to {} {}/udp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'tcp' in proto and '5228' in dport and state.lower() == 'established':
-                activity = 'Google Playstore or Google Talk or Google Chrome Sync to {} {}/tcp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
+            if dport_name and state.lower() == 'established':
+                activity = '- {} asked to {} {}/udp (Country: {})\n'.format(dport_name, daddr, dport, daddr_country)
+            elif dport_name and 'notest' in state.lower():
+                activity = '- Not Established {} asked to {} {}/udp (Country: {})\n'.format(dport_name, daddr, dport, daddr_country)
             else:
-                activity = 'Not recognized activity on flow {}'.format(flow)
+                activity = 'Not recognized activity on flow {}\n'.format(flow)
 
             if activity:
                 # Store the activity in the DB for this profileid and twid
