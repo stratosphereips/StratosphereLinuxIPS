@@ -1004,7 +1004,6 @@ class Database(object):
     def get_timeline_all_lines(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline') 
-        self.print('Getting timeline data for key {}'.format(key))
         data = self.r.lrange(key, 0, -1)
         return data
 
