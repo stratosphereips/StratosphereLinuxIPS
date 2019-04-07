@@ -469,6 +469,14 @@ class Database(object):
                     FPA_FPA
                     """
                     return 'Established'
+                elif 'ECO' in pre:
+                    return 'ICMP Echo'
+                elif 'ECR' in pre:
+                    return 'ICMP Reply'
+                elif 'URH' in pre:
+                    return 'ICMP Host Unreachable'
+                elif 'URP' in pre:
+                    return 'ICMP Port Unreachable'
                 else:
                     """
                     Examples:
@@ -1006,5 +1014,16 @@ class Database(object):
         key = str(profileid + self.separator + twid + self.separator + 'timeline') 
         data = self.r.lrange(key, 0, -1)
         return data
+
+    def set_port_info(self, portproto, name):
+        """ Save in the DB a port with its description """
+        self.r.hset('portinfo', portproto, name)
+
+    def get_port_info(self, portproto):
+        """ Retrive the name of a port """
+        return self.r.hget('portinfo', portproto)
+
+
+
 
 __database__ = Database()
