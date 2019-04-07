@@ -64,8 +64,7 @@ class Database(object):
                 # The IP of the profile should also be added as a new IP we know about.
                 ip = profileid.split(self.separator)[1]
                 # If the ip is new add it to the list of ips
-                if not self.getIP(ip):
-                    self.setNewIP(ip)
+                self.setNewIP(ip)
 
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put('00|database|Error in addProfile in database.py')
@@ -903,13 +902,14 @@ class Database(object):
 
     def setNewIP(self, ip):
         """ Store this new ip in the IPs hash """
-        self.r.hset('IPs', ip, '{}')
-        # Publish in the new_ip channel
-        self.publish('new_ip', ip)
+        if not self.getIP(ip):
+            self.r.hset('IPsInfo', ip, '{}')
+            # Publish in the new_ip channel
+            self.publish('new_ip', ip)
 
     def getIP(self, ip):
         """ Check if this ip is the hash of the profiles! """
-        data = self.r.hget('IPs', ip)
+        data = self.r.hget('IPsInfo', ip)
         if data:
             return True
         else:
