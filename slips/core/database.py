@@ -41,7 +41,7 @@ class Database(object):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def setOutputQueue(self, outputqueue):
         """ Set the output queue"""
@@ -106,9 +106,10 @@ class Database(object):
     def getTWsfromProfile(self, profileid):
         """
         Receives a profile id and returns the list of all the TW in that profile
-
+        Returns a list with data or an empty list
         """
-        return self.r.zrange('tws' + profileid, 0, -1, withscores=True)
+        data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
+        return data
 
     def getamountTWsfromProfile(self, profileid):
         """
@@ -625,9 +626,9 @@ class Database(object):
         try:
             key = str(feature) + 'ClientTCPNotEstablished'
             data = self.r.hget( profileid + self.separator + twid, key)
-            self.print('Getting info about {} for Profile {} TW {}: {}'.format(key, profileid, twid, str(data)), 5, 0)
             value = {}
             if data:
+                self.print('Getting info about {} for Profile {} TW {}: {}'.format(key, profileid, twid, str(data)), 5, 0)
                 # Convet the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
@@ -991,22 +992,19 @@ class Database(object):
 
     def add_timeline_line(self, profileid, twid, data):
         """ Add a line to the time line of this profileid and twid """
-        # There is a bug in redis that some keys can not be saved. Concatenating something at the end solves it
-        stupid_bit = '.'
-        key = str(profileid + self.separator + twid + stupid_bit) 
+        key = str(profileid + self.separator + twid + self.separator + 'timeline') 
         self.r.rpush(key, str(data))
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
-        stupid_bit = '.'
-        key = str(profileid + self.separator + twid + stupid_bit) 
+        key = str(profileid + self.separator + twid + self.separator + 'timeline') 
         data = self.r.lrange(key, -1, -1)
         return data
 
     def get_timeline_all_lines(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
-        stupid_bit = '.'
-        key = str(profileid + self.separator + twid + stupid_bit) 
+        key = str(profileid + self.separator + twid + self.separator + 'timeline') 
+        self.print('Getting timeline data for key {}'.format(key))
         data = self.r.lrange(key, 0, -1)
         return data
 
