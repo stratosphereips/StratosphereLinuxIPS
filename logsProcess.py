@@ -65,7 +65,7 @@ class LogsProcess(multiprocessing.Process):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def run(self):
         try:
@@ -137,23 +137,38 @@ class LogsProcess(multiprocessing.Process):
         Do not close the file
         In data_mode = 'text', we add a \n at the end
         In data_mode = 'raw', we do not add a \n at the end
+        In data_type = 'txt' we do not do anything now
+        In data_type = 'json' we do not do anything now, but we may interpret the json for better printing
         """
-        if data_type == 'json':
-            # Implement some fancy print from json data
-            data = data
-        if data_mode == 'text':
-            data = data + '\n'
         try:
-            filename.write(data)
-            return filename
-        except (NameError, AttributeError) as e:
-            # The file was not opened
-            fileobj = open(filename, file_mode)
-            fileobj.write(data)
-            # For some reason the files are closed and flushed correclty.
-            return fileobj
+            if data_mode == 'text':
+                data = data + '\n'
+            try:
+                if data_type == 'lines':
+                    # We received a bunch of lines all together. Just write them
+                    filename.writelines(data)
+                    return filename
+                else:
+                    filename.write(data)
+                    return filename
+            except (NameError, AttributeError) as e:
+                # The file was not opened
+                fileobj = open(filename, file_mode)
+                if data_type == 'lines':
+                    # We received a bunch of lines all together. Just write them
+                    fileobj.writelines(data)
+                    return fileobj
+                else:
+                    fileobj.write(data)
+                # For some reason the files are closed and flushed correclty.
+                return fileobj
         except KeyboardInterrupt:
             return True
+        except Exception as inst:
+            self.print('Error in addDataToFile()')
+            self.print(type(inst))
+            self.print(inst)
+            sys.exit(1)
 
     def process_global_data(self):
         """ 
@@ -306,14 +321,19 @@ class LogsProcess(multiprocessing.Process):
 
 
                 ###########
-                # Timeline
-                # Store the timeline in the DB in a file for each profile and tw
-                data = __database__.get_timeline_all_lines(profileid, twid)
-                if data:
-                    self.addDataToFile(profilefolder + '/' + 'timeline.txt', 'TimeLine of this IP on this TimeWindow\n' , file_mode='w+')
-                    for line in data:
-                        self.addDataToFile(profilefolder + '/' + 'timeline.txt', line , file_mode='a+')
-                        #self.print('TIMELINE Profileid: {:45}, twid: {}. Activity: {}'.format(profileid, twid, data))
+                # Complete Timeline
+                # Store the complete timeline in the DB in a file for each profile
+                # The complete timeline file is unique for all timewindows. Much easier to read this way.
+                # Get all the TW for this profile
+                tws = __database__.getTWsfromProfile(profileid)
+                self.addDataToFile(profilefolder + '/' + 'Complete-timeline.txt', 'Complete TimeLine of this IP\n' , file_mode='w+')
+                for twid_tuple in tws:
+                    (twid, starttime) = twid_tuple
+                    data = __database__.get_timeline_all_lines(profileid, twid)
+                    if data:
+                        #for line in data:
+                        #self.print('TIMELINE Profileid: {:45}, twid: {}. Line: {}'.format(profileid, twid, line))
+                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline.txt', data , file_mode='a+', data_mode='raw', data_type='lines')
 
 
             # Create the file of the blocked profiles and TW
