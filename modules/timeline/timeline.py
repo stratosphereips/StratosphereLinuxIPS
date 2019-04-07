@@ -80,17 +80,13 @@ class Module(Module, multiprocessing.Process):
                 daddr_country = daddr_data['geocountry']
             except KeyError:
                 daddr_country = 'Unknown'
+            try:
+                daddr_asn = daddr_data['asn']
+            except KeyError:
+                daddr_asn = 'Unknown'
             dport = flow_dict['dport']
             proto = flow_dict['proto']
-            if 'icmp' in proto:
-                if '0x0008' in sport:
-                    dport_name = 'PING echo'
-                else:
-                    dport_name = 'ICMP'
-            elif 'igmp' in proto:
-                dport_name = 'IGMP'
-            else:
-                dport_name = __database__.get_port_info(dport+'/'+proto)
+            dport_name = __database__.get_port_info(dport+'/'+proto)
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
@@ -113,13 +109,24 @@ class Module(Module, multiprocessing.Process):
 
             key = profileid
 
+            # Record Activity
             activity = ''
-            if dport_name and state.lower() == 'established':
-                activity = '- {} asked to {} {}/udp (Country: {})\n'.format(dport_name, daddr, dport, daddr_country)
-            elif dport_name and 'notest' in state.lower():
-                activity = '- Not Established {} asked to {} {}/udp (Country: {})\n'.format(dport_name, daddr, dport, daddr_country)
-            else:
-                activity = 'Not recognized activity on flow {}\n'.format(flow)
+            if 'tcp' in proto or 'udp' in proto:
+                if dport_name and state.lower() == 'established':
+                    activity = '- {} asked to {} {}/udp, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, daddr_country, daddr_asn)
+                elif dport_name and 'notest' in state.lower():
+                    activity = '- NOT Established {} asked to {} {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, daddr_country, daddr_asn)
+                else:
+                    activity = '[!!] Not recognized activity on flow {}\n'.format(flow)
+            elif 'icmp' in proto:
+                if '0x0008' in sport:
+                    dport_name = 'PING echo'
+                else:
+                    dport_name = 'ICMP'
+                activity = '- {} asked to {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, daddr_country, daddr_asn)
+            elif 'igmp' in proto:
+                dport_name = 'IGMP'
+                activity = '- {} asked to {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, daddr_country, daddr_asn)
 
             if activity:
                 # Store the activity in the DB for this profileid and twid
