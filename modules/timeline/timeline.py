@@ -86,26 +86,27 @@ class Module(Module, multiprocessing.Process):
             key = profileid
 
             activity = ''
+            # We use \n at the end because the lines are saved to file using writelines()
             if 'udp' in proto and '53' in dport and state.lower() == 'established':
-                activity = 'DNS asked to {} {}/udp (Country: {})'.format(daddr, dport, daddr_country)
+                activity = 'DNS asked to {} {}/udp (Country: {})\n'.format(daddr, dport, daddr_country)
             elif 'udp' in proto and '53' in dport and 'NotEst' in state.lower():
-                activity = 'Not Established DNS asked to {} {}/udp (Country: {})'.format(daddr, dport, daddr_country)
+                activity = 'Not Established DNS asked to {} {}/udp (Country: {})\n'.format(daddr, dport, daddr_country)
             elif 'udp' in proto and '123' in dport and state.lower() == 'established':
-                activity = 'NTP asked to {} {}/udp (Country: {})'.format(daddr, dport, daddr_country)
+                activity = 'NTP asked to {} {}/udp (Country: {})\n'.format(daddr, dport, daddr_country)
             elif 'tcp' in proto and '80' in dport and state.lower() == 'established':
-                activity = 'HTTP asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'tcp' in proto and '80' in dport and 'NotEst' in state.lower():
-                activity = 'Not Established HTTP asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
+                activity = 'HTTP asked to {} {}/tcp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
+            elif 'tcp' in proto and '80' in dport and 'notest' in state.lower():
+                activity = 'Not Established HTTP asked to {} {}/tcp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
             elif 'tcp' in proto and '443' in dport and state.lower() == 'established':
-                activity = 'HTTPS asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'tcp' in proto and '443' in dport and 'NotEst' in state.lower():
-                activity = 'Not Established HTTPS asked to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
+                activity = 'HTTPS asked to {} {}/tcp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
+            elif 'tcp' in proto and '443' in dport and 'notest' in state.lower():
+                activity = 'Not Established HTTPS asked to {} {}/tcp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
             elif 'udp' in proto and '443' in dport and state.lower() == 'established':
-                activity = 'QUICK asked to {} {}/udp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
-            elif 'udp' in proto and '443' in dport and 'NotEst' in state.lower():
-                activity = 'Not Established QUICK asked to {} {}/udp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
+                activity = 'QUICK asked to {} {}/udp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
+            elif 'udp' in proto and '443' in dport and 'notest' in state.lower():
+                activity = 'Not Established QUICK asked to {} {}/udp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
             elif 'tcp' in proto and '5228' in dport and state.lower() == 'established':
-                activity = 'Google Playstore or Google Talk or Google Chrome Sync to {} {}/tcp. Transfered: {} (Country: {})'.format(daddr, dport, allbytes_human, daddr_country)
+                activity = 'Google Playstore or Google Talk or Google Chrome Sync to {} {}/tcp. Transfered: {} (Country: {})\n'.format(daddr, dport, allbytes_human, daddr_country)
             else:
                 activity = 'Not recognized activity on flow {}'.format(flow)
 
