@@ -63,7 +63,9 @@ class Database(object):
                 self.r.hset(profileid, 'duration', duration)
                 # The IP of the profile should also be added as a new IP we know about.
                 ip = profileid.split(self.separator)[1]
-                self.setNewIP(ip)
+                # If the ip is new add it to the list of ips
+                if not self.getIP(ip):
+                    self.setNewIP(ip)
 
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put('00|database|Error in addProfile in database.py')
@@ -880,12 +882,12 @@ class Database(object):
         data = self.r.smembers('BlockedProfTW')
         return data
 
-    def getIPData(self, IP):
+    def getIPData(self, ip):
         """ 
         Return information about this IP from the IPs has 
         Returns a dictionary
         """
-        data = self.r.hget('IPs', IP)
+        data = self.r.hget('IPsInfo', ip)
         if data:
             data = json.loads(data)
         else:
@@ -895,15 +897,23 @@ class Database(object):
 
     def getallIPs(self):
         """ Return list of all IPs in the DB """
-        data = self.r.hgetall('IPs')
+        data = self.r.hgetall('IPsInfo')
+        #data = json.loads(data)
         return data
 
     def setNewIP(self, ip):
         """ Store this new ip in the IPs hash """
-        #self.print('New IP stored: {}'.format(ip),1,0)
         self.r.hset('IPs', ip, '{}')
         # Publish in the new_ip channel
         self.publish('new_ip', ip)
+
+    def getIP(self, ip):
+        """ Check if this ip is the hash of the profiles! """
+        data = self.r.hget('IPs', ip)
+        if data:
+            return True
+        else:
+            return False
 
     def setInfoForIPs(self, ip, ipdata):
         """ 
@@ -914,13 +924,19 @@ class Database(object):
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
-        if not data:
-            data = {}
-        # Append the new data
-        data.update(ipdata)
-        data = json.dumps(data)
-        #self.print('Storing info for IP {}: {}'.format(ip, ipdata),1,0)
-        self.r.hset('IPs', ip, data)
+
+        key = next(iter(ipdata))
+        to_store = ipdata[key]
+
+        # If the key is already stored, do not modify it
+        try:
+            value = data[key]
+        except KeyError:
+            # Append the new data
+            data[key] = to_store
+            #data.update(ipdata)
+            data = json.dumps(data)
+            self.r.hset('IPsInfo', ip, data)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
