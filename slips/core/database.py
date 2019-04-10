@@ -502,6 +502,10 @@ class Database(object):
                 elif 'CON' in pre:
                     # UDP
                     return 'Established'
+                elif 'INT' in pre:
+                    # UDP trying to connect, NOT preciselly not established but also NOT 'Established'. So we considered not established because there
+                    # is no confirmation of what happened.
+                    return 'NotEstablished'
                 elif 'EST' in pre:
                     # TCP
                     return 'Established'
@@ -852,6 +856,8 @@ class Database(object):
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence))
         # Tell everyone an evidence was added
         self.publish('evidence_added', profileid + ':' + twid)
+        # Add this evidence to the timeline
+        self.add_timeline_line(profileid, twid, current_evidence)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
