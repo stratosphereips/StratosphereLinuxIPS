@@ -326,7 +326,8 @@ class LogsProcess(multiprocessing.Process):
                 # The complete timeline file is unique for all timewindows. Much easier to read this way.
                 # Get all the TW for this profile
                 tws = __database__.getTWsfromProfile(profileid)
-                self.addDataToFile(profilefolder + '/' + 'Complete-timeline.txt', 'Complete TimeLine of this IP\n' , file_mode='w+')
+                ip = profileid.split('_')[1]
+                self.addDataToFile(profilefolder + '/' + 'Complete-timeline.txt', 'Complete TimeLine of IP {}\n'.format(ip) , file_mode='w+')
                 for twid_tuple in tws:
                     (twid, starttime) = twid_tuple
                     data = __database__.get_timeline_all_lines(profileid, twid)
