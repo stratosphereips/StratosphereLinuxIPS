@@ -31,9 +31,11 @@ class Module(Module, multiprocessing.Process):
         self.load_ports()
 
     def load_ports(self):
-        """ Load the known ports from a file """
+        """ 
+        Funciton to read our special file called 'services.csv' and load the known ports from it into the database
+        """
         try:
-            f = open('services.csv')
+            f = open('modules/timeline/services.csv')
             for line in f:
                 name = line.split(',')[0]
                 port = line.split(',')[1]
@@ -86,7 +88,11 @@ class Module(Module, multiprocessing.Process):
                 daddr_asn = 'Unknown'
             dport = flow_dict['dport']
             proto = flow_dict['proto']
+            # Here is where we see if we know this dport
+            # Check the database.py code
             dport_name = __database__.get_port_info(dport+'/'+proto)
+            if dport == 80 and proto == 'udp':
+                print(dport_name)
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
@@ -113,20 +119,36 @@ class Module(Module, multiprocessing.Process):
             activity = ''
             if 'tcp' in proto or 'udp' in proto:
                 if dport_name and state.lower() == 'established':
-                    activity = '- {} asked to {} {}/udp, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, daddr_country, daddr_asn)
+                    activity = '- {} asked to {} {}/{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, allbytes_human, daddr_country, daddr_asn)
+                # In here we try to capture the situation when only 1 udp packet is sent. Looks like not established, but is actually maybe ok
+                elif dport_name and 'notest' in state.lower() and proto == 'udp' and allbytes == sbytes:
+                    activity = '- Not answered {} asked to {} {}/{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, allbytes_human, daddr_country, daddr_asn)
                 elif dport_name and 'notest' in state.lower():
-                    activity = '- NOT Established {} asked to {} {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, daddr_country, daddr_asn)
+                    activity = '- NOT Established {} asked to {} {}/{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, allbytes_human, daddr_country, daddr_asn)
                 else:
                     activity = '[!!] Not recognized activity on flow {}\n'.format(flow)
             elif 'icmp' in proto:
                 if '0x0008' in sport:
                     dport_name = 'PING echo'
+                    activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                elif '0x0103' in sport:
+                    dport_name = 'ICMP Host Unreachable'
+                    activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                elif '0x0303' in sport:
+                    dport_name = 'ICMP Port Unreachable'
+                    activity = '- {} sent to {}, unreachable port is {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_country, daddr_asn)
+                elif '0x000b' in sport:
+                    dport_name = 'ICMP Time Excedded in Transit'
+                    activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                elif '0x0003' in sport:
+                    dport_name = 'ICMP Destination Net Unreachable'
+                    activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
                 else:
-                    dport_name = 'ICMP'
-                activity = '- {} asked to {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, daddr_country, daddr_asn)
+                    dport_name = 'ICMP Unknown type'
+                    activity = '- {} sent to {}, Type: 0x{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, sport, allbytes_human, daddr_country, daddr_asn)
             elif 'igmp' in proto:
                 dport_name = 'IGMP'
-                activity = '- {} asked to {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, daddr_country, daddr_asn)
+                activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
 
             if activity:
                 # Store the activity in the DB for this profileid and twid
