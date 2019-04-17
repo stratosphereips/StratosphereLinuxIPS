@@ -327,14 +327,14 @@ class LogsProcess(multiprocessing.Process):
                 # Get all the TW for this profile
                 tws = __database__.getTWsfromProfile(profileid)
                 ip = profileid.split('_')[1]
-                self.addDataToFile(profilefolder + '/' + 'Complete-timeline.txt', 'Complete TimeLine of IP {}\n'.format(ip) , file_mode='w+')
+                self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', 'Complete TimeLine of IP {}\n'.format(ip) , file_mode='w+')
                 for twid_tuple in tws:
                     (twid, starttime) = twid_tuple
                     data = __database__.get_timeline_all_lines(profileid, twid)
                     if data:
                         #for line in data:
                         #self.print('TIMELINE Profileid: {:45}, twid: {}. Line: {}'.format(profileid, twid, line))
-                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline.txt', data , file_mode='a+', data_mode='raw', data_type='lines')
+                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data , file_mode='a+', data_mode='raw', data_type='lines')
 
 
             # Create the file of the blocked profiles and TW
