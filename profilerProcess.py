@@ -50,7 +50,7 @@ class ProfilerProcess(multiprocessing.Process):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
