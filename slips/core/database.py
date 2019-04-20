@@ -1045,6 +1045,13 @@ class Database(object):
         """ Retrive the name of a port """
         return self.r.hget('portinfo', portproto)
 
+    def add_zeek_file(self, filename):
+        self.r.rpush('zeekfiles', filename)
+
+    def get_all_zeek_file(self):
+        data = self.r.lrange('zeekfiles', 0, -1)
+        return data
+
 
 
 
