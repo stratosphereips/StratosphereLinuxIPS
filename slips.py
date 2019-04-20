@@ -45,7 +45,9 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
     parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
     parser.add_argument('-W', '--whitelist', help="File with the IP addresses to whitelist. One per line.", action='store', required=False)
-    parser.add_argument('-r', '--filepath', help='Path to the binetflow file to be read.', required=False)
+    parser.add_argument('-f', '--filepath', help='Path to the flow input file to read. It can be a Argus binetflow flow, a Zeek conn.log file, or a Zeek folder with all the log files.', required=False)
+    parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
+    parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the info and detections.', required=False, default=False, action='store_true')
     args = parser.parse_args()
@@ -139,9 +141,21 @@ if __name__ == '__main__':
     profilerProcessThread.start()
     outputProcessQueue.put('30|main|Started profiler thread')
 
+
+    # Check the type of input
+    if args.interface:
+        input_information = args.interface
+        input_type = 'interface'
+    elif args.pcapfile:
+        input_information = args.pcapfile
+        input_type = 'pcap'
+    elif args.filepath:
+        input_information = args.filepath
+        input_type = 'file'
+
     # Input process
     # Create the input process and start it
-    inputProcess = InputProcess(None, outputProcessQueue, profilerProcessQueue, args.filepath, config)
+    inputProcess = InputProcess(None, outputProcessQueue, profilerProcessQueue, input_type, input_information, config)
     inputProcess.start()
     outputProcessQueue.put('30|main|Started input thread')
 
