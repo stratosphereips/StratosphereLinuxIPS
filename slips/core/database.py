@@ -1046,12 +1046,17 @@ class Database(object):
         return self.r.hget('portinfo', portproto)
 
     def add_zeek_file(self, filename):
-        self.r.rpush('zeekfiles', filename)
+        """ Add an entry to the list of zeek files """
+        self.r.sadd('zeekfiles', filename)
 
     def get_all_zeek_file(self):
-        data = self.r.lrange('zeekfiles', 0, -1)
+        """ Return all entries from the list of zeek files """
+        data = self.r.smembers('zeekfiles')
         return data
 
+    def del_zeek_file(self, filename):
+        """ Delete an entry from the list of zeek files """
+        self.r.srem('zeekfiles', filename)
 
 
 
