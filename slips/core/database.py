@@ -176,7 +176,7 @@ class Database(object):
         """
         # [-1] so we bring the last TW that matched this time.
         try:
-            data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)[-1]
+            data = self.r.zrangebyscore('tws' + profileid, float('-inf'), float(time), withscores=True, start=0, num=-1)[-1]
         except IndexError:
             # We dont have any last tw?
             data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)
