@@ -50,6 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the info and detections.', required=False, default=False, action='store_true')
+    parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
@@ -155,7 +156,7 @@ if __name__ == '__main__':
 
     # Input process
     # Create the input process and start it
-    inputProcess = InputProcess(None, outputProcessQueue, profilerProcessQueue, input_type, input_information, config)
+    inputProcess = InputProcess(None, outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter)
     inputProcess.start()
     outputProcessQueue.put('30|main|Started input thread')
 
