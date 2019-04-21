@@ -12,7 +12,7 @@ import json
 # Input Process
 class InputProcess(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, inputqueue, outputqueue, profilerqueue, input_type, input_information, config):
+    def __init__(self, inputqueue, outputqueue, profilerqueue, input_type, input_information, config, packet_filter):
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -22,6 +22,21 @@ class InputProcess(multiprocessing.Process):
         self.input_information = input_information
         self.zeek_folder = './zeek_files'
         self.name = 'input'
+        # Read the configuration
+        self.read_configuration()
+        # If we were given something from command line, has preference over the configuration file
+        if packet_filter:
+            self.packet_filter = "'" + packet_filter + "'"
+
+
+    def read_configuration(self):
+        """ Read the configuration file for what we need """
+        # Get the pcap filter
+        try:
+            self.packet_filter = self.config.get('parameters', 'pcapfilter')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.packet_filter = 'ip or not ip'
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -89,7 +104,10 @@ class InputProcess(multiprocessing.Process):
                 command = "rm " + self.zeek_folder + "/*.log"
                 os.system(command)
                 # Run zeek on the pcap. The redef is to hav json files
-                command = "cd " + self.zeek_folder + "; bro -C -r " + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' 2>&1 > /dev/null &"
+                # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
+                command = "cd " + self.zeek_folder + "; bro -C -r " + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                self.print(command)
+                
                 os.system(command)
                 # Give Zeek some time to generate at least 1 file.
                 time.sleep(3)
