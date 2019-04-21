@@ -56,7 +56,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         continue
 
                 # Start of the port scan detection
-                self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 5, 0)
+                self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 6, 0)
                 # For port scan detection, we will measure different things:
                 # 1. Vertical port scan:
                 # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
@@ -103,6 +103,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     dstips = data[dport]['dstips']
                     amount_of_dips = len(dstips)
                     # If we contacted more than 3 dst IPs on this port with not established connections.. we have evidence
+                    self.print('Horizontal Portscan check. Amount of dips: {}. Threshold=3'.format(amount_of_dips), 3, 0)
                     if amount_of_dips > 3:
                         # Type of evidence
                         type_evidence = 'PortScanType2'
@@ -135,6 +136,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # dstports is a dict
                     dstports = data[dstip]['dstports']
                     amount_of_dports = len(dstports)
+                    #self.print('Vertical Portscan check. Amount of dports: {}. Threshold=3'.format(amount_of_dports), 3, 0)
                     # If we contacted more than 3 dst ports on this ip with not established connections.. we have evidence
                     if amount_of_dports > 3:
                         # Type of evidence
