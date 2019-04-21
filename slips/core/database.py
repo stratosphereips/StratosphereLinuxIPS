@@ -1076,6 +1076,4 @@ class Database(object):
         """ Delete an entry from the list of zeek files """
         self.r.srem('zeekfiles', filename)
 
-
-
 __database__ = Database()
