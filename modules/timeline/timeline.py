@@ -41,7 +41,7 @@ class Module(Module, multiprocessing.Process):
                 port = line.split(',')[1]
                 proto = line.split(',')[2]
                 descr = line.split(',')[3]
-                __database__.set_port_info(port+'/'+proto, name)
+                __database__.set_port_info(str(port)+'/'+proto, name)
         except Exception as inst:
             self.print('Problem on load_ports()', 0, 1)
             self.print(str(type(inst)), 0, 1)
@@ -90,7 +90,7 @@ class Module(Module, multiprocessing.Process):
             proto = flow_dict['proto']
             # Here is where we see if we know this dport
             # Check the database.py code
-            dport_name = __database__.get_port_info(dport+'/'+proto)
+            dport_name = __database__.get_port_info(str(dport)+'/'+proto)
             if dport == 80 and proto == 'udp':
                 print(dport_name)
             state = flow_dict['state']
@@ -128,24 +128,46 @@ class Module(Module, multiprocessing.Process):
                 else:
                     activity = '[!!] Not recognized activity on flow {}\n'.format(flow)
             elif 'icmp' in proto:
-                if '0x0008' in sport:
-                    dport_name = 'PING echo'
-                    activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
-                elif '0x0103' in sport:
-                    dport_name = 'ICMP Host Unreachable'
-                    activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
-                elif '0x0303' in sport:
-                    dport_name = 'ICMP Port Unreachable'
-                    activity = '- {} sent to {}, unreachable port is {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_country, daddr_asn)
-                elif '0x000b' in sport:
-                    dport_name = 'ICMP Time Excedded in Transit'
-                    activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
-                elif '0x0003' in sport:
-                    dport_name = 'ICMP Destination Net Unreachable'
-                    activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
-                else:
-                    dport_name = 'ICMP Unknown type'
-                    activity = '- {} sent to {}, Type: 0x{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, sport, allbytes_human, daddr_country, daddr_asn)
+                if type(sport) == int:
+                    # zeek puts the number
+                    if sport == 8:
+                        dport_name = 'PING echo'
+                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                    # SEARCH FOR ZEEK for 0x0103
+                    # dport_name = 'ICMP Host Unreachable'
+                    # activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                    #elif '0x0303' in sport: # SEARCH FOR ZEEK
+                    #    dport_name = 'ICMP Port Unreachable'
+                    #    activity = '- {} sent to {}, unreachable port is {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_country, daddr_asn)
+                    elif sport == 11:
+                        dport_name = 'ICMP Time Excedded in Transit'
+                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                    elif sport == 3:
+                        dport_name = 'ICMP Destination Net Unreachable'
+                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                    else:
+                        dport_name = 'ICMP Unknown type'
+                        activity = '- {} sent to {}, Type: 0x{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, sport, allbytes_human, daddr_country, daddr_asn)
+                elif type(sport) == str:
+                    # Argus puts in hex 
+                    if '0x0008' in sport:
+                        dport_name = 'PING echo'
+                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                    elif '0x0103' in sport:
+                        dport_name = 'ICMP Host Unreachable'
+                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                    elif '0x0303' in sport:
+                        dport_name = 'ICMP Port Unreachable'
+                        activity = '- {} sent to {}, unreachable port is {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_country, daddr_asn)
+                    elif '0x000b' in sport:
+                        dport_name = 'ICMP Time Excedded in Transit'
+                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                    elif '0x0003' in sport:
+                        dport_name = 'ICMP Destination Net Unreachable'
+                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                    else:
+                        dport_name = 'ICMP Unknown type'
+                        activity = '- {} sent to {}, Type: 0x{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, sport, allbytes_human, daddr_country, daddr_asn)
             elif 'igmp' in proto:
                 dport_name = 'IGMP'
                 activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
