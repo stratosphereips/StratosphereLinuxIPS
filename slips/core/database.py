@@ -436,6 +436,14 @@ class Database(object):
             self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
             pre = state.split('_')[0]
             try:
+                # We have varius type of states depending on the type of flow.
+                # For Zeek 
+                if 'S0' in state or 'REJ' in state or 'RSTOS0' in state or 'RSTRH' in state or 'SH' in state or 'SHR' in state:
+                    return 'NotEstablished'
+                elif 'S1' in state or 'SF' in state or 'S2' in state or 'S3' in state or 'RSTO' in state or 'RSTP' in state or 'OTH' in state: 
+                    return 'Established'
+
+                # For Argus
                 suf = state.split('_')[1]
                 if 'S' in pre and 'A' in pre and 'S' in suf and 'A' in suf:
                     """
@@ -560,6 +568,10 @@ class Database(object):
         ClientIPV6-ICMPNotEstablished
         """
         try:
+            # Try to make all the parameters the same type of data:
+            dport = str(dport)
+
+            self.print('Add_out_dstport called with profileid {}, twid {}, dport:{}, totbytes: {}, pkts: {}, spkts: {}, state: {}, proto: {}, daddr {}'.format(profileid, twid, dport, totbytes, pkts, spkts, state, proto,  str(daddr)), 0, 5)
             feature = 'DstPort'
             hosttype = 'Client'
             # Get the state. Established, NotEstablished
@@ -577,7 +589,7 @@ class Database(object):
                 return True
             try:
                 innerdata = prev_data[dport]
-                #self.outputqueue.put('03|database|[DB]: Adding for port {}. PRE Data: {}'.format(dport, innerdata))
+                self.outputqueue.put('03|database|[DB]: Adding for port {}. PRE Data: {}'.format(dport, innerdata))
                 # We had this port
                 # We need to add all the data
                 innerdata['totalflows'] += 1
@@ -591,7 +603,7 @@ class Database(object):
                     temp_dstips[str(daddr)] = int(pkts)
                 innerdata['dstips'] = temp_dstips
                 prev_data[dport] = innerdata
-                #self.outputqueue.put('03|database|[DB]: Adding for port {}. POST Data: {}'.format(dport, innerdata))
+                self.outputqueue.put('03|database|[DB]: Adding for port {}. POST Data: {}'.format(dport, innerdata))
             except KeyError:
                 # First time for this flow
                 innerdata = {}
@@ -601,7 +613,7 @@ class Database(object):
                 temp_dstips = {}
                 temp_dstips[str(daddr)] = int(pkts)
                 innerdata['dstips'] = temp_dstips
-                #self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
+                self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
                 prev_data[dport] = innerdata
             # Convet the dictionary to json
             data = json.dumps(prev_data)
@@ -623,6 +635,7 @@ class Database(object):
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
+                self.print('Key: {}. Getting info about dst port for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
                 # Convet the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
@@ -641,7 +654,7 @@ class Database(object):
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
-                self.print('Getting info about {} for Profile {} TW {}: {}'.format(key, profileid, twid, str(data)), 5, 0)
+                self.print('Key: {}. Getting info about dst port for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
                 # Convet the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
@@ -659,6 +672,7 @@ class Database(object):
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
+                self.print('Key: {}. Getting info about dst port for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
                 # Convet the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
@@ -678,6 +692,7 @@ class Database(object):
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
+                self.print('Key: {}. Getting info about dst port for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
                 # Convet the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
@@ -696,6 +711,7 @@ class Database(object):
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
+                self.print('Key: {}. Getting info about dst port for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
                 # Convet the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
@@ -712,10 +728,10 @@ class Database(object):
         """
         try:
             key = str(feature) + 'ClientICMPEstablished'
-            self.print('Key: {}. Getting info about dst port for Profile {} TW {}. Key: {}'.format(key, profileid, twid, key), 5, 0)
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
+                self.print('Key: {}. Getting info about dst port for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
                 # Convet the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
@@ -734,6 +750,7 @@ class Database(object):
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
+                self.print('Key: {}. Getting info about dst port for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
                 # Convet the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
@@ -752,6 +769,7 @@ class Database(object):
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
+                self.print('Key: {}. Getting info about dst port for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
                 # Convet the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
