@@ -28,7 +28,6 @@ class InputProcess(multiprocessing.Process):
         if packet_filter:
             self.packet_filter = "'" + packet_filter + "'"
 
-
     def read_configuration(self):
         """ Read the configuration file for what we need """
         # Get the pcap filter
