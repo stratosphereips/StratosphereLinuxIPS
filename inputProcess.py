@@ -55,7 +55,7 @@ class InputProcess(multiprocessing.Process):
                     file_stream = open(self.input_information)
 
                 for line in file_stream:
-                    self.outputqueue.put("03|input|[In]      > Sent Line: {}".format(line.replace('\n','')))
+                    self.print('	> Sent Line: {}'.format(line.replace('\n','')), 0, 3)
                     self.profilerqueue.put(line)
                     lines += 1
 
@@ -89,7 +89,7 @@ class InputProcess(multiprocessing.Process):
                 command = "rm " + self.zeek_folder + "/*.log"
                 os.system(command)
                 # Run zeek on the pcap. The redef is to hav json files
-                command = "cd " + self.zeek_folder + "; bro -C -r " + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' &"
+                command = "cd " + self.zeek_folder + "; bro -C -r " + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' 2>&1 > /dev/null &"
                 os.system(command)
                 # Give Zeek some time to generate at least 1 file.
                 time.sleep(3)
@@ -127,8 +127,12 @@ class InputProcess(multiprocessing.Process):
 
                         # Convert from json to dict
                         line = json.loads(json_line)
+                        # All bro files have a field 'ts' with the timestamp.
+                        # So we are safe here not checking the type of line
                         timestamp = line['ts']
                         time_last_lines[filename] = timestamp
+                        # Add the type of file to the dict so later we know how to parse it
+                        line['type'] = filename
                         #self.print('File {}. TS: {}'.format(filename, timestamp))
                         # Store the line in the cache
                         #self.print('Adding cache and time of {}'.format(filename))
@@ -149,7 +153,7 @@ class InputProcess(multiprocessing.Process):
                     line_to_send = cache_lines[key]
                     #self.print('Line to send from file {}. {}'.format(key, line_to_send))
                     # SENT
-                    self.print("	> Sent Line: {}".format(line.replace('\n','')), 0, 3)
+                    self.print("	> Sent Line: {}".format(line), 0, 3)
                     self.profilerqueue.put(line_to_send)
                     # Count the read lines
                     lines += 1
