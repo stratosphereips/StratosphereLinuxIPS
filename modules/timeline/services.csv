@@ -114,7 +114,10 @@ ssdp,1900,tcp,Simple Service Discovery Protocol
 ssdp,1900,udp,Simple Service Discovery Protocol
 gnunet,2086,tcp,GNUnet
 gnunet,2086,udp,GNUnet
+Web Services Discovery (WSD) UPNP,3702,tcp,Web Services Discovery (WSD)
+Web Services Discovery (WSD) UPNP,3702,udp,Web Services Discovery (WSD)
 XMPP Chat. Google Talk. Telegram or Whatsapp,5222,tcp,XMPP Chat. Google Talk, Telegram or Whatsapp
+Apple Notification Protocol or XMPP,5223,tcp,Apple Notification Protocol or XMPP (Jabber)
 Google Playstore or Google Talk or Google Chrome Sync,5228,tcp,Google Playstore or Google Talk or Google Chrome Sync
 http-alt,8080,tcp,HTTP Alternative
 http-alt,8081,tcp,HTTP Alternative
