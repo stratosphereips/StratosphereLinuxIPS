@@ -247,13 +247,22 @@ class ProfilerProcess(multiprocessing.Process):
             except KeyError:
                 self.column_values['dbytes'] = 0
             self.column_values['bytes'] = self.column_values['sbytes'] + self.column_values['dbytes'] 
-            self.column_values['uid'] = line['uid']
+            try:
+                self.column_values['uid'] = line['uid']
+            except KeyError:
+                self.column_values['uid'] = False
             try:
                 self.column_values['state_hist'] = line['history']
             except KeyError:
                 self.column_values['state_hist'] = self.column_values['state']
-            self.column_values['smac'] = line['orig_l2_addr']
-            self.column_values['dmac'] = line['resp_l2_addr']
+            try:
+                self.column_values['smac'] = line['orig_l2_addr']
+            except KeyError:
+                self.column_values['smac'] = ''
+            try:
+                self.column_values['dmac'] = line['resp_l2_addr']
+            except KeyError:
+                self.column_values['dmac'] = ''
         elif 'http' in line['type']:
             self.column_values = {}
             self.column_values['type'] = 'http'
