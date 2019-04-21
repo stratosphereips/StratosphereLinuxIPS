@@ -147,8 +147,10 @@ class InputProcess(multiprocessing.Process):
                         # No more sorted keys. Get out of the while
                         break
                     line_to_send = cache_lines[key]
-                    self.print('Line to send from file {}. {}'.format(key, line_to_send))
+                    #self.print('Line to send from file {}. {}'.format(key, line_to_send))
                     # SENT
+                    self.print("	> Sent Line: {}".format(line.replace('\n','')), 0, 3)
+                    self.profilerqueue.put(line_to_send)
                     # Count the read lines
                     lines += 1
                     # Delete this line from the cache and the time list
