@@ -273,6 +273,57 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'long' in line['type']:
             self.column_values = {}
             self.column_values['type'] = 'long'
+        elif 'dhcp' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'dhcp'
+        elif 'dce_rpc' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'dce_rpc'
+        elif 'dnp3' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'dnp3'
+        elif 'ftp' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'ftp'
+        elif 'kerberos' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'kerberos'
+        elif 'mysql' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'mysql'
+        elif 'modbus' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'modbus'
+        elif 'ntlm' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'ntlm'
+        elif 'rdp' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'rdp'
+        elif 'sip' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'sip'
+        elif 'smb_cmd' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'smb_cmd'
+        elif 'smb_files' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'smb_files'
+        elif 'smb_mapping' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'smb_mapping'
+        elif 'smtp' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'smtp'
+        elif 'socks' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'socks'
+        elif 'syslog' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'syslog'
+        elif 'tunnel' in line['type']:
+            self.column_values = {}
+            self.column_values['type'] = 'tunnel'
 
     def process_argus_input(self, line):
         """
@@ -376,6 +427,7 @@ class ProfilerProcess(multiprocessing.Process):
         It interprets each colum 
         """
         try:
+            # For now we only process the argus flows and the zeek conn logs
             if not 'conn' in self.column_values['type'] and not 'argus' in self.column_values['type']:
                 return True
             #########
@@ -855,10 +907,13 @@ class ProfilerProcess(multiprocessing.Process):
                     else:
                         # There was no TW that included the time of this flow, so create them in the past
                         # How many new TW we need in the past?
+                        # amount_of_new_tw is the total amount of tw we should have under the new situation
                         amount_of_new_tw = int((lasttw_end_time - flowtime) / self.width)
+                        # amount_of_current_tw is the real amount of tw we have now
                         amount_of_current_tw = __database__.getamountTWsfromProfile(profileid)
+                        # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
-                        self.outputqueue.put("05|profiler|[Profiler] We need to create {} TW before the first".format(diff))
+                        self.outputqueue.put("05|profiler|[Profiler] We need to create {} TW before the first".format(diff + 1))
                         # Get the first TW
                         [(firsttwid, firsttw_start_time)] = __database__.getFirstTWforProfile(profileid)
                         firsttw_start_time = float(firsttw_start_time)
