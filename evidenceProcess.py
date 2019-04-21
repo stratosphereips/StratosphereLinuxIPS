@@ -13,7 +13,7 @@ class EvidenceProcess(multiprocessing.Process):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
     def __init__(self, inputqueue, outputqueue, config):
-        self.name = 'Evidence'
+        self.myname = 'Evidence'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -38,7 +38,7 @@ class EvidenceProcess(multiprocessing.Process):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
+        self.outputqueue.put(vd_text + '|' + self.myname + '|[' + self.myname + '] ' + text)
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
