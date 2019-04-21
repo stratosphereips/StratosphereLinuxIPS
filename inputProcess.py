@@ -106,7 +106,6 @@ class InputProcess(multiprocessing.Process):
                 # Run zeek on the pcap. The redef is to hav json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
                 command = "cd " + self.zeek_folder + "; bro -C -r " + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
-                self.print(command)
                 
                 os.system(command)
                 # Give Zeek some time to generate at least 1 file.
