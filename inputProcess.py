@@ -105,7 +105,6 @@ class InputProcess(multiprocessing.Process):
                 # Run zeek on the pcap. The redef is to hav json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
                 command = "cd " + self.zeek_folder + "; bro -C -r " + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
-                
                 os.system(command)
                 # Give Zeek some time to generate at least 1 file.
                 time.sleep(3)
@@ -115,7 +114,9 @@ class InputProcess(multiprocessing.Process):
                 open_file_handlers = {}
                 time_last_lines = {}
                 cache_lines = {}
-                while zeek_files:
+                # Try to keep track of when was the last update so we stop this reading
+                last_updated_file_time = datetime.now()
+                while True:
                     for filename in zeek_files:
                         # Update which files we know about
                         try:
@@ -131,16 +132,14 @@ class InputProcess(multiprocessing.Process):
                             open_file_handlers[filename] = file_handler
                             #self.print('New File {}'.format(filename))
                         json_line = file_handler.readline()
+                        #self.print('File {}, read line: {}'.format(filename, json_line))
                         # Did the file ended?
                         if not json_line:
-                            # We reached the end of this file. Remove it from the list of files to check
-                            __database__.del_zeek_file(filename)
-                            #del time_last_lines[filename]
-                            #cache_lines.remove(filename)
-                            #self.print('Closing {}'.format(filename))
+                            # We reached the end of this file. Wait for more data to come
                             continue
-                        #self.print('Pre dejson line from file {}. {}'.format(filename, json_line))
-
+                        
+                        # Since we actually read something form any file, update the last time of read
+                        last_updated_file_time = datetime.now()
                         # Convert from json to dict
                         line = json.loads(json_line)
                         # All bro files have a field 'ts' with the timestamp.
@@ -153,10 +152,20 @@ class InputProcess(multiprocessing.Process):
                         # Store the line in the cache
                         #self.print('Adding cache and time of {}'.format(filename))
                         cache_lines[filename] = line
-
+                     
                     # Out of the for
                     #self.print('Out of the for.')
                     #self.print('Cached lines: {}'.format(str(cache_lines)))
+                    # If we don't have any cached lines to send, it may mean that new lines are not arriving. Check
+                    if not cache_lines:
+                        # Verify that we didn't have any new lines in the last 10 seconds. Seems enough for any network to have ANY traffic
+                        now = datetime.now()
+                        diff = now - last_updated_file_time
+                        diff = diff.seconds
+                        if diff >= 10:
+                            # It has been 10 seconds without any file being updated. So stop the while
+                            break
+
                     #self.print('Cached times: {}'.format(str(time_last_lines)))
                     # Now read lines in order. The line with the smallest timestamp first
                     sorted_time_last_lines = sorted(time_last_lines, key=time_last_lines.get)
@@ -164,8 +173,8 @@ class InputProcess(multiprocessing.Process):
                     try:
                         key = sorted_time_last_lines[0]
                     except IndexError:
-                        # No more sorted keys. Get out of the while
-                        break
+                        # No more sorted keys. Just loop waiting for more lines
+                        continue
                     line_to_send = cache_lines[key]
                     #self.print('Line to send from file {}. {}'.format(key, line_to_send))
                     # SENT
@@ -182,7 +191,7 @@ class InputProcess(multiprocessing.Process):
                     zeek_files = __database__.get_all_zeek_file()
 
                 # No more files to read
-                self.print("No more input. Stopping input process. Sent {} lines".format(lines))
+                self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
                 return True
 
         except KeyboardInterrupt:
@@ -194,10 +203,9 @@ class InputProcess(multiprocessing.Process):
                 pass
             return True
         except Exception as inst:
-            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(lines))
-            self.outputqueue.put("01|input|Problem with Input Process.")
-            self.outputqueue.put("01|input|" + type(inst))
-
-            self.outputqueue.put("01|input|" + inst.args)
-            self.outputqueue.put("01|input|" + inst)
+            self.print("Problem with Input Process.",0,1)
+            self.print("Stopping input process. Sent {} lines".format(lines),0,1)
+            self.print(type(inst),0,1)
+            self.print(inst.args,0,1)
+            self.print(inst,0,1)
             sys.exit(1)
