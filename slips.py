@@ -104,7 +104,7 @@ if __name__ == '__main__':
     # We need to tell the output process the type of output so he know if it should print in console or send the data to another process
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
-    outputProcessQueue.put('30|main|Started output thread')
+    outputProcessQueue.put('30|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
@@ -113,7 +113,7 @@ if __name__ == '__main__':
         cursesProcessQueue = Queue()
         cursesProcessThread = CursesProcess(cursesProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
         cursesProcessThread.start()
-        outputProcessQueue.put('30|main|Started Curses thread')
+        outputProcessQueue.put('30|main|Started Curses thread [PID {}]'.format(cursesProcessThread.pid))
     elif not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
         do_logs = read_configuration(config, 'parameters', 'create_log_files')
@@ -122,7 +122,7 @@ if __name__ == '__main__':
             logsProcessQueue = Queue()
             logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
             logsProcessThread.start()
-            outputProcessQueue.put('30|main|Started logsfiles thread')
+            outputProcessQueue.put('30|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
         # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
 
     # Evidence thread
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config)
     evidenceProcessThread.start()
     evidenceProcessQueue.close()
-    outputProcessQueue.put('30|main|Started Evidence thread')
+    outputProcessQueue.put('30|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
 
     # Profile thread
     # Create the queue for the profile thread
@@ -140,7 +140,7 @@ if __name__ == '__main__':
     # Create the profile thread and start it
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
     profilerProcessThread.start()
-    outputProcessQueue.put('30|main|Started profiler thread')
+    outputProcessQueue.put('30|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
 
 
     # Check the type of input
@@ -156,19 +156,19 @@ if __name__ == '__main__':
 
     # Input process
     # Create the input process and start it
-    inputProcess = InputProcess(None, outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter)
+    inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter)
     inputProcess.start()
-    outputProcessQueue.put('30|main|Started input thread')
+    outputProcessQueue.put('30|main|Started input thread [PID {}]'.format(inputProcess.pid))
 
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
     for module_name in __modules__:
         to_ignore = read_configuration(config, 'modules', 'disable')
         if not module_name in to_ignore:
-            outputProcessQueue.put('01|main|\t[main] Starting the module {} ({})'.format(module_name, __modules__[module_name]['description']))
             module_class = __modules__[module_name]['obj']
             ModuleProcess = module_class(outputProcessQueue, config)
             ModuleProcess.start()
+            outputProcessQueue.put('01|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, __modules__[module_name]['description'], ModuleProcess.pid))
 
     profilerProcessQueue.close()
     outputProcessQueue.close()
