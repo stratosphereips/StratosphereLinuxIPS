@@ -12,9 +12,8 @@ import json
 # Input Process
 class InputProcess(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, inputqueue, outputqueue, profilerqueue, input_type, input_information, config, packet_filter):
+    def __init__(self, outputqueue, profilerqueue, input_type, input_information, config, packet_filter):
         multiprocessing.Process.__init__(self)
-        self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
         self.config = config
@@ -191,6 +190,12 @@ class InputProcess(multiprocessing.Process):
                     zeek_files = __database__.get_all_zeek_file()
 
                 # No more files to read
+                for file in open_file_handlers:
+                    self.print('Closing file {}'.format(file),3,0)
+                    open_file_handlers[file].close()
+                # Stop the observer
+                self.event_observer.stop()
+                self.event_observer.join()
                 self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
                 return True
 
