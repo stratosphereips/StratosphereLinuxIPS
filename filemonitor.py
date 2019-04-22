@@ -18,4 +18,3 @@ class FileEventHandler(RegexMatchingEventHandler):
     def process(self, event):
         filename, ext = os.path.splitext(event.src_path)
         __database__.add_zeek_file(filename)
-
