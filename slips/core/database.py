@@ -4,23 +4,6 @@ import json
 import sys
 
 
-# Struture of the DB
-# Set 'profile'
-#  Holds a set of all profile ids
-# For each profile, there is a set for the timewindows. The name of the sets is the names of profiles
-# The data for a profile in general is hold in a hash
-# The data for each timewindow in a profile is hold in a hash
- # profile|10.0.0.1|timewindow1
- # In this hash there are strings:
-  # dstips_in -> '{'1.1.1.1':10, '2.2.2.2':20}'
-  # srcips_in -> '{'3.3.3.3':30, '4.4.4.4':40}'
-  # dstports_in -> '{'22':30, '21':40}'
-  # dstports_in -> '{'22':30, '21':40}'
-  # dstips_out -> '{'1.1.1.1':10, '2.2.2.2':20}'
-  # srcips_out -> '{'3.3.3.3':30, '4.4.4.4':40}'
-  # dstports_out -> '{'22':30, '21':40}'
-  # dstports_out -> '{'22':30, '21':40}'
-
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -58,7 +41,7 @@ class Database(object):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def setOutputQueue(self, outputqueue):
         """ Set the output queue"""
@@ -78,8 +61,11 @@ class Database(object):
                 self.r.hset(profileid, 'Starttime', starttime)
                 # For now duration of the TW is fixed
                 self.r.hset(profileid, 'duration', duration)
-                # The name of the list with the dstips
-                #self.r.hset(profileid, 'DstIps', 'DstIps')
+                # The IP of the profile should also be added as a new IP we know about.
+                ip = profileid.split(self.separator)[1]
+                # If the ip is new add it to the list of ips
+                self.setNewIP(ip)
+
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put('00|database|Error in addProfile in database.py')
             self.outputqueue.put('00|database|{}'.format(type(inst)))
@@ -121,9 +107,10 @@ class Database(object):
     def getTWsfromProfile(self, profileid):
         """
         Receives a profile id and returns the list of all the TW in that profile
-
+        Returns a list with data or an empty list
         """
-        return self.r.zrange('tws' + profileid, 0, -1, withscores=True)
+        data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
+        return data
 
     def getamountTWsfromProfile(self, profileid):
         """
@@ -265,10 +252,6 @@ class Database(object):
         """ Return all the list of modified tw """
         return self.r.smembers('ModifiedTWForLogs')
 
-    def getModifiedTWPortScan(self):
-        """ Return all the list of modified tw """
-        return self.r.smembers('ModifiedTWForPortScan')
-
     def wasProfileTWModifiedLogs(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
         data = self.r.sismember('ModifiedTWForLogs', profileid + self.separator + twid)
@@ -283,12 +266,6 @@ class Database(object):
         """
         self.r.srem('ModifiedTWForLogs', profileid + self.separator + twid)
 
-    def markProfileTWAsNotModifiedPortScan(self, profileid, twid):
-        """ 
-        Mark a TW in a profile as not modified after the portscan module process it.
-        """
-        self.r.srem('ModifiedTWForPortScan', profileid + self.separator + twid)
-
     def markProfileTWAsModified(self, profileid, twid):
         """ 
         Mark a TW in a profile as not modified 
@@ -299,50 +276,116 @@ class Database(object):
         points of view. This is why we are putting mark for different modules
         """
         self.r.sadd('ModifiedTWForLogs', profileid + self.separator + twid)
-        self.r.sadd('ModifiedTWForPortScan', profileid + self.separator + twid)
-        self.publish_tw_modified(profileid + ':' + twid)
+        self.publish('tw_modified', profileid + ':' + twid)
 
-    def add_out_dstips(self, profileid, twid, daddr_as_obj):
+    def add_ips(self, profileid, twid, ip_as_obj, columns, traffic_out=False):
         """
-        Function if the flow is going out from the profile IP
-        Add the dstip to this tw in this profile
+        Function to add all the info about ips.
+        This function does two things:
+            1- Add the ip to this tw in this profile, counting how many times it was contacted, and storing it in the key 'DstIPs' or 'SrcIPs' in the hash of the profile
+            2- Use the ip as a key to count how many times that IP was contacted on each port. We store it like this because its the
+               pefect structure to detect vertical port scans later on
         """
         try:
-            # Get the hash of the timewindow
-            self.outputqueue.put('05|database|[DB]: Add_out_dstips called with profileid {}, twid {}, daddr_as_obj {}'.format(profileid, twid, str(daddr_as_obj)))
+            dport = columns['dport']
+            sport = columns['sport']
+            totbytes = columns['bytes']
+            sbytes = columns['sbytes']
+            pkts = columns['pkts']
+            spkts = columns['spkts']
+            state = columns['state']
+            proto = columns['proto']
+            daddr = columns['daddr']
+            saddr = columns['saddr']
+
+            if traffic_out:
+                dst_or_srcIP_key = 'DstIPs'
+                dst_or_src_key = 'Dst'
+                hosttype = 'Client'
+
+            else:
+                dst_or_srcIP_key = 'SrcIPs'
+                hosttype = 'Server'
+                dst_or_src_key = 'Src'
+
+            # Store the IP address and notify in the channel
+            self.setNewIP(str(ip_as_obj))
+
+            self.outputqueue.put('05|database|[DB]: Add_out_dstips called with profileid {}, twid {}, ip_as_obj {}'.format(profileid, twid, str(ip_as_obj)))
             hash_id = profileid + self.separator + twid
-            data = self.r.hget(hash_id, 'DstIPs')
+            data = self.r.hget(hash_id, dst_or_srcIP_key)
             if not data:
                 data = {}
             try:
                 # Convert the json str to a dictionary
                 data = json.loads(data)
                 # Add 1 because we found this ip again
-                self.outputqueue.put('05|database|[DB]: Not the first time for this daddr. Add 1 to {}'.format(str(daddr_as_obj)))
-                data[str(daddr_as_obj)] += 1
-                data = json.dumps(data)
+                self.outputqueue.put('05|database|[DB]: Not the first time for this daddr. Add 1 to {}'.format(str(ip_as_obj)))
+                data[str(ip_as_obj)] += 1
             except (TypeError, KeyError) as e:
                 # There was no previous data stored in the DB
-                self.outputqueue.put('05|database|[DB]: First time for this daddr. Make it 1 to {}'.format(str(daddr_as_obj)))
-                data[str(daddr_as_obj)] = 1
-                # Convet the dictionary to json
-                data = json.dumps(data)
+                self.outputqueue.put('05|database|[DB]: First time for this daddr. Make it 1 to {}'.format(str(ip_as_obj)))
+                data[str(ip_as_obj)] = 1
+
+            # Convet the dictionary to json
+            data = json.dumps(data)
             # Store the dstips in the dB
-            self.r.hset(hash_id, 'DstIPs', str(data))
+            self.r.hset(hash_id, dst_or_srcIP_key, str(data))
+
+            # Get the state. Established, NotEstablished
+            summaryState = __database__.getFinalStateFromFlags(state, pkts)
+            hash_key = profileid + self.separator + twid
+            key_name = dst_or_src_key + 'IP' + hosttype + proto.upper() + summaryState
+            prev_data = self.get_data_from_profile_tw(hash_key, key_name)
+            try:
+                innerdata = prev_data[str(ip_as_obj)]
+                # self.outputqueue.put('03|database|[DB]: Adding for port {}. PRE Data: {}'.format(dport, innerdata))
+                innerdata['totalflows'] += 1
+                innerdata['totalpkt'] += int(pkts)
+                innerdata['totalbytes'] += int(totbytes)
+                temp_dstports = innerdata['dstports']
+                try:
+                    temp_dstports[str(dport)] += int(pkts)
+                except KeyError:
+                    # First time for this ip in the inner dictionary
+                    temp_dstports[str(dport)] = int(pkts)
+                innerdata['dstports'] = temp_dstports
+                prev_data[str(ip_as_obj)] = innerdata
+                #self.outputqueue.put('03|database|[DB]: Adding for port {}. POST Data: {}'.format(dport, innerdata))
+            except KeyError:
+                # First time for this flow
+                innerdata = {}
+                innerdata['totalflows'] = 1
+                innerdata['totalpkt'] = int(pkts)
+                innerdata['totalbytes'] = int(totbytes)
+                temp_dstports = {}
+                temp_dstports[str(dport)] = int(pkts)
+                innerdata['dstports'] = temp_dstports
+                #self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
+                prev_data[str(ip_as_obj)] = innerdata
+            # Convert the dictionary to json
+            data = json.dumps(prev_data)
+            # Store this data in the profile hash
+            self.r.hset( profileid + self.separator + twid, key_name, str(data))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
             self.outputqueue.put('01|database|[DB] Error in add_out_dstips in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-            self.outputqueue.put('01|database|[DB] Data after error: {}'.format(data))
 
-    def add_out_tuple(self, profileid, twid, tupleid, data_tuple):
-        """ Add the tuple going out for this profile """
+    def add_tuple(self, profileid, twid, tupleid, data_tuple, traffic_out=False):
+        """ Add the tuple going in or out for this profile """
+
+        if traffic_out:
+            tuple_key = 'OutTuples'
+        else:
+            tuple_key = 'InTuples'
+
         try:
-            self.outputqueue.put('05|database|[DB]: Add_out_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple))
+            self.outputqueue.put('05|database|[DB]: Add {} called with profileid {}, twid {}, tupleid {}, data {}'.format(tuple_key, profileid, twid, tupleid, data_tuple))
             hash_id = profileid + self.separator + twid
-            data = self.r.hget(hash_id, 'OutTuples')
+            data = self.r.hget(hash_id, tuple_key)
             (symbol_to_add, previous_time, T2) = data_tuple
             if not data:
                 data = {}
@@ -367,26 +410,118 @@ class Database(object):
                 data[tupleid] = new_data
                 # Convet the dictionary to json
                 data = json.dumps(data)
-            self.r.hset(hash_id, 'OutTuples', str(data))
+            self.r.hset(hash_id, tuple_key, str(data))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_out_tuple in database.py')
+            self.outputqueue.put('01|database|[DB] Error in add_tuple in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
+    def add_port(self, profileid: str, twid: str, ip_address: str, columns: dict, traffic_out=False, dst_port=False):
+        """
+        Store info learned from ports and other data from the flow.
+        When the flow goes out, which means we are the client sending it.
+        When the flow goes in, which means we are the server receiving it.
+        """
+        try:
+            dport = columns['dport']
+            sport = columns['sport']
+            totbytes = columns['bytes']
+            sbytes = columns['sbytes']
+            pkts = columns['pkts']
+            spkts = columns['spkts']
+            state = columns['state']
+            proto = columns['proto']
+            daddr = columns['daddr']
+            saddr = columns['saddr']
+
+            if dst_port:
+                src_or_dst = 'Dst'
+                port = dport
+            else:
+                src_or_dst = 'Src'
+                port = sport
+
+            if traffic_out:
+                hosttype = 'Client'
+                ip_key = 'dstips'
+            else:
+                hosttype = 'Server'
+                ip_key = 'srcips'
+
+            hash_key = profileid + self.separator + twid
+            # Get the state. Established, NotEstablished
+            summaryState = __database__.getFinalStateFromFlags(state, pkts)
+            # Create the key_name. The key_name is one of the names of the features
+            key_name = src_or_dst + 'Port' + hosttype + proto.upper() + summaryState
+            # self.outputqueue.put('03|database|[DB]: Storing info about dst port for {}. Key: {}.'.format(profileid, key_name))
+            prev_data = self.get_data_from_profile_tw(hash_key, key_name)
+            try:
+                innerdata = prev_data[port]
+                innerdata['totalflows'] += 1
+                innerdata['totalpkt'] += int(pkts)
+                innerdata['totalbytes'] += int(totbytes)
+                temp_dstips = innerdata[ip_key]
+                try:
+                    temp_dstips[str(ip_address)] += int(pkts)
+                except KeyError:
+                    temp_dstips[str(ip_address)] = int(pkts)
+                innerdata[ip_key] = temp_dstips
+                prev_data[port] = innerdata
+                # self.outputqueue.put('03|database|[DB]: Adding for port {}. POST Data: {}'.format(dport, innerdata))
+            except KeyError:
+                # First time for this flow
+                innerdata = {}
+                innerdata['totalflows'] = 1
+                innerdata['totalpkt'] = int(pkts)
+                innerdata['totalbytes'] = int(totbytes)
+                temp_dstips = {}
+                temp_dstips[str(ip_address)] = int(pkts)
+                innerdata[ip_key] = temp_dstips
+                prev_data[port] = innerdata
+                # self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
+            # Convet the dictionary to json
+            data = json.dumps(prev_data)
+            # Store this data in the profile hash
+            self.r.hset(hash_key, key_name, str(data))
+            # Mark the tw as modified
+            self.markProfileTWAsModified(profileid, twid)
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in add_out_dstport in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
+    def get_data_from_profile_tw(self, hash_key: str, key_name: str):
+        try:
+            """
+            key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established, NotEstablihed] 
+            Example: key_name = 'SrcPortClientTCPEstablished'
+            """
+            data = self.r.hget(hash_key, key_name)
+            value = {}
+            if data:
+                portdata = json.loads(data)
+                value = portdata
+            return value
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getDataFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
+
     def getOutTuplesfromProfileTW(self, profileid, twid):
-        """ Get the tuples """
+        """ Get the out tuples """
         data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
         return data
 
     def getInTuplesfromProfileTW(self, profileid, twid):
-        """ Get the tuples """
+        """ Get the in tuples """
         data = self.r.hget(profileid + self.separator + twid, 'InTuples')
         return data
 
     def getFinalStateFromFlags(self, state, pkts):
-        """ 
+        """
         Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags
         We receive the pakets to distinguish some Reset connections
         """
@@ -428,6 +563,14 @@ class Database(object):
                     FPA_FPA
                     """
                     return 'Established'
+                elif 'ECO' in pre:
+                    return 'ICMP Echo'
+                elif 'ECR' in pre:
+                    return 'ICMP Reply'
+                elif 'URH' in pre:
+                    return 'ICMP Host Unreachable'
+                elif 'URP' in pre:
+                    return 'ICMP Port Unreachable'
                 else:
                     """
                     Examples:
@@ -489,441 +632,53 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-
-    def add_out_dstport(self, profileid, twid, columns):
-        """
-        Store info learned from the dst port and other data from the flow.
-        When the flow goes out, which means we are the client sending it.
-
-        Here we store in the DB the features :
-        ClientUDPEstablished
-        ClientUDPNotEstablished
-        ClientTCPEstablished
-        ClientICMPEstablished
-        ClientIPV6-ICMPEstablished
-        ClientTCPNotEstablished
-        """
-        try:
-
-            dport = columns['dport']
-            totbytes = columns['bytes']
-            sbytes = columns['sbytes']
-            pkts = columns['pkts']
-            spkts = columns['spkts']
-            state = columns['state']
-            proto = columns['proto']
-            daddr = columns['daddr']
-
-            hosttype = 'Client'
-            # Get the state
-            summaryState = __database__.getFinalStateFromFlags(state, pkts)
-            # Create the key. The key is one of the names of the features
-            key = proto.upper() + summaryState
-            #self.outputqueue.put('03|database|[DB]: Storing info about dst port for {}. Key: {}.'.format(profileid, key))
-            # Get the previous data about this key
-            functionName = 'getSrcDstPort' + key + 'FromProfileTW'
-            # This is a trick to call different functions based on what we were given
-            try:
-                function = getattr(self, functionName)
-                prev_data = function(profileid, twid, hosttype)
-            except AttributeError:
-                # Some protocols we still dont process, such as IPV6-ICMP. So we don't have the function getDstPortClientIPV6-ICMPEstablishedFromProfileTW
-                return True
-            try:
-                innerdata = prev_data[dport]
-                #self.outputqueue.put('03|database|[DB]: Adding for port {}. PRE Data: {}'.format(dport, innerdata))
-                # We had this port
-                # We need to add all the data
-                innerdata['totalflows'] += 1
-                innerdata['totalpkt'] += int(pkts)
-                innerdata['totalbytes'] += int(totbytes)
-                temp_dstips = innerdata['dstips']
-                try:
-                    temp_dstips[str(daddr)] += int(pkts)
-                except KeyError:
-                    # First time for this ip in the inner dictionary
-                    temp_dstips[str(daddr)] = int(pkts)
-                innerdata['dstips'] = temp_dstips
-                prev_data[dport] = innerdata
-                #self.outputqueue.put('03|database|[DB]: Adding for port {}. POST Data: {}'.format(dport, innerdata))
-            except KeyError:
-                # First time for this flow
-                innerdata = {}
-                innerdata['totalflows'] = 1
-                innerdata['totalpkt'] = int(pkts)
-                innerdata['totalbytes'] = int(totbytes)
-                temp_dstips = {}
-                temp_dstips[str(daddr)] = int(pkts)
-                innerdata['dstips'] = temp_dstips
-                #self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
-                prev_data[dport] = innerdata
-            # Convet the dictionary to json
-            data = json.dumps(prev_data)
-            # Store this data in the profile hash
-            self.r.hset( profileid + self.separator + twid, hosttype + key, str(data))
-            # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid)
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_out_dstport in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-    def getSrcDstPortTCPEstablishedFromProfileTW(self, profileid, twid, client_or_server):
-        """ 
-        Get the info about the dst port. TCP established
-        """
-        try:
-            key = client_or_server + 'TCPEstablished'
-            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
-            data = self.r.hget(profileid + self.separator + twid, key)
-            value = {}
-            if data:
-                # Convet the dictionary to json
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientTCPEstFromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-    def getSrcDstPortTCPNotEstablishedFromProfileTW(self, profileid, twid, client_or_server):
-        """ 
-        Get the info about all the dst port TCP not established in this TW. For all the flows sent.
-        """
-        try:
-            key = client_or_server + 'TCPNotEstablished'
-            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
-            data = self.r.hget( profileid + self.separator + twid, key)
-            value = {}
-            if data:
-                # Convet the dictionary to json
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientTCPNotEstFromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-
-    def getSrcDstPortIPV6ICMPNotEstablishedFromProfileTW(self, profileid, twid, client_or_server):
-        """ 
-        Get the info about the dst port. ipv6-icmp. not established
-        """
-        try:
-            key = client_or_server + 'IPV6ICMPNotEstablished'
-            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
-            data = self.r.hget( profileid + self.separator + twid, key)
-            value = {}
-            if data:
-                # Convet the dictionary to json
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientIPV6ICMPNotEstFromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-
-    def getSrcDstPortIPV6ICMPEstablishedFromProfileTW(self, profileid, twid, client_or_server):
-        """ 
-        Get the info about the dst port. ipv6-icmp. established
-        """
-        try:
-            key = client_or_server + 'IPV6ICMPEstablished'
-            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
-            data = self.r.hget( profileid + self.separator + twid, key)
-            value = {}
-            if data:
-                # Convet the dictionary to json
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientIPV6ICMPEstFromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-    def getSrcDstPortICMPNotEstablishedFromProfileTW(self, profileid, twid, client_or_server):
-        """
-        Get the info about the dst port. icmp. not established
-        """
-        try:
-            key = client_or_server + 'ICMPNotEstablished'
-            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
-            data = self.r.hget(profileid + self.separator + twid, key)
-            value = {}
-            if data:
-                # Convet the dictionary to json
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientICMPNotEstFromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-    def getSrcDstPortICMPEstablishedFromProfileTW(self, profileid, twid, client_or_server):
-        """ 
-        Get the info about the dst port. icmp. established
-        """
-        try:
-            key = client_or_server + 'ICMPEstablished'
-            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
-            data = self.r.hget( profileid + self.separator + twid, key)
-            value = {}
-            if data:
-                # Convet the dictionary to json
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientICMPEstFromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-    def getSrcDstPortUDPNotEstablishedFromProfileTW(self, profileid, twid, client_or_server):
-        """ 
-        Get the info about the dst port. udp. not established
-        """
-        try:
-            key = client_or_server + 'UDPNotEstablished'
-            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
-            data = self.r.hget( profileid + self.separator + twid, key)
-            value = {}
-            if data:
-                # Convet the dictionary to json
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientUDPNotEstFromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-    def getSrcDstPortUDPEstablishedFromProfileTW(self, profileid, twid, client_or_server):
-        """ 
-        Get the info about the dst port. UDP established
-        """
-        try:
-            key = client_or_server + 'UDPEstablished'
-            #self.outputqueue.put('03|database|[DB]: Geting info about dst port for Profile {} TW {}. Key: {}'.format(profileid, twid, key))
-            data = self.r.hget( profileid + self.separator + twid, key)
-            value = {}
-            if data:
-                # Convet the dictionary to json
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDstPortClientUDPEstFromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-    """
-    ######################## TRAFFIC GOING IN ######################## 
-    """
-    def add_in_tuple(self, profileid, twid, tupleid, data_tuple):
-        """ Add the tuple going in for this profile """
-        try:
-            self.outputqueue.put('05|database|[DB]: Add_in_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple))
-            hash_id = profileid + self.separator + twid
-            data = self.r.hget(hash_id, 'InTuples')
-            (symbol_to_add, previous_time, T2) = data_tuple
-            if not data:
-                data = {}
-            try:
-                # Convert the json str to a dictionary
-                data = json.loads(data)
-                # Disasemble the input
-                self.outputqueue.put('05|database|[DB]: Not the first time for tuple {}. Add the symbol: {}. Store previous_time: {}, T2: {}'.format(tupleid, symbol_to_add, previous_time, T2))
-                # Get the last symbols of letters in the DB
-                prev_symbols = data[tupleid][0]
-                # Add it to form the string of letters
-                new_symbol = prev_symbols + symbol_to_add
-                # Bundle the data together
-                new_data = (new_symbol, previous_time, T2)
-                data[tupleid] = new_data
-                self.outputqueue.put('06|database|[DB]: Letters so far for tuple {}: {}'.format(tupleid, new_symbol))
-                data = json.dumps(data)
-            except (TypeError, KeyError) as e:
-                # There was no previous data stored in the DB
-                self.outputqueue.put('05|database|[DB]: First time for tuple {}'.format(tupleid))
-                new_data = (symbol_to_add, previous_time, T2)
-                data[tupleid] = new_data
-                # Convet the dictionary to json
-                data = json.dumps(data)
-            self.r.hset(hash_id, 'InTuples', str(data))
-            # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid)
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_in_tuple in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-    def add_in_srcips(self, profileid, twid, saddr_as_obj):
-        """
-        Function if the flow is going in to the profile IP
-        Add the srcip to this tw in this profile
-        """
-        try:
-            #self.outputqueue.put('03|database|[DB]: Add_in_srcips called with profileid {}, twid {}, saddr_as_obj {}'.format(profileid, twid, str(saddr_as_obj)))
-
-            self.outputqueue.put('05|database|[DB]: Add_in_srcips called with profileid {}, twid {}, saddr_as_obj {}'.format(profileid, twid, str(saddr_as_obj)))
-
-            # Get the hash of the timewindow
-            hash_id = profileid + self.separator + twid
-            data = self.r.hget(hash_id, 'SrcIPs')
-            if not data:
-                data = {}
-            try:
-                # Convert the json str to a dictionary
-                data = json.loads(data)
-                # Add 1 because we found this ip again
-                self.outputqueue.put('05|database|[DB]: Not the first time for this saddr. Add 1 to {}'.format(str(saddr_as_obj)))
-                data[str(saddr_as_obj)] += 1
-                data = json.dumps(data)
-            except (KeyError, TypeError) as e:
-                self.outputqueue.put('05|database|[DB]: First time for this saddr. Make it 1 to {}'.format(str(saddr_as_obj)))
-                data[str(saddr_as_obj)] = 1
-                # Convet the dictionary to json
-                data = json.dumps(data)
-            self.r.hset(hash_id, 'SrcIPs', str(data))
-            # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid)
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_in_srcips in database.py')
-            self.outputqueue.put('01|database|[DB] {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] {}'.format(inst))
-            self.outputqueue.put('01|database|[DB] Data after error: {}'.format(data))
-
-    def add_in_dstport(self, profileid, twid, dport):
-        """ """
-        pass
-
-    def add_in_srcport(self, profileid, twid, columns):
-        """
-        Store info learned from the src port and other data from the flow. When the flow goes in, which means we are the server receiving it.
-        Here we store in the DB the features :
-        ClientUDPEstablished
-        ClientUDPNotEstablished
-        ClientTCPNotEstablished
-        ClientTCPEstablished
-        ClientICMPEstablished
-        ClientIPV6-ICMPEstablished
-        """
-        try:
-            sport = columns['sport']
-            totbytes = columns['bytes']
-            sbytes = columns['sbytes']
-            pkts = columns['pkts']
-            spkts = columns['spkts']
-            state = columns['state']
-            proto = columns['proto']
-            saddr = columns['saddr']
-
-            hosttype = 'Server'
-            # Get the state
-            summaryState = __database__.getFinalStateFromFlags(state, pkts)
-            # Create the key. The key is one of the names of the features
-            key = proto.upper() + summaryState
-            # self.outputqueue.put('03|database|[DB]: Storing info about dst port for {}. Key: {}.'.format(profileid, key))
-            # Get the previous data about this key
-            functionName = 'getSrcDstPort' + key + 'FromProfileTW'
-            # This is a trick to call different functions based on what we were given
-            try:
-                function = getattr(self, functionName)
-                prev_data = function(profileid, twid, hosttype)
-            except AttributeError:
-                # Some protocols we still dont process, such as IPV6-ICMP. So we don't have the function getDstPortClientIPV6-ICMPEstablishedFromProfileTW
-                return True
-            try:
-                innerdata = prev_data[sport]
-                # self.outputqueue.put('03|database|[DB]: Adding for port {}. PRE Data: {}'.format(dport, innerdata))
-                # We had this port
-                # We need to add all the data
-                innerdata['totalflows'] += 1
-                innerdata['totalpkt'] += int(pkts)
-                innerdata['totalbytes'] += int(totbytes)
-                temp_srcips = innerdata['srcips']
-                try:
-                    temp_srcips[str(saddr)] += int(pkts)
-                except KeyError:
-                    # First time for this ip in the inner dictionary
-                    temp_srcips[str(saddr)] = int(pkts)
-                innerdata['srcips'] = temp_srcips
-                prev_data[sport] = innerdata
-                # self.outputqueue.put('03|database|[DB]: Adding for port {}. POST Data: {}'.format(dport, innerdata))
-            except KeyError:
-                # First time for this flow
-                innerdata = {}
-                innerdata['totalflows'] = 1
-                innerdata['totalpkt'] = int(pkts)
-                innerdata['totalbytes'] = int(totbytes)
-                temp_srcips = {}
-                temp_srcips[str(saddr)] = int(pkts)
-                innerdata['srcips'] = temp_srcips
-                # self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
-                prev_data[sport] = innerdata
-            # Convet the dictionary to json
-            data = json.dumps(prev_data)
-            # Store this data in the profile hash
-            self.r.hset(profileid + self.separator + twid, hosttype + key, str(data))
-            # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid)
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_in_srcport in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
-
-    def add_srcips(self, profileid, twid, saddr):
-        """ """
-        pass
-
     def getFieldSeparator(self):
         """ Return the field separator """
         return self.separator
 
-    def setEvidenceForTW(self, profileid, twid, type_detection, threat_level, confidence):
-        """ Get the evidence for this TW for this Profile """
-        # Get the current evidence
+    def setEvidenceForTW(self, profileid, twid, key, threat_level, confidence, description):
+        """
+        Get the evidence for this TW for this Profile
+
+        Input:
+        - key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans, then this would be the port used.
+               the idea is that you can later update this specific detection when it evolves.
+               Examples of keys are: 'dport:1234' for all the evidences regarding this dport, or 'dip:1.1.1.1' for all the evidences regarding that dst ip
+        - type_evidence: The type of evidence you can send. For example PortScanType1
+        - threat_level: How important this evidence is. Portscan? C&C channel? Exploit?
+        - confidence: How sure you are that this is what you say it is. Basically: the more data the more sure you are.
+
+        The evidence is stored as a dict.
+        {
+            'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'],
+            'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1']
+            'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
+        }
+
+        """
+        # Get the current evidence stored in the DB
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
         else:
-            current_evidence = []
-        # Convert the given data into our array
+            # We never had any evidence for nothing
+            current_evidence = {}
+        # We dont care if there is previous evidence or not. We just change all the values.
         data = []
-        data.append(type_detection)
-        data.append(threat_level)
         data.append(confidence)
-        # Append the new data into the current one
-        current_evidence.append(data)
-        if not current_evidence:
-            current_evidence = ''
+        data.append(threat_level)
+        data.append(description)
+        current_evidence[key] = data
+
         current_evidence = json.dumps(current_evidence)
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence))
+        # Tell everyone an evidence was added
+        self.publish('evidence_added', profileid + ':' + twid)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
         return data
-
-    def setFakeNow(self, time):
-        """ Set the fake now time """
-        # Only update the fake now, when it goes forward
-        current_fake_now = self.getFakeNow()
-        try:
-            if current_fake_now < time:
-                self.r.set('fakenow', time)
-        except TypeError:
-            self.r.set('fakenow', time)
-
-    def getFakeNow(self):
-        """ Get the fake now time """
-        return self.r.get('fakenow')
 
     def setBlockingRequest(self, profileid, twid):
         """ Set the request to block this profile. found in this time window """
@@ -948,17 +703,164 @@ class Database(object):
         data = self.r.smembers('BlockedProfTW')
         return data
 
+    def getIPData(self, ip):
+        """
+        Return information about this IP from the IPs has
+        Returns a dictionary
+        """
+        data = self.r.hget('IPsInfo', ip)
+        if data:
+            data = json.loads(data)
+        else:
+            data = {}
+        # Always return a dictionary
+        return data
+
+    def getallIPs(self):
+        """ Return list of all IPs in the DB """
+        data = self.r.hgetall('IPsInfo')
+        #data = json.loads(data)
+        return data
+
+    def setNewIP(self, ip):
+        """ Store this new ip in the IPs hash """
+        if not self.getIP(ip):
+            self.r.hset('IPsInfo', ip, '{}')
+            # Publish in the new_ip channel
+            self.publish('new_ip', ip)
+
+    def getIP(self, ip):
+        """ Check if this ip is the hash of the profiles! """
+        data = self.r.hget('IPsInfo', ip)
+        if data:
+            return True
+        else:
+            return False
+
+    def setInfoForIPs(self, ip, ipdata):
+        """
+        Store information for this IP
+        We receive a dictionary, such as {'geocountry': 'rumania'} that we are going to store for this IP.
+        If it was not there before we store it. If it was there before, we overwrite it
+
+        """
+        # Get the previous info already stored
+        data = self.getIPData(ip)
+
+        key = next(iter(ipdata))
+        to_store = ipdata[key]
+
+        # If the key is already stored, do not modify it
+        try:
+            value = data[key]
+        except KeyError:
+            # Append the new data
+            data[key] = to_store
+            #data.update(ipdata)
+            data = json.dumps(data)
+            self.r.hset('IPsInfo', ip, data)
+
     def subscribe(self, channel):
         """ Subscribe to channel """
-        pubsub = self.r.pubsub()
         # For when a TW is modified
+        pubsub = self.r.pubsub()
         if 'tw_modified' in channel:
+            pubsub.subscribe(channel)
+        elif 'evidence_added' in channel:
+            pubsub.subscribe(channel)
+        elif 'new_ip' in channel:
+            pubsub.subscribe(channel)
+        elif 'new_flow' in channel:
             pubsub.subscribe(channel)
         return pubsub
 
-    def publish_tw_modified(self, data):
+    def publish(self, channel, data):
         """ Publish something """
-        self.r.publish('tw_modified', data)
+        self.r.publish(channel, data)
+
+    def addFlowVerbatim(self, line):
+        """
+        Receives a verbatim flow and stores it in a structure that expires flows in time
+        """
+        self.r.rpush('Flows', line)
+
+    def getNextFlowVerbatim(self):
+        """
+        Receives a verbatim flow and stores it in a structure that expires flows in time
+        """
+        return self.r.lpop('Flows')
+
+    def get_flow(self, profileid, twid, stime):
+        """
+        Returns the flow in the specific time
+        The format is a dictionary
+        """
+        data = {}
+        temp = self.r.hget(profileid + self.separator + twid, stime)
+        data[stime] = temp
+        # Get the dictionary format
+        return data
+
+    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto=''):
+        """
+        Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
+
+        """
+        data = {}
+        data['dur'] = dur
+        data['saddr'] = saddr
+        data['sport'] = sport
+        data['daddr'] = daddr
+        data['dport'] = dport
+        data['proto'] = proto
+        # Store the interpreted state, not the raw one
+        summaryState = __database__.getFinalStateFromFlags(state, pkts)
+        data['state'] = summaryState
+        data['pkts'] = pkts
+        data['allbytes'] = allbytes
+        data['spkts'] = spkts
+        data['sbytes'] = sbytes
+        data['appproto'] = appproto
+        # Convert to json string
+        data = json.dumps(data)
+        self.r.hset(profileid + self.separator + twid, stime, data)
+        # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
+        flow = self.get_flow(profileid, twid, stime)
+        # Get the dictionary and convert to json string
+        flow = json.dumps(flow)
+        # Prepare the data to publish.
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['flow'] = flow
+        to_send = json.dumps(to_send)
+        self.publish('new_flow', to_send)
+
+    def add_timeline_line(self, profileid, twid, data):
+        """ Add a line to the time line of this profileid and twid """
+        key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        self.r.rpush(key, str(data))
+
+    def get_timeline_last_line(self, profileid, twid):
+        """ Add a line to the time line of this profileid and twid """
+        key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        data = self.r.lrange(key, -1, -1)
+        return data
+
+    def get_timeline_all_lines(self, profileid, twid):
+        """ Add a line to the time line of this profileid and twid """
+        key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        data = self.r.lrange(key, 0, -1)
+        return data
+
+    def set_port_info(self, portproto, name):
+        """ Save in the DB a port with its description """
+        self.r.hset('portinfo', portproto, name)
+
+    def get_port_info(self, portproto):
+        """ Retrive the name of a port """
+        return self.r.hget('portinfo', portproto)
+
 
 
 

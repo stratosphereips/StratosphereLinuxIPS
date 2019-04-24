@@ -13,6 +13,7 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
 - python3.6 or greater
 - py37-redis (Be sure that you install the redis libraries for your python3 version. This can be done with pip3, but your 'python3' executable in your path should point to the version of python you are using, such as python3.7)
 - redis database
+- maxminddb (pip install maxminddb) For the GeoIP module (you can also ignore this module in the conf)
 
 #### Installing dependencies    
 The new version of slips uses redis as a backend database, so you need to have redis running.
@@ -64,6 +65,19 @@ To run argus in your own computer you should do:
     ```
 
 ## Usage
+Start redis
+
+    In macos using ports, if you prefer to start a redis server manually, rather than using 'port load', then use this command:
+
+        redis-server /opt/local/etc/redis.conf
+
+    A startup item has been generated that will aid in starting redis with launchd. It is disabled by default. Execute the following command to start it, and to cause it to launch at startup:
+
+        sudo port load redis
+
+
+
+
 Slips can be used by passing flows in its stdin, like this:
 
     ```
@@ -143,8 +157,6 @@ This version of slips comes with the following features:
     - Now we have a configuration file slips.conf. In there you can specify from fixed parameters, the time formats, to the columns in the flow file.
 - 0.3.3alpha
     - First stable version with a minimal algorithm for detecting behavioral threats.
-
-
 
 ### Author and Contributors
 [rewrite]

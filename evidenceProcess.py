@@ -13,6 +13,7 @@ class EvidenceProcess(multiprocessing.Process):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
     def __init__(self, inputqueue, outputqueue, config):
+        self.name = 'Evidence'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -20,12 +21,30 @@ class EvidenceProcess(multiprocessing.Process):
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
+        # Subscribe to channel 'tw_modified'
+        self.c1 = __database__.subscribe('evidence_added')
+
+    def print(self, text, verbose=1, debug=0):
+        """ 
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the prcocesses into account
+
+        Input
+         verbose: is the minimum verbosity level required for this text to be printed
+         debug: is the minimum debugging level required for this text to be printed
+         text: text to print. Can include format like 'Test {}'.format('here')
+        
+        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+        """
+
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
         # Get the format of the time in the flows
         try:
-            self.timeformat = config.get('timestamp', 'format')
+            self.timeformat = self.config.get('timestamp', 'format')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.timeformat = '%Y/%m/%d %H:%M:%S.%f'
@@ -61,74 +80,47 @@ class EvidenceProcess(multiprocessing.Process):
     def run(self):
         try:
             while True:
-                if self.inputqueue.empty():
-                    # Do stuff
-                    self.outputqueue.put('50|evidence|[Evidence] Processing the Evidence')
+                # Wait for a message from the channel that a TW was modified
+                message = self.c1.get_message(timeout=-1)
+                if message['channel'] == 'evidence_added':
+                    # Get the profileid and twid
                     try:
-                        profiles = __database__.getProfiles()
-                        for profileid in profiles:
-                            ip = profileid.split(self.separator)[1]
-                            lasttw = __database__.getLastTWforProfile(profileid)
-                            lasttw_id, lasttw_time = lasttw[0]
-                            # Is the end time of this TW still current? If the fake now time is out of this TW we do not evaluate it.
-                            fake_now = __database__.getFakeNow()
-                            # For some weird reason the time from the fake now uses another format!!! not sure why
-                            #fake_now = datetime.strptime(fake_now, self.timeformat)
-                            try:
-                                fake_now = datetime.strptime(fake_now, '%Y-%m-%d %H:%M:%S')
-                            except ValueError:
-                                # Sometimes there are nanoseconds and some unconverted data remains
-                                fake_now = datetime.strptime(fake_now, '%Y-%m-%d %H:%M:%S.%f')
-                            lasttw_time = datetime.fromtimestamp(lasttw_time)
-                            time_diff = (fake_now - lasttw_time) 
-                            width_as_delta = timedelta(seconds=self.width)
-                            if time_diff >= width_as_delta:
-                                # This TW is already too old. Do not process it
-                                self.outputqueue.put('60|evidence|[Evidence] This TW is too old. Discard. Fake Now: {}, Current: {}. Diff: {}'.format(fake_now, lasttw_time, time_diff))
-                                continue
-                            #self.outputqueue.put('40|evidence|[Evidence] This TW is NOT too old. Use. Fake Now: {}, Current: {}. Diff: {}'.format(fake_now, lasttw_time, time_diff))
-                            # Since the analysis of evidence should be done 
-                            evidence = __database__.getEvidenceForTW(profileid, lasttw_id)
-                            if evidence:
-                                evidence = json.loads(evidence)
-                                self.outputqueue.put('40|evidence|[Evidence] Evidence for IP: {}. TW: {}. Evidence: {}'.format(ip, lasttw_id, evidence))
-                                accumulated_threat_level = 0.0
-                                for pieceEvid in evidence:
-                                    self.outputqueue.put('50|evidence|[Evidence] \tPiece of Evidence: {}'.format(pieceEvid))
-                                    type_of_alert = pieceEvid[0]
-                                    threat_level = float(pieceEvid[1])
-                                    confidence = float(pieceEvid[2])
-                                    # Compute the moving average of evidence
-                                    new_threat_level = threat_level * confidence
-                                    self.outputqueue.put('50|evidence|[Evidence] \tPiece Threat Level: {}'.format(new_threat_level))
-                                    accumulated_threat_level += new_threat_level
-                                    self.outputqueue.put('50|evidence|[Evidence] \tAcc Threat Level: {}'.format(accumulated_threat_level))
-                                self.outputqueue.put('30|evidence|[Evidence] IP: {}. TW: {}. Accumulated Threat Level: {}'.format(ip, lasttw_id, accumulated_threat_level))
-                                #self.outputqueue.put('10|evidence|[Evidence] Accumulated evidence: {}, threshold: {}'.format(accumulated_threat_level, self.detected))
-                                # This is the part to detect if the accumulated evidence was enough for generating a detection
-                                # The detection should be done in attacks per minute. The paramater in the configuration is attacks per minute
-                                # So find out how many attacks corresponds to the width we are using
-                                # 60 because the width is specified in seconds
-                                detection_threshold_in_this_width = self.detection_threshold * self.width / 60
-                                if accumulated_threat_level >= detection_threshold_in_this_width:
-                                    self.outputqueue.put('10|evidence|[Evidence] DETECTED IP: {}. Accumulated evidence: {}'.format(ip, accumulated_threat_level))
-                                    __database__.setBlockingRequest(profileid, lasttw_id)
-                                    # We also need to mark the TW as processed, because when the stdin does not receive any more traffic, we just keep thinking
-                                    # that the last TW is the last tw....... and the fake time does not advance
-                            
-                    except Exception as inst:
-                        self.outputqueue.put('01|evidence|[Evidence] Error in run() of EvidenceProcess')
-                        self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
-                        self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
-                        #self.outputqueue.put('01|evidence|[Evidence] After Error Evidence {}'.format(evidence))
-
-                    time.sleep(60)
-
-                else:
-                    line = self.queue.get()
-                    if 'stop' != line:
-                        self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
+                        profileid = message['data'].split(':')[0]
+                        twid = message['data'].split(':')[1]
+                    except AttributeError:
+                        # When the channel is created the data '1' is sent
                         return True
+                        # continue
+                    evidence = __database__.getEvidenceForTW(profileid, twid)
+                    if evidence:
+                        evidence = json.loads(evidence)
+                        # The accumulated threat level is for all the types of evidence for this profile
+                        accumulated_threat_level = 0.0
+                        ip = profileid.split(self.separator)[1]
+                        self.print('Evidence for IP {}'.format(ip), 5, 0)
+                        for key in evidence:
+                            data = evidence[key]
+                            self.print('\tEvidence for key {}'.format(key), 5, 0)
+                            confidence = float(data[0])
+                            threat_level = float(data[1])
+                            description = data[2]
+                            # Compute the moving average of evidence
+                            new_threat_level = threat_level * confidence
+                            self.print('\t\tWeighted Threat Level: {}'.format(new_threat_level), 5, 0)
+                            accumulated_threat_level += new_threat_level
+                            self.print('\t\tAccumulated Threat Level: {}'.format(accumulated_threat_level), 5, 0)
+
+                        # This is the part to detect if the accumulated evidence was enough for generating a detection
+                        # The detection should be done in attacks per minute. The parameter in the configuration is attacks per minute
+                        # So find out how many attacks corresponds to the width we are using
+                        # 60 because the width is specified in seconds
+                        detection_threshold_in_this_width = self.detection_threshold * self.width / 60
+                        if accumulated_threat_level >= detection_threshold_in_this_width:
+                            # if this profile was not already blocked in this TW
+                            if not __database__.getBlockingRequest(profileid, twid):
+                                self.print('\tDETECTED IP: {}. Accumulated evidence: {}'.format(ip, accumulated_threat_level), 1,0)
+                                __database__.setBlockingRequest(profileid, twid)
+                            
         except KeyboardInterrupt:
             self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
             return True

@@ -23,6 +23,7 @@ def timing(f):
 class ProfilerProcess(multiprocessing.Process):
     """ A class to create the profiles for IPs and the rest of data """
     def __init__(self, inputqueue, outputqueue, config, width):
+        self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -34,6 +35,22 @@ class ProfilerProcess(multiprocessing.Process):
         self.read_configuration()
         # Set the database
         __database__.setOutputQueue(self.outputqueue)
+
+    def print(self, text, verbose=1, debug=0):
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the prcocesses into account
+
+        Input
+         verbose: is the minimum verbosity level required for this text to be printed
+         debug: is the minimum debugging level required for this text to be printed
+         text: text to print. Can include format like 'Test {}'.format('here')
+
+        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+        """
+
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -122,71 +139,71 @@ class ProfilerProcess(multiprocessing.Process):
             nline = line.strip().split(self.separator)
             try:
                 self.column_values['starttime'] = datetime.strptime(nline[self.column_idx['starttime']], self.timeformat)
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['endtime'] = nline[self.column_idx['endtime']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['dur'] = nline[self.column_idx['dur']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['proto'] = nline[self.column_idx['proto']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['appproto'] = nline[self.column_idx['appproto']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['saddr'] = nline[self.column_idx['saddr']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['sport'] = nline[self.column_idx['sport']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['dir'] = nline[self.column_idx['dir']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['daddr'] = nline[self.column_idx['daddr']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['dport'] = nline[self.column_idx['dport']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['state'] = nline[self.column_idx['state']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['pkts'] = nline[self.column_idx['pkts']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['spkts'] = nline[self.column_idx['spkts']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['dpkts'] = nline[self.column_idx['dpkts']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['bytes'] = nline[self.column_idx['bytes']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['sbytes'] = nline[self.column_idx['sbytes']]
-            except IndexError:
+            except KeyError:
                 pass
             try:
                 self.column_values['dbytes'] = nline[self.column_idx['dbytes']]
-            except IndexError:
+            except KeyError:
                 pass
         else:
             # Find the type of lines, and the columns indexes
@@ -289,6 +306,14 @@ class ProfilerProcess(multiprocessing.Process):
                             self.column_idx['pkts'] = nline.index(field)
                         elif 'totbytes' in field.lower():
                             self.column_idx['bytes'] = nline.index(field)
+                    # Some of the fields were not found probably, so just delete them from the index if their value is False. If not we will believe that we have data on them
+                    # We need a temp dict because we can not change the size of dict while analyzing it
+                    temp_dict = {}
+                    for i in self.column_idx:
+                        if type(self.column_idx[i]) == bool and self.column_idx[i] == False:
+                            continue
+                        temp_dict[i] = self.column_idx[i]
+                    self.column_idx = temp_dict
                 self.columns_defined = True
             except Exception as inst:
                 self.outputqueue.put("01|profiler|\tProblem in process_columns() in profilerProcess.")
@@ -306,15 +331,31 @@ class ProfilerProcess(multiprocessing.Process):
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each colum
         """
-        # Get data
         try:
+            #########
+            # 1st. Get the data from the interpreted columns
+            separator = __database__.getFieldSeparator()
+            starttime = time.mktime(columns['starttime'].timetuple())
+            dur = columns['dur']
             saddr = columns['saddr']
+            profileid = 'profile' + separator + str(saddr)
             sport = columns['sport']
             dport = columns['dport']
             daddr = columns['daddr']
-            separator = __database__.getFieldSeparator()
-            profileid = 'profile' + separator + str(saddr)
-            starttime = time.mktime(columns['starttime'].timetuple())
+            dport = columns['dport']
+            sport = columns['sport']
+            proto = columns['proto']
+            state = columns['state']
+            pkts = columns['pkts']
+            allbytes = columns['bytes']
+            spkts = columns['spkts']
+            sbytes = columns['sbytes']
+            endtime = columns['endtime']
+            appproto = columns['appproto']
+            direction = columns['dir']
+            dpkts = columns['dpkts']
+            dbytes = columns['dbytes']
+
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(saddr) 
@@ -329,6 +370,8 @@ class ProfilerProcess(multiprocessing.Process):
                     # Its a mac
                     return False
 
+            ##############
+            # 2nd. Check home network
             # Check if the ip received (src_ip) is part of our home network. We only crate profiles for our home network
             if self.home_net and saddr_as_obj in self.home_net:
                 # Its in our Home network
@@ -385,42 +428,55 @@ class ProfilerProcess(multiprocessing.Process):
                 # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
                 rev_twid = self.get_timewindow(starttime, rev_profileid)
 
+
+            ##############
+            # 4th Define help functions
             def store_features_going_out(profile, tw):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
                 # Tuple
-                tupleid = str(daddr_as_obj) + ':' + dport + ':' + columns['proto']
+                tupleid = str(daddr_as_obj) + ':' + dport + ':' + proto
+
                 # Compute the symbol for this flow, for this TW, for this profile
                 #symbol = self.compute_symbol(profile, tw, tupleid, columns['starttime'], columns['dur'], columns['bytes'])
                 symbol = ('a', '2019-01-26--13:31:09', 1)
                 # Add the out tuple
-                __database__.add_out_tuple(profile, tw, tupleid, symbol)
+                __database__.add_tuple(profile, tw, tupleid, symbol, traffic_out=True)
                 # Add the dstip
-                __database__.add_out_dstips(profile, tw, daddr_as_obj)
+                __database__.add_ips(profile, tw, daddr_as_obj, columns, traffic_out=True)
                 # Add the dstport
-                __database__.add_out_dstport(profile, tw, columns)
+                __database__.add_port(profile, tw, daddr_as_obj, columns, traffic_out=True, dst_port=True)
+                # Add the srcport
+                __database__.add_port(profile, tw, daddr_as_obj, columns, traffic_out=True, dst_port=False)
+                # Add the flow with all the fields interpreted
+                __database__.add_flow(profileid=profile, twid=tw, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto)
 
             def store_features_going_in(profile, tw):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
                 # Tuple
-                tupleid = str(saddr_as_obj) + ':' + sport + ':' + columns['proto']
+                tupleid = str(saddr_as_obj) + ':' + dport + ':' + proto
                 # Compute symbols.
                 symbol = ('a', '2019-01-26--13:31:09', 1)
                 # Add the src tuple
-                __database__.add_in_tuple(profile, tw, tupleid, symbol)
+                __database__.add_tuple(profile, tw, tupleid, symbol, traffic_out=False)
                 # Add the srcip
-                __database__.add_in_srcips(profile, tw, saddr_as_obj)
+                __database__.add_ips(profile, tw, saddr_as_obj, columns, traffic_out=False)
+                # Add the dstport
+                __database__.add_port(profile, tw, saddr_as_obj, columns, traffic_out=False, dst_port=True)
                 # Add the srcport
-                __database__.add_in_srcport(profile, tw, columns)
+                __database__.add_port(profile, tw, saddr_as_obj, columns, traffic_out=False, dst_port=False)
+                # Add the flow with all the fields interpreted
+                __database__.add_flow(profileid=profile, twid=tw, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto)
 
             ##########################################
+            # 5th. Store the data according to the paremeters
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
             self.outputqueue.put("07|profiler|[Profiler] Storing data in the profile: {}".format(profileid))
-            # In which analysis mode are we?
 
+            # In which analysis mode are we?
             # Mode 'out'
             if self.analysis_direction == 'out':
                 # Only take care of the stuff going out. Here we don't keep track of the stuff going in
@@ -447,10 +503,6 @@ class ProfilerProcess(multiprocessing.Process):
                     # If we have a home net and the flow comes to it. Only the features going in of the IP
                     elif daddr_as_obj in self.home_net:
                         # The dstip was in the homenet. Add the src info to the dst profile
-                        store_features_going_in(rev_profileid, rev_twid)
-                    # If the flow is going from homenet to homenet.
-                    elif daddr_as_obj in self.home_net and saddr_as_obj in self.home_net:
-                        store_features_going_out(profileid, twid)
                         store_features_going_in(rev_profileid, rev_twid)
 
         except Exception as inst:
@@ -809,14 +861,12 @@ class ProfilerProcess(multiprocessing.Process):
                     self.outputqueue.put("03|profiler|[Profile] < Received Line: {}".format(line.replace('\n','')))
                     rec_lines += 1
                     # The received flow is in the line variable.
+                    # Send the flow verbatim to the database, without processing.
+                    #__database__.addFlowVerbatim(line)
                     # Extract the columns of the flow
                     if self.process_columns(line):
                         # Add the flow to the profile
                         self.add_flow_to_profile(self.column_values)
-                        # Update the fake now time. This is used for knowing when is 'now' when reading a file.
-                        # WE NEED TO MEASURE HOW THIS AFFECTS THE SPEED OF THE TOOL
-                        fake_now = str(self.column_values['starttime'])
-                        __database__.setFakeNow(fake_now)
         except KeyboardInterrupt:
             self.outputqueue.put("01|profiler|[Profile] Received {} lines.".format(rec_lines))
             return True

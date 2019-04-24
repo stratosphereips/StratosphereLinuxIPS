@@ -148,7 +148,8 @@ if __name__ == '__main__':
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
     for module_name in __modules__:
-        if not 'Template' in module_name:
+        to_ignore = read_configuration(config, 'modules', 'disable')
+        if not module_name in to_ignore:
             outputProcessQueue.put('01|main|\t[main] Starting the module {} ({})'.format(module_name, __modules__[module_name]['description']))
             module_class = __modules__[module_name]['obj']
             ModuleProcess = module_class(outputProcessQueue, config)

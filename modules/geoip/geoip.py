@@ -31,7 +31,7 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Open the maminddb offline db
         try:
-            self.reader = maxminddb.open_database('GeoLite2-Country_20190402/GeoLite2-Country.mmdb')
+            self.reader = maxminddb.open_database('modules/geoip/GeoLite2-Country.mmdb')
         except:
             self.print('Error opening the geolite2 db in ./GeoLite2-Country_20190402/GeoLite2-Country.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
@@ -57,7 +57,7 @@ class Module(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                message = self.c1.get_message(timeout=None)
+                message = self.c1.get_message(timeout=-1)
                 if message['channel'] == 'new_ip':
                     # Not all the ips!! only the new one coming in the data
                     ip = message['data']
@@ -65,7 +65,7 @@ class Module(Module, multiprocessing.Process):
                     if type(ip) == str:
                         data = __database__.getIPData(ip)
                         # If we alredy have the country for this ip, do not ask the file
-                        if not data:
+                        if 'geocountry' not in data:
                             geoinfo = self.reader.get(ip)
                             if geoinfo:
                                 try:
@@ -80,7 +80,6 @@ class Module(Module, multiprocessing.Process):
                                 data = {}
                                 data['geocountry'] = 'Unknown'
                             __database__.setInfoForIPs(ip, data)
-                            #self.print('Found country of IP {}: {}'.format(ip, countryname), 1, 0)
 
         except KeyboardInterrupt:
             if self.reader:
