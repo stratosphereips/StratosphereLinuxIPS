@@ -11,7 +11,7 @@ def timing(f):
         time1 = time.time()
         ret = f(*args)
         time2 = time.time()
-        Database.outputqueue.put('01|database|Function took {:.3f} ms'.format((time2-time1)*1000.0))
+        self.outputqueue.put('01|database|Function took {:.3f} ms'.format((time2-time1)*1000.0))
         return ret
     return wrap
 
@@ -176,7 +176,7 @@ class Database(object):
         """
         # [-1] so we bring the last TW that matched this time.
         try:
-            data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)[-1]
+            data = self.r.zrangebyscore('tws' + profileid, float('-inf'), float(time), withscores=True, start=0, num=-1)[-1]
         except IndexError:
             # We dont have any last tw?
             data = self.r.zrangebyscore('tws' + profileid, 0, float(time), withscores=True, start=0, num=-1)
@@ -529,6 +529,14 @@ class Database(object):
             self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
             pre = state.split('_')[0]
             try:
+                # We have varius type of states depending on the type of flow.
+                # For Zeek
+                if 'S0' in state or 'REJ' in state or 'RSTOS0' in state or 'RSTRH' in state or 'SH' in state or 'SHR' in state:
+                    return 'NotEstablished'
+                elif 'S1' in state or 'SF' in state or 'S2' in state or 'S3' in state or 'RSTO' in state or 'RSTP' in state or 'OTH' in state:
+                    return 'Established'
+
+                # For Argus
                 suf = state.split('_')[1]
                 if 'S' in pre and 'A' in pre and 'S' in suf and 'A' in suf:
                     """
@@ -595,6 +603,10 @@ class Database(object):
                 elif 'CON' in pre:
                     # UDP
                     return 'Established'
+                elif 'INT' in pre:
+                    # UDP trying to connect, NOT preciselly not established but also NOT 'Established'. So we considered not established because there
+                    # is no confirmation of what happened.
+                    return 'NotEstablished'
                 elif 'EST' in pre:
                     # TCP
                     return 'Established'
@@ -674,6 +686,8 @@ class Database(object):
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence))
         # Tell everyone an evidence was added
         self.publish('evidence_added', profileid + ':' + twid)
+        # Add this evidence to the timeline
+        self.add_timeline_line(profileid, twid, current_evidence)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -861,7 +875,17 @@ class Database(object):
         """ Retrive the name of a port """
         return self.r.hget('portinfo', portproto)
 
+    def add_zeek_file(self, filename):
+        """ Add an entry to the list of zeek files """
+        self.r.sadd('zeekfiles', filename)
 
+    def get_all_zeek_file(self):
+        """ Return all entries from the list of zeek files """
+        data = self.r.smembers('zeekfiles')
+        return data
 
+    def del_zeek_file(self, filename):
+        """ Delete an entry from the list of zeek files """
+        self.r.srem('zeekfiles', filename)
 
 __database__ = Database()

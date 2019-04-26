@@ -119,16 +119,20 @@ class LogsProcess(multiprocessing.Process):
         profilefolder = profileid.split(self.fieldseparator)[1]
         if not os.path.exists(profilefolder):
             os.makedirs(profilefolder)
-            # If we create the folder, add once there the profileid. We have to do this here if we want to do it once.
-            self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Profileid : ' + profileid)
-            # Add more data into the file that is only for the global profile of this IP, without any time window
-            # Add the info we have about this IP
             ip = profileid.split(self.fieldseparator)[1]
+            # If we create the folder, add once there the profileid. We have to do this here if we want to do it once.
+            self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Profiled IP: ' + ip)
+
+            # Add more data into the file that is only for the global profile of this IP, without any time window
+
+            # Add the info we have about this IP
             ip_info = __database__.getIPData(ip)
             printable_ip_info = ''
             if ip_info:
                 printable_ip_info = ', '.join('{} {}'.format(k, v) for k, v in ip_info.items())
-                self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Info about this IP : ' + printable_ip_info, file_mode='a+')
+                self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', 'Info: ', file_mode='a+')
+                for data in printable_ip_info.split(','):
+                    self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', '\t' + data.strip(), file_mode='a+')
         return profilefolder
 
     def addDataToFile(self, filename, data, file_mode='w+', data_type='txt', data_mode='text'):
@@ -212,7 +216,6 @@ class LogsProcess(multiprocessing.Process):
 
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
-
 
                 # Add the rest of data into profile log file
                 twlog = twtime + '.' + twid
@@ -326,14 +329,15 @@ class LogsProcess(multiprocessing.Process):
                 # The complete timeline file is unique for all timewindows. Much easier to read this way.
                 # Get all the TW for this profile
                 tws = __database__.getTWsfromProfile(profileid)
-                self.addDataToFile(profilefolder + '/' + 'Complete-timeline.txt', 'Complete TimeLine of this IP\n' , file_mode='w+')
+                ip = profileid.split('_')[1]
+                self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', 'Complete TimeLine of IP {}\n'.format(ip) , file_mode='w+')
                 for twid_tuple in tws:
                     (twid, starttime) = twid_tuple
                     data = __database__.get_timeline_all_lines(profileid, twid)
                     if data:
                         #for line in data:
                         #self.print('TIMELINE Profileid: {:45}, twid: {}. Line: {}'.format(profileid, twid, line))
-                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline.txt', data , file_mode='a+', data_mode='raw', data_type='lines')
+                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data , file_mode='a+', data_mode='raw', data_type='lines')
 
             # Create the file of the blocked profiles and TW
             TWforProfileBlocked = __database__.getBlockedTW()
@@ -343,6 +347,11 @@ class LogsProcess(multiprocessing.Process):
                 for blocked in TWforProfileBlocked:
                     self.addDataToFile('Blocked.txt', '\t' + str(blocked).split('_')[1] + ': ' + str(blocked).split('_')[2], file_mode='a+', data_type='json')
                     #self.outputqueue.put('03|logs|\t\t[Logs]: Blocked file updated: {}'.format(TWforProfileBlocked))
+
+            # Create a file with information about the capture in general
+            #self.addDataToFile('Information.txt', 'Information about this slips run', file_mode='w+', data_type='text')
+            #self.addDataToFile('Information.txt', '================================\n', file_mode='a+', data_type='text')
+            #self.addDataToFile('Information.txt', 'Type of input: ' + , file_mode='a+', data_type='text')
 
         except KeyboardInterrupt:
             return True

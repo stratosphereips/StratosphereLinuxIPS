@@ -28,7 +28,6 @@ bootpc,68,udp,Bootstrap Protocol Client
 tftp,69,tcp,Trivial File Transfer
 tftp,69,udp,Trivial File Transfer
 http,80,tcp,HTTP
-http,80,udp,HTTP
 npp,92,tcp,Network Printing Protocol
 npp,92,udp,Network Printing Protocol
 pop3,110,tcp,Post Office Protocol - Version 3
@@ -115,7 +114,17 @@ ssdp,1900,tcp,Simple Service Discovery Protocol
 ssdp,1900,udp,Simple Service Discovery Protocol
 gnunet,2086,tcp,GNUnet
 gnunet,2086,udp,GNUnet
+telnet-alt,2323,tcp,Telnet Alternative
+Web Services Discovery (WSD) UPNP,3702,tcp,Web Services Discovery (WSD)
+Web Services Discovery (WSD) UPNP,3702,udp,Web Services Discovery (WSD)
 XMPP Chat. Google Talk. Telegram or Whatsapp,5222,tcp,XMPP Chat. Google Talk, Telegram or Whatsapp
+Apple Notification Protocol or XMPP,5223,tcp,Apple Notification Protocol or XMPP (Jabber)
 Google Playstore or Google Talk or Google Chrome Sync,5228,tcp,Google Playstore or Google Talk or Google Chrome Sync
 http-alt,8080,tcp,HTTP Alternative
 http-alt,8081,tcp,HTTP Alternative
+nat-pmp,5351,udp,Nat Port Mapping Protocol
+nat-pmp,5351,tcp,Nat Port Mapping Protocol
+mdns,5353,udp,Multicast DNS
+llmr,5355,udp,Link-Local Multicast Name Resolution
+bittorrent,6881,udp,Bittorrent protocol usually
+bittorrent,6882,udp,Bittorrent protocol usually
