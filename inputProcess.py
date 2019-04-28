@@ -79,8 +79,8 @@ class InputProcess(multiprocessing.Process):
                 self.profilerqueue.close()
 
                 return True
-            # Process the pcap files
-            elif self.input_type == 'pcap':
+            # Process the pcap files or bro interface
+            elif self.input_type == 'pcap' or self.input_type == 'interface':
                 # Now start the observer of new files. We need the observer because Zeek does not create all the files
                 # at once, but when the traffic appears. That means that we need
                 # some process to tell us which files to read in real time when they appear
@@ -93,17 +93,29 @@ class InputProcess(multiprocessing.Process):
                 # Start the observer
                 self.event_observer.start()
 
-                # Find if the pcap file name was absolute or relative
-                if self.input_information[0] == '/':
+                # This double if is horrible but we just need to change a string
+                if self.input_type == 'interface':
+                    # Change the bro command
+                    bro_parameter = '-i'
                     prefix = ''
-                else:
-                    prefix = '../'
+                    # We don't want to stop bro if we read from an interface
+                    self.bro_timeout = 9999999999999999
+                elif self.input_type == 'pcap':
+                    # We change the bro command
+                    bro_parameter = '-r'
+                    # Find if the pcap file name was absolute or relative
+                    if self.input_information[0] == '/':
+                        prefix = ''
+                    else:
+                        prefix = '../'
+                    # This is for stoping the input if bro does not receive any new line while reading a pcap
+                    self.bro_timeout = 10
                 # First clear the zeek folder of old .log files
-                command = "rm " + self.zeek_folder + "/*.log"
+                command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null &"
                 os.system(command)
                 # Run zeek on the pcap. The redef is to hav json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                command = "cd " + self.zeek_folder + "; bro -C -r " + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                command = "cd " + self.zeek_folder + "; bro -C " + bro_parameter + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
                 os.system(command)
                 # Give Zeek some time to generate at least 1 file.
                 time.sleep(3)
@@ -134,7 +146,7 @@ class InputProcess(multiprocessing.Process):
                         #self.print('File {}, read line: {}'.format(filename, json_line))
                         # Did the file ended?
                         if not json_line:
-                            # We reached the end of this file. Wait for more data to come
+                            # We reached the end of one of the files that we were reading. Wait for more data to come
                             continue
                         
                         # Since we actually read something form any file, update the last time of read
@@ -153,6 +165,7 @@ class InputProcess(multiprocessing.Process):
                         cache_lines[filename] = line
                      
                     # Out of the for
+
                     #self.print('Out of the for.')
                     #self.print('Cached lines: {}'.format(str(cache_lines)))
                     # If we don't have any cached lines to send, it may mean that new lines are not arriving. Check
@@ -161,7 +174,7 @@ class InputProcess(multiprocessing.Process):
                         now = datetime.now()
                         diff = now - last_updated_file_time
                         diff = diff.seconds
-                        if diff >= 10:
+                        if diff >= self.bro_timeout:
                             # It has been 10 seconds without any file being updated. So stop the while
                             break
 
@@ -173,6 +186,10 @@ class InputProcess(multiprocessing.Process):
                         key = sorted_time_last_lines[0]
                     except IndexError:
                         # No more sorted keys. Just loop waiting for more lines
+                        # It may happened that we check all the files in the folder, and there is still no file for us.
+                        # To cover this case, just refresh the list of files
+                        #self.print('Getting new files...')
+                        zeek_files = __database__.get_all_zeek_file()
                         continue
                     line_to_send = cache_lines[key]
                     #self.print('Line to send from file {}. {}'.format(key, line_to_send))
