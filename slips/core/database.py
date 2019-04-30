@@ -870,12 +870,14 @@ class Database(object):
         data.append(description)
         current_evidence[key] = data
 
-        current_evidence = json.dumps(current_evidence)
-        self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence))
+        current_evidence_json = json.dumps(current_evidence)
+        self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         # Tell everyone an evidence was added
         self.publish('evidence_added', profileid + ':' + twid)
+
         # Add this evidence to the timeline
-        self.add_timeline_line(profileid, twid, current_evidence)
+        text_timeline = current_evidence[list(current_evidence.keys())[0]][2] + '\n'
+        self.add_timeline_line(profileid, twid, text_timeline)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -1046,7 +1048,8 @@ class Database(object):
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline') 
-        data = self.r.lrange(key, -1, -1)
+        #data = self.r.lrange(key, -1, -1)
+        data = self.r.lpop(key)
         return data
 
     def get_timeline_all_lines(self, profileid, twid):
