@@ -70,6 +70,7 @@ class Module(Module, multiprocessing.Process):
         Receives a flow and it process it for this profileid and twid
         """
         try:
+            # Get some fields
             stime = next(iter(flow))
             flow_dict = json.loads(flow[stime])
             
@@ -77,6 +78,7 @@ class Module(Module, multiprocessing.Process):
             saddr = flow_dict['saddr']
             sport = flow_dict['sport']
             daddr = flow_dict['daddr']
+            # Get data from the dst IP address
             daddr_data = __database__.getIPData(daddr)
             try:
                 daddr_country = daddr_data['geocountry']
@@ -88,15 +90,17 @@ class Module(Module, multiprocessing.Process):
                 daddr_asn = 'Unknown'
             dport = flow_dict['dport']
             proto = flow_dict['proto']
+
             # Here is where we see if we know this dport
-            # Check the database.py code
             dport_name = __database__.get_port_info(str(dport)+'/'+proto)
-            if dport == 80 and proto == 'udp':
-                print(dport_name)
+            #if dport == 80 and proto == 'udp':
+            #    print(dport_name)
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
             allbytes_human = 0.0
+
+            # Convert the bytes into human readable
             if int(allbytes) < 1024:
                 # In bytes
                 allbytes_human = '{:.2f}{}'.format(float(allbytes),'b')
