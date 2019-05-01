@@ -18,7 +18,7 @@ from evidenceProcess import EvidenceProcess
 # This plugins import will automatially load the modules and put them in the __modules__ variable
 from slips.core.plugins import __modules__
 
-version = '0.6.0'
+version = '0.6.0rc1'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
