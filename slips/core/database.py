@@ -863,7 +863,7 @@ class Database(object):
         else:
             # We never had any evidence for nothing
             current_evidence = {}
-        # We dont care if there is previous evidence or not. We just change all the values.
+        # We dont care if there is previous evidence or not in this key. We just change all the values.
         data = []
         data.append(confidence)
         data.append(threat_level)
@@ -876,7 +876,7 @@ class Database(object):
         self.publish('evidence_added', profileid + ':' + twid)
 
         # Add this evidence to the timeline
-        text_timeline = current_evidence[list(current_evidence.keys())[0]][2] + '\n'
+        text_timeline = str(current_evidence[key][2]) + '\n'
         self.add_timeline_line(profileid, twid, text_timeline)
 
     def getEvidenceForTW(self, profileid, twid):
