@@ -103,8 +103,10 @@ class PortScanProcess(Module, multiprocessing.Process):
                     dstips = data[dport]['dstips']
                     amount_of_dips = len(dstips)
                     # If we contacted more than 3 dst IPs on this port with not established connections.. we have evidence
-                    self.print('Horizontal Portscan check. Amount of dips: {}. Threshold=3'.format(amount_of_dips), 3, 0)
-                    if amount_of_dips > 3:
+                    #self.print('Horizontal Portscan check. Amount of dips: {}. Threshold=3'.format(amount_of_dips), 3, 0)
+                    # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dips per port.
+                    # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more. 
+                    if amount_of_dips % 3 == 0:
                         # Type of evidence
                         type_evidence = 'PortScanType2'
                         # Key
@@ -137,8 +139,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                     dstports = data[dstip]['dstports']
                     amount_of_dports = len(dstports)
                     #self.print('Vertical Portscan check. Amount of dports: {}. Threshold=3'.format(amount_of_dports), 3, 0)
-                    # If we contacted more than 3 dst ports on this ip with not established connections.. we have evidence
-                    if amount_of_dports > 3:
+                    # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dports per dip.
+                    # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more. 
+                    if amount_of_dports % 3 == 0:
                         # Type of evidence
                         type_evidence = 'PortScanType1'
                         # Key
