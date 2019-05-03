@@ -14,6 +14,7 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
 - py37-redis (Be sure that you install the redis libraries for your python3 version. This can be done with pip3, but your 'python3' executable in your path should point to the version of python you are using, such as python3.7)
 - redis database
 - maxminddb (pip install maxminddb) For the GeoIP module (you can also ignore this module in the conf)
+- Zeek (Bro) https://docs.zeek.org/en/stable/install/install.html
 
 #### Installing dependencies    
 The new version of slips uses redis as a backend database, so you need to have redis running.
@@ -64,6 +65,18 @@ To run argus in your own computer you should do:
     argus -B localhost -F [slipsfolder]/argus.conf
     ```
 
+3. Zeek (Bro)
+
+- How to install and set Zeek (Bro) properly?
+ 
+  - Download the [Zeek] and follow the instructions for compilation.
+  - Make Zeek (Bro) visible for slips. Some ideas:
+    - Create a link to "/bin" folder from compiled Zeek (Bro) folder like 
+    ```
+    "sudo ln -s PATH_TO_COMPILED_BRO_FOLDER/bin/bro /bin"
+    ```
+    - or add path from your compiled zeek (bro) folder to ~/.bashrc file.
+   
 ## Usage
 Start redis
 
@@ -172,3 +185,4 @@ This version of slips comes with the following features:
 [Argus]: http://qosient.com/argus/ "Argus"
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
+[Zeek]: https://www.zeek.org/download/index.html 
