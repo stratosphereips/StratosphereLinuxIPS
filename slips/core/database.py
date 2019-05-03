@@ -21,10 +21,14 @@ class Database(object):
     def __init__(self):
         # The name is used to print in the outputprocess
         self.name = 'DB'
-        self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
-        # IMPORTANT
-        # For now, do not remember between runs of slips. Just delete the database when we start with flushdb
-        self.r.flushdb()
+        try:
+            self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+            # IMPORTANT
+            # For now, do not remember between runs of slips. Just delete the database when we start with flushdb
+            self.r.flushdb()
+        except redis.exceptions.ConnectionError:
+            print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
+
         self.separator = '_'
 
     def print(self, text, verbose=1, debug=0):
