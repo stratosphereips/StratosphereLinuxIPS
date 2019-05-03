@@ -7,11 +7,11 @@ Slips is an intrusion prevention system that is based on behavioral detections a
 The minimum slips requirements are:
 
 - redis database running (see http://redis.org)
-- python 3.7
+- python 3.7 or more
 - py37-redis 
-- maxminddb libraries for python (pip install maxminddb)
+- maxminddb libraries for python (pip install maxminddb). Or ignore the geoip module in the conf.
 - watchdog python library
-- bro (now zeek) (see http://zeek.org)
+- Zeek (Bro) https://docs.zeek.org/en/stable/install/install.html
   
 To run redis you can:
     - In Linux, as a daemon: redis-server --daemonize yes
@@ -54,15 +54,20 @@ The timeline file is created by the timeline module and is a unique file interpr
 ### Profile file
 This file contains generic features of the profile that are not part of any individual time-window, such as information about its Ethernet MAC address.
 
-
-
-
-
-
 # History of Slips
 This is the new version of the Stratosphere IPS, a behavioral-based intrusion detection and prevention system that uses machine learning algorithms to detect malicious behaviors. It is part of a larger suite of programs that include the [Stratosphere Windows IPS] and the [Stratosphere Testing Framework].
 
+## Usage
 
+- Start redis
+
+    In macos using ports, if you prefer to start a redis server manually, rather than using 'port load', then use this command:
+
+        redis-server /opt/local/etc/redis.conf
+
+    A startup item has been generated that will aid in starting redis with launchd. It is disabled by default. Execute the following command to start it, and to cause it to launch at startup:
+
+        sudo port load redis
 
 # More specific usage examples
 
@@ -152,12 +157,13 @@ This version of slips comes with the following features:
 
 - The main author of the project is Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
 - Ondrej Lukas: During the original slips code, he worked on the new detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classes, etc.
+- Frantisek Strasak. Work on all the new version of slips, features, output, core. (https://github.com/frenky-strasak)
 - Elaheh Biglar Beigi
 - MariaRigaki 
 - kartik88363
 - arkamar
 
 
-[Argus]: http://qosient.com/argus/ "Argus"
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
+[Zeek]: https://www.zeek.org/download/index.html 
