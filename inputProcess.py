@@ -81,6 +81,9 @@ class InputProcess(multiprocessing.Process):
                 return True
             # Process the pcap files
             elif self.input_type == 'pcap':
+                # Create zeek_folder if does not exist.
+                if not os.path.exists(self.zeek_folder):
+                    os.makedirs(self.zeek_folder)
                 # Now start the observer of new files. We need the observer because Zeek does not create all the files
                 # at once, but when the traffic appears. That means that we need
                 # some process to tell us which files to read in real time when they appear
@@ -89,22 +92,25 @@ class InputProcess(multiprocessing.Process):
                 # Create an observer
                 self.event_observer = Observer()
                 # Schedule the observer with the callback on the file handler
-                self.event_observer.schedule( self.event_handler, self.zeek_folder, recursive=True)
+                self.event_observer.schedule(self.event_handler, self.zeek_folder, recursive=True)
                 # Start the observer
                 self.event_observer.start()
-
                 # Find if the pcap file name was absolute or relative
                 if self.input_information[0] == '/':
                     prefix = ''
                 else:
                     prefix = '../'
-                # First clear the zeek folder of old .log files
-                command = "rm " + self.zeek_folder + "/*.log"
-                os.system(command)
+
+                if len(os.listdir(self.zeek_folder)) > 0:
+                    # First clear the zeek folder of old .log files
+                    command = "rm " + self.zeek_folder + "/*.log > /dev/null"
+                    os.system(command)
                 # Run zeek on the pcap. The redef is to hav json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
                 command = "cd " + self.zeek_folder + "; bro -C -r " + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                # Run zeek.
                 os.system(command)
+
                 # Give Zeek some time to generate at least 1 file.
                 time.sleep(3)
 
@@ -198,6 +204,9 @@ class InputProcess(multiprocessing.Process):
                 self.event_observer.join()
                 self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
                 return True
+
+            elif self.input_type == 'interface':
+                raise NotImplementedError
 
         except KeyboardInterrupt:
             self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(lines))
