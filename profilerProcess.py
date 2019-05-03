@@ -8,6 +8,8 @@ import configparser
 from slips.core.database import __database__
 import time
 import ipaddress
+import traceback
+
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -688,13 +690,13 @@ class ProfilerProcess(multiprocessing.Process):
                     symbol = ('a', '2019-01-26--13:31:09', 1)
 
                     # Add the out tuple
-                    __database__.add_out_tuple(profileid, twid, tupleid, symbol)
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, traffic_out=True)
                     # Add the dstip
-                    __database__.add_out_dstips(profileid, twid, daddr_as_obj, state, pkts, proto, dport)
+                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, traffic_out=True)
                     # Add the dstport
-                    __database__.add_out_dstport(profileid, twid, dport, allbytes, sbytes, pkts, spkts, state, proto, daddr_as_obj)
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, traffic_out=True, dst_port=True)
                     # Add the srcport
-                    __database__.add_out_srcport(profileid, twid, sport)
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, traffic_out=True, dst_port=False)
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
                 elif 'dns' in flow_type:
@@ -715,15 +717,15 @@ class ProfilerProcess(multiprocessing.Process):
                     symbol = ('a', '2019-01-26--13:31:09', 1)
 
                     # Add the src tuple
-                    __database__.add_in_tuple(profileid, tw, tupleid, symbol)
+                    __database__.add_tuple(profile, twid, tupleid, symbol, traffic_out=False)
                     # Add the srcip
-                    __database__.add_in_srcips(profileid, twid, saddr_as_obj)
+                    __database__.add_ips(profile, twid, saddr_as_obj, self.column_values, traffic_out=False)
                     # Add the dstport
-                    __database__.add_in_dstport(profileid, twid, dport)
+                    __database__.add_port(profile, twid, saddr_as_obj, self.column_values, traffic_out=False, dst_port=True)
                     # Add the srcport
-                    __database__.add_in_srcport(profileid, twid, sport)
+                    __database__.add_port(profile, twid, saddr_as_obj, self.column_values, traffic_out=False, dst_port=False)
                     # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, label=self.label)
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
 
             ##########################################
             # 5th. Store the data according to the paremeters
@@ -764,7 +766,7 @@ class ProfilerProcess(multiprocessing.Process):
                         store_features_going_in(rev_profileid, rev_twid)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
-            self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess.")
+            self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()))
             self.outputqueue.put("01|profiler|[Profile] {}".format((type(inst))))
             self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
 
