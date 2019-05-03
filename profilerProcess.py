@@ -8,6 +8,8 @@ import configparser
 from slips.core.database import __database__
 import time
 import ipaddress
+import traceback
+
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -566,7 +568,7 @@ class ProfilerProcess(multiprocessing.Process):
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
                 # Tuple
-                tupleid = str(saddr_as_obj) + ':' + dport + ':' + proto
+                tupleid = str(saddr_as_obj) + ':' + str(dport) + ':' + proto
                 # Compute symbols.
                 symbol = ('a', '2019-01-26--13:31:09', 1)
                 # Add the src tuple
@@ -616,7 +618,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
-            self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess.")
+            self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()))
             self.outputqueue.put("01|profiler|[Profile] {}".format((type(inst))))
             self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
 
