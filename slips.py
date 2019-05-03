@@ -3,20 +3,11 @@
 # See the file 'LICENSE' for copying permission.
 # Author: Sebastian Garcia. eldraco@gmail.com , sebastian.garcia@agents.fel.cvut.cz
 
-import sys
-import os
-import argparse
-import multiprocessing
-from multiprocessing import Queue
 import configparser
-from inputProcess import InputProcess
-from outputProcess import OutputProcess
-from profilerProcess import ProfilerProcess
-from cursesProcess import CursesProcess
-from logsProcess import LogsProcess
-from evidenceProcess import EvidenceProcess
-# This plugins import will automatially load the modules and put them in the __modules__ variable
-from slips.core.plugins import __modules__
+import argparse
+import sys
+import redis
+import os
 
 version = '0.5.1'
 
@@ -27,6 +18,36 @@ def read_configuration(config, section, name):
     except (configparser.NoOptionError, configparser.NoSectionError, NameError):
         # There is a conf, but there is no option, or no section or no configuration file specified
         return False
+
+
+def test_redis_database(redis_host='localhost', redis_port=6379) -> str:
+    server_redis_version = None
+    try:
+        r = redis.StrictRedis(host=redis_host, port=redis_port, db=0, charset="utf-8",
+                                   decode_responses=True)
+        server_redis_version = r.execute_command('INFO')['redis_version']
+    except redis.exceptions.ConnectionError:
+        print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
+    return server_redis_version
+
+
+def test_zeek() -> bool:
+    """
+    Test if we can run zeek (bro).
+    """
+    command = "bro --version"
+    ret = os.system(command)
+    if ret != 0:
+        print("01|main|[main] Error: Zeek (Bro) was not found. Did you set the path to zeek?"
+              " The command which was executed in slips: {}".format(command))
+    return True if ret == 0 else False
+
+
+def terminate_slips():
+    """
+    Do all necessary stuff to stop process any clear any files.
+    """
+    sys.exit(-1)
 
 
 ####################
@@ -63,7 +84,32 @@ if __name__ == '__main__':
     except TypeError:
         # No conf file provided
         pass
-    
+
+    # check if redis server running
+    server_redis_version = test_redis_database()
+    if server_redis_version is None:
+        terminate_slips()
+
+    # If we need zeek (bro), test if we can run it.
+    if args.pcapfile:
+        visible_zeek = test_zeek()
+        if visible_zeek is False:
+            # If we do not have access to zeek and we want to use it, kill it.
+            terminate_slips()
+
+    """
+    Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
+    """
+    from multiprocessing import Queue
+    from inputProcess import InputProcess
+    from outputProcess import OutputProcess
+    from profilerProcess import ProfilerProcess
+    from cursesProcess import CursesProcess
+    from logsProcess import LogsProcess
+    from evidenceProcess import EvidenceProcess
+    # This plugins import will automatially load the modules and put them in the __modules__ variable
+    from slips.core.plugins import __modules__
+
     # Any verbosity passed as parameter overrides the configuration. Only check its value
     if args.verbose == None:
         # Read the verbosity from the config
