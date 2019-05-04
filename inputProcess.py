@@ -109,7 +109,7 @@ class InputProcess(multiprocessing.Process):
                     else:
                         prefix = '../'
                     # This is for stoping the input if bro does not receive any new line while reading a pcap
-                    self.bro_timeout = 10
+                    self.bro_timeout = 30
                 # First clear the zeek folder of old .log files
                 command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null &"
                 os.system(command)
