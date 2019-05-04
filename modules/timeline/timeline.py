@@ -29,6 +29,8 @@ class Module(Module, multiprocessing.Process):
         self.profiles_tw = {}
         # Load the list of common known ports
         self.load_ports()
+        # Wait a little so we give time to read something from the files
+        time.sleep(5)
 
     def load_ports(self):
         """ 
@@ -75,6 +77,7 @@ class Module(Module, multiprocessing.Process):
             flow_dict = json.loads(flow[stime])
             
             dur = flow_dict['dur']
+            uid = flow_dict['uid']
             saddr = flow_dict['saddr']
             sport = flow_dict['sport']
             daddr = flow_dict['daddr']
@@ -116,6 +119,8 @@ class Module(Module, multiprocessing.Process):
             spkts = flow_dict['spkts']
             sbytes = flow_dict['sbytes']
             appproto = flow_dict['appproto']
+            # Check if we have an alternative flow related to this one. Like DNS or HTTP
+            alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
 
             key = profileid
 
@@ -130,7 +135,9 @@ class Module(Module, multiprocessing.Process):
                 elif dport_name and 'notest' in state.lower():
                     activity = '- NOT Established {} asked to {} {}/{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, allbytes_human, daddr_country, daddr_asn)
                 else:
-                    activity = '[!!] Not recognized activity on flow {}\n'.format(flow)
+                    # This is not recognized. Do our best
+                    activity = '[!] - Not recognized flow from {} to {} dport {}/{}, Size: {}, Country: {}, ASN Org: {}\n'.format(saddr, daddr, dport, proto, allbytes_human, daddr_country, daddr_asn)
+                    #activity = '[!!] Not recognized activity on flow {}\n'.format(flow)
             elif 'icmp' in proto:
                 if type(sport) == int:
                     # zeek puts the number
@@ -176,10 +183,24 @@ class Module(Module, multiprocessing.Process):
                 dport_name = 'IGMP'
                 activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
 
+            # Store the activity in the DB for this profileid and twid
             if activity:
-                # Store the activity in the DB for this profileid and twid
                 __database__.add_timeline_line(profileid, twid, activity)
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+
+            # Now print the alternative flow:
+            if alt_flow_json:
+                alt_flow = json.loads(alt_flow_json)
+                if 'dns' in alt_flow['type']:
+                    activity = '	- Query: {}, Query Class: {}, Type: {}, Response Code: {}, Answers: {}\n'.format(alt_flow['query'], alt_flow['qclass_name'], alt_flow['qtype_name'], alt_flow['rcode_name'], alt_flow['answers'])
+            #else:
+                #activity = '	No alternative flow for this netflow uid: {}\n'.format(uid)
+
+            # Store the activity in the DB for this profileid and twid
+            if activity:
+                __database__.add_timeline_line(profileid, twid, activity)
+            self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+
 
         except KeyboardInterrupt:
             return True
