@@ -270,6 +270,25 @@ class ProfilerProcess(multiprocessing.Process):
             #{"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
             self.column_values = {}
             self.column_values['type'] = 'dns'
+            self.column_values['starttime'] = datetime.fromtimestamp(line['ts'])
+            try:
+                self.column_values['uid'] = line['uid']
+            except KeyError:
+                self.column_values['uid'] = False
+            self.column_values['query'] = line['query']
+            self.column_values['qclass_name'] = line['qclass_name']
+            self.column_values['qtype_name'] = line['qtype_name']
+            self.column_values['rcode_name'] = line['rcode_name']
+            try:
+                self.column_values['answers'] = line['answers']
+            except KeyError:
+                self.column_values['answers'] = ''
+            try:
+                self.column_values['TTLs'] = line['TTLs']
+            except KeyError:
+                self.column_values['TTLs'] = ''
+            self.column_values['saddr'] = line['id.orig_h']
+            self.column_values['daddr'] = line['id.resp_h']
         elif 'ssh' in line['type']:
             self.column_values = {}
             self.column_values['type'] = 'ssh'
@@ -437,30 +456,48 @@ class ProfilerProcess(multiprocessing.Process):
         """
         try:
             # For now we only process the argus flows and the zeek conn logs
-            if not 'conn' in self.column_values['type'] and not 'argus' in self.column_values['type']:
+            if not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'argus' in self.column_values['type']:
                 return True
+
+            # The first change we should do is to take into account different types of flows. A normal netflow is what we have now, but we need all 
+            # the zeek type of flows. So we need to adapt all the database?
+
             #########
             # 1st. Get the data from the interpreted columns
             separator = __database__.getFieldSeparator()
+            # These are common to all types of flows
             starttime = time.mktime(self.column_values['starttime'].timetuple())
-            dur = self.column_values['dur']
+            uid = self.column_values['uid']
+            flowtype = self.column_values['type']
+            flow_type = self.column_values['type']
             saddr = self.column_values['saddr']
-            profileid = 'profile' + separator + str(saddr)
-            sport = self.column_values['sport']
             daddr = self.column_values['daddr']
-            dport = self.column_values['dport']
-            sport = self.column_values['sport']
-            proto = self.column_values['proto']
-            state = self.column_values['state']
-            pkts = self.column_values['pkts']
-            allbytes = self.column_values['bytes']
-            spkts = self.column_values['spkts']
-            sbytes = self.column_values['sbytes']
-            endtime = self.column_values['endtime']
-            appproto = self.column_values['appproto']
-            direction = self.column_values['dir']
-            dpkts = self.column_values['dpkts']
-            dbytes = self.column_values['dbytes']
+            profileid = 'profile' + separator + str(saddr)
+            
+            if 'conn' in flow_type  or 'argus' in flow_type:
+                dur = self.column_values['dur']
+                sport = self.column_values['sport']
+                dport = self.column_values['dport']
+                sport = self.column_values['sport']
+                proto = self.column_values['proto']
+                state = self.column_values['state']
+                pkts = self.column_values['pkts']
+                allbytes = self.column_values['bytes']
+                spkts = self.column_values['spkts']
+                sbytes = self.column_values['sbytes']
+                endtime = self.column_values['endtime']
+                appproto = self.column_values['appproto']
+                direction = self.column_values['dir']
+                dpkts = self.column_values['dpkts']
+                dbytes = self.column_values['dbytes']
+
+            elif 'dns' in flow_type:
+                query = self.column_values['query']
+                qclass_name = self.column_values['qclass_name']
+                qtype_name = self.column_values['qtype_name']
+                rcode_name = self.column_values['rcode_name']
+                answers = self.column_values['answers'] 
+                ttls = self.column_values['TTLs']
 
             # Create the objects of IPs
             try:
@@ -475,7 +512,6 @@ class ProfilerProcess(multiprocessing.Process):
                 except ipaddress.AddressValueError:
                     # Its a mac
                     return False
-
      
             ##############
             # For Adding the profile only now
@@ -540,40 +576,44 @@ class ProfilerProcess(multiprocessing.Process):
 
             ##############
             # 4th Define help functions for storing data
-            def store_features_going_out(profile, tw):
+            def store_features_going_out(profileid, twid):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
-                # Tuple
-                tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
 
-                # Compute the symbol for this flow, for this TW, for this profile
-                # FIX
-                symbol = ('a', '2019-01-26--13:31:09', 1)
+                if 'conn' in flow_type  or 'argus' in flow_type:
+                    # Tuple
+                    tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
+                    # Compute the symbol for this flow, for this TW, for this profile
+                    # FIX
+                    symbol = ('a', '2019-01-26--13:31:09', 1)
 
-                # Add the out tuple
-                __database__.add_out_tuple(profile, tw, tupleid, symbol)
-                # Add the dstip
-                __database__.add_out_dstips(profile, tw, daddr_as_obj, state, pkts, proto, dport)
-                # Add the dstport
-                __database__.add_out_dstport(profile, tw, dport, allbytes, sbytes, pkts, spkts, state, proto, daddr_as_obj)
-                # Add the srcport
-                __database__.add_out_srcport(profile, tw, sport)
-                # Add the flow with all the fields interpreted
-                __database__.add_flow(profileid=profile, twid=tw, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto)
+                    # Add the out tuple
+                    __database__.add_out_tuple(profileid, twid, tupleid, symbol)
+                    # Add the dstip
+                    __database__.add_out_dstips(profileid, twid, daddr_as_obj, state, pkts, proto, dport)
+                    # Add the dstport
+                    __database__.add_out_dstport(profileid, twid, dport, allbytes, sbytes, pkts, spkts, state, proto, daddr_as_obj)
+                    # Add the srcport
+                    __database__.add_out_srcport(profileid, twid, sport)
+                    # Add the flow with all the fields interpreted
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid)
+                elif 'dns' in flow_type:
+                    __database__.add_out_dns(profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
 
-            def store_features_going_in(profile, tw):
+            def store_features_going_in(profileid, twid):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
-                # Add the srcip
-                __database__.add_in_srcips(profile, tw, saddr_as_obj)
-                # Add the dstport
-                __database__.add_in_dstport(profile, tw, dport)
-                # Add the srcport
-                __database__.add_in_srcport(profile, tw, sport)
-                # Add the flow with all the fields interpreted
-                __database__.add_flow(profileid=profile, twid=tw, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto)
+                if 'conn' in flow_type  or 'argus' in flow_type:
+                    # Add the srcip
+                    __database__.add_in_srcips(profileid, twid, saddr_as_obj)
+                    # Add the dstport
+                    __database__.add_in_dstport(profileid, twid, dport)
+                    # Add the srcport
+                    __database__.add_in_srcport(profileid, twid, sport)
+                    # Add the flow with all the fields interpreted
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto)
 
 
             ##########################################
@@ -640,7 +680,6 @@ class ProfilerProcess(multiprocessing.Process):
             timechar = ''
 
             # Get T1 (the time diff between the past flow and the past-past flow) from this tuple. T1 is a float in the db. Also get the time of the last flow in this tuple. In the DB prev time is a str
-            self.outputqueue.put("01|profiler|[Profile] AAA ")
             (T1, previous_time) = __database__.getT2ForProfileTW(profileid, twid, tupleid)
             ## BE SURE THAT HERE WE RECEIVE THE PROPER DATA
             #T1 = timedelta(seconds=10)
