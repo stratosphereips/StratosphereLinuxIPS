@@ -142,27 +142,35 @@ class InputProcess(multiprocessing.Process):
                             file_handler = open(filename + '.log', 'r')
                             open_file_handlers[filename] = file_handler
                             #self.print('New File {}'.format(filename))
-                        json_line = file_handler.readline()
-                        #self.print('File {}, read line: {}'.format(filename, json_line))
-                        # Did the file ended?
-                        if not json_line:
-                            # We reached the end of one of the files that we were reading. Wait for more data to come
-                            continue
-                        
-                        # Since we actually read something form any file, update the last time of read
-                        last_updated_file_time = datetime.now()
-                        # Convert from json to dict
-                        line = json.loads(json_line)
-                        # All bro files have a field 'ts' with the timestamp.
-                        # So we are safe here not checking the type of line
-                        timestamp = line['ts']
-                        time_last_lines[filename] = timestamp
-                        # Add the type of file to the dict so later we know how to parse it
-                        line['type'] = filename
-                        #self.print('File {}. TS: {}'.format(filename, timestamp))
-                        # Store the line in the cache
-                        #self.print('Adding cache and time of {}'.format(filename))
-                        cache_lines[filename] = line
+
+                        # Only read the next line if the previous line was sent
+                        try:
+                            temp = cache_lines[filename]
+                            # We have still something to send, do not read the next line
+                        except KeyError:
+                            # We don't have any waiting line for this file, so proceed
+
+                            json_line = file_handler.readline()
+                            #self.print('File {}, read line: {}'.format(filename, json_line))
+                            # Did the file ended?
+                            if not json_line:
+                                # We reached the end of one of the files that we were reading. Wait for more data to come
+                                continue
+                            
+                            # Since we actually read something form any file, update the last time of read
+                            last_updated_file_time = datetime.now()
+                            # Convert from json to dict
+                            line = json.loads(json_line)
+                            # All bro files have a field 'ts' with the timestamp.
+                            # So we are safe here not checking the type of line
+                            timestamp = line['ts']
+                            time_last_lines[filename] = timestamp
+                            # Add the type of file to the dict so later we know how to parse it
+                            line['type'] = filename
+                            #self.print('File {}. TS: {}'.format(filename, timestamp))
+                            # Store the line in the cache
+                            #self.print('Adding cache and time of {}'.format(filename))
+                            cache_lines[filename] = line
                      
                     # Out of the for
 
@@ -180,10 +188,10 @@ class InputProcess(multiprocessing.Process):
 
                     #self.print('Cached times: {}'.format(str(time_last_lines)))
                     # Now read lines in order. The line with the smallest timestamp first
-                    sorted_time_last_lines = sorted(time_last_lines, key=time_last_lines.get)
-                    #self.print('Sorted times: {}'.format(str(sorted_time_last_lines)))
+                    file_sorted_time_last_lines = sorted(time_last_lines, key=time_last_lines.get)
+                    #self.print('Sorted times: {}'.format(str(file_sorted_time_last_lines)))
                     try:
-                        key = sorted_time_last_lines[0]
+                        key = file_sorted_time_last_lines[0]
                     except IndexError:
                         # No more sorted keys. Just loop waiting for more lines
                         # It may happened that we check all the files in the folder, and there is still no file for us.
@@ -191,6 +199,7 @@ class InputProcess(multiprocessing.Process):
                         #self.print('Getting new files...')
                         zeek_files = __database__.get_all_zeek_file()
                         continue
+
                     line_to_send = cache_lines[key]
                     #self.print('Line to send from file {}. {}'.format(key, line_to_send))
                     # SENT
