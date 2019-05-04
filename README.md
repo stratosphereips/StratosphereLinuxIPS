@@ -1,82 +1,69 @@
-# Stratosphere Linux IPS (slips) Version 0.5
+# Stratosphere Linux IPS (slips) Version 0.6rc1
+Slips is an intrusion prevention system that is based on behavioral detections and machine learning algorithms. It's core is to separate the traffic into profiles for each IP address, and then separate the traffic further into time windows. Into each of these time windows slips extracts dozens of features and then analyses them in different ways. Slips also implements a module API, so anyone can create a single python file that quickly implements a new detection algorithm. 
+
+# Installation
+
+## Dependencies
+The minimum slips requirements are:
+
+- redis database running (see http://redis.org)
+- python 3.7
+- py37-redis 
+- maxminddb libraries for python (pip install maxminddb)
+- bro (now zeek) (see http://zeek.org)
+  
+To run redis you can:
+    - In Linux, as a daemon: redis-server --daemonize yes
+    - In macos, as a daemon: sudo port load redis
+    - By hand and leaving redis running on the console: redis-server /opt/local/etc/redis.conf
+
+# Fast usage
+1. Start Redis (as a daemon or not)
+2. ./slips.py -c slips.conf -i <interface>
+3. Check the folder called with the date of today. All files are updated every 5 seconds.
+
+# Architecture of operation
+- The data collected and used is on the _profile_ level and up. Slips does not work with data at the _flow_ level or _packet_ level to classify. This means that the simplest data structure available inside slips is the profile of an IP address. The modules can not access individual flows.
+
+## Input Data
+Slips can read:
+- Packets from a pcap file (using Zeek)
+- Packets from an interface (using Zeek). But not from the interface _any_ due to a limitation in Zeek.
+- Flows from a CSV file separated with commas (typically from Argus sensors)
+- Flows from a CSV file separated with TABS 
+- Flows from a file with JSON lines. (typically from Suricata)
+- Flows from a conn.log file from Zeek alone (under implementation)
+- Flows from a folder with all the Zeek log files all together (under implementation)
+
+## Output
+
+## Text Output
+For now slips only creates log files as output, but more outputs are planned as ncurses and web.
+
+The output of slips is stored in a folder called as the current date-time using seconds. So multiple executions will not override the results. Inside this main folder there is one folder per IP address that is being profiled. See Section _Architecture of Operation_ to understand which IP addresses are converted into profiles. Apart from the folders of the profiles, some files are created in this folder containing information about the complete capture, such as _Blocked.txt_ that has information about all the IP addresses that were detected and blocked.
+
+Inside the folder of each profile there are three types of files: time-window files, timeline file and profile file.
+
+### Time window files
+Each of these files contains all the features extracted for this time window and its name is the start-time of the time window.
+
+### Timeline file
+The timeline file is created by the timeline module and is a unique file interpreting what this profile IP did. 
+
+### Profile file
+This file contains generic features of the profile that are not part of any individual time-window, such as information about its Ethernet MAC address.
+
+
+
+
+
+
+# History of Slips
 This is the new version of the Stratosphere IPS, a behavioral-based intrusion detection and prevention system that uses machine learning algorithms to detect malicious behaviors. It is part of a larger suite of programs that include the [Stratosphere Windows IPS] and the [Stratosphere Testing Framework].
 
 
-## Architecture of operation
-[rewrite]
-- The data collected and used is on the _profile_ level and up. Slips does not work with data at the _flow_ level or _packet_ level to classify. This means that the simplest data structure available inside slips is the profile of an IP address. The modules can not access individual flows.
 
-
-## Install
-
-### Dependencies
-- python3.6 or greater
-- py37-redis (Be sure that you install the redis libraries for your python3 version. This can be done with pip3, but your 'python3' executable in your path should point to the version of python you are using, such as python3.7)
-- redis database
-- maxminddb (pip install maxminddb) For the GeoIP module (you can also ignore this module in the conf)
-
-#### Installing dependencies    
-The new version of slips uses redis as a backend database, so you need to have redis running.
-
-1. Start Redis
-    - In Linux
-        - As a daemon
-            The easiest way to launch Redis as a daemon is to edit the configuration file and change the following line:
-
-            ```
-            # By default Redis does not run as a daemon. Use 'yes' if you need it.
-            # Note that Redis will write a pid file in /var/run/redis.pid when daemonized.
-            daemonize yes
-            ```
-
-            You can also use:
-
-            ```
-            redis-server --daemonize yes
-            ```
-
-    - In macos
-        - As a deamon
-
-            ```
-            sudo port load redis
-            ```
-        - By hand and leaving redis running on the console
-
-            ```
-            redis-server /opt/local/etc/redis.conf
-            ```
-
-2. Argus
-Currently only Flows generated by Argus are read, but we will expand this soon.
-
-If you don't have an Argus instance to generate your own flows, first install it:
-    - Source install from [Argus].
-    - In Debian and Ubuntu you can do:
-
-        ```
-        sudo apt-get install argus argus-clients
-        ```
-
-To run argus in your own computer you should do:
-
-    ```
-    argus -B localhost -F [slipsfolder]/argus.conf
-    ```
-
-## Usage
-Start redis
-
-    In macos using ports, if you prefer to start a redis server manually, rather than using 'port load', then use this command:
-
-        redis-server /opt/local/etc/redis.conf
-
-    A startup item has been generated that will aid in starting redis with launchd. It is disabled by default. Execute the following command to start it, and to cause it to launch at startup:
-
-        sudo port load redis
-
-
-
+# More specific usage examples
 
 Slips can be used by passing flows in its stdin, like this:
 
@@ -107,7 +94,6 @@ The behavioral models are stored in the __models__ folder and will be updated re
 
 
 ## Features 
-- The database is Redis
 - For now, everytime slips starts the database is deleted.
 - Slips can detect port scans. For now the types detected are:
  - Horizontal port scans. Same src ip, sending TCP not established flows, to more than 3 dst ips. The amount of packetes is the confidence.
@@ -146,6 +132,7 @@ This version of slips comes with the following features:
 ### Roadmap
 [rewrite]
 
+
 ### Changelog
 [rewrite]
 - 0.5 Completely renewed architecture and code.
@@ -161,8 +148,8 @@ This version of slips comes with the following features:
 ### Author and Contributors
 [rewrite]
 
-- The author of the project is Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. (Send an email for bugs, reports, ideas or comments)
-- Ondrej Lukas: New detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classes, etc.
+- The main author of the project is Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
+- Ondrej Lukas: During the original slips code, he worked on the new detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classes, etc.
 - Elaheh Biglar Beigi
 - MariaRigaki 
 - kartik88363
