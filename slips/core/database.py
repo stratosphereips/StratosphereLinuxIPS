@@ -976,6 +976,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_flow' in channel:
             pubsub.subscribe(channel)
+        elif 'new_dns' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -1000,17 +1002,18 @@ class Database(object):
         The format is a dictionary
         """
         data = {}
-        temp = self.r.hget(profileid + self.separator + twid, stime)
+        temp = self.r.hget(profileid + self.separator + twid + self.separator + 'flows', stime)
         data[stime] = temp
         # Get the dictionary format
         return data
 
-    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto=''):
+    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto='', uid=''):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
 
         """
         data = {}
+        data['uid'] = uid
         data['dur'] = dur
         data['saddr'] = saddr
         data['sport'] = sport
@@ -1027,7 +1030,8 @@ class Database(object):
         data['appproto'] = appproto
         # Convert to json string
         data = json.dumps(data)
-        self.r.hset(profileid + self.separator + twid, stime, data)
+        # Store in the hash 10.0.0.1_timewindow1, a key stime, with data
+        self.r.hset(profileid + self.separator + twid + self.separator + 'flows', stime, data)
         # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
         flow = self.get_flow(profileid, twid, stime)
         # Get the dictionary and convert to json string
@@ -1039,6 +1043,37 @@ class Database(object):
         to_send['flow'] = flow
         to_send = json.dumps(to_send)
         self.publish('new_flow', to_send)
+
+    def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
+        """ 
+        Store in the DB a DNS request
+
+        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        """
+        data = {}
+        data['uid'] = uid
+        data['type'] = flowtype
+        data['query'] = query
+        data['qclass_name'] = qclass_name
+        data['qtype_name'] = qtype_name
+        data['rcode_name'] = rcode_name
+        data['answers'] = answers
+        data['ttls'] = ttls
+        # Convert to json string
+        data = json.dumps(data)
+        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['dnsflow'] = data
+        to_send = json.dumps(to_send)
+        self.publish('new_dns', to_send)
+        self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
+
+    def get_altflow_from_uid(self, profileid, twid, uid):
+        """ Given a uid, get the alternative flow realted to it """
+        return self.r.hget(profileid + self.separator + twid + self.separator + 'altflows', uid)
 
     def add_timeline_line(self, profileid, twid, data):
         """ Add a line to the time line of this profileid and twid """
