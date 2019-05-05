@@ -978,6 +978,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_dns' in channel:
             pubsub.subscribe(channel)
+        elif 'new_http' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -1043,6 +1045,38 @@ class Database(object):
         to_send['flow'] = flow
         to_send = json.dumps(to_send)
         self.publish('new_flow', to_send)
+        self.print('Adding CONN flow to DB: {}'.format(data), 5,0)
+
+    def add_out_http(self, profileid, twid, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
+        """
+        Store in the DB a http request
+        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        """
+        data = {}
+        data['uid'] = uid
+        data['type'] = flowtype
+        data['method'] = method
+        data['host'] = host
+        data['uri'] = uri
+        data['version'] = version
+        data['user_agent'] = user_agent
+        data['request_body_len'] = request_body_len
+        data['response_body_len'] = response_body_len
+        data['status_code'] = status_code
+        data['status_msg'] = status_msg
+        data['resp_mime_types'] = resp_mime_types
+        data['resp_fuids'] = resp_fuids
+        # Convert to json string
+        data = json.dumps(data)
+        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['flow'] = data
+        to_send = json.dumps(to_send)
+        self.publish('new_http', to_send)
+        self.print('Adding HTTP flow to DB: {}'.format(data), 5,0)
 
     def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """ 
@@ -1066,7 +1100,7 @@ class Database(object):
         to_send = {}
         to_send['profileid'] = profileid
         to_send['twid'] = twid
-        to_send['dnsflow'] = data
+        to_send['flow'] = data
         to_send = json.dumps(to_send)
         self.publish('new_dns', to_send)
         self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
