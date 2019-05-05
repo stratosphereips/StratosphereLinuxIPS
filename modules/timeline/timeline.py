@@ -187,12 +187,17 @@ class Module(Module, multiprocessing.Process):
             if activity:
                 __database__.add_timeline_line(profileid, twid, activity)
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
-
-            # Now print the alternative flow:
+            
+            #################################
+            # Now print the alternative flows
             if alt_flow_json:
                 alt_flow = json.loads(alt_flow_json)
+                self.print('Received an altflow of type {}: {}'.format(alt_flow['type'], alt_flow), 5,0)
                 if 'dns' in alt_flow['type']:
                     activity = '	- Query: {}, Query Class: {}, Type: {}, Response Code: {}, Answers: {}\n'.format(alt_flow['query'], alt_flow['qclass_name'], alt_flow['qtype_name'], alt_flow['rcode_name'], alt_flow['answers'])
+                elif alt_flow['type'] == 'http':
+                    # __database__.add_out_http(profileid, twid, flowtype, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['version'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids']
+                    activity = '	- {} http://{}{} HTTP/{} {}/{}  MIME:{} Sent:{}b, Recv:{}b UA:{} \n'.format(alt_flow['method'], alt_flow['host'], alt_flow['uri'], alt_flow['version'],alt_flow['status_code'], alt_flow['status_msg'], alt_flow['resp_mime_types'], alt_flow['request_body_len'], alt_flow['response_body_len'], alt_flow['user_agent'])
             #else:
                 #activity = '	No alternative flow for this netflow uid: {}\n'.format(uid)
 
