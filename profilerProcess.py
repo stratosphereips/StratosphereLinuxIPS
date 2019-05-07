@@ -207,6 +207,7 @@ class ProfilerProcess(multiprocessing.Process):
         Process the line and extract columns for zeek
         Its a dictionary
         """
+        self.column_values = {}
         if 'conn' in line['type']:
             # {'ts': 1538080852.403669, 'uid': 'Cewh6D2USNVtfcLxZe', 'id.orig_h': '192.168.2.12', 'id.orig_p': 56343, 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364, 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1, 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8', 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
             self.column_values = {}
@@ -295,7 +296,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['TTLs'] = ''
             self.column_values['saddr'] = line['id.orig_h']
             self.column_values['daddr'] = line['id.resp_h']
-        elif line['type'] == 'http':
+        elif 'http' in line['type'] and not 'https' in line['type']:
             # {"ts":158.957403,"uid":"CnNLbE2dyfy5KyqEhh","id.orig_h":"10.0.2.105","id.orig_p":49158,"id.resp_h":"64.182.208.181","id.resp_p":80,"trans_depth":1,"method":"GET","host":"icanhazip.com","uri":"/","version":"1.1","user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.38 (KHTML, like Gecko) Chrome/45.0.2456.99 Safari/537.38","request_body_len":0,"response_body_len":13,"status_code":200,"status_msg":"OK","tags":[],"resp_fuids":["FwraVxIOACcjkaGi3"],"resp_mime_types":["text/plain"]}
             self.column_values = {}
             self.column_values['type'] = 'http'
@@ -523,7 +524,11 @@ class ProfilerProcess(multiprocessing.Process):
         """
         try:
             # For now we only process the argus flows and the zeek conn logs
-            if self.column_values['type'] != 'http' and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'argus' in self.column_values['type']:
+            if not self.column_values:
+                return True
+            elif not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'argus' in self.column_values['type']:
+                return True
+            elif 'https' in self.column_values['type']:
                 return True
 
             # The first change we should do is to take into account different types of flows. A normal netflow is what we have now, but we need all 
