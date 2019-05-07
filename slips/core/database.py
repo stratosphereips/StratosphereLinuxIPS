@@ -433,7 +433,7 @@ class Database(object):
         We receive the pakets to distinguish some Reset connections
         """
         try:
-            self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
+            #self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
             pre = state.split('_')[0]
             try:
                 # We have varius type of states depending on the type of flow.
