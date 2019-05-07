@@ -534,7 +534,10 @@ class ProfilerProcess(multiprocessing.Process):
             separator = __database__.getFieldSeparator()
             # These are common to all types of flows
             starttime = time.mktime(self.column_values['starttime'].timetuple())
-            uid = self.column_values['uid']
+            try:
+                uid = self.column_values['uid']
+            except KeyError:
+                uid = ''
             flowtype = self.column_values['type']
             flow_type = self.column_values['type']
             saddr = self.column_values['saddr']
