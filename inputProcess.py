@@ -146,11 +146,12 @@ class InputProcess(multiprocessing.Process):
                         # Only read the next line if the previous line was sent
                         try:
                             temp = cache_lines[filename]
-                            # We have still something to send, do not read the next line
+                            # We have still something to send, do not read the next line from this file
                         except KeyError:
                             # We don't have any waiting line for this file, so proceed
 
                             json_line = file_handler.readline()
+                            #self.print('Reading from file {}, the line {}'.format(filename, json_line))
                             #self.print('File {}, read line: {}'.format(filename, json_line))
                             # Did the file ended?
                             if not json_line:
@@ -203,7 +204,7 @@ class InputProcess(multiprocessing.Process):
                     line_to_send = cache_lines[key]
                     #self.print('Line to send from file {}. {}'.format(key, line_to_send))
                     # SENT
-                    self.print("	> Sent Line: {}".format(line), 0, 3)
+                    self.print("	> Sent Line: {}".format(line_to_send), 0, 3)
                     self.profilerqueue.put(line_to_send)
                     # Count the read lines
                     lines += 1
