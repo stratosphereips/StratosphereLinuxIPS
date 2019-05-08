@@ -224,7 +224,7 @@ class Module(Module, multiprocessing.Process):
             elif not alt_flow_json and ('tcp' in proto or 'udp' in proto) and state.lower() == 'established' and dport_name:
                 # We have an established tcp or udp connection that we know the usual name of the port, but we don't know the type of connection!!!
 
-                if (proto == 'udp' and dport == 67) or (proto == 'udp' and dport == 123) or (proto == 'tcp' and dport == 23) or (proto == 'udp' and dport == 5222):
+                if (proto == 'udp' and dport == 67) or (proto == 'udp' and dport == 123) or (proto == 'tcp' and dport == 23) or (proto == 'tcp' and dport == 5222):
                     # Some protocols we ignore in this warning because Zeek does not process them
                     # bootps, ntp, telnet, xmpp
                     pass
