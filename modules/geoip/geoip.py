@@ -16,6 +16,7 @@ from slips.core.database import __database__
 # Your imports
 import time
 import maxminddb
+import ipaddress
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -51,7 +52,7 @@ class Module(Module, multiprocessing.Process):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def run(self):
         try:
@@ -76,6 +77,10 @@ class Module(Module, multiprocessing.Process):
                                 except KeyError:
                                     data = {}
                                     data['geocountry'] = 'Unknown'
+                            elif ipaddress.ip_address(ip).is_private:
+                                # Try to find if it is a local/private IP
+                                data = {}
+                                data['geocountry'] = 'Private'
                             else:
                                 data = {}
                                 data['geocountry'] = 'Unknown'
