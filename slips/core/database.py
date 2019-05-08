@@ -980,6 +980,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_http' in channel:
             pubsub.subscribe(channel)
+        elif 'new_ssl' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -1046,6 +1048,38 @@ class Database(object):
         to_send = json.dumps(to_send)
         self.publish('new_flow', to_send)
         self.print('Adding CONN flow to DB: {}'.format(data), 5,0)
+
+    def add_out_ssl(self, profileid, twid, flowtype, uid, version, cipher, resumed, established, cert_chain_fuids, client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
+        """ 
+        Store in the DB an ssl request
+        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        """
+        data = {}
+        data['uid'] = uid
+        data['type'] = flowtype
+        data['version'] = version
+        data['cipher'] = cipher
+        data['resumed'] = resumed
+        data['established'] = established
+        data['cert_chain_fuids'] = cert_chain_fuids
+        data['client_cert_chain_fuids'] = client_cert_chain_fuids
+        data['subject'] = subject
+        data['issuer'] = issuer
+        data['validation_status'] = validation_status
+        data['curve'] = curve
+        data['server_name'] = server_name
+
+        # Convert to json string
+        data = json.dumps(data)
+        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['flow'] = data
+        to_send = json.dumps(to_send)
+        self.publish('new_ssl', to_send)
+        self.print('Adding SSL flow to DB: {}'.format(data), 5,0)
 
     def add_out_http(self, profileid, twid, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
         """
