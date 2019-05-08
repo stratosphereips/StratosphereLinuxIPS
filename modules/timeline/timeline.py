@@ -104,6 +104,7 @@ class Module(Module, multiprocessing.Process):
             allbytes_human = 0.0
 
             # Convert the bytes into human readable
+            # Convert into a function
             if int(allbytes) < 1024:
                 # In bytes
                 allbytes_human = '{:.2f}{}'.format(float(allbytes),'b')
@@ -136,7 +137,7 @@ class Module(Module, multiprocessing.Process):
                     activity = '- NOT Established {} asked to {} {}/{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, allbytes_human, daddr_country, daddr_asn)
                 else:
                     # This is not recognized. Do our best
-                    activity = '[!] - Not recognized flow from {} to {} dport {}/{}, Size: {}, Country: {}, ASN Org: {}\n'.format(saddr, daddr, dport, proto, allbytes_human, daddr_country, daddr_asn)
+                    activity = '[!] - Not recognized {} flow from {} to {} dport {}/{}, Sent: {}, Recv: {}, Country: {}, ASN Org: {}\n'.format(state.lower(), saddr, daddr, dport, proto, sbytes, allbytes - sbytes, daddr_country, daddr_asn)
                     #activity = '[!!] Not recognized activity on flow {}\n'.format(flow)
             elif 'icmp' in proto:
                 if type(sport) == int:
