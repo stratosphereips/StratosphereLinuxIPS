@@ -207,12 +207,30 @@ class ProfilerProcess(multiprocessing.Process):
         Process the line and extract columns for zeek
         Its a dictionary
         """
+        # Generic fields in Zeek
         self.column_values = {}
+        # We need to set it to empty at the beggining so any new flow has the key 'type'
+        self.column_values['type'] = ''
+        try:
+            self.column_values['starttime'] = datetime.fromtimestamp(line['ts'])
+        except KeyError:
+            self.column_values['starttime'] = ''
+        try:
+            self.column_values['uid'] = line['uid']
+        except KeyError:
+            self.column_values['uid'] = False
+        try:
+            self.column_values['saddr'] = line['id.orig_h']
+        except KeyError:
+            self.column_values['saddr'] = ''
+        try:
+            self.column_values['daddr'] = line['id.resp_h']
+        except KeyError:
+            self.column_values['daddr'] = ''
+
         if 'conn' in line['type']:
             # {'ts': 1538080852.403669, 'uid': 'Cewh6D2USNVtfcLxZe', 'id.orig_h': '192.168.2.12', 'id.orig_p': 56343, 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364, 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1, 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8', 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
-            self.column_values = {}
             self.column_values['type'] = 'conn'
-            self.column_values['starttime'] = datetime.fromtimestamp(line['ts'])
             try:
                 self.column_values['dur'] = line['duration']
             except KeyError:
@@ -224,10 +242,8 @@ class ProfilerProcess(multiprocessing.Process):
             except KeyError:
                 # no service recognized
                 self.column_values['appproto'] = ''
-            self.column_values['saddr'] = line['id.orig_h']
             self.column_values['sport'] = line['id.orig_p']
             self.column_values['dir'] = '->'
-            self.column_values['daddr'] = line['id.resp_h']
             self.column_values['dport'] = line['id.resp_p']
             self.column_values['state'] = line['conn_state']
             try:
@@ -249,10 +265,6 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dbytes'] = 0
             self.column_values['bytes'] = self.column_values['sbytes'] + self.column_values['dbytes'] 
             try:
-                self.column_values['uid'] = line['uid']
-            except KeyError:
-                self.column_values['uid'] = False
-            try:
                 self.column_values['state_hist'] = line['history']
             except KeyError:
                 self.column_values['state_hist'] = self.column_values['state']
@@ -266,14 +278,11 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dmac'] = ''
         elif 'dns' in line['type']:
             #{"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
-            self.column_values = {}
             self.column_values['type'] = 'dns'
-            self.column_values['starttime'] = datetime.fromtimestamp(line['ts'])
             try:
-                self.column_values['uid'] = line['uid']
+                self.column_values['query'] = line['query']
             except KeyError:
-                self.column_values['uid'] = False
-            self.column_values['query'] = line['query']
+                self.column_values['query'] = ''
             try:
                 self.column_values['qclass_name'] = line['qclass_name']
             except KeyError:
@@ -294,25 +303,9 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['TTLs'] = line['TTLs']
             except KeyError:
                 self.column_values['TTLs'] = ''
-            self.column_values['saddr'] = line['id.orig_h']
-            self.column_values['daddr'] = line['id.resp_h']
-        elif 'http' in line['type'] and not 'https' in line['type']:
+        elif 'http' in line['type']:
             # {"ts":158.957403,"uid":"CnNLbE2dyfy5KyqEhh","id.orig_h":"10.0.2.105","id.orig_p":49158,"id.resp_h":"64.182.208.181","id.resp_p":80,"trans_depth":1,"method":"GET","host":"icanhazip.com","uri":"/","version":"1.1","user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.38 (KHTML, like Gecko) Chrome/45.0.2456.99 Safari/537.38","request_body_len":0,"response_body_len":13,"status_code":200,"status_msg":"OK","tags":[],"resp_fuids":["FwraVxIOACcjkaGi3"],"resp_mime_types":["text/plain"]}
-            self.column_values = {}
             self.column_values['type'] = 'http'
-            self.column_values['starttime'] = datetime.fromtimestamp(line['ts'])
-            try:
-                self.column_values['uid'] = line['uid']
-            except KeyError:
-                self.column_values['uid'] = False
-            try:
-                self.column_values['saddr'] = line['id.orig_h']
-            except KeyError:
-                self.column_values['saddr'] = ''
-            try:
-                self.column_values['daddr'] = line['id.resp_h']
-            except KeyError:
-                self.column_values['daddr'] = ''
             try:
                 self.column_values['method'] = line['method']
             except KeyError:
@@ -357,68 +350,93 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['resp_fuids'] = line['resp_fuids']
             except KeyError:
                 self.column_values['resp_fuids'] = ''
-        elif 'ssh' in line['type']:
-            self.column_values = {}
-            self.column_values['type'] = 'ssh'
         elif 'ssl' in line['type']:
-            self.column_values = {}
+            # {"ts":12087.045499,"uid":"CdoFDp4iW79I5ZmsT7","id.orig_h":"10.0.2.105","id.orig_p":49704,"id.resp_h":"195.211.240.166","id.resp_p":443,"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
+            # {"ts":1382354909.915615,"uid":"C7W6ZA4vI8FxJ9J0bh","id.orig_h":"147.32.83.53","id.orig_p":36567,"id.resp_h":"195.113.214.241","id.resp_p":443,"version":"TLSv12","cipher":"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA","curve":"secp256r1","server_name":"id.google.com.ar","resumed":false,"established":true,"cert_chain_fuids":["FnomJz1vghKIOHtytf","FSvQff1KsaDkRtKXo4","Fif2PF48bytqq6xMDb"],"client_cert_chain_fuids":[],"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
             self.column_values['type'] = 'ssl'
+            try:
+                self.column_values['version'] = line['version']
+            except KeyError:
+                self.column_values['version'] = ''
+            try:
+                self.column_values['cipher'] = line['cipher']
+            except KeyError:
+                self.column_values['cipher'] = ''
+            try:
+                self.column_values['resumed'] = line['resumed']
+            except KeyError:
+                self.column_values['resumed'] = ''
+            try:
+                self.column_values['established'] = line['established']
+            except KeyError:
+                self.column_values['established'] = ''
+            try:
+                self.column_values['cert_chain_fuids'] = line['cert_chain_fuids']
+            except KeyError:
+                self.column_values['cert_chain_fuids'] = ''
+            try:
+                self.column_values['client_cert_chain_fuids'] = line['client_cert_chain_fuids']
+            except KeyError:
+                self.column_values['client_cert_chain_fuids'] = ''
+            try:
+                self.column_values['subject'] = line['subject']
+            except KeyError:
+                self.column_values['subject'] = ''
+            try:
+                self.column_values['issuer'] = line['issuer']
+            except KeyError:
+                self.column_values['issuer'] = ''
+            try:
+                self.column_values['validation_status'] = line['validation_status']
+            except KeyError:
+                self.column_values['validation_status'] = ''
+            try:
+                self.column_values['curve'] = line['curve']
+            except KeyError:
+                self.column_values['curve'] = ''
+            try:
+                self.column_values['server_name'] = line['server_name']
+            except KeyError:
+                self.column_values['server_name'] = ''
+        elif 'ssh' in line['type']:
+            self.column_values['type'] = 'ssh'
         elif 'irc' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'irc'
         elif 'long' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'long'
         elif 'dhcp' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'dhcp'
         elif 'dce_rpc' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'dce_rpc'
         elif 'dnp3' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'dnp3'
         elif 'ftp' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'ftp'
         elif 'kerberos' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'kerberos'
         elif 'mysql' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'mysql'
         elif 'modbus' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'modbus'
         elif 'ntlm' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'ntlm'
         elif 'rdp' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'rdp'
         elif 'sip' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'sip'
         elif 'smb_cmd' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'smb_cmd'
         elif 'smb_files' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'smb_files'
         elif 'smb_mapping' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'smb_mapping'
         elif 'smtp' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'smtp'
         elif 'socks' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'socks'
         elif 'syslog' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'syslog'
         elif 'tunnel' in line['type']:
-            self.column_values = {}
             self.column_values['type'] = 'tunnel'
 
     def process_argus_input(self, line):
@@ -526,9 +544,7 @@ class ProfilerProcess(multiprocessing.Process):
             # For now we only process the argus flows and the zeek conn logs
             if not self.column_values:
                 return True
-            elif not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'argus' in self.column_values['type']:
-                return True
-            elif 'https' in self.column_values['type']:
+            elif not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'argus' in self.column_values['type']:
                 return True
 
             # The first change we should do is to take into account different types of flows. A normal netflow is what we have now, but we need all 
@@ -539,16 +555,16 @@ class ProfilerProcess(multiprocessing.Process):
             separator = __database__.getFieldSeparator()
             # These are common to all types of flows
             starttime = time.mktime(self.column_values['starttime'].timetuple())
+            # This uid check is for when we read things that are not zeek
             try:
                 uid = self.column_values['uid']
             except KeyError:
                 uid = ''
-            flowtype = self.column_values['type']
             flow_type = self.column_values['type']
             saddr = self.column_values['saddr']
             daddr = self.column_values['daddr']
             profileid = 'profile' + separator + str(saddr)
-            
+                
             if 'conn' in flow_type  or 'argus' in flow_type:
                 dur = self.column_values['dur']
                 sport = self.column_values['sport']
@@ -674,9 +690,11 @@ class ProfilerProcess(multiprocessing.Process):
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid)
                 elif 'dns' in flow_type:
-                    __database__.add_out_dns(profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
+                    __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                 elif flow_type == 'http':
-                    __database__.add_out_http(profileid, twid, flowtype, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['version'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
+                    __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['version'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
+                elif flow_type == 'ssl':
+                    __database__.add_out_ssl(profileid, twid, flow_type, uid, self.column_values['version'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
 
             def store_features_going_in(profileid, twid):
                 """
