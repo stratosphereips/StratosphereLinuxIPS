@@ -64,6 +64,7 @@ bgp,179,udp,Border Gateway Protocol
 bgp,179,sctp,BGP
 irc,194,tcp,Internet Relay Chat Protocol
 irc,194,udp,Internet Relay Chat Protocol
+airport discovery,udp,192,Apple AirPort Base Station PPP status or discovery (certain configurations), AirPort Admin Utility, AirPort Express Assistant
 imap3,220,tcp,Interactive Mail Access Protocol v3
 imap3,220,udp,Interactive Mail Access Protocol v3
 https,443,tcp,http protocol over TLS/SSL
