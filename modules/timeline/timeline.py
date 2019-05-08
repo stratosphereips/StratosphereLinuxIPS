@@ -96,11 +96,11 @@ class Module(Module, multiprocessing.Process):
 
             # Here is where we see if we know this dport
             dport_name = __database__.get_port_info(str(dport)+'/'+proto)
-            #if dport == 80 and proto == 'udp':
-            #    print(dport_name)
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
+            if type(allbytes) != int:
+                allbytes = 0
             allbytes_human = 0.0
 
             # Convert the bytes into human readable
@@ -119,6 +119,8 @@ class Module(Module, multiprocessing.Process):
                 allbytes_human = '{:.2f}{}'.format(float(allbytes) / 1024 / 1024 / 1024, 'Gb')
             spkts = flow_dict['spkts']
             sbytes = flow_dict['sbytes']
+            if type(sbytes) != int:
+                sbytes = 0
             appproto = flow_dict['appproto']
             # Check if we have an alternative flow related to this one. Like DNS or HTTP
             alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
@@ -129,15 +131,19 @@ class Module(Module, multiprocessing.Process):
             activity = ''
             if 'tcp' in proto or 'udp' in proto:
                 if dport_name and state.lower() == 'established':
-                    activity = '- {} asked to {} {}/{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, allbytes_human, daddr_country, daddr_asn)
+                    # Check if appart from being established the connection sent anything!
+                    if allbytes:
+                        activity = '- {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {} , Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
+                    else:
+                        activity = '- {} asked to {} {}/{}, Be careful! Established but empyt! Sent: {}, Recv: {}, Tot: {} , Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
                 # In here we try to capture the situation when only 1 udp packet is sent. Looks like not established, but is actually maybe ok
                 elif dport_name and 'notest' in state.lower() and proto == 'udp' and allbytes == sbytes:
-                    activity = '- Not answered {} asked to {} {}/{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, allbytes_human, daddr_country, daddr_asn)
+                    activity = '- Not answered {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
                 elif dport_name and 'notest' in state.lower():
-                    activity = '- NOT Established {} asked to {} {}/{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, allbytes_human, daddr_country, daddr_asn)
+                    activity = '- NOT Established {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
                 else:
                     # This is not recognized. Do our best
-                    activity = '[!] - Not recognized {} flow from {} to {} dport {}/{}, Sent: {}, Recv: {}, Country: {}, ASN Org: {}\n'.format(state.lower(), saddr, daddr, dport, proto, sbytes, allbytes - sbytes, daddr_country, daddr_asn)
+                    activity = '[!] - Not recognized {} flow from {} to {} dport {}/{}, Sent: {}, Recv: {}, Totl: {}, Country: {}, ASN Org: {}\n'.format(state.lower(), saddr, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
                     #activity = '[!!] Not recognized activity on flow {}\n'.format(flow)
             elif 'icmp' in proto:
                 if type(sport) == int:
@@ -197,15 +203,40 @@ class Module(Module, multiprocessing.Process):
                 if 'dns' in alt_flow['type']:
                     activity = '	- Query: {}, Query Class: {}, Type: {}, Response Code: {}, Answers: {}\n'.format(alt_flow['query'], alt_flow['qclass_name'], alt_flow['qtype_name'], alt_flow['rcode_name'], alt_flow['answers'])
                 elif alt_flow['type'] == 'http':
-                    # __database__.add_out_http(profileid, twid, flowtype, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['version'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids']
                     activity = '	- {} http://{}{} HTTP/{} {}/{}  MIME:{} Sent:{}b, Recv:{}b UA:{} \n'.format(alt_flow['method'], alt_flow['host'], alt_flow['uri'], alt_flow['version'],alt_flow['status_code'], alt_flow['status_msg'], alt_flow['resp_mime_types'], alt_flow['request_body_len'], alt_flow['response_body_len'], alt_flow['user_agent'])
+                elif alt_flow['type'] == 'ssl':
+                    # {"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
+                    # version":"TLSv12","resumed":false,"established":true,"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
+                    if alt_flow['validation_status'] == 'ok':
+                        validation = 'Yes'
+                    elif not alt_flow['validation_status'] and alt_flow['resumed'] == True:
+                        # If there is no validation and it is a resumed ssl. It means that there was a previous connection with the validation data. We can not say Say it
+                        validation = '?? (Resumed)'
+                    else:
+                        # If the validation is not ok and not empty
+                        validation = 'No'
+                    activity = '	- {}. Issuer: {}. Trust Cert: {}. Subject: {}. Version: {}. Resumed: {} \n'.format(alt_flow['server_name'], alt_flow['issuer'], validation, alt_flow['subject'], alt_flow['version'], alt_flow['resumed'])
 
                 # Store the activity in the DB for this profileid and twid
                 if activity:
                     __database__.add_timeline_line(profileid, twid, activity)
                 self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
-            #else:
-                #activity = '	No alternative flow for this netflow uid: {}\n'.format(uid)
+            elif not alt_flow_json and ('tcp' in proto or 'udp' in proto) and state.lower() == 'established' and dport_name:
+                # We have an established tcp or udp connection that we know the usual name of the port, but we don't know the type of connection!!!
+
+                if (proto == 'udp' and dport == 67) or (proto == 'udp' and dport == 123) or (proto == 'tcp' and dport == 23) or (proto == 'udp' and dport == 5222):
+                    # Some protocols we ignore in this warning because Zeek does not process them
+                    # bootps, ntp, telnet, xmpp
+                    pass
+                elif not allbytes:
+                    # If it is established but no bytes were sent, then we will never have an alt_flow, so do not report that is missing.
+                    pass
+                else:
+                    activity = '	[!] Attention. We know this port number, but we couldn\'t identify the protocol. Check UID {}\n'.format(uid)
+                    # Store the activity in the DB for this profileid and twid
+                    if activity:
+                        __database__.add_timeline_line(profileid, twid, activity)
+                    self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
 
         except KeyboardInterrupt:
