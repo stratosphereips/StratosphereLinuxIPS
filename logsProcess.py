@@ -42,6 +42,8 @@ class LogsProcess(multiprocessing.Process):
         # For some weird reason the database loses its outputqueue and we have to re set it here.......
         __database__.setOutputQueue(self.outputqueue)
 
+        self.timeline_first_index = {}
+
     def read_configuration(self):
         """ Read the configuration file for what we need """
         # Get the time of log report
@@ -64,7 +66,6 @@ class LogsProcess(multiprocessing.Process):
 
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
-
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
@@ -337,11 +338,14 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
                 for twid_tuple in tws:
                     (twid, starttime) = twid_tuple
-                    data = __database__.get_timeline_last_lines(profileid, twid)
+                    hash_key = profileid + self.separator + twid
+                    first_index = self.timeline_first_index.get(hash_key, 0)
+                    data, first_index = __database__.get_timeline_last_lines(profileid, twid, first_index)
+                    self.timeline_first_index[hash_key] = first_index
                     if data:
-                        #for line in data:
                         #self.print('TIMELINE Profileid: {:45}, twid: {}. Line: {}'.format(profileid, twid, line))
-                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data , file_mode='a+', data_mode='raw', data_type='lines')
+                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_mode='raw', data_type='lines')
+
 
             # Create the file of the blocked profiles and TW
             TWforProfileBlocked = __database__.getBlockedTW()
