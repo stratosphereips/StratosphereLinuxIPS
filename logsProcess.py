@@ -330,10 +330,13 @@ class LogsProcess(multiprocessing.Process):
                 # Get all the TW for this profile
                 tws = __database__.getTWsfromProfile(profileid)
                 ip = profileid.split('_')[1]
-                self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', 'Complete TimeLine of IP {}\n'.format(ip) , file_mode='w+')
+
+                timeline_path = profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt'
+                if not os.path.isfile(timeline_path):
+                    self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
                 for twid_tuple in tws:
                     (twid, starttime) = twid_tuple
-                    data = __database__.get_timeline_all_lines(profileid, twid)
+                    data = __database__.get_timeline_last_lines(profileid, twid)
                     if data:
                         #for line in data:
                         #self.print('TIMELINE Profileid: {:45}, twid: {}. Line: {}'.format(profileid, twid, line))
