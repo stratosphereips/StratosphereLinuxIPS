@@ -75,6 +75,7 @@ class LogsProcess(multiprocessing.Process):
             self.mainfoldername = datetime.now().strftime('%Y-%m-%d--%H:%M:%S')
             if not os.path.exists(self.mainfoldername):
                     os.makedirs(self.mainfoldername)
+                    self.print('Using the folder {} for storing results.'.format(self.mainfoldername))
             # go into this folder
             os.chdir(self.mainfoldername)
 
