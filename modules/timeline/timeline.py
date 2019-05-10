@@ -135,7 +135,7 @@ class Module(Module, multiprocessing.Process):
                     if allbytes:
                         activity = '- {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {} , Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
                     else:
-                        activity = '- {} asked to {} {}/{}, Be careful! Established but empyt! Sent: {}, Recv: {}, Tot: {} , Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} asked to {} {}/{}, Be careful! Established but empty! Sent: {}, Recv: {}, Tot: {} , Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
                 # In here we try to capture the situation when only 1 udp packet is sent. Looks like not established, but is actually maybe ok
                 elif dport_name and 'notest' in state.lower() and proto == 'udp' and allbytes == sbytes:
                     activity = '- Not answered {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
