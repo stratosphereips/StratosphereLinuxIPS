@@ -9,7 +9,7 @@ import sys
 import redis
 import os
 
-version = '0.5.1'
+version = '0.6.0rc1'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
