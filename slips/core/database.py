@@ -2,6 +2,7 @@ import redis
 import time
 import json
 import sys
+from typing import Tuple, Dict, Set, Callable
 
 
 
@@ -30,7 +31,6 @@ class Database(object):
             print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
 
         self.separator = '_'
-        self.db_timeline_last_index = 0
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -961,9 +961,8 @@ class Database(object):
     def add_timeline_line(self, profileid, twid, data):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
-        # Set the index of last stored item. (Do not be confused the index of last item is not common index,
-        # because it starts from 1 not from 0.)
-        self.db_timeline_last_index = self.r.rpush(key, str(data))
+        # Set the index of last stored item.
+        index = self.r.rpush(key, str(data))
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
@@ -971,11 +970,12 @@ class Database(object):
         data = self.r.lrange(key, -1, -1)
         return data
 
-    def get_timeline_last_lines(self, profileid, twid):
-        """ Add a line to the time line of this profileid and twid """
+    def get_timeline_last_lines(self, profileid, twid, first_index: int) -> Tuple[str, int]:
+        """ Get all new items in this table."""
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
-        data = self.r.lrange(key, self.db_timeline_last_index, -1)
-        return data
+        last_index = self.r.llen(key)
+        data = self.r.lrange(key, first_index, last_index - 1)
+        return data, last_index
 
     def get_timeline_all_lines(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
@@ -1003,5 +1003,15 @@ class Database(object):
     def del_zeek_file(self, filename):
         """ Delete an entry from the list of zeek files """
         self.r.srem('zeekfiles', filename)
+
+    def add_malicious_ip(self, ip: str, description: str) -> None:
+        self.r.hset('loaded_malicious_ips', ip, description)
+
+    def get_malicious_ip(self, ip: str) -> str:
+        self.r.hget('loaded_malicious_ips', ip)
+        # It is not finished. On Tuesday I will finished.
+        return ''
+
+
 
 __database__ = Database()
