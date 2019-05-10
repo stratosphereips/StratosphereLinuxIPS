@@ -63,6 +63,7 @@ bgp,179,udp,Border Gateway Protocol
 bgp,179,sctp,BGP
 irc,194,tcp,Internet Relay Chat Protocol
 irc,194,udp,Internet Relay Chat Protocol
+airport discovery,udp,192,Apple AirPort Base Station PPP status or discovery (certain configurations), AirPort Admin Utility, AirPort Express Assistant
 imap3,220,tcp,Interactive Mail Access Protocol v3
 imap3,220,udp,Interactive Mail Access Protocol v3
 https,443,tcp,http protocol over TLS/SSL
@@ -126,5 +127,7 @@ nat-pmp,5351,udp,Nat Port Mapping Protocol
 nat-pmp,5351,tcp,Nat Port Mapping Protocol
 mdns,5353,udp,Multicast DNS
 llmr,5355,udp,Link-Local Multicast Name Resolution
+IRC,6667,udp,IRC Protocol
+IRC,6667,tcp,IRC Protocol
 bittorrent,6881,udp,Bittorrent protocol usually
 bittorrent,6882,udp,Bittorrent protocol usually
