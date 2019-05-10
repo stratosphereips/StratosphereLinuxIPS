@@ -531,7 +531,7 @@ class Database(object):
         We receive the pakets to distinguish some Reset connections
         """
         try:
-            self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
+            #self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
             pre = state.split('_')[0]
             try:
                 # We have varius type of states depending on the type of flow.
@@ -791,6 +791,12 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_flow' in channel:
             pubsub.subscribe(channel)
+        elif 'new_dns' in channel:
+            pubsub.subscribe(channel)
+        elif 'new_http' in channel:
+            pubsub.subscribe(channel)
+        elif 'new_ssl' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -815,17 +821,18 @@ class Database(object):
         The format is a dictionary
         """
         data = {}
-        temp = self.r.hget(profileid + self.separator + twid, stime)
+        temp = self.r.hget(profileid + self.separator + twid + self.separator + 'flows', stime)
         data[stime] = temp
         # Get the dictionary format
         return data
 
-    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto=''):
+    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto='', uid=''):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
 
         """
         data = {}
+        data['uid'] = uid
         data['dur'] = dur
         data['saddr'] = saddr
         data['sport'] = sport
@@ -842,7 +849,8 @@ class Database(object):
         data['appproto'] = appproto
         # Convert to json string
         data = json.dumps(data)
-        self.r.hset(profileid + self.separator + twid, stime, data)
+        # Store in the hash 10.0.0.1_timewindow1, a key stime, with data
+        self.r.hset(profileid + self.separator + twid + self.separator + 'flows', stime, data)
         # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
         flow = self.get_flow(profileid, twid, stime)
         # Get the dictionary and convert to json string
@@ -854,6 +862,101 @@ class Database(object):
         to_send['flow'] = flow
         to_send = json.dumps(to_send)
         self.publish('new_flow', to_send)
+        self.print('Adding CONN flow to DB: {}'.format(data), 5,0)
+
+    def add_out_ssl(self, profileid, twid, flowtype, uid, version, cipher, resumed, established, cert_chain_fuids, client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
+        """ 
+        Store in the DB an ssl request
+        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        """
+        data = {}
+        data['uid'] = uid
+        data['type'] = flowtype
+        data['version'] = version
+        data['cipher'] = cipher
+        data['resumed'] = resumed
+        data['established'] = established
+        data['cert_chain_fuids'] = cert_chain_fuids
+        data['client_cert_chain_fuids'] = client_cert_chain_fuids
+        data['subject'] = subject
+        data['issuer'] = issuer
+        data['validation_status'] = validation_status
+        data['curve'] = curve
+        data['server_name'] = server_name
+
+        # Convert to json string
+        data = json.dumps(data)
+        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['flow'] = data
+        to_send = json.dumps(to_send)
+        self.publish('new_ssl', to_send)
+        self.print('Adding SSL flow to DB: {}'.format(data), 5,0)
+
+    def add_out_http(self, profileid, twid, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
+        """
+        Store in the DB a http request
+        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        """
+        data = {}
+        data['uid'] = uid
+        data['type'] = flowtype
+        data['method'] = method
+        data['host'] = host
+        data['uri'] = uri
+        data['version'] = version
+        data['user_agent'] = user_agent
+        data['request_body_len'] = request_body_len
+        data['response_body_len'] = response_body_len
+        data['status_code'] = status_code
+        data['status_msg'] = status_msg
+        data['resp_mime_types'] = resp_mime_types
+        data['resp_fuids'] = resp_fuids
+        # Convert to json string
+        data = json.dumps(data)
+        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['flow'] = data
+        to_send = json.dumps(to_send)
+        self.publish('new_http', to_send)
+        self.print('Adding HTTP flow to DB: {}'.format(data), 5,0)
+
+    def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
+        """ 
+        Store in the DB a DNS request
+
+        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        """
+        data = {}
+        data['uid'] = uid
+        data['type'] = flowtype
+        data['query'] = query
+        data['qclass_name'] = qclass_name
+        data['qtype_name'] = qtype_name
+        data['rcode_name'] = rcode_name
+        data['answers'] = answers
+        data['ttls'] = ttls
+        # Convert to json string
+        data = json.dumps(data)
+        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['flow'] = data
+        to_send = json.dumps(to_send)
+        self.publish('new_dns', to_send)
+        self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
+
+    def get_altflow_from_uid(self, profileid, twid, uid):
+        """ Given a uid, get the alternative flow realted to it """
+        return self.r.hget(profileid + self.separator + twid + self.separator + 'altflows', uid)
 
     def add_timeline_line(self, profileid, twid, data):
         """ Add a line to the time line of this profileid and twid """
