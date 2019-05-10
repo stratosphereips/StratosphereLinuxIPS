@@ -10,6 +10,7 @@ The minimum slips requirements are:
 - python 3.7
 - py37-redis 
 - maxminddb libraries for python (pip install maxminddb)
+- watchdog python library
 - bro (now zeek) (see http://zeek.org)
   
 To run redis you can:
