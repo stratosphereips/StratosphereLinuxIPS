@@ -30,6 +30,7 @@ class Database(object):
             print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
 
         self.separator = '_'
+        self.db_timeline_last_index = 0
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -857,12 +858,20 @@ class Database(object):
     def add_timeline_line(self, profileid, twid, data):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
-        self.r.rpush(key, str(data))
+        # Set the index of last stored item. (Do not be confused the index of last item is not common index,
+        # because it starts from 1 not from 0.)
+        self.db_timeline_last_index = self.r.rpush(key, str(data))
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = self.r.lrange(key, -1, -1)
+        return data
+
+    def get_timeline_last_lines(self, profileid, twid):
+        """ Add a line to the time line of this profileid and twid """
+        key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        data = self.r.lrange(key, self.db_timeline_last_index, -1)
         return data
 
     def get_timeline_all_lines(self, profileid, twid):
