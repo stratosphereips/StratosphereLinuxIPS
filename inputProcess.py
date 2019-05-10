@@ -95,16 +95,29 @@ class InputProcess(multiprocessing.Process):
                 self.event_observer.schedule(self.event_handler, self.zeek_folder, recursive=True)
                 # Start the observer
                 self.event_observer.start()
-                # Find if the pcap file name was absolute or relative
-                if self.input_information[0] == '/':
+
+                # This double if is horrible but we just need to change a string
+                if self.input_type == 'interface':
+                    # Change the bro command
+                    bro_parameter = '-i'
                     prefix = ''
-                else:
-                    prefix = '../'
+                    # We don't want to stop bro if we read from an interface
+                    self.bro_timeout = 9999999999999999
+                elif self.input_type == 'pcap':
+                    # We change the bro command
+                    bro_parameter = '-r'
+                    # Find if the pcap file name was absolute or relative
+                    if self.input_information[0] == '/':
+                        prefix = ''
+                    else:
+                        prefix = '../'
+                    # This is for stoping the input if bro does not receive any new line while reading a pcap
+                    self.bro_timeout = 30
 
                 if len(os.listdir(self.zeek_folder)) > 0:
                     # First clear the zeek folder of old .log files
-                    command = "rm " + self.zeek_folder + "/*.log > /dev/null"
-                    os.system(command)
+                    command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null &"
+                os.system(command)
                 # Run zeek on the pcap. The redef is to hav json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
                 command = "cd " + self.zeek_folder + "; bro -C -r " + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
@@ -136,27 +149,36 @@ class InputProcess(multiprocessing.Process):
                             file_handler = open(filename + '.log', 'r')
                             open_file_handlers[filename] = file_handler
                             #self.print('New File {}'.format(filename))
-                        json_line = file_handler.readline()
-                        #self.print('File {}, read line: {}'.format(filename, json_line))
-                        # Did the file ended?
-                        if not json_line:
-                            # We reached the end of this file. Wait for more data to come
-                            continue
-                        
-                        # Since we actually read something form any file, update the last time of read
-                        last_updated_file_time = datetime.now()
-                        # Convert from json to dict
-                        line = json.loads(json_line)
-                        # All bro files have a field 'ts' with the timestamp.
-                        # So we are safe here not checking the type of line
-                        timestamp = line['ts']
-                        time_last_lines[filename] = timestamp
-                        # Add the type of file to the dict so later we know how to parse it
-                        line['type'] = filename
-                        #self.print('File {}. TS: {}'.format(filename, timestamp))
-                        # Store the line in the cache
-                        #self.print('Adding cache and time of {}'.format(filename))
-                        cache_lines[filename] = line
+
+                        # Only read the next line if the previous line was sent
+                        try:
+                            temp = cache_lines[filename]
+                            # We have still something to send, do not read the next line from this file
+                        except KeyError:
+                            # We don't have any waiting line for this file, so proceed
+
+                            json_line = file_handler.readline()
+                            #self.print('Reading from file {}, the line {}'.format(filename, json_line))
+                            #self.print('File {}, read line: {}'.format(filename, json_line))
+                            # Did the file ended?
+                            if not json_line:
+                                # We reached the end of one of the files that we were reading. Wait for more data to come
+                                continue
+
+                            # Since we actually read something form any file, update the last time of read
+                            last_updated_file_time = datetime.now()
+                            # Convert from json to dict
+                            line = json.loads(json_line)
+                            # All bro files have a field 'ts' with the timestamp.
+                            # So we are safe here not checking the type of line
+                            timestamp = line['ts']
+                            time_last_lines[filename] = timestamp
+                            # Add the type of file to the dict so later we know how to parse it
+                            line['type'] = filename
+                            #self.print('File {}. TS: {}'.format(filename, timestamp))
+                            # Store the line in the cache
+                            #self.print('Adding cache and time of {}'.format(filename))
+                            cache_lines[filename] = line
                      
                     # Out of the for
                     #self.print('Out of the for.')
@@ -167,23 +189,28 @@ class InputProcess(multiprocessing.Process):
                         now = datetime.now()
                         diff = now - last_updated_file_time
                         diff = diff.seconds
-                        if diff >= 10:
+                        if diff >= self.bro_timeout:
                             # It has been 10 seconds without any file being updated. So stop the while
                             break
 
                     #self.print('Cached times: {}'.format(str(time_last_lines)))
                     # Now read lines in order. The line with the smallest timestamp first
-                    sorted_time_last_lines = sorted(time_last_lines, key=time_last_lines.get)
-                    #self.print('Sorted times: {}'.format(str(sorted_time_last_lines)))
+                    file_sorted_time_last_lines = sorted(time_last_lines, key=time_last_lines.get)
+                    #self.print('Sorted times: {}'.format(str(file_sorted_time_last_lines)))
                     try:
-                        key = sorted_time_last_lines[0]
+                        key = file_sorted_time_last_lines[0]
                     except IndexError:
                         # No more sorted keys. Just loop waiting for more lines
+                        # It may happened that we check all the files in the folder, and there is still no file for us.
+                        # To cover this case, just refresh the list of files
+                        #self.print('Getting new files...')
+                        zeek_files = __database__.get_all_zeek_file()
                         continue
+
                     line_to_send = cache_lines[key]
                     #self.print('Line to send from file {}. {}'.format(key, line_to_send))
                     # SENT
-                    self.print("	> Sent Line: {}".format(line), 0, 3)
+                    self.print("	> Sent Line: {}".format(line_to_send), 0, 3)
                     self.profilerqueue.put(line_to_send)
                     # Count the read lines
                     lines += 1
