@@ -4,19 +4,19 @@ import multiprocessing
 from slips.core.database import __database__
 
 import sys
-import threading
 import configparser
 import time
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 import pickle
 import pandas as pd
+import json
 
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'MLdetection1'
-    description = 'Module to run a RandomForest to detect malicious flows based on a trained model.'
+    description = 'Module to train or test a RandomForest to detect malicious flows.'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
@@ -30,17 +30,17 @@ class Module(Module, multiprocessing.Process):
         # Read the configuration
         self.read_configuration()
         self.fieldseparator = __database__.getFieldSeparator()
-        # For some weird reason the database loses its outputqueue and we have to re set it here.......
+        # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
-        f = open('scale-new.bin', 'rb')
-        self.scaler = pickle.load(f)
-        f.close()
-        f = open('model-new.bin', 'rb')
-        self.clf = pickle.load(f)
-        f.close()
-        f = open('categories.bin', 'rb')
-        self.categories = pickle.load(f)
-        f.close()
+
+    def read_configuration(self):
+        """ Read the configuration file for what we need """
+        try:
+            self.mode = self.config.get('MLdetection1', 'mode')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            # Default to test
+            self.mode = 'test'
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -56,185 +56,170 @@ class Module(Module, multiprocessing.Process):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
-
-    def read_configuration(self):
-        """ Read the configuration file for what we need """
-        # Get the time of log report
-        try:
-            self.report_time = int(self.config.get('parameters', 'log_report_time'))
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.report_time = 5
-        self.outputqueue.put('01|logs|Logs Process configured to report every: {} seconds'.format(self.report_time))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def run(self):
         try:
-            # Create a timer to process the data every X seconds
-            timer = TimerThread(self.report_time, self.process_flow)
-            timer.start()
-
             while True:
-                line = self.inputqueue.get()
-                if 'stop' != line:
-                    # we are not processing input from the queue yet
-                    # without this line the complete output thread does not work!!
-                    # WTF???????
-                    print(line)
-                    pass
-                else:
-                    # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
-                    self.outputqueue.put('stop')
-                    return True
-            # Stop the timer
-            timer.shutdown()
-
+                message = self.c1.get_message(timeout=None)
+                #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
+                if message['channel'] == 'new_flow' and message['data'] != 1:
+                    mdata = message['data']
+                    # Convert from json to dict
+                    mdata = json.loads(mdata)
+                    profileid = mdata['profileid']
+                    twid = mdata['twid']
+                    # Get flow as a json
+                    json_flow = mdata['flow']
+                    # Convert flow to a dict
+                    self.flow = json.loads(json_flow)
+                    #self.print('Flow received: {}'.format(self.flow))
+                    # First process the flow to convert to pandas
+                    self.process_flow()
+                    if self.mode == 'train':
+                        self.train()
+                    elif self.mode == 'test':
+                        pred = self.detect()
+                        self.print('Prediction: {}'.format(pred))
         except KeyboardInterrupt:
-            # Stop the timer
-            timer.shutdown()
             return True
         except Exception as inst:
             # Stop the timer
-            timer.shutdown()
-            self.outputqueue.put('01|logs|\t[Logs] Error with LogsProcess')
-            self.outputqueue.put('01|logs|\t[Logs] {}'.format(type(inst)))
-            self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))
+            self.print('Error in run()')
+            self.print(type(inst))
+            self.print(inst)
+            sys.exit(1)
+
+    def train(self, flow):
+        """ 
+        Train a model based on the flows we receive and the labels
+        """
+        try:
+            flow.label = flow.label.str.replace(r'(^.*Normal.*$)', 'Normal')
+            flow.label = flow.label.str.replace(r'(^.*Malware.*$)', 'Malware')
+
+            # Separate
+            y_flow = flow['label']
+            X_flow = flow.drop('label', axis=1)
+
+            #sc = StandardScaler()
+            #sc.fit(X_flow)
+            #X_flow = sc.transform(X_flow)
+            #print(X_flow)
+
+            clf = RandomForestClassifier(n_estimators=3, criterion='entropy', random_state=1234)
+            clf.fit(X_flow, y_flow)
+            score = clf.score(X_flow, y_flow)
+            print(score)
+
+            f = open('scale-new.bin', 'wb')
+            data = pickle.dumps(sc)
+            f.write(data)
+            f.close()
+
+            f = open('model-new.bin', 'wb')
+            data = pickle.dumps(clf)
+            f.write(data)
+            f.close()
+            print(categories)
+
+            f = open('categories.bin', 'wb')
+            data = pickle.dumps(categories)
+            f.write(data)
+            f.close()
+        except Exception as inst:
+            # Stop the timer
+            self.print('Error in train()')
+            self.print(type(inst))
+            self.print(inst)
             sys.exit(1)
 
     def process_features(self, dataset):
         '''
         Discards some features of the dataset and can create new.
         '''
+        # {"uid": "Ci5mJ63d7iYGzukjCl", "dur": 0, "saddr": "192.168.2.12", "sport": 1652, "daddr": "69.57.14.100", "dport": 23, "proto": "tcp", "state": "NotEstablished", "pkts": 1, "allbytes": 0, "spkts": 1, "sbytes": 0, "appproto": ""}
         try:
-          dataset = dataset.drop('StartTime', axis=1)
-        except ValueError:
-          pass
-        dataset.reset_index()
-        try:
-          dataset = dataset.drop('SrcAddr', axis=1)
+          dataset = dataset.drop('appproto', axis=1)
         except ValueError:
           pass
         try:
-          dataset = dataset.drop('DstAddr', axis=1)
+          dataset = dataset.drop('daddr', axis=1)
         except ValueError:
           pass
         try:
-          dataset = dataset.drop('sTos', axis=1)
+          dataset = dataset.drop('saddr', axis=1)
         except ValueError:
           pass
         try:
-          dataset = dataset.drop('dTos', axis=1)
+          dataset = dataset.drop('uid', axis=1)
         except ValueError:
           pass
-        try:
-          dataset = dataset.drop('Label', axis=1)
-        except ValueError:
-          pass
-        # Create categorical features
-        try:
-          dataset.Dir = self.categories['Dir'].codes
-        except ValueError:
-          pass
-        try:
-          dataset.Proto = self.categories['Proto'].codes
-        except ValueError:
-          pass
-        try:
-          # Convert the ports to categorical codes because some ports are not numbers. For exmaple, ICMP has ports with 0x03
-          dataset.Sport = self.categories['Sport'].codes
-        except ValueError:
-          pass
-        try:
-          dataset.State = self.categories['State'].codes
-        except ValueError:
-          pass
-        try:
-          # Convert the ports to categorical codes because some ports are not numbers. For exmaple, ICMP has ports with 0x03
-          dataset.Dport = self.categories['Dport'].codes
-        except ValueError:
-          pass
+        # Convert proto to categorical 
+        # Convert state to categorical
         try:
           # Convert Dur to float
-          dataset.Dur = dataset.Dur.astype('float')
+          dataset.dur = dataset.dur.astype('float')
         except ValueError:
           pass
         try:
           # Convert TotPkts to float
-          dataset.Dur = dataset.TotPkts.astype('float')
+          dataset.pkts = dataset.pkts.astype('float')
         except ValueError:
           pass
         try:
           # Convert SrcPkts to float
-          dataset.Dur = dataset.SrcPkts.astype('float')
+          dataset.spkts = dataset.spkts.astype('float')
         except ValueError:
           pass
         try:
           # Convert TotBytes to float
-          dataset.Dur = dataset.TotBytes.astype('float')
+          dataset.allbytes = dataset.allbytes.astype('float')
         except ValueError:
           pass
         try:
           # Convert SrcBytes to float
-          dataset.Dur = dataset.SrcBytes.astype('float')
+          dataset.sbytes = dataset.sbytes.astype('float')
         except ValueError:
           pass
         return dataset
 
     def process_flow(self):
         """ 
+        Process the self.flow and try to see if we can detect it
+        Store the pandas df in self.flow
         """
-        # Discard the headers
-        flow = __database__.getNextFlowVerbatim()
-        # Discard the man flow
-        flow = __database__.getNextFlowVerbatim()
-        # Read all the pending flows
-        flow = __database__.getNextFlowVerbatim()
-        while flow:
-            #self.outputqueue.put('01|detection1|\t[detect1] Flow read: {}'.format(flow))
-            # Since the flow is verbatim we need to split it here 
-            #sflow = flow.split('	')
-            sflow = flow.split(',')
-            #self.outputqueue.put('01|detection1|\t[detect1] sflow: {}'.format(sflow))
+        # Forget the timestamp that is the only key of the dict and get the content
+        json_flow = self.flow[list(self.flow.keys())[0]]
+        # Convert flow to a dict
+        dict_flow = json.loads(json_flow)
+        # Convert the flow to a pandas dataframe
+        raw_flow = pd.DataFrame(dict_flow, index=[0])
+        # Process features
+        dflow = self.process_features(raw_flow)
+        # Update the flow to the processed version
+        self.flow = dflow
 
-            # convert the flow to a pandas dataframe
-            dflow = pd.DataFrame([sflow], columns=['StartTime','Dur','Proto','SrcAddr','Sport','Dir','DstAddr','Dport','State','sTos','dTos','TotPkts','TotBytes','SrcBytes','SrcPkts','Label'])
-            # Process features
-            dflow = self.process_features(dflow)
-
-            #self.outputqueue.put('01|detection1|\t[detect1] dflow: {}'.format(dflow))
-            flow_std = self.scaler.transform(dflow)
-            #self.outputqueue.put('01|detection1|\t[detect1] flow std: {}'.format(flow_std))
-
-            pred = self.clf.predict(flow_std)
-            self.outputqueue.put('01|detection1|\t[detect1] Prediction of flow: {}. -> {}'.format(flow[:-1], pred))
-            flow = __database__.getNextFlowVerbatim()
-
-
-
-
-class TimerThread(threading.Thread):
-    """Thread that executes a task every N seconds. Only to run the process_global_data."""
-    
-    def __init__(self, interval, function):
-        threading.Thread.__init__(self)
-        self._finished = threading.Event()
-        self._interval = interval
-        self.function = function 
-
-    def shutdown(self):
-        """Stop this thread"""
-        self._finished.set()
-    
-    def run(self):
+    def detect(self):
+        """ 
+        Detect this flow with the current model stored
+        """
         try:
-            while 1:
-                if self._finished.isSet(): return
-                self.task()
-                
-                # sleep for interval or until shutdown
-                self._finished.wait(self._interval)
-        except KeyboardInterrupt:
-            return True
-    
-    def task(self):
-        self.function()
+            # Drop the label column here
+            # Scale the flow
+            #flow_std = self.scaler.transform(dflow)
+
+            # Load the model from disk
+            f = open('./modules/MLdetection1/model-new.bin', 'rb')
+            self.clf = pickle.load(f)
+            f.close()
+
+            #pred = self.clf.predict(self.flow)
+            pred = 'Normal'
+            return pred
+        except Exception as inst:
+            # Stop the timer
+            self.print('Error in detect()')
+            self.print(type(inst))
+            self.print(inst)
+            sys.exit(1)
