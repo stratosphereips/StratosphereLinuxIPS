@@ -9,8 +9,11 @@ from slips.core.database import __database__
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r".*\.log$"]
 
-    def __init__(self):
+    def __init__(self, config):
         super().__init__(self.REGEX)
+        self.config = config
+        # Start the DB
+        __database__.start(self.config)
 
     def on_created(self, event):
         self.process(event)
