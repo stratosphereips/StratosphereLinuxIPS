@@ -34,6 +34,8 @@ class ProfilerProcess(multiprocessing.Process):
         self.input_type = False
         # Read the configuration
         self.read_configuration()
+        # Start the DB
+        __database__.start(self.config)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
 
