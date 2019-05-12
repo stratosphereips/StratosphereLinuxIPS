@@ -1021,7 +1021,7 @@ class Database(object):
         # Get the dictionary format
         return data
 
-    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto='', uid=''):
+    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto='', uid='', label=''):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
 
@@ -1042,6 +1042,7 @@ class Database(object):
         data['spkts'] = spkts
         data['sbytes'] = sbytes
         data['appproto'] = appproto
+        data['label'] = label
         # Convert to json string
         data = json.dumps(data)
         # Store in the hash 10.0.0.1_timewindow1, a key stime, with data
@@ -1191,5 +1192,9 @@ class Database(object):
     def del_zeek_file(self, filename):
         """ Delete an entry from the list of zeek files """
         self.r.srem('zeekfiles', filename)
+
+    def add_label_to_flow(self, profileid, twid, ts, label):
+        """ Add a label to a flow """
+
 
 __database__ = Database()
