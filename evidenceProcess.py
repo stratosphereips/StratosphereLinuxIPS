@@ -18,6 +18,8 @@ class EvidenceProcess(multiprocessing.Process):
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.config = config
+        # Start the DB
+        __database__.start(self.config)
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
