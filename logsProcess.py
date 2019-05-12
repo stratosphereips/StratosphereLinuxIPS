@@ -32,6 +32,8 @@ class LogsProcess(multiprocessing.Process):
         self.verbose = verbose
         self.debug = debug
         self.config = config
+        # Start the DB
+        __database__.start(self.config)
         # From the config, read the timeout to read logs. Now defaults to 5 seconds
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
