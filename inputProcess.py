@@ -113,7 +113,7 @@ class InputProcess(multiprocessing.Process):
                     # This is for stoping the input if bro does not receive any new line while reading a pcap
                     self.bro_timeout = 30
                 # First clear the zeek folder of old .log files
-                command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null &"
+                command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null"
                 os.system(command)
                 # Run zeek on the pcap. The redef is to hav json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
