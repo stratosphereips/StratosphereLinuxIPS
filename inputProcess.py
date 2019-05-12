@@ -17,6 +17,8 @@ class InputProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
         self.config = config
+        # Start the DB
+        __database__.start(self.config)
         self.input_type = input_type
         self.input_information = input_information
         self.zeek_folder = './zeek_files'
@@ -85,7 +87,7 @@ class InputProcess(multiprocessing.Process):
                 # at once, but when the traffic appears. That means that we need
                 # some process to tell us which files to read in real time when they appear
                 # Get the fileeventhandler
-                self.event_handler = FileEventHandler()
+                self.event_handler = FileEventHandler(self.config)
                 # Create an observer
                 self.event_observer = Observer()
                 # Schedule the observer with the callback on the file handler
