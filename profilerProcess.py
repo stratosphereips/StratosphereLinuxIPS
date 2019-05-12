@@ -97,7 +97,6 @@ class ProfilerProcess(multiprocessing.Process):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.timeformat = '%Y/%m/%d %H:%M:%S.%f'
-
         ##
         # Get the direction of analysis
         try:
@@ -106,6 +105,14 @@ class ProfilerProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default 
             self.analysis_direction = 'all'
+        # Get the default label for all this flow. Used during training usually
+        try:
+            self.label = self.config.get('parameters', 'label')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            # By default 
+            self.label = 'normal'
+
 
     def define_type(self, line):
         """ 
@@ -690,7 +697,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # Add the srcport
                     __database__.add_out_srcport(profileid, twid, sport)
                     # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid)
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
                 elif 'dns' in flow_type:
                     __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                 elif flow_type == 'http':
@@ -710,7 +717,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # Add the srcport
                     __database__.add_in_srcport(profileid, twid, sport)
                     # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto)
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, label=self.label)
 
 
             ##########################################
