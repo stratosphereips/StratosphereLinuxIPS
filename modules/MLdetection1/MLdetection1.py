@@ -12,6 +12,11 @@ import pickle
 import pandas as pd
 import json
 
+# This horrible hack is only to stop sklearn from printing those warnings
+def warn(*args, **kwargs):
+    pass
+import warnings
+warnings.warn = warn
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -84,20 +89,23 @@ class Module(Module, multiprocessing.Process):
                         # Then check if we have already more than 1 label in the training data
                         labels = __database__.get_labels()
                         sum_labeled_flows = sum([i[1] for i in labels])
+                        #self.print('Amount of labels: {}'.format(labels),3,0)
                         if len(labels) <= 1:
+                            self.print('Training mode active but only {} labels'.format(len(labels)))
                             # We don't: return True and keep waiting for more labels
                             return True
                         elif sum_labeled_flows - self.retrain >= 100:
+                            self.print('Training the model with the last group of flows.')
                             # Did we get more than 100 new flows since we last retrained?
                             self.retrain = sum_labeled_flows
                             # Process all flows in the DB and make them ready for pandas
                             self.process_flows()
                             # Train an algorithm
-                            #self.train()
+                            self.train()
                     elif self.mode == 'test':
                         self.process_flow()
                         pred = self.detect()
-                        #self.print('Prediction: {}'.format(pred))
+                        self.print('Prediction: {}'.format(pred[0]))
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -112,38 +120,45 @@ class Module(Module, multiprocessing.Process):
         Train a model based on the flows we receive and the labels
         """
         try:
-            self.flow.label = self.flow.label.str.replace(r'(^.*Normal.*$)', 'Normal')
-            self.flow.label = self.flow.label.str.replace(r'(^.*Malware.*$)', 'Malware')
+            self.flows.label = self.flows.label.str.replace(r'(^.*Normal.*$)', 'Normal')
+            self.flows.label = self.flows.label.str.replace(r'(^.*Malware.*$)', 'Malware')
 
             # Separate
-            y_flow = self.flow['label']
-            X_flow = self.flow.drop('label', axis=1)
+            y_flow = self.flows['label']
+            X_flow = self.flows.drop('label', axis=1)
+            #self.print('	X_flow without label: {}'.format(X_flow))
 
-            #sc = StandardScaler()
-            #sc.fit(X_flow)
-            #X_flow = sc.transform(X_flow)
-            #print(X_flow)
+            sc = StandardScaler()
+            sc.fit(X_flow)
+            X_flow = sc.transform(X_flow)
+            #self.print('	X_flow scaled: {}'.format(X_flow))
 
-            clf = RandomForestClassifier(n_estimators=3, criterion='entropy', random_state=1234)
-            clf.fit(X_flow, y_flow)
-            score = clf.score(X_flow, y_flow)
-            self.print('Score: {}'.format(score))
+            # Load the old model if there is one
+            try:
+                f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
+                self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 3,0)
+                self.clf = pickle.load(f)
+                f.close()
+            except FileNotFoundError:
+                pass
+            self.print('Create the model')
 
-            f = open('scale-new.bin', 'wb')
+            # Create th RF model. Warm_start is to incrementallly train with new flows inside a previously trained model.
+            self.clf = RandomForestClassifier(n_estimators=3, criterion='entropy', random_state=1234, warm_start=True)
+            self.clf.fit(X_flow, y_flow)
+            score = self.clf.score(X_flow, y_flow)
+            self.print('	Training Score: {}'.format(score))
+
+            f = open('./modules/MLdetection1/RFscaler.bin', 'wb')
             data = pickle.dumps(sc)
             f.write(data)
             f.close()
 
-            f = open('model-new.bin', 'wb')
-            data = pickle.dumps(clf)
+            f = open('./modules/MLdetection1/RFmodel.bin', 'wb')
+            data = pickle.dumps(self.clf)
             f.write(data)
             f.close()
-            print(categories)
 
-            f = open('categories.bin', 'wb')
-            data = pickle.dumps(categories)
-            f.write(data)
-            f.close()
         except Exception as inst:
             # Stop the timer
             self.print('Error in train()')
@@ -155,7 +170,6 @@ class Module(Module, multiprocessing.Process):
         '''
         Discards some features of the dataset and can create new.
         '''
-        # {"uid": "Ci5mJ63d7iYGzukjCl", "dur": 0, "saddr": "192.168.2.12", "sport": 1652, "daddr": "69.57.14.100", "dport": 23, "proto": "tcp", "state": "NotEstablished", "pkts": 1, "allbytes": 0, "spkts": 1, "sbytes": 0, "appproto": ""}
         try:
           dataset = dataset.drop('appproto', axis=1)
         except ValueError:
@@ -172,8 +186,16 @@ class Module(Module, multiprocessing.Process):
           dataset = dataset.drop('uid', axis=1)
         except ValueError:
           pass
-        # Convert proto to categorical 
         # Convert state to categorical
+        dataset.state = dataset.state.str.replace(r'(^.*NotEstablished.*$)', '0')
+        dataset.state = dataset.state.str.replace(r'(^.*Established.*$)', '1')
+        dataset.state = dataset.state.astype('float64')
+        # Convert proto to categorical. For now we only have to states, so we can hardcode...
+        dataset.proto = dataset.proto.str.replace(r'(^.*tcp.*$)', '0')
+        dataset.proto = dataset.proto.str.replace(r'(^.*udp.*$)', '1')
+        dataset.proto = dataset.proto.str.replace(r'(^.*icmp.*$)', '2')
+        dataset.proto = dataset.proto.str.replace(r'(^.*icmp-ipv6.*$)', '3')
+        dataset.proto = dataset.proto.astype('float64')
         try:
           # Convert Dur to float
           dataset.dur = dataset.dur.astype('float')
@@ -207,17 +229,17 @@ class Module(Module, multiprocessing.Process):
         Store the pandas df in self.flows
         """
         flows = __database__.get_all_flows()
-        self.print(flows)
-        # Forget the timestamp that is the only key of the dict and get the content
-        #json_flow = self.flow[list(self.flow.keys())[0]]
-        # Convert flow to a dict
-        #dict_flow = json.loads(json_flow)
-        # Convert the flow to a pandas dataframe
-        #raw_flow = pd.DataFrame(dict_flow, index=[0])
+        list_flows = []
+        for flowdict in flows:
+            for flow in flowdict:
+                dict_flow = json.loads(flowdict[flow])
+                list_flows.append(dict_flow)
+        # Convert the list to a pandas dataframe
+        df_flows = pd.DataFrame(list_flows)
         # Process features
-        #dflow = self.process_features(raw_flow)
+        df_flows = self.process_features(df_flows)
         # Update the flow to the processed version
-        #self.flow = dflow
+        self.flows = df_flows
 
     def process_flow(self):
         """ 
@@ -240,17 +262,31 @@ class Module(Module, multiprocessing.Process):
         Detect this flow with the current model stored
         """
         try:
-            # Drop the label column here
-            # Scale the flow
-            #flow_std = self.scaler.transform(dflow)
+            # Load the scaler and the model
+            try:
+                f = open('./modules/MLdetection1/RFscaler.bin', 'rb')
+                self.sc = pickle.load(f)
+                f.close()
+            except FileNotFoundError:
+                self.print('There is no RF model stored. You need to train first with at least two different labels.')
 
             # Load the model from disk
-            f = open('./modules/MLdetection1/model-new.bin', 'rb')
-            self.clf = pickle.load(f)
-            f.close()
+            try:
+                f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
+                self.clf = pickle.load(f)
+                f.close()
+            except FileNotFoundError:
+                self.print('There is no RF model stored. You need to train first with at least two different labels.')
+                return False
+            
+            #self.print('Scale the flow')
+            # Drop the label if there is one
+            y_flow = self.flow['label']
+            X_flow = self.flow.drop('label', axis=1)
+            # Scale the flow
+            X_flow = self.sc.transform(X_flow)
 
-            #pred = self.clf.predict(self.flow)
-            pred = 'Normal'
+            pred = self.clf.predict(X_flow)
             return pred
         except Exception as inst:
             # Stop the timer
