@@ -28,14 +28,19 @@ class Database(object):
         """ Start the DB. Allow it to read the conf """
         self.config = config
         try:
-            self.donotdelete = bool(self.config.get('parameters', 'donotedeletedb'))
+            donotdeleteText = self.config.get('parameters', 'donotdeletedb')
+            if donotdeleteText == 'True':
+                self.donotdelete = True
+            elif donotdeleteText == 'False':
+                self.donotdelete = False
         except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError, KeyError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.donotdelete = False
         # Create the connection to redis
-        self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
-        if not self.donotdelete:
-            self.r.flushdb()
+        if not hasattr(self, 'r'):
+            self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+            if not self.donotdelete:
+                self.r.flushdb()
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -1021,6 +1026,10 @@ class Database(object):
         # Get the dictionary format
         return data
 
+    def get_labels(self):
+        """ Return the amount of each label so far """
+        return self.r.zrange('labels', 0, -1, withscores=True)
+
     def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto='', uid='', label=''):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
@@ -1043,6 +1052,11 @@ class Database(object):
         data['sbytes'] = sbytes
         data['appproto'] = appproto
         data['label'] = label
+
+        # Store the label in our uniq set, and increment it by 1
+        if label:
+            self.r.zincrby('labels', 1, label)
+
         # Convert to json string
         data = json.dumps(data)
         # Store in the hash 10.0.0.1_timewindow1, a key stime, with data
