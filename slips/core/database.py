@@ -2,6 +2,7 @@ import redis
 import time
 import json
 import sys
+import configparser
 
 
 
@@ -21,11 +22,20 @@ class Database(object):
     def __init__(self):
         # The name is used to print in the outputprocess
         self.name = 'DB'
-        self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
-        # IMPORTANT
-        # For now, do not remember between runs of slips. Just delete the database when we start with flushdb
-        self.r.flushdb()
         self.separator = '_'
+
+    def start(self, config):
+        """ Start the DB. Allow it to read the conf """
+        self.config = config
+        try:
+            self.donotdelete = bool(self.config.get('parameters', 'donotedeletedb'))
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError, KeyError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.donotdelete = False
+        # Create the connection to redis
+        self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+        if not self.donotdelete:
+            self.r.flushdb()
 
     def print(self, text, verbose=1, debug=0):
         """ 
