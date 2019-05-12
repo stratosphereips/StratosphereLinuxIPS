@@ -41,6 +41,9 @@ class Database(object):
             self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
             if not self.donotdelete:
                 self.r.flushdb()
+        # Even if the DB is not deleted. We need to delete some temp data
+        # Zeek_files
+        self.r.delete('zeekfiles')
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -1014,19 +1017,26 @@ class Database(object):
         Receives a verbatim flow and stores it in a structure that expires flows in time
         """
         return self.r.lpop('Flows')
+    
+    def get_all_flows_in_profileid_twid(self, profileid, twid):
+        """ 
+        Return a list of all the flows in this profileid and twid
+        """
+        data = self.r.hgetall(profileid + self.separator + twid + self.separator + 'flows')
+        if data:
+            return data
 
     def get_all_flows(self):
         """
-        Returns all the flows in this profileid and twid
-        The format is a dictionary
+        Returns a list with all the flows in all profileids and twids
+        Each position in the list is a dictionary of flows.
         """
         data = []
         for profileid in self.getProfiles():
             for (twid, time) in self.getTWsfromProfile(profileid):
-                temp = self.r.hgetall(profileid + self.separator + twid + self.separator + 'flows')
+                temp = self.get_all_flows_in_profileid_twid(profileid, twid)
                 if temp:
                     data.append(temp)
-        # Get the dictionary format
         return data
 
     def get_flow(self, profileid, twid, stime):
@@ -1067,26 +1077,27 @@ class Database(object):
         data['appproto'] = appproto
         data['label'] = label
 
-        # Store the label in our uniq set, and increment it by 1
-        if label:
-            self.r.zincrby('labels', 1, label)
-
         # Convert to json string
         data = json.dumps(data)
         # Store in the hash 10.0.0.1_timewindow1, a key stime, with data
-        self.r.hset(profileid + self.separator + twid + self.separator + 'flows', stime, data)
-        # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
-        flow = self.get_flow(profileid, twid, stime)
-        # Get the dictionary and convert to json string
-        flow = json.dumps(flow)
-        # Prepare the data to publish.
-        to_send = {}
-        to_send['profileid'] = profileid
-        to_send['twid'] = twid
-        to_send['flow'] = flow
-        to_send = json.dumps(to_send)
-        self.publish('new_flow', to_send)
-        self.print('Adding CONN flow to DB: {}'.format(data), 5,0)
+        value = self.r.hset(profileid + self.separator + twid + self.separator + 'flows', stime, data)
+        if value:
+            # The key was not there before.
+            # Store the label in our uniq set, and increment it by 1
+            if label:
+                self.r.zincrby('labels', 1, label)
+            # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
+            flow = self.get_flow(profileid, twid, stime)
+            # Get the dictionary and convert to json string
+            flow = json.dumps(flow)
+            # Prepare the data to publish.
+            to_send = {}
+            to_send['profileid'] = profileid
+            to_send['twid'] = twid
+            to_send['flow'] = flow
+            to_send = json.dumps(to_send)
+            self.publish('new_flow', to_send)
+            self.print('Adding CONN flow to DB: {}'.format(data), 5,0)
 
     def add_out_ssl(self, profileid, twid, flowtype, uid, version, cipher, resumed, established, cert_chain_fuids, client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
         """ 
