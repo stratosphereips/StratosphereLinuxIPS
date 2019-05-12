@@ -25,6 +25,8 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
+        # Start the DB
+        __database__.start(self.config)
         # Subscribe to the channel
         self.c1 = __database__.subscribe('new_flow')
         # Read the configuration
@@ -77,10 +79,17 @@ class Module(Module, multiprocessing.Process):
                     # First process the flow to convert to pandas
                     self.process_flow()
                     if self.mode == 'train':
+                        # We are training. 
+                        # First add the label to the flow in redis
+                        # Store this label in redis
+                        # Then check if we have already more than 1 label in the training data
+                        # We don't: return True
+                        # We do: we can really train an algorithm
+
                         self.train()
                     elif self.mode == 'test':
                         pred = self.detect()
-                        self.print('Prediction: {}'.format(pred))
+                        #self.print('Prediction: {}'.format(pred))
         except KeyboardInterrupt:
             return True
         except Exception as inst:
