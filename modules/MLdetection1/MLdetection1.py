@@ -29,11 +29,13 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         # Subscribe to the channel
         self.c1 = __database__.subscribe('new_flow')
-        # Read the configuration
-        self.read_configuration()
         self.fieldseparator = __database__.getFieldSeparator()
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
+        # Read the configuration
+        self.read_configuration()
+        # To know when to retrain. We store the number of labels when we last retrain
+        self.retrain = 0
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -77,17 +79,23 @@ class Module(Module, multiprocessing.Process):
                     self.flow = json.loads(json_flow)
                     #self.print('Flow received: {}'.format(self.flow))
                     # First process the flow to convert to pandas
-                    self.process_flow()
                     if self.mode == 'train':
                         # We are training. 
-                        # First add the label to the flow in redis
-                        # Store this label in redis
                         # Then check if we have already more than 1 label in the training data
-                        # We don't: return True
-                        # We do: we can really train an algorithm
-
-                        self.train()
+                        labels = __database__.get_labels()
+                        sum_labeled_flows = sum([i[1] for i in labels])
+                        if len(labels) <= 1:
+                            # We don't: return True and keep waiting for more labels
+                            return True
+                        elif sum_labeled_flows - self.retrain >= 100:
+                            # Did we get more than 100 new flows since we last retrained?
+                            self.retrain = sum_labeled_flows
+                            # Process all flows in the DB and make them ready for pandas
+                            self.process_flows()
+                            # Train an algorithm
+                            #self.train()
                     elif self.mode == 'test':
+                        self.process_flow()
                         pred = self.detect()
                         #self.print('Prediction: {}'.format(pred))
         except KeyboardInterrupt:
@@ -99,17 +107,17 @@ class Module(Module, multiprocessing.Process):
             self.print(inst)
             sys.exit(1)
 
-    def train(self, flow):
+    def train(self):
         """ 
         Train a model based on the flows we receive and the labels
         """
         try:
-            flow.label = flow.label.str.replace(r'(^.*Normal.*$)', 'Normal')
-            flow.label = flow.label.str.replace(r'(^.*Malware.*$)', 'Malware')
+            self.flow.label = self.flow.label.str.replace(r'(^.*Normal.*$)', 'Normal')
+            self.flow.label = self.flow.label.str.replace(r'(^.*Malware.*$)', 'Malware')
 
             # Separate
-            y_flow = flow['label']
-            X_flow = flow.drop('label', axis=1)
+            y_flow = self.flow['label']
+            X_flow = self.flow.drop('label', axis=1)
 
             #sc = StandardScaler()
             #sc.fit(X_flow)
@@ -119,7 +127,7 @@ class Module(Module, multiprocessing.Process):
             clf = RandomForestClassifier(n_estimators=3, criterion='entropy', random_state=1234)
             clf.fit(X_flow, y_flow)
             score = clf.score(X_flow, y_flow)
-            print(score)
+            self.print('Score: {}'.format(score))
 
             f = open('scale-new.bin', 'wb')
             data = pickle.dumps(sc)
@@ -193,9 +201,27 @@ class Module(Module, multiprocessing.Process):
           pass
         return dataset
 
+    def process_flows(self):
+        """ 
+        Process all the flwos in the DB 
+        Store the pandas df in self.flows
+        """
+        flows = __database__.get_all_flows()
+        self.print(flows)
+        # Forget the timestamp that is the only key of the dict and get the content
+        #json_flow = self.flow[list(self.flow.keys())[0]]
+        # Convert flow to a dict
+        #dict_flow = json.loads(json_flow)
+        # Convert the flow to a pandas dataframe
+        #raw_flow = pd.DataFrame(dict_flow, index=[0])
+        # Process features
+        #dflow = self.process_features(raw_flow)
+        # Update the flow to the processed version
+        #self.flow = dflow
+
     def process_flow(self):
         """ 
-        Process the self.flow and try to see if we can detect it
+        Process the self.flow 
         Store the pandas df in self.flow
         """
         # Forget the timestamp that is the only key of the dict and get the content
