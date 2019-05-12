@@ -1015,6 +1015,20 @@ class Database(object):
         """
         return self.r.lpop('Flows')
 
+    def get_all_flows(self):
+        """
+        Returns all the flows in this profileid and twid
+        The format is a dictionary
+        """
+        data = []
+        for profileid in self.getProfiles():
+            for (twid, time) in self.getTWsfromProfile(profileid):
+                temp = self.r.hgetall(profileid + self.separator + twid + self.separator + 'flows')
+                if temp:
+                    data.append(temp)
+        # Get the dictionary format
+        return data
+
     def get_flow(self, profileid, twid, stime):
         """
         Returns the flow in the specific time
