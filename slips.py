@@ -152,7 +152,6 @@ if __name__ == '__main__':
     ##
     # Creation of the threads
     ##
-
     # Output thread
     # Create the queue for the output thread first. Later the output process is created after we defined which type of output we have
     outputProcessQueue = Queue()
@@ -164,6 +163,20 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid
     outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
+
+
+    # Start each module in the folder modules
+    outputProcessQueue.put('01|main|[main] Starting modules')
+    for module_name in __modules__:
+        to_ignore = read_configuration(config, 'modules', 'disable')
+        if not module_name in to_ignore:
+            module_class = __modules__[module_name]['obj']
+            outputProcessQueue.put('01|main|\t[main] Starting the module {} ({})'.format(module_name, __modules__[ module_name]['description'],))
+            ModuleProcess = module_class(outputProcessQueue, config)
+            ModuleProcess.start()
+
+    # Do we need to wait for some modules to load? The threat Intelligence module takes ~7s to load.
+    sleep(3)
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
@@ -184,6 +197,7 @@ if __name__ == '__main__':
             outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
         # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
 
+
     # Evidence thread
     # Create the queue for the evidence thread
     evidenceProcessQueue = Queue()
@@ -201,20 +215,12 @@ if __name__ == '__main__':
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
 
+
     # Input process
     # Create the input process and start it
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter)
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
-
-    # Start each module in the folder modules
-    for module_name in __modules__:
-        to_ignore = read_configuration(config, 'modules', 'disable')
-        if not module_name in to_ignore:
-            module_class = __modules__[module_name]['obj']
-            ModuleProcess = module_class(outputProcessQueue, config)
-            ModuleProcess.start()
-            outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, __modules__[module_name]['description'], ModuleProcess.pid))
 
     profilerProcessQueue.close()
     outputProcessQueue.close()
