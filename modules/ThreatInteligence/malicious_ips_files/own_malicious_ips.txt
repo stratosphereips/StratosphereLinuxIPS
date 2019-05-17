@@ -1,0 +1,7 @@
+# Format of this file: [IP],[DESCRIPTION]
+# You can leave [DESCRIPTION] empty.
+# EXAMPLES:
+# 1.1.1.1
+# 0.0.0.0, Ip address of my uncle Karel who likes malicious website so he is infected all the time :(
+103.15.53.231, Karel from our village. He is bad guy.
+66.249.65.50, Hacked server in my town.

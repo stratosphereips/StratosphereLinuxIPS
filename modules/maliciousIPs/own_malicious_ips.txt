@@ -1,5 +1,0 @@
-# Format of this file: [IP],[DESCRIPTION]
-# You can leave [DESCRIPTION] empty.
-# EXAMPLES:
-# 1.1.1.1
-# 0.0.0.0, Ip address of my uncle Karel who likes malicious website so he is infected all the time :(
