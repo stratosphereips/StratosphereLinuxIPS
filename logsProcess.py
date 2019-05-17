@@ -44,6 +44,7 @@ class LogsProcess(multiprocessing.Process):
         __database__.setOutputQueue(self.outputqueue)
 
         self.timeline_first_index = {}
+        self.is_timline_file = False
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -191,6 +192,8 @@ class LogsProcess(multiprocessing.Process):
             TWforProfile = __database__.getModifiedTWLogs()
             amount_of_modified = len(TWforProfile)
             self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {}. Modified TWs: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+            last_profile_id = None
+            description_of_malicious_ip_profile = None
             for profileTW in TWforProfile:
 
                 # Get the profileid and twid
@@ -214,6 +217,15 @@ class LogsProcess(multiprocessing.Process):
 
                 # 0. Write the profileID for people getting know what they see in the file.
                 self.addDataToFile(profilefolder + '/' + twlog, 'ProfileID: {}\n'.format(profileid), file_mode='a+', data_type='text')
+
+                # 0. Is a ip of this profile stored as malicious?
+                # If it still one profile do not ask again the database for each new time_window.
+                if last_profile_id != profileid:
+                    description_of_malicious_ip_profile = __database__.is_profile_malicious(profileid)
+                if description_of_malicious_ip_profile:
+                    ip_of_profile = profileid.split(self.separator)[1]
+                    text_data = '[THREAT INTELIGENCE] IP of this profile: {} was detected as malicious. Description: "{}"\n'.format(ip_of_profile, description_of_malicious_ip_profile)
+                    self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
 
                 # 1. Detections to block. The getBlockingRequest function return {True, False}
                 blocking = __database__.getBlockingRequest(profileid, twid)
@@ -412,6 +424,7 @@ class LogsProcess(multiprocessing.Process):
                         #self.print('TIMELINE Profileid: {:45}, twid: {}. Line: {}'.format(profileid, twid, line))
                         self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_mode='raw', data_type='lines')
 
+                last_profile_id = profileid
 
             # Create the file of the blocked profiles and TW
             TWforProfileBlocked = __database__.getBlockedTW()
