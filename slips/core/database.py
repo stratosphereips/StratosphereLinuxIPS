@@ -692,7 +692,9 @@ class Database(object):
         # Tell everyone an evidence was added
         self.publish('evidence_added', profileid + ':' + twid)
         # Add this evidence to the timeline
-        self.add_timeline_line(profileid, twid, current_evidence)
+        # Default time now because I did not resolve how to add here timestamp.
+        timestamp = 'default time'
+        self.add_timeline_line(profileid, twid, current_evidence, timestamp)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -860,9 +862,10 @@ class Database(object):
         to_send['profileid'] = profileid
         to_send['twid'] = twid
         to_send['flow'] = flow
+        to_send['stime'] = stime
         to_send = json.dumps(to_send)
         self.publish('new_flow', to_send)
-        self.print('Adding CONN flow to DB: {}'.format(data), 5,0)
+        self.print('Adding CONN flow to DB: {}'.format(data), 5, 0)
 
     def add_out_ssl(self, profileid, twid, flowtype, uid, version, cipher, resumed, established, cert_chain_fuids, client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
         """ 
@@ -958,11 +961,12 @@ class Database(object):
         """ Given a uid, get the alternative flow realted to it """
         return self.r.hget(profileid + self.separator + twid + self.separator + 'altflows', uid)
 
-    def add_timeline_line(self, profileid, twid, data):
+    def add_timeline_line(self, profileid, twid, data, timestamp: str):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        data = timestamp + ' ' + str(data)
         # Set the index of last stored item.
-        index = self.r.rpush(key, str(data))
+        index = self.r.rpush(key, data)
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
@@ -1004,14 +1008,23 @@ class Database(object):
         """ Delete an entry from the list of zeek files """
         self.r.srem('zeekfiles', filename)
 
-    def add_malicious_ip(self, ip: str, description: str) -> None:
+    def add_all_loaded_malicous_ips(self, ips_and_description: dict) -> None:
+        self.r.hmset('loaded_malicious_ips', ips_and_description)
+
+    def add_loaded_malicious_ip(self, ip: str, description: str) -> None:
         self.r.hset('loaded_malicious_ips', ip, description)
 
-    def get_malicious_ip(self, ip: str) -> str:
-        self.r.hget('loaded_malicious_ips', ip)
-        # It is not finished. On Tuesday I will finished.
-        return ''
+    def get_loaded_malicious_ip(self, ip: str) -> str:
+        ip_description = self.r.hget('loaded_malicious_ips', ip)
+        return ip_description
 
+    def set_profile_as_malicious(self, profileid: str, description: str) -> None:
+        # Add description to this malicious ip profile.
+        self.r.hset(profileid, 'labeled_as_malicious', description)
+
+    def is_profile_malicious(self, profileid: str) -> str:
+        data = self.r.hget(profileid, 'labeled_as_malicious')
+        return data
 
 
 __database__ = Database()
