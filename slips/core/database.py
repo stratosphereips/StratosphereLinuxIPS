@@ -24,7 +24,6 @@ class Database(object):
         # The name is used to print in the outputprocess
         self.name = 'DB'
         self.separator = '_'
-        self.db_timeline_last_index = 0
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -763,8 +762,9 @@ class Database(object):
         self.publish('evidence_added', profileid + ':' + twid)
 
         # Add this evidence to the timeline
-        text_timeline = str(current_evidence[key][2]) + '\n'
-        self.add_timeline_line(profileid, twid, text_timeline)
+        # Default time now because I did not resolve how to add here timestamp.
+        timestamp = 'default time'
+        self.add_timeline_line(profileid, twid, current_evidence, timestamp)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -939,7 +939,6 @@ class Database(object):
         # Convert to json string
         data = json.dumps(data)
         # Store in the hash 10.0.0.1_timewindow1, a key stime, with data
-        #value = self.r.hset(profileid + self.separator + twid + self.separator + 'flows', stime, data)
         value = self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
         if value:
             # The key was not there before. So this flow is not repeated
@@ -955,9 +954,10 @@ class Database(object):
             to_send['profileid'] = profileid
             to_send['twid'] = twid
             to_send['flow'] = flow
+            to_send['stime'] = stime
             to_send = json.dumps(to_send)
             self.publish('new_flow', to_send)
-            self.print('Adding CONN flow to DB: {}'.format(data), 5,0)
+            self.print('Adding CONN flow to DB: {}'.format(data), 5, 0)
 
     def add_out_ssl(self, profileid, twid, flowtype, uid, version, cipher, resumed, established, cert_chain_fuids, client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
         """ 
@@ -1053,13 +1053,13 @@ class Database(object):
         """ Given a uid, get the alternative flow realted to it """
         return self.r.hget(profileid + self.separator + twid + self.separator + 'altflows', uid)
 
-    def add_timeline_line(self, profileid, twid, data):
+    def add_timeline_line(self, profileid, twid, data, timestamp: str):
         """ Add a line to the time line of this profileid and twid """
-        key = str(profileid + self.separator + twid + self.separator + 'timeline') 
-        self.r.rpush(key, str(data))
-        # Set the index of last stored item. (Do not be confused the index of last item is not common index,
-        # because it starts from 1 not from 0.)
-        self.db_timeline_last_index = self.r.rpush(key, str(data))
+        key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        data = timestamp + ' ' + str(data)
+        # Set the index of last stored item.
+        index = self.r.rpush(key, data)
+        # TODO: The index variable is not used!
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
@@ -1103,6 +1103,7 @@ class Database(object):
         self.r.srem('zeekfiles', filename)
 
     def add_all_loaded_malicous_ips(self, ips_and_description: dict) -> None:
+<<<<<<< HEAD
         """ ????????? """
         self.r.hmset('loaded_malicious_ips', ips_and_description)
 
@@ -1112,16 +1113,30 @@ class Database(object):
 
     def get_loaded_malicious_ip(self, ip: str) -> str:
         """ ????????? """
+=======
+        self.r.hmset('loaded_malicious_ips', ips_and_description)
+
+    def add_loaded_malicious_ip(self, ip: str, description: str) -> None:
+        self.r.hset('loaded_malicious_ips', ip, description)
+
+    def get_loaded_malicious_ip(self, ip: str) -> str:
+>>>>>>> 0345118... database.py
         ip_description = self.r.hget('loaded_malicious_ips', ip)
         return ip_description
 
     def set_profile_as_malicious(self, profileid: str, description: str) -> None:
+<<<<<<< HEAD
         """ ????????? """
+=======
+>>>>>>> 0345118... database.py
         # Add description to this malicious ip profile.
         self.r.hset(profileid, 'labeled_as_malicious', description)
 
     def is_profile_malicious(self, profileid: str) -> str:
+<<<<<<< HEAD
         """ ????????? """
+=======
+>>>>>>> 0345118... database.py
         data = self.r.hget(profileid, 'labeled_as_malicious')
         return data
 
