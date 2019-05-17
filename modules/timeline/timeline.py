@@ -6,6 +6,8 @@ from slips.core.database import __database__
 # Your imports
 import time
 import json
+import configparser
+from datetime import datetime
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -21,6 +23,7 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
+        self.separator = __database__.getFieldSeparator()
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         # The options change, so the last list is on the slips/core/database.py file. However common options are:
         # - new_ip
@@ -31,8 +34,22 @@ class Module(Module, multiprocessing.Process):
         self.profiles_tw = {}
         # Load the list of common known ports
         self.load_ports()
+        # Store malicious IPs. We do not make alert everytime we receive flow with thi IP but only once.
+        self.alerted_malicous_ips_dict = {}
+        # Read information how we should print timestamp.
+        self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
         # Wait a little so we give time to read something from the files
         time.sleep(5)
+
+    def read_configuration(self, section: str, name: str) -> str:
+        """ Read the configuration file for what we need """
+        # Get the time of log report
+        try:
+            conf_variable = self.config.get(section, name)
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            conf_variable = None
+        return conf_variable
 
     def load_ports(self):
         """ 
@@ -69,10 +86,19 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def process_flow(self, profileid, twid, flow):
+    def process_timestamp(self, timestamp: float) -> str:
+        if self.is_human_timestamp is True:
+            # human readable time
+            d = datetime.fromtimestamp(timestamp)
+            timestamp = '{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:06d}'.format(
+                d.year, d.month, d.day, d.hour, d.minute, d.second, d.microsecond)
+        return str(timestamp)
+
+    def process_flow(self, profileid, twid, flow, timestamp: float):
         """
         Receives a flow and it process it for this profileid and twid
         """
+        timestamp = self.process_timestamp(timestamp)
         try:
             # Get some fields
             uid = next(iter(flow))
@@ -194,7 +220,7 @@ class Module(Module, multiprocessing.Process):
 
             # Store the activity in the DB for this profileid and twid
             if activity:
-                __database__.add_timeline_line(profileid, twid, activity)
+                __database__.add_timeline_line(profileid, twid, activity, timestamp)
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
             
             #################################
@@ -221,7 +247,7 @@ class Module(Module, multiprocessing.Process):
 
                 # Store the activity in the DB for this profileid and twid
                 if activity:
-                    __database__.add_timeline_line(profileid, twid, activity)
+                    __database__.add_timeline_line(profileid, twid, activity, timestamp)
                 self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
             elif not alt_flow_json and ('tcp' in proto or 'udp' in proto) and state.lower() == 'established' and dport_name:
                 # We have an established tcp or udp connection that we know the usual name of the port, but we don't know the type of connection!!!
@@ -237,8 +263,20 @@ class Module(Module, multiprocessing.Process):
                     activity = '	[!] Attention. We know this port number, but we couldn\'t identify the protocol. Check UID {}\n'.format(uid)
                     # Store the activity in the DB for this profileid and twid
                     if activity:
-                        __database__.add_timeline_line(profileid, twid, activity)
+                        __database__.add_timeline_line(profileid, twid, activity, timestamp)
                     self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+
+            # [THREAT INTELLIGENCE module]
+            # Is the IP of this profile malicious? If yes, store it in timeline table (however only once!).
+            if self.alerted_malicous_ips_dict.get(profileid, None) is None:
+                description = __database__.is_profile_malicious(profileid)
+                if description is not None:
+                    malicious_ip = profileid.split(self.separator)[1]
+                    activity = '[THREAT INTELLIGENCE] Malicious IP was detected! The IP: {} was found in malicious list.' \
+                               ' Description: "{}"\n'.format(malicious_ip, description)
+                    __database__.add_timeline_line(profileid, twid, activity, timestamp)
+                    self.alerted_malicous_ips_dict[profileid] = True
+
 
 
         except KeyboardInterrupt:
@@ -265,10 +303,11 @@ class Module(Module, multiprocessing.Process):
                     twid = mdata['twid']
                     # Get flow as a json
                     flow = mdata['flow']
+                    timestamp = mdata['stime']
                     # Convert flow to a dict
                     flow = json.loads(flow)
                     # Process the flow
-                    self.process_flow(profileid, twid, flow)
+                    self.process_flow(profileid, twid, flow, timestamp)
 
         except KeyboardInterrupt:
             return True
