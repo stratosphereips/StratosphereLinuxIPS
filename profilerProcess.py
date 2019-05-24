@@ -66,7 +66,7 @@ class ProfilerProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.home_net = False
 
-        # Get the time window width, if it was not specified as a parameter 
+        # Get the time window width, if it was not specified as a parameter
         if not self.width:
             try:
                 data = self.config.get('parameters', 'time_window_width')
@@ -105,7 +105,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            # By default 
+            # By default
             self.analysis_direction = 'all'
         # Get the default label for all this flow. Used during training usually
         try:
@@ -547,7 +547,7 @@ class ProfilerProcess(multiprocessing.Process):
 
     def add_flow_to_profile(self):
         """ 
-        This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system. 
+        This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each colum 
         """
@@ -565,7 +565,20 @@ class ProfilerProcess(multiprocessing.Process):
             # 1st. Get the data from the interpreted columns
             separator = __database__.getFieldSeparator()
             # These are common to all types of flows
-            starttime = time.mktime(self.column_values['starttime'].timetuple())
+            # No, older zeek has seconds instead of date.
+            try:
+                # seconds.
+                starttime = float(str(self.column_values['starttime']))
+            except ValueError:
+                # date
+                try:
+                    # This file format is very extended, but we should consider more options. Maybe we should detect the time format.
+                    date_time = datetime.strptime(str(self.column_values['starttime']), '%Y-%m-%d %H:%M:%S.%f')
+                    starttime = date_time.timestamp()
+                except ValueError as e:
+                    self.outputqueue.put("01|profiler|[Profile] We can not recognize time format.")
+                    self.outputqueue.put("01|profiler|[Profile] {}".format((type(e))))
+
             # This uid check is for when we read things that are not zeek
             try:
                 uid = self.column_values['uid']
@@ -603,14 +616,14 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Create the objects of IPs
             try:
-                saddr_as_obj = ipaddress.IPv4Address(saddr) 
-                daddr_as_obj = ipaddress.IPv4Address(daddr) 
+                saddr_as_obj = ipaddress.IPv4Address(saddr)
+                daddr_as_obj = ipaddress.IPv4Address(daddr)
                 # Is ipv4
             except ipaddress.AddressValueError:
                 # Is it ipv6?
                 try:
-                    saddr_as_obj = ipaddress.IPv6Address(saddr) 
-                    daddr_as_obj = ipaddress.IPv6Address(daddr) 
+                    saddr_as_obj = ipaddress.IPv6Address(saddr)
+                    daddr_as_obj = ipaddress.IPv6Address(daddr)
                 except ipaddress.AddressValueError:
                     # Its a mac
                     return False
@@ -624,8 +637,8 @@ class ProfilerProcess(multiprocessing.Process):
                 # Its in our Home network
 
                 # The steps for adding a flow in a profile should be
-                # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
-                # The width is unique for all the timewindow in this profile. 
+                # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
+                # The width is unique for all the timewindow in this profile.
                 # Also we only need to pass the width for registration in the DB. Nothing operational
                 __database__.addProfile(profileid, starttime, self.width)
 
@@ -644,7 +657,7 @@ class ProfilerProcess(multiprocessing.Process):
                     if not rev_profileid:
                         # We do not have yet the profile of the dst ip that is in our home net
                         self.outputqueue.put("07|profiler|[Profiler] The dstip profile was not here... create")
-                        # Create a reverse profileid for managing the data going to the dstip. 
+                        # Create a reverse profileid for managing the data going to the dstip.
                         # With the rev_profileid we can now work with data in relation to the dst ip
                         rev_profileid = 'profile' + separator + str(daddr_as_obj)
                         __database__.addProfile(rev_profileid, starttime, self.width)
@@ -664,7 +677,7 @@ class ProfilerProcess(multiprocessing.Process):
             elif not self.home_net:
                 # We don't have a home net, so create profiles for everyone
 
-                # Add the profile for the srcip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
+                # Add the profile for the srcip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
                 __database__.addProfile(profileid, starttime, self.width)
                 # Add the profile for the dstip to the DB. If it already exists, nothing happens. So now rev_profileid is the id of the profile to work with. 
                 rev_profileid = 'profile' + separator + str(daddr_as_obj)
@@ -742,7 +755,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Mode 'all'
             elif self.analysis_direction == 'all':
-                # Take care of both the stuff going out and in. In case the profile is for the srcip and for the dstip 
+                # Take care of both the stuff going out and in. In case the profile is for the srcip and for the dstip
                 if not self.home_net:
                     # If we don't have a home net, just try to store everything coming OUT and IN to the IP
                     # Out features
@@ -771,7 +784,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
 
     def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size):
-        """ 
+        """
         This function computes the new symbol for the tuple according to the original stratosphere ips model of letters
         Here we do not apply any detection model, we just create the letters as one more feature
         """
@@ -1027,7 +1040,7 @@ class ProfilerProcess(multiprocessing.Process):
 
 
     def get_timewindow(self, flowtime, profileid):
-        """" 
+        """"
         This function should get the id of the TW in the database where the flow belong.
         If the TW is not there, we create as many tw as necessary in the future or past until we get the correct TW for this flow.
         - We use this function to avoid retrieving all the data from the DB for the complete profile. We use a separate table for the TW per profile.
@@ -1055,7 +1068,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.outputqueue.put("04|profiler|[Profiler] We have to create {} empty TWs in the midle.".format(amount_of_new_tw))
                     temp_end = lasttw_end_time
                     for id in range(0, amount_of_new_tw + 1):
-                        new_start = temp_end 
+                        new_start = temp_end
                         twid = __database__.addNewTW(profileid, new_start)
                         self.outputqueue.put("04|profiler|[Profiler] Creating the TW id {}. Start: {}.".format(twid, new_start))
                         temp_end = new_start + self.width
