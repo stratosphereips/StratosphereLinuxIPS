@@ -19,6 +19,8 @@ import ipaddress
 import os
 import configparser
 from progress_bar import ProgressBar
+from modules.ThreatIntelligence.update_ip_manager import UpdateIPManager
+
 
 class MaliciousIPs(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -28,25 +30,23 @@ class MaliciousIPs(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         self.separator = __database__.getFieldSeparator()
-        # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        # The options change, so the last list is on the slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
+
         self.c1 = __database__.subscribe('new_ip')
-        self.path_to_malicious_ip_folder = 'modules/ThreatInteligence/malicious_ips_files/'
+        self.path_to_malicious_ip_folder = 'modules/ThreatIntelligence/malicious_ips_files/'
 
-        self.progress_bar = ProgressBar(bar_size=10, prefix="\t\tLoading malicious IPs: ")
+        self.progress_bar = ProgressBar(bar_size=10, prefix="\t\t[ThreadIntelligence] Loading malicious IPs to DB: ")
 
-        # Load files containing malicious IPs.
-        self.manage_ip_data()
+        self.update_manager = UpdateIPManager(self.outputqueue)
 
-    def read_configuration(self, section: str, name: str) -> str:
+        # Update and load files containing malicious IPs.
+        self.__update_malicious_file()
+        self.__load_malicious_ips()
+
+    def __read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
         # Get the time of log report
         try:
@@ -56,17 +56,22 @@ class MaliciousIPs(Module, multiprocessing.Process):
             conf_variable = None
         return conf_variable
 
-    def manage_ip_data(self) -> None:
+    def __update_malicious_file(self) -> None:
+        # How often we should update malicious IP list.
+        update_period = self.__read_configuration('modules', 'malicious_ips_update_period')
+        self.update_manager.update(update_period)
+
+    def __load_malicious_ips(self) -> None:
         self.progress_bar.start_progress_bar()
         malicious_ips_dict = {}
 
         # First look if a variable "malicious_ip_file_path" in slips.conf is set.
-        malicious_ip_file_path = self.read_configuration('modules', 'malicious_ip_file_path')
+        malicious_ip_file_path = self.__read_configuration('modules', 'malicious_ip_file_path')
         if malicious_ip_file_path is not None:
             # The variable "malicious_ip_file_path" in slips.conf is set.
             self.outputqueue.put('03|logs|File {} containing malicious IPs was loaded.'.format(malicious_ip_file_path))
             try:
-                self.load_malicious_ips(malicious_ip_file_path, malicious_ips_dict)
+                self.__load_malicious_ips_file(malicious_ip_file_path, malicious_ips_dict)
             except FileNotFoundError as e:
                 # The file does not exist.
                 self.print(e, 1, 0)
@@ -74,7 +79,7 @@ class MaliciousIPs(Module, multiprocessing.Process):
                            'which you specify in slips.conf is NOT valid.', 1, 0)
         else:
             # The variable "malicious_ip_file_path" in slips.conf is NOT set.
-            # Read all files in "modules/ThreatInteligence/malicious_ips_files/" folder.
+            # Read all files in "modules/ThreatIntelligence/malicious_ips_files/" folder.
             self.outputqueue.put('03|logs|Reading malicious Ips from {}.'.format(self.path_to_malicious_ip_folder))
             if len(os.listdir(self.path_to_malicious_ip_folder)) == 0:
                 # No file to read.
@@ -82,7 +87,7 @@ class MaliciousIPs(Module, multiprocessing.Process):
             else:
                 for ip_file in os.listdir(self.path_to_malicious_ip_folder):
                     try:
-                        self.load_malicious_ips(self.path_to_malicious_ip_folder + '/' + ip_file, malicious_ips_dict)
+                        self.__load_malicious_ips_file(self.path_to_malicious_ip_folder + '/' + ip_file, malicious_ips_dict)
                         self.print('\tMalicious IPs from {} file were loaded.', 5, 0)
                     except FileNotFoundError as e:
                         self.print(e, 1, 0)
@@ -91,7 +96,7 @@ class MaliciousIPs(Module, multiprocessing.Process):
         __database__.add_all_loaded_malicous_ips(malicious_ips_dict)
         self.progress_bar.stop_progress_bar()
 
-    def load_malicious_ips(self, malicious_ips_path: str, malicious_ips_dict: dict) -> None:
+    def __load_malicious_ips_file(self, malicious_ips_path: str, malicious_ips_dict: dict) -> None:
         with open(malicious_ips_path) as f:
             for line in f:
                 if '#' in line:
