@@ -1059,7 +1059,7 @@ class Database(object):
         data = timestamp + ' ' + str(data)
         # Set the index of last stored item.
         index = self.r.rpush(key, data)
-        # TODO: The index variable is not used!
+        self.r.rpush(key, data)
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
