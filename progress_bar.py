@@ -4,7 +4,7 @@ import time
 
 
 class ProgressBar:
-    def __init__(self, bar_size: int, prefix: str, wait_time=0.25):
+    def __init__(self, bar_size: int, prefix: str, wait_time: float =0.25):
         self.bar_size = bar_size
         self.prefix = prefix
         self.file = sys.stdout
@@ -15,13 +15,13 @@ class ProgressBar:
         self.proc = Process(target=self.progress_bar)
         self.proc.start()
 
-    def stop_progress_bar(self):
+    def stop_progress_bar(self, final_word: str = ' -> Done.'):
         self.proc.terminate()
         # Print final value in the bar.
         s = ''
         for i in range(self.bar_size):
             s += '#'
-        self.file.write("\r" + self.prefix + '[' + s + ']' + ' -> Done.')
+        self.file.write("\r" + self.prefix + '[' + s + ']' + final_word)
         self.file.flush()
         self.file.write('\n')
 
