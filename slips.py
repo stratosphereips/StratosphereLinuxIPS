@@ -92,6 +92,20 @@ if __name__ == '__main__':
     if args.debug < 0:
         args.debug = 0
 
+    # Check the type of input
+    if args.interface:
+        input_information = args.interface
+        input_type = 'interface'
+    elif args.pcapfile:
+        input_information = args.pcapfile
+        input_type = 'pcap'
+    elif args.filepath:
+        input_information = args.filepath
+        input_type = 'file'
+    else:
+        print('You need to define an input source.')
+        sys.exit(-1)
+
     ##
     # Creation of the threads
     ##
@@ -144,18 +158,6 @@ if __name__ == '__main__':
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
 
-
-    # Check the type of input
-    if args.interface:
-        input_information = args.interface
-        input_type = 'interface'
-    elif args.pcapfile:
-        input_information = args.pcapfile
-        input_type = 'pcap'
-    elif args.filepath:
-        input_information = args.filepath
-        input_type = 'file'
-
     # Input process
     # Create the input process and start it
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter)
@@ -163,7 +165,6 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
 
     # Start each module in the folder modules
-    outputProcessQueue.put('20|main|[main] Starting modules')
     for module_name in __modules__:
         to_ignore = read_configuration(config, 'modules', 'disable')
         if not module_name in to_ignore:
