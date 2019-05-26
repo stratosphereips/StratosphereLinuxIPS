@@ -4,6 +4,12 @@ __pycache__/
 *$py.class
 2019*/
 
+# apple shit
+*.bst
+
+# pcap
+*.pcap
+
 # C extensions
 *.so
 
