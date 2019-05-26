@@ -41,6 +41,32 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
         # To know when to retrain. We store the number of labels when we last retrain
         self.retrain = 0
+        # Load the models only once, depending the mode
+        if self.mode == 'train':
+            # Load the old model if there is one
+            try:
+                f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
+                self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 3,0)
+                self.clf = pickle.load(f)
+                f.close()
+            except FileNotFoundError:
+                pass
+        elif self.mode == 'test':
+            #try:
+            #    f = open('./modules/MLdetection1/RFscaler.bin', 'rb')
+            #    self.sc = pickle.load(f)
+            #    f.close()
+            #except FileNotFoundError:
+            #    self.print('There is no RF model stored. You need to train first with at least two different labels.')
+
+            # Load the model from disk
+            try:
+                f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
+                self.clf = pickle.load(f)
+                f.close()
+            except FileNotFoundError:
+                self.print('There is no RF model stored. You need to train first with at least two different labels.')
+                return False
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -102,10 +128,17 @@ class Module(Module, multiprocessing.Process):
                             self.process_flows()
                             # Train an algorithm
                             self.train()
-                    elif self.mode == 'test':
+                        # Test
                         self.process_flow()
+                        # Predict
                         pred = self.detect()
-                        self.print('Prediction: {}'.format(pred[0]))
+                        self.print('Test Prediction of flow {}: {}'.format(json_flow, pred[0]))
+                    elif self.mode == 'test':
+                        # Process the flow
+                        self.process_flow()
+                        # Predict
+                        pred = self.detect()
+                        self.print('Prediction of flow {}: {}'.format(json_flow, pred[0]))
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -120,44 +153,42 @@ class Module(Module, multiprocessing.Process):
         Train a model based on the flows we receive and the labels
         """
         try:
+            self.print('Replace labels')
             self.flows.label = self.flows.label.str.replace(r'(^.*Normal.*$)', 'Normal')
             self.flows.label = self.flows.label.str.replace(r'(^.*Malware.*$)', 'Malware')
 
+            self.print('Separate X and y')
             # Separate
             y_flow = self.flows['label']
             X_flow = self.flows.drop('label', axis=1)
             #self.print('	X_flow without label: {}'.format(X_flow))
 
-            sc = StandardScaler()
-            sc.fit(X_flow)
-            X_flow = sc.transform(X_flow)
+            #self.print('Scale')
+            #sc = StandardScaler()
+            #sc.fit(X_flow)
+            #X_flow = sc.transform(X_flow)
             #self.print('	X_flow scaled: {}'.format(X_flow))
+            self.print(X_flow)
 
-            # Load the old model if there is one
-            try:
-                f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
-                self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 3,0)
-                self.clf = pickle.load(f)
-                f.close()
-            except FileNotFoundError:
-                pass
             self.print('Create the model')
-
             # Create th RF model. Warm_start is to incrementallly train with new flows inside a previously trained model.
-            self.clf = RandomForestClassifier(n_estimators=3, criterion='entropy', random_state=1234, warm_start=True)
+            #self.clf = RandomForestClassifier(n_estimators=3, criterion='entropy', random_state=1234, warm_start=True)
+            self.clf = RandomForestClassifier(n_estimators=30, criterion='entropy')
             self.clf.fit(X_flow, y_flow)
             score = self.clf.score(X_flow, y_flow)
             self.print('	Training Score: {}'.format(score))
 
-            f = open('./modules/MLdetection1/RFscaler.bin', 'wb')
-            data = pickle.dumps(sc)
-            f.write(data)
-            f.close()
+            # Store the models on disk
+            #f = open('./modules/MLdetection1/RFscaler.bin', 'wb')
+            #data = pickle.dumps(sc)
+            #f.write(data)
+            #f.close()
 
             f = open('./modules/MLdetection1/RFmodel.bin', 'wb')
             data = pickle.dumps(self.clf)
             f.write(data)
             f.close()
+            self.print('Finish storing the models')
 
         except Exception as inst:
             # Stop the timer
@@ -183,7 +214,11 @@ class Module(Module, multiprocessing.Process):
         except ValueError:
           pass
         try:
-          dataset = dataset.drop('uid', axis=1)
+          dataset = dataset.drop('ts', axis=1)
+        except ValueError:
+          pass
+        try:
+          dataset = dataset.drop('origstate', axis=1)
         except ValueError:
           pass
         # Convert state to categorical
@@ -263,28 +298,15 @@ class Module(Module, multiprocessing.Process):
         """
         try:
             # Load the scaler and the model
-            try:
-                f = open('./modules/MLdetection1/RFscaler.bin', 'rb')
-                self.sc = pickle.load(f)
-                f.close()
-            except FileNotFoundError:
-                self.print('There is no RF model stored. You need to train first with at least two different labels.')
-
-            # Load the model from disk
-            try:
-                f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
-                self.clf = pickle.load(f)
-                f.close()
-            except FileNotFoundError:
-                self.print('There is no RF model stored. You need to train first with at least two different labels.')
-                return False
             
             #self.print('Scale the flow')
             # Drop the label if there is one
             y_flow = self.flow['label']
             X_flow = self.flow.drop('label', axis=1)
             # Scale the flow
-            X_flow = self.sc.transform(X_flow)
+            #self.print('Scale')
+            #X_flow = self.sc.transform(X_flow)
+            self.print(X_flow)
 
             pred = self.clf.predict(X_flow)
             return pred
