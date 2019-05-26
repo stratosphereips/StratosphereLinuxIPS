@@ -4,6 +4,10 @@ __pycache__/
 *$py.class
 2019*/
 
+
+*.swp
+*.swo
+
 # apple shit
 *.bst
 
