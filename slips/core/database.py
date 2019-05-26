@@ -28,18 +28,19 @@ class Database(object):
         """ Start the DB. Allow it to read the conf """
         self.config = config
         try:
-            donotdeleteText = self.config.get('parameters', 'donotdeletedb')
-            if donotdeleteText == 'True':
-                self.donotdelete = True
-            elif donotdeleteText == 'False':
-                self.donotdelete = False
+            deletePrevdbText = self.config.get('parameters', 'deletePrevdb')
+            if deletePrevdbText == 'True':
+                self.deletePrevdb = True
+            elif deletePrevdbText == 'False':
+                self.deletePrevdb = False
         except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError, KeyError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.donotdelete = False
+            self.deletePrevdb = True
         # Create the connection to redis
         if not hasattr(self, 'r'):
             self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
-            if not self.donotdelete:
+            if self.deletePrevdb:
+                print('Deleting the previous stored DB in Redis.')
                 self.r.flushdb()
         # Even if the DB is not deleted. We need to delete some temp data
         # Zeek_files
@@ -1039,14 +1040,14 @@ class Database(object):
                     data.append(temp)
         return data
 
-    def get_flow(self, profileid, twid, stime):
+    def get_flow(self, profileid, twid, uid):
         """
         Returns the flow in the specific time
         The format is a dictionary
         """
         data = {}
-        temp = self.r.hget(profileid + self.separator + twid + self.separator + 'flows', stime)
-        data[stime] = temp
+        temp = self.r.hget(profileid + self.separator + twid + self.separator + 'flows', uid)
+        data[uid] = temp
         # Get the dictionary format
         return data
 
@@ -1060,7 +1061,8 @@ class Database(object):
 
         """
         data = {}
-        data['uid'] = uid
+        #data['uid'] = uid
+        data['ts'] = stime
         data['dur'] = dur
         data['saddr'] = saddr
         data['sport'] = sport
@@ -1069,6 +1071,7 @@ class Database(object):
         data['proto'] = proto
         # Store the interpreted state, not the raw one
         summaryState = __database__.getFinalStateFromFlags(state, pkts)
+        data['origstate'] = state 
         data['state'] = summaryState 
         data['pkts'] = pkts
         data['allbytes'] = allbytes
@@ -1080,14 +1083,15 @@ class Database(object):
         # Convert to json string
         data = json.dumps(data)
         # Store in the hash 10.0.0.1_timewindow1, a key stime, with data
-        value = self.r.hset(profileid + self.separator + twid + self.separator + 'flows', stime, data)
+        #value = self.r.hset(profileid + self.separator + twid + self.separator + 'flows', stime, data)
+        value = self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
         if value:
-            # The key was not there before.
+            # The key was not there before. So this flow is not repeated
             # Store the label in our uniq set, and increment it by 1
             if label:
                 self.r.zincrby('labels', 1, label)
             # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
-            flow = self.get_flow(profileid, twid, stime)
+            flow = self.get_flow(profileid, twid, uid)
             # Get the dictionary and convert to json string
             flow = json.dumps(flow)
             # Prepare the data to publish.
