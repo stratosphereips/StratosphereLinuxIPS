@@ -75,11 +75,11 @@ class Module(Module, multiprocessing.Process):
         """
         try:
             # Get some fields
-            stime = next(iter(flow))
-            flow_dict = json.loads(flow[stime])
+            uid = next(iter(flow))
+            flow_dict = json.loads(flow[uid])
             
             dur = flow_dict['dur']
-            uid = flow_dict['uid']
+            stime = flow_dict['ts']
             saddr = flow_dict['saddr']
             sport = flow_dict['sport']
             daddr = flow_dict['daddr']
