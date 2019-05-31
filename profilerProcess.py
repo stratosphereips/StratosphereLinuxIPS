@@ -9,6 +9,7 @@ from slips.core.database import __database__
 import time
 import ipaddress
 import traceback
+from typing import Tuple, Dict, Set, Callable
 
 
 def timing(f):
@@ -237,7 +238,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dur'] = line['duration']
             except KeyError:
                 self.column_values['dur'] = 0
-            self.column_values['endtime'] = self.column_values['starttime'] + timedelta(self.column_values['dur'])
+            self.column_values['endtime'] = self.column_values['starttime'] + timedelta(seconds=self.column_values['dur'])
             self.column_values['proto'] = line['proto']
             try:
                 self.column_values['appproto'] = line['service']
@@ -692,8 +693,8 @@ class ProfilerProcess(multiprocessing.Process):
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute the symbol for this flow, for this TW, for this profile
                     # FIX
-                    symbol = ('a', '2019-01-26--13:31:09', 1)
-
+                    # symbol = ('a', '2019-01-26--13:31:09', 1)
+                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
                     # Add the out tuple
                     __database__.add_tuple(profileid, twid, tupleid, symbol, traffic_out=True)
                     # Add the dstip
@@ -719,7 +720,8 @@ class ProfilerProcess(multiprocessing.Process):
                     # Tuple
                     tupleid = str(saddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute symbols.
-                    symbol = ('a', '2019-01-26--13:31:09', 1)
+                    # symbol = ('a', '2019-01-26--13:31:09', 1)
+                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
                     # Add the src tuple
                     __database__.add_tuple(profileid, twid, tupleid, symbol, traffic_out=False)
                     # Add the srcip
@@ -775,7 +777,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.outputqueue.put("01|profiler|[Profile] {}".format((type(inst))))
             self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
 
-    def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size):
+    def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size, tuple_key: str):
         """
         This function computes the new symbol for the tuple according to the original stratosphere ips model of letters
         Here we do not apply any detection model, we just create the letters as one more feature
@@ -783,7 +785,8 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             current_duration = float(current_duration)
             current_size = int(current_size)
-            self.outputqueue.put("01|profiler|[Profile] Starting compute symbol. Tupleid {}, time:{} ({}), dur:{}, size:{}".format(tupleid, current_time, type(current_time), current_duration, current_size))
+            now_ts = float(current_time)
+            self.outputqueue.put("08|profiler|[Profile] Starting compute symbol. Tupleid {}, time:{} ({}), dur:{}, size:{}".format(tupleid, current_time, type(current_time), current_duration, current_size))
             # Variables for computing the symbol of each tuple
             T2 = False
             TD = False
@@ -802,51 +805,56 @@ class ProfilerProcess(multiprocessing.Process):
             timechar = ''
 
             # Get T1 (the time diff between the past flow and the past-past flow) from this tuple. T1 is a float in the db. Also get the time of the last flow in this tuple. In the DB prev time is a str
-            (T1, previous_time) = __database__.getT2ForProfileTW(profileid, twid, tupleid)
+            # (T1, previous_time) = __database__.getT2ForProfileTW(profileid, twid, tupleid)
+
+            (last_last_ts, last_ts) = __database__.getT2ForProfileTW(profileid, twid, tupleid, tuple_key)
+
+
             ## BE SURE THAT HERE WE RECEIVE THE PROPER DATA
             #T1 = timedelta(seconds=10)
             #previous_time = datetime.now() - timedelta(seconds=3600)
-            self.outputqueue.put("01|profiler|[Profile] T1:{}, previous_time:{}".format(T1, previous_time))
 
-
-            def compute_periodicity():
+            # def compute_periodicity(now_ts: float, last_ts: float, last_last_ts: float) -> Tuple(int, str):
+            def compute_periodicity(now_ts: float, last_ts: float, last_last_ts: float):
                 """ Function to compute the periodicity """
-                # If either T1 or T2 are False
-                #if (isinstance(T1, bool) and T1 == False) or (isinstance(T2, bool) and T2 == False):
-                if T1 == False or T2 == False:
-                    periodicity = -1
-                elif T2 >= tto:
-                    t2_in_hours = T2.total_seconds() / tto.total_seconds()
-                    # Should be int always
-                    for i in range(int(t2_in_hours)):
-                        # Add the 0000 to the symbol object
-                        symbol += '0'
-                # Why to recompute the 0000 with T1 again??? this should have been done when processing the previous flow
-                #elif T1 >= tto:
-                    #t1_in_hours = T1.total_seconds() / tto.total_seconds()
-                    ## Should be int always
-                    #for i in range(int(t1_in_hours)):
-                        #state += '0'
-                if not isinstance(T1, bool) and not isinstance(T2, bool):
+                zeros = ''
+                if last_last_ts is False or last_ts is False:
+                    TD = -1
+                else:
+                    # Time diff between the past flow and the past-past flow.
+                    T1 = last_ts - last_last_ts
+                    # Time diff between the current flow and the past flow.
+                    T2 = now_ts - last_ts
+
+                    if T2 >= tto.total_seconds():
+                        t2_in_hours = T2 / tto.total_seconds()
+                        # Shoud we round it? Because for example:
+                        #  7100 / 3600 =~ 1.972  ->  int(1.972) = 1
+                        for i in range(int(t2_in_hours)):
+                            # Add the 0000 to the symbol object
+                            zeros += '0'
                     try:
                         if T2 >= T1:
-                            TD = timedelta(seconds=(T2.total_seconds() / T1.total_seconds())).total_seconds()
+                            TD = T2 / T1
                         else:
-                            TD = timedelta(seconds=(T1.total_seconds() / T2.total_seconds())).total_seconds()
+                            TD = T1 / T2
                     except ZeroDivisionError:
                         TD = 1
                     # Decide the periodic based on TD and the thresholds
                     if TD <= tt1:
                         # Strongly periodicity
-                        return 1
-                    elif TD < tt2:
+                        TD = 1
+                    elif TD <= tt2:
                         # Weakly periodicity
-                        return 2
-                    elif TD < tt3:
+                        TD = 2
+                    elif TD <= tt3:
                         # Weakly not periodicity
-                        return 3
-                    else:
-                        return 4
+                        TD = 3
+                    elif TD > tt3:
+                        # Strongly not periodicity
+                        TD = 4
+
+                return TD, zeros
 
             def compute_duration():
                 """ Function to compute letter of the duration """
@@ -982,53 +990,55 @@ class ProfilerProcess(multiprocessing.Process):
             def compute_timechar():
                 """ Function to compute the timechar """
                 if not isinstance(T2, bool):
-                    if T2 <= timedelta(seconds=5):
-                        return  '.'
-                    elif T2 <= timedelta(seconds=60):
+                    if T2 <= timedelta(seconds=5).total_seconds():
+                        return '.'
+                    elif T2 <= timedelta(seconds=60).total_seconds():
                         return ','
-                    elif T2 <= timedelta(seconds=300):
+                    elif T2 <= timedelta(seconds=300).total_seconds():
                         return '+'
-                    elif T2 <= timedelta(seconds=3600):
+                    elif T2 <= timedelta(seconds=3600).total_seconds():
                         return '*'
+                    else:
+                        return '0'
 
             # Here begins the function's code
             try:
                 # Update value of T2
-                T2 = current_time - previous_time
+                # T2 = current_time - previous_time
+                T2 = now_ts - last_ts
                 # Are flows sorted?
-                if T2.total_seconds() < 0:
+                if T2 < 0:
                     # Flows are not sorted!
                     # What is going on here when the flows are not ordered?? Are we losing flows?
                     # Put a warning
-                    pass
+                    self.outputqueue.put("01|profiler|[Profile] Warning: Coming flows are not sorted -> Some time diff are less than zero.")
             except TypeError:
                 T2 = False
-            self.outputqueue.put("01|profiler|[Profile] T2:{}".format(T2))
+            # self.outputqueue.put("01|profiler|[Profile] T2:{}".format(T2))
 
             # Compute the rest
-            periodicity = compute_periodicity()
-            self.outputqueue.put("01|profiler|[Profile] Periodicity:{}".format(periodicity))
+            periodicity, zeros = compute_periodicity(now_ts, last_ts, last_last_ts)
+            # self.outputqueue.put("01|profiler|[Profile] Periodicity: {}".format(periodicity))
+            # if zeros == '':
             duration = compute_duration()
-            self.outputqueue.put("01|profiler|[Profile] Duration:{}".format(duration))
+            # self.outputqueue.put("01|profiler|[Profile] Duration: {}".format(duration))
             size = compute_size()
-            self.outputqueue.put("01|profiler|[Profile] Size:{}".format(size))
+            # self.outputqueue.put("01|profiler|[Profile] Size: {}".format(size))
             letter = compute_letter()
-            self.outputqueue.put("01|profiler|[Profile] Letter:{}".format(letter))
-            timechar = compute_timechar()
-            self.outputqueue.put("01|profiler|[Profile] TimeChar:{}".format(timechar))
+            # self.outputqueue.put("01|profiler|[Profile] Letter: {}".format(letter))
 
-            symbol = letter + timechar
-            T1 = T1.total_seconds()
-            current_time = current_time.strftime(self.timeformat)
-            self.outputqueue.put("01|profiler|[Profile] To Store. symbol: {}, current_time: {}, T1: {} ({})".format(symbol, current_time, T1, type(T1)))
+            timechar = compute_timechar()
+            # self.outputqueue.put("01|profiler|[Profile] TimeChar: {}".format(timechar))
+
+            symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
-            return (symbol, str(current_time), T1)
-            # End of the compute_symbol function
+            return symbol, (last_ts, now_ts)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.outputqueue.put("01|profiler|[Profile] Error in compute_symbol in profilerProcess.")
             self.outputqueue.put("01|profiler|[Profile] {}".format(type(inst)))
             self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
+            self.outputqueue.put("01|profiler|[Profile] {}".format(traceback.format_exc()))
 
 
     def get_timewindow(self, flowtime, profileid):
