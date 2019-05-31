@@ -3,6 +3,7 @@ import time
 import json
 import sys
 from typing import Tuple, Dict, Set, Callable
+import traceback
 
 
 
@@ -138,23 +139,27 @@ class Database(object):
         data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
         return data
 
-    def getT2ForProfileTW(self, profileid, twid, tupleid):
+    def getT2ForProfileTW(self, profileid, twid, tupleid, tuple_key: str):
         """
         Get T1 and the previous_time for this previous_time, twid and tupleid
         """
         try:
-            self.outputqueue.put('01|database|[DB] BB: {}, {}, {}'.format(profileid, twid, tupleid))
             hash_id = profileid + self.separator + twid
-            data = self.r.hget(hash_id, 'OutTuples')
+            data = self.r.hget(hash_id, tuple_key)
+
             if not data:
-                return (False, False)
-            self.outputqueue.put('01|database|[DB] Data in the tuple: {}'.format(data[tupleid]))
-            ( _ , previous_time, T1) = data[tupleid]
-            return (previous_time, T1)
+                return False, False
+            data = json.loads(data)
+            try:
+                (_, previous_two_timestamps) = data[tupleid]
+                return previous_two_timestamps
+            except KeyError:
+                return False, False
         except Exception as e:
             self.outputqueue.put('01|database|[DB] Error in getT2ForProfileTW in database.py')
             self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
             self.outputqueue.put('01|database|[DB] {}'.format(e))
+            self.outputqueue.put("01|profiler|[Profile] {}".format(traceback.format_exc()))
 
     def hasProfile(self, profileid):
         """ Check if we have the given profile """
@@ -381,7 +386,6 @@ class Database(object):
 
     def add_tuple(self, profileid, twid, tupleid, data_tuple, traffic_out=False):
         """ Add the tuple going in or out for this profile """
-
         if traffic_out:
             tuple_key = 'OutTuples'
         else:
@@ -391,27 +395,27 @@ class Database(object):
             self.outputqueue.put('05|database|[DB]: Add {} called with profileid {}, twid {}, tupleid {}, data {}'.format(tuple_key, profileid, twid, tupleid, data_tuple))
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, tuple_key)
-            (symbol_to_add, previous_time, T2) = data_tuple
+            (symbol_to_add, previous_two_timestamps) = data_tuple
             if not data:
                 data = {}
             try:
                 # Convert the json str to a dictionary
                 data = json.loads(data)
                 # Disasemble the input
-                self.outputqueue.put('05|database|[DB]: Not the first time for tuple {}. Add the symbol: {}. Store previous_time: {}, T2: {}'.format(tupleid, symbol_to_add, previous_time, T2))
+                self.outputqueue.put('05|database|[DB]: Not the first time for tuple {}. Add the symbol: {}. Store previous_times: {}'.format(tupleid, symbol_to_add, previous_two_timestamps))
                 # Get the last symbols of letters in the DB
                 prev_symbols = data[tupleid][0]
                 # Add it to form the string of letters
                 new_symbol = prev_symbols + symbol_to_add
                 # Bundle the data together
-                new_data = (new_symbol, previous_time, T2)
+                new_data = (new_symbol, previous_two_timestamps)
                 data[tupleid] = new_data
                 self.outputqueue.put('06|database|[DB]: Letters so far for tuple {}: {}'.format(tupleid, new_symbol))
                 data = json.dumps(data)
             except (TypeError, KeyError) as e:
                 # There was no previous data stored in the DB
                 self.outputqueue.put('05|database|[DB]: First time for tuple {}'.format(tupleid))
-                new_data = (symbol_to_add, previous_time, T2)
+                new_data = (symbol_to_add, previous_two_timestamps)
                 data[tupleid] = new_data
                 # Convet the dictionary to json
                 data = json.dumps(data)
@@ -422,6 +426,7 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Error in add_tuple in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+            self.outputqueue.put('01|database|[DB] {}'.format(traceback.format_exc()))
 
     def add_port(self, profileid: str, twid: str, ip_address: str, columns: dict, traffic_out=False, dst_port=False):
         """
@@ -513,7 +518,6 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Error in getDataFromProfileTW in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """ Get the out tuples """
@@ -693,7 +697,8 @@ class Database(object):
         self.publish('evidence_added', profileid + ':' + twid)
         # Add this evidence to the timeline
         # Default time now because I did not resolve how to add here timestamp.
-        timestamp = 'default time'
+        # It is tricky to define when. No time for this.
+        timestamp = '\t\t\t\t  '
         self.add_timeline_line(profileid, twid, current_evidence, timestamp)
 
     def getEvidenceForTW(self, profileid, twid):
