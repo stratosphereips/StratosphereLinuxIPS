@@ -9,7 +9,7 @@ import sys
 import redis
 import os
 
-version = '0.6.0rc1'
+version = '0.6.1'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
@@ -18,7 +18,6 @@ def read_configuration(config, section, name):
     except (configparser.NoOptionError, configparser.NoSectionError, NameError):
         # There is a conf, but there is no option, or no section or no configuration file specified
         return False
-
 
 def test_redis_database(redis_host='localhost', redis_port=6379) -> str:
     server_redis_version = None
@@ -29,7 +28,6 @@ def test_redis_database(redis_host='localhost', redis_port=6379) -> str:
     except redis.exceptions.ConnectionError:
         print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
     return server_redis_version
-
 
 def test_zeek() -> bool:
     """
@@ -42,11 +40,11 @@ def test_zeek() -> bool:
               " The command which was executed in slips: {}".format(command))
     return True if ret == 0 else False
 
-
 def terminate_slips():
     """
     Do all necessary stuff to stop process any clear any files.
     """
+    # Say something about why we ended.
     sys.exit(-1)
 
 
@@ -59,18 +57,15 @@ if __name__ == '__main__':
 
     # Parse the parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
     parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False) 
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
-    parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
-    parser.add_argument('-W', '--whitelist', help="File with the IP addresses to whitelist. One per line.", action='store', required=False)
     parser.add_argument('-f', '--filepath', help='Path to the flow input file to read. It can be a Argus binetflow flow, a Zeek conn.log file, or a Zeek folder with all the log files.', required=False)
     parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
-    parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the info and detections.', required=False, default=False, action='store_true')
+    parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     args = parser.parse_args()
 
@@ -87,13 +82,15 @@ if __name__ == '__main__':
 
     # check if redis server running
     server_redis_version = test_redis_database()
-    if server_redis_version is None:
+    if not server_redis_version:
+        self.print('[!] Redis is not running.')
         terminate_slips()
 
     # If we need zeek (bro), test if we can run it.
-    if args.pcapfile:
+    if args.pcapfile or args.interface:
         visible_zeek = test_zeek()
-        if visible_zeek is False:
+        if not visible_zeek:
+            self.print('[!] Zeek could not be found on this system.')
             # If we do not have access to zeek and we want to use it, kill it.
             terminate_slips()
 
