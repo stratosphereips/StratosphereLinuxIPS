@@ -8,6 +8,7 @@ import argparse
 import sys
 import redis
 import os
+import time
 
 version = '0.6.1'
 
@@ -176,7 +177,7 @@ if __name__ == '__main__':
             ModuleProcess.start()
 
     # Do we need to wait for some modules to load? The threat Intelligence module takes ~7s to load.
-    sleep(3)
+    time.sleep(3)
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
