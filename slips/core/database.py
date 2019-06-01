@@ -24,6 +24,7 @@ class Database(object):
         # The name is used to print in the outputprocess
         self.name = 'DB'
         self.separator = '_'
+        self.db_timeline_last_index = 0
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -1056,6 +1057,9 @@ class Database(object):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline') 
         self.r.rpush(key, str(data))
+        # Set the index of last stored item. (Do not be confused the index of last item is not common index,
+        # because it starts from 1 not from 0.)
+        self.db_timeline_last_index = self.r.rpush(key, str(data))
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
@@ -1070,6 +1074,15 @@ class Database(object):
         last_index = self.r.llen(key)
         data = self.r.lrange(key, first_index, last_index - 1)
         return data, last_index
+
+    """
+    # Check if this is the last version or not
+    def get_timeline_last_lines(self, profileid, twid):
+        /"/"/" Add a line to the time line of this profileid and twid /"/"/"
+        key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        data = self.r.lrange(key, self.db_timeline_last_index, -1)
+        return data
+    """
 
     def get_timeline_all_lines(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
