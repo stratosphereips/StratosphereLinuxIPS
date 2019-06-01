@@ -1075,15 +1075,6 @@ class Database(object):
         data = self.r.lrange(key, first_index, last_index - 1)
         return data, last_index
 
-    """
-    # Check if this is the last version or not
-    def get_timeline_last_lines(self, profileid, twid):
-        /"/"/" Add a line to the time line of this profileid and twid /"/"/"
-        key = str(profileid + self.separator + twid + self.separator + 'timeline')
-        data = self.r.lrange(key, self.db_timeline_last_index, -1)
-        return data
-    """
-
     def get_timeline_all_lines(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline') 
