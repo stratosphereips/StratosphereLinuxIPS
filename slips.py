@@ -36,9 +36,9 @@ def test_zeek() -> bool:
     command = "bro --version"
     ret = os.system(command)
     if ret != 0:
-        print("01|main|[main] Error: Zeek (Bro) was not found. Did you set the path to zeek?"
-              " The command which was executed in slips: {}".format(command))
-    return True if ret == 0 else False
+        print("[main] Error: Zeek (Bro) was not found. Did you set the path?")
+        return False
+    return True
 
 def terminate_slips():
     """
