@@ -1112,7 +1112,6 @@ class Database(object):
 
     def get_loaded_malicious_ip(self, ip: str) -> str:
         """ ????????? """
-        self.r.hmset('loaded_malicious_ips', ips_and_description)
         ip_description = self.r.hget('loaded_malicious_ips', ip)
         return ip_description
 
