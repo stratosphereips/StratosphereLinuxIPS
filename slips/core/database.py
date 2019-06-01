@@ -1103,7 +1103,6 @@ class Database(object):
         self.r.srem('zeekfiles', filename)
 
     def add_all_loaded_malicous_ips(self, ips_and_description: dict) -> None:
-<<<<<<< HEAD
         """ ????????? """
         self.r.hmset('loaded_malicious_ips', ips_and_description)
 
@@ -1113,30 +1112,17 @@ class Database(object):
 
     def get_loaded_malicious_ip(self, ip: str) -> str:
         """ ????????? """
-=======
         self.r.hmset('loaded_malicious_ips', ips_and_description)
-
-    def add_loaded_malicious_ip(self, ip: str, description: str) -> None:
-        self.r.hset('loaded_malicious_ips', ip, description)
-
-    def get_loaded_malicious_ip(self, ip: str) -> str:
->>>>>>> 0345118... database.py
         ip_description = self.r.hget('loaded_malicious_ips', ip)
         return ip_description
 
     def set_profile_as_malicious(self, profileid: str, description: str) -> None:
-<<<<<<< HEAD
         """ ????????? """
-=======
->>>>>>> 0345118... database.py
         # Add description to this malicious ip profile.
         self.r.hset(profileid, 'labeled_as_malicious', description)
 
     def is_profile_malicious(self, profileid: str) -> str:
-<<<<<<< HEAD
         """ ????????? """
-=======
->>>>>>> 0345118... database.py
         data = self.r.hget(profileid, 'labeled_as_malicious')
         return data
 
