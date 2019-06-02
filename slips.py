@@ -150,17 +150,19 @@ if __name__ == '__main__':
         print('You need to define an input source.')
         sys.exit(-1)
 
-    ##
+
+
+    ##########################
     # Creation of the threads
-    ##
-    # Output thread
-    # Create the queue for the output thread first. Later the output process is created after we defined which type of output we have
+    ##########################
+
+    # Output thread. This thread should be created first because it handles the output of the rest of the threads.
+    # Create the queue 
     outputProcessQueue = Queue()
     # Create the output thread and start it
-    # We need to tell the output process the type of output so he know if it should print in console or send the data to another process
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
-    # Main PID
+    # Print the PID of the main slips process. We do it here because we needed the queue to the output process
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid
     outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
