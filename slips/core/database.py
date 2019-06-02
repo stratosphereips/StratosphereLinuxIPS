@@ -533,7 +533,7 @@ class Database(object):
             # Get the state. Established, NotEstablished
             summaryState = __database__.getFinalStateFromFlags(state, pkts)
             # Create the key_name. The key_name is one of the names of the features
-            key_name = src_or_dst + 'Port' + hosttype + proto.upper() + summaryState
+            key_name = src_or_dst + 'Ports' + hosttype + proto.upper() + summaryState
             # self.outputqueue.put('03|database|[DB]: Storing info about dst port for {}. Key: {}.'.format(profileid, key_name))
             prev_data = self.get_data_from_profile_tw(hash_key, key_name)
             try:
