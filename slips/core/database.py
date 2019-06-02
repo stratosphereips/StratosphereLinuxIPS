@@ -573,24 +573,6 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    def get_data_from_profile_tw(self, hash_key: str, key_name: str):
-        try:
-            """
-            ??????????????????
-            key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established, NotEstablihed] 
-            Example: key_name = 'SrcPortClientTCPEstablished'
-            """
-            data = self.r.hget(hash_key, key_name)
-            value = {}
-            if data:
-                portdata = json.loads(data)
-                value = portdata
-            return value
-        except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDataFromProfileTW in database.py')
-            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """ Get the tuples """
         data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
