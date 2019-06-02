@@ -700,22 +700,22 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
-                direction = 'out'
+                role = 'Client'
                 if 'conn' in flow_type  or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute the symbol for this flow, for this TW, for this profile
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
                     # Add the out tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, direction)
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role)
                     # Add the dstip
-                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, direction)
+                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, role)
                     # Add the dstport
                     port_type = 'Dst'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, direction, port_type)
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the srcport
                     port_type = 'Src'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, direction, port_type)
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
                 elif 'dns' in flow_type:
@@ -729,22 +729,22 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
-                direction = 'in'
+                role = 'Server'
                 if 'conn' in flow_type  or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(saddr_as_obj) + ':' + sport + ':' + columns['proto']
                     # Compute symbols.
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
                     # Add the src tuple
-                    __database__.add_tuple(profile, twid, tupleid, symbol, direction)
+                    __database__.add_tuple(profile, twid, tupleid, symbol, role)
                     # Add the srcip
-                    __database__.add_ips(profile, twid, saddr_as_obj, self.column_values, direction)
+                    __database__.add_ips(profile, twid, saddr_as_obj, self.column_values, role)
                     # Add the dstport
                     port_type = 'Dst'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, direction, port_type)
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the srcport
                     port_type = 'Src'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, direction, port_type)
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
 
@@ -839,13 +839,15 @@ class ProfilerProcess(multiprocessing.Process):
                     T1 = last_ts - last_last_ts
                     # Time diff between the current flow and the past flow.
                     T2 = now_ts - last_ts
-
+                    
+                    # We have a time out of 1hs. After that, put 1 number 0 for each hs
                     if T2 >= tto.total_seconds():
                         t2_in_hours = T2 / tto.total_seconds()
-                        # Shoud we round it? Because for example:
-                        #  7100 / 3600 =~ 1.972  ->  int(1.972) = 1
+                        # Shoud round it. Because we need the time to pass to really count it
+                        # For example:
+                        # 7100 / 3600 =~ 1.972  ->  int(1.972) = 1
                         for i in range(int(t2_in_hours)):
-                            # Add the 0000 to the symbol object
+                            # Add the zeros to the symbol object
                             zeros += '0'
                     try:
                         if T2 >= T1:
