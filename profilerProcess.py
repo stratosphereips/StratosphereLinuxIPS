@@ -795,6 +795,7 @@ class ProfilerProcess(multiprocessing.Process):
         """
         This function computes the new symbol for the tuple according to the original stratosphere ips model of letters
         Here we do not apply any detection model, we just create the letters as one more feature
+        current_time is the starttime of the flow
         """
         try:
             current_duration = float(current_duration)
@@ -818,9 +819,8 @@ class ProfilerProcess(multiprocessing.Process):
             symbol = ''
             timechar = ''
 
-            # Get T1 (the time diff between the past flow and the past-past flow) from this tuple. T1 is a float in the db. Also get the time of the last flow in this tuple. In the DB prev time is a str
-            # (T1, previous_time) = __database__.getT2ForProfileTW(profileid, twid, tupleid)
-
+            # Get the time of the last flow in this tuple, and the last last
+            # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
             (last_last_ts, last_ts) = __database__.getT2ForProfileTW(profileid, twid, tupleid, tuple_key)
 
 
@@ -828,7 +828,6 @@ class ProfilerProcess(multiprocessing.Process):
             #T1 = timedelta(seconds=10)
             #previous_time = datetime.now() - timedelta(seconds=3600)
 
-            # def compute_periodicity(now_ts: float, last_ts: float, last_last_ts: float) -> Tuple(int, str):
             def compute_periodicity(now_ts: float, last_ts: float, last_last_ts: float):
                 """ Function to compute the periodicity """
                 zeros = ''
@@ -838,9 +837,11 @@ class ProfilerProcess(multiprocessing.Process):
                     # Time diff between the past flow and the past-past flow.
                     T1 = last_ts - last_last_ts
                     # Time diff between the current flow and the past flow.
+                    # We already computed this before, but we can do it here again just in case
                     T2 = now_ts - last_ts
                     
                     # We have a time out of 1hs. After that, put 1 number 0 for each hs
+                    # It should not happen that we also check T1... right?
                     if T2 >= tto.total_seconds():
                         t2_in_hours = T2 / tto.total_seconds()
                         # Shoud round it. Because we need the time to pass to really count it
@@ -849,6 +850,8 @@ class ProfilerProcess(multiprocessing.Process):
                         for i in range(int(t2_in_hours)):
                             # Add the zeros to the symbol object
                             zeros += '0'
+
+                    # Compute TD
                     try:
                         if T2 >= T1:
                             TD = T2 / T1
@@ -856,6 +859,7 @@ class ProfilerProcess(multiprocessing.Process):
                             TD = T1 / T2
                     except ZeroDivisionError:
                         TD = 1
+
                     # Decide the periodic based on TD and the thresholds
                     if TD <= tt1:
                         # Strongly periodicity
@@ -1020,7 +1024,6 @@ class ProfilerProcess(multiprocessing.Process):
             # Here begins the function's code
             try:
                 # Update value of T2
-                # T2 = current_time - previous_time
                 T2 = now_ts - last_ts
                 # Are flows sorted?
                 if T2 < 0:
@@ -1034,17 +1037,15 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Compute the rest
             periodicity, zeros = compute_periodicity(now_ts, last_ts, last_last_ts)
-            # self.outputqueue.put("01|profiler|[Profile] Periodicity: {}".format(periodicity))
-            # if zeros == '':
             duration = compute_duration()
             # self.outputqueue.put("01|profiler|[Profile] Duration: {}".format(duration))
             size = compute_size()
             # self.outputqueue.put("01|profiler|[Profile] Size: {}".format(size))
             letter = compute_letter()
             # self.outputqueue.put("01|profiler|[Profile] Letter: {}".format(letter))
-
             timechar = compute_timechar()
             # self.outputqueue.put("01|profiler|[Profile] TimeChar: {}".format(timechar))
+            self.outputqueue.put("05|profiler|[Profile] Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(periodicity, duration, size, letter, timechar))
 
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
@@ -1055,7 +1056,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.outputqueue.put("01|profiler|[Profile] {}".format(type(inst)))
             self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
             self.outputqueue.put("01|profiler|[Profile] {}".format(traceback.format_exc()))
-
 
     def get_timewindow(self, flowtime, profileid):
         """"
