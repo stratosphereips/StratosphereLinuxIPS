@@ -220,12 +220,15 @@ class LogsProcess(multiprocessing.Process):
 
                 # 0. Is a ip of this profile stored as malicious?
                 # If it still one profile do not ask again the database for each new time_window.
+                """
+                # This should be taken out of the for of the tws
                 if last_profile_id != profileid:
                     description_of_malicious_ip_profile = __database__.is_profile_malicious(profileid)
                 if description_of_malicious_ip_profile:
-                    ip_of_profile = profileid.split(self.separator)[1]
+                    ip_of_profile = profileid.split(self.fieldseparator)[1]
                     text_data = '[THREAT INTELIGENCE] IP of this profile: {} was detected as malicious. Description: "{}"\n'.format(ip_of_profile, description_of_malicious_ip_profile)
                     self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
+                """
 
                 # 1. Detections to block. The getBlockingRequest function return {True, False}
                 blocking = __database__.getBlockingRequest(profileid, twid)
