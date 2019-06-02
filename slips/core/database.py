@@ -373,7 +373,7 @@ class Database(object):
             # Get the state. Established, NotEstablished
             summaryState = __database__.getFinalStateFromFlags(state, pkts)
             # Get the previous data about this key
-            prev_data = self.getDataFromProfileTW(profileid, twid, type_host_key, summaryState, proto, role, 'IPs'):
+            prev_data = self.getDataFromProfileTW(profileid, twid, type_host_key, summaryState, proto, role, 'IPs')
             self.print('Prev data : {}'.format(prev_data,1,0))
             try:
                 innerdata = prev_data[str(ip_as_obj)]
@@ -499,10 +499,14 @@ class Database(object):
             elif role == 'Server':
                 ip_key = 'srcips'
 
+
             # Get the state. Established, NotEstablished
             summaryState = __database__.getFinalStateFromFlags(state, pkts)
-            self.outputqueue.put('03|database|[DB]: Storing info about dst port for {}. Key: {}.'.format(profileid, key_name))
-            prev_data = self.getDataFromProfileTW(profileid, twid, port_type, summaryState, proto, role, 'Ports'):
+            # Key
+            key_name = port_type + 'Ports' + role + proto + summaryState
+
+            #self.outputqueue.put('03|database|[DB]: Storing info about dst port for {}. Key: {}.'.format(profileid, key_name))
+            prev_data = self.getDataFromProfileTW(profileid, twid, port_type, summaryState, proto, role, 'Ports')
             try:
                 innerdata = prev_data[port]
                 innerdata['totalflows'] += 1
@@ -529,6 +533,7 @@ class Database(object):
                 # self.outputqueue.put('03|database|[DB]: First time for port {}. Data: {}'.format(dport, innerdata))
             # Convet the dictionary to json
             data = json.dumps(prev_data)
+            self.outputqueue.put('03|database|[DB]: Storing data for port {}. Data: {}'.format(port, prev_data))
             # Store this data in the profile hash
             hash_key = profileid + self.separator + twid
             self.r.hset(hash_key, key_name, str(data))
@@ -1089,14 +1094,15 @@ class Database(object):
         state: can be 'Established' or 'NOTEstablished'
         protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
         role: can be 'Client' or 'Server'
-        type_data: can be 'Port' or 'IPs'
+        type_data: can be 'Ports' or 'IPs'
         """
         try:
-            key = direction + role + protocol + state 
+            self.print('Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(profileid, twid, direction, state, protocol, role, type_data))
+            key = direction + type_data + role + protocol + state 
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
             if data:
-                self.print('Key: {}. Getting info about {} for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
+                self.print('Key: {}. Getting info for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
                 # Convet the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
