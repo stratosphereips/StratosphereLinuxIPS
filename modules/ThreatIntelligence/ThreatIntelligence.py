@@ -14,7 +14,7 @@ from modules.ThreatIntelligence.update_ip_manager import UpdateIPManager
 
 class MaliciousIPs(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'Threat Inteligence'
+    name = 'ThreatInteligence'
     description = 'Check if the srcIP or dstIP are in a malicious list of IPs.'
     authors = ['Frantisek Strasak']
 
