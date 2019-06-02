@@ -9,6 +9,7 @@
 # 4. Change the name of the module, description and author in the variables
 # 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
 # 6. The variable 'name' MUST have the exact same name as the filename (minus .py extension) and folder, e.g. 'template'
+# 7. The name of the class MUST be 'Module', do not change it.
 
 # Must imports
 from slips.common.abstracts import Module
