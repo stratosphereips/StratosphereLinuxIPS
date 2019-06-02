@@ -199,7 +199,6 @@ if __name__ == '__main__':
             outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
         # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
 
-
     # Evidence thread
     # Create the queue for the evidence thread
     evidenceProcessQueue = Queue()
@@ -216,7 +215,6 @@ if __name__ == '__main__':
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
-
 
     # Input process
     # Create the input process and start it
