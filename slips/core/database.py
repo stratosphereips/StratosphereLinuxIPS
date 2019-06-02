@@ -306,9 +306,12 @@ class Database(object):
 
     # old def add_out_dstips(self, profileid, twid, daddr_as_obj, state, pkts, proto, dport):
     # old def add_out_dstips(self, profileid, twid, columns):
-    def add_ips(self, profileid, twid, ip_as_obj, columns, traffic_out=False):
+    def add_ips(self, profileid, twid, ip_as_obj, columns, direction: str):
         """
-        Function to add all the info about the dstip if the flow is going out from the profile IP
+        Function to add information about the IP
+        The flow can go out of the IP or into the IP 
+        direction: 'in' or 'out'
+
         This function does two things:
             1- Add the dstip to this tw in this profile, counting how many times it was contacted, and storing it in the key 'DstIPs' in the hash of the profile
             2- Use the dstip as a key to count how many times that IP was contacted on each dstport. We store it like this because its the 
@@ -323,17 +326,16 @@ class Database(object):
             spkts = columns['spkts']
             state = columns['state']
             proto = columns['proto']
-            #daddr_as_obj = columns['daddr_as_obj']
             daddr = columns['daddr']
             saddr = columns['saddr']
             
             # Depending if the traffic is going out or not, we are Client or Server
-            if traffic_out:
+            # CHECK
+            if direction == 'out':
                 dst_or_srcIP_key = 'DstIPs'
                 dst_or_src_key = 'Dst'
                 hosttype = 'Client'
-
-            else:
+            elif direction == 'in':
                 # TODO: Check why we need these two keys
                 dst_or_srcIP_key = 'SrcIPs'
                 dst_or_src_key = 'Src'
@@ -497,7 +499,7 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             self.outputqueue.put('01|database|[DB] {}'.format(traceback.format_exc()))
 
-    def add_port(self, profileid: str, twid: str, ip_address: str, columns: dict, traffic_out=False, dst_port=False):
+    def add_port(self, profileid: str, twid: str, ip_address: str, columns: dict, direction, port_type):
         """
         Store info learned from ports and other data from the flow.
         When the flow goes out, which means we are the client sending it.
@@ -515,17 +517,17 @@ class Database(object):
             daddr = columns['daddr']
             saddr = columns['saddr']
 
-            if dst_port:
+            if port_type == 'Dst':
                 src_or_dst = 'Dst'
                 port = dport
-            else:
+            elif port_type == 'Src':
                 src_or_dst = 'Src'
                 port = sport
 
-            if traffic_out:
+            if direction == 'out':
                 hosttype = 'Client'
                 ip_key = 'dstips'
-            else:
+            elif direction == 'in':
                 hosttype = 'Server'
                 ip_key = 'srcips'
 
