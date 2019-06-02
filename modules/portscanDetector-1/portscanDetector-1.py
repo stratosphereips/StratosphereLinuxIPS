@@ -76,7 +76,13 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                 # Get the list of dports that we connected as client using TCP not established
                 # old data = __database__.getClientTCPNotEstablishedFromProfileTW('DstPort', profileid, twid)
-                data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
+                #data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
+                direction = 'Dst'
+                state = 'NOTEstablished'
+                protocol = 'TCP'
+                role = 'Client'
+                type_data = 'Ports'
+                data = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
                 # For each port, see if the amount is over the threshold
                 for dport in data.keys():
                     """
@@ -145,7 +151,15 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                 # Get the list of dstips that we connected as client using TCP not established, and their ports
                 #old data = __database__.getClientTCPNotEstablishedFromProfileTW('DstIP', profileid, twid)
-                data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
+                #old data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
+
+                direction = 'Dst'
+                state = 'NOTEstablished'
+                protocol = 'TCP'
+                role = 'Client'
+                type_data = 'IPs'
+                data = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
+
                 # For each dstip, see if the amount of ports connections is over the threshold
                 for dstip in data.keys():
                     ### PortScan Type 1. Direction OUT
