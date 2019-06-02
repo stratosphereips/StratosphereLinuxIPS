@@ -315,10 +315,11 @@ class LogsProcess(multiprocessing.Process):
                                 text_data = 'As {}, {} {} {} ports:'.format(role, protocol, state, direction)
                                 self.outputqueue.put('03|logs|\t\t\t[Logs]: ' + text_data)
                                 data = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
+                                #self.print('LOGING data: {}'.format(data))
                                 if data:
                                     self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
                                     for port in data:
-                                        text_data = '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}.'.format(port, dstportdata[port]['totalflows'], dstportdata[port]['totalpkt'], dstportdata[port]['totalbytes'])
+                                        text_data = '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}.'.format(port, data[port]['totalflows'], data[port]['totalpkt'], data[port]['totalbytes'])
                                         self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
                                         self.outputqueue.put('03|logs|\t\t\t[Logs]: ' + text_data)
 
