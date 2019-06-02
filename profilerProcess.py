@@ -574,7 +574,11 @@ class ProfilerProcess(multiprocessing.Process):
                 # date
                 try:
                     # This file format is very extended, but we should consider more options. Maybe we should detect the time format.
-                    date_time = datetime.strptime(str(self.column_values['starttime']), '%Y-%m-%d %H:%M:%S.%f')
+                    # Some times if there is no microseconds, the datatime object just give us '2018-12-18 14:00:00' instead of '2018-12-18 14:00:00.000000' so the format fails
+                    try:
+                        date_time = datetime.strptime(str(self.column_values['starttime']), '%Y-%m-%d %H:%M:%S.%f')
+                    except ValueError:
+                        date_time = datetime.strptime(str(self.column_values['starttime']) + '.000000', '%Y-%m-%d %H:%M:%S.%f')
                     starttime = date_time.timestamp()
                 except ValueError as e:
                     self.outputqueue.put("01|profiler|[Profile] We can not recognize time format.")
@@ -696,21 +700,22 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
+                direction = 'out'
                 if 'conn' in flow_type  or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute the symbol for this flow, for this TW, for this profile
-                    # FIX
-                    # symbol = ('a', '2019-01-26--13:31:09', 1)
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
                     # Add the out tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, traffic_out=True)
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, direction)
                     # Add the dstip
-                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, traffic_out=True)
+                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, direction)
                     # Add the dstport
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, traffic_out=True, dst_port=True)
+                    port_type = 'Dst'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, direction, port_type)
                     # Add the srcport
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, traffic_out=True, dst_port=False)
+                    port_type = 'Src'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, direction, port_type)
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
                 elif 'dns' in flow_type:
@@ -724,19 +729,22 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
+                direction = 'in'
                 if 'conn' in flow_type  or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(saddr_as_obj) + ':' + sport + ':' + columns['proto']
                     # Compute symbols.
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
                     # Add the src tuple
-                    __database__.add_tuple(profile, twid, tupleid, symbol, traffic_out=False)
+                    __database__.add_tuple(profile, twid, tupleid, symbol, direction)
                     # Add the srcip
-                    __database__.add_ips(profile, twid, saddr_as_obj, self.column_values, traffic_out=False)
+                    __database__.add_ips(profile, twid, saddr_as_obj, self.column_values, direction)
                     # Add the dstport
-                    __database__.add_port(profile, twid, saddr_as_obj, self.column_values, traffic_out=False, dst_port=True)
+                    port_type = 'Dst'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, direction, port_type)
                     # Add the srcport
-                    __database__.add_port(profile, twid, saddr_as_obj, self.column_values, traffic_out=False, dst_port=False)
+                    port_type = 'Src'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, direction, port_type)
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
 
@@ -1160,8 +1168,8 @@ class ProfilerProcess(multiprocessing.Process):
                         # Argus puts the definition of the columns on the first line only
                         # So read the first line and define the columns
 
-                        # Are the columns defined?
                         try:
+                            # Are the columns defined? Just try to access them
                             temp = self.column_idx['starttime']
                             # Yes
                             # Quickly process all lines
