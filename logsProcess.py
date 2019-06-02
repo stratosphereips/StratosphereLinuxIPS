@@ -277,21 +277,21 @@ class LogsProcess(multiprocessing.Process):
                 # 5. OutTuples
                 out_tuples = __database__.getOutTuplesfromProfileTW(profileid, twid)
                 if out_tuples:
-                    # Add tuples
+                    # Add out tuples
                     self.addDataToFile(profilefolder + '/' + twlog, 'OutTuples:', file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] OutTuples:')
                     data = json.loads(out_tuples)
                     for key in data:
                         self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]), file_mode='a+', data_type='text')
-                    self.outputqueue.put('03|logs|\t\t[Logs] Tuples: ' + tuples)
+                    self.outputqueue.put('03|logs|\t\t[Logs] Tuples: ' + out_tuples)
 
                 # 6. InTuples
-                out_tuples = __database__.getInTuplesfromProfileTW(profileid, twid)
-                if out_tuples:
-                    # Add tuples
+                in_tuples = __database__.getInTuplesfromProfileTW(profileid, twid)
+                if in_tuples:
+                    # Add in tuples
                     self.addDataToFile(profilefolder + '/' + twlog, 'InTuples:', file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] InTuples:')
-                    data = json.loads(out_tuples)
+                    data = json.loads(in_tuples)
                     for key in data:
                         self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]), file_mode='a+', data_type='text')
                         self.outputqueue.put('03|logs|\t\t\t[Logs] {} ({})'.format(key, data[key]))
