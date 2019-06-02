@@ -1131,5 +1131,31 @@ class Database(object):
         data = self.r.hget(profileid, 'labeled_as_malicious')
         return data
 
+    def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
+        """ 
+        Get the info about a certain role (Client or Server), for a particular protocol (TCP, UDP, ICMP, etc.) for a particular State (Established, etc.)
+
+        direction: 'Dst' or 'Src'. This is used to know if you want the data of the src ip or ports, or the data from the dst ips or ports
+        state: can be 'Established' or 'NOTEstablished'
+        protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
+        role: can be 'Client' or 'Server'
+        type_data: can be 'Port' or 'IPs'
+        """
+        try:
+            key = direction + role + protocol + state 
+            data = self.r.hget( profileid + self.separator + twid, key)
+            value = {}
+            if data:
+                self.print('Key: {}. Getting info about {} for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
+                # Convet the dictionary to json
+                portdata = json.loads(data)
+                value = portdata
+            return value
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getDataFromProfileTW database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
+
 
 __database__ = Database()
