@@ -8,7 +8,6 @@ import argparse
 import sys
 import redis
 import os
-import time
 
 version = '0.6.1'
 
@@ -176,9 +175,6 @@ if __name__ == '__main__':
             ModuleProcess = module_class(outputProcessQueue, config)
             ModuleProcess.start()
             outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, __modules__[module_name]['description'], ModuleProcess.pid))
-
-    # Do we need to wait for some modules to load? The threat Intelligence module takes ~7s to load.
-    time.sleep(3)
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
