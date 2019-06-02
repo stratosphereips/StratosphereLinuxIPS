@@ -346,7 +346,7 @@ class Database(object):
             #############
             # 1- Count the dstips and store them
             # TODO: Retire this info after we finish 2-. Because its duplicated
-            self.outputqueue.put('05|database|[DB]: Add_out_dstips called with profileid {}, twid {}, daddr_as_obj {}'.format(profileid, twid, str(daddr_as_obj)))
+            self.outputqueue.put('05|database|[DB]: Add_out_dstips called with profileid {}, twid {}, daddr {}'.format(profileid, twid, str(daddr)))
             # Get the hash of the timewindow
             hash_id = profileid + self.separator + twid
             # Get the DstIPs data for this tw in this profile
@@ -448,7 +448,7 @@ class Database(object):
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_out_dstips in database.py')
+            self.outputqueue.put('01|database|[DB] Error in add_ips in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
