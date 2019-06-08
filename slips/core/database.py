@@ -418,7 +418,6 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
-    # old def add_out_tuple(self, profileid, twid, tupleid, data_tuple):
     def add_tuple(self, profileid, twid, tupleid, data_tuple, role):
         """ 
         Add the tuple going in or out for this profile 
@@ -431,16 +430,20 @@ class Database(object):
             tuple_key = 'InTuples'
         try:
             self.print('Add_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple), 0, 5)
+            # Get all the InTuples or OutTuples for this profileid in this TW
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, tuple_key)
+            # Separate the symbold to add and the previous data
             (symbol_to_add, previous_two_timestamps) = data_tuple
             if not data:
-                data = {}
+                # Must be str so we can convert later
+                data = '{}'
+            # Convert the json str to a dictionary
+            data = json.loads(data)
             try:
-                # Convert the json str to a dictionary
-                data = json.loads(data)
+                stored_tuple = data[tupleid]
                 # Disasemble the input
-                self.print('Not the first time for tuple {}. Add the symbol: {}. Store previous_times: {}. Prev Data: {}'.format(tupleid, symbol_to_add, previous_two_timestamps, data), 0, 5)
+                self.print('Not the first time for tuple {} as an {} for {} in TW {}. Add the symbol: {}. Store previous_times: {}. Prev Data: {}'.format(tupleid, tuple_key, profileid, twid, symbol_to_add, previous_two_timestamps, data), 0, 5)
                 # Get the last symbols of letters in the DB
                 prev_symbols = data[tupleid][0]
                 # Add it to form the string of letters
@@ -448,20 +451,21 @@ class Database(object):
                 # Bundle the data together
                 new_data = (new_symbol, previous_two_timestamps)
                 data[tupleid] = new_data
-                self.outputqueue.put('06|database|[DB]: Letters so far for tuple {}: {}'.format(tupleid, new_symbol))
+                self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol), 0, 6)
                 data = json.dumps(data)
             except (TypeError, KeyError) as e:
                 # There was no previous data stored in the DB
-                self.outputqueue.put('05|database|[DB] First time for tuple {}'.format(tupleid))
+                self.print('First time for tuple {} as an {} for {} in TW {}'.format(tupleid, tuple_key, profileid, twid), 0, 5)
                 new_data = (symbol_to_add, previous_two_timestamps)
                 data[tupleid] = new_data
                 # Convet the dictionary to json
                 data = json.dumps(data)
+            # Store the new data on the db
             self.r.hset(hash_id, tuple_key, str(data))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid)
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_out_tuple in database.py')
+            self.outputqueue.put('01|database|[DB] Error in add_tuple in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             self.outputqueue.put('01|database|[DB] {}'.format(traceback.format_exc()))
@@ -506,7 +510,7 @@ class Database(object):
             # Key
             key_name = port_type + 'Ports' + role + proto + summaryState
 
-            self.print('add_port() Storing info about port {} for {}. Key: {}.'.format(port, profileid, key_name), 0, 3)
+            #self.print('add_port(): As a {} storing info about {} port {} for {}. Key: {}.'.format(role, port_type, port, profileid, key_name), 0, 3)
             prev_data = self.getDataFromProfileTW(profileid, twid, port_type, summaryState, proto, role, 'Ports')
             try:
                 innerdata = prev_data[port]
@@ -520,7 +524,7 @@ class Database(object):
                     temp_dstips[str(ip_address)] = int(pkts)
                 innerdata[ip_key] = temp_dstips
                 prev_data[port] = innerdata
-                self.print('add_port() Adding for port {}. POST Data: {}'.format(port, innerdata), 0, 3)
+                self.print('add_port(): Adding this new info about port {} for {}. Key: {}. NewData: {}'.format(port, profileid, key_name, innerdata), 0, 3)
             except KeyError:
                 # First time for this flow
                 innerdata = {}
@@ -531,10 +535,10 @@ class Database(object):
                 temp_dstips[str(ip_address)] = int(pkts)
                 innerdata[ip_key] = temp_dstips
                 prev_data[port] = innerdata
-                self.print('add_port() First time for port {}. Data: {}'.format(port, innerdata), 0, 3)
+                self.print('add_port(): First time for port {} for {}. Key: {}. Data: {}'.format(port, profileid, key_name, innerdata), 0, 3)
             # Convet the dictionary to json
             data = json.dumps(prev_data)
-            self.print('add_port() Storing data for port {}. Data: {}'.format(port, prev_data), 0, 3)
+            self.print('add_port(): Storing info about port {} for {}. Key: {}. Data: {}'.format(port, profileid, key_name, prev_data), 0, 3)
             # Store this data in the profile hash
             hash_key = profileid + self.separator + twid
             self.r.hset(hash_key, key_name, str(data))
@@ -919,7 +923,7 @@ class Database(object):
             to_send['stime'] = stime
             to_send = json.dumps(to_send)
             self.publish('new_flow', to_send)
-            self.print('Adding CONN flow to DB: {}'.format(data), 5, 0)
+            self.print('Adding complete flow to DB: {}'.format(data), 5, 0)
 
     def add_out_ssl(self, profileid, twid, flowtype, uid, version, cipher, resumed, established, cert_chain_fuids, client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
         """ 
@@ -1098,7 +1102,7 @@ class Database(object):
         type_data: can be 'Ports' or 'IPs'
         """
         try:
-            self.print('Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(profileid, twid, direction, state, protocol, role, type_data))
+            self.print('Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(profileid, twid, direction, state, protocol, role, type_data), 0, 4)
             key = direction + type_data + role + protocol + state 
             #self.print('Asked Key: {}'.format(key))
             data = self.r.hget( profileid + self.separator + twid, key)
