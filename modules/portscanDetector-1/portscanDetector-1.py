@@ -154,7 +154,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 #old data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
 
                 direction = 'Dst'
-                state = 'NOTEstablished'
+                state = 'NotEstablished'
                 protocol = 'TCP'
                 role = 'Client'
                 type_data = 'IPs'
