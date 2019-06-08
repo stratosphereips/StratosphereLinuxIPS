@@ -23,18 +23,17 @@ class Module(Module, multiprocessing.Process):
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         self.separator = __database__.getFieldSeparator()
-
-        self.c1 = __database__.subscribe('new_ip')
+        # This default path is only used in case there is no path in the configuration file
         self.path_to_malicious_ip_folder = 'modules/ThreatIntelligence/malicious_ips_files/'
-
-        #self.progress_bar = ProgressBar(bar_size=10, prefix="\t\t[ThreatIntelligence] Loading malicious IPs to DB: ")
-
+        # Subscribe to the new_ip channel
+        self.c1 = __database__.subscribe('new_ip')
         # Create the update manager. This manager takes care of the re-downloading of the list of IoC when needed.
         self.update_manager = UpdateIPManager(self.outputqueue)
-
         # Update and load files containing malicious IPs.
-        self.__update_malicious_file()
+        self.__update_remote_malicious_file()
         self.__load_malicious_ips()
+        # This dictionary will hold each malicious ip to store in the db
+        self. malicious_ips_dict = {}
 
     def __read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -46,65 +45,54 @@ class Module(Module, multiprocessing.Process):
             conf_variable = None
         return conf_variable
 
-    def __update_malicious_file(self) -> None:
+    def __update_remote_malicious_file(self) -> None:
+        """ 
+        Prepare to download a remote file with malicious ips. This file is remotely updated
+        """
         # How often we should update malicious IP list.
         update_period = self.__read_configuration('modules', 'malicious_ips_update_period')
+        # Run the update manager
         self.update_manager.update(update_period)
 
     def __load_malicious_ips(self) -> None:
-        #self.progress_bar.start_progress_bar()
-        malicious_ips_dict = {}
+        """ Load the malicious ips from all the files in a folder"""
+        
 
-        # First look if a variable "malicious_ip_file_path" in slips.conf is set.
-        malicious_ip_file_path = self.__read_configuration('modules', 'malicious_ip_file_path')
-        if malicious_ip_file_path is not None:
-            # The variable "malicious_ip_file_path" in slips.conf is set.
-            self.outputqueue.put('03|logs|File {} containing malicious IPs was loaded.'.format(malicious_ip_file_path))
-            try:
-                self.__load_malicious_ips_file(malicious_ip_file_path, malicious_ips_dict)
-            except FileNotFoundError as e:
-                # The file does not exist.
-                self.print(e, 1, 0)
-                self.print('Error: The PATH to file for loading you malicious IPs '
-                           'which you specify in slips.conf is NOT valid.', 1, 0)
+        # First look if a variable "malicious_ip_file_path" in slips.conf is set. If not, we have the default ready
+        self.path_to_malicious_ip_folder = self.__read_configuration('modules', 'malicious_ip_file_path')
+
+        # Read all files in "modules/ThreatIntelligence/malicious_ips_files/" folder.
+        self.print('Reading malicious IPs from files in foler {}.'.format(self.path_to_malicious_ip_folder), 0, 3)
+        if len(os.listdir(self.path_to_malicious_ip_folder)) == 0:
+            # No files to read.
+            self.print('There are no files in {}.'.format(self.path_to_malicious_ip_folder), 1, 0)
         else:
-            # The variable "malicious_ip_file_path" in slips.conf is NOT set.
-            # Read all files in "modules/ThreatIntelligence/malicious_ips_files/" folder.
-            self.outputqueue.put('03|logs|Reading malicious Ips from {}.'.format(self.path_to_malicious_ip_folder))
-            if len(os.listdir(self.path_to_malicious_ip_folder)) == 0:
-                # No file to read.
-                self.print('In "{}" there are no files containing malicious IPs.'.format(self.path_to_malicious_ip_folder), 1, 0)
-            else:
-                for ip_file in os.listdir(self.path_to_malicious_ip_folder):
-                    try:
-                        self.__load_malicious_ips_file(self.path_to_malicious_ip_folder + '/' + ip_file, malicious_ips_dict)
-                        self.print('\tMalicious IPs from {} file were loaded.', 5, 0)
-                    except FileNotFoundError as e:
-                        self.print(e, 1, 0)
+            for ip_file in os.listdir(self.path_to_malicious_ip_folder):
+                try:
+                    self.__load_malicious_ips_file(self.path_to_malicious_ip_folder + '/' + ip_file)
+                    self.print('\tLoading malicious IPs from file {}.', 5, 0)
+                except FileNotFoundError as e:
+                    self.print(e, 1, 0)
 
-        # Put all loaded malicious ips to database.
-        __database__.add_all_loaded_malicous_ips(malicious_ips_dict)
-        #self.progress_bar.stop_progress_bar()
+        # Add all loaded malicious ips to the database
+        __database__.add_add_ips_to_ioc(self.malicious_ips_dict)
 
-    def __load_malicious_ips_file(self, malicious_ips_path: str, malicious_ips_dict: dict) -> None:
-        with open(malicious_ips_path) as f:
-            for line in f:
+    def __load_malicious_ips_file(self, malicious_ips_path: str) -> None:
+        """ 
+        Read a file holding IP addresses and a description
+        """
+        with open(malicious_ips_path) as malicious_file:
+            self.print('Reading the file {} for IoC'.format(malicious_ips_path), 3, 0)
+            for line in malicious_file:
                 if '#' in line:
-                    # '#' is comment line in malicious IP files.
+                    # '#' is a comment line, ignore
                     continue
-                line = line.rstrip()
-                comma_index = line.find(',')
-                ip_description = '-'
-                if comma_index == -1:
-                    # No description was found for the IP.
-                    ip_address = line
-                else:
-                    try:
-                        ip_description = line[comma_index + 1:]
-                    except IndexError:
-                        # There is the comma behind the ip, but no description.
-                        pass
-                    ip_address = line[:comma_index]
+                ip = line.rstrip().split(',')[0]
+                try:
+                    ip_description = line.rstrip().split(',')[1]
+                except IndexError:
+                    ip_description = ''
+                self.print('\tRead IP {}: {}'.format(ip, ip_description), 6, 0)
 
                 # Check if ip is valid.
                 try:
@@ -116,10 +104,10 @@ class Module(Module, multiprocessing.Process):
                         ip_address = ipaddress.IPv6Address(ip_address)
                     except ipaddress.AddressValueError:
                         # It does not look as IP address.
-                        self.print('This ip: {} is not valid. It was found in {}.'.format(ip_address, malicious_ips_path), verbose=1, debug=1)
+                        self.print('The IP address {} is not valid. It was found in {}.'.format(ip_address, malicious_ips_path), 1, 1)
                         continue
 
-                malicious_ips_dict[str(ip_address)] = ip_description
+                self.malicious_ips_dict[str(ip_address)] = ip_description
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -145,10 +133,29 @@ class Module(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message['channel'] == 'new_ip':
                     new_ip = message['data']
-                    description = __database__.get_loaded_malicious_ip(new_ip)
-                    if description is not None:
-                        profile_id = 'profile' + self.separator + new_ip
-                        __database__.set_profile_as_malicious(profile_id, description)
+                    # Get what we know about this IP so far
+                    description = __database__.search_IP_in_IoC(new_ip)
+                    # Mark this IP as being malicious in the DB
+                    ip_data = {}
+                    ip_data['Malicious'] = 'True'
+                    ip_data['description'] = ip_description
+                    __database__.setInfoForIPs(ip, ipdata):
+                    """
+                    # Maybe store some evidence????
+                    profile_id = 
+                    # Type of evidence
+                    type_evidence = 'MaliciousIP'
+                    # Key
+                    key = ???????? ':' + type_evidence
+                    # Threat level
+                    threat_level = 100
+                    # Compute the confidence
+                    confidence = 1
+                    description = 'Malicious IP {} found: {}.'.format(ip, ip_description)
+                    self.print(description, 3, 0)
+                    # Store the evidence in the DB
+                    __database__.setEvidenceForTW(profileid, twid, key, threat_level, confidence, description)
+                    """
 
         except KeyboardInterrupt:
             return True
