@@ -783,7 +783,7 @@ class Database(object):
         """ Store this new ip in the IPs hash """
         if not self.getIP(ip):
             self.r.hset('IPsInfo', ip, '{}')
-            # Publish in the new_ip channel
+            # Publish in the new_ip channel 
             self.publish('new_ip', ip)
 
     def getIP(self, ip):
@@ -1060,28 +1060,23 @@ class Database(object):
         """ Delete an entry from the list of zeek files """
         self.r.srem('zeekfiles', filename)
 
-    def add_all_loaded_malicous_ips(self, ips_and_description: dict) -> None:
-        """ ????????? """
-        self.r.hmset('loaded_malicious_ips', ips_and_description)
+    def add_ips_to_IoC(self, ips_and_description: dict) -> None:
+        """ 
+        Store a group of IPs in the db as they were obtained from an IoC source 
+        What is the format of ips_and_description?
+        """
+        self.r.hmset('IoC_ips', ips_and_description)
 
-    def add_loaded_malicious_ip(self, ip: str, description: str) -> None:
-        """ ????????? """
-        self.r.hset('loaded_malicious_ips', ip, description)
+    def add_ip_to_IoC(self, ip: str, description: str) -> None:
+        """
+        Store in the DB 1 IP we read from an IoC source  with its description
+        """
+        self.r.hset('IoC_ips', ip, description)
 
-    def get_loaded_malicious_ip(self, ip: str) -> str:
-        """ ????????? """
-        ip_description = self.r.hget('loaded_malicious_ips', ip)
+    def search_IP_in_IoC(self, ip: str) -> str:
+        """ Search in the dB of malicious IPs and return a description if we found a match """
+        ip_description = self.r.hget('IoC_ips', ip)
         return ip_description
-
-    def set_profile_as_malicious(self, profileid: str, description: str) -> None:
-        """ ????????? """
-        # Add description to this malicious ip profile.
-        self.r.hset(profileid, 'labeled_as_malicious', description)
-
-    def is_profile_malicious(self, profileid: str) -> str:
-        """ ????????? """
-        data = self.r.hget(profileid, 'labeled_as_malicious')
-        return data
 
     def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
         """ 
