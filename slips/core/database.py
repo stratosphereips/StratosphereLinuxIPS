@@ -1021,18 +1021,10 @@ class Database(object):
 
     def add_timeline_line(self, profileid, twid, data, timestamp: str):
         """ Add a line to the time line of this profileid and twid """
+        #self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data))
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = timestamp + ' ' + str(data)
-        # Set the index of last stored item.
-        index = self.r.rpush(key, data)
         self.r.rpush(key, data)
-
-    def get_timeline_last_line(self, profileid, twid):
-        """ Add a line to the time line of this profileid and twid """
-        key = str(profileid + self.separator + twid + self.separator + 'timeline') 
-        #data = self.r.lrange(key, -1, -1)
-        data = self.r.lpop(key)
-        return data
 
     def get_timeline_last_lines(self, profileid, twid, first_index: int) -> Tuple[str, int]:
         """ Get all new items in this table."""
