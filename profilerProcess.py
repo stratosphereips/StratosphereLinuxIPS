@@ -706,6 +706,7 @@ class ProfilerProcess(multiprocessing.Process):
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute the symbol for this flow, for this TW, for this profile
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
+                    # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
                     # Add the out tuple
                     __database__.add_tuple(profileid, twid, tupleid, symbol, role)
                     # Add the dstip
@@ -751,7 +752,7 @@ class ProfilerProcess(multiprocessing.Process):
             ##########################################
             # 5th. Store the data according to the paremeters
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
-            self.outputqueue.put("07|profiler|[Profiler] Storing data in the profile: {}".format(profileid))
+            self.print("[Profiler] Storing data in the profile: {}".format(profileid), 0, 7)
 
             # In which analysis mode are we?
             # Mode 'out'
@@ -787,9 +788,9 @@ class ProfilerProcess(multiprocessing.Process):
                         store_features_going_in(rev_profileid, rev_twid)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
-            self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()))
-            self.outputqueue.put("01|profiler|[Profile] {}".format((type(inst))))
-            self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
+            self.print("[Profile] Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
+            self.print("[Profile] {}".format((type(inst))), 0, 1)
+            self.print("[Profile] {}".format(inst), 0, 1)
 
     def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size, tuple_key: str):
         """
@@ -801,7 +802,7 @@ class ProfilerProcess(multiprocessing.Process):
             current_duration = float(current_duration)
             current_size = int(current_size)
             now_ts = float(current_time)
-            self.outputqueue.put("08|profiler|[Profile] Starting compute symbol. Tupleid {}, time:{} ({}), dur:{}, size:{}".format(tupleid, current_time, type(current_time), current_duration, current_size))
+            self.print("Starting compute symbol. Tupleid {}, time:{} ({}), dur:{}, size:{}".format(tupleid, current_time, type(current_time), current_duration, current_size), 0, 8)
             # Variables for computing the symbol of each tuple
             T2 = False
             TD = False
@@ -1019,7 +1020,8 @@ class ProfilerProcess(multiprocessing.Process):
                     elif T2 <= timedelta(seconds=3600).total_seconds():
                         return '*'
                     else:
-                        return '0'
+                        # Changed from 0 to ''
+                        return ''
 
             # Here begins the function's code
             try:
@@ -1045,17 +1047,17 @@ class ProfilerProcess(multiprocessing.Process):
             # self.outputqueue.put("01|profiler|[Profile] Letter: {}".format(letter))
             timechar = compute_timechar()
             # self.outputqueue.put("01|profiler|[Profile] TimeChar: {}".format(timechar))
-            self.outputqueue.put("05|profiler|[Profile] Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(periodicity, duration, size, letter, timechar))
+            self.print("Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(periodicity, duration, size, letter, timechar), 0, 5)
 
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
             return symbol, (last_ts, now_ts)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
-            self.outputqueue.put("01|profiler|[Profile] Error in compute_symbol in profilerProcess.")
-            self.outputqueue.put("01|profiler|[Profile] {}".format(type(inst)))
-            self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
-            self.outputqueue.put("01|profiler|[Profile] {}".format(traceback.format_exc()))
+            self.print("[Profile] Error in compute_symbol in profilerProcess.", 0, 1)
+            self.print("[Profile] {}".format(type(inst)), 0, 1)
+            self.print("[Profile] {}".format(inst), 0, 1)
+            self.print("[Profile] {}".format(traceback.format_exc()), 0, 1)
 
     def get_timewindow(self, flowtime, profileid):
         """"
@@ -1077,23 +1079,23 @@ class ProfilerProcess(multiprocessing.Process):
                 self.print('The last TW id for profile {} was {}. Start:{}. End: {}'.format(profileid, lasttwid, lasttw_start_time, lasttw_end_time), 0, 4)
                 # There was a last TW, so check if the current flow belongs here.
                 if lasttw_end_time > flowtime and lasttw_start_time <= flowtime:
-                    self.outputqueue.put("04|profiler|[Profiler] The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time))
+                    self.print("[Profiler] The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time), 0, 4)
                     twid = lasttwid
                 elif lasttw_end_time <= flowtime:
                     # The flow was not in the last TW, its NEWER than it
-                    self.outputqueue.put("04|profiler|[Profiler] The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time))
+                    self.print("[Profiler] The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time), 0, 4)
                     amount_of_new_tw = int((flowtime - lasttw_end_time) / self.width)
-                    self.outputqueue.put("04|profiler|[Profiler] We have to create {} empty TWs in the midle.".format(amount_of_new_tw))
+                    self.print("[Profiler] We have to create {} empty TWs in the midle.".format(amount_of_new_tw), 0, 4)
                     temp_end = lasttw_end_time
                     for id in range(0, amount_of_new_tw + 1):
                         new_start = temp_end
                         twid = __database__.addNewTW(profileid, new_start)
-                        self.outputqueue.put("04|profiler|[Profiler] Creating the TW id {}. Start: {}.".format(twid, new_start))
+                        self.print("[Profiler] Creating the TW id {}. Start: {}.".format(twid, new_start), 0, 4)
                         temp_end = new_start + self.width
                     # Now get the id of the last TW so we can return it
                 elif lasttw_start_time > flowtime:
                     # The flow was not in the last TW, its OLDER that it
-                    self.outputqueue.put("04|profiler|[Profiler] The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time))
+                    self.print("[Profiler] The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time), 0, 4)
                     # Find out if we already have this TW in the past
                     data = __database__.getTWforScore(profileid, flowtime)
                     if data:
@@ -1109,7 +1111,7 @@ class ProfilerProcess(multiprocessing.Process):
                         amount_of_current_tw = __database__.getamountTWsfromProfile(profileid)
                         # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
-                        self.outputqueue.put("05|profiler|[Profiler] We need to create {} TW before the first".format(diff + 1))
+                        self.print("[Profiler] We need to create {} TW before the first".format(diff + 1), 0, 5)
                         # Get the first TW
                         [(firsttwid, firsttw_start_time)] = __database__.getFirstTWforProfile(profileid)
                         firsttw_start_time = float(firsttw_start_time)
@@ -1119,7 +1121,7 @@ class ProfilerProcess(multiprocessing.Process):
                             new_start = temp_start
                             # The method to add an older TW is the same as to add a new one, just the starttime changes
                             twid = __database__.addNewOlderTW(profileid, new_start)
-                            self.outputqueue.put("02|profiler|[Profiler] Creating the new older TW id {}. Start: {}.".format(twid, new_start))
+                            self.print("[Profiler] Creating the new older TW id {}. Start: {}.".format(twid, new_start), 0, 2)
                             temp_start = new_start - self.width
             except ValueError:
                 # There is no last tw. So create the first TW
@@ -1132,11 +1134,11 @@ class ProfilerProcess(multiprocessing.Process):
                     startoftw = float(flowtime)
                 # Add this TW, of this profile, to the DB
                 twid = __database__.addNewTW(profileid, startoftw)
-                #self.outputqueue.put("01|profiler|First TW ({}) created for profile {}.".format(twid, profileid))
+                #self.print("First TW ({}) created for profile {}.".format(twid, profileid), 0, 1)
             return twid
         except Exception as e:
-            self.outputqueue.put("01|profiler|[Profile] Error in get_timewindow().")
-            self.outputqueue.put("01|profiler|[Profile] {}".format(e))
+            self.print("[Profile] Error in get_timewindow().", 0, 1)
+            self.print("[Profile] {}".format(e), 0, 1)
 
     def run(self):
         # Main loop function
@@ -1145,12 +1147,12 @@ class ProfilerProcess(multiprocessing.Process):
             while True:
                 line = self.inputqueue.get()
                 if 'stop' == line:
-                    self.outputqueue.put("01|profiler|[Profile] Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+                    self.printt("[Profile] Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 1)
                     return True
                 else:
                     # Received new input data
                     # Extract the columns smartly
-                    self.outputqueue.put("03|profiler|[Profile] < Received Line: {}".format(line))
+                    self.print("[Profile] < Received Line: {}".format(line), 0, 3)
                     rec_lines += 1
                     if not self.input_type:
                         # Find the type of input received
@@ -1194,12 +1196,12 @@ class ProfilerProcess(multiprocessing.Process):
                         # Add the flow to the profile
                         self.add_flow_to_profile()
         except KeyboardInterrupt:
-            self.outputqueue.put("01|profiler|[Profile] Received {} lines.".format(rec_lines))
+            self.print("[Profile] Received {} lines.".format(rec_lines), 0, 1)
             return True
         except Exception as inst:
-            self.outputqueue.put("01|profiler|[Profile] Error. Stopped Profiler Process. Received {} lines".format(rec_lines))
-            self.outputqueue.put("01|profiler|\tProblem with Profiler Process.")
-            self.outputqueue.put("01|profiler|"+str(type(inst)))
-            self.outputqueue.put("01|profiler|"+str(inst.args))
-            self.outputqueue.put("01|profiler|"+str(inst))
+            self.print("[Profile] Error. Stopped Profiler Process. Received {} lines".format(rec_lines), 0, 1)
+            self.print("\tProblem with Profiler Process.", 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
             return True
