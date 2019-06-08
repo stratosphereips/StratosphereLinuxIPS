@@ -52,13 +52,6 @@ class Module(Module, multiprocessing.Process):
             except FileNotFoundError:
                 pass
         elif self.mode == 'test':
-            #try:
-            #    f = open('./modules/MLdetection1/RFscaler.bin', 'rb')
-            #    self.sc = pickle.load(f)
-            #    f.close()
-            #except FileNotFoundError:
-            #    self.print('There is no RF model stored. You need to train first with at least two different labels.')
-
             # Load the model from disk
             try:
                 f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
@@ -108,6 +101,10 @@ class Module(Module, multiprocessing.Process):
                     json_flow = mdata['flow']
                     # Convert flow to a dict
                     self.flow = json.loads(json_flow)
+                    # The dict has an empty key, just get the real flow from inside
+                    self.flow = list(self.flow.values())[0]
+                    # Reconvert
+                    self.flow = json.loads(self.flow)
                     #self.print('Flow received: {}'.format(self.flow))
                     # First process the flow to convert to pandas
                     if self.mode == 'train':
@@ -132,13 +129,15 @@ class Module(Module, multiprocessing.Process):
                         self.process_flow()
                         # Predict
                         pred = self.detect()
-                        self.print('Test Prediction of flow {}: {}'.format(json_flow, pred[0]))
+                        self.print('Test Prediction of flow {}: {}'.format(json_flow, pred[0]), 2, 0)
                     elif self.mode == 'test':
                         # Process the flow
-                        self.process_flow()
-                        # Predict
-                        pred = self.detect()
-                        self.print('Prediction of flow {}: {}'.format(json_flow, pred[0]))
+                        # If the flow is icmp, just ignore it
+                        if not 'icmp' in self.flow['proto']:
+                            self.process_flow()
+                            # Predict
+                            pred = self.detect()
+                            self.print('Prediction of flow {}: {}'.format(json_flow, pred[0]), 3, 0)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -201,6 +200,7 @@ class Module(Module, multiprocessing.Process):
         '''
         Discards some features of the dataset and can create new.
         '''
+        # For now, discard the ports
         try:
           dataset = dataset.drop('appproto', axis=1)
         except ValueError:
@@ -282,11 +282,12 @@ class Module(Module, multiprocessing.Process):
         Store the pandas df in self.flow
         """
         # Forget the timestamp that is the only key of the dict and get the content
-        json_flow = self.flow[list(self.flow.keys())[0]]
+        #json_flow = self.flow[list(self.flow.keys())[0]]
         # Convert flow to a dict
-        dict_flow = json.loads(json_flow)
+        #dict_flow = json.loads(json_flow)
         # Convert the flow to a pandas dataframe
-        raw_flow = pd.DataFrame(dict_flow, index=[0])
+        #raw_flow = pd.DataFrame(dict_flow, index=[0])
+        raw_flow = pd.DataFrame(self.flow, index=[0])
         # Process features
         dflow = self.process_features(raw_flow)
         # Update the flow to the processed version
@@ -306,7 +307,7 @@ class Module(Module, multiprocessing.Process):
             # Scale the flow
             #self.print('Scale')
             #X_flow = self.sc.transform(X_flow)
-            self.print(X_flow)
+            #self.print(X_flow)
 
             pred = self.clf.predict(X_flow)
             return pred
