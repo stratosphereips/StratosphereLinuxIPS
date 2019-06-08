@@ -1147,7 +1147,7 @@ class ProfilerProcess(multiprocessing.Process):
             while True:
                 line = self.inputqueue.get()
                 if 'stop' == line:
-                    self.printt("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 1)
+                    self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 1)
                     return True
                 else:
                     # Received new input data
