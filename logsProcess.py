@@ -305,7 +305,7 @@ class LogsProcess(multiprocessing.Process):
                 """
                 all_roles = ['Client', 'Server']
                 all_protocols = ['TCP', 'UDP', 'ICMP', 'IPV6ICMP']
-                all_states = ['Established', 'NOTEstablished']
+                all_states = ['Established', 'NotEstablished']
                 all_directions = ['Dst', 'Src']
                 type_data = 'Ports'
                 for role in all_roles:
