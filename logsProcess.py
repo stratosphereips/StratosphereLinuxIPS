@@ -185,14 +185,14 @@ class LogsProcess(multiprocessing.Process):
         Read the global data and output it on logs 
         """
         try:
-            #1. Get the list of profiles so far
+            #1. Get the list of profiles modified
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             # Get the list of all the modifed TW for all the profiles
             TWforProfile = __database__.getModifiedTWLogs()
             amount_of_modified = len(TWforProfile)
             self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {}. Modified TWs: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
-            last_profile_id = None
+            # last_profile_id = None
             description_of_malicious_ip_profile = None
             for profileTW in TWforProfile:
 
@@ -202,24 +202,20 @@ class LogsProcess(multiprocessing.Process):
                 # Get the time of this TW. For the file name
                 twtime = __database__.getTimeTW(profileid, twid)
                 twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
-                self.outputqueue.put('02|logs|\t[Logs] Storing Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime))
-                #self.outputqueue.put('30|logs|\t[Logs] Profile: {} has {} timewindows'.format(profileid, twLen))
+                self.print('\tStoring Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime), 0, 2)
+                #self.print('\tProfile: {} has {} timewindows'.format(profileid, twLen), 0, 3)
 
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
             
-                # Add the rest of data into profile log file
+                # Create the TW log file
                 twlog = twtime + '.' + twid
                 # First Erase its file and save the data again
                 self.addDataToFile(profilefolder + '/' + twlog, '', file_mode='w+', data_mode='raw')
 
-                # Save in the log file all parts of the profile
-
-                # 0. Write the profileID for people getting know what they see in the file.
+                # In the file ProfileData.txt and Write the profileID 
                 self.addDataToFile(profilefolder + '/' + twlog, 'ProfileID: {}\n'.format(profileid), file_mode='a+', data_type='text')
 
-                # 0. Is a ip of this profile stored as malicious?
-                # If it still one profile do not ask again the database for each new time_window.
                 """
                 # This should be taken out of the for of the tws
                 if last_profile_id != profileid:
@@ -300,9 +296,7 @@ class LogsProcess(multiprocessing.Process):
                         self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]), file_mode='a+', data_type='text')
                         self.outputqueue.put('03|logs|\t\t\t[Logs] {} ({})'.format(key, data[key]))
 
-                """
-                Print the port data
-                """
+                # 7. Print the port data
                 all_roles = ['Client', 'Server']
                 all_protocols = ['TCP', 'UDP', 'ICMP', 'IPV6ICMP']
                 all_states = ['Established', 'NotEstablished']
@@ -323,7 +317,7 @@ class LogsProcess(multiprocessing.Process):
                                         self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
                                         self.outputqueue.put('03|logs|\t\t\t[Logs]: ' + text_data)
 
-                # 13. Info about the evidence so far for this TW. 
+                # 8. Info about the evidence so far for this TW. 
                 evidence = __database__.getEvidenceForTW(profileid, twid)
                 if evidence:
                     evidence = json.loads(evidence)
@@ -333,7 +327,7 @@ class LogsProcess(multiprocessing.Process):
 
 
 
-                # 4. This should be last. Detections to block
+                # 9. This should be last. Detections to block
                 blocking = __database__.getBlockingRequest(profileid, twid)
                 if blocking:
                     self.addDataToFile(profilefolder + '/' + twlog, 'Was requested to block in this time window: ' + str(blocking), file_mode='a+', data_type='json')
@@ -354,17 +348,16 @@ class LogsProcess(multiprocessing.Process):
                 timeline_path = profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt'
                 if not os.path.isfile(timeline_path):
                     self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
-                for twid_tuple in tws:
-                    (twid, starttime) = twid_tuple
-                    hash_key = profileid + self.fieldseparator + twid
-                    first_index = self.timeline_first_index.get(hash_key, 0)
-                    data, first_index = __database__.get_timeline_last_lines(profileid, twid, first_index)
-                    self.timeline_first_index[hash_key] = first_index
-                    if data:
-                        #self.print('TIMELINE Profileid: {:45}, twid: {}. Line: {}'.format(profileid, twid, line))
-                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_mode='raw', data_type='lines')
+                #(twid, starttime) = twid_tuple
+                #hash_key = profileid + self.fieldseparator + twid
+                #first_index = self.timeline_first_index.get(hash_key, 0)
+                data, first_index = __database__.get_timeline_last_lines(profileid, twid, first_index)
+                #self.timeline_first_index[hash_key] = first_index
+                if data:
+                    #self.print('TIMELINE Profileid: {:45}, twid: {}. Line: {}'.format(profileid, twid, line))
+                    self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_mode='raw', data_type='lines')
 
-                last_profile_id = profileid
+                #last_profile_id = profileid
 
             # Create the file of the blocked profiles and TW
             TWforProfileBlocked = __database__.getBlockedTW()
