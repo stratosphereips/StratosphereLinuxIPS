@@ -146,8 +146,9 @@ class LogsProcess(multiprocessing.Process):
         Do not close the file
         In data_mode = 'text', we add a \n at the end
         In data_mode = 'raw', we do not add a \n at the end
-        In data_type = 'txt' we do not do anything now
+        In data_type = 'text' we do not do anything now
         In data_type = 'json' we do not do anything now, but we may interpret the json for better printing
+        In data_type = 'lines' we write all the lines together
         """
         try:
             if data_mode == 'text':
@@ -344,18 +345,19 @@ class LogsProcess(multiprocessing.Process):
                 # Get all the TW for this profile
                 tws = __database__.getTWsfromProfile(profileid)
                 ip = profileid.split('_')[1]
-
                 timeline_path = profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt'
-                if not os.path.isfile(timeline_path):
-                    self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
-                #(twid, starttime) = twid_tuple
-                #hash_key = profileid + self.fieldseparator + twid
-                #first_index = self.timeline_first_index.get(hash_key, 0)
-                data, first_index = __database__.get_timeline_last_lines(profileid, twid, first_index)
-                #self.timeline_first_index[hash_key] = first_index
-                if data:
-                    #self.print('TIMELINE Profileid: {:45}, twid: {}. Line: {}'.format(profileid, twid, line))
-                    self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_mode='raw', data_type='lines')
+                # Everytime we complete the timeline, we delete the old file and create a new one
+                self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
+
+                # If the file does not exists yet, create it
+                #if not os.path.isfile(timeline_path):
+                    #self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
+                for twid_tuple in tws:
+                    (twid, starttime) = twid_tuple
+                    data = __database__.get_timeline_all_lines(profileid, twid)
+                    if data:
+                        self.print('Adding to the profile line {} {}, datat {}'.format(profileid, twid, data))
+                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_mode='raw', data_type='lines')
 
                 #last_profile_id = profileid
 
