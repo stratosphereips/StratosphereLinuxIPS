@@ -33,7 +33,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.config = config
         self.width = width
         self.columns_defined = False
-        self.timeformat = ''
+        self.timeformat = None
         self.input_type = False
         # Read the configuration
         self.read_configuration()
@@ -97,7 +97,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.timeformat = self.config.get('timestamp', 'format')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.timeformat = '%Y/%m/%d %H:%M:%S.%f'
+            self.timeformat = None
 
         ##
         # Get the direction of analysis
@@ -205,6 +205,55 @@ class ProfilerProcess(multiprocessing.Process):
             self.print(str(inst), 0, 1)
             sys.exit(1)
 
+    def define_time_format(self, time: str) -> str:
+        time_format: str = None
+        try:
+            # Try unix timestamp in seconds.
+            datetime.fromtimestamp(float(time))
+            time_format = 'unixtimestamp'
+        except ValueError:
+            try:
+                # Try the default time format for suricata.
+                datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f%z')
+                time_format = '%Y-%m-%dT%H:%M:%S.%f%z'
+            except ValueError:
+                # Let's try the classic time format "'%Y-%m-%d %H:%M:%S.%f'"
+                try:
+                    datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
+                    time_format = '%Y-%m-%d %H:%M:%S.%f'
+                except ValueError:
+                    try:
+                        datetime.strptime(time, '%Y/%m/%d %H:%M:%S.%f')
+                        time_format = '%Y/%m/%d %H:%M:%S.%f'
+                    except ValueError:
+                        # We did not find the right time format.
+                        self.outputqueue.put("01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
+        return time_format
+
+    def get_time(self, time: str) -> datetime:
+        """
+        Take time in string and return datetime object.
+        The format of time can be completely different. It can be seconds, or dates with specific formats.
+        If user does not define the time format in configuration file, we have to try most frequent cases of time format.
+        """
+        if not self.timeformat:
+            # The time format was not defined from configuration file neither from last flows.
+            self.timeformat = self.define_time_format(time)
+
+        defined_datetime: datetime = None
+        if self.timeformat:
+            if self.timeformat == 'unixtimestamp':
+                # The format of time is in seconds.
+                defined_datetime = datetime.fromtimestamp(float(time))
+            else:
+                # The format of time is a complete date.
+                defined_datetime = datetime.strptime(time, self.timeformat)
+        else:
+            # We do not know the time format so we can not read it.
+            self.outputqueue.put(
+                "01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
+        return defined_datetime
+
     def process_zeek_input(self, line):
         """
         Process the line and extract columns for zeek
@@ -215,7 +264,7 @@ class ProfilerProcess(multiprocessing.Process):
         # We need to set it to empty at the beggining so any new flow has the key 'type'
         self.column_values['type'] = ''
         try:
-            self.column_values['starttime'] = datetime.fromtimestamp(line['ts'])
+            self.column_values['starttime'] = self.get_time(line['ts'])
         except KeyError:
             self.column_values['starttime'] = ''
         try:
@@ -469,7 +518,7 @@ class ProfilerProcess(multiprocessing.Process):
         # Read the lines fast
         nline = line.strip().split(self.separator)
         try:
-            self.column_values['starttime'] = datetime.strptime(nline[self.column_idx['starttime']], self.timeformat)
+            self.column_values['starttime'] = self.get_time(nline[self.column_idx['starttime']])
         except KeyError:
             pass
         try:
@@ -537,6 +586,70 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             pass
 
+    def process_suricata_input(self, line: str):
+        """ Read suricata json input """
+        line = json.loads(line)
+
+        self.column_values = {}
+        try:
+            self.column_values['starttime'] = self.get_time(line['timestamp'])
+        except KeyError:
+            self.column_values['starttime'] = False
+        try:
+            self.column_values['endtime'] = self.get_time(line['end'])
+        except KeyError:
+            self.column_values['endtime'] = False
+        try:
+            self.column_values['dur'] = (self.column_values['endtime'] - self.column_values['starttime']).total_seconds()
+        except (KeyError, TypeError):
+            self.column_values['dur'] = 0
+        try:
+            self.column_values['flow_id'] = line['flow_id']
+        except KeyError:
+            self.column_values['flow_id'] = False
+        try:
+            self.column_values['saddr'] = line['src_ip']
+        except KeyError:
+            self.column_values['saddr'] = False
+        try:
+            self.column_values['sport'] = line['src_port']
+        except KeyError:
+            self.column_values['sport'] = False
+        try:
+            self.column_values['daddr'] = line['dest_ip']
+        except KeyError:
+            self.column_values['daddr'] = False
+        try:
+            self.column_values['dport'] = line['dest_port']
+        except KeyError:
+            self.column_values['dport'] = False
+        try:
+            self.column_values['proto'] = line['proto']
+        except KeyError:
+            self.column_values['proto'] = False
+        try:
+            self.column_values['event_type'] = line['event_type']
+        except KeyError:
+            self.column_values['event_type'] = False
+
+        if self.column_values['event_type']:
+            """
+            event_type: 
+            -flow
+            -tls
+            -http
+            -dns
+            -alert
+            -fileinfo
+            -stats
+            """
+            if self.column_values['event_type'] == 'flow':
+                pass
+
+        #
+        # It is not finished.
+        #
+
     def add_flow_to_profile(self):
         """
         This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
@@ -556,20 +669,15 @@ class ProfilerProcess(multiprocessing.Process):
             #########
             # 1st. Get the data from the interpreted columns
             separator = __database__.getFieldSeparator()
-            # These are common to all types of flows
-            # No, older zeek has seconds instead of date.
-            try:
-                # seconds.
-                starttime = float(str(self.column_values['starttime']))
-            except ValueError:
-                # date
-                try:
-                    # This file format is very extended, but we should consider more options. Maybe we should detect the time format.
-                    date_time = datetime.strptime(str(self.column_values['starttime']), '%Y-%m-%d %H:%M:%S.%f')
-                    starttime = date_time.timestamp()
-                except ValueError as e:
-                    self.outputqueue.put("01|profiler|[Profile] We can not recognize time format.")
-                    self.outputqueue.put("01|profiler|[Profile] {}".format((type(e))))
+
+            # "self.column_values['starttime']" is for each type of input (zeek, argus, suricata)
+            # defined as <class 'datetime.datetime'> object by us.
+            if self.column_values['starttime']:
+                # Function transform datetime to seconds in UTC.
+                starttime = self.column_values['starttime'].timestamp()
+            else:
+                # We have no data about startime. It means that we did not detect it the time format.
+                self.outputqueue.put("01|profiler|[Profile] We can not recognize time format.")
 
             # This uid check is for when we read things that are not zeek
             try:
