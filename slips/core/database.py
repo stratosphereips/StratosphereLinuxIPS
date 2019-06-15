@@ -804,18 +804,22 @@ class Database(object):
         # Get the previous info already stored
         data = self.getIPData(ip)
 
-        key = next(iter(ipdata))
-        to_store = ipdata[key]
-
-        # If the key is already stored, do not modify it
-        try:
-            value = data[key]
-        except KeyError:
-            # Append the new data
-            data[key] = to_store
-            #data.update(ipdata)
-            data = json.dumps(data)
-            self.r.hset('IPsInfo', ip, data)
+        for key in iter(ipdata):
+            if type(data) == str:
+                # Convert the str to a dict
+                data = json.loads(data)
+            to_store = ipdata[key]
+            
+            # If the key is already stored, do not modify it
+            #self.print(data)
+            try:
+                value = data[key]
+            except KeyError:
+                # Append the new data
+                data[key] = to_store
+                #data.update(ipdata)
+                data = json.dumps(data)
+                self.r.hset('IPsInfo', ip, data)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
@@ -1096,7 +1100,7 @@ class Database(object):
             value = {}
             if data:
                 self.print('Key: {}. Getting info for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
-                # Convet the dictionary to json
+                # Convert the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
             elif not data:
