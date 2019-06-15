@@ -904,7 +904,7 @@ class Database(object):
 
         # Convert to json string
         data = json.dumps(data)
-        # Store in the hash 10.0.0.1_timewindow1, a key stime, with data
+        # Store in the hash 10.0.0.1_timewindow1, a key uid, with data
         value = self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
         if value:
             # The key was not there before. So this flow is not repeated
