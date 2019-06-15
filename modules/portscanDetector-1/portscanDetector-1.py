@@ -10,7 +10,7 @@ class PortScanProcess(Module, multiprocessing.Process):
     A class process to find port scans
     This should be converted into a module that wakesup alone when a new alert arrives
     """
-    name = 'PortscanDetector1'
+    name = 'portscandetector-1'
     description = 'Port scan detector to detect Horizonal and Vertical scans'
     authors = ['Sebastian Garcia']
 
