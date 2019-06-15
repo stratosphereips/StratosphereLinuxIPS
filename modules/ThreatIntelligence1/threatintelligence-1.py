@@ -9,31 +9,32 @@ import ipaddress
 import os
 import configparser
 from progress_bar import ProgressBar
-from modules.ThreatIntelligence.update_ip_manager import UpdateIPManager
+from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'threatintelligence-1'
+    name = 'threatintelligence1'
     description = 'Check if the srcIP or dstIP are in a malicious list of IPs.'
     authors = ['Frantisek Strasak']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
+        # This dictionary will hold each malicious ip to store in the db
+        self.malicious_ips_dict = {}
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         self.separator = __database__.getFieldSeparator()
         # This default path is only used in case there is no path in the configuration file
-        self.path_to_malicious_ip_folder = 'modules/ThreatIntelligence/malicious_ips_files/'
+        self.path_to_malicious_ip_folder = 'modules/ThreatIntelligence1/malicious_ips_files/'
         # Subscribe to the new_ip channel
         self.c1 = __database__.subscribe('new_ip')
         # Create the update manager. This manager takes care of the re-downloading of the list of IoC when needed.
         self.update_manager = UpdateIPManager(self.outputqueue)
-        # Update and load files containing malicious IPs.
-        self.__update_remote_malicious_file()
+        # Update the remote file containing malicious IPs.
+        #self.__update_remote_malicious_file()
+        # First load the malicious ips from the file to the DB
         self.__load_malicious_ips()
-        # This dictionary will hold each malicious ip to store in the db
-        self. malicious_ips_dict = {}
 
     def __read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -60,20 +61,22 @@ class Module(Module, multiprocessing.Process):
         self.path_to_malicious_ip_folder = self.__read_configuration('modules', 'malicious_ip_file_path')
 
         # Read all files in "modules/ThreatIntelligence/malicious_ips_files/" folder.
-        self.print('Reading malicious IPs from files in foler {}.'.format(self.path_to_malicious_ip_folder), 0, 3)
+        self.print('Loading malicious IPs from files in folder {}.'.format(self.path_to_malicious_ip_folder), 0, 3)
         if len(os.listdir(self.path_to_malicious_ip_folder)) == 0:
             # No files to read.
             self.print('There are no files in {}.'.format(self.path_to_malicious_ip_folder), 1, 0)
         else:
             for ip_file in os.listdir(self.path_to_malicious_ip_folder):
                 try:
-                    self.__load_malicious_ips_file(self.path_to_malicious_ip_folder + '/' + ip_file)
-                    self.print('\tLoading malicious IPs from file {}.', 5, 0)
+                    # Only read the files with .txt or .csv
+                    if '.txt' in ip_file or '.csv' in ip_file:
+                        self.print('\tLoading malicious IPs from file {}.'.format(ip_file), 5, 0)
+                        self.__load_malicious_ips_file(self.path_to_malicious_ip_folder + '/' + ip_file)
                 except FileNotFoundError as e:
                     self.print(e, 1, 0)
 
         # Add all loaded malicious ips to the database
-        __database__.add_add_ips_to_ioc(self.malicious_ips_dict)
+        __database__.add_ips_to_IoC(self.malicious_ips_dict)
 
     def __load_malicious_ips_file(self, malicious_ips_path: str) -> None:
         """ 
@@ -85,12 +88,12 @@ class Module(Module, multiprocessing.Process):
                 if '#' in line:
                     # '#' is a comment line, ignore
                     continue
-                ip = line.rstrip().split(',')[0]
+                ip_address = line.rstrip().split(',')[0]
                 try:
                     ip_description = line.rstrip().split(',')[1]
                 except IndexError:
                     ip_description = ''
-                self.print('\tRead IP {}: {}'.format(ip, ip_description), 6, 0)
+                self.print('\tRead IP {}: {}'.format(ip_address, ip_description), 6, 0)
 
                 # Check if ip is valid.
                 try:
@@ -105,6 +108,8 @@ class Module(Module, multiprocessing.Process):
                         self.print('The IP address {} is not valid. It was found in {}.'.format(ip_address, malicious_ips_path), 1, 1)
                         continue
 
+                # Store the ip in the dict
+                #self.print('Storing the IP {} in the DB.'.format(ip_address), 1, 0)
                 self.malicious_ips_dict[str(ip_address)] = ip_description
 
     def print(self, text, verbose=1, debug=0):
@@ -132,12 +137,15 @@ class Module(Module, multiprocessing.Process):
                 if message['channel'] == 'new_ip':
                     new_ip = message['data']
                     # Get what we know about this IP so far
-                    description = __database__.search_IP_in_IoC(new_ip)
-                    # Mark this IP as being malicious in the DB
-                    ip_data = {}
-                    ip_data['Malicious'] = 'True'
-                    ip_data['description'] = ip_description
-                    __database__.setInfoForIPs(ip, ipdata)
+                    ip_description = __database__.search_IP_in_IoC(new_ip)
+                    if ip_description:
+                        self.print('\tIs in our DB as malicious. Description {}'.format(ip_description))
+                        # Mark this IP as being malicious in the DB
+                        ip_data = {}
+                        #ip_data['Malicious'] = 'True'
+                        #ip_data['description'] = ip_description
+                        ip_data['Malicious'] = ip_description
+                        __database__.setInfoForIPs(new_ip, ip_data)
                     """
                     # Maybe store some evidence????
                     profile_id = 
