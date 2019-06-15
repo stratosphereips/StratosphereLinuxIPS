@@ -11,7 +11,7 @@ from datetime import datetime
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'Timeline'
+    name = 'timeline'
     description = 'Creates a timeline of what happened in the network based on all the flows and type of data available'
     authors = ['Sebastian Garcia']
 
