@@ -13,7 +13,7 @@ from modules.ThreatIntelligence.update_ip_manager import UpdateIPManager
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'ThreatIntelligence'
+    name = 'threatintelligence-1'
     description = 'Check if the srcIP or dstIP are in a malicious list of IPs.'
     authors = ['Frantisek Strasak']
 
