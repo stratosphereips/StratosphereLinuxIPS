@@ -10,6 +10,9 @@ import time
 import ipaddress
 import traceback
 from typing import Tuple, Dict, Set, Callable
+import os
+import binascii
+import base64
 
 
 def timing(f):
@@ -588,7 +591,9 @@ class ProfilerProcess(multiprocessing.Process):
             try:
                 uid = self.column_values['uid']
             except KeyError:
-                uid = ''
+                # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
+                # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
+                uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
             flow_type = self.column_values['type']
             saddr = self.column_values['saddr']
             daddr = self.column_values['daddr']
