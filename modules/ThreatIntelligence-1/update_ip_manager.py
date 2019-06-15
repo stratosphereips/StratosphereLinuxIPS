@@ -42,27 +42,40 @@ class UpdateIPManager:
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def __check_if_update(self, update_period: float) -> bool:
         """
         Check if user wants to update.
+        """
         """
         # Log file exists from last running of slips.
         try:
             last_update = float(__log_file_manager__.read_data(self.section_name, self.last_update_var))
         except TypeError:
             last_update = None
+        """
+        # Read the last update time from the db
+        last_update = __database__.get_last_update_time_malicious_file()
+        try:
+            last_update = float(last_update)
+        except ValueError:
+            last_update = float('-inf')
 
         now = time.time()
+
         if last_update is None:
             # We have no information about last update. Try to update.
             self.set_last_update = now
             return True
-        elif last_update + update_period < now:
+        el
+        
+        if last_update + self.update_period < now:
             # Update.
-            self.set_last_update = now
             return True
         return False
+
 
     def __check_conn(self, host: str) -> bool:
         try:
