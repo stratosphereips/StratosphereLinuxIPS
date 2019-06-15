@@ -105,13 +105,13 @@ class UpdateIPManager:
 
     def __download_malicious_ips(self) -> bool:
         # check internet connection.
-        tested_url = 'https://github.com/'
-        internet_conn = self.__check_conn(tested_url)
+        # tested_url = 'https://github.com/'
+        #internet_conn = self.__check_conn(tested_url)
 
-        if internet_conn is False:
-            self.outputqueue.put('01|ThreadIntelligence|[ThreadIntelligence] We can not connect to {}. Check your connection. Downloading of data for Threat intelligence module is aborted.'
-                                 ''.format(tested_url))
-            return False
+        #if internet_conn is False:
+        #    self.outputqueue.put('01|ThreadIntelligence|[ThreadIntelligence] We can not connect to {}. Check your connection. Downloading of data for Threat intelligence module is aborted.'
+        #                         ''.format(tested_url))
+        #    return False
 
         # Take last e-tag of our maliciou ips file.
         old_e_tag = __log_file_manager__.read_data(self.section_name, self.e_tag_var)
