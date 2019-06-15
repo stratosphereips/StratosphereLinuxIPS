@@ -98,6 +98,8 @@ class UpdateIPManager:
         # Download file from github
         try:
             urllib.request.urlretrieve(url, path)
+            # Get the time of update
+            self.new_update_time = time.time()
         except:
             self.outputqueue.put('01|ThreadInteligence|[ThreadIntelligence] An error occurred during updating Threat intelligence module.')
             return False
