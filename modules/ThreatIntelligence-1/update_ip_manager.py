@@ -42,7 +42,6 @@ class UpdateIPManager:
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
-        self.progress_bar = ProgressBar(bar_size=10, prefix="\t\t[ThreadIntelligence] Updating: ")
 
     def __check_if_update(self, update_period: float) -> bool:
         """
