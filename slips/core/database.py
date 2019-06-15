@@ -1107,6 +1107,14 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
+    def get_last_update_time_malicious_file(self):
+        """ Return the time of last update of the remote malicious file from the db """
+        return self.r.get('last_update_malicious_file')
+
+    def set_last_update_time_malicious_file(self, time):
+        """ Return the time of last update of the remote malicious file from the db """
+        self.r.set('last_update_malicious_file', time)
+
 
 
 __database__ = Database()
