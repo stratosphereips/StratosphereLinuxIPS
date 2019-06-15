@@ -20,7 +20,7 @@ warnings.warn = warn
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'MLdetection1'
+    name = 'mldetection-1'
     description = 'Module to train or test a RandomForest to detect malicious flows.'
     authors = ['Sebastian Garcia']
 
