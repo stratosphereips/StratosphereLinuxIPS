@@ -11,7 +11,7 @@ import maxminddb
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'ASN'
+    name = 'asn'
     description = 'Module to find the ASN of an IP address'
     authors = ['Sebastian Garcia']
 
