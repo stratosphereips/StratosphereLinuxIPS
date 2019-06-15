@@ -23,6 +23,8 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
+        # Set the output queue of our database instance
+        __database__.setOutputQueue(self.outputqueue)
         # Open the maminddb offline db
         try:
             self.reader = maxminddb.open_database('modules/asn/GeoLite2-ASN.mmdb')
