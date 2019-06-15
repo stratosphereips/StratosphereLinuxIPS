@@ -140,33 +140,42 @@ class UpdateIPManager:
         """
         __log_file_manager__.set_data(self.section_name, variable_name, value)
 
-    def update(self, update_period) -> bool:
 
+    def update(self, update_period) -> bool:
+        """
+        Main function. It tries to update the malicious file from a remote server
+        """
         try:
             update_period = float(update_period)
         except (TypeError, ValueError):
             # User does not want to update the malicious IP list.
-            self.outputqueue.put('01|ThreadIntelligence|\t\t[ThreadIntelligence] Updating is not alowed.')
+            self.print('\t\tNot Updating the remote file of maliciuos IPs.', 0, 1)
             return False
 
         if update_period <= 0:
             # User does not want to update the malicious IP list.
-            self.outputqueue.put('01|ThreadIntelligence|\t\t[ThreadIntelligence] Updating is not alowed.')
+            self.print('\t\tNot Updating the remote file of maliciuos IPs.', 0, 1)
             return False
 
+        # Check if the remote file is newer than our own
         if self.__check_if_update(update_period):
-            done = self.__download_malicious_ips()
-            if done:
-                self.outputqueue.put('01|ThreadIntelligence|\t\t[ThreadIntelligence] Updating was successful.')
+            if self.__download_malicious_ips():
+                self.print('\t\tSuccessful Update of remote maliciuos IP file.', 0, 1)
+                # Read the last update time from the db
+                __database__.set_last_update_time_malicious_file(self.new_update_time)
             else:
-                self.outputqueue.put(
-                    '01|ThreadIntelligence|[ThreadIntelligence] An error occured during downloading data for Threat intelligence module.'
-                    ' Updating was aborted.')
-        else:
-            self.outputqueue.put('01|ThreadIntelligence|\t\t[ThreadIntelligence] Thread Intelligence module is up to date. No downloading.')
+                self.print('An error occured during downloading data for Threat intelligence module. Updating was aborted.', 0, 1)
 
+
+        else:
+            self.print('\t\tMalicious IP is up to date. No downloading.', 0, 1)
+
+        """
         # Save e-tag and lastUpdate to log file if they are not None.
         if self.set_e_tag:
             self.__set_log_file(self.e_tag_var, str(self.set_e_tag))
         if self.set_last_update:
             self.__set_log_file(self.last_update_var, str(self.set_last_update))
+        """
+
+
