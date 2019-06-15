@@ -33,7 +33,7 @@ def test_zeek() -> bool:
     """
     Test if we can run zeek (bro).
     """
-    command = "bro --version"
+    command = "bro --version 2>&1 > /dev/null"
     ret = os.system(command)
     if ret != 0:
         print("[main] Error: Zeek (Bro) was not found. Did you set the path?")
