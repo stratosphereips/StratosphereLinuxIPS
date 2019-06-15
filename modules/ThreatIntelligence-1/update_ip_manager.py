@@ -9,13 +9,18 @@ class UpdateIPManager:
 
     def __init__(self, outputqueue):
         self.outputqueue = outputqueue
-
-        self.section_name = 'threat_inteligence_module'
-        self.e_tag_var = 'e_tag_of_last_malicious_ip_file'
-        self.last_update_var = 'threat_intelligence_ips_last_update'
-
+        # For now, read the malicious IPs from here
+        self.name = 'UpdateManager'
+        self.url_to_malicious_ips = 'https://raw.githubusercontent.com/frenky-strasak/StratosphereLinuxIPS/frenky_develop/modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt'
+        #self.path_to_thret_intelligence_data = 'modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt'
+        #self.section_name = 'threat_inteligence_module'
+        #self.e_tag_var = 'e_tag_of_last_malicious_ip_file'
+        #self.last_update_var = 'threat_intelligence_ips_last_update'
         self.set_last_update = None
         self.set_e_tag = None
+        self.new_update_time = None
+        self.read_configuration()
+
     def read_configuration(self):
         """ Read the configuration file for what we need """
         try:
