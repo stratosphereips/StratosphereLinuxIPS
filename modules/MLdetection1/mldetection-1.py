@@ -41,25 +41,6 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
         # To know when to retrain. We store the number of labels when we last retrain
         self.retrain = 0
-        # Load the models only once, depending the mode
-        if self.mode == 'train':
-            # Load the old model if there is one
-            try:
-                f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
-                self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 3,0)
-                self.clf = pickle.load(f)
-                f.close()
-            except FileNotFoundError:
-                pass
-        elif self.mode == 'test':
-            # Load the model from disk
-            try:
-                f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
-                self.clf = pickle.load(f)
-                f.close()
-            except FileNotFoundError:
-                self.print('There is no RF model stored. You need to train first with at least two different labels.')
-                return False
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -88,7 +69,29 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         try:
+            # Load the models only once, depending the mode
+            # This should be done here and not in __init__ because the python does not finish correctly then
+            if self.mode == 'train':
+                # Load the old model if there is one
+                try:
+                    f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
+                    self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 3,0)
+                    self.clf = pickle.load(f)
+                    f.close()
+                except FileNotFoundError:
+                    pass
+            elif self.mode == 'test':
+                # Load the model from disk
+                try:
+                    f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
+                    self.clf = pickle.load(f)
+                    f.close()
+                except FileNotFoundError:
+                    self.print('There is no RF model stored. You need to train first with at least two different labels.')
+                    return False
+
             while True:
+                """
                 message = self.c1.get_message(timeout=None)
                 #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
                 if message['channel'] == 'new_flow' and message['data'] != 1:
@@ -105,7 +108,7 @@ class Module(Module, multiprocessing.Process):
                     self.flow = list(self.flow.values())[0]
                     # Reconvert
                     self.flow = json.loads(self.flow)
-                    #self.print('Flow received: {}'.format(self.flow))
+                    self.print('Flow received: {}'.format(self.flow))
                     # First process the flow to convert to pandas
                     if self.mode == 'train':
                         # We are training. 
@@ -137,7 +140,8 @@ class Module(Module, multiprocessing.Process):
                             self.process_flow()
                             # Predict
                             pred = self.detect()
-                            self.print('Prediction of flow {}: {}'.format(json_flow, pred[0]), 3, 0)
+                            self.print('Prediction of flow {}: {}'.format(json_flow, pred[0]), 0, 0)
+                """
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -145,7 +149,7 @@ class Module(Module, multiprocessing.Process):
             self.print('Error in run()')
             self.print(type(inst))
             self.print(inst)
-            sys.exit(1)
+            return True
 
     def train(self):
         """ 
@@ -194,7 +198,6 @@ class Module(Module, multiprocessing.Process):
             self.print('Error in train()')
             self.print(type(inst))
             self.print(inst)
-            sys.exit(1)
 
     def process_features(self, dataset):
         '''
@@ -316,4 +319,3 @@ class Module(Module, multiprocessing.Process):
             self.print('Error in detect()')
             self.print(type(inst))
             self.print(inst)
-            sys.exit(1)
