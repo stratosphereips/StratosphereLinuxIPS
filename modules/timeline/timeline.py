@@ -35,7 +35,6 @@ class Module(Module, multiprocessing.Process):
         # Read information how we should print timestamp.
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
         # Wait a little so we give time to have something to print 
-        time.sleep(5)
 
     def read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -273,6 +272,7 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # Main loop function
+            time.sleep(5)
             while True:
                 message = self.c1.get_message(timeout=None)
                 # Check that the message is for you. Probably unnecessary...
