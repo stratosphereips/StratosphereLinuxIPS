@@ -137,7 +137,7 @@ class Module(Module, multiprocessing.Process):
                     ip_data = {}
                     ip_data['Malicious'] = 'True'
                     ip_data['description'] = ip_description
-                    __database__.setInfoForIPs(ip, ipdata):
+                    __database__.setInfoForIPs(ip, ipdata)
                     """
                     # Maybe store some evidence????
                     profile_id = 
