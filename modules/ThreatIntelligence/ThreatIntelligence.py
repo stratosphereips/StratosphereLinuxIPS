@@ -56,8 +56,6 @@ class Module(Module, multiprocessing.Process):
 
     def __load_malicious_ips(self) -> None:
         """ Load the malicious ips from all the files in a folder"""
-        
-
         # First look if a variable "malicious_ip_file_path" in slips.conf is set. If not, we have the default ready
         self.path_to_malicious_ip_folder = self.__read_configuration('modules', 'malicious_ip_file_path')
 
