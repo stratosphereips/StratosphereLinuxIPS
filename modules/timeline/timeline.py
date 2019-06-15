@@ -261,19 +261,6 @@ class Module(Module, multiprocessing.Process):
                         __database__.add_timeline_line(profileid, twid, activity, timestamp)
                     self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
-            """
-            # [THREAT INTELLIGENCE module]
-            # Is the IP of this profile malicious? If yes, store it in timeline table (however only once!).
-            if self.alerted_malicous_ips_dict.get(profileid, None) is None:
-                description = __database__.is_profile_malicious(profileid)
-                if description is not None:
-                    malicious_ip = profileid.split(self.separator)[1]
-                    activity = '[THREAT INTELLIGENCE] Malicious IP was detected! The IP: {} was found in malicious list.' \
-                               ' Description: "{}"\n'.format(malicious_ip, description)
-                    __database__.add_timeline_line(profileid, twid, activity, timestamp)
-                    self.alerted_malicous_ips_dict[profileid] = True
-            """
-
         except KeyboardInterrupt:
             return True
         except Exception as inst:
