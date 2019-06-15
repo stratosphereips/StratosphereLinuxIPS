@@ -9,8 +9,6 @@ class UpdateIPManager:
 
     def __init__(self, outputqueue):
         self.outputqueue = outputqueue
-        self.url_to_malicious_ips = 'https://raw.githubusercontent.com/frenky-strasak/StratosphereLinuxIPS/frenky_develop/modules/ThreatInteligence/malicious_ips_files/malicious_ips.txt'
-        self.path_to_thret_intelligence_data = 'modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt'
 
         self.section_name = 'threat_inteligence_module'
         self.e_tag_var = 'e_tag_of_last_malicious_ip_file'
