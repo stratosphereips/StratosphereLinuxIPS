@@ -20,6 +20,8 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
+        # Set the output queue of our database instance
+        __database__.setOutputQueue(self.outputqueue)
         # Get from the database the separator used to separate the IP and the word profile
         self.fieldseparator = __database__.getFieldSeparator()
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
