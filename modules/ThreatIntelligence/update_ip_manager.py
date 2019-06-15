@@ -18,6 +18,26 @@ class UpdateIPManager:
 
         self.set_last_update = None
         self.set_e_tag = None
+    def read_configuration(self):
+        """ Read the configuration file for what we need """
+        try:
+            self.update_period = ipaddress.ip_network(self.config.get('modules', 'malicious_ips_update_period'))
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.update_period = 86400
+
+    def print(self, text, verbose=1, debug=0):
+        """ 
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the prcocesses into account
+
+        Input
+         verbose: is the minimum verbosity level required for this text to be printed
+         debug: is the minimum debugging level required for this text to be printed
+         text: text to print. Can include format like 'Test {}'.format('here')
+        
+        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+        """
 
         self.progress_bar = ProgressBar(bar_size=10, prefix="\t\t[ThreadIntelligence] Updating: ")
 
