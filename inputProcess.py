@@ -236,7 +236,7 @@ class InputProcess(multiprocessing.Process):
                 return True
 
         except KeyboardInterrupt:
-            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".fo/mat(lines))
+            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(lines))
             try:
                 self.event_observer.stop()
                 self.event_observer.join()
