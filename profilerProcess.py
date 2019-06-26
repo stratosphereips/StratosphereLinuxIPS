@@ -234,7 +234,7 @@ class ProfilerProcess(multiprocessing.Process):
         """
         Take time in string and return datetime object.
         The format of time can be completely different. It can be seconds, or dates with specific formats.
-        If user does not define the time format in configuration file, we have to try most frequent cases of time format.
+        If user does not define the time format in configuration file, we have to try most frequent cases of time formats.
         """
         if not self.timeformat:
             # The time format was not defined from configuration file neither from last flows.
@@ -595,14 +595,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['starttime'] = self.get_time(line['timestamp'])
         except KeyError:
             self.column_values['starttime'] = False
-        try:
-            self.column_values['endtime'] = self.get_time(line['end'])
-        except KeyError:
-            self.column_values['endtime'] = False
-        try:
-            self.column_values['dur'] = (self.column_values['endtime'] - self.column_values['starttime']).total_seconds()
-        except (KeyError, TypeError):
-            self.column_values['dur'] = 0
+        self.column_values['endtime'] = False
+        self.column_values['dur'] = 0
         try:
             self.column_values['flow_id'] = line['flow_id']
         except KeyError:
@@ -628,11 +622,16 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             self.column_values['proto'] = False
         try:
-            self.column_values['event_type'] = line['event_type']
+            self.column_values['type'] = line['event_type']
         except KeyError:
-            self.column_values['event_type'] = False
+            self.column_values['type'] = False
+        self.column_values['dir'] = '->'
+        try:
+            self.column_values['appproto'] = line['app_proto']
+        except KeyError:
+            self.column_values['appproto'] = False
 
-        if self.column_values['event_type']:
+        if self.column_values['type']:
             """
             event_type: 
             -flow
@@ -641,14 +640,144 @@ class ProfilerProcess(multiprocessing.Process):
             -dns
             -alert
             -fileinfo
-            -stats
+            -stats (only one line - it is conclusion of entire capture)
             """
-            if self.column_values['event_type'] == 'flow':
-                pass
+            if self.column_values['type'] == 'flow':
+                # A suricata line of flow type usually has 2 components.
+                # 1. flow information
+                # 2. tcp information
+                if line.get('flow', None):
+                    try:
+                        # Define time again, because this is line of flow type and
+                        # we do not want timestamp but start time.
+                        self.column_values['starttime'] = self.get_time(line['flow']['start'])
+                    except KeyError:
+                        self.column_values['starttime'] = False
+                    try:
+                        self.column_values['endtime'] = self.get_time(line['flow']['end'])
+                    except KeyError:
+                        self.column_values['endtime'] = False
 
-        #
-        # It is not finished.
-        #
+                    try:
+                        self.column_values['dur'] = (
+                            self.column_values['endtime'] - self.column_values['starttime']).total_seconds()
+                    except (KeyError, TypeError):
+                        self.column_values['dur'] = 0
+                    try:
+                        self.column_values['spkts'] = line['flow']['pkts_toserver']
+                    except KeyError:
+                        self.column_values['spkts'] = 0
+                    try:
+                        self.column_values['dpkts'] = line['flow']['pkts_toclient']
+                    except KeyError:
+                        self.column_values['dpkts'] = 0
+
+                    self.column_values['pkts'] = self.column_values['dpkts'] + self.column_values['spkts']
+
+                    try:
+                        self.column_values['sbytes'] = line['flow']['bytes_toserver']
+                    except KeyError:
+                        self.column_values['sbytes'] = 0
+
+                    try:
+                        self.column_values['dbytes'] = line['flow']['bytes_toclient']
+                    except KeyError:
+                        self.column_values['dbytes'] = 0
+
+                    self.column_values['bytes'] = self.column_values['dbytes'] + self.column_values['sbytes']
+
+                    try:
+                        self.column_values['state'] = line['flow']['bytes_toclient']
+                    except KeyError:
+                        self.column_values['state'] = 0
+            elif self.column_values['type'] == 'http':
+                if line.get('http', None):
+                    try:
+                        self.column_values['method'] = line['http']['http_method']
+                    except KeyError:
+                        self.column_values['method'] = ''
+                    try:
+                        self.column_values['host'] = line['http']['hostname']
+                    except KeyError:
+                        self.column_values['host'] = ''
+                    try:
+                        self.column_values['uri'] = line['http']['url']
+                    except KeyError:
+                        self.column_values['uri'] = ''
+                    try:
+                        self.column_values['user_agent'] = line['http']['http_user_agent']
+                    except KeyError:
+                        self.column_values['user_agent'] = ''
+                    try:
+                        self.column_values['status_code'] = line['http']['status']
+                    except KeyError:
+                        self.column_values['status_code'] = ''
+
+            elif self.column_values['type'] == 'dns':
+                if line.get('dns', None):
+                    try:
+                        self.column_values['query'] = line['dns']['rdata']
+                    except KeyError:
+                        self.column_values['query'] = ''
+                    try:
+                        self.column_values['TTLs'] = line['dns']['ttl']
+                    except KeyError:
+                        self.column_values['TTLs'] = ''
+
+                    try:
+                        self.column_values['qtype_name'] = line['dns']['rrtype']
+                    except KeyError:
+                        self.column_values['qtype_name'] = ''
+
+            elif self.column_values['type'] == 'tls':
+                if line.get('tls', None):
+                    try:
+                        self.column_values['version'] = line['tls']['version']
+                    except KeyError:
+                        self.column_values['version'] = ''
+                    try:
+                        self.column_values['subject'] = line['tls']['subject']
+                    except KeyError:
+                        self.column_values['subject'] = ''
+                    try:
+                        self.column_values['issuer'] = line['tls']['issuerdn']
+                    except KeyError:
+                        self.column_values['issuer'] = ''
+                    try:
+                        self.column_values['server_name'] = line['tls']['sni']
+                    except KeyError:
+                        self.column_values['server_name'] = ''
+
+                    try:
+                        self.column_values['notbefore'] = datetime.strptime((line['tls']['notbefore']), '%Y-%m-%dT%H:%M:%S')
+                    except KeyError:
+                        self.column_values['notbefore'] = ''
+
+                    try:
+                        self.column_values['notafter'] = datetime.strptime((line['tls']['notafter']), '%Y-%m-%dT%H:%M:%S')
+                    except KeyError:
+                        self.column_values['notafter'] = ''
+            elif self.column_values['type'] == 'alert':
+                if line.get('alert', None):
+                    try:
+                        self.column_values['signature'] = line['alert']['signature']
+                    except KeyError:
+                        self.column_values['signature'] = ''
+                    try:
+                        self.column_values['category'] = line['alert']['category']
+                    except KeyError:
+                        self.column_values['category'] = ''
+                    try:
+                        self.column_values['severity'] = line['alert']['severity']
+                    except KeyError:
+                        self.column_values['severity'] = ''
+            elif self.column_values['type'] == 'fileinfo':
+                try:
+                    self.column_values['filesize'] = line['fileinfo']['size']
+                except KeyError:
+                    self.column_values['filesize'] = ''
+
+
 
     def add_flow_to_profile(self):
         """
@@ -689,7 +818,7 @@ class ProfilerProcess(multiprocessing.Process):
             daddr = self.column_values['daddr']
             profileid = 'profile' + separator + str(saddr)
 
-            if 'conn' in flow_type  or 'argus' in flow_type:
+            if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
                 dur = self.column_values['dur']
                 sport = self.column_values['sport']
                 dport = self.column_values['dport']
@@ -796,7 +925,7 @@ class ProfilerProcess(multiprocessing.Process):
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
 
-                if 'conn' in flow_type  or 'argus' in flow_type:
+                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute the symbol for this flow, for this TW, for this profile
@@ -824,7 +953,7 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
-                if 'conn' in flow_type  or 'argus' in flow_type:
+                if 'flow' in flow_type or 'conn' in flow_type  or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(saddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute symbols.
