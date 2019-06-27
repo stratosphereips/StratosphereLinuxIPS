@@ -10,6 +10,8 @@ import os
 import configparser
 from progress_bar import ProgressBar
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
+# To open the file in slices
+from itertools import islice
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -32,7 +34,7 @@ class Module(Module, multiprocessing.Process):
         # Create the update manager. This manager takes care of the re-downloading of the list of IoC when needed.
         self.update_manager = UpdateIPManager(self.outputqueue)
         # Update the remote file containing malicious IPs.
-        #self.__update_remote_malicious_file()
+        self.__update_remote_malicious_file()
         # First load the malicious ips from the file to the DB
         self.__load_malicious_ips()
 
@@ -56,7 +58,12 @@ class Module(Module, multiprocessing.Process):
         self.update_manager.update(update_period)
 
     def __load_malicious_ips(self) -> None:
-        """ Load the malicious ips from all the files in a folder"""
+        """ 
+        Load the names of malicious ips files in a folder and ask to read them into a dictionary.
+        Then load the dictionary into our DB
+
+        This is not going to the internet. Only from files to DB
+        """
         # First look if a variable "malicious_ip_file_path" in slips.conf is set. If not, we have the default ready
         self.path_to_malicious_ip_folder = self.__read_configuration('modules', 'malicious_ip_file_path')
 
@@ -80,10 +87,21 @@ class Module(Module, multiprocessing.Process):
 
     def __load_malicious_ips_file(self, malicious_ips_path: str) -> None:
         """ 
-        Read a file holding IP addresses and a description
+        Read all the files holding IP addresses and a description and put the info in a large dict.
+        This also helps in having unique ioc accross files
+        Returns nothing, but the dictionary should be filled
         """
+
+        # Internal function to load the file in slices
+        def next_n_lines(file_opened, N):
+            return [x.strip() for x in islice(file_opened, N)]
+
+        # Max num of ips per batch 7000
+        lines_read = 0
         with open(malicious_ips_path) as malicious_file:
-            self.print('Reading the file {} for IoC'.format(malicious_ips_path), 3, 0)
+            lines = next_n_lines(malicious_file, 7000)
+
+            self.print('Reading next lines in the file {} for IoC'.format(malicious_ips_path), 3, 0)
             for line in malicious_file:
                 if '#' in line:
                     # '#' is a comment line, ignore
@@ -93,7 +111,7 @@ class Module(Module, multiprocessing.Process):
                     ip_description = line.rstrip().split(',')[1]
                 except IndexError:
                     ip_description = ''
-                self.print('\tRead IP {}: {}'.format(ip_address, ip_description), 6, 0)
+                #self.print('\tRead IP {}: {}'.format(ip_address, ip_description), 6, 0)
 
                 # Check if ip is valid.
                 try:
@@ -108,9 +126,9 @@ class Module(Module, multiprocessing.Process):
                         self.print('The IP address {} is not valid. It was found in {}.'.format(ip_address, malicious_ips_path), 1, 1)
                         continue
 
-                # Store the ip in the dict
-                #self.print('Storing the IP {} in the DB.'.format(ip_address), 1, 0)
+                # Store the ip in our local dict
                 self.malicious_ips_dict[str(ip_address)] = ip_description
+                lines_read += 1
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -133,7 +151,7 @@ class Module(Module, multiprocessing.Process):
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=None)
-                # Check that the message is for you. Probably unnecessary...
+                # Check that the message is for you. 
                 if message['channel'] == 'new_ip':
                     new_ip = message['data']
                     # Get what we know about this IP so far
