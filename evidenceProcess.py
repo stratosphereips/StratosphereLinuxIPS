@@ -83,7 +83,7 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             while True:
                 # Wait for a message from the channel that a TW was modified
-                message = self.c1.get_message(timeout=None)
+                message = self.c1.get_message(timeout=-1)
                 if message['channel'] == 'evidence_added':
                     # Get the profileid and twid
                     try:
