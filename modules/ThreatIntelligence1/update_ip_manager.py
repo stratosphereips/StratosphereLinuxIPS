@@ -4,6 +4,7 @@ import urllib.request
 from log_file_manager import __log_file_manager__
 from progress_bar import ProgressBar
 from slips.core.database import __database__
+import os
 
 
 class UpdateIPManager:
@@ -15,14 +16,9 @@ class UpdateIPManager:
         self.url_to_malicious_ips = 'https://raw.githubusercontent.com/frenky-strasak/StratosphereLinuxIPS/frenky_develop/modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt'
         # This is where we are going to store it
         self.path_to_thret_intelligence_data = 'modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.txt'
-        #self.section_name = 'threat_inteligence_module'
-        #self.e_tag_var = 'e_tag_of_last_malicious_ip_file'
-        #self.last_update_var = 'threat_intelligence_ips_last_update'
-        self.set_last_update = None
-        self.set_e_tag = None
         self.old_e_tag = ''
         self.new_e_tag = ''
-        self.new_update_time = None
+        self.new_update_time = float('-inf')
         self.read_configuration()
 
     def read_configuration(self):
@@ -53,58 +49,52 @@ class UpdateIPManager:
         """
         Check if user wants to update.
         """
-        """
-        # Log file exists from last running of slips.
+        # Read the last update time
+        #last_update = __database__.get_last_update_time_malicious_file()
         try:
-            last_update = float(__log_file_manager__.read_data(self.section_name, self.last_update_var))
-        except TypeError:
-            last_update = None
-        """
-        # Read the last update time from the db
-        last_update = __database__.get_last_update_time_malicious_file()
-        try:
+            with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.time', 'r') as f:
+                last_update = f.readlines()[0]
             last_update = float(last_update)
-        except (ValueError, TypeError):
-            last_update = float('-inf')
+        except (ValueError, TypeError, FileNotFoundError, IndexError):
+            last_update = float('inf')
 
         now = time.time()
 
-        if last_update is None:
-            # We have no information about last update. Try to update.
-            self.set_last_update = now
-            return True
-        
         if last_update + self.update_period < now:
-            # Update.
+            # Update
             return True
         return False
 
 
-    def __check_conn(self, host: str) -> bool:
-        try:
-            urllib.request.urlopen(host)
-            return True
-        except:
-            return False
-
     def __get_e_tag_from_web(self) -> str:
         try:
-            request = urllib.request.Request(self.url_to_malicious_ips)
-            res = urllib.request.urlopen(request)
-            e_tag = res.info().get('Etag', None)
-            self.set_e_tag = e_tag
-        except:
-            e_tag = None
-        return e_tag
+            #request = urllib.request.Request(self.url_to_malicious_ips)
+            #res = urllib.request.urlopen(request)
+            #self.new_e_tag = res.info().get('Etag', None)
+            # We use a command in os because if we use urllib or requests the process complains!:w
+            command = 'curl -s -I https://raw.githubusercontent.com/frenky-strasak/StratosphereLinuxIPS/frenky_develop/modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt|grep -i etag'
+            temp = os.popen(command).read()
+            self.new_e_tag = temp.split()[1].split('\n')[0].replace("\"",'')
+        except Exception as inst:
+            self.print('Error with __get_e_tag_from_web()', 0, 1)
+            self.print('{}'.format(type(inst)), 0, 1)
+            self.print('{}'.format(inst), 0, 1)
 
     def __download_file(self, url: str, path: str) -> bool:
         # Download file from github
         try:
-            urllib.request.urlretrieve(url, path)
+            #urllib.request.urlretrieve(url, path)
+            # This replaces are to be sure that a user can not inject commands in curl
+            path = path.replace(';', '')
+            path = path.replace('\`', '')
+            url = url.replace(';', '')
+            url = url.replace('\`', '')
+            command = 'curl -s ' + url + ' -o ' + path
+            os.system(command)
             # Get the time of update
             self.new_update_time = time.time()
         except:
-            self.outputqueue.put('01|ThreadInteligence|[ThreadIntelligence] An error occurred during updating Threat intelligence module.')
+            self.print('An error occurred during updating Threat intelligence module.', 0, 1)
             return False
         return True
 
@@ -118,7 +108,7 @@ class UpdateIPManager:
             pass
 
         # Check now if E-TAG of file in github is same as downloaded file here.
-        self.new_e_tag = self.__get_e_tag_from_web()
+        self.__get_e_tag_from_web()
 
         if self.new_e_tag and self.old_e_tag != self.new_e_tag:
             # Our malicious file is old. Download new one.
@@ -128,11 +118,17 @@ class UpdateIPManager:
             # Take last e-tag of our maliciou ips file.
             with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.etag', 'w+') as f:
                 f.write(self.new_e_tag)
+            # Write the last we checked the update time
+            with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.time', 'w+') as f:
+                f.write(str(self.new_update_time))
             return True
         elif self.new_e_tag and self.old_e_tag == self.new_e_tag:
-            self.print('File is still the same. Not downloading the file', 3, 0)
+            self.print('File is still the same. Not downloading the file', 2, 0)
             # Store the update time like we downloaded it anyway
             self.new_update_time = time.time()
+            # Write the last we checked the update time
+            with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.time', 'w+') as f:
+                f.write(str(self.new_update_time))
             return True
         elif not self.new_e_tag:
             # Something failed. Do not download
@@ -147,24 +143,22 @@ class UpdateIPManager:
             update_period = float(update_period)
         except (TypeError, ValueError):
             # User does not want to update the malicious IP list.
-            self.print('\t\tNot Updating the remote file of maliciuos IPs.')
+            self.print('Not Updating the remote file of maliciuos IPs.')
             return False
 
         if update_period <= 0:
             # User does not want to update the malicious IP list.
-            self.print('\t\tNot Updating the remote file of maliciuos IPs.')
+            self.print('Not Updating the remote file of maliciuos IPs.')
             return False
 
         # Check if the remote file is newer than our own
         if self.__check_if_update(update_period):
             self.print('We should update the remote file')
             if self.__download_malicious_ips():
-                self.print('\t\tSuccessful Update of remote maliciuos IP file.')
-                # Read the last update time from the db
-                __database__.set_last_update_time_malicious_file(self.new_update_time)
+                self.print('Successfully Updated maliciuos IP remote file.')
             else:
                 self.print('An error occured during downloading data for Threat intelligence module. Updating was aborted.', 0, 1)
                 return False
         else:
-            self.print('\t\tMalicious IP is up to date. No downloading.')
+            self.print('Malicious IP is up to date. No downloading.')
             return False
