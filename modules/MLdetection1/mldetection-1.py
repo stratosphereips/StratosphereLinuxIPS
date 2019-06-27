@@ -12,11 +12,16 @@ import pickle
 import pandas as pd
 import json
 
+
 # This horrible hack is only to stop sklearn from printing those warnings
 def warn(*args, **kwargs):
     pass
+
+
 import warnings
+
 warnings.warn = warn
+
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -60,7 +65,7 @@ class Module(Module, multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
@@ -75,7 +80,7 @@ class Module(Module, multiprocessing.Process):
                 # Load the old model if there is one
                 try:
                     f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
-                    self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 3,0)
+                    self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 3, 0)
                     self.clf = pickle.load(f)
                     f.close()
                 except FileNotFoundError:
@@ -87,7 +92,8 @@ class Module(Module, multiprocessing.Process):
                     self.clf = pickle.load(f)
                     f.close()
                 except FileNotFoundError:
-                    self.print('There is no RF model stored. You need to train first with at least two different labels.')
+                    self.print(
+                        'There is no RF model stored. You need to train first with at least two different labels.')
                     return False
 
             while True:
@@ -164,28 +170,28 @@ class Module(Module, multiprocessing.Process):
             # Separate
             y_flow = self.flows['label']
             X_flow = self.flows.drop('label', axis=1)
-            #self.print('	X_flow without label: {}'.format(X_flow))
+            # self.print('	X_flow without label: {}'.format(X_flow))
 
-            #self.print('Scale')
-            #sc = StandardScaler()
-            #sc.fit(X_flow)
-            #X_flow = sc.transform(X_flow)
-            #self.print('	X_flow scaled: {}'.format(X_flow))
+            # self.print('Scale')
+            # sc = StandardScaler()
+            # sc.fit(X_flow)
+            # X_flow = sc.transform(X_flow)
+            # self.print('	X_flow scaled: {}'.format(X_flow))
             self.print(X_flow)
 
             self.print('Create the model')
             # Create th RF model. Warm_start is to incrementallly train with new flows inside a previously trained model.
-            #self.clf = RandomForestClassifier(n_estimators=3, criterion='entropy', random_state=1234, warm_start=True)
+            # self.clf = RandomForestClassifier(n_estimators=3, criterion='entropy', random_state=1234, warm_start=True)
             self.clf = RandomForestClassifier(n_estimators=30, criterion='entropy')
             self.clf.fit(X_flow, y_flow)
             score = self.clf.score(X_flow, y_flow)
             self.print('	Training Score: {}'.format(score))
 
             # Store the models on disk
-            #f = open('./modules/MLdetection1/RFscaler.bin', 'wb')
-            #data = pickle.dumps(sc)
-            #f.write(data)
-            #f.close()
+            # f = open('./modules/MLdetection1/RFscaler.bin', 'wb')
+            # data = pickle.dumps(sc)
+            # f.write(data)
+            # f.close()
 
             f = open('./modules/MLdetection1/RFmodel.bin', 'wb')
             data = pickle.dumps(self.clf)
@@ -205,25 +211,25 @@ class Module(Module, multiprocessing.Process):
         '''
         # For now, discard the ports
         try:
-          dataset = dataset.drop('appproto', axis=1)
+            dataset = dataset.drop('appproto', axis=1)
         except ValueError:
-          pass
+            pass
         try:
-          dataset = dataset.drop('daddr', axis=1)
+            dataset = dataset.drop('daddr', axis=1)
         except ValueError:
-          pass
+            pass
         try:
-          dataset = dataset.drop('saddr', axis=1)
+            dataset = dataset.drop('saddr', axis=1)
         except ValueError:
-          pass
+            pass
         try:
-          dataset = dataset.drop('ts', axis=1)
+            dataset = dataset.drop('ts', axis=1)
         except ValueError:
-          pass
+            pass
         try:
-          dataset = dataset.drop('origstate', axis=1)
+            dataset = dataset.drop('origstate', axis=1)
         except ValueError:
-          pass
+            pass
         # Convert state to categorical
         dataset.state = dataset.state.str.replace(r'(^.*NotEstablished.*$)', '0')
         dataset.state = dataset.state.str.replace(r'(^.*Established.*$)', '1')
@@ -235,30 +241,30 @@ class Module(Module, multiprocessing.Process):
         dataset.proto = dataset.proto.str.replace(r'(^.*icmp-ipv6.*$)', '3')
         dataset.proto = dataset.proto.astype('float64')
         try:
-          # Convert Dur to float
-          dataset.dur = dataset.dur.astype('float')
+            # Convert Dur to float
+            dataset.dur = dataset.dur.astype('float')
         except ValueError:
-          pass
+            pass
         try:
-          # Convert TotPkts to float
-          dataset.pkts = dataset.pkts.astype('float')
+            # Convert TotPkts to float
+            dataset.pkts = dataset.pkts.astype('float')
         except ValueError:
-          pass
+            pass
         try:
-          # Convert SrcPkts to float
-          dataset.spkts = dataset.spkts.astype('float')
+            # Convert SrcPkts to float
+            dataset.spkts = dataset.spkts.astype('float')
         except ValueError:
-          pass
+            pass
         try:
-          # Convert TotBytes to float
-          dataset.allbytes = dataset.allbytes.astype('float')
+            # Convert TotBytes to float
+            dataset.allbytes = dataset.allbytes.astype('float')
         except ValueError:
-          pass
+            pass
         try:
-          # Convert SrcBytes to float
-          dataset.sbytes = dataset.sbytes.astype('float')
+            # Convert SrcBytes to float
+            dataset.sbytes = dataset.sbytes.astype('float')
         except ValueError:
-          pass
+            pass
         return dataset
 
     def process_flows(self):
@@ -285,11 +291,11 @@ class Module(Module, multiprocessing.Process):
         Store the pandas df in self.flow
         """
         # Forget the timestamp that is the only key of the dict and get the content
-        #json_flow = self.flow[list(self.flow.keys())[0]]
+        # json_flow = self.flow[list(self.flow.keys())[0]]
         # Convert flow to a dict
-        #dict_flow = json.loads(json_flow)
+        # dict_flow = json.loads(json_flow)
         # Convert the flow to a pandas dataframe
-        #raw_flow = pd.DataFrame(dict_flow, index=[0])
+        # raw_flow = pd.DataFrame(dict_flow, index=[0])
         raw_flow = pd.DataFrame(self.flow, index=[0])
         # Process features
         dflow = self.process_features(raw_flow)
@@ -302,15 +308,15 @@ class Module(Module, multiprocessing.Process):
         """
         try:
             # Load the scaler and the model
-            
-            #self.print('Scale the flow')
+
+            # self.print('Scale the flow')
             # Drop the label if there is one
             y_flow = self.flow['label']
             X_flow = self.flow.drop('label', axis=1)
             # Scale the flow
-            #self.print('Scale')
-            #X_flow = self.sc.transform(X_flow)
-            #self.print(X_flow)
+            # self.print('Scale')
+            # X_flow = self.sc.transform(X_flow)
+            # self.print(X_flow)
 
             pred = self.clf.predict(X_flow)
             return pred

@@ -284,7 +284,7 @@ class Module(Module, multiprocessing.Process):
             # Main loop function
             time.sleep(10)
             while True:
-                message = self.c1.get_message(timeout=None)
+                message = self.c1.get_message(timeout=-1)
                 # Check that the message is for you. Probably unnecessary...
                 if message['channel'] == 'new_flow' and message['data'] != 1:
                     # Example of printing the number of profiles in the Database every second
