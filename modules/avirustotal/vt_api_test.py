@@ -48,37 +48,68 @@ class VTTest:
 
 
 def interpret_response(response: dict):
-    url_detections = 0
-    url_total = 0
-    if "undetected_urls" in response.keys():
-        for url in response["undetected_urls"]:
-            url_detections += url[2]
-            url_total += url[3]
-    if "detected_urls" in response.keys():
-        for url in response["detected_urls"]:
-            url_detections += url["positives"]
-            url_total += url["total"]
+    # get score [positives, total] for the URL samples that weren't detected
+    # this is the only section where samples are lists and not dicts, that's why integers are passed as keys
+    undetected_url_score = count_positives(response, "undetected_urls", 2, 3)
+    detected_url_score = count_positives(response, "detected_urls", "positives", "total")
+    url_detections = undetected_url_score[0] + detected_url_score[0]
+    url_total = undetected_url_score[1] + detected_url_score[1]
 
     if url_total:
         url_ratio = url_detections/url_total
     else:
         url_ratio = 0
 
-    down_file_detections = 0
-    down_file_total = 0
-    if "undetected_downloaded_samples" in response.keys():
-        for down_file in response["undetected_downloaded_samples"]:
-            down_file_detections += down_file["positives"]
-            down_file_total += down_file["total"]
-    if "detected_downloaded_samples" in response.keys():
-        for down_file in response["detected_downloaded_samples"]:
-            down_file_detections += down_file["positives"]
-            down_file_total += down_file["total"]
+    undetected_download_score = count_positives(response, "undetected_downloaded_samples", "positives", "total")
+    detected_download_score = count_positives(response, "detected_downloaded_samples", "positives", "total")
+    down_file_detections = undetected_download_score[0] + detected_download_score[0]
+    down_file_total = undetected_download_score[1] + detected_download_score[1]
 
     if down_file_total:
         down_file_ratio = down_file_detections/down_file_total
     else:
         down_file_ratio = 0
+
+    undetected_ref_score = count_positives(response, "undetected_referrer_samples", "positives", "total")
+    detected_ref_score = count_positives(response, "detected_referrer_samples", "positives", "total")
+    ref_file_detections = undetected_ref_score[0] + detected_ref_score[0]
+    ref_file_total = undetected_ref_score[1] + detected_ref_score[1]
+
+    if ref_file_total:
+        ref_file_ratio = ref_file_detections/ref_file_total
+    else:
+        ref_file_ratio = 0
+
+    undetected_com_score = count_positives(response, "undetected_communicating_samples", "positives", "total")
+    detected_com_score = count_positives(response, "detected_communicating_samples", "positives", "total")
+    com_file_detections = undetected_com_score[0] + detected_com_score[0]
+    com_file_total = undetected_com_score[1] + detected_com_score[1]
+
+    if com_file_total:
+        com_file_ratio = com_file_detections/com_file_total
+    else:
+        com_file_ratio = 0
+
+    return url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
+
+
+def count_positives(response, response_key, positive_key, total_key):
+    detections = 0
+    total = 0
+    if response_key in response.keys():
+        for item in response[response_key]:
+            detections += item[positive_key]
+            total += item[total_key]
+    return detections, total
+
+
+def check_ip_from_file(ip):
+    filename = ip + ".txt"
+    if filename:
+        with open(filename, 'r') as f:
+            datastore = json.load(f)
+            print(interpret_response(datastore))
+
 
 if __name__ == "__main__":
     # filename = "response_lauren.txt"
@@ -87,5 +118,7 @@ if __name__ == "__main__":
     #         datastore = json.load(f)
     #         k = 3
 
-    vt = VTTest()
-    vt.api_query("216.58.201.78")
+    # vt = VTTest()
+    # vt.api_query("216.58.201.78")
+    check_ip_from_file("216.58.201.78")  # google.com
+    check_ip_from_file("47.88.158.115")  # laurengraham.com (malicious)
