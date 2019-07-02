@@ -76,7 +76,7 @@ def process_input_file(infile, outfile, is_ips):
         with open(outfile, 'a') as o:
             lines = f.read().split("\n")
             lines.remove("")
-            vt = VirusTotalModule()
+            vt = VirusTotalModule(None, None, testing=True, keyfile="api_key")
             for l in lines:
                 try:
                     scores = get_score(vt, l)
@@ -137,24 +137,5 @@ def show_histograms(benign, malicious):
 
 
 if __name__ == "__main__":
-    # filename = "response_lauren.txt"
-    # if filename:
-    #     with open(filename, 'r') as f:
-    #         datastore = json.load(f)
-    #         k = 3
-
-    # vt = VirusTotalModule()
-    # vt.check_ip("216.58.201.78")
-    # check_ip_from_file("216.58.201.78")  # google.com
-    # check_ip_from_file("47.88.158.115")  # laurengraham.com (malicious)
-
-    # process_ips_in_file("data/malicious-ips2.txt")
-    # process_hostnames_in_file("data/hostnames")
-    # malicious_data = read_score_from_file("data/scores-malicious.txt")
-    # benign_data = read_score_from_file("data/scores-benign.txt")
-
-    # show_histograms(benign_data, malicious_data)
-
     dataset_demo("data/demo/benign_in", "data/demo/benign_out", False,
-                 "data/demo/malicious_in", "data/demo/malicious_out", True,
-                 call_api=False)
+                 "data/demo/malicious_in", "data/demo/malicious_out", True, call_api=True)
