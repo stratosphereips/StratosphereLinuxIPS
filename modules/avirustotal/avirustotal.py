@@ -18,27 +18,31 @@ class VirusTotalModule(Module, multiprocessing.Process):
     description = 'IP address lookup on VirusTotal'
     authors = ['Dita']
 
-    def __init__(self, outputqueue, config):
-        multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
-        self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for your own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
-        # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
-        # The options change, so the last list is on the slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
-        self.c1 = __database__.subscribe('new_ip')
-        print("VT", self.c1)
+    def __init__(self, outputqueue, config, testing=False, keyfile="modules/avirustotal/api_key"):
+        if testing:
+            self.print = print
+        else:
+            multiprocessing.Process.__init__(self)
+            # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
+            self.outputqueue = outputqueue
+            # In case you need to read the slips.conf configuration file for your own configurations
+            self.config = config
+            # Start the DB
+            __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
+            # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
+            # The options change, so the last list is on the slips/core/database.py file. However common options are:
+            # - new_ip
+            # - tw_modified
+            # - evidence_added
+            self.c1 = __database__.subscribe('new_ip')
+            print("VT", self.c1)
 
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
 
-        key_file = open("modules/avirustotal/api_key", "r")
+        key_file = open(keyfile, "r")
         self.key = key_file.read(64)
+        key_file.close()
 
         # dictionary of already processed subnets
         # TODO: use redis instead
