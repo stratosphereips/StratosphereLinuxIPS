@@ -80,7 +80,9 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 if message['channel'] == 'new_ip' and message["type"] == "message":
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
-                    self.print("Score of IP " + ip + " is " + str(ip_score))
+                    if is_dangerous(ip_score):
+                        print("IP address " + ip + " is suspicious (URL score " + str(ip_score[0]) + ")")
+                    # self.print("Score of IP " + ip + " is " + str(ip_score))
 
         except KeyboardInterrupt:
             return True
@@ -168,6 +170,12 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     json.dump(data, f)
 
         return response
+
+
+def is_dangerous(score):
+    if score[0] > 0.025:
+        return True
+    return False
 
 
 def interpret_response(response: dict):
