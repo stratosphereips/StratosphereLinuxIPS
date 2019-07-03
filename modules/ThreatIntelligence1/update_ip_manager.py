@@ -49,14 +49,12 @@ class UpdateIPManager:
         """
         Check if user wants to update.
         """
-        # Read the last update time
-        #last_update = __database__.get_last_update_time_malicious_file()
         try:
             with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.time', 'r') as f:
                 last_update = f.readlines()[0]
             last_update = float(last_update)
         except (ValueError, TypeError, FileNotFoundError, IndexError):
-            last_update = float('inf')
+            last_update = float('-inf')
 
         now = time.time()
 
