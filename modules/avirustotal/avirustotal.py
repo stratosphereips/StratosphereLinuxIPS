@@ -76,6 +76,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 if message['channel'] == 'new_ip' and message["type"] == "message":
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
+                    save_score_to_db(ip, ip_score)
                     if is_dangerous(ip_score):
                         print("IP address " + ip + " is suspicious (URL score " + str(ip_score[0]) + ")")
                     # self.print("Score of IP " + ip + " is " + str(ip_score))
@@ -178,6 +179,16 @@ class VirusTotalModule(Module, multiprocessing.Process):
     def put_subnet_to_db(self, subnet, score):
         data = str(score[0]) + " " + str(score[1]) + " " + str(score[2]) + " " + str(score[3])
         __database__.r.hset(self.db_hashset_name, subnet, data)
+
+
+def save_score_to_db(ip, scores):
+    vtdata = {"URL": scores[0],
+              "down_file": scores[1],
+              "ref_file": scores[2],
+              "com_file": scores[3]}
+
+    data = {"VirusTotal": vtdata}
+    __database__.setInfoForIPs(ip, data)
 
 
 def is_dangerous(score):
