@@ -20,7 +20,7 @@ To run redis you can:
 
 # Fast usage
 1. Start Redis (as a daemon or not)
-2. ./slips.py -c slips.conf -i <interface>
+2. `./slips.py -c slips.conf -i <interface>`
 3. Check the folder called with the date of today. All files are updated every 5 seconds.
 
 # Architecture of operation
@@ -73,21 +73,15 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
 
 Slips can be used by passing flows in its stdin, like this:
 
-    ```
     cat test-flows/test3.binetflow | ./slips.py -l -c slips.conf -v 2 
-    ```
 
 Or it can be told to open a certain file, like this:
 
-    ```
     ./slips.py -r test-flows/test3.binetflow -l -c slips.conf -v 2 
-    ```
 
 To read your own packets you can do:
 
-    ```
     sudo argus -i eth0 -S 5 -w - |ra -n -r -  | ./slips.py -l -v 2 -c slips.conf
-    ```
 
     Which means run argus in eth0, report flows every 5s, give them to ra, ra only prints the flows, and slips works with them.
 
