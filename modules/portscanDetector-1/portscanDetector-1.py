@@ -44,7 +44,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + text)
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def run(self):
         try:
@@ -77,8 +77,6 @@ class PortScanProcess(Module, multiprocessing.Process):
 
 
                 # Get the list of dports that we connected as client using TCP not established
-                # old data = __database__.getClientTCPNotEstablishedFromProfileTW('DstPort', profileid, twid)
-                #data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
                 direction = 'Dst'
                 state = 'NotEstablished'
                 protocol = 'TCP'
@@ -109,7 +107,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         else:
                             # Between 3 and 10 pkts compute a kind of linear grow
                             confidence = totalpkts / 10.0
-                        __database__.setEvidenceForTW(profileid, twid, type_evidence, threat_level, confidence)
+                        __database__.setEvidence(profileid, twid, type_evidence, threat_level, confidence)
                         self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
 
                     """
@@ -146,14 +144,12 @@ class PortScanProcess(Module, multiprocessing.Process):
                             confidence = pkts_sent / 10.0
                         # Description
                         description = 'New horizontal port scan detected to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
-                        __database__.setEvidenceForTW(profileid, twid, key, threat_level, confidence, description)
+                        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
                         self.print(description, 3, 0)
                         # Store in our local cache how many dips were there:
                         self.cache_det_thresholds[cache_key] = amount_of_dips
 
                 # Get the list of dstips that we connected as client using TCP not established, and their ports
-                #old data = __database__.getClientTCPNotEstablishedFromProfileTW('DstIP', profileid, twid)
-                #old data = __database__.getSrcDstPortTCPNotEstablishedFromProfileTW(profileid, twid, 'Client')
 
                 direction = 'Dst'
                 state = 'NotEstablished'
@@ -196,7 +192,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             confidence = pkts_sent / 10.0
                         # Description
                         description = 'New vertical port scan detected to IP {} from {}. Total {} dst ports. Not Estab TCP. Tot pkts sent all ports: {}'.format(dstip, profileid.split(self.fieldseparator)[1], amount_of_dports, pkts_sent, confidence)
-                        __database__.setEvidenceForTW(profileid, twid, key, threat_level, confidence, description)
+                        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
                         self.print(description, 3, 0)
                         # Store in our local cache how many dips were there:
                         self.cache_det_thresholds[cache_key] = amount_of_dports
