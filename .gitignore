@@ -4,6 +4,10 @@ __pycache__/
 *$py.class
 2019*/
 .DS_Store
+# Do not store in git the files from the IoCs that we downloaded
+malicious_ips.etag
+malicious_ips.time
+malicious_ips.txt
 
 
 *.swp
