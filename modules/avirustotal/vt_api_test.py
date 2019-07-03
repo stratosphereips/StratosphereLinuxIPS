@@ -1,3 +1,4 @@
+import configparser
 import json
 import socket
 import os
@@ -76,7 +77,7 @@ def process_input_file(infile, outfile, is_ips):
         with open(outfile, 'a') as o:
             lines = f.read().split("\n")
             lines.remove("")
-            vt = VirusTotalModule(None, None, testing=True, keyfile="api_key")
+            vt = VirusTotalModule(None, get_default_config(), testing=True, keyfile="api_key")
             for l in lines:
                 try:
                     scores = get_score(vt, l)
@@ -135,6 +136,11 @@ def show_histograms(benign, malicious):
         plt.legend(loc='upper right')
     plt.show()
 
+
+def get_default_config():
+    cfg = configparser.ConfigParser()
+    cfg.read_file(open("../../slips.conf"))
+    return cfg
 
 if __name__ == "__main__":
     dataset_demo("data/demo/benign_in", "data/demo/benign_out", False,

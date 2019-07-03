@@ -1,6 +1,4 @@
 # Must imports
-
-
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
@@ -23,19 +21,21 @@ class VirusTotalModule(Module, multiprocessing.Process):
             self.print = print
         else:
             multiprocessing.Process.__init__(self)
-            # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
-            self.outputqueue = outputqueue
-            # In case you need to read the slips.conf configuration file for your own configurations
-            self.config = config
-            # Start the DB
-            __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
-            # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
-            # The options change, so the last list is on the slips/core/database.py file. However common options are:
-            # - new_ip
-            # - tw_modified
-            # - evidence_added
-            self.c1 = __database__.subscribe('new_ip')
-            print("VT", self.c1)
+        # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
+        self.outputqueue = outputqueue
+        # In case you need to read the slips.conf configuration file for your own configurations
+        self.config = config
+        # Start the DB
+        __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
+
+        self.db_hashset_name = "virustotal-module-ipv4subnet-cache"
+        # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
+        # The options change, so the last list is on the slips/core/database.py file. However common options are:
+        # - new_ip
+        # - tw_modified
+        # - evidence_added
+        self.c1 = __database__.subscribe('new_ip')
+        print("VT", self.c1)
 
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
@@ -43,10 +43,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
         key_file = open(keyfile, "r")
         self.key = key_file.read(64)
         key_file.close()
-
-        # dictionary of already processed subnets
-        # TODO: use redis instead
-        self.known_ipv4_subnets = {}
 
         # regex to check IP version (only IPv4 can be saved at the moment)
         self.ipv4_reg = re.compile("^([0-9]{1,3}\.){3}[0-9]{1,3}$")
@@ -112,17 +108,18 @@ class VirusTotalModule(Module, multiprocessing.Process):
             ip_subnet = ip_split[0] + "." + ip_split[1] + "." + ip_split[2]
 
             # compare if the first three bytes of address match
-            if ip_subnet in self.known_ipv4_subnets:
+            cached_data = self.is_subnet_in_db(ip_subnet)
+            if cached_data:
                 # TODO: check API limit and consider doing the query anyway
                 self.print("[" + ip + "] This IP was already processed")
-                return self.known_ipv4_subnets[ip_subnet]
+                return cached_data
 
             # for unknown ipv4 address, do the query
             response = self.api_query_(ip)
 
             # save query results
             scores = interpret_response(response.json())
-            self.known_ipv4_subnets[ip_subnet] = scores
+            self.put_subnet_to_db(ip_subnet, scores)
             self.counter += 1
             return scores
 
@@ -170,6 +167,17 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     json.dump(data, f)
 
         return response
+
+    def is_subnet_in_db(self, subnet):
+        data = __database__.r.hget(self.db_hashset_name, subnet)
+        if data:
+            return list(map(float, data.split(" ")))
+        else:
+            return data  # None, the key wasn't found
+
+    def put_subnet_to_db(self, subnet, score):
+        data = str(score[0]) + " " + str(score[1]) + " " + str(score[2]) + " " + str(score[3])
+        __database__.r.hset(self.db_hashset_name, subnet, data)
 
 
 def is_dangerous(score):
