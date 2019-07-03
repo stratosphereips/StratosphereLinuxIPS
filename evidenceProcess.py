@@ -9,8 +9,9 @@ import configparser
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
     """ 
-    A class process to process the evidence from the alerts and update the threat level 
-    This should be converted into a module that wakesup alone when a new alert arrives
+    A class to process the evidence from the alerts and update the threat level 
+    It only work on evidence for IPs that were profiled
+    This should be converted into a module 
     """
     def __init__(self, inputqueue, outputqueue, config):
         self.myname = 'Evidence'
@@ -40,7 +41,7 @@ class EvidenceProcess(multiprocessing.Process):
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.myname + '|[' + self.myname + '] ' + text)
+        self.outputqueue.put(vd_text + '|' + self.myname + '|[' + self.myname + '] ' + str(text))
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -81,6 +82,7 @@ class EvidenceProcess(multiprocessing.Process):
 
     def run(self):
         try:
+            # Adapt this process to process evidence from only IPs and not profileid or twid
             while True:
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=None)
