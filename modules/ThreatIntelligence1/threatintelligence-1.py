@@ -162,26 +162,8 @@ class Module(Module, multiprocessing.Process):
                         self.print('\tIs in our DB as malicious. Description {}'.format(ip_description))
                         # Mark this IP as being malicious in the DB
                         ip_data = {}
-                        #ip_data['Malicious'] = 'True'
-                        #ip_data['description'] = ip_description
                         ip_data['Malicious'] = ip_description
                         __database__.setInfoForIPs(new_ip, ip_data)
-                    """
-                    # Maybe store some evidence????
-                    profile_id = 
-                    # Type of evidence
-                    type_evidence = 'MaliciousIP'
-                    # Key
-                    key = ???????? ':' + type_evidence
-                    # Threat level
-                    threat_level = 100
-                    # Compute the confidence
-                    confidence = 1
-                    description = 'Malicious IP {} found: {}.'.format(ip, ip_description)
-                    self.print(description, 3, 0)
-                    # Store the evidence in the DB
-                    __database__.setEvidenceForTW(profileid, twid, key, threat_level, confidence, description)
-                    """
 
         except KeyboardInterrupt:
             return True
