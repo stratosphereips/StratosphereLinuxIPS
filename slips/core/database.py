@@ -1069,7 +1069,8 @@ class Database(object):
         Store a group of IPs in the db as they were obtained from an IoC source 
         What is the format of ips_and_description?
         """
-        self.r.hmset('IoC_ips', ips_and_description)
+        if ips_and_description:
+            self.r.hmset('IoC_ips', ips_and_description)
 
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
         """
