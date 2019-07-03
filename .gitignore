@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 2019*/
+.DS_Store
 
 
 *.swp
