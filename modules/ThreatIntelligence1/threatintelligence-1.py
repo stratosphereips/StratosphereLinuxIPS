@@ -35,8 +35,6 @@ class Module(Module, multiprocessing.Process):
         self.update_manager = UpdateIPManager(self.outputqueue)
         # Update the remote file containing malicious IPs.
         self.__update_remote_malicious_file()
-        # First load the malicious ips from the file to the DB
-        self.__load_malicious_ips()
 
     def __read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -77,8 +75,9 @@ class Module(Module, multiprocessing.Process):
                 try:
                     # Only read the files with .txt or .csv
                     if '.txt' in ip_file or '.csv' in ip_file:
-                        self.print('\tLoading malicious IPs from file {}.'.format(ip_file), 5, 0)
+                        self.print('\tLoading malicious IPs from file {}.'.format(ip_file), 3, 0)
                         self.__load_malicious_ips_file(self.path_to_malicious_ip_folder + '/' + ip_file)
+                        self.print('Finished loading the IPs from {}'.format(ip_file), 3, 0)
                 except FileNotFoundError as e:
                     self.print(e, 1, 0)
 
@@ -93,13 +92,14 @@ class Module(Module, multiprocessing.Process):
         """
 
         # Internal function to load the file in slices
-        def next_n_lines(file_opened, N):
-            return [x.strip() for x in islice(file_opened, N)]
+        # The slices are needed because for some reason python 3.7.3 in macos gives error when we try to fill a dict that is too big.
+        #def next_n_lines(file_opened, N):
+            #return [x.strip() for x in islice(file_opened, N)]
 
         # Max num of ips per batch 7000
         lines_read = 0
         with open(malicious_ips_path) as malicious_file:
-            lines = next_n_lines(malicious_file, 7000)
+            #lines = next_n_lines(malicious_file, 7000)
 
             self.print('Reading next lines in the file {} for IoC'.format(malicious_ips_path), 3, 0)
             for line in malicious_file:
@@ -111,7 +111,7 @@ class Module(Module, multiprocessing.Process):
                     ip_description = line.rstrip().split(',')[1]
                 except IndexError:
                     ip_description = ''
-                #self.print('\tRead IP {}: {}'.format(ip_address, ip_description), 6, 0)
+                self.print('\tRead IP {}: {}'.format(ip_address, ip_description), 6, 0)
 
                 # Check if ip is valid.
                 try:
@@ -149,6 +149,8 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # Main loop function
+            # First load the malicious ips from the file to the DB
+            self.__load_malicious_ips()
             while True:
                 message = self.c1.get_message(timeout=None)
                 # Check that the message is for you. 
