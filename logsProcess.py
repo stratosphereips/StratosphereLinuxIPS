@@ -346,7 +346,7 @@ class LogsProcess(multiprocessing.Process):
                     (twid, starttime) = twid_tuple
                     data = __database__.get_timeline_all_lines(profileid, twid)
                     if data:
-                        self.print('Adding to the profile line {} {}, datat {}'.format(profileid, twid, data), 3, 0)
+                        self.print('Adding to the profile line {} {}, data {}'.format(profileid, twid, data), 6, 0)
                         self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_mode='raw', data_type='lines')
 
                 #last_profile_id = profileid
