@@ -86,6 +86,8 @@ class Database(object):
                 ip = profileid.split(self.separator)[1]
                 # If the ip is new add it to the list of ips
                 self.setNewIP(ip)
+                # After we stored the new, check for all of them (new or not) if we have some detections already.
+                # TODO
 
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put('00|database|Error in addProfile in database.py')
@@ -340,6 +342,32 @@ class Database(object):
             #############
             # Store the Dst as IP address and notify in the channel
             self.setNewIP(str(ip_as_obj))
+
+            #############
+            # Try to find evidence for this dst ip, in case we need to report it
+            # The idea is that here is where we check that the dst ip was already reported by some module and then we add the evidence
+            # It shoud be done here so the check is done with the data in the cache in the DB
+            if role == 'Client':
+                # After we stored the new ip, check for all of them (new or not) if we have some detections already for it. If we do, add the evidence to this profileid and twid
+                # Only if we are a client. Because if we are a server, this evidence should be stored in the profile of the client 
+                ipdata = self.getIPData(str(ip_as_obj))
+                if type(ipdata) == str:
+                    # Convert the str to a dict
+                    ipdata = json.loads(ipdata)
+                #for key in ipdata:
+                #self.print('For IP {}, data stored: {}'.format(str(ip_as_obj), ipdata))
+                # If there are detections, store the evidence.
+                if False:
+                    # Type of evidence
+                    type_evidence = 'asdf'
+                    # Key
+                    key = 'dstip' + ':' + dstip + ':' + type_evidence
+                    # Threat level
+                    threat_level = 50
+                    confidence = 1
+                    description = 'sadf'
+                    __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
 
             #############
             # 1- Count the dstips and store them
@@ -687,7 +715,7 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
-    def setEvidenceForTW(self, profileid, twid, key, threat_level, confidence, description):
+    def setEvidence(self, key, threat_level, confidence, description, profileid='', twid='',):
         """ 
         Get the evidence for this TW for this Profile 
 
@@ -705,16 +733,18 @@ class Database(object):
             'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1'] 
             'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow'] 
         }
+
+        Adapt to set the evidence of ips without profile and tw
         
         """
-        # Get the current evidence stored in the DB
+        # See if we have and get the current evidence stored in the DB fot this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
         else:
             # We never had any evidence for nothing
             current_evidence = {}
-        # We dont care if there is previous evidence or not in this key. We just change all the values.
+        # We dont care if there is previous evidence or not in this key. We just change add all the values.
         data = []
         data.append(confidence)
         data.append(threat_level)
