@@ -35,7 +35,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_ip')
-        print("VT", self.c1)
 
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
@@ -77,9 +76,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
                     save_score_to_db(ip, ip_score)
-                    if is_dangerous(ip_score):
-                        print("IP address " + ip + " is suspicious (URL score " + str(ip_score[0]) + ")")
-                    # self.print("Score of IP " + ip + " is " + str(ip_score))
+                    self.print("Score of IP " + ip + " is " + str(ip_score))
 
         except KeyboardInterrupt:
             return True
@@ -99,10 +96,12 @@ class VirusTotalModule(Module, multiprocessing.Process):
         :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
         """
 
-        # TODO whitelist
-        # TODO should private IPs be excluded?
+        # TODO should private IPs be excluded -> yes
+        # 192.168.*
+        # 10.*
+        # 172.16.* - 172.32.*
 
-        # first, look if an address from the same network was already resolved - TODO: add ipv6
+        # first, look if an address from the same network was already resolved
         if re.match(self.ipv4_reg, ip):
             # get first three bytes of address
             ip_split = ip.split(".")
@@ -125,6 +124,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
             return scores
 
         # ipv6 addresses
+        # TODO add ipv6 cache
         response = self.api_query_(ip)
         self.counter += 1
 
@@ -189,12 +189,6 @@ def save_score_to_db(ip, scores):
 
     data = {"VirusTotal": vtdata}
     __database__.setInfoForIPs(ip, data)
-
-
-def is_dangerous(score):
-    if score[0] > 0.025:
-        return True
-    return False
 
 
 def interpret_response(response: dict):
