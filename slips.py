@@ -3,22 +3,13 @@
 # See the file 'LICENSE' for copying permission.
 # Author: Sebastian Garcia. eldraco@gmail.com , sebastian.garcia@agents.fel.cvut.cz
 
-import sys
-import os
-import argparse
-import multiprocessing
-from multiprocessing import Queue
 import configparser
-from inputProcess import InputProcess
-from outputProcess import OutputProcess
-from profilerProcess import ProfilerProcess
-from cursesProcess import CursesProcess
-from logsProcess import LogsProcess
-from evidenceProcess import EvidenceProcess
-# This plugins import will automatially load the modules and put them in the __modules__ variable
-from slips.core.plugins import __modules__
+import argparse
+import sys
+import redis
+import os
 
-version = '0.6.0rc1'
+version = '0.6.1'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
@@ -27,6 +18,34 @@ def read_configuration(config, section, name):
     except (configparser.NoOptionError, configparser.NoSectionError, NameError):
         # There is a conf, but there is no option, or no section or no configuration file specified
         return False
+
+def test_redis_database(redis_host='localhost', redis_port=6379) -> str:
+    server_redis_version = None
+    try:
+        r = redis.StrictRedis(host=redis_host, port=redis_port, db=0, charset="utf-8",
+                                   decode_responses=True)
+        server_redis_version = r.execute_command('INFO')['redis_version']
+    except redis.exceptions.ConnectionError:
+        print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
+    return server_redis_version
+
+def test_zeek() -> bool:
+    """
+    Test if we can run zeek (bro).
+    """
+    command = "bro --version 2>&1 > /dev/null"
+    ret = os.system(command)
+    if ret != 0:
+        print("[main] Error: Zeek (Bro) was not found. Did you set the path?")
+        return False
+    return True
+
+def terminate_slips():
+    """
+    Do all necessary stuff to stop process any clear any files.
+    """
+    # Say something about why we ended.
+    sys.exit(-1)
 
 
 ####################
@@ -38,18 +57,15 @@ if __name__ == '__main__':
 
     # Parse the parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
     parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False) 
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
-    parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
-    parser.add_argument('-W', '--whitelist', help="File with the IP addresses to whitelist. One per line.", action='store', required=False)
     parser.add_argument('-f', '--filepath', help='Path to the flow input file to read. It can be a Argus binetflow flow, a Zeek conn.log file, or a Zeek folder with all the log files.', required=False)
     parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
-    parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the info and detections.', required=False, default=False, action='store_true')
+    parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     args = parser.parse_args()
 
@@ -63,7 +79,34 @@ if __name__ == '__main__':
     except TypeError:
         # No conf file provided
         pass
-    
+
+    # check if redis server running
+    server_redis_version = test_redis_database()
+    if not server_redis_version:
+        self.print('[!] Redis is not running.')
+        terminate_slips()
+
+    # If we need zeek (bro), test if we can run it.
+    if args.pcapfile or args.interface:
+        visible_zeek = test_zeek()
+        if not visible_zeek:
+            self.print('[!] Zeek could not be found on this system.')
+            # If we do not have access to zeek and we want to use it, kill it.
+            terminate_slips()
+
+    """
+    Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
+    """
+    from multiprocessing import Queue
+    from inputProcess import InputProcess
+    from outputProcess import OutputProcess
+    from profilerProcess import ProfilerProcess
+    from cursesProcess import CursesProcess
+    from logsProcess import LogsProcess
+    from evidenceProcess import EvidenceProcess
+    # This plugins import will automatially load the modules and put them in the __modules__ variable
+    from slips.core.plugins import __modules__
+
     # Any verbosity passed as parameter overrides the configuration. Only check its value
     if args.verbose == None:
         # Read the verbosity from the config
@@ -106,21 +149,32 @@ if __name__ == '__main__':
         print('You need to define an input source.')
         sys.exit(-1)
 
-    ##
-    # Creation of the threads
-    ##
 
-    # Output thread
-    # Create the queue for the output thread first. Later the output process is created after we defined which type of output we have
+
+    ##########################
+    # Creation of the threads
+    ##########################
+
+    # Output thread. This thread should be created first because it handles the output of the rest of the threads.
+    # Create the queue 
     outputProcessQueue = Queue()
     # Create the output thread and start it
-    # We need to tell the output process the type of output so he know if it should print in console or send the data to another process
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
-    # Main PID
+    # Print the PID of the main slips process. We do it here because we needed the queue to the output process
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid
     outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
+
+    # Start each module in the folder modules
+    outputProcessQueue.put('01|main|[main] Starting modules')
+    for module_name in __modules__:
+        to_ignore = read_configuration(config, 'modules', 'disable')
+        if not module_name in to_ignore:
+            module_class = __modules__[module_name]['obj']
+            ModuleProcess = module_class(outputProcessQueue, config)
+            ModuleProcess.start()
+            outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, __modules__[module_name]['description'], ModuleProcess.pid))
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
@@ -163,15 +217,6 @@ if __name__ == '__main__':
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter)
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
-
-    # Start each module in the folder modules
-    for module_name in __modules__:
-        to_ignore = read_configuration(config, 'modules', 'disable')
-        if not module_name in to_ignore:
-            module_class = __modules__[module_name]['obj']
-            ModuleProcess = module_class(outputProcessQueue, config)
-            ModuleProcess.start()
-            outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, __modules__[module_name]['description'], ModuleProcess.pid))
 
     profilerProcessQueue.close()
     outputProcessQueue.close()

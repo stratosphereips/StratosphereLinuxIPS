@@ -20,7 +20,7 @@ warnings.warn = warn
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'MLdetection1'
+    name = 'mldetection-1'
     description = 'Module to train or test a RandomForest to detect malicious flows.'
     authors = ['Sebastian Garcia']
 
@@ -41,32 +41,6 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
         # To know when to retrain. We store the number of labels when we last retrain
         self.retrain = 0
-        # Load the models only once, depending the mode
-        if self.mode == 'train':
-            # Load the old model if there is one
-            try:
-                f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
-                self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 3,0)
-                self.clf = pickle.load(f)
-                f.close()
-            except FileNotFoundError:
-                pass
-        elif self.mode == 'test':
-            #try:
-            #    f = open('./modules/MLdetection1/RFscaler.bin', 'rb')
-            #    self.sc = pickle.load(f)
-            #    f.close()
-            #except FileNotFoundError:
-            #    self.print('There is no RF model stored. You need to train first with at least two different labels.')
-
-            # Load the model from disk
-            try:
-                f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
-                self.clf = pickle.load(f)
-                f.close()
-            except FileNotFoundError:
-                self.print('There is no RF model stored. You need to train first with at least two different labels.')
-                return False
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -95,7 +69,29 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         try:
+            # Load the models only once, depending the mode
+            # This should be done here and not in __init__ because the python does not finish correctly then
+            if self.mode == 'train':
+                # Load the old model if there is one
+                try:
+                    f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
+                    self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 3,0)
+                    self.clf = pickle.load(f)
+                    f.close()
+                except FileNotFoundError:
+                    pass
+            elif self.mode == 'test':
+                # Load the model from disk
+                try:
+                    f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
+                    self.clf = pickle.load(f)
+                    f.close()
+                except FileNotFoundError:
+                    self.print('There is no RF model stored. You need to train first with at least two different labels.')
+                    return False
+
             while True:
+                """
                 message = self.c1.get_message(timeout=None)
                 #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
                 if message['channel'] == 'new_flow' and message['data'] != 1:
@@ -108,7 +104,11 @@ class Module(Module, multiprocessing.Process):
                     json_flow = mdata['flow']
                     # Convert flow to a dict
                     self.flow = json.loads(json_flow)
-                    #self.print('Flow received: {}'.format(self.flow))
+                    # The dict has an empty key, just get the real flow from inside
+                    self.flow = list(self.flow.values())[0]
+                    # Reconvert
+                    self.flow = json.loads(self.flow)
+                    self.print('Flow received: {}'.format(self.flow))
                     # First process the flow to convert to pandas
                     if self.mode == 'train':
                         # We are training. 
@@ -132,13 +132,16 @@ class Module(Module, multiprocessing.Process):
                         self.process_flow()
                         # Predict
                         pred = self.detect()
-                        self.print('Test Prediction of flow {}: {}'.format(json_flow, pred[0]))
+                        self.print('Test Prediction of flow {}: {}'.format(json_flow, pred[0]), 2, 0)
                     elif self.mode == 'test':
                         # Process the flow
-                        self.process_flow()
-                        # Predict
-                        pred = self.detect()
-                        self.print('Prediction of flow {}: {}'.format(json_flow, pred[0]))
+                        # If the flow is icmp, just ignore it
+                        if not 'icmp' in self.flow['proto']:
+                            self.process_flow()
+                            # Predict
+                            pred = self.detect()
+                            self.print('Prediction of flow {}: {}'.format(json_flow, pred[0]), 0, 0)
+                """
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -146,7 +149,7 @@ class Module(Module, multiprocessing.Process):
             self.print('Error in run()')
             self.print(type(inst))
             self.print(inst)
-            sys.exit(1)
+            return True
 
     def train(self):
         """ 
@@ -195,12 +198,12 @@ class Module(Module, multiprocessing.Process):
             self.print('Error in train()')
             self.print(type(inst))
             self.print(inst)
-            sys.exit(1)
 
     def process_features(self, dataset):
         '''
         Discards some features of the dataset and can create new.
         '''
+        # For now, discard the ports
         try:
           dataset = dataset.drop('appproto', axis=1)
         except ValueError:
@@ -282,11 +285,12 @@ class Module(Module, multiprocessing.Process):
         Store the pandas df in self.flow
         """
         # Forget the timestamp that is the only key of the dict and get the content
-        json_flow = self.flow[list(self.flow.keys())[0]]
+        #json_flow = self.flow[list(self.flow.keys())[0]]
         # Convert flow to a dict
-        dict_flow = json.loads(json_flow)
+        #dict_flow = json.loads(json_flow)
         # Convert the flow to a pandas dataframe
-        raw_flow = pd.DataFrame(dict_flow, index=[0])
+        #raw_flow = pd.DataFrame(dict_flow, index=[0])
+        raw_flow = pd.DataFrame(self.flow, index=[0])
         # Process features
         dflow = self.process_features(raw_flow)
         # Update the flow to the processed version
@@ -306,7 +310,7 @@ class Module(Module, multiprocessing.Process):
             # Scale the flow
             #self.print('Scale')
             #X_flow = self.sc.transform(X_flow)
-            self.print(X_flow)
+            #self.print(X_flow)
 
             pred = self.clf.predict(X_flow)
             return pred
@@ -315,4 +319,3 @@ class Module(Module, multiprocessing.Process):
             self.print('Error in detect()')
             self.print(type(inst))
             self.print(inst)
-            sys.exit(1)

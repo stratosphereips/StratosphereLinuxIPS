@@ -20,7 +20,7 @@ import ipaddress
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'GeoIP'
+    name = 'geoip'
     description = 'Module to find the Country and geolocaiton information of an IP address'
     authors = ['Sebastian Garcia']
 

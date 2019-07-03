@@ -8,6 +8,12 @@ import configparser
 from slips.core.database import __database__
 import time
 import ipaddress
+import traceback
+from typing import Tuple, Dict, Set, Callable
+import os
+import binascii
+import base64
+
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -64,7 +70,7 @@ class ProfilerProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.home_net = False
 
-        # Get the time window width, if it was not specified as a parameter 
+        # Get the time window width, if it was not specified as a parameter
         if not self.width:
             try:
                 data = self.config.get('parameters', 'time_window_width')
@@ -103,7 +109,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            # By default 
+            # By default
             self.analysis_direction = 'all'
         # Get the default label for all this flow. Used during training usually
         try:
@@ -244,7 +250,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dur'] = line['duration']
             except KeyError:
                 self.column_values['dur'] = 0
-            self.column_values['endtime'] = self.column_values['starttime'] + timedelta(self.column_values['dur'])
+            self.column_values['endtime'] = self.column_values['starttime'] + timedelta(seconds=self.column_values['dur'])
             self.column_values['proto'] = line['proto']
             try:
                 self.column_values['appproto'] = line['service']
@@ -545,7 +551,7 @@ class ProfilerProcess(multiprocessing.Process):
 
     def add_flow_to_profile(self):
         """ 
-        This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system. 
+        This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each colum 
         """
@@ -563,12 +569,31 @@ class ProfilerProcess(multiprocessing.Process):
             # 1st. Get the data from the interpreted columns
             separator = __database__.getFieldSeparator()
             # These are common to all types of flows
-            starttime = time.mktime(self.column_values['starttime'].timetuple())
+            # No, older zeek has seconds instead of date.
+            try:
+                # seconds.
+                starttime = float(str(self.column_values['starttime']))
+            except ValueError:
+                # date
+                try:
+                    # This file format is very extended, but we should consider more options. Maybe we should detect the time format.
+                    # Some times if there is no microseconds, the datatime object just give us '2018-12-18 14:00:00' instead of '2018-12-18 14:00:00.000000' so the format fails
+                    try:
+                        date_time = datetime.strptime(str(self.column_values['starttime']), '%Y-%m-%d %H:%M:%S.%f')
+                    except ValueError:
+                        date_time = datetime.strptime(str(self.column_values['starttime']) + '.000000', '%Y-%m-%d %H:%M:%S.%f')
+                    starttime = date_time.timestamp()
+                except ValueError as e:
+                    self.print("We can not recognize time format.", 0, 1)
+                    self.print("{}".format((type(e))), 0, 1)
+
             # This uid check is for when we read things that are not zeek
             try:
                 uid = self.column_values['uid']
             except KeyError:
-                uid = ''
+                # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
+                # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
+                uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
             flow_type = self.column_values['type']
             saddr = self.column_values['saddr']
             daddr = self.column_values['daddr']
@@ -601,14 +626,14 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Create the objects of IPs
             try:
-                saddr_as_obj = ipaddress.IPv4Address(saddr) 
-                daddr_as_obj = ipaddress.IPv4Address(daddr) 
+                saddr_as_obj = ipaddress.IPv4Address(saddr)
+                daddr_as_obj = ipaddress.IPv4Address(daddr)
                 # Is ipv4
             except ipaddress.AddressValueError:
                 # Is it ipv6?
                 try:
-                    saddr_as_obj = ipaddress.IPv6Address(saddr) 
-                    daddr_as_obj = ipaddress.IPv6Address(daddr) 
+                    saddr_as_obj = ipaddress.IPv6Address(saddr)
+                    daddr_as_obj = ipaddress.IPv6Address(daddr)
                 except ipaddress.AddressValueError:
                     # Its a mac
                     return False
@@ -622,8 +647,8 @@ class ProfilerProcess(multiprocessing.Process):
                 # Its in our Home network
 
                 # The steps for adding a flow in a profile should be
-                # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
-                # The width is unique for all the timewindow in this profile. 
+                # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
+                # The width is unique for all the timewindow in this profile.
                 # Also we only need to pass the width for registration in the DB. Nothing operational
                 __database__.addProfile(profileid, starttime, self.width)
 
@@ -635,14 +660,14 @@ class ProfilerProcess(multiprocessing.Process):
 
                 # Check that the dst IP is in our home net. Like the flow is 'going' to it.
                 if daddr_as_obj in self.home_net:
-                    self.outputqueue.put("07|profiler|[Profiler] Flow with dstip in homenet: srcip {}, dstip {}".format(saddr_as_obj, daddr_as_obj))
+                    self.print("Flow with dstip in homenet: srcip {}, dstip {}".format(saddr_as_obj, daddr_as_obj), 0, 7)
                     # The dst ip is in the home net. So register this as going to it
                     # 1. Get the profile of the dst ip.
                     rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
                     if not rev_profileid:
                         # We do not have yet the profile of the dst ip that is in our home net
-                        self.outputqueue.put("07|profiler|[Profiler] The dstip profile was not here... create")
-                        # Create a reverse profileid for managing the data going to the dstip. 
+                        self.print("The dstip profile was not here... create", 0, 7)
+                        # Create a reverse profileid for managing the data going to the dstip.
                         # With the rev_profileid we can now work with data in relation to the dst ip
                         rev_profileid = 'profile' + separator + str(daddr_as_obj)
                         __database__.addProfile(rev_profileid, starttime, self.width)
@@ -653,7 +678,7 @@ class ProfilerProcess(multiprocessing.Process):
                         if not rev_profileid:
                             # Too many errors. We should not be here
                             return False
-                    self.outputqueue.put("07|profiler|[Profile] Profile for dstip {} : {}".format(daddr_as_obj, profileid))
+                    self.print("Profile for dstip {} : {}".format(daddr_as_obj, profileid), 0, 7)
                     # 2. For this profile, find the id in the databse of the tw where the flow belongs.
                     rev_twid = self.get_timewindow(starttime, profileid)
                 elif daddr_as_obj not in self.home_net:
@@ -662,7 +687,7 @@ class ProfilerProcess(multiprocessing.Process):
             elif not self.home_net:
                 # We don't have a home net, so create profiles for everyone
 
-                # Add the profile for the srcip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with. 
+                # Add the profile for the srcip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
                 __database__.addProfile(profileid, starttime, self.width)
                 # Add the profile for the dstip to the DB. If it already exists, nothing happens. So now rev_profileid is the id of the profile to work with. 
                 rev_profileid = 'profile' + separator + str(daddr_as_obj)
@@ -680,21 +705,23 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
+                role = 'Client'
                 if 'conn' in flow_type  or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute the symbol for this flow, for this TW, for this profile
-                    # FIX
-                    symbol = ('a', '2019-01-26--13:31:09', 1)
-
+                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
+                    # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
                     # Add the out tuple
-                    __database__.add_out_tuple(profileid, twid, tupleid, symbol)
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role)
                     # Add the dstip
-                    __database__.add_out_dstips(profileid, twid, daddr_as_obj, state, pkts, proto, dport)
+                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, role)
                     # Add the dstport
-                    __database__.add_out_dstport(profileid, twid, dport, allbytes, sbytes, pkts, spkts, state, proto, daddr_as_obj)
+                    port_type = 'Dst'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the srcport
-                    __database__.add_out_srcport(profileid, twid, sport)
+                    port_type = 'Src'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
                 elif 'dns' in flow_type:
@@ -708,27 +735,29 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
+                role = 'Server'
                 if 'conn' in flow_type  or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(saddr_as_obj) + ':' + sport + ':' + columns['proto']
                     # Compute symbols.
-                    symbol = ('a', '2019-01-26--13:31:09', 1)
-
+                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
                     # Add the src tuple
-                    __database__.add_in_tuple(profileid, tw, tupleid, symbol)
+                    __database__.add_tuple(profile, twid, tupleid, symbol, role)
                     # Add the srcip
-                    __database__.add_in_srcips(profileid, twid, saddr_as_obj)
+                    __database__.add_ips(profile, twid, saddr_as_obj, self.column_values, role)
                     # Add the dstport
-                    __database__.add_in_dstport(profileid, twid, dport)
+                    port_type = 'Dst'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the srcport
-                    __database__.add_in_srcport(profileid, twid, sport)
+                    port_type = 'Src'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, label=self.label)
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
 
             ##########################################
             # 5th. Store the data according to the paremeters
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
-            self.outputqueue.put("07|profiler|[Profiler] Storing data in the profile: {}".format(profileid))
+            self.print("Storing data in the profile: {}".format(profileid), 0, 7)
 
             # In which analysis mode are we?
             # Mode 'out'
@@ -740,7 +769,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Mode 'all'
             elif self.analysis_direction == 'all':
-                # Take care of both the stuff going out and in. In case the profile is for the srcip and for the dstip 
+                # Take care of both the stuff going out and in. In case the profile is for the srcip and for the dstip
                 if not self.home_net:
                     # If we don't have a home net, just try to store everything coming OUT and IN to the IP
                     # Out features
@@ -764,19 +793,21 @@ class ProfilerProcess(multiprocessing.Process):
                         store_features_going_in(rev_profileid, rev_twid)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
-            self.outputqueue.put("01|profiler|[Profile] Error in add_flow_to_profile profilerProcess.")
-            self.outputqueue.put("01|profiler|[Profile] {}".format((type(inst))))
-            self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
+            self.print("Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
+            self.print("{}".format((type(inst))), 0, 1)
+            self.print("{}".format(inst), 0, 1)
 
-    def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size):
-        """ 
+    def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size, tuple_key: str):
+        """
         This function computes the new symbol for the tuple according to the original stratosphere ips model of letters
         Here we do not apply any detection model, we just create the letters as one more feature
+        current_time is the starttime of the flow
         """
         try:
             current_duration = float(current_duration)
             current_size = int(current_size)
-            self.outputqueue.put("01|profiler|[Profile] Starting compute symbol. Tupleid {}, time:{} ({}), dur:{}, size:{}".format(tupleid, current_time, type(current_time), current_duration, current_size))
+            now_ts = float(current_time)
+            self.print("Starting compute symbol. Tupleid {}, time:{} ({}), dur:{}, size:{}".format(tupleid, current_time, type(current_time), current_duration, current_size), 0, 8)
             # Variables for computing the symbol of each tuple
             T2 = False
             TD = False
@@ -794,52 +825,62 @@ class ProfilerProcess(multiprocessing.Process):
             symbol = ''
             timechar = ''
 
-            # Get T1 (the time diff between the past flow and the past-past flow) from this tuple. T1 is a float in the db. Also get the time of the last flow in this tuple. In the DB prev time is a str
-            (T1, previous_time) = __database__.getT2ForProfileTW(profileid, twid, tupleid)
+            # Get the time of the last flow in this tuple, and the last last
+            # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
+            (last_last_ts, last_ts) = __database__.getT2ForProfileTW(profileid, twid, tupleid, tuple_key)
+
+
             ## BE SURE THAT HERE WE RECEIVE THE PROPER DATA
             #T1 = timedelta(seconds=10)
             #previous_time = datetime.now() - timedelta(seconds=3600)
-            self.outputqueue.put("01|profiler|[Profile] T1:{}, previous_time:{}".format(T1, previous_time))
 
-
-            def compute_periodicity():
+            def compute_periodicity(now_ts: float, last_ts: float, last_last_ts: float):
                 """ Function to compute the periodicity """
-                # If either T1 or T2 are False
-                #if (isinstance(T1, bool) and T1 == False) or (isinstance(T2, bool) and T2 == False):
-                if T1 == False or T2 == False:
-                    periodicity = -1
-                elif T2 >= tto:
-                    t2_in_hours = T2.total_seconds() / tto.total_seconds()
-                    # Should be int always
-                    for i in range(int(t2_in_hours)):
-                        # Add the 0000 to the symbol object
-                        symbol += '0'
-                # Why to recompute the 0000 with T1 again??? this should have been done when processing the previous flow
-                #elif T1 >= tto:
-                    #t1_in_hours = T1.total_seconds() / tto.total_seconds()
-                    ## Should be int always
-                    #for i in range(int(t1_in_hours)):
-                        #state += '0'
-                if not isinstance(T1, bool) and not isinstance(T2, bool):
+                zeros = ''
+                if last_last_ts is False or last_ts is False:
+                    TD = -1
+                else:
+                    # Time diff between the past flow and the past-past flow.
+                    T1 = last_ts - last_last_ts
+                    # Time diff between the current flow and the past flow.
+                    # We already computed this before, but we can do it here again just in case
+                    T2 = now_ts - last_ts
+                    
+                    # We have a time out of 1hs. After that, put 1 number 0 for each hs
+                    # It should not happen that we also check T1... right?
+                    if T2 >= tto.total_seconds():
+                        t2_in_hours = T2 / tto.total_seconds()
+                        # Shoud round it. Because we need the time to pass to really count it
+                        # For example:
+                        # 7100 / 3600 =~ 1.972  ->  int(1.972) = 1
+                        for i in range(int(t2_in_hours)):
+                            # Add the zeros to the symbol object
+                            zeros += '0'
+
+                    # Compute TD
                     try:
                         if T2 >= T1:
-                            TD = timedelta(seconds=(T2.total_seconds() / T1.total_seconds())).total_seconds()
+                            TD = T2 / T1
                         else:
-                            TD = timedelta(seconds=(T1.total_seconds() / T2.total_seconds())).total_seconds()
+                            TD = T1 / T2
                     except ZeroDivisionError:
                         TD = 1
+
                     # Decide the periodic based on TD and the thresholds
                     if TD <= tt1:
                         # Strongly periodicity
-                        return 1
-                    elif TD < tt2:
+                        TD = 1
+                    elif TD <= tt2:
                         # Weakly periodicity
-                        return 2
-                    elif TD < tt3:
+                        TD = 2
+                    elif TD <= tt3:
                         # Weakly not periodicity
-                        return 3
-                    else:
-                        return 4
+                        TD = 3
+                    elif TD > tt3:
+                        # Strongly not periodicity
+                        TD = 4
+
+                return TD, zeros
 
             def compute_duration():
                 """ Function to compute letter of the duration """
@@ -975,57 +1016,56 @@ class ProfilerProcess(multiprocessing.Process):
             def compute_timechar():
                 """ Function to compute the timechar """
                 if not isinstance(T2, bool):
-                    if T2 <= timedelta(seconds=5):
-                        return  '.'
-                    elif T2 <= timedelta(seconds=60):
+                    if T2 <= timedelta(seconds=5).total_seconds():
+                        return '.'
+                    elif T2 <= timedelta(seconds=60).total_seconds():
                         return ','
-                    elif T2 <= timedelta(seconds=300):
+                    elif T2 <= timedelta(seconds=300).total_seconds():
                         return '+'
-                    elif T2 <= timedelta(seconds=3600):
+                    elif T2 <= timedelta(seconds=3600).total_seconds():
                         return '*'
+                    else:
+                        # Changed from 0 to ''
+                        return ''
 
             # Here begins the function's code
             try:
                 # Update value of T2
-                T2 = current_time - previous_time
+                T2 = now_ts - last_ts
                 # Are flows sorted?
-                if T2.total_seconds() < 0:
+                if T2 < 0:
                     # Flows are not sorted!
                     # What is going on here when the flows are not ordered?? Are we losing flows?
                     # Put a warning
-                    pass
+                    self.print("Warning: Coming flows are not sorted -> Some time diff are less than zero.", 0, 1)
             except TypeError:
                 T2 = False
-            self.outputqueue.put("01|profiler|[Profile] T2:{}".format(T2))
+            # self.print("T2:{}".format(T2), 0, 1)
 
             # Compute the rest
-            periodicity = compute_periodicity()
-            self.outputqueue.put("01|profiler|[Profile] Periodicity:{}".format(periodicity))
+            periodicity, zeros = compute_periodicity(now_ts, last_ts, last_last_ts)
             duration = compute_duration()
-            self.outputqueue.put("01|profiler|[Profile] Duration:{}".format(duration))
+            # self.print("Duration: {}".format(duration), 0, 1)
             size = compute_size()
-            self.outputqueue.put("01|profiler|[Profile] Size:{}".format(size))
+            # self.print("Size: {}".format(size), 0, 1)
             letter = compute_letter()
-            self.outputqueue.put("01|profiler|[Profile] Letter:{}".format(letter))
+            # self.print("Letter: {}".format(letter), 0, 1)
             timechar = compute_timechar()
-            self.outputqueue.put("01|profiler|[Profile] TimeChar:{}".format(timechar))
+            # self.print("TimeChar: {}".format(timechar), 0, 1)
+            self.print("Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(periodicity, duration, size, letter, timechar), 0, 5)
 
-            symbol = letter + timechar
-            T1 = T1.total_seconds()
-            current_time = current_time.strftime(self.timeformat)
-            self.outputqueue.put("01|profiler|[Profile] To Store. symbol: {}, current_time: {}, T1: {} ({})".format(symbol, current_time, T1, type(T1)))
+            symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
-            return (symbol, str(current_time), T1)
-            # End of the compute_symbol function
+            return symbol, (last_ts, now_ts)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
-            self.outputqueue.put("01|profiler|[Profile] Error in compute_symbol in profilerProcess.")
-            self.outputqueue.put("01|profiler|[Profile] {}".format(type(inst)))
-            self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
-
+            self.print("Error in compute_symbol in profilerProcess.", 0, 1)
+            self.print("{}".format(type(inst)), 0, 1)
+            self.print("{}".format(inst), 0, 1)
+            self.print("{}".format(traceback.format_exc()), 0, 1)
 
     def get_timewindow(self, flowtime, profileid):
-        """" 
+        """"
         This function should get the id of the TW in the database where the flow belong.
         If the TW is not there, we create as many tw as necessary in the future or past until we get the correct TW for this flow.
         - We use this function to avoid retrieving all the data from the DB for the complete profile. We use a separate table for the TW per profile.
@@ -1044,23 +1084,23 @@ class ProfilerProcess(multiprocessing.Process):
                 self.print('The last TW id for profile {} was {}. Start:{}. End: {}'.format(profileid, lasttwid, lasttw_start_time, lasttw_end_time), 0, 4)
                 # There was a last TW, so check if the current flow belongs here.
                 if lasttw_end_time > flowtime and lasttw_start_time <= flowtime:
-                    self.outputqueue.put("04|profiler|[Profiler] The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time))
+                    self.print("The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time), 0, 4)
                     twid = lasttwid
                 elif lasttw_end_time <= flowtime:
                     # The flow was not in the last TW, its NEWER than it
-                    self.outputqueue.put("04|profiler|[Profiler] The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time))
+                    self.print("The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time), 0, 4)
                     amount_of_new_tw = int((flowtime - lasttw_end_time) / self.width)
-                    self.outputqueue.put("04|profiler|[Profiler] We have to create {} empty TWs in the midle.".format(amount_of_new_tw))
+                    self.print("We have to create {} empty TWs in the midle.".format(amount_of_new_tw), 0, 4)
                     temp_end = lasttw_end_time
                     for id in range(0, amount_of_new_tw + 1):
-                        new_start = temp_end 
+                        new_start = temp_end
                         twid = __database__.addNewTW(profileid, new_start)
-                        self.outputqueue.put("04|profiler|[Profiler] Creating the TW id {}. Start: {}.".format(twid, new_start))
+                        self.print("Creating the TW id {}. Start: {}.".format(twid, new_start), 0, 4)
                         temp_end = new_start + self.width
                     # Now get the id of the last TW so we can return it
                 elif lasttw_start_time > flowtime:
                     # The flow was not in the last TW, its OLDER that it
-                    self.outputqueue.put("04|profiler|[Profiler] The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time))
+                    self.print("The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time), 0, 4)
                     # Find out if we already have this TW in the past
                     data = __database__.getTWforScore(profileid, flowtime)
                     if data:
@@ -1076,7 +1116,7 @@ class ProfilerProcess(multiprocessing.Process):
                         amount_of_current_tw = __database__.getamountTWsfromProfile(profileid)
                         # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
-                        self.outputqueue.put("05|profiler|[Profiler] We need to create {} TW before the first".format(diff + 1))
+                        self.print("We need to create {} TW before the first".format(diff + 1), 0, 5)
                         # Get the first TW
                         [(firsttwid, firsttw_start_time)] = __database__.getFirstTWforProfile(profileid)
                         firsttw_start_time = float(firsttw_start_time)
@@ -1086,7 +1126,7 @@ class ProfilerProcess(multiprocessing.Process):
                             new_start = temp_start
                             # The method to add an older TW is the same as to add a new one, just the starttime changes
                             twid = __database__.addNewOlderTW(profileid, new_start)
-                            self.outputqueue.put("02|profiler|[Profiler] Creating the new older TW id {}. Start: {}.".format(twid, new_start))
+                            self.print("Creating the new older TW id {}. Start: {}.".format(twid, new_start), 0, 2)
                             temp_start = new_start - self.width
             except ValueError:
                 # There is no last tw. So create the first TW
@@ -1099,11 +1139,11 @@ class ProfilerProcess(multiprocessing.Process):
                     startoftw = float(flowtime)
                 # Add this TW, of this profile, to the DB
                 twid = __database__.addNewTW(profileid, startoftw)
-                #self.outputqueue.put("01|profiler|First TW ({}) created for profile {}.".format(twid, profileid))
+                #self.print("First TW ({}) created for profile {}.".format(twid, profileid), 0, 1)
             return twid
         except Exception as e:
-            self.outputqueue.put("01|profiler|[Profile] Error in get_timewindow().")
-            self.outputqueue.put("01|profiler|[Profile] {}".format(e))
+            self.print("Error in get_timewindow().", 0, 1)
+            self.print("{}".format(e), 0, 1)
 
     def run(self):
         # Main loop function
@@ -1112,12 +1152,12 @@ class ProfilerProcess(multiprocessing.Process):
             while True:
                 line = self.inputqueue.get()
                 if 'stop' == line:
-                    self.outputqueue.put("01|profiler|[Profile] Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+                    self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 1)
                     return True
                 else:
                     # Received new input data
                     # Extract the columns smartly
-                    self.outputqueue.put("03|profiler|[Profile] < Received Line: {}".format(line))
+                    self.print("< Received Line: {}".format(line), 0, 3)
                     rec_lines += 1
                     if not self.input_type:
                         # Find the type of input received
@@ -1137,8 +1177,8 @@ class ProfilerProcess(multiprocessing.Process):
                         # Argus puts the definition of the columns on the first line only
                         # So read the first line and define the columns
 
-                        # Are the columns defined?
                         try:
+                            # Are the columns defined? Just try to access them
                             temp = self.column_idx['starttime']
                             # Yes
                             # Quickly process all lines
@@ -1161,12 +1201,12 @@ class ProfilerProcess(multiprocessing.Process):
                         # Add the flow to the profile
                         self.add_flow_to_profile()
         except KeyboardInterrupt:
-            self.outputqueue.put("01|profiler|[Profile] Received {} lines.".format(rec_lines))
+            self.print("Received {} lines.".format(rec_lines), 0, 1)
             return True
         except Exception as inst:
-            self.outputqueue.put("01|profiler|[Profile] Error. Stopped Profiler Process. Received {} lines".format(rec_lines))
-            self.outputqueue.put("01|profiler|\tProblem with Profiler Process.")
-            self.outputqueue.put("01|profiler|"+str(type(inst)))
-            self.outputqueue.put("01|profiler|"+str(inst.args))
-            self.outputqueue.put("01|profiler|"+str(inst))
+            self.print("Error. Stopped Profiler Process. Received {} lines".format(rec_lines), 0, 1)
+            self.print("\tProblem with Profiler Process.", 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
             return True
