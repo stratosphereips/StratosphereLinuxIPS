@@ -18,7 +18,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, config, testing=False, keyfile="modules/avirustotal/api_key"):
         if testing:
-            self.print = print
+            self.print = self.testing_print
         else:
             multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
@@ -65,6 +65,17 @@ class VirusTotalModule(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def testing_print(self, text, verbose=1, debug=0):
+        """
+        Printing function that will be used automatically by the module, in case it is run in testing mode
+        (without SLIPS and outputprocess). 
+        :param text: String to print
+        :param verbose: ignored parameter
+        :param debug: ignored parameter
+        :return: None
+        """
+        print(text)
+
     def run(self):
         try:
             # Main loop function
@@ -76,7 +87,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
                     save_score_to_db(ip, ip_score)
-                    self.print("[" + ip + "] has score " + str(ip_score))
+                    self.print("[" + ip + "] has score " + str(ip_score), verbose=5, debug=1)
 
         except KeyboardInterrupt:
             return True
@@ -103,14 +114,14 @@ class VirusTotalModule(Module, multiprocessing.Process):
             ip_subnet = ip_split[0] + "." + ip_split[1] + "." + ip_split[2]
 
             if not is_ipv4_public(ip_split):
-                self.print("[" + ip + "] is private, skipping")
+                self.print("[" + ip + "] is private, skipping", verbose=5, debug=1)
                 return 0, 0, 0, 0
 
             # compare if the first three bytes of address match
             cached_data = self.is_subnet_in_db(ip_subnet)
             if cached_data:
                 # TODO: check API limit and consider doing the query anyway
-                self.print("[" + ip + "] This IP was already processed")
+                self.print("[" + ip + "] This IP was already processed", verbose=5, debug=1)
                 return cached_data
 
             # for unknown ipv4 address, do the query
@@ -153,7 +164,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
             # report that API limit is reached, wait one minute and try again
             self.print("Status code is " + str(response.status_code) + " at " + str(time.time()) + ", query id: " + str(
-                self.counter))
+                self.counter), verbose=5, debug=1)
             time.sleep(60)
             response = requests.get(self.url, params=params)
 
