@@ -246,13 +246,243 @@ class ProfilerProcess(multiprocessing.Process):
                 # The format of time is in seconds.
                 defined_datetime = datetime.fromtimestamp(float(time))
             else:
-                # The format of time is a complete date.
-                defined_datetime = datetime.strptime(time, self.timeformat)
+                try:
+                    # The format of time is a complete date.
+                    defined_datetime = datetime.strptime(time, self.timeformat)
+                except ValueError:
+                    defined_datetime = None
         else:
             # We do not know the time format so we can not read it.
             self.outputqueue.put(
                 "01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
         return defined_datetime
+
+    def process_zeek_tabs_input(self, line: str) -> None:
+        """
+        Process the tab line from zeek.
+        """
+        line: str = line.rstrip()
+        line: list = line.split('\t')
+
+        # Generic fields in Zeek
+        self.column_values: dict = {}
+        # We need to set it to empty at the beginning so any new flow has the key 'type'
+        self.column_values['type'] = ''
+        try:
+            self.column_values['starttime'] = self.get_time(line[0])
+        except KeyError:
+            self.column_values['starttime'] = ''
+        try:
+            self.column_values['uid'] = line[1]
+        except KeyError:
+            self.column_values['uid'] = False
+        try:
+            self.column_values['saddr'] = line[2]
+        except KeyError:
+            self.column_values['saddr'] = ''
+        try:
+            self.column_values['daddr'] = line[4]
+        except KeyError:
+            self.column_values['daddr'] = ''
+
+        if 'conn' in line[-1]:
+            self.column_values['type'] = 'conn'
+            try:
+                self.column_values['dur'] = float(line[8])
+            except (KeyError, ValueError):
+                self.column_values['dur'] = 0
+            self.column_values['endtime'] = self.column_values['starttime'] + timedelta(
+                seconds=self.column_values['dur'])
+            self.column_values['proto'] = line[6]
+            try:
+                self.column_values['appproto'] = line[7]
+            except KeyError:
+                # no service recognized
+                self.column_values['appproto'] = ''
+            self.column_values['sport'] = line[3]
+            self.column_values['dir'] = '->'
+            self.column_values['dport'] = line[5]
+            self.column_values['state'] = line[11]
+            try:
+                self.column_values['spkts'] = float(line[16])
+            except (KeyError, ValueError):
+                self.column_values['spkts'] = 0
+            try:
+                self.column_values['dpkts'] = float(line[18])
+            except (KeyError, ValueError):
+                self.column_values['dpkts'] = 0
+            self.column_values['pkts'] = self.column_values['spkts'] + self.column_values['dpkts']
+            try:
+                self.column_values['sbytes'] = float(line[9])
+            except (KeyError, ValueError):
+                self.column_values['sbytes'] = 0
+            try:
+                self.column_values['dbytes'] = float(line[10])
+            except (KeyError, ValueError):
+                self.column_values['dbytes'] = 0
+            self.column_values['bytes'] = self.column_values['sbytes'] + self.column_values['dbytes']
+            try:
+                self.column_values['state_hist'] = line[15]
+            except KeyError:
+                self.column_values['state_hist'] = self.column_values['state']
+            # We do not know the indexes of MACs.
+            self.column_values['smac'] = ''
+            self.column_values['dmac'] = ''
+        elif 'dns' in line[-1]:
+            self.column_values['type'] = 'dns'
+            try:
+                self.column_values['query'] = line[9]
+            except KeyError:
+                self.column_values['query'] = ''
+            try:
+                self.column_values['qclass_name'] = line[11]
+            except KeyError:
+                self.column_values['qclass_name'] = ''
+            try:
+                self.column_values['qtype_name'] = line[13]
+            except KeyError:
+                self.column_values['qtype_name'] = ''
+            try:
+                self.column_values['rcode_name'] = line[15]
+            except KeyError:
+                self.column_values['rcode_name'] = ''
+            try:
+                self.column_values['answers'] = line[21]
+            except KeyError:
+                self.column_values['answers'] = ''
+            try:
+                self.column_values['TTLs'] = line[22]
+            except KeyError:
+                self.column_values['TTLs'] = ''
+        elif 'http' in line[-1]:
+            self.column_values['type'] = 'http'
+            try:
+                self.column_values['method'] = line[7]
+            except KeyError:
+                self.column_values['method'] = ''
+            try:
+                self.column_values['host'] = line[8]
+            except KeyError:
+                self.column_values['host'] = ''
+            try:
+                self.column_values['uri'] = line[9]
+            except KeyError:
+                self.column_values['uri'] = ''
+            try:
+                self.column_values['httpversion'] = line[11]
+            except KeyError:
+                self.column_values['httpversion'] = ''
+            try:
+                self.column_values['user_agent'] = line[12]
+            except KeyError:
+                self.column_values['user_agent'] = ''
+            try:
+                self.column_values['request_body_len'] = line[13]
+            except KeyError:
+                self.column_values['request_body_len'] = 0
+            try:
+                self.column_values['response_body_len'] = line[14]
+            except KeyError:
+                self.column_values['response_body_len'] = 0
+            try:
+                self.column_values['status_code'] = line[15]
+            except KeyError:
+                self.column_values['status_code'] = ''
+            try:
+                self.column_values['status_msg'] = line[16]
+            except KeyError:
+                self.column_values['status_msg'] = ''
+            try:
+                self.column_values['resp_mime_types'] = line[28]
+            except KeyError:
+                self.column_values['resp_mime_types'] = ''
+            try:
+                self.column_values['resp_fuids'] = line[26]
+            except KeyError:
+                self.column_values['resp_fuids'] = ''
+        elif 'ssl' in line[-1]:
+            self.column_values['type'] = 'ssl'
+            try:
+                self.column_values['sslversion'] = line[6]
+            except KeyError:
+                self.column_values['sslversion'] = ''
+            try:
+                self.column_values['cipher'] = line[7]
+            except KeyError:
+                self.column_values['cipher'] = ''
+            try:
+                self.column_values['resumed'] = line[10]
+            except KeyError:
+                self.column_values['resumed'] = ''
+            try:
+                self.column_values['established'] = line[13]
+            except KeyError:
+                self.column_values['established'] = ''
+            try:
+                self.column_values['cert_chain_fuids'] = line[14]
+            except KeyError:
+                self.column_values['cert_chain_fuids'] = ''
+            try:
+                self.column_values['client_cert_chain_fuids'] = line[15]
+            except KeyError:
+                self.column_values['client_cert_chain_fuids'] = ''
+            try:
+                self.column_values['subject'] = line[16]
+            except KeyError:
+                self.column_values['subject'] = ''
+            try:
+                self.column_values['issuer'] = line[17]
+            except KeyError:
+                self.column_values['issuer'] = ''
+            self.column_values['validation_status'] = ''
+            try:
+                self.column_values['curve'] = line[8]
+            except KeyError:
+                self.column_values['curve'] = ''
+            try:
+                self.column_values['server_name'] = line[9]
+            except KeyError:
+                self.column_values['server_name'] = ''
+        elif 'ssh' in line[-1]:
+            self.column_values['type'] = 'ssh'
+        elif 'irc' in line[-1]:
+            self.column_values['type'] = 'irc'
+        elif 'long' in line[-1]:
+            self.column_values['type'] = 'long'
+        elif 'dhcp' in line[-1]:
+            self.column_values['type'] = 'dhcp'
+        elif 'dce_rpc' in line[-1]:
+            self.column_values['type'] = 'dce_rpc'
+        elif 'dnp3' in line[-1]:
+            self.column_values['type'] = 'dnp3'
+        elif 'ftp' in line[-1]:
+            self.column_values['type'] = 'ftp'
+        elif 'kerberos' in line[-1]:
+            self.column_values['type'] = 'kerberos'
+        elif 'mysql' in line[-1]:
+            self.column_values['type'] = 'mysql'
+        elif 'modbus' in line[-1]:
+            self.column_values['type'] = 'modbus'
+        elif 'ntlm' in line[-1]:
+            self.column_values['type'] = 'ntlm'
+        elif 'rdp' in line[-1]:
+            self.column_values['type'] = 'rdp'
+        elif 'sip' in line[-1]:
+            self.column_values['type'] = 'sip'
+        elif 'smb_cmd' in line[-1]:
+            self.column_values['type'] = 'smb_cmd'
+        elif 'smb_files' in line[-1]:
+            self.column_values['type'] = 'smb_files'
+        elif 'smb_mapping' in line[-1]:
+            self.column_values['type'] = 'smb_mapping'
+        elif 'smtp' in line[-1]:
+            self.column_values['type'] = 'smtp'
+        elif 'socks' in line[-1]:
+            self.column_values['type'] = 'socks'
+        elif 'syslog' in line[-1]:
+            self.column_values['type'] = 'syslog'
+        elif 'tunnel' in line[-1]:
+            self.column_values['type'] = 'tunnel'
 
     def process_zeek_input(self, line):
         """
@@ -284,7 +514,7 @@ class ProfilerProcess(multiprocessing.Process):
             # {'ts': 1538080852.403669, 'uid': 'Cewh6D2USNVtfcLxZe', 'id.orig_h': '192.168.2.12', 'id.orig_p': 56343, 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364, 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1, 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8', 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
             self.column_values['type'] = 'conn'
             try:
-                self.column_values['dur'] = line['duration']
+                self.column_values['dur'] = float(line['duration'])
             except KeyError:
                 self.column_values['dur'] = 0
             self.column_values['endtime'] = self.column_values['starttime'] + timedelta(seconds=self.column_values['dur'])
@@ -371,9 +601,9 @@ class ProfilerProcess(multiprocessing.Process):
             except KeyError:
                 self.column_values['uri'] = ''
             try:
-                self.column_values['version'] = line['version']
+                self.column_values['httpversion'] = line['version']
             except KeyError:
-                self.column_values['version'] = ''
+                self.column_values['httpversion'] = ''
             try:
                 self.column_values['user_agent'] = line['user_agent']
             except KeyError:
@@ -407,9 +637,9 @@ class ProfilerProcess(multiprocessing.Process):
             # {"ts":1382354909.915615,"uid":"C7W6ZA4vI8FxJ9J0bh","id.orig_h":"147.32.83.53","id.orig_p":36567,"id.resp_h":"195.113.214.241","id.resp_p":443,"version":"TLSv12","cipher":"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA","curve":"secp256r1","server_name":"id.google.com.ar","resumed":false,"established":true,"cert_chain_fuids":["FnomJz1vghKIOHtytf","FSvQff1KsaDkRtKXo4","Fif2PF48bytqq6xMDb"],"client_cert_chain_fuids":[],"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
             self.column_values['type'] = 'ssl'
             try:
-                self.column_values['version'] = line['version']
+                self.column_values['sslversion'] = line['version']
             except KeyError:
-                self.column_values['version'] = ''
+                self.column_values['sslversion'] = ''
             try:
                 self.column_values['cipher'] = line['cipher']
             except KeyError:
@@ -586,14 +816,19 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             pass
 
-    def process_suricata_input(self, line: str):
+    def process_suricata_input(self, line: str) -> None:
         """ Read suricata json input """
         line = json.loads(line)
 
-        self.column_values = {}
+        self.column_values: dict = {}
         try:
             self.column_values['starttime'] = self.get_time(line['timestamp'])
-        except KeyError:
+        # except (KeyError, ValueError):
+        except :
+            # Reason for catching ValueError:
+            # "ValueError: time data '1900-01-00T00:00:08.511802+0000' does not match format '%Y-%m-%dT%H:%M:%S.%f%z'"
+            # It means some flow do not have valid timestamp. It seems to me if suricata does not know the timestamp, it put
+            # there this not valid time.
             self.column_values['starttime'] = False
         self.column_values['endtime'] = False
         self.column_values['dur'] = 0
@@ -712,6 +947,21 @@ class ProfilerProcess(multiprocessing.Process):
                         self.column_values['status_code'] = line['http']['status']
                     except KeyError:
                         self.column_values['status_code'] = ''
+                    try:
+                        self.column_values['httpversion'] = line['http']['protocol']
+                    except KeyError:
+                        self.column_values['httpversion'] = ''
+                    try:
+                        self.column_values['response_body_len'] = line['http']['length']
+                    except KeyError:
+                        self.column_values['response_body_len'] = 0
+                    try:
+                        self.column_values['request_body_len'] = line['http']['request_body_len']
+                    except KeyError:
+                        self.column_values['request_body_len'] = 0
+                    self.column_values['status_msg'] = ''
+                    self.column_values['resp_mime_types'] = ''
+                    self.column_values['resp_fuids'] = ''
 
             elif self.column_values['type'] == 'dns':
                 if line.get('dns', None):
@@ -729,12 +979,18 @@ class ProfilerProcess(multiprocessing.Process):
                     except KeyError:
                         self.column_values['qtype_name'] = ''
 
+                    # can not find in eve.json:
+                    self.column_values['qclass_name'] = ''
+                    self.column_values['rcode_name'] = ''
+                    self.column_values['answers'] = ''
+
+
             elif self.column_values['type'] == 'tls':
                 if line.get('tls', None):
                     try:
-                        self.column_values['version'] = line['tls']['version']
+                        self.column_values['sslversion'] = line['tls']['version']
                     except KeyError:
-                        self.column_values['version'] = ''
+                        self.column_values['sslversion'] = ''
                     try:
                         self.column_values['subject'] = line['tls']['subject']
                     except KeyError:
@@ -945,9 +1201,9 @@ class ProfilerProcess(multiprocessing.Process):
                 elif 'dns' in flow_type:
                     __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                 elif flow_type == 'http':
-                    __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['version'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
+                    __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['httpversion'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
                 elif flow_type == 'ssl':
-                    __database__.add_out_ssl(profileid, twid, flow_type, uid, self.column_values['version'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
+                    __database__.add_out_ssl(profileid, twid, flow_type, uid, self.column_values['sslversion'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
 
             def store_features_going_in(profileid, twid):
                 """
@@ -1423,4 +1679,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.outputqueue.put("01|profiler|"+str(type(inst)))
             self.outputqueue.put("01|profiler|"+str(inst.args))
             self.outputqueue.put("01|profiler|"+str(inst))
+            self.outputqueue.put(
+                "01|profiler|[Profile] Error in profilerProcess. {}".format(traceback.format_exc()))
             return True
