@@ -98,7 +98,7 @@ class Module(Module, multiprocessing.Process):
 
             while True:
                 """
-                message = self.c1.get_message(timeout=None)
+                message = self.c1.get_message(timeout=-1)
                 #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
                 if message['channel'] == 'new_flow' and message['data'] != 1:
                     mdata = message['data']
