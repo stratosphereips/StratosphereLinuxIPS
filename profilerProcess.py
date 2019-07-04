@@ -1533,7 +1533,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.outputqueue.put("01|profiler|[Profile] {}".format(inst))
             self.outputqueue.put("01|profiler|[Profile] {}".format(traceback.format_exc()))
 
-
     def get_timewindow(self, flowtime, profileid):
         """"
         This function should get the id of the TW in the database where the flow belong.
