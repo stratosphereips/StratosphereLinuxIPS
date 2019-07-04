@@ -76,7 +76,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
                     save_score_to_db(ip, ip_score)
-                    self.print("Score of IP " + ip + " is " + str(ip_score))
+                    self.print("[" + ip + "] has score " + str(ip_score))
 
         except KeyboardInterrupt:
             return True
@@ -96,16 +96,15 @@ class VirusTotalModule(Module, multiprocessing.Process):
         :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
         """
 
-        # TODO should private IPs be excluded -> yes
-        # 192.168.*
-        # 10.*
-        # 172.16.* - 172.32.*
-
         # first, look if an address from the same network was already resolved
         if re.match(self.ipv4_reg, ip):
             # get first three bytes of address
             ip_split = ip.split(".")
             ip_subnet = ip_split[0] + "." + ip_split[1] + "." + ip_split[2]
+
+            if not is_ipv4_public(ip_split):
+                self.print("[" + ip + "] is private, skipping")
+                return 0, 0, 0, 0
 
             # compare if the first three bytes of address match
             cached_data = self.is_subnet_in_db(ip_subnet)
@@ -124,7 +123,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
             return scores
 
         # ipv6 addresses
-        # TODO add ipv6 cache
         response = self.api_query_(ip)
         self.counter += 1
 
@@ -189,6 +187,42 @@ def save_score_to_db(ip, scores):
 
     data = {"VirusTotal": vtdata}
     __database__.setInfoForIPs(ip, data)
+
+
+def is_ipv4_public(ip: list):
+    # TODO: consider using https://docs.python.org/3/library/ipaddress.html module
+    # Reserved addresses: https://en.wikipedia.org/wiki/Reserved_IP_addresses
+    ip = list(map(int, ip))
+
+    # private addresses
+    # 10.*
+    if ip[0] == 10:
+        return False
+    # 192.168.*
+    if ip[0] == 192 and ip[1] == 168:
+        return False
+    # 172.16.* - 172.32.*
+    if ip[0] == 172 and 16 <= ip[1] <= 32:
+        return False
+
+    # Used for link-local addresses between two hosts on a single link when no IP address is otherwise specified,
+    # such as would have normally been retrieved from a DHCP server.
+    # 169.254.*
+    if ip[0] == 169 and ip[1] == 254:
+        return False
+
+    # IETF Protocol Assignments
+    # 192.0.0.*
+    if ip[0] == 192 and ip[1] == 0 and ip[2] == 0:
+        return False
+
+    # In use for IP multicast. (Former Class D network) 224.* - 239.*
+    # Reserved for future use. (Former Class E network) 240.0.0.0 – 255.255.255.254
+    # Reserved for the "limited broadcast" destination address 255.255.255.255
+    if ip[0] >= 224:
+        return False
+
+    return True
 
 
 def interpret_response(response: dict):

@@ -152,7 +152,7 @@ class Module(Module, multiprocessing.Process):
             # First load the malicious ips from the file to the DB
             self.__load_malicious_ips()
             while True:
-                message = self.c1.get_message(timeout=None)
+                message = self.c1.get_message(timeout=-1)
                 # Check that the message is for you. 
                 if message['channel'] == 'new_ip':
                     new_ip = message['data']
