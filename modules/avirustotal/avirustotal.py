@@ -26,6 +26,8 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         # Start the DB
+        # This line might not be needed when running SLIPS, but when VT module is run standalone, it still uses the
+        # database and this line is necessary. Do not delete it, instead move it to line 21.
         __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
 
         self.db_hashset_name = "virustotal-module-ipv4subnet-cache"
@@ -157,7 +159,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 # X-Api-Message is a comprehensive error description, but it is not always present
                 if "X-Api-Message" in response.headers:
                     message = response.headers["X-Api-Message"]
-                # Reason is a much shorter desctiption ("Forbidden"), but it is always there
+                # Reason is a much shorter description ("Forbidden"), but it is always there
                 else:
                     message = response.reason
                 raise Exception("VT API returned unexpected code: " + str(response.status_code) + " - " + message)
