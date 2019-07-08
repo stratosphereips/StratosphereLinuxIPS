@@ -17,7 +17,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
     description = 'IP address lookup on VirusTotal'
     authors = ['Dita']
 
-    def __init__(self, outputqueue, config, testing=False, keyfile="modules/virustotal/api_key"):
+    def __init__(self, outputqueue, config, testing=False, keyfile="modules/virustotal/api_key_slow"):
         if testing:
             self.print = self.testing_print
         else:
@@ -194,7 +194,8 @@ class VirusTotalModule(Module, multiprocessing.Process):
             # report that API limit is reached, wait one minute and try again
             self.print("Status code is " + str(response.status_code) + " at " + str(time.time()) + ", query id: " + str(
                 self.counter), verbose=5, debug=1)
-            time.sleep(60)
+            self.print("API limit reached, going to sleep for 60 seconds", verbose=1, debug=0)
+            time.sleep(60)  # TODO: split sleeping time to 50+10 or 40+20
             response = requests.get(self.url, params=params)
 
         # optionally, save data to file
