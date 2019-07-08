@@ -8,6 +8,7 @@ import json
 import re
 import requests
 import time
+import ipaddress
 
 
 class VirusTotalModule(Module, multiprocessing.Process):
@@ -104,19 +105,15 @@ class VirusTotalModule(Module, multiprocessing.Process):
     def check_ip(self, ip: str):
         """
         Look if this IP was already processed. If not, perform API call to VirusTotal and return scores for each of
-        the four processed categories. Response is cached in a dictionary.
+        the four processed categories. Response is cached in a dictionary. Private IPs always return (0, 0, 0, 0).
         :param ip: IP address to check
         :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
         """
 
-        # check if the IP is a public ipv4 address
-        if re.match(self.ipv4_reg, ip):
-            # get first three bytes of address
-            ip_split = ip.split(".")
-
-            if not is_ipv4_public(ip_split):
-                self.print("[" + ip + "] is private, skipping", verbose=5, debug=1)
-                return 0, 0, 0, 0
+        addr = ipaddress.ip_address(ip)
+        if addr.is_private:
+            self.print("[" + ip + "] is private, skipping", verbose=5, debug=1)
+            return 0, 0, 0, 0
 
         # check if the address is in the cache (probably not, since all IPs are unique)
         cached_data = self.is_ip_in_db(ip)
@@ -236,6 +233,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
 
 def save_score_to_db(ip, scores):
+    # TODO: can this be used instead of hashset for ip caching?
     vtdata = {"URL": scores[0],
               "down_file": scores[1],
               "ref_file": scores[2],
@@ -246,7 +244,6 @@ def save_score_to_db(ip, scores):
 
 
 def is_ipv4_public(ip: list):
-    # TODO: consider using https://docs.python.org/3/library/ipaddress.html module
     # Reserved addresses: https://en.wikipedia.org/wiki/Reserved_IP_addresses
     ip = list(map(int, ip))
 
