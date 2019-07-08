@@ -13,11 +13,11 @@ import ipaddress
 
 class VirusTotalModule(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'aVirusTotal'
+    name = 'VirusTotal'
     description = 'IP address lookup on VirusTotal'
     authors = ['Dita']
 
-    def __init__(self, outputqueue, config, testing=False, keyfile="modules/avirustotal/api_key"):
+    def __init__(self, outputqueue, config, testing=False, keyfile="modules/virustotal/api_key"):
         if testing:
             self.print = self.testing_print
         else:

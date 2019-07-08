@@ -5,7 +5,7 @@ import os
 import numpy as np
 from matplotlib import pyplot as plt
 
-from modules.avirustotal.avirustotal import VirusTotalModule
+from modules.virustotal.virustotal import VirusTotalModule
 
 
 def check_ip_from_file(ip):
