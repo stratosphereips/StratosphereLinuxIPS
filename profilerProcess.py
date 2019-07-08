@@ -130,7 +130,11 @@ class ProfilerProcess(multiprocessing.Process):
                     if nr_commas > nr_tabs:
                         # Commas is the separator
                         self.separator = ','
-                        self.input_type = 'argus'
+                        if nr_commas > 40:
+                            self.input_type = 'nfdump'
+                        else:
+                            self.input_type = 'argus'
+
                     elif nr_tabs > nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
@@ -223,11 +227,15 @@ class ProfilerProcess(multiprocessing.Process):
                     time_format = '%Y-%m-%d %H:%M:%S.%f'
                 except ValueError:
                     try:
-                        datetime.strptime(time, '%Y/%m/%d %H:%M:%S.%f')
-                        time_format = '%Y/%m/%d %H:%M:%S.%f'
+                        datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
+                        time_format = '%Y-%m-%d %H:%M:%S'
                     except ValueError:
-                        # We did not find the right time format.
-                        self.outputqueue.put("01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
+                        try:
+                            datetime.strptime(time, '%Y/%m/%d %H:%M:%S.%f')
+                            time_format = '%Y/%m/%d %H:%M:%S.%f'
+                        except ValueError:
+                            # We did not find the right time format.
+                            self.outputqueue.put("01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
         return time_format
 
     def get_time(self, time: str) -> datetime:
@@ -814,6 +822,98 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             self.column_values['dbytes'] = nline[self.column_idx['dbytes']]
         except KeyError:
+            pass
+
+    def process_nfdump_input(self, line):
+        """
+        Process the line and extract columns for argus
+        """
+        self.column_values = {}
+        self.column_values['starttime'] = False
+        self.column_values['endtime'] = False
+        self.column_values['dur'] = False
+        self.column_values['proto'] = False
+        self.column_values['appproto'] = False
+        self.column_values['saddr'] = False
+        self.column_values['sport'] = False
+        self.column_values['dir'] = False
+        self.column_values['daddr'] = False
+        self.column_values['dport'] = False
+        self.column_values['state'] = False
+        self.column_values['pkts'] = False
+        self.column_values['spkts'] = False
+        self.column_values['dpkts'] = False
+        self.column_values['bytes'] = False
+        self.column_values['sbytes'] = False
+        self.column_values['dbytes'] = False
+        self.column_values['type'] = 'argus'
+
+        # Read the lines fast
+        nline = line.strip().split(self.separator)
+        try:
+            self.column_values['starttime'] = self.get_time(nline[0])
+        except IndexError:
+            pass
+        try:
+            self.column_values['endtime'] = self.get_time(nline[1])
+        except IndexError:
+            pass
+        try:
+            self.column_values['dur'] = nline[2]
+        except IndexError:
+            pass
+        try:
+            self.column_values['proto'] = nline[7]
+        except IndexError:
+            pass
+        try:
+            self.column_values['saddr'] = nline[3]
+        except IndexError:
+            pass
+        try:
+            self.column_values['sport'] = nline[5]
+        except IndexError:
+            pass
+        try:
+            # Direction: ingress=0, egress=1
+            self.column_values['dir'] = nline[22]
+        except IndexError:
+            pass
+        try:
+            self.column_values['daddr'] = nline[4]
+        except IndexError:
+            pass
+        try:
+            self.column_values['dport'] = nline[6]
+        except IndexError:
+            pass
+        try:
+            self.column_values['state'] = nline[8]
+        except IndexError:
+            pass
+        try:
+            self.column_values['spkts'] = nline[11]
+        except IndexError:
+            pass
+        try:
+            self.column_values['dpkts'] = nline[13]
+        except IndexError:
+            pass
+        try:
+            self.column_values['pkts'] = self.column_values['spkts'] + self.column_values['dpkts']
+        except IndexError:
+            pass
+        try:
+            self.column_values['sbytes'] = nline[12]
+        except IndexError:
+            pass
+        try:
+            self.column_values['dbytes'] = nline[14]
+        except IndexError:
+            pass
+        try:
+            self.column_values['bytes'] = self.column_values['sbytes'] + self.column_values['dbytes']
+        except IndexError:
             pass
 
     def process_suricata_input(self, line: str) -> None:
@@ -1668,6 +1768,9 @@ class ProfilerProcess(multiprocessing.Process):
                         #self.print('Zeek-tabs line')
                         self.process_zeek_tabs_input(line)
                         # Add the flow to the profile
+                        self.add_flow_to_profile()
+                    elif self.input_type == 'nfdump':
+                        self.process_nfdump_input(line)
                         self.add_flow_to_profile()
         except KeyboardInterrupt:
             self.outputqueue.put("01|profiler|[Profile] Received {} lines.".format(rec_lines))
