@@ -31,16 +31,17 @@ def test_redis_database(redis_host='localhost', redis_port=6379) -> str:
     return server_redis_version
 
 
-def test_zeek() -> bool:
+
+def test_program(command: str) -> bool:
     """
-    Test if we can run zeek (bro).
+    Test if we can run some program (e.g.: zeek, nfdump).
     """
-    command = "bro --version"
+    command = command + " 2>&1 > /dev/null &"
     ret = os.system(command)
     if ret != 0:
-        print("[main] Error: Zeek (Bro) was not found. Did you set the path to zeek?"
-              " The command which was executed in slips: {}".format(command))
-    return True if ret == 0 else False
+        print("[main] Error: The command: " + command + " was not found. Did you set the path?")
+        return False
+    return True
 
 
 def terminate_slips():
@@ -60,7 +61,7 @@ if __name__ == '__main__':
     # Parse the parameters
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
-    parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False) 
+    parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False)
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
@@ -69,6 +70,7 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--filepath', help='Path to the flow input file to read. It can be a Argus binetflow flow, a Zeek conn.log file, or a Zeek folder with all the log files.', required=False)
     parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
+    parser.add_argument('-b', '--nfdump', help='A binary file from NFDUMP to read. NFDUMP is used to send data to slips.', required=False)
     parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the info and detections.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
@@ -92,9 +94,15 @@ if __name__ == '__main__':
 
     # If we need zeek (bro), test if we can run it.
     if args.pcapfile:
-        visible_zeek = test_zeek()
+        visible_zeek = test_program('bro --version')
         if visible_zeek is False:
             # If we do not have access to zeek and we want to use it, kill it.
+            terminate_slips()
+
+    if args.nfdump:
+        visible_nfdump = test_program('nfdump -h')
+        if visible_nfdump is False:
+            # If we do not have access to nfdump and we want to use it, kill it.
             terminate_slips()
 
     """
@@ -211,6 +219,9 @@ if __name__ == '__main__':
     elif args.filepath:
         input_information = args.filepath
         input_type = 'file'
+    elif args.nfdump:
+        input_information = args.nfdump
+        input_type = 'nfdump'
 
 
     # Input process
