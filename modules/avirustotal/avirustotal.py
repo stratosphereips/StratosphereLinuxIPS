@@ -31,6 +31,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
 
         self.db_hashset_name = "virustotal-module-ipv4subnet-cache"
+        self.db_ip_hashset_name = "virustotal-module-ip-cache"
         # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
         # The options change, so the last list is on the slips/core/database.py file. However common options are:
         # - new_ip
@@ -102,6 +103,36 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
     def check_ip(self, ip: str):
         """
+        Look if this IP was already processed. If not, perform API call to VirusTotal and return scores for each of
+        the four processed categories. Response is cached in a dictionary.
+        :param ip: IP address to check
+        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
+        """
+
+        # check if the IP is a public ipv4 address
+        if re.match(self.ipv4_reg, ip):
+            # get first three bytes of address
+            ip_split = ip.split(".")
+
+            if not is_ipv4_public(ip_split):
+                self.print("[" + ip + "] is private, skipping", verbose=5, debug=1)
+                return 0, 0, 0, 0
+
+        # check if the address is in the cache (probably not, since all IPs are unique)
+        cached_data = self.is_ip_in_db(ip)
+        if cached_data:
+            return cached_data
+
+        # for unknown address, do the query
+        response = self.api_query_(ip)
+
+        scores = interpret_response(response.json())
+        self.put_ip_to_db(ip, scores)
+        self.counter += 1
+        return scores
+
+    def check_ip_with_subnet_cache_(self, ip: str):
+        """
         Look if similar IP was already processed. If not, perform API call to VirusTotal and return scores for each of
         the four processed categories. Response is cached in a dictionary.
         IPv6 addresses are not cached, they will always be queried.
@@ -122,7 +153,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
             # compare if the first three bytes of address match
             cached_data = self.is_subnet_in_db(ip_subnet)
             if cached_data:
-                # TODO: check API limit and consider doing the query anyway
                 self.print("[" + ip + "] This IP was already processed", verbose=5, debug=1)
                 return cached_data
 
@@ -181,6 +211,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         return response
 
     def is_subnet_in_db(self, subnet):
+        """ Check if subnet ip is in db. Unused """
         data = __database__.r.hget(self.db_hashset_name, subnet)
         if data:
             return list(map(float, data.split(" ")))
@@ -188,8 +219,20 @@ class VirusTotalModule(Module, multiprocessing.Process):
             return data  # None, the key wasn't found
 
     def put_subnet_to_db(self, subnet, score):
+        """ Add new subnet with score to db. Unused """
         data = str(score[0]) + " " + str(score[1]) + " " + str(score[2]) + " " + str(score[3])
         __database__.r.hset(self.db_hashset_name, subnet, data)
+
+    def is_ip_in_db(self, ip):
+        data = __database__.r.hget(self.db_ip_hashset_name, ip)
+        if data:
+            return list(map(float, data.split(" ")))
+        else:
+            return data  # None, the key wasn't found
+
+    def put_ip_to_db(self, ip, score):
+        data = str(score[0]) + " " + str(score[1]) + " " + str(score[2]) + " " + str(score[3])
+        __database__.r.hset(self.db_ip_hashset_name, ip, data)
 
 
 def save_score_to_db(ip, scores):
