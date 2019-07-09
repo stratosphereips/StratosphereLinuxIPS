@@ -153,7 +153,7 @@ class IpAddress(object):
                         tuple_result = self.result_per_tuple(tuple4, start_time, end_time)
                         # Is at least one tuple detected?
                         if tuple_result[0] != 0:
-                            #Shall we use whois?
+                            #Shall we use whoisip?
                             if use_whois:
                                 whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
                                 print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
@@ -168,7 +168,7 @@ class IpAddress(object):
                 elif verbose > 3:
                     for tuple4 in self.tuples.keys():
                         tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
-                        # Shall we use whois?
+                        # Shall we use whoisip?
                         if use_whois:
                             whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
                             print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
@@ -201,7 +201,7 @@ class IpAddress(object):
                         tuple_result = self.result_per_tuple(tuple4,start_time,end_time)
                         # Is at least one tuple checked?
                         if tuple_result[1] != 0:
-                            #Shall we use whois?
+                            #Shall we use whoisip?
                             if use_whois:
                                 whois = whois_handler.get_whois_data(self.tuples[tuple4][0][3])
                                 print "\t\t{} [{}] ({}/{})".format(tuple4,whois,tuple_result[0],tuple_result[1])
