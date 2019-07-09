@@ -142,6 +142,18 @@ def get_default_config():
     cfg.read_file(open("../../slips.conf"))
     return cfg
 
+
+def test_api_limit():
+    import random
+    vt = VirusTotalModule(None, get_default_config(), testing=True, keyfile="api_key_slow")
+    while True:
+        ip = str(random.randint(0, 255)) + "." + str(random.randint(0, 255)) + "."\
+             + str(random.randint(0, 255)) + "." + str(random.randint(0, 255))
+        vt.check_ip(ip)
+
+
 if __name__ == "__main__":
+    test_api_limit()
+    exit(0)
     dataset_demo("data/demo/benign_in", "data/demo/benign_out", False,
                  "data/demo/malicious_in", "data/demo/malicious_out", True, call_api=True)

@@ -17,7 +17,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
     description = 'IP address lookup on VirusTotal'
     authors = ['Dita']
 
-    def __init__(self, outputqueue, config, testing=False, keyfile="modules/virustotal/api_key_slow"):
+    def __init__(self, outputqueue, config, testing=False, keyfile="modules/virustotal/api_key_wrong"):
         if testing:
             self.print = self.testing_print
         else:
@@ -130,6 +130,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
     def check_ip_with_subnet_cache_(self, ip: str):
         """
+        Unused.
         Look if similar IP was already processed. If not, perform API call to VirusTotal and return scores for each of
         the four processed categories. Response is cached in a dictionary.
         IPv6 addresses are not cached, they will always be queried.
@@ -179,10 +180,28 @@ class VirusTotalModule(Module, multiprocessing.Process):
         params = {'apikey': self.key, 'ip': ip}
         response = requests.get(self.url, params=params)
 
+        sleep_attempts = 0
+
         # repeat query if API limit was reached (code 204)
         while response.status_code != 200:
-            # if the query was unsuccessful but it is not caused by API limit, abort (this is some unknown error)
-            if response.status_code != 204:
+
+            # requests per minute limit reached
+            if response.status_code == 204:
+                # usually sleeping for 40 seconds is enough, if not, try adding 20 more
+                if sleep_attempts == 0:
+                    sleep_time = 40
+                else:
+                    sleep_time = 20
+                sleep_attempts += 1
+
+            # requests per hour limit reached
+            elif response.status_code == 403:
+                # 10 minutes
+                sleep_time = 600
+                self.print("Please check that your API key is correct. Code 403 means timeout but also wrong API key.")
+
+            else:
+                # if the query was unsuccessful but it is not caused by API limit, abort (this is some unknown error)
                 # X-Api-Message is a comprehensive error description, but it is not always present
                 if "X-Api-Message" in response.headers:
                     message = response.headers["X-Api-Message"]
@@ -192,10 +211,11 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 raise Exception("VT API returned unexpected code: " + str(response.status_code) + " - " + message)
 
             # report that API limit is reached, wait one minute and try again
-            self.print("Status code is " + str(response.status_code) + " at " + str(time.time()) + ", query id: " + str(
+            self.print("Status code is " + str(response.status_code) + " at " + str(time.asctime()) + ", query id: " + str(
                 self.counter), verbose=5, debug=1)
-            self.print("API limit reached, going to sleep for 60 seconds", verbose=1, debug=0)
-            time.sleep(60)  # TODO: split sleeping time to 50+10 or 40+20
+
+            self.print("API limit reached, going to sleep for " + str(sleep_time) + " seconds", verbose=1, debug=0)
+            time.sleep(sleep_time)
             response = requests.get(self.url, params=params)
 
         # optionally, save data to file
