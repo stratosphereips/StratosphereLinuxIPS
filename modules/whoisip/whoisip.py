@@ -60,7 +60,7 @@ class WhoisIP(Module, multiprocessing.Process):
         print(text)
 
     def check_ip(self, ip):
-        pass
+        self.print(ip)
 
     def run(self):
         try:
