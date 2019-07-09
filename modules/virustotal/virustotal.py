@@ -17,7 +17,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
     description = 'IP address lookup on VirusTotal'
     authors = ['Dita']
 
-    def __init__(self, outputqueue, config, testing=False, keyfile="modules/virustotal/api_key_wrong"):
+    def __init__(self, outputqueue, config, testing=False):
         if testing:
             self.print = self.testing_print
         else:
@@ -43,9 +43,13 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
 
-        key_file = open(keyfile, "r")
-        self.key = key_file.read(64)
-        key_file.close()
+        key_file = config["virustotal"]["api_key_file"]
+        self.key = None
+        try:
+            with open(key_file, "r") as f:
+                self.key = f.read(64)
+        except FileNotFoundError:
+            self.print("The file with API key (" + key_file + ") could not be loaded. VT module is stopping.")
 
         # regex to check IP version (only IPv4 can be saved at the moment)
         self.ipv4_reg = re.compile("^([0-9]{1,3}\.){3}[0-9]{1,3}$")
@@ -81,6 +85,9 @@ class VirusTotalModule(Module, multiprocessing.Process):
         print(text)
 
     def run(self):
+        if self.key is None:
+            return
+
         try:
             # Main loop function
             while True:
@@ -254,7 +261,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
 
 def save_score_to_db(ip, scores):
-    # TODO: can this be used instead of hashset for ip caching?
     vtdata = {"URL": scores[0],
               "down_file": scores[1],
               "ref_file": scores[2],

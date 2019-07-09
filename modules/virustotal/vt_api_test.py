@@ -77,7 +77,7 @@ def process_input_file(infile, outfile, is_ips):
         with open(outfile, 'a') as o:
             lines = f.read().split("\n")
             lines.remove("")
-            vt = VirusTotalModule(None, get_default_config(), testing=True, keyfile="api_key")
+            vt = VirusTotalModule(None, get_default_config(), testing=True)
             for l in lines:
                 try:
                     scores = get_score(vt, l)
@@ -139,13 +139,13 @@ def show_histograms(benign, malicious):
 
 def get_default_config():
     cfg = configparser.ConfigParser()
-    cfg.read_file(open("../../slips.conf"))
+    cfg.read_file(open("slips.conf"))
     return cfg
 
 
 def test_api_limit():
     import random
-    vt = VirusTotalModule(None, get_default_config(), testing=True, keyfile="api_key_slow")
+    vt = VirusTotalModule(None, get_default_config(), testing=True)
     while True:
         ip = str(random.randint(0, 255)) + "." + str(random.randint(0, 255)) + "."\
              + str(random.randint(0, 255)) + "." + str(random.randint(0, 255))
@@ -153,7 +153,5 @@ def test_api_limit():
 
 
 if __name__ == "__main__":
-    test_api_limit()
-    exit(0)
-    dataset_demo("data/demo/benign_in", "data/demo/benign_out", False,
-                 "data/demo/malicious_in", "data/demo/malicious_out", True, call_api=True)
+    dataset_demo("modules/virustotal/data/demo/benign_in", "modules/virustotal/data/demo/benign_out", False,
+                 "modules/virustotal/data/demo/malicious_in", "modules/virustotal/data/demo/malicious_out", True, call_api=True)
