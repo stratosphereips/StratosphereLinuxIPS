@@ -4,7 +4,10 @@ import multiprocessing
 from slips.core.database import __database__
 
 # Your imports
-import time
+import ipwhois
+import ipaddress
+import json
+
 
 
 class WhoisIP(Module, multiprocessing.Process):
@@ -31,10 +34,12 @@ class WhoisIP(Module, multiprocessing.Process):
         # - evidence_added
         self.c1 = __database__.subscribe('new_ip')
 
+        self.db_hashset_ipv4 = "whois-module-ipv4subnet-cache"
+
     def print(self, text, verbose=1, debug=0):
         """ 
         Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the prcocesses into account
+        Slips then decides how, when and where to print this text by taking all the processes into account
 
         Input
          verbose: is the minimum verbosity level required for this text to be printed
@@ -60,7 +65,76 @@ class WhoisIP(Module, multiprocessing.Process):
         print(text)
 
     def check_ip(self, ip):
-        self.print(ip)
+        print("--- Checking ip " + ip)
+        try:
+            ip_object = ipwhois.IPWhois(ip)
+        except Exception as e:
+            self.print(e)
+            return
+
+        if ip_object.version == 4:
+            load_subnet = self.load_ipv4_subnet
+            save_subnet = self.save_ipv4_subnet
+            Interface = ipaddress.IPv4Interface
+        else:
+            load_subnet = self.load_ipv6_subnet
+            save_subnet = self.save_ipv6_subnet
+            Interface = ipaddress.IPv6Interface
+
+        cached_data = load_subnet(ipaddress.ip_address(ip))
+
+        if cached_data is not None:
+            self.print("Data found in cache!")
+            return cached_data  # TODO
+
+        try:
+            message = ip_object.lookup_rdap(depth=1)
+        except ipwhois.ASNRegistryError as e:
+            self.print(e)
+            return
+
+        asn = message["asn"]
+        ctr_code = message["asn_country_code"]
+        cidr = message["network"]["cidr"]
+        name = message["network"]["name"]
+        print("ASN:", asn)
+        print("Country:", ctr_code)
+        print("CIDR:", cidr)
+        print("Name:", name)
+
+        if "," in cidr:
+            cidrs = cidr.split(", ")
+        else:
+            cidrs = [cidr]
+
+        for cidr in cidrs:
+            mask = int(Interface(cidr).netmask)
+            save_subnet(mask, asn, ctr_code, cidr, name)
+
+    def save_ipv4_subnet(self, mask: int, asn: str, ctr_code: str, cidr: str, name: str):
+        data = {"asn": asn,
+                  "country": ctr_code,
+                  "cidr": cidr,
+                  "name": name}
+        str_data = json.dumps(data)
+        __database__.r.hset(self.db_hashset_ipv4, mask, str_data)
+
+    def save_ipv6_subnet(self, mask, asn, ctr_code, cidr, name):
+        pass
+
+    def load_ipv4_subnet(self, ip):
+        mask = 4294967295
+        ip_value = int(ip)
+        for i in range(0, 16):
+            mask -= pow(2, i)
+            masked_ip = mask & ip_value
+            data = __database__.r.hget(self.db_hashset_ipv4, masked_ip)
+            if data:
+                return data
+        return None
+
+    def load_ipv6_subnet(self, ip):
+        pass
 
     def run(self):
         try:
