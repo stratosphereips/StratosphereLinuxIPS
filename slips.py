@@ -9,7 +9,7 @@ import sys
 import redis
 import os
 
-version = '0.6.0rc1'
+version = '0.6.1'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
@@ -31,12 +31,11 @@ def test_redis_database(redis_host='localhost', redis_port=6379) -> str:
     return server_redis_version
 
 
-
 def test_program(command: str) -> bool:
     """
     Test if we can run some program (e.g.: zeek, nfdump).
     """
-    command = command + " 2>&1 > /dev/null &"
+    command = command + " 2>&1 > /dev/null"
     ret = os.system(command)
     if ret != 0:
         print("[main] Error: The command: " + command + " was not found. Did you set the path?")
@@ -60,19 +59,16 @@ if __name__ == '__main__':
 
     # Parse the parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('-a', '--amount', help='Minimum amount of flows that should be in a tuple to be printed.', action='store', required=False, type=int, default=-1)
     parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False)
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
-    parser.add_argument('-d', '--datawhois', help='Get and show the WHOIS info for the destination IP in each tuple', action='store_true', default=False, required=False)
-    parser.add_argument('-W', '--whitelist', help="File with the IP addresses to whitelist. One per line.", action='store', required=False)
     parser.add_argument('-f', '--filepath', help='Path to the flow input file to read. It can be a Argus binetflow flow, a Zeek conn.log file, or a Zeek folder with all the log files.', required=False)
     parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-b', '--nfdump', help='A binary file from NFDUMP to read. NFDUMP is used to send data to slips.', required=False)
     parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
-    parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the info and detections.', required=False, default=False, action='store_true')
+    parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     args = parser.parse_args()
 
@@ -146,69 +142,6 @@ if __name__ == '__main__':
     if args.debug < 0:
         args.debug = 0
 
-
-    ##
-    # Creation of the threads
-    ##
-    # Output thread
-    # Create the queue for the output thread first. Later the output process is created after we defined which type of output we have
-    outputProcessQueue = Queue()
-    # Create the output thread and start it
-    # We need to tell the output process the type of output so he know if it should print in console or send the data to another process
-    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
-    outputProcessThread.start()
-    outputProcessQueue.put('30|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
-
-
-    # Start each module in the folder modules
-    outputProcessQueue.put('01|main|[main] Starting modules')
-    to_ignore = read_configuration(config, 'modules', 'disable')
-    for module_name in __modules__:
-        if not module_name in to_ignore:
-            module_class = __modules__[module_name]['obj']
-            outputProcessQueue.put('01|main|\t[main] Starting the module {} ({})'.format(module_name, __modules__[ module_name]['description'],))
-            ModuleProcess = module_class(outputProcessQueue, config)
-            ModuleProcess.start()
-
-
-    # Get the type of output from the parameters
-    # Several combinations of outputs should be able to be used
-    if args.curses:
-        # Create the curses thread
-        cursesProcessQueue = Queue()
-        cursesProcessThread = CursesProcess(cursesProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
-        cursesProcessThread.start()
-        outputProcessQueue.put('30|main|Started Curses thread [PID {}]'.format(cursesProcessThread.pid))
-    elif not args.nologfiles:
-        # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
-        do_logs = read_configuration(config, 'parameters', 'create_log_files')
-        if do_logs == 'yes':
-            # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
-            logsProcessQueue = Queue()
-            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
-            logsProcessThread.start()
-            outputProcessQueue.put('30|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
-        # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
-
-
-    # Evidence thread
-    # Create the queue for the evidence thread
-    evidenceProcessQueue = Queue()
-    # Create the thread and start it
-    evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config)
-    evidenceProcessThread.start()
-    evidenceProcessQueue.close()
-    outputProcessQueue.put('30|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
-
-    # Profile thread
-    # Create the queue for the profile thread
-    profilerProcessQueue = Queue()
-    # Create the profile thread and start it
-    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
-    profilerProcessThread.start()
-    outputProcessQueue.put('30|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
-
-
     # Check the type of input
     if args.interface:
         input_information = args.interface
@@ -222,14 +155,78 @@ if __name__ == '__main__':
     elif args.nfdump:
         input_information = args.nfdump
         input_type = 'nfdump'
+    else:
+        print('You need to define an input source.')
+        sys.exit(-1)
 
+
+
+    ##########################
+    # Creation of the threads
+    ##########################
+
+    # Output thread. This thread should be created first because it handles the output of the rest of the threads.
+    # Create the queue
+    outputProcessQueue = Queue()
+    # Create the output thread and start it
+    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
+    outputProcessThread.start()
+    # Print the PID of the main slips process. We do it here because we needed the queue to the output process
+    outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
+    # Output pid
+    outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
+
+    # Start each module in the folder modules
+    outputProcessQueue.put('01|main|[main] Starting modules')
+    to_ignore = read_configuration(config, 'modules', 'disable')
+    for module_name in __modules__:
+        if not module_name in to_ignore:
+            module_class = __modules__[module_name]['obj']
+            ModuleProcess = module_class(outputProcessQueue, config)
+            ModuleProcess.start()
+            outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, __modules__[module_name]['description'], ModuleProcess.pid))
+
+    # Get the type of output from the parameters
+    # Several combinations of outputs should be able to be used
+    if args.curses:
+        # Create the curses thread
+        cursesProcessQueue = Queue()
+        cursesProcessThread = CursesProcess(cursesProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+        cursesProcessThread.start()
+        outputProcessQueue.put('20|main|Started Curses thread [PID {}]'.format(cursesProcessThread.pid))
+    elif not args.nologfiles:
+        # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
+        do_logs = read_configuration(config, 'parameters', 'create_log_files')
+        if do_logs == 'yes':
+            # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
+            logsProcessQueue = Queue()
+            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+            logsProcessThread.start()
+            outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
+        # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
+
+    # Evidence thread
+    # Create the queue for the evidence thread
+    evidenceProcessQueue = Queue()
+    # Create the thread and start it
+    evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config)
+    evidenceProcessThread.start()
+    evidenceProcessQueue.close()
+    outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
+
+    # Profile thread
+    # Create the queue for the profile thread
+    profilerProcessQueue = Queue()
+    # Create the profile thread and start it
+    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
+    profilerProcessThread.start()
+    outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
 
     # Input process
     # Create the input process and start it
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter)
     inputProcess.start()
-    outputProcessQueue.put('30|main|Started input thread [PID {}]'.format(inputProcess.pid))
-
+    outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
 
     profilerProcessQueue.close()
     outputProcessQueue.close()

@@ -20,7 +20,7 @@ import ipaddress
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'GeoIP'
+    name = 'geoip'
     description = 'Module to find the Country and geolocaiton information of an IP address'
     authors = ['Sebastian Garcia']
 
@@ -30,6 +30,8 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
+        # Start the DB
+        __database__.start(self.config)
         # Open the maminddb offline db
         try:
             self.reader = maxminddb.open_database('modules/geoip/GeoLite2-Country.mmdb')

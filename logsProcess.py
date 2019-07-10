@@ -32,6 +32,8 @@ class LogsProcess(multiprocessing.Process):
         self.verbose = verbose
         self.debug = debug
         self.config = config
+        # Start the DB
+        __database__.start(self.config)
         self.separator = '_'
         # From the config, read the timeout to read logs. Now defaults to 5 seconds
         self.inputqueue = inputqueue
@@ -56,7 +58,7 @@ class LogsProcess(multiprocessing.Process):
         self.outputqueue.put('01|logs|Logs Process configured to report every: {} seconds'.format(self.report_time))
 
     def print(self, text, verbose=1, debug=0):
-        """
+        """ 
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -64,7 +66,7 @@ class LogsProcess(multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-
+        
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
         vd_text = str(int(verbose) * 10 + int(debug))
@@ -145,8 +147,9 @@ class LogsProcess(multiprocessing.Process):
         Do not close the file
         In data_mode = 'text', we add a \n at the end
         In data_mode = 'raw', we do not add a \n at the end
-        In data_type = 'txt' we do not do anything now
+        In data_type = 'text' we do not do anything now
         In data_type = 'json' we do not do anything now, but we may interpret the json for better printing
+        In data_type = 'lines' we write all the lines together
         """
         try:
             if data_mode == 'text':
@@ -199,7 +202,7 @@ class LogsProcess(multiprocessing.Process):
         Read the global data and output it on logs 
         """
         try:
-            #1. Get the list of profiles so far
+            #1. Get the list of profiles modified
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             # Get the list of all the modifed TW for all the profiles
@@ -216,13 +219,13 @@ class LogsProcess(multiprocessing.Process):
                 # Get the time of this TW. For the file name
                 twtime = __database__.getTimeTW(profileid, twid)
                 twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
-                self.outputqueue.put('02|logs|\t[Logs] Storing Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime))
-                #self.outputqueue.put('30|logs|\t[Logs] Profile: {} has {} timewindows'.format(profileid, twLen))
+                self.print('\tStoring Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime), 0, 2)
+                #self.print('\tProfile: {} has {} timewindows'.format(profileid, twLen), 0, 3)
 
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
-
-                # Add the rest of data into profile log file
+            
+                # Create the TW log file
                 twlog = twtime + '.' + twid
                 # First Erase its file and save the data again
                 self.addDataToFile(profilefolder + '/' + twlog, '', file_mode='w+', data_mode='raw')
@@ -301,17 +304,48 @@ class LogsProcess(multiprocessing.Process):
                     for key in data:
                         self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]), file_mode='a+', data_type='text')
                         self.outputqueue.put('03|logs|\t\t\t[Logs] {} ({})'.format(key, data[key]))
+                    self.outputqueue.put('03|logs|\t\t[Logs] Tuples: ' + out_tuples)
 
                 # 6. InTuples
-                out_tuples = __database__.getInTuplesfromProfileTW(profileid, twid)
-                if out_tuples:
-                    # Add tuples
+                in_tuples = __database__.getInTuplesfromProfileTW(profileid, twid)
+                if in_tuples:
+                    # Add in tuples
                     self.addDataToFile(profilefolder + '/' + twlog, 'InTuples:', file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] InTuples:')
-                    data = json.loads(out_tuples)
+                    data = json.loads(in_tuples)
                     for key in data:
                         self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]), file_mode='a+', data_type='text')
                         self.outputqueue.put('03|logs|\t\t\t[Logs] {} ({})'.format(key, data[key]))
+
+
+                # 7. Print the port data
+                all_roles = ['Client', 'Server']
+                all_protocols = ['TCP', 'UDP', 'ICMP', 'IPV6ICMP']
+                all_states = ['Established', 'NotEstablished']
+                all_directions = ['Dst', 'Src']
+                type_data = 'Ports'
+                for role in all_roles:
+                    for protocol in all_protocols:
+                        for state in all_states:
+                            for direction in all_directions:
+                                text_data = 'As {}, {} {} {} ports:'.format(role, protocol, state, direction)
+                                self.outputqueue.put('03|logs|\t\t\t[Logs]: ' + text_data)
+                                data = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
+                                #self.print('LOGING data: {}'.format(data))
+                                if data:
+                                    self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
+                                    for port in data:
+                                        text_data = '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}.'.format(port, data[port]['totalflows'], data[port]['totalpkt'], data[port]['totalbytes'])
+                                        self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
+                                        self.outputqueue.put('03|logs|\t\t\t[Logs]: ' + text_data)
+
+                # 8. Info about the evidence so far for this TW.
+                evidence = __database__.getEvidenceForTW(profileid, twid)
+                if evidence:
+                    evidence = json.loads(evidence)
+                    self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
+                    for key in evidence:
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence Description: {}. Confidence: {}. Threat Level: {} (key:{})'.format(evidence[key][2], evidence[key][0], evidence[key][1], key), file_mode='a+', data_type='text')
 
                 # Add free line between tuple info and information about ports and IP.
                 self.addDataToFile(profilefolder + '/' + twlog, '', file_mode='a+', data_type='text')
@@ -334,6 +368,13 @@ class LogsProcess(multiprocessing.Process):
                             self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
                             self.outputqueue.put('03|logs|\t\t\t[Logs]: ' + text_data)
 
+
+                # 9. This should be last. Detections to block
+                blocking = __database__.getBlockingRequest(profileid, twid)
+                if blocking:
+                    self.addDataToFile(profilefolder + '/' + twlog, 'Was requested to block in this time window: ' + str(blocking), file_mode='a+', data_type='json')
+                    self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
+
                 # Mark it as not modified anymore
                 __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
 
@@ -348,6 +389,10 @@ class LogsProcess(multiprocessing.Process):
                 timeline_path = profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt'
                 if not os.path.isfile(timeline_path):
                     self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
+
+                # If the file does not exists yet, create it
+                #if not os.path.isfile(timeline_path):
+                    #self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
                 for twid_tuple in tws:
                     (twid, starttime) = twid_tuple
                     hash_key = profileid + self.separator + twid
@@ -355,7 +400,7 @@ class LogsProcess(multiprocessing.Process):
                     data, first_index = __database__.get_timeline_last_lines(profileid, twid, first_index)
                     self.timeline_first_index[hash_key] = first_index
                     if data:
-                        #self.print('TIMELINE Profileid: {:45}, twid: {}. Line: {}'.format(profileid, twid, line))
+                        self.print('Adding to the profile line {} {}, data {}'.format(profileid, twid, data), 6, 0)
                         self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_mode='raw', data_type='lines')
 
                 last_profile_id = profileid

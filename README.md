@@ -3,18 +3,15 @@ Slips is an intrusion prevention system that is based on behavioral detections a
 
 # Installation
 
-
-   
-
 ## Dependencies
 The minimum slips requirements are:
 
 - redis database running (see http://redis.org)
-- python 3.7
+- python 3.7 or more
 - py37-redis 
-- maxminddb libraries for python (pip install maxminddb)
+- maxminddb libraries for python (pip install maxminddb). Or ignore the geoip module in the conf.
 - watchdog python library
-- bro (now zeek) (see http://zeek.org)
+- Zeek (Bro) https://docs.zeek.org/en/stable/install/install.html
   
 To run redis you can:
     - In Linux, as a daemon: redis-server --daemonize yes
@@ -35,7 +32,7 @@ To run redis you can:
 
 # Fast usage
 1. Start Redis (as a daemon or not)
-2. ./slips.py -c slips.conf -i <interface>
+2. `./slips.py -c slips.conf -i <interface>`
 3. Check the folder called with the date of today. All files are updated every 5 seconds.
 
 # Architecture of operation
@@ -69,19 +66,12 @@ The timeline file is created by the timeline module and is a unique file interpr
 ### Profile file
 This file contains generic features of the profile that are not part of any individual time-window, such as information about its Ethernet MAC address.
 
-
-
-
-
-
 # History of Slips
 This is the new version of the Stratosphere IPS, a behavioral-based intrusion detection and prevention system that uses machine learning algorithms to detect malicious behaviors. It is part of a larger suite of programs that include the [Stratosphere Windows IPS] and the [Stratosphere Testing Framework].
 
-
-
-
 ## Usage
-Start redis
+
+- Start redis
 
     In macos using ports, if you prefer to start a redis server manually, rather than using 'port load', then use this command:
 
@@ -91,27 +81,19 @@ Start redis
 
         sudo port load redis
 
-
-
 # More specific usage examples
 
 Slips can be used by passing flows in its stdin, like this:
 
-    ```
     cat test-flows/test3.binetflow | ./slips.py -l -c slips.conf -v 2 
-    ```
 
 Or it can be told to open a certain file, like this:
 
-    ```
     ./slips.py -r test-flows/test3.binetflow -l -c slips.conf -v 2 
-    ```
 
 To read your own packets you can do:
 
-    ```
     sudo argus -i eth0 -S 5 -w - |ra -n -r -  | ./slips.py -l -v 2 -c slips.conf
-    ```
 
     Which means run argus in eth0, report flows every 5s, give them to ra, ra only prints the flows, and slips works with them.
 
@@ -124,6 +106,7 @@ The behavioral models are stored in the __models__ folder and will be updated re
 
 
 ## Features 
+- Each flow from the pcap is stored only once. Even if you load the same pcap again when not deleting the DB.
 - For now, everytime slips starts the database is deleted.
 - Slips can detect port scans. For now the types detected are:
  - Horizontal port scans. Same src ip, sending TCP not established flows, to more than 3 dst ips. The amount of packetes is the confidence.
@@ -180,13 +163,13 @@ This version of slips comes with the following features:
 
 - The main author of the project is Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
 - Ondrej Lukas: During the original slips code, he worked on the new detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classes, etc.
+- Frantisek Strasak. Work on all the new version of slips, features, output, core. (https://github.com/frenky-strasak)
 - Elaheh Biglar Beigi
 - MariaRigaki 
 - kartik88363
 - arkamar
 
 
-[Argus]: http://qosient.com/argus/ "Argus"
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
 [Zeek]: https://www.zeek.org/download/index.html 

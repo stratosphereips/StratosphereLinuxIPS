@@ -11,7 +11,7 @@ import maxminddb
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'ASN'
+    name = 'asn'
     description = 'Module to find the ASN of an IP address'
     authors = ['Sebastian Garcia']
 
@@ -21,6 +21,10 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
+        # Start the DB
+        __database__.start(self.config)
+        # Set the output queue of our database instance
+        __database__.setOutputQueue(self.outputqueue)
         # Open the maminddb offline db
         try:
             self.reader = maxminddb.open_database('modules/asn/GeoLite2-ASN.mmdb')

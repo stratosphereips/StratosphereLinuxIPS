@@ -11,7 +11,7 @@ from datetime import datetime
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'Timeline'
+    name = 'timeline'
     description = 'Creates a timeline of what happened in the network based on all the flows and type of data available'
     authors = ['Sebastian Garcia']
 
@@ -21,12 +21,10 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
+        # Start the DB
+        __database__.start(self.config)
         self.separator = __database__.getFieldSeparator()
-        # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        # The options change, so the last list is on the slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
+        # Subscribe to 'new_flow' channel
         self.c1 = __database__.subscribe('new_flow')
         # To store the timelines of each profileid_twid
         self.profiles_tw = {}
@@ -36,8 +34,7 @@ class Module(Module, multiprocessing.Process):
         self.alerted_malicous_ips_dict = {}
         # Read information how we should print timestamp.
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
-        # Wait a little so we give time to read something from the files
-        time.sleep(5)
+        # Wait a little so we give time to have something to print
 
     def read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -88,22 +85,21 @@ class Module(Module, multiprocessing.Process):
         if self.is_human_timestamp is True:
             # human readable time
             d = datetime.fromtimestamp(timestamp)
-            timestamp = '{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:06d}'.format(
-                d.year, d.month, d.day, d.hour, d.minute, d.second, d.microsecond)
+            timestamp = '{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:06d}'.format(d.year, d.month, d.day, d.hour, d.minute, d.second, d.microsecond)
         return str(timestamp)
 
     def process_flow(self, profileid, twid, flow, timestamp: float):
         """
-        Receives a flow and it process it for this profileid and twid
+        Receives a flow and it process it for this profileid and twid so its printed by the logprocess later
         """
         timestamp = self.process_timestamp(timestamp)
         try:
-            # Get some fields
-            stime = next(iter(flow))
-            flow_dict = json.loads(flow[stime])
+            # Convert the common fields to something that can be interpreted
+            uid = next(iter(flow))
+            flow_dict = json.loads(flow[uid])
             
             dur = flow_dict['dur']
-            uid = flow_dict['uid']
+            stime = flow_dict['ts']
             saddr = flow_dict['saddr']
             sport = flow_dict['sport']
             daddr = flow_dict['daddr']
@@ -117,8 +113,19 @@ class Module(Module, multiprocessing.Process):
                 daddr_asn = daddr_data['asn']
             except KeyError:
                 daddr_asn = 'Unknown'
+            try:
+                if daddr_data['Malicious']:
+                    daddr_malicious = 'Malicious'
+                daddr_malicious_info = daddr_data['description']
+            except KeyError:
+                daddr_malicious = ''
+                daddr_malicious_info = ''
+
+            daddr_data_str = ', '.join("{!s}={!r}".format(key,val) for (key,val) in daddr_data.items())
+
             dport = flow_dict['dport']
             proto = flow_dict['proto']
+
             # Here is where we see if we know this dport
             dport_name = __database__.get_port_info(str(dport)+'/'+proto)
             state = flow_dict['state']
@@ -129,7 +136,6 @@ class Module(Module, multiprocessing.Process):
             allbytes_human = 0.0
 
             # Convert the bytes into human readable
-            # Convert into a function
             if int(allbytes) < 1024:
                 # In bytes
                 allbytes_human = '{:.2f}{}'.format(float(allbytes),'b')
@@ -147,35 +153,36 @@ class Module(Module, multiprocessing.Process):
             if type(sbytes) != int:
                 sbytes = 0
             appproto = flow_dict['appproto']
-            # Check if we have an alternative flow related to this one. Like DNS or HTTP
+
+            # Check if we have an alternative flow related to this one. Like DNS or HTTP from Zeek
             alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
 
-            key = profileid
 
+            # Now that we have the flow processed. Try to interpret it and create the activity line
             # Record Activity
             activity = ''
             if 'tcp' in proto or 'udp' in proto:
                 if dport_name and state.lower() == 'established':
                     # Check if appart from being established the connection sent anything!
                     if allbytes:
-                        activity = '- {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {} , Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {} , {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
                     else:
-                        activity = '- {} asked to {} {}/{}, Be careful! Established but empyt! Sent: {}, Recv: {}, Tot: {} , Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} asked to {} {}/{}, Be careful! Established but empty! Sent: {}, Recv: {}, Tot: {}, {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
                 # In here we try to capture the situation when only 1 udp packet is sent. Looks like not established, but is actually maybe ok
                 elif dport_name and 'notest' in state.lower() and proto == 'udp' and allbytes == sbytes:
-                    activity = '- Not answered {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
+                    activity = '- Not answered {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {}, {} \n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
                 elif dport_name and 'notest' in state.lower():
-                    activity = '- NOT Established {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
+                    activity = '- NOT Established {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {}, {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
                 else:
                     # This is not recognized. Do our best
-                    activity = '[!] - Not recognized {} flow from {} to {} dport {}/{}, Sent: {}, Recv: {}, Totl: {}, Country: {}, ASN Org: {}\n'.format(state.lower(), saddr, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_country, daddr_asn)
+                    activity = '[!] - Not recognized {} flow from {} to {} dport {}/{}, Sent: {}, Recv: {}, Totl: {}, {}\n'.format(state.lower(), saddr, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
                     #activity = '[!!] Not recognized activity on flow {}\n'.format(flow)
             elif 'icmp' in proto:
                 if type(sport) == int:
                     # zeek puts the number
                     if sport == 8:
                         dport_name = 'PING echo'
-                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} sent to {}, Size: {}, {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
                     # SEARCH FOR ZEEK for 0x0103
                     # dport_name = 'ICMP Host Unreachable'
                     # activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
@@ -184,36 +191,36 @@ class Module(Module, multiprocessing.Process):
                     #    activity = '- {} sent to {}, unreachable port is {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_country, daddr_asn)
                     elif sport == 11:
                         dport_name = 'ICMP Time Excedded in Transit'
-                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} sent to {}, Size: {}, {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
                     elif sport == 3:
                         dport_name = 'ICMP Destination Net Unreachable'
-                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} sent to {}, Size: {}, {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
                     else:
                         dport_name = 'ICMP Unknown type'
-                        activity = '- {} sent to {}, Type: 0x{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, sport, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} sent to {}, Type: 0x{}, Size: {}, {}\n'.format(dport_name, daddr, sport, allbytes_human, daddr_data_str)
                 elif type(sport) == str:
                     # Argus puts in hex 
                     if '0x0008' in sport:
                         dport_name = 'PING echo'
-                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} sent to {}, Size: {}, {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
                     elif '0x0103' in sport:
                         dport_name = 'ICMP Host Unreachable'
-                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} sent to {}, Size: {}, {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
                     elif '0x0303' in sport:
                         dport_name = 'ICMP Port Unreachable'
-                        activity = '- {} sent to {}, unreachable port is {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} sent to {}, unreachable port is {}, Size: {}, {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_data_str)
                     elif '0x000b' in sport:
-                        dport_name = 'ICMP Time Excedded in Transit'
                         activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} sent to {}, Size: {}, {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
                     elif '0x0003' in sport:
                         dport_name = 'ICMP Destination Net Unreachable'
-                        activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} sent to {}, Size: {}, {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
                     else:
                         dport_name = 'ICMP Unknown type'
-                        activity = '- {} sent to {}, Type: 0x{}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, sport, allbytes_human, daddr_country, daddr_asn)
+                        activity = '- {} sent to {}, Size: {}, {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
             elif 'igmp' in proto:
                 dport_name = 'IGMP'
-                activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                activity = '- {} sent to {}, Size: {}, {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
 
             # Store the activity in the DB for this profileid and twid
             if activity:
@@ -263,19 +270,6 @@ class Module(Module, multiprocessing.Process):
                         __database__.add_timeline_line(profileid, twid, activity, timestamp)
                     self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
-            # [THREAT INTELLIGENCE module]
-            # Is the IP of this profile malicious? If yes, store it in timeline table (however only once!).
-            if self.alerted_malicous_ips_dict.get(profileid, None) is None:
-                description = __database__.is_profile_malicious(profileid)
-                if description is not None:
-                    malicious_ip = profileid.split(self.separator)[1]
-                    activity = '[THREAT INTELLIGENCE] Malicious IP was detected! The IP: {} was found in malicious list.' \
-                               ' Description: "{}"\n'.format(malicious_ip, description)
-                    __database__.add_timeline_line(profileid, twid, activity, timestamp)
-                    self.alerted_malicous_ips_dict[profileid] = True
-
-
-
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -288,6 +282,7 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # Main loop function
+            time.sleep(10)
             while True:
                 message = self.c1.get_message(timeout=-1)
                 # Check that the message is for you. Probably unnecessary...
