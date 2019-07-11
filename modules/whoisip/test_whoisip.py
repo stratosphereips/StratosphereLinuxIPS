@@ -35,14 +35,8 @@ def test_tricky_ips():
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
         wi.check_ip(ip)
-
-     # TODO: Tomorrow check this:
-     # 21) "4294959104"
-     # 22) "{\"asn\": \"17964\", \"country\": \"CN\", \"cidr\": \"101.246.0.0/19\", \"name\": \"GHSX_NET\"}"
-     # 23) "4294966784"
-     # 24) "{\"asn\": \"8517\", \"country\": \"TR\", \"cidr\": \"193.140.124.0/23\", \"name\": \"OGU-NET\"}"
-     # 25) "4294966272"
-     # 26) "{\"asn\": \"8517\", \"country\": \"TR\", \"cidr\": \"193.140.120.0/22\", \"name\": \"OGU-NET\"}"
+    for ip in ips:
+        wi.check_ip(ip)
 
 
 if __name__ == "__main__":
