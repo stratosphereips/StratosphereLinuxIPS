@@ -1,6 +1,6 @@
 # Must imports
 import ssl
-from urllib import request
+import urllib
 
 from slips.common.abstracts import Module
 import multiprocessing
@@ -42,8 +42,8 @@ class WhoisIP(Module, multiprocessing.Process):
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-        https_handler = request.HTTPSHandler(context=ctx)
-        self.opener = request.build_opener(https_handler)
+        https_handler = urllib.request.HTTPSHandler(context=ctx)
+        self.opener = urllib.request.build_opener(https_handler)
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -97,20 +97,28 @@ class WhoisIP(Module, multiprocessing.Process):
         if cached_data is not None:
             self.print("Data found in cache!")
             self.show_results(cached_data["asn"], cached_data["country"], cached_data["cidr"], cached_data["name"])
-            return cached_data  # TODO
+            return cached_data
 
         self.print("Data not found in cache!")
 
         try:
             message = ip_object.lookup_rdap(depth=1)
+            asn = message["asn"]
+            ctr_code = message["asn_country_code"]
+            cidr = message["network"]["cidr"]
+            name = str(message["network"]["name"])  # This should be converted to string in case name is None
         except ipwhois.ASNRegistryError as e:
             self.print(e)
             return
+        except ipwhois.HTTPLookupError:
+            self.print("RDAP failed, trying whois directly")
+            message = ip_object.lookup_whois()
+            asn = message["asn"]
+            ctr_code = message["asn_country_code"]
+            cidr = message["asn_cidr"]
+            name = str(message["asn_description"])  # This should be converted to string in case name is None
+            k = 3
 
-        asn = message["asn"]
-        ctr_code = message["asn_country_code"]
-        cidr = message["network"]["cidr"]
-        name = message["network"]["name"]
         self.show_results(asn, ctr_code, cidr, name)
 
         if "," in cidr:

@@ -29,6 +29,7 @@ def try_random_addresses():
 
 def test_tricky_ips():
     ips = []
+    ips.append("162.253.210.64")  # 404 error for rdap, however whois works
     ips.append("71.163.76.208")  # there is a list of cidrs
     ips.append("223.43.28.222")  # Korean whois with encoding errs
 
