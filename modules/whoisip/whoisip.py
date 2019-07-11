@@ -75,6 +75,8 @@ class WhoisIP(Module, multiprocessing.Process):
 
     def check_ip(self, ip):
         print("--- Checking ip " + ip)
+
+        # IPWhois object can only be created on valid IP addresses that are public, not multicast etc.
         try:
             ip_object = ipwhois.IPWhois(ip, proxy_opener=self.opener)
         except Exception as e:
@@ -94,7 +96,10 @@ class WhoisIP(Module, multiprocessing.Process):
 
         if cached_data is not None:
             self.print("Data found in cache!")
+            self.show_results(cached_data["asn"], cached_data["country"], cached_data["cidr"], cached_data["name"])
             return cached_data  # TODO
+
+        self.print("Data not found in cache!")
 
         try:
             message = ip_object.lookup_rdap(depth=1)
@@ -106,10 +111,7 @@ class WhoisIP(Module, multiprocessing.Process):
         ctr_code = message["asn_country_code"]
         cidr = message["network"]["cidr"]
         name = message["network"]["name"]
-        print("ASN:", asn)
-        print("Country:", ctr_code)
-        print("CIDR:", cidr)
-        print("Name:", name)
+        self.show_results(asn, ctr_code, cidr, name)
 
         if "," in cidr:
             cidrs = cidr.split(", ")
@@ -117,14 +119,17 @@ class WhoisIP(Module, multiprocessing.Process):
             cidrs = [cidr]
 
         for cidr in cidrs:
-            mask = int(Interface(cidr).netmask)
+            mask = int(Interface(cidr))
             save_subnet(mask, asn, ctr_code, cidr, name)
 
+    def show_results(self, asn, ctr_code, cidr, name):
+        self.print("ASN: " + asn)
+        self.print("Country: " + ctr_code)
+        self.print("CIDR: " + cidr)
+        self.print("Name: " + name)
+
     def save_ipv4_subnet(self, mask: int, asn: str, ctr_code: str, cidr: str, name: str):
-        data = {"asn": asn,
-                  "country": ctr_code,
-                  "cidr": cidr,
-                  "name": name}
+        data = {"asn": asn, "country": ctr_code, "cidr": cidr, "name": name}
         str_data = json.dumps(data)
         __database__.r.hset(self.db_hashset_ipv4, mask, str_data)
 
@@ -134,12 +139,12 @@ class WhoisIP(Module, multiprocessing.Process):
     def load_ipv4_subnet(self, ip):
         mask = 4294967295
         ip_value = int(ip)
-        for i in range(0, 16):
+        for i in range(0, 32):
             mask -= pow(2, i)
             masked_ip = mask & ip_value
             data = __database__.r.hget(self.db_hashset_ipv4, masked_ip)
             if data:
-                return data
+                return json.loads(data)
         return None
 
     def load_ipv6_subnet(self, ip):
