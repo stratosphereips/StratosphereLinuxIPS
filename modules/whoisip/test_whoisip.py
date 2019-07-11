@@ -27,10 +27,14 @@ def try_random_addresses():
         wi.check_ip(ip)
 
 
-def test_tricky(ips):
+def test_tricky_ips():
     ips = []
     ips.append("71.163.76.208")  # there is a list of cidrs
     ips.append("223.43.28.222")  # Korean whois with encoding errs
+
+    wi = WhoisIP(None, get_default_config(), testing=True)
+    for ip in ips:
+        wi.check_ip(ip)
 
      # TODO: Tomorrow check this:
      # 21) "4294959104"
@@ -43,4 +47,5 @@ def test_tricky(ips):
 
 if __name__ == "__main__":
     # run("modules/whoisip/data/malicious_ips.txt", "modules/whoisip/data/malicious_ips_out.txt")
-    try_random_addresses()
+    # try_random_addresses()
+    test_tricky_ips()

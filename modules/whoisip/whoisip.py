@@ -1,4 +1,7 @@
 # Must imports
+import ssl
+from urllib import request
+
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
@@ -7,7 +10,6 @@ from slips.core.database import __database__
 import ipwhois
 import ipaddress
 import json
-
 
 
 class WhoisIP(Module, multiprocessing.Process):
@@ -35,6 +37,13 @@ class WhoisIP(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
 
         self.db_hashset_ipv4 = "whois-module-ipv4subnet-cache"
+
+        # disable SSL checks, this fixes issues with checking Korean domains
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        https_handler = request.HTTPSHandler(context=ctx)
+        self.opener = request.build_opener(https_handler)
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -67,7 +76,7 @@ class WhoisIP(Module, multiprocessing.Process):
     def check_ip(self, ip):
         print("--- Checking ip " + ip)
         try:
-            ip_object = ipwhois.IPWhois(ip)
+            ip_object = ipwhois.IPWhois(ip, proxy_opener=self.opener)
         except Exception as e:
             self.print(e)
             return
