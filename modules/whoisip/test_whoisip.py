@@ -1,5 +1,7 @@
 import configparser
 
+import time
+
 from modules.whoisip.whoisip import WhoisIP
 
 
@@ -29,18 +31,19 @@ def try_random_addresses():
 
 def test_tricky_ips():
     ips = []
+    ips.append("163.194.132.190")  # ASN lookup failed
     ips.append("162.253.210.64")  # 404 error for rdap, however whois works
     ips.append("71.163.76.208")  # there is a list of cidrs
     ips.append("223.43.28.222")  # Korean whois with encoding errs
 
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
-        wi.check_ip(ip)
-    for ip in ips:
-        wi.check_ip(ip)
-
+        wi.check_ip_ipwhois(ip)
 
 if __name__ == "__main__":
-    # run("modules/whoisip/data/malicious_ips.txt", "modules/whoisip/data/malicious_ips_out.txt")
+    t = time.time()
+    run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # try_random_addresses()
-    test_tricky_ips()
+    # test_tricky_ips()
+    # TODO: check ip ranges in file
+    print(time.time() - t)

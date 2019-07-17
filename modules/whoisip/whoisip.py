@@ -1,4 +1,5 @@
 # Must imports
+import socket
 import ssl
 import urllib
 
@@ -10,6 +11,7 @@ from slips.core.database import __database__
 import ipwhois
 import ipaddress
 import json
+from cymruwhois import Client
 
 
 class WhoisIP(Module, multiprocessing.Process):
@@ -45,6 +47,8 @@ class WhoisIP(Module, multiprocessing.Process):
         https_handler = urllib.request.HTTPSHandler(context=ctx)
         self.opener = urllib.request.build_opener(https_handler)
 
+        self.client = Client()
+
     def print(self, text, verbose=1, debug=0):
         """ 
         Function to use to print text using the outputqueue of slips.
@@ -73,7 +77,80 @@ class WhoisIP(Module, multiprocessing.Process):
 
         print(text)
 
+    def is_checkable(self, address):
+        if not address.is_global:
+            self.print("Address is not global")
+            return False
+
+        if address.is_private:
+            self.print("Address is private")
+            return False
+
+        if address.is_multicast:
+            self.print("Address is multicast")
+            return False
+
+        if address.is_link_local:
+            self.print("Address is link local")
+            return False
+
+        if address.is_loopback:
+            self.print("Address is loopback")
+            return False
+
+        return True
+
     def check_ip(self, ip):
+        print("--- Checking ip " + ip)
+
+        address = ipaddress.ip_address(ip)
+
+        if not self.is_checkable(address):
+            return
+
+        if address.version == 4:
+            load_subnet = self.load_ipv4_subnet
+            save_subnet = self.save_ipv4_subnet
+            Interface = ipaddress.IPv4Interface
+        else:
+            load_subnet = self.load_ipv6_subnet
+            save_subnet = self.save_ipv6_subnet
+            Interface = ipaddress.IPv6Interface
+
+        cached_data = load_subnet(address)
+
+        if cached_data is not None:
+            self.print("Data found in cache!")
+            self.show_results(cached_data["asn"], cached_data["country"], cached_data["cidr"], cached_data["name"])
+            return cached_data
+
+        self.print("Data not found in cache!")
+
+        try:
+            message = self.client.lookup(ip)
+            asn = message.asn
+            ctr_code = message.cc
+            cidr = message.prefix
+            name = message.owner
+        except socket.gaierror as e:
+            self.print(e)
+            return
+
+        self.show_results(asn, ctr_code, cidr, name)
+
+        if "," in cidr:
+            cidrs = cidr.split(", ")
+        else:
+            cidrs = [cidr]
+
+        for cidr in cidrs:
+            try:
+                mask = int(Interface(cidr))
+                save_subnet(mask, asn, ctr_code, cidr, name)
+            except:
+                pass
+
+    def check_ip_ipwhois(self, ip):
         print("--- Checking ip " + ip)
 
         # IPWhois object can only be created on valid IP addresses that are public, not multicast etc.
