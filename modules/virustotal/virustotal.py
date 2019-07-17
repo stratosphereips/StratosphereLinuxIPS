@@ -1,4 +1,6 @@
 # Must imports
+import configparser
+
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
@@ -43,7 +45,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
 
-        key_file = config["virustotal"]["api_key_file"]
+        key_file = self.__read_configuration("virustotal", "api_key_file")
         self.key = None
         try:
             with open(key_file, "r") as f:
@@ -56,6 +58,16 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         # self.print("Starting VirusTotal module at " + str(time.time()))
         self.counter = 0
+
+    def __read_configuration(self, section: str, name: str) -> str:
+        """ Read the configuration file for what we need """
+        # Get the time of log report
+        try:
+             conf_variable = self.config.get(section, name)
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            conf_variable = None
+        return conf_variable
 
     def print(self, text, verbose=1, debug=0):
         """ 
