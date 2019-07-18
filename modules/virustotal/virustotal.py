@@ -147,47 +147,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
         self.counter += 1
         return scores
 
-    def check_ip_with_subnet_cache_(self, ip: str):
-        """
-        Unused.
-        Look if similar IP was already processed. If not, perform API call to VirusTotal and return scores for each of
-        the four processed categories. Response is cached in a dictionary.
-        IPv6 addresses are not cached, they will always be queried.
-        :param ip: IP address to check
-        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
-        """
-
-        # first, look if an address from the same network was already resolved
-        if re.match(self.ipv4_reg, ip):
-            # get first three bytes of address
-            ip_split = ip.split(".")
-            ip_subnet = ip_split[0] + "." + ip_split[1] + "." + ip_split[2]
-
-            if not is_ipv4_public(ip_split):
-                self.print("[" + ip + "] is private, skipping", verbose=5, debug=1)
-                return 0, 0, 0, 0
-
-            # compare if the first three bytes of address match
-            cached_data = self.is_subnet_in_db(ip_subnet)
-            if cached_data:
-                self.print("[" + ip + "] This IP was already processed", verbose=5, debug=1)
-                return cached_data
-
-            # for unknown ipv4 address, do the query
-            response = self.api_query_(ip)
-
-            # save query results
-            scores = interpret_response(response.json())
-            self.put_subnet_to_db(ip_subnet, scores)
-            self.counter += 1
-            return scores
-
-        # ipv6 addresses
-        response = self.api_query_(ip)
-        self.counter += 1
-
-        return interpret_response(response.json())
-
     def api_query_(self, ip, save_data=False):
         """
         Create request and perform API call
@@ -280,41 +239,6 @@ def save_score_to_db(ip, scores):
 
     data = {"VirusTotal": vtdata}
     __database__.setInfoForIPs(ip, data)
-
-
-def is_ipv4_public(ip: list):
-    # Reserved addresses: https://en.wikipedia.org/wiki/Reserved_IP_addresses
-    ip = list(map(int, ip))
-
-    # private addresses
-    # 10.*
-    if ip[0] == 10:
-        return False
-    # 192.168.*
-    if ip[0] == 192 and ip[1] == 168:
-        return False
-    # 172.16.* - 172.32.*
-    if ip[0] == 172 and 16 <= ip[1] <= 32:
-        return False
-
-    # Used for link-local addresses between two hosts on a single link when no IP address is otherwise specified,
-    # such as would have normally been retrieved from a DHCP server.
-    # 169.254.*
-    if ip[0] == 169 and ip[1] == 254:
-        return False
-
-    # IETF Protocol Assignments
-    # 192.0.0.*
-    if ip[0] == 192 and ip[1] == 0 and ip[2] == 0:
-        return False
-
-    # In use for IP multicast. (Former Class D network) 224.* - 239.*
-    # Reserved for future use. (Former Class E network) 240.0.0.0 – 255.255.255.254
-    # Reserved for the "limited broadcast" destination address 255.255.255.255
-    if ip[0] >= 224:
-        return False
-
-    return True
 
 
 def interpret_response(response: dict):
