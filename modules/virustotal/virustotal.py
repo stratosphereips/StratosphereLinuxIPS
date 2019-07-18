@@ -33,8 +33,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # database and this line is necessary. Do not delete it, instead move it to line 21.
         __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
 
-        self.db_hashset_name = "virustotal-module-ipv4subnet-cache"
-        self.db_ip_hashset_name = "virustotal-module-ip-cache"
         # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
         # The options change, so the last list is on the slips/core/database.py file. However common options are:
         # - new_ip
@@ -109,7 +107,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 if message['channel'] == 'new_ip' and message["type"] == "message":
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
-                    save_score_to_db(ip, ip_score)
+                    __database__.set_virustotal_score(ip, ip_score)
                     self.print("[" + ip + "] has score " + str(ip_score), verbose=5, debug=1)
 
         except KeyboardInterrupt:
@@ -135,7 +133,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
             return 0, 0, 0, 0
 
         # check if the address is in the cache (probably not, since all IPs are unique)
-        cached_data = self.is_ip_in_db(ip)
+        cached_data = __database__.is_ip_in_virustotal_cache(ip)
         if cached_data:
             return cached_data
 
@@ -143,7 +141,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         response = self.api_query_(ip)
 
         scores = interpret_response(response.json())
-        self.put_ip_to_db(ip, scores)
+        __database__.put_ip_to_virustotal_cache(ip, scores)
         self.counter += 1
         return scores
 
@@ -205,40 +203,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     json.dump(data, f)
 
         return response
-
-    def is_subnet_in_db(self, subnet):
-        """ Check if subnet ip is in db. Unused """
-        data = __database__.r.hget(self.db_hashset_name, subnet)
-        if data:
-            return list(map(float, data.split(" ")))
-        else:
-            return data  # None, the key wasn't found
-
-    def put_subnet_to_db(self, subnet, score):
-        """ Add new subnet with score to db. Unused """
-        data = str(score[0]) + " " + str(score[1]) + " " + str(score[2]) + " " + str(score[3])
-        __database__.r.hset(self.db_hashset_name, subnet, data)
-
-    def is_ip_in_db(self, ip):
-        data = __database__.r.hget(self.db_ip_hashset_name, ip)
-        if data:
-            return list(map(float, data.split(" ")))
-        else:
-            return data  # None, the key wasn't found
-
-    def put_ip_to_db(self, ip, score):
-        data = str(score[0]) + " " + str(score[1]) + " " + str(score[2]) + " " + str(score[3])
-        __database__.r.hset(self.db_ip_hashset_name, ip, data)
-
-
-def save_score_to_db(ip, scores):
-    vtdata = {"URL": scores[0],
-              "down_file": scores[1],
-              "ref_file": scores[2],
-              "com_file": scores[3]}
-
-    data = {"VirusTotal": vtdata}
-    __database__.setInfoForIPs(ip, data)
 
 
 def interpret_response(response: dict):

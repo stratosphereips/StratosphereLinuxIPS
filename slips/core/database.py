@@ -1150,6 +1150,38 @@ class Database(object):
         """ Return the time of last update of the remote malicious file from the db """
         self.r.set('last_update_malicious_file', time)
 
+    def is_ip_in_virustotal_cache(self, ip):
+        """ Check if the IP was cached by VT module. If yes, return list of 4 floats (the score). If not, return None.
+        :param ip: the IP address to check
+        :return: list of 4 floats or None
+        """
+        data = self.r.hget("virustotal-module-ip-cache", ip)
+        if data:
+            return list(map(float, data.split(" ")))
+        else:
+            return data  # None, the key wasn't found
 
+    def put_ip_to_virustotal_cache(self, ip, score):
+        """ Cache VT score for the given IP address
+        :param ip: IP address
+        :param score: list of four int/float values
+        :return: None
+        """
+        data = str(score[0]) + " " + str(score[1]) + " " + str(score[2]) + " " + str(score[3])
+        self.r.hset("virustotal-module-ip-cache", ip, data)
+
+    def set_virustotal_score(self, ip, scores):
+        """ Save VT score to the database to update info about the IP
+        :param ip: IP address
+        :param scores: list of four int/float values
+        :return: None
+        """
+        vtdata = {"URL": scores[0],
+                  "down_file": scores[1],
+                  "ref_file": scores[2],
+                  "com_file": scores[3]}
+
+        data = {"VirusTotal": vtdata}
+        self.setInfoForIPs(ip, data)
 
 __database__ = Database()
