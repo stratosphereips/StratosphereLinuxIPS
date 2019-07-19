@@ -1157,7 +1157,7 @@ class Database(object):
         """
         data = self.r.hget("virustotal-module-ip-cache", ip)
         if data:
-            return list(map(float, data.split(" ")))
+            return tuple(map(float, data.split(" ")))
         else:
             return data  # None, the key wasn't found
 

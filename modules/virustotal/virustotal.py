@@ -8,7 +8,8 @@ from slips.core.database import __database__
 # Your imports
 import json
 import re
-import requests
+import urllib3
+import certifi
 import time
 import ipaddress
 
@@ -56,6 +57,10 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         # self.print("Starting VirusTotal module at " + str(time.time()))
         self.counter = 0
+
+        # Pool manager to make HTTP requests with urllib3
+        # certifi provides a bundle of trusted CAs, the certificates are located in certifi.where()
+        self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
 
     def __read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -140,7 +145,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # for unknown address, do the query
         response = self.api_query_(ip)
 
-        scores = interpret_response(response.json())
+        scores = interpret_response(response)
         __database__.put_ip_to_virustotal_cache(ip, scores)
         self.counter += 1
         return scores
@@ -154,15 +159,15 @@ class VirusTotalModule(Module, multiprocessing.Process):
         """
 
         params = {'apikey': self.key, 'ip': ip}
-        response = requests.get(self.url, params=params)
+        response = self.http.request("GET", self.url, fields=params)
 
         sleep_attempts = 0
 
         # repeat query if API limit was reached (code 204)
-        while response.status_code != 200:
+        while response.status != 200:
 
             # requests per minute limit reached
-            if response.status_code == 204:
+            if response.status == 204:
                 # usually sleeping for 40 seconds is enough, if not, try adding 20 more
                 if sleep_attempts == 0:
                     sleep_time = 40
@@ -171,7 +176,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 sleep_attempts += 1
 
             # requests per hour limit reached
-            elif response.status_code == 403:
+            elif response.status == 403:
                 # 10 minutes
                 sleep_time = 600
                 self.print("Please check that your API key is correct. Code 403 means timeout but also wrong API key.")
@@ -184,25 +189,26 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 # Reason is a much shorter description ("Forbidden"), but it is always there
                 else:
                     message = response.reason
-                raise Exception("VT API returned unexpected code: " + str(response.status_code) + " - " + message)
+                raise Exception("VT API returned unexpected code: " + str(response.status) + " - " + message)
 
             # report that API limit is reached, wait one minute and try again
-            self.print("Status code is " + str(response.status_code) + " at " + str(time.asctime()) + ", query id: " + str(
+            self.print("Status code is " + str(response.status) + " at " + str(time.asctime()) + ", query id: " + str(
                 self.counter), verbose=5, debug=1)
 
             self.print("API limit reached, going to sleep for " + str(sleep_time) + " seconds", verbose=1, debug=0)
             time.sleep(sleep_time)
-            response = requests.get(self.url, params=params)
+            response = self.http.request("GET", self.url, fields=params)
+
+        data = json.loads(response.data)
 
         # optionally, save data to file
         if save_data:
-            data = response.json()
             filename = ip + ".txt"
             if filename:
                 with open(filename, 'w') as f:
                     json.dump(data, f)
 
-        return response
+        return data
 
 
 def interpret_response(response: dict):
