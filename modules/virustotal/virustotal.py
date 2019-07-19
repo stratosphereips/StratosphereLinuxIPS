@@ -155,7 +155,15 @@ class VirusTotalModule(Module, multiprocessing.Process):
         """
 
         params = {'apikey': self.key, 'ip': ip}
-        response = self.http.request("GET", self.url, fields=params)
+
+        # wait for network
+        while True:
+            try:
+                response = self.http.request("GET", self.url, fields=params)
+                break
+            except urllib3.exceptions.MaxRetryError:
+                self.print("Network is not available, waiting 10s")
+                time.sleep(10)
 
         sleep_attempts = 0
 
