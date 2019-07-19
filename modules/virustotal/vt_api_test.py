@@ -3,7 +3,6 @@ import json
 import socket
 import os
 import numpy as np
-from matplotlib import pyplot as plt
 
 from modules.virustotal.virustotal import VirusTotalModule
 
@@ -42,7 +41,7 @@ def dataset_demo(benign_infile, benign_outfile, b_is_ips, malicious_infile, mali
     benign_data = read_score_from_file(benign_outfile)
     malicious_data = read_score_from_file(malicious_outfile)
 
-    show_histograms(benign_data, malicious_data)
+    # visualisation was removed, see older commits
 
 
 def process_input_file(infile, outfile, is_ips):
@@ -110,31 +109,6 @@ def read_score_from_file(filename, verbose=False):
             print("Min value:", np.min(data, 0))
 
         return data
-
-
-def show_histograms(benign, malicious):
-    """
-    Visualise four histograms, one for each category of scores. The input arrays must have 4 columns, number of rows
-    do not need to match
-    :param benign: np.ndarray of benign scores
-    :param malicious: np.ndarray of malicious scores
-    :return: None
-    """
-    bins = np.linspace(0, 0.12, 20)
-    titles = ["Resolved URLs", "Downloaded files", "Referring files", "Communicating files"]
-
-    for i in range(0, 4):
-        b_urls = benign[:, i]
-        m_urls = malicious[:, i]
-
-        subplot_id = 221 + i
-
-        plt.subplot(subplot_id)
-        plt.hist(b_urls, bins, alpha=0.5, label='Benign', color="blue")
-        plt.hist(m_urls, bins, alpha=0.5, label='Malicious', color="red")
-        plt.title(titles[i])
-        plt.legend(loc='upper right')
-    plt.show()
 
 
 def get_default_config():

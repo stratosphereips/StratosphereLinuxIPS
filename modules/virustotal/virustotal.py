@@ -7,7 +7,6 @@ from slips.core.database import __database__
 
 # Your imports
 import json
-import re
 import urllib3
 import certifi
 import time
@@ -52,10 +51,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         except FileNotFoundError:
             self.print("The file with API key (" + key_file + ") could not be loaded. VT module is stopping.")
 
-        # regex to check IP version (only IPv4 can be saved at the moment)
-        self.ipv4_reg = re.compile("^([0-9]{1,3}\.){3}[0-9]{1,3}$")
-
-        # self.print("Starting VirusTotal module at " + str(time.time()))
+        # query counter for debugging purposes
         self.counter = 0
 
         # Pool manager to make HTTP requests with urllib3
@@ -66,7 +62,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         """ Read the configuration file for what we need """
         # Get the time of log report
         try:
-             conf_variable = self.config.get(section, name)
+            conf_variable = self.config.get(section, name)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             conf_variable = None
