@@ -2,6 +2,7 @@
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
+import platform
 
 # Your imports
 import time
@@ -35,6 +36,16 @@ class Module(Module, multiprocessing.Process):
         self.update_manager = UpdateIPManager(self.outputqueue)
         # Update the remote file containing malicious IPs.
         self.__update_remote_malicious_file()
+        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
+        if platform.system() == 'Darwin':
+            # macos
+            self.timeout = None
+        elif platform.system() == 'Linux':
+            # linux
+            self.timeout = -1
+        else:
+            #??
+            self.timeout = None
 
     def __read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -152,7 +163,7 @@ class Module(Module, multiprocessing.Process):
             # First load the malicious ips from the file to the DB
             self.__load_malicious_ips()
             while True:
-                message = self.c1.get_message(timeout=None)
+                message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. 
                 if message['channel'] == 'new_ip':
                     new_ip = message['data']

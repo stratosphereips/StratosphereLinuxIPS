@@ -1,0 +1,5 @@
+benign_in: the hostnames visited in the CTU-Normal-4 dataset
+benign_out_bkp: scores computed for benign_in (benign_out will be deleted once the demo scrupt is run)
+malicious_in: IP addresses that were marked as malicious at https://ransomwaretracker.abuse.ch/tracker/ (as of 2019-07-01)
+malicious_out_bkp: scores computed for malicious_in (malicious_out will be deleted once the demo scrupt is run)
+

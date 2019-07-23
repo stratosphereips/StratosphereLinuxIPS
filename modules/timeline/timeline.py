@@ -2,6 +2,7 @@
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
+import platform
 
 # Your imports
 import time
@@ -35,6 +36,16 @@ class Module(Module, multiprocessing.Process):
         # Read information how we should print timestamp.
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
         # Wait a little so we give time to have something to print 
+        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
+        if platform.system() == 'Darwin':
+            # macos
+            self.timeout = None
+        elif platform.system() == 'Linux':
+            # linux
+            self.timeout = -1
+        else:
+            #??
+            self.timeout = None
 
     def read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -284,7 +295,7 @@ class Module(Module, multiprocessing.Process):
             # Main loop function
             time.sleep(10)
             while True:
-                message = self.c1.get_message(timeout=None)
+                message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['channel'] == 'new_flow' and message['data'] != 1:
                     # Example of printing the number of profiles in the Database every second
