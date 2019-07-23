@@ -952,7 +952,7 @@ class Database(object):
             # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
             flow = self.get_flow(profileid, twid, uid)
             # Get the dictionary and convert to json string
-            flow = json.dumps(flow)
+            flow = json.dumps(flow)git
             # Prepare the data to publish.
             to_send = {}
             to_send['profileid'] = profileid
