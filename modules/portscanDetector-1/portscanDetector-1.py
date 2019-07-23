@@ -3,6 +3,7 @@ import multiprocessing
 from slips.core.database import __database__
 import time
 import json
+import platform
 
 # Port Scan Detector Process
 class PortScanProcess(Module, multiprocessing.Process):
@@ -29,6 +30,16 @@ class PortScanProcess(Module, multiprocessing.Process):
         # We need to know that after a detection, if we receive another flow that does not modify the count for the detection, we are not
         # re-detecting again only becase the threshold was overcomed last time.
         self.cache_det_thresholds = {}
+        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
+        if platform.system() == 'Darwin':
+            # macos
+            self.timeout = None
+        elif platform.system() == 'Linux':
+            # linux
+            self.timeout = -1
+        else:
+            #??
+            self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -50,7 +61,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         try:
             while True:
                 # Wait for a message from the channel that a TW was modified
-                message = self.c1.get_message(timeout=-1)
+                message = self.c1.get_message(timeout=self.timeout)
                 #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
                 if message['channel'] == 'tw_modified':
                     # 'profile_147.32.81.134:timewindow0'
