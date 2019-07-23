@@ -8,8 +8,15 @@ __pycache__/
 malicious_ips.etag
 malicious_ips.time
 malicious_ips.txt
+# Ignore the secret api key of virustotal
 api_key_secret
-
+# Ignore the results folders
+2019-
+2020-
+2021-
+2022-
+2023-
+# Be careful after 2023
 
 *.swp
 *.swo
