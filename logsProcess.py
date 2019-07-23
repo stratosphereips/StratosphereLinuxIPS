@@ -153,23 +153,29 @@ class LogsProcess(multiprocessing.Process):
         try:
             if data_mode == 'text':
                 data = data + '\n'
+            # The other mode is 'raw' where we do not add the \n 
             try:
                 if data_type == 'lines':
                     # We received a bunch of lines all together. Just write them
                     filename.writelines(data)
+                    filename.flush()
                     return filename
                 else:
+                # The other mode is 'line' where we just write one line
                     filename.write(data)
+                    filename.flush()
                     return filename
             except (NameError, AttributeError) as e:
-                # The file was not opened
+                # The file was not opened yet
                 fileobj = open(filename, file_mode)
                 if data_type == 'lines':
                     # We received a bunch of lines all together. Just write them
                     fileobj.writelines(data)
+                    fileobj.flush()
                     return fileobj
                 else:
                     fileobj.write(data)
+                    fileobj.flush()
                 # For some reason the files are closed and flushed correclty.
                 return fileobj
         except KeyboardInterrupt:
@@ -347,7 +353,7 @@ class LogsProcess(multiprocessing.Process):
                     data = __database__.get_timeline_all_lines(profileid, twid)
                     if data:
                         self.print('Adding to the profile line {} {}, data {}'.format(profileid, twid, data), 6, 0)
-                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_mode='raw', data_type='lines')
+                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_type='lines', data_mode='raw')
 
                 #last_profile_id = profileid
 
