@@ -21,10 +21,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
     authors = ['Dita']
 
     def __init__(self, outputqueue, config, testing=False):
-        if testing:
-            self.print = self.testing_print
-        else:
-            multiprocessing.Process.__init__(self)
+        multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
@@ -43,7 +40,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
-
+        # Read the conf file
         key_file = self.__read_configuration("virustotal", "api_key_file")
         self.key = None
         try:
@@ -56,7 +53,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         self.counter = 0
 
         # Pool manager to make HTTP requests with urllib3
-        # certifi provides a bundle of trusted CAs, the certificates are located in certifi.where()
+        # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
@@ -95,21 +92,10 @@ class VirusTotalModule(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def testing_print(self, text, verbose=1, debug=0):
-        """
-        Printing function that will be used automatically by the module, in case it is run in testing mode
-        (without SLIPS and outputprocess). 
-        :param text: String to print
-        :param verbose: ignored parameter
-        :param debug: ignored parameter
-        :return: None
-        """
-        print(text)
-
     def run(self):
         if self.key is None:
+            # We don't have a virustotal key
             return
-
         try:
             # Main loop function
             while True:
@@ -120,7 +106,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
                     __database__.set_virustotal_score(ip, ip_score)
-                    self.print("[" + ip + "] has score " + str(ip_score), verbose=5, debug=1)
+                    self.print("[" + ip + "] has score " + str(ip_score), verbose=7, debug=1)
 
         except KeyboardInterrupt:
             return True
@@ -141,7 +127,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         addr = ipaddress.ip_address(ip)
         if addr.is_private:
-            self.print("[" + ip + "] is private, skipping", verbose=5, debug=1)
+            self.print("[" + ip + "] is private, skipping", verbose=7, debug=1)
             return 0, 0, 0, 0
 
         # check if the address is in the cache (probably not, since all IPs are unique)
