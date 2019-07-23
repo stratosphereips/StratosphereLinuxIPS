@@ -4,6 +4,7 @@ import configparser
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
+import platform
 
 # Your imports
 import json
@@ -57,6 +58,16 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # Pool manager to make HTTP requests with urllib3
         # certifi provides a bundle of trusted CAs, the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
+        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
+        if platform.system() == 'Darwin':
+            # macos
+            self.timeout = None
+        elif platform.system() == 'Linux':
+            # linux
+            self.timeout = -1
+        else:
+            #??
+            self.timeout = None
 
     def __read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -102,7 +113,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                message = self.c1.get_message(timeout=-1)
+                message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 # Ignore the first message
                 if message['channel'] == 'new_ip' and message["type"] == "message":
