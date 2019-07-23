@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 from datetime import timedelta
 import configparser
+import platform
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -26,6 +27,16 @@ class EvidenceProcess(multiprocessing.Process):
         self.read_configuration()
         # Subscribe to channel 'tw_modified'
         self.c1 = __database__.subscribe('evidence_added')
+        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
+        if platform.system() == 'Darwin':
+            # macos
+            self.timeout = None
+        elif platform.system() == 'Linux':
+            # linux
+            self.timeout = -1
+        else:
+            #??
+            self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -85,7 +96,7 @@ class EvidenceProcess(multiprocessing.Process):
             # Adapt this process to process evidence from only IPs and not profileid or twid
             while True:
                 # Wait for a message from the channel that a TW was modified
-                message = self.c1.get_message(timeout=-1)
+                message = self.c1.get_message(timeout=self.timeout)
                 if message['channel'] == 'evidence_added':
                     # Get the profileid and twid
                     try:
