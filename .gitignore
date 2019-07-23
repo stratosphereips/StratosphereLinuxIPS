@@ -8,6 +8,7 @@ __pycache__/
 malicious_ips.etag
 malicious_ips.time
 malicious_ips.txt
+api_key_secret
 
 
 *.swp
