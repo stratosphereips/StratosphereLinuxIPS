@@ -15,6 +15,7 @@
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
+import platform
 
 # Your imports
 import time
@@ -39,6 +40,16 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_ip')
+        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
+        if platform.system() == 'Darwin':
+            # macos
+            self.timeout = None
+        elif platform.system() == 'Linux':
+            # linux
+            self.timeout = -1
+        else:
+            #??
+            self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -60,7 +71,7 @@ class Module(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                message = self.c1.get_message(timeout=-1)
+                message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['channel'] == 'new_ip':
                     # Example of printing the number of profiles in the Database every second
