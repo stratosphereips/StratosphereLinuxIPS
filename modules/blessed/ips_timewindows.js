@@ -2,9 +2,9 @@ const redis = require('redis')
   , redis_ips_with_profiles = redis.createClient()
   , redis_tws_for_ip = redis.createClient()
   , redis_ip_info = redis.createClient()
-  , 
-  redis_get_timeline = redis.createClient()
+  , redis_get_timeline = redis.createClient()
   , redis_outtuples_timewindow = redis.createClient()
+  , redis_detections_timewindow = redis.createClient()
   , redis_timeline_ip = redis.createClient()
   , async = require('async')
   ,	blessed = require('blessed')
@@ -12,7 +12,7 @@ const redis = require('redis')
   , screen = blessed.screen()
 
 
-var fs = require("fs");
+// set up elements of the interface.
 
 const grid = new contrib.grid({
   rows: 6,
@@ -52,19 +52,41 @@ const table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table,
         fg: '#f0f0f0'
       },
     }})
-  , box = grid.set(5.5, 0, 0.5, 6,blessed.box,{
+ //  , box = grid.set(5.5, 0, 0.5, 6,blessed.box,{
+ //  		top: 'center',
+ //  		left: 'center',
+ //  		width: '50%',
+ //  		height: '50%',
+ //  		content:'what to do',
+ //  		tags: true,
+ // 		border: {
+ //   		type: 'line'
+ // 		},
+ // 		style: {
+ //    	fg: 'white',
+ //    	bg: 'magenta',
+ //    	border: {
+ //      	fg: '#f0f0f0'
+ //    	},
+ //    	hover: {
+ //      	bg: 'green'
+ //    	}
+ //  		}
+	// })
+ , box_detections = grid.set(4.2, 1, 1, 2.5,blessed.box,{
   		top: 'center',
   		left: 'center',
   		width: '50%',
   		height: '50%',
-  		content:'what to do',
+  		label:'Detections',
+  		// content:'',
   		tags: true,
  		border: {
    		type: 'line'
  		},
  		style: {
     	fg: 'white',
-    	bg: 'magenta',
+    	// bg: 'magenta',
     	border: {
       	fg: '#f0f0f0'
     	},
@@ -73,20 +95,29 @@ const table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table,
     	}
   		}
 	})
-
- , bar = grid.set(2.5,3.5,2.6,2.5,contrib.stackedBar,
+ , bar = grid.set(2.5,3.5,2.7,2.5,contrib.stackedBar,
        { label: 'Connection Port Established'
-       , barWidth: 4
-       , barSpacing: 6
-       , xOffset: 0
-       // , maxValue: 90
-       , height: "40%"
-       , width: "50%"
+       , barWidth: 3
+       , barSpacing: 10
+       , xOffset: 2
+       , height: "90%"
+       , width: "100%"
        , barBgColor: [ 'red', 'blue', 'green' ]})
 
 
 
+
+
+ function round(value, decimals) {
+  return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
+}
+
+
+
  function timewindows_list_per_ip(tw){
+ 	/*
+ 	create a list of dictionaries with tws(to set the tree). [{'tw1':{},'tw2':{}"}]
+ 	*/
 	var temp_list = []
 	var dict = {};
 	for(i=0; i<tw.length; i++){
@@ -97,7 +128,30 @@ const table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table,
 
 
 
+function getIpInfo(ip){
+	/*
+	retrieves IPsInfo from redis.
+	*/
+	redis_timeline_ip.hgetall("IPsInfo",(err,reply)=>{
+		try{
+		var obj = JSON.parse(reply[ip]);
+  		var l =  Object.values(obj)
+  		box_ip.setContent(l.join(', '));
+      	screen.render();}
+      	catch (e){
+      		box_ip.setContent(reply[ip]);
+      	    screen.render();}
+    });
+}
+
+    
+
+
+
 function set_tree_data(ips_with_profiles, timewindows_list){
+	/*
+	sets ips and their tws for the tree.
+	*/
   var explorer = { extended: true
   , children: function(self){
       var result = {};
@@ -116,8 +170,13 @@ function set_tree_data(ips_with_profiles, timewindows_list){
 return explorer;};
 
 async.waterfall([
+	/*async_waterfall to fill the data for the tree*/
+
 	
 	function get_IPs_with_profiles(callback){
+		/*
+		retrieve ips with profile from redis key 'Profiles'
+		*/
 		var ips_with_profiles = [];
 		redis_ips_with_profiles.smembers("profiles", (err,reply)=>{
 		if(err){callback(err)}
@@ -127,6 +186,7 @@ async.waterfall([
 })},
 
 	function get_tws_for_ips(ips_with_profiles, callback){
+
 		var timewindows_list = [];
 		for(i=0; i<ips_with_profiles.length;i++){
 
@@ -155,6 +215,9 @@ tree.on('select',function(node){
     	getIpInfo(node.name)}
   		
     else{
+    redis_detections_timewindow.hget("profile_"+node.parent.name+"_"+node.name,'Detections',(err,reply)=>{
+    	box_detections.setContent(reply)
+    })
     redis_outtuples_timewindow.hgetall("profile_"+node.parent.name+"_"+node.name, (err,reply)=>{
         if(reply == null){return;}
 	    const mapOutTuples = async _ => {
@@ -175,30 +238,42 @@ tree.on('select',function(node){
 
 		// const mapTCPEstablished
 		const mapTCPEstablished = async _ => {
+		var bar_categories_protocol_port = []
 	    var obj_dstPorts_tcp_established = JSON.parse(reply["DstPortsClientTCPEstablished"])
 		var keys_dstPorts_tcp_established = Object.keys(obj_dstPorts_tcp_established)
-		var data_con = [];
+		var data_tcp_est = [];
 
 	    const promises_TCP_est = keys_dstPorts_tcp_established.map(async key_TCP_est => {
+	    	bar_categories_protocol_port.push('TCP/'+key_TCP_est)
 	    	var service_info = obj_dstPorts_tcp_established[key_TCP_est]
 	    	var row = []
-	    	row.push(Math.log(service_info['totalflows']), Math.log(service_info['totalpkt']), Math.log(service_info['totalbytes']))
+	    	row.push(round(Math.log(service_info['totalflows']),0), round(Math.log(service_info['totalpkt']),0), round(Math.log(service_info['totalbytes']),0))
 	    	
-	    	data_con.push(row)
+	    	data_tcp_est.push(row)
+  		})
+
+  		var obj_dstPorts_udp_established = JSON.parse(reply["DstPortsClientUDPEstablished"])
+		var keys_dstPorts_udp_established = Object.keys(obj_dstPorts_udp_established)
+		var data_udp_est = [];
+
+	    const promises_UDP_est = keys_dstPorts_udp_established.map(async key_UDP_est => {
+	    	bar_categories_protocol_port.push('UDP/'+key_UDP_est)
+	    	var service_info_udp = obj_dstPorts_udp_established[key_UDP_est]
+	    	var row_udp = []
+	    	row_udp.push(round(Math.log(service_info_udp['totalflows']),0), round(Math.log(service_info_udp['totalpkt']),0), round(Math.log(service_info_udp['totalbytes']),0))
+	    	data_udp_est.push(row_udp)
   		})
 
   		await Promise.all(promises_TCP_est)
+  		await Promise.all(promises_UDP_est)
+  		data_tcp_est.push(...data_udp_est)
   		 bar.setData(
-        { barCategory: ['TCP/80', 'TCP/443','TCP/80',]
+        { barCategory: bar_categories_protocol_port
         , stackedCategory: ['totalflows', 'totalpkt', 'totalbytes']
-        , data: data_con
+        , data: data_tcp_est
         })
 		screen.render();}
 		mapTCPEstablished()
-		
-		
-		
-
     }) 
 
     
@@ -252,21 +327,6 @@ table_outTuples.rows.on('select', (item, index) => {
 });
 
 
-function getIpInfo(ip){
-	redis_timeline_ip.hgetall("IPsInfo",(err,reply)=>{
-		try{
-		var obj = JSON.parse(reply[ip]);
-  		var l =  Object.values(obj)
-  		box_ip.setContent(l.join(', '));
-      	screen.render();}
-      	catch (e){
-      		box_ip.setContent(reply[ip]);
-      	screen.render();}
-
-    });
-}
-
-    
 
 screen.key(['escape', 'q', 'C-c'], function(ch, key) {
   return process.exit(0);
