@@ -368,9 +368,9 @@ table_outTuples.rows.on('select', (item, index) => {
 // 		mapTCPNotEstablished()
 // });
 // });
-// screen.key(['escape', 'q', 'C-c'], function(ch, key) {
-//   return process.exit(0);
-// });
+ screen.key(['escape', 'q', 'C-c'], function(ch, key) {
+   return process.exit(0);
+ });
 
 screen.key(['tab'], function(ch, key) {
   if(screen.focused == tree.rows)
