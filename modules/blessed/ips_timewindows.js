@@ -263,7 +263,6 @@ tree.on('select',function(node){
 	    	row_udp.push(round(Math.log(service_info_udp['totalflows']),0), round(Math.log(service_info_udp['totalpkt']),0), round(Math.log(service_info_udp['totalbytes']),0))
 	    	data_udp_est.push(row_udp)
   		})
-
   		await Promise.all(promises_TCP_est)
   		await Promise.all(promises_UDP_est)
   		data_tcp_est.push(...data_udp_est)
@@ -327,10 +326,51 @@ table_outTuples.rows.on('select', (item, index) => {
 });
 
 
+// screen.key(['e'],function(ch,key){
+// 	redis_outtuples_timewindow.hgetall("profile_"+node.parent.name+"_"+node.name, (err,reply)=>{
+//         if(reply == null){return;}
+// 	const mapTCPNotEstablished = async _ => {
+// 		var bar_categories_protocol_port = []
+// 	    var obj_dstPorts_tcp_notestablished = JSON.parse(reply["DstPortsClientTCPNotEstablished"])
+// 		var keys_dstPorts_tcp_notestablished = Object.keys(obj_dstPorts_tcp_notestablished)
+// 		var data_tcp_notest = [];
 
-screen.key(['escape', 'q', 'C-c'], function(ch, key) {
-  return process.exit(0);
-});
+// 	    const promises_TCP_notest = keys_dstPorts_tcp_notestablished.map(async key_TCP_notest => {
+// 	    	bar_categories_protocol_port.push('TCP/'+key_TCP_notest)
+// 	    	var service_info = obj_dstPorts_tcp_notestablished[key_TCP_notest]
+// 	    	var row = []
+// 	    	row.push(round(Math.log(service_info['totalflows']),0), round(Math.log(service_info['totalpkt']),0), round(Math.log(service_info['totalbytes']),0))
+	    	
+// 	    	data_tcp_notest.push(row)
+//   		})
+
+//   		var obj_dstPorts_udp_notestablished = JSON.parse(reply["DstPortsClientUDPNotEstablished"])
+// 		var keys_dstPorts_udp_notestablished = Object.keys(obj_dstPorts_udp_notestablished)
+// 		var data_udp_notest = [];
+
+// 	    const promises_UDP_notest = keys_dstPorts_udp_notestablished.map(async key_UDP_notest => {
+// 	    	bar_categories_protocol_port.push('UDP/'+key_UDP_notest)
+// 	    	var service_info_udp = obj_dstPorts_udp_notestablished[key_UDP_notest]
+// 	    	var row_udp = []
+// 	    	row_udp.push(round(Math.log(service_info_udp['totalflows']),0), round(Math.log(service_info_udp['totalpkt']),0), round(Math.log(service_info_udp['totalbytes']),0))
+// 	    	data_udp_notest.push(row_udp)
+//   		})
+//   		await Promise.all(promises_TCP_notest)
+//   		await Promise.all(promises_UDP_notest)
+//   		data_tcp_notest.push(...data_udp_notest)
+//   		 bar.setData(
+//         { barCategory: bar_categories_protocol_port
+//         , stackedCategory: ['totalflows', 'totalpkt', 'totalbytes']
+//         , data: data_tcp_notest
+//         })
+// 		screen.render();}
+
+// 		mapTCPNotEstablished()
+// });
+// });
+// screen.key(['escape', 'q', 'C-c'], function(ch, key) {
+//   return process.exit(0);
+// });
 
 screen.key(['tab'], function(ch, key) {
   if(screen.focused == tree.rows)
