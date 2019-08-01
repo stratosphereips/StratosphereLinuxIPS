@@ -52,27 +52,7 @@ const table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table,
         fg: '#f0f0f0'
       },
     }})
- //  , box = grid.set(5.5, 0, 0.5, 6,blessed.box,{
- //  		top: 'center',
- //  		left: 'center',
- //  		width: '50%',
- //  		height: '50%',
- //  		content:'what to do',
- //  		tags: true,
- // 		border: {
- //   		type: 'line'
- // 		},
- // 		style: {
- //    	fg: 'white',
- //    	bg: 'magenta',
- //    	border: {
- //      	fg: '#f0f0f0'
- //    	},
- //    	hover: {
- //      	bg: 'green'
- //    	}
- //  		}
-	// })
+
  , box_detections = grid.set(4.2, 1, 1, 2.5,blessed.box,{
   		top: 'center',
   		left: 'center',
@@ -98,7 +78,7 @@ const table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table,
  , bar = grid.set(2.5,3.5,2.7,2.5,contrib.stackedBar,
        { label: 'Connection Port Established'
        , barWidth: 3
-       , barSpacing: 10
+       , barSpacing: 5
        , xOffset: 2
        , height: "90%"
        , width: "100%"
@@ -106,7 +86,11 @@ const table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table,
 
 
 
+function interface_element(state){
+  this.state = state;
+  };
 
+var stacked_bar = new interface_element(0)
 
  function round(value, decimals) {
   return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
@@ -138,7 +122,7 @@ function getIpInfo(ip){
   		var l =  Object.values(obj)
   		box_ip.setContent(l.join(', '));
       	screen.render();}
-      	catch (e){
+      	catch (err){
       		box_ip.setContent(reply[ip]);
       	    screen.render();}
     });
@@ -236,25 +220,44 @@ tree.on('select',function(node){
 
 		mapOutTuples()
 
-		// const mapTCPEstablished
-		const mapTCPEstablished = async _ => {
+		// const mapTCPEstablishe
+		// stackedbar();
+		function stackedbar(first, second){
+		const mapTCPEstablished = async () => {
 		var bar_categories_protocol_port = []
-	    var obj_dstPorts_tcp_established = JSON.parse(reply["DstPortsClientTCPEstablished"])
+		try{
+	    var obj_dstPorts_tcp_established = JSON.parse(reply[first])
 		var keys_dstPorts_tcp_established = Object.keys(obj_dstPorts_tcp_established)
 		var data_tcp_est = [];
+}
+	    catch(err){
+	     var obj_dstPorts_tcp_established = reply[first]	
+	     var keys_dstPorts_tcp_established = Object.keys(obj_dstPorts_tcp_established)
+		var data_tcp_est = [];
 
+	    }
+		
 	    const promises_TCP_est = keys_dstPorts_tcp_established.map(async key_TCP_est => {
 	    	bar_categories_protocol_port.push('TCP/'+key_TCP_est)
 	    	var service_info = obj_dstPorts_tcp_established[key_TCP_est]
 	    	var row = []
+
 	    	row.push(round(Math.log(service_info['totalflows']),0), round(Math.log(service_info['totalpkt']),0), round(Math.log(service_info['totalbytes']),0))
 	    	
 	    	data_tcp_est.push(row)
   		})
 
-  		var obj_dstPorts_udp_established = JSON.parse(reply["DstPortsClientUDPEstablished"])
-		var keys_dstPorts_udp_established = Object.keys(obj_dstPorts_udp_established)
-		var data_udp_est = [];
+  		try{
+  		var obj_dstPorts_udp_established = JSON.parse(reply[second])
+  		var keys_dstPorts_udp_established = Object.keys(obj_dstPorts_udp_established)
+  	    var data_udp_est = [];}
+  		catch(err){
+  			var obj_dstPorts_udp_established = reply[second]
+  			var keys_dstPorts_udp_established = Object.keys(obj_dstPorts_udp_established)
+  	    var data_udp_est = []
+
+  		}
+		
 
 	    const promises_UDP_est = keys_dstPorts_udp_established.map(async key_UDP_est => {
 	    	bar_categories_protocol_port.push('UDP/'+key_UDP_est)
@@ -262,6 +265,7 @@ tree.on('select',function(node){
 	    	var row_udp = []
 	    	row_udp.push(round(Math.log(service_info_udp['totalflows']),0), round(Math.log(service_info_udp['totalpkt']),0), round(Math.log(service_info_udp['totalbytes']),0))
 	    	data_udp_est.push(row_udp)
+	    	
   		})
   		await Promise.all(promises_TCP_est)
   		await Promise.all(promises_UDP_est)
@@ -272,7 +276,20 @@ tree.on('select',function(node){
         , data: data_tcp_est
         })
 		screen.render();}
-		mapTCPEstablished()
+		mapTCPEstablished()}
+		screen.key(['e'], function(ch, key) {
+			if(stacked_bar.state == 0){
+				stackedbar("DstPortsClientTCPEstablished","DstPortsClientUDPEstablished");
+				stacked_bar.state=1;}
+			else{
+				stackedbar("DstIPsClientTCPEstablished","DstIPsClientUDPEstablished");
+				stacked_bar.state = 0;
+
+			}
+
+  
+});
+    	stackedbar("DstIPsClientTCPEstablished","DstIPsClientUDPEstablished");
     }) 
 
     
@@ -296,23 +313,6 @@ tree.on('select',function(node){
     }
 });
 
-// table_outTuples.on('focus',(item,index) => {
-// 	// console.log(item.var focus_line = item.ritems[item.selected];
-// 	// console.log(item.items[0])
-// 	var outTuple_ip = focus_line.trim().split(":")[0]
-// 	getIpInfo(outTuple_ip);
-// })
-// table_timeline.rows.on('focus', (item)=>{
-// 	console.log(item.data)
-// 	console.log(item.content)
-	
-// 	// var focus_line = item.ritems[item.selected];
-// 	// // console.log(item.items[0])
-// 	// var outTuple_ip = focus_line.split(" ")
-// 	// var ip_st = outTuple_ip[6]
-// 	// var ip = ip_st.slice(6,-7)
-// 	// getIpInfo(ip);
-// })
 table_timeline.rows.on('select', (item, index) => {
 	var timeline_line = item.content.split(" ");
 	var timeline_ip = timeline_line[6].slice(6,-7)
@@ -326,51 +326,10 @@ table_outTuples.rows.on('select', (item, index) => {
 });
 
 
-// screen.key(['e'],function(ch,key){
-// 	redis_outtuples_timewindow.hgetall("profile_"+node.parent.name+"_"+node.name, (err,reply)=>{
-//         if(reply == null){return;}
-// 	const mapTCPNotEstablished = async _ => {
-// 		var bar_categories_protocol_port = []
-// 	    var obj_dstPorts_tcp_notestablished = JSON.parse(reply["DstPortsClientTCPNotEstablished"])
-// 		var keys_dstPorts_tcp_notestablished = Object.keys(obj_dstPorts_tcp_notestablished)
-// 		var data_tcp_notest = [];
 
-// 	    const promises_TCP_notest = keys_dstPorts_tcp_notestablished.map(async key_TCP_notest => {
-// 	    	bar_categories_protocol_port.push('TCP/'+key_TCP_notest)
-// 	    	var service_info = obj_dstPorts_tcp_notestablished[key_TCP_notest]
-// 	    	var row = []
-// 	    	row.push(round(Math.log(service_info['totalflows']),0), round(Math.log(service_info['totalpkt']),0), round(Math.log(service_info['totalbytes']),0))
-	    	
-// 	    	data_tcp_notest.push(row)
-//   		})
-
-//   		var obj_dstPorts_udp_notestablished = JSON.parse(reply["DstPortsClientUDPNotEstablished"])
-// 		var keys_dstPorts_udp_notestablished = Object.keys(obj_dstPorts_udp_notestablished)
-// 		var data_udp_notest = [];
-
-// 	    const promises_UDP_notest = keys_dstPorts_udp_notestablished.map(async key_UDP_notest => {
-// 	    	bar_categories_protocol_port.push('UDP/'+key_UDP_notest)
-// 	    	var service_info_udp = obj_dstPorts_udp_notestablished[key_UDP_notest]
-// 	    	var row_udp = []
-// 	    	row_udp.push(round(Math.log(service_info_udp['totalflows']),0), round(Math.log(service_info_udp['totalpkt']),0), round(Math.log(service_info_udp['totalbytes']),0))
-// 	    	data_udp_notest.push(row_udp)
-//   		})
-//   		await Promise.all(promises_TCP_notest)
-//   		await Promise.all(promises_UDP_notest)
-//   		data_tcp_notest.push(...data_udp_notest)
-//   		 bar.setData(
-//         { barCategory: bar_categories_protocol_port
-//         , stackedCategory: ['totalflows', 'totalpkt', 'totalbytes']
-//         , data: data_tcp_notest
-//         })
-// 		screen.render();}
-
-// 		mapTCPNotEstablished()
-// });
-// });
- screen.key(['escape', 'q', 'C-c'], function(ch, key) {
-   return process.exit(0);
- });
+screen.key(['escape', 'q', 'C-c'], function(ch, key) {
+  return process.exit(0);
+});
 
 screen.key(['tab'], function(ch, key) {
   if(screen.focused == tree.rows)
@@ -383,4 +342,3 @@ screen.key(['tab'], function(ch, key) {
 });
 tree.focus();
 screen.render();
-
