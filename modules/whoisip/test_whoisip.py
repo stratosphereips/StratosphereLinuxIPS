@@ -38,12 +38,14 @@ def test_tricky_ips():
 
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
-        wi.check_ip_ipwhois(ip)
+        wi.check_ip(ip)
 
 if __name__ == "__main__":
     t = time.time()
-    run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
+    # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
+    # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
     # try_random_addresses()
-    # test_tricky_ips()
+    test_tricky_ips()
     # TODO: check ip ranges in file
+    # TODO: run query manually if the query doesn't return enough data
     print(time.time() - t)
