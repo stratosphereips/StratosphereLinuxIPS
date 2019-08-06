@@ -1,17 +1,15 @@
 # Must imports
-import socket
-import ssl
-import urllib
-
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
 
 # Your imports
-import ipwhois
+import socket
+from modules.whoisip.whois_parser import get_data_from_response
 import ipaddress
 import json
 from cymruwhois import Client
+import subprocess
 
 
 class WhoisIP(Module, multiprocessing.Process):
@@ -39,13 +37,6 @@ class WhoisIP(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
 
         self.db_hashset_ipv4 = "whois-module-ipv4subnet-cache"
-
-        # disable SSL checks, this fixes issues with checking Korean domains
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        https_handler = urllib.request.HTTPSHandler(context=ctx)
-        self.opener = urllib.request.build_opener(https_handler)
 
         self.client = Client()
 
@@ -136,6 +127,9 @@ class WhoisIP(Module, multiprocessing.Process):
             self.print(e)
             return
 
+        if asn == "NA":
+            asn, ctr_code, cidr, name = self.check_whois_manually(address, asn, ctr_code, cidr, name)
+
         self.show_results(asn, ctr_code, cidr, name)
 
         if "," in cidr:
@@ -150,62 +144,10 @@ class WhoisIP(Module, multiprocessing.Process):
             except:
                 pass
 
-    def check_ip_ipwhois(self, ip):
-        print("--- Checking ip " + ip)
-
-        # IPWhois object can only be created on valid IP addresses that are public, not multicast etc.
-        try:
-            ip_object = ipwhois.IPWhois(ip, proxy_opener=self.opener)
-        except Exception as e:
-            self.print(e)
-            return
-
-        if ip_object.version == 4:
-            load_subnet = self.load_ipv4_subnet
-            save_subnet = self.save_ipv4_subnet
-            Interface = ipaddress.IPv4Interface
-        else:
-            load_subnet = self.load_ipv6_subnet
-            save_subnet = self.save_ipv6_subnet
-            Interface = ipaddress.IPv6Interface
-
-        cached_data = load_subnet(ipaddress.ip_address(ip))
-
-        if cached_data is not None:
-            self.print("Data found in cache!")
-            self.show_results(cached_data["asn"], cached_data["country"], cached_data["cidr"], cached_data["name"])
-            return cached_data
-
-        self.print("Data not found in cache!")
-
-        try:
-            message = ip_object.lookup_rdap(depth=1)
-            asn = message["asn"]
-            ctr_code = message["asn_country_code"]
-            cidr = message["network"]["cidr"]
-            name = str(message["network"]["name"])  # This should be converted to string in case name is None
-        except ipwhois.ASNRegistryError as e:
-            self.print(e)
-            return
-        except ipwhois.HTTPLookupError:
-            self.print("RDAP failed, trying whois directly")
-            message = ip_object.lookup_whois()
-            asn = message["asn"]
-            ctr_code = message["asn_country_code"]
-            cidr = message["asn_cidr"]
-            name = str(message["asn_description"])  # This should be converted to string in case name is None
-            k = 3
-
-        self.show_results(asn, ctr_code, cidr, name)
-
-        if "," in cidr:
-            cidrs = cidr.split(", ")
-        else:
-            cidrs = [cidr]
-
-        for cidr in cidrs:
-            mask = int(Interface(cidr))
-            save_subnet(mask, asn, ctr_code, cidr, name)
+    def check_whois_manually(self, ip, asn, ctr_code, cidr, name):
+        response = subprocess.check_output("whois " + str(ip), shell=True)
+        data = get_data_from_response(response, asn, ctr_code, cidr, name)
+        return data["asn"], data["country"], data["cidr"], data["name"]
 
     def show_results(self, asn, ctr_code, cidr, name):
         self.print("ASN: " + asn)
