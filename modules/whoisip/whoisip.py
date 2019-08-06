@@ -118,16 +118,30 @@ class WhoisIP(Module, multiprocessing.Process):
         self.print("Data not found in cache!")
 
         try:
+            check_manually = False
             message = self.client.lookup(ip)
             asn = message.asn
             ctr_code = message.cc
             cidr = message.prefix
             name = message.owner
+            if asn == "NA":
+                asn = "None"
+                check_manually = True
+            if ctr_code == "" or ctr_code == "NA":
+                # unfortunately, IP addresses from Namibia (NA) will have to be checked again
+                ctr_code = "None"
+                check_manually = True
+            if cidr == "NA":
+                cidr = "None"
+                check_manually = True
+            if name == "NA":
+                name = "None"
+                check_manually = True
         except socket.gaierror as e:
             self.print(e)
             return
 
-        if asn == "NA":
+        if check_manually:
             asn, ctr_code, cidr, name = self.check_whois_manually(address, asn, ctr_code, cidr, name)
 
         self.show_results(asn, ctr_code, cidr, name)

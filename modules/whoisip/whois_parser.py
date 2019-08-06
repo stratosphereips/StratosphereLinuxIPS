@@ -1,5 +1,6 @@
 import ipaddress
 
+
 def get_data_from_response(response, asn, ctr_code, cidr, name):
     # get a dictionary of values in the response
     data_dictionary = parse_raw_response(response)
@@ -8,29 +9,28 @@ def get_data_from_response(response, asn, ctr_code, cidr, name):
 
     # ASN
     # use original value if available
-    if asn != "NA":
+    if asn != "None":
         result["asn"] = asn
     # use manually read value if available
     elif "asn" in data_dictionary:
         result["asn"] = data_dictionary["asn"]
-    # otherwise set "NA"
+    # otherwise set "None"
     else:
-        result["asn"] = "NA"
+        result["asn"] = "None"
 
     # Country
-    # TODO: This doesn't work for Namibia (code NA), but that's what the library returns
     # TODO: 163.194.132.190 is from US as far as cymruwhois says, but actually is in Australia. Who should I trust?
-    if ctr_code != "NA":
+    if ctr_code != "None":
         result["country"] = ctr_code
         if "country" in data_dictionary and data_dictionary["country"] != ctr_code:
             print("### Warning: Country code from cymruwhois is", ctr_code, ", but whois returned", data_dictionary["country"])
     elif "country" in data_dictionary:
         result["country"] = data_dictionary["country"]
     else:
-        result["country"] = "NA"
+        result["country"] = "None"
 
     # CIDR
-    if cidr != "NA":
+    if cidr != "None":
         result["cidr"] = cidr
     elif "cidr" in data_dictionary:
         result["cidr"] = data_dictionary["cidr"]
@@ -43,10 +43,10 @@ def get_data_from_response(response, asn, ctr_code, cidr, name):
     elif "inetnum" in data_dictionary:
         result["cidr"] = get_cidr_from_net_range(data_dictionary["inetnum"])
     else:
-        result["cidr"] = "NA"
+        result["cidr"] = "None"
 
     # Name
-    if name != "NA":
+    if name != "None":
         result["name"] = name
     elif "name" in data_dictionary:
         result["name"] = data_dictionary["name"]
@@ -57,7 +57,7 @@ def get_data_from_response(response, asn, ctr_code, cidr, name):
     elif "netname" in data_dictionary:
         result["name"] = data_dictionary["netname"]
     else:
-        result["name"] = "NA"
+        result["name"] = "None"
 
     return result
 
@@ -106,7 +106,7 @@ def get_cidr_from_net_range(netrange):
     max_address = ipaddress.ip_address(max_address_str)
     # only IPv4 addresses can be handled at the moment
     if min_address.version != 4:
-        return "NA"
+        return "None"
     # subtract edge addresses to get size of network
     dif = int(max_address) - int(min_address)
     # use size to create IP, which will have all ones: 000.255.255.255
