@@ -59,6 +59,15 @@ def get_data_from_response(response, asn, ctr_code, cidr, name):
     else:
         result["name"] = "None"
 
+    # if IP isn't registered, the mask of whole IPv4 range is returned (eg IP 194.31.224.157)
+    # Description of the query: This object represents all IPv4 addresses. If you see this object as a result of a
+    # single IP query, it means that the IP address you are querying is currently not assigned to any organisation
+    if result["cidr"] == "0.0.0.0/32":
+        result["cidr"] = "None"
+        result["asn"] = "None"
+        result["country"] = "None"
+        result["name"] = "None"
+
     return result
 
 
@@ -99,18 +108,21 @@ def parse_raw_response(response):
 
 
 def get_cidr_from_net_range(netrange):
-    # get lower and higher IP strings from format 163.0.0.0 - 163.255.255.255
-    min_address_str, max_address_str = netrange.split(" - ")
-    # convert to IP address objects
-    min_address = ipaddress.ip_address(min_address_str)
-    max_address = ipaddress.ip_address(max_address_str)
-    # only IPv4 addresses can be handled at the moment
-    if min_address.version != 4:
-        return "None"
-    # subtract edge addresses to get size of network
-    dif = int(max_address) - int(min_address)
-    # use size to create IP, which will have all ones: 000.255.255.255
-    inverted_mask = ipaddress.ip_address(dif)
-    # from the lower IP and the inverted mask, ipaddress can parse the network cidr correctly
-    network = ipaddress.IPv4Network(str(min_address) + "/" + str(inverted_mask))
+    try:
+        # get lower and higher IP strings from format 163.0.0.0 - 163.255.255.255
+        min_address_str, max_address_str = netrange.split(" - ")
+        # convert to IP address objects
+        min_address = ipaddress.ip_address(min_address_str)
+        max_address = ipaddress.ip_address(max_address_str)
+        # only IPv4 addresses can be handled at the moment
+        if min_address.version != 4:
+            return "None"
+        # subtract edge addresses to get size of network
+        dif = int(max_address) - int(min_address)
+        # use size to create IP, which will have all ones: 000.255.255.255
+        inverted_mask = ipaddress.ip_address(dif)
+        # from the lower IP and the inverted mask, ipaddress can parse the network cidr correctly
+        network = ipaddress.IPv4Network(str(min_address) + "/" + str(inverted_mask))
+    except:
+        network = None
     return str(network)
