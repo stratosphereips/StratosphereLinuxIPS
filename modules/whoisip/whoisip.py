@@ -140,6 +140,14 @@ class WhoisIP(Module, multiprocessing.Process):
         except socket.gaierror as e:
             self.print(e)
             return
+        except TypeError:
+            # error in cymruwhois when querying IP 76.42.110.168
+            # __init__() missing 2 required positional arguments: 'cc' and 'owner'
+            check_manually = True
+            asn = "None"
+            ctr_code = "None"
+            cidr = "None"
+            name = "None"
 
         if check_manually:
             asn, ctr_code, cidr, name = self.check_whois_manually(address, asn, ctr_code, cidr, name)
@@ -159,7 +167,12 @@ class WhoisIP(Module, multiprocessing.Process):
                 pass
 
     def check_whois_manually(self, ip, asn, ctr_code, cidr, name):
-        response = subprocess.check_output("whois " + str(ip), shell=True)
+        try:
+            response = subprocess.check_output("whois " + str(ip), shell=True, timeout=5)
+        except subprocess.TimeoutExpired:
+            print('process ran too long')
+            # -r stops whois from following links to other databases
+            response = subprocess.check_output("whois -r " + str(ip), shell=True)
         data = get_data_from_response(response, asn, ctr_code, cidr, name)
         return data["asn"], data["country"], data["cidr"], data["name"]
 
