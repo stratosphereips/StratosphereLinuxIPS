@@ -31,6 +31,7 @@ class Module(Module, multiprocessing.Process):
         # This default path is only used in case there is no path in the configuration file
         self.path_to_malicious_ip_folder = 'modules/ThreatIntelligence1/malicious_ips_files/'
         # Subscribe to the new_ip channel
+        __database__.start(self.config)
         self.c1 = __database__.subscribe('new_ip')
         # Create the update manager. This manager takes care of the re-downloading of the list of IoC when needed.
         self.update_manager = UpdateIPManager(self.outputqueue)
