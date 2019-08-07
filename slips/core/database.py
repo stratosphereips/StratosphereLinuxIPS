@@ -86,6 +86,8 @@ class Database(object):
                 ip = profileid.split(self.separator)[1]
                 # If the ip is new add it to the list of ips
                 self.setNewIP(ip)
+                # Publish that we have a new profile
+                self.publish('new_profile', ip)
                 # After we stored the new, check for all of them (new or not) if we have some detections already.
                 # TODO
 
@@ -868,6 +870,8 @@ class Database(object):
         elif 'new_http' in channel:
             pubsub.subscribe(channel)
         elif 'new_ssl' in channel:
+            pubsub.subscribe(channel)
+        elif 'new_profile' in channel:
             pubsub.subscribe(channel)
         return pubsub
 
