@@ -149,9 +149,11 @@ This version of slips comes with the following features:
 ### Author and Contributors
 [rewrite]
 
-- The main author of the project is Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
+- Main author: Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
 - Ondrej Lukas: During the original slips code, he worked on the new detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classes, etc.
-- Frantisek Strasak. Work on all the new version of slips, features, output, core. (https://github.com/frenky-strasak)
+- Frantisek Strasak. Work on all the new version of slips, features, output, core and the https Machine Learning detection module. (https://github.com/frenky-strasak)
+- Dita hollmannova: Worked in the VirusTotal module and the Whois modul. (dita.hollmannova@gmail.com)
+- Kamila Babayeva: Implemented the NodeJS interface (kamifai14@gmail.com)
 - Elaheh Biglar Beigi
 - MariaRigaki 
 - kartik88363
