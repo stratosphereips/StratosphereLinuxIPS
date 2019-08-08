@@ -12,6 +12,7 @@ var redis = require('redis')
   , contrib = require('blessed-contrib')
   ,  fs = require('fs')
   , screen = blessed.screen()
+  var colors = require('colors');
 
 //read countries  location
 let country_loc = {};
@@ -37,22 +38,24 @@ var grid = new contrib.grid({
   screen: screen
 });
 var table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table, 
-  { keys: true
+  {keys: true
+  , vi:true
+  , scrollbar: true
   , fg: 'green'
   , label: "Timeline"
-  , vi:true
-  , keys:true
-  , mouse: true
   , columnWidth:[200]})
 
-  ,table_outTuples =  grid.set(2.5,1,1.7,2.5, contrib.table, 
+  ,table_outTuples =  grid.set(2.5,1,1.8,2.5, contrib.table, 
   { keys: true
+  , vi:true
   , fg: 'green'
   , label: "OutTuples"
-  , columnWidth:[25,30]})
+  
+   , columnWidth:[25,30]})
 
   , tree =  grid.set(0,0,5,1,contrib.tree,
-  { style: { text: "red" }
+  {  vi:true 
+  ,style: {border: {fg:'magenta'}}
   , template: { lines: true }
   , label: 'Ips from slips'})
 
@@ -65,37 +68,40 @@ var table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table,
       tags: true,
       border: {
       type: 'line'
-    },
-    style: {
-      fg: 'white',
-      border: {
-        fg: '#f0f0f0'
-      },
     }})
 
- , box_detections = grid.set(4.2, 1, 0.9, 2.5,blessed.box,{
+ , box_detections = grid.set(2.5, 3.5, 0.9, 2.5,blessed.box,{
   		top: 'center',
   		left: 'center',
   		width: '50%',
   		height: '50%',
   		label:'Detections',
   		tags: true,
+ 		vi:true,
+ 		border: {
+   		type: 'line'
+ 		}
+	})
+ , box_evidence = grid.set(3.4, 3.5, 0.9, 2.5,blessed.box,{
+  		top: 'center',
+  		left: 'center',
+  		width: '50%',
+  		height: '50%',
+  		label:'Evidence',
+  		tags: true,
+  		keys: true,
+  		vi:true,
+  scrollable: true,
+  alwaysScroll: true,
+  scrollbar: {
+    ch: ' ',
+    inverse: true
+  },
  		border: {
    		type: 'line'
  		},
- 		style: {
-    	fg: 'white',
-    	border: {
-      	fg: '#f0f0f0'
-    	},
-    	hover: {
-      	bg: 'green'
-    	}
-  		}
 	})
-
-,
-box_hotkeys = grid.set(2.5, 3.5, 0.8, 1, blessed.box,
+, box_hotkeys = grid.set(4.3, 1, 0.8, 1, blessed.box,
       {top: 'center',
       left: 'center',
       width: '50%',
@@ -105,12 +111,7 @@ box_hotkeys = grid.set(2.5, 3.5, 0.8, 1, blessed.box,
       border: {
       type: 'line'
     },
-    style: {
-      fg: 'white',
-      border: {
-        fg: '#f0f0f0'
-      },
-    }})
+    })
 , map = grid.set(0, 0, 6, 6,contrib.map,{label: 'World Map'})
 map.hide()
 
@@ -213,7 +214,6 @@ function setMap(ips){
 			catch(err){
 				return;
 			}
-			
 			var country = inf["geocountry"]
 			
 			geoloc = country_loc[" "+country]
@@ -231,7 +231,6 @@ function setMap(ips){
 		};
 	
 	})
-
 
 	})
 	
@@ -272,60 +271,54 @@ function setMap(ips){
 		}
 		});}
 
+function udp_connections(key,data_stacked_bar,bar_categories_protocol_port,reply,bar){
+	if(reply[key]==null){
+		set_stacked_bar(data_stacked_bar,bar_categories_protocol_port,bar)
+	return;
+	};
+	
+	try{
+		var obj_udp = JSON.parse(reply[key]);
+		var keys_udp = Object.keys(obj_udp);
+	}
+	catch(err){
+		var obj_udp = reply[key];
+		var keys_udp = Object.keys(obj_udp);
+	}
 
-		function udp_connections(key,data_stacked_bar,bar_categories_protocol_port,reply,bar){
-			if(reply[key]==null){
- 		set_stacked_bar(data_stacked_bar,bar_categories_protocol_port,bar)
- 		return;
- 	}
-  		
-  		try{
-	    	var obj_udp = JSON.parse(reply[key]);
-			var keys_udp = Object.keys(obj_udp);
+	async.each(keys_udp, function(key_UDP_est, callback) {
+		bar_categories_protocol_port.push('UDP/'+key_UDP_est);
+	var service_info = obj_udp[key_UDP_est];
+	var row = [];
+	row.push(round(Math.log(service_info['totalflows']),0), round(Math.log(service_info['totalpkt']),0), round(Math.log(service_info['totalbytes']),0));
+	data_stacked_bar.push(row);
+	callback()
+	}, function(err) {
+
+		if( err ) {
+			console.log('unable to create user');
+		} else {
+			set_stacked_bar(data_stacked_bar,bar_categories_protocol_port,bar)
 		}
-	    catch(err){
-	    	var obj_udp = reply[key];
-	    	var keys_udp = Object.keys(obj_udp);
+	});
 
-	    }
+}		
 
-  		async.each(keys_udp, function(key_UDP_est, callback) {
-  			bar_categories_protocol_port.push('UDP/'+key_UDP_est);
-	    	var service_info = obj_udp[key_UDP_est];
-	    	var row = [];
-	    	row.push(round(Math.log(service_info['totalflows']),0), round(Math.log(service_info['totalpkt']),0), round(Math.log(service_info['totalbytes']),0));
-	    	data_stacked_bar.push(row);
-	    	callback()
-		}, function(err) {
-
- 		if( err ) {
- 			console.log('unable to create user');
- 		} else {
- 			set_stacked_bar(data_stacked_bar,bar_categories_protocol_port,bar)
-		}
-		});
-
-		}
-		
-
-		function set_stacked_bar(data,bars,bar){
-			if(data.length==0){
-				bar.setData(
-        	{ barCategory: bars
-        	, stackedCategory: ['EMPTY']
-        	, data: data})
-			screen.render();
-
-			}
-			else{
-			bar.setData(
-        	{ barCategory: bars
-        	, stackedCategory: ['totalflows', 'totalpkt', 'totalbytes']
-        	, data: data})
-			screen.render();}
-		}
-
-
+function set_stacked_bar(data,bars,bar){
+	if(data.length==0){
+		bar.setData(
+    	{ barCategory: bars
+    	, stackedCategory: ['EMPTY']
+    	, data: data})
+		screen.render();
+	}
+	else{
+		bar.setData(
+    	{ barCategory: bars
+    	, stackedCategory: ['totalflows', 'totalpkt', 'totalbytes']
+    	, data: data})
+		screen.render();}
+	};
 
  function timewindows_list_per_ip(tw){
 
@@ -338,7 +331,7 @@ function setMap(ips){
 		dict[tw[i]] = {}};
 		temp_list.push(dict);
 	return temp_list;
- }
+ };
 
 
 
@@ -358,10 +351,28 @@ function getIpInfo_box_ip(ip){
       	    screen.render();
       	}
     });
-}
+};
 
-    
+function getEvidence(reply){
+	/*
+	retrieves IPsInfo from redis.
+	*/var ev = ''
 
+		try{
+		var obj = JSON.parse(reply);
+  		var keys = Object.keys(obj);
+  		async.each(keys, (key,callback)=>{
+  			ev = ev+'{bold}'+key.green+'{/bold}'+" "+obj[key]+'\n'
+  			callback();
+  		}, function(err){
+  			if(err);
+  			box_evidence.setContent(ev);
+  		})
+      	screen.render();}
+      	catch (err){
+      		return;
+      	}
+};
 
 
 function set_tree_data(timewindows_list){
@@ -386,6 +397,7 @@ function set_tree_data(timewindows_list){
     }
 }
 return explorer;};
+
 
 async.waterfall([
 	/*async_waterfall to fill the data for the tree*/
@@ -444,7 +456,6 @@ async.waterfall([
   	}
 ], function(err){if(err){console.log(err)}});
 
-
 tree.on('select',function(node){
 
     if(!node.name.includes('timewindow')){
@@ -457,7 +468,9 @@ tree.on('select',function(node){
         	table_outTuples.setData({headers: [''], data: []})
         	box_detections.setContent('');
         	return;}
-	    box_detections.setContent(reply['Detections'])
+	    box_detections.setContent(reply['Detections']);
+	    getEvidence(reply['Evidence'])
+	    
 
 	    var obj_outTuples = JSON.parse(reply["OutTuples"])
 	    var keys = Object.keys(obj_outTuples);
@@ -474,7 +487,6 @@ tree.on('select',function(node){
  		if( err ) {
 			console.log('unable to create user');
  		} else {
- 			
  			table_outTuples.setData({headers: [''], data: data});
 		screen.render();	
  		}
@@ -516,10 +528,8 @@ tree.on('select',function(node){
 		bar2.setLabel({text:'DstPortsClientNotEstablished',side:'left'})
 		}
 		else{
-  			bar.hide()	
-  			bar2.hide()	
-  			
-
+  			bar.hide();
+  			bar2.hide();
   		}
   		conn_state2 = !conn_state2;
   		screen.render()
@@ -600,13 +610,14 @@ tree.on('select',function(node){
     redis_get_timeline.lrange("profile_"+node.parent.name+"_"+node.name+'_timeline',0,-1, (err,reply)=>{
     	var data = [];
     	var ips = []	
+    	map.innerMap.draw(null)
 
     	async.each(reply, function(line, callback){
     		var row = [];
     		var line_arr = line.split(" ")
 	      	if(line_arr[6].includes('.')){
 	      	ips.push(line_arr[6])
-	      	line_arr[6]= "{bold}"+line_arr[6]+"{/bold}"}
+	      	line_arr[6]= "{bold}"+line_arr[6].blue+"{/bold}"}
 	      	line_arr[1]= line_arr[1].substring(0, line_arr[1].lastIndexOf('.'));
 			row.push(line_arr.join(" "));
 			data.push(row);
@@ -625,7 +636,7 @@ tree.on('select',function(node){
 	screen.key('m', function(ch, key) {
 		if(conn_state5){
 			map.show()
-			// map.focus()
+			
 		}
 		else{
   			map.hide()	
@@ -634,13 +645,9 @@ tree.on('select',function(node){
   		screen.render()
 	
 });
-
-
-    
+   
     }
 });
-
-
 
 table_timeline.rows.on('select', (item, index) => {
 	var timeline_line = item.content.split(" ");
@@ -653,11 +660,6 @@ table_outTuples.rows.on('select', (item, index) => {
 	getIpInfo_box_ip(outTuple_ip)
 
 });
-
-
-
-
-
 screen.key(['escape', 'q', 'C-c'], function(ch, key) {
   return process.exit(0);
 });
@@ -665,13 +667,28 @@ screen.key(['escape', 'q', 'C-c'], function(ch, key) {
 
 
 screen.key(['tab'], function(ch, key) {
-  if(screen.focused == tree.rows)
-    table_timeline.focus();
-  else if(screen.focused == table_timeline.rows)
-  	table_outTuples.focus();
-  else
-    tree.focus();
+  if(screen.focused == tree.rows){
+	tree.style.border.fg = 'blue'
+  	table_timeline.style.border.fg='magenta'
+    table_timeline.focus();}
+  else if(screen.focused == table_timeline.rows){
+  	table_timeline.style.border.fg='blue'
+  	table_outTuples.style.border.fg='magenta'
+  	table_outTuples.focus();}
+  else if(screen.focused == table_outTuples.rows){
+  	table_outTuples.style.border.fg='blue'
+  	box_detections.style.border.fg = 'magenta'
+  	box_detections.focus()}
+  else if(screen.focused == box_detections){
+  	box_detections.style.border.fg='blue'
+  	box_evidence.style.border.fg = 'magenta'
+  	box_evidence.focus()}
+
+  else{
+  	box_evidence.style.border.fg = 'blue'
+  	tree.style.border.fg = 'magenta'
+    tree.focus();}
+screen.render();
 });
 tree.focus();
-// screen.append(tree)
 screen.render();
