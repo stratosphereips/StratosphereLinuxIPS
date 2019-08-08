@@ -178,7 +178,7 @@ if __name__ == '__main__':
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
-    if args.curses:
+    if args.nodejs:
         # Create the curses thread
         cursesProcessQueue = Queue()
         cursesProcessThread = CursesProcess(cursesProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
