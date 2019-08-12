@@ -31,12 +31,12 @@ def try_random_addresses():
 
 def test_tricky_ips():
     ips = []
+    ips.append("206.60.214.219")  # referring to other servers, unregistered segment, wrong country code
     ips.append("107.78.26.116")  # broken pipe in cymruwhois (didn't happen for the second time..)
     ips.append("163.194.132.190")  # ASN lookup failed
     ips.append("162.253.210.64")  # 404 error for rdap, however whois works
     ips.append("71.163.76.208")  # there is a list of cidrs
     ips.append("223.43.28.222")  # Korean whois with encoding errs
-    ips.append("206.60.214.219")  # referring to other servers, unregistered segment, wrong country code
     ips.append("76.42.110.168")  # cymruwhois crashes
     ips.append("86.255.141.19")  # wrong encoding
 
