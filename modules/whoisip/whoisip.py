@@ -140,6 +140,9 @@ class WhoisIP(Module, multiprocessing.Process):
         except socket.gaierror as e:
             self.print(e)
             return
+        except BrokenPipeError as e:
+            self.print(e)
+            return
         except TypeError:
             # error in cymruwhois when querying IP 76.42.110.168
             # __init__() missing 2 required positional arguments: 'cc' and 'owner'
@@ -168,12 +171,25 @@ class WhoisIP(Module, multiprocessing.Process):
 
     def check_whois_manually(self, ip, asn, ctr_code, cidr, name):
         try:
-            response = subprocess.check_output("whois " + str(ip), shell=True, timeout=5)
-        except subprocess.TimeoutExpired:
-            print('process ran too long')
+            # timeout: interrupt process after time in seconds
+            # stdout: save output in response object
+            # stderr: save error output in response object
+            # universal newlines: output is string instead of byte array (this cannot be used due to encoding issues
+            #    with foreign characters, eg French: 86.255.141.19)
+            response = subprocess.run(["whois", str(ip)], timeout=3, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except subprocess.TimeoutExpired as e:
             # -r stops whois from following links to other databases
-            response = subprocess.check_output("whois -r " + str(ip), shell=True)
-        data = get_data_from_response(response, asn, ctr_code, cidr, name)
+            # but also some outputs are different, so it cannot be used by default
+            response = subprocess.run(["whois", "-r", str(ip)], stdout=subprocess.PIPE)
+
+        if response.returncode != 0:
+            print(response.stderr)
+            # TODO: handle incorrect requests (don't cache them)
+            return None
+
+        # decode as iso-8859-1, this fixes errors in French requests
+        output = response.stdout.decode("iso-8859-1")
+        data = get_data_from_response(output, asn, ctr_code, cidr, name)
         return data["asn"], data["country"], data["cidr"], data["name"]
 
     def show_results(self, asn, ctr_code, cidr, name):

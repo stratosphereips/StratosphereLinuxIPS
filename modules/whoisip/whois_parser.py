@@ -72,7 +72,6 @@ def get_data_from_response(response, asn, ctr_code, cidr, name):
 
 
 def parse_raw_response(response):
-    response = response.decode("utf-8")
     # remove comments and empty lines
     lines = []
 
