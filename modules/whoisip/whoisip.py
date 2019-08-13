@@ -5,7 +5,7 @@ from slips.core.database import __database__
 
 # Your imports
 import socket
-from modules.whoisip.whois_parser import get_data_from_response
+from modules.whoisip.whois_parser import get_data_from_query
 import ipaddress
 import json
 from cymruwhois import Client
@@ -194,7 +194,7 @@ class WhoisIP(Module, multiprocessing.Process):
 
         # decode as iso-8859-1, this fixes errors in French requests
         output = response.stdout.decode("iso-8859-1")
-        data = get_data_from_response(output, asn, ctr_code, cidr, name)
+        data = get_data_from_query(output, asn, ctr_code, cidr, name)
         return data["asn"], data["country"], data["cidr"], data["name"]
 
     def show_results(self, asn, ctr_code, cidr, name):
