@@ -103,6 +103,10 @@ def parse_raw_response(response):
 
         data_dictionary[key] = value.strip()
 
+    # only take first two letters of country code (country codes are always two letters, this removes comments)
+    if "country" in data_dictionary:
+        data_dictionary["country"] = data_dictionary["country"][0:2]
+
     return data_dictionary
 
 
