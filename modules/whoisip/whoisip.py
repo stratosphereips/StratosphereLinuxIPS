@@ -146,6 +146,7 @@ class WhoisIP(Module, multiprocessing.Process):
         except TypeError:
             # error in cymruwhois when querying IP 76.42.110.168
             # __init__() missing 2 required positional arguments: 'cc' and 'owner'
+            print("### CymruWhois crashed")
             check_manually = True
             asn = "None"
             ctr_code = "None"
@@ -153,9 +154,13 @@ class WhoisIP(Module, multiprocessing.Process):
             name = "None"
 
         if check_manually:
+            print("### Running manual check")
             asn, ctr_code, cidr, name = self.check_whois_manually(address, asn, ctr_code, cidr, name)
 
         self.show_results(asn, ctr_code, cidr, name)
+
+        if asn == "None" or ctr_code == "None" or cidr == "None" or name == "None":
+            print("Results are incomplete")
 
         if "," in cidr:
             cidrs = cidr.split(", ")
