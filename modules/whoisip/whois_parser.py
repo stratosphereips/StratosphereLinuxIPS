@@ -1,10 +1,105 @@
 import ipaddress
 
 
-def get_data_from_response(response, asn, ctr_code, cidr, name):
-    # get a dictionary of values in the response
-    data_dictionary = parse_raw_response(response)
+class Response:
+    def __init__(self, cidr: str=None, asn: str=None):
+        self.cidr = cidr
+        self.asn = asn
+        self.data = []
+        self.modified = None
+        self.country = None
+        self.name = None
+        self.cidr_prefixlen = 0
+        self.num_missing_values = 0
+        self.important_fields = {"asn": None, "country": None, "cidr": None, "route": None, "netrange": None,
+                                 "inetnum": None, "name": None, "orgname": None, "netname": None, "org-name": None,
+                                 "last-modified": None}
 
+    def add_value(self, line):
+        """
+        Save a line of data (in a "key:     value" format) to the Response object
+        :param line: one line of the input
+        :return: None
+        """
+        key, value = line.split(": ", 1)
+        key = key.lower()
+        value = value.strip()
+
+        # remove comments from lines with country codes. Codes always have two letters.
+        if key == "country":
+            value = value[0:2]
+
+        # TODO: It seems like the self.data field is not needed, maybe remove it
+        # if key was already read, append to it
+        if key in self.data:
+            self.data[key] = self.data[key] + "\n" + value
+        # if the key was not seen before, add it
+        else:
+            self.data[key] = value
+
+        # save important keys separately, this will make processing easier
+        if key in self.important_fields and self.important_fields[key] is None:
+            self.important_fields[key] = value
+
+    def process(self):
+        """
+        Read data from the response and choose the correct values. Also, compute the statistics to evaluate the response
+        :return: None
+        """
+
+        if self.asn is None:
+            self.asn = self.important_fields["asn"]
+
+        if self.cidr is None:
+            if self.important_fields["cidr"] is not None:
+                self.cidr = self.important_fields["cidr"]
+            elif self.important_fields["route"] is not None:
+                self.cidr = self.important_fields["route"]
+            elif self.important_fields["netrange"] is not None:
+                self.cidr = get_cidr_from_net_range(self.important_fields["netrange"])
+            elif self.important_fields["inetnum"] is not None:
+                self.cidr = get_cidr_from_net_range(self.important_fields["inetnum"])
+
+        self.country = self.important_fields["country"]
+
+        if self.important_fields["name"] is not None:
+            self.name = self.important_fields["name"]
+        elif self.important_fields["orgname"] is not None:
+            self.name = self.important_fields["orgname"]
+        elif self.important_fields["org-name"] is not None:
+            self.name = self.important_fields["org-name"]
+        elif self.important_fields["netname"] is not None:
+            self.name = self.important_fields["netname"]
+
+        # update which variables are missing, compute length of the mask prefix
+        if self.asn is None:
+            self.num_missing_values += 1
+
+        if self.cidr is None:
+            self.num_missing_values += 1
+            # if no cidr is present, set prefix to zero. This way, it will be the least preferable network
+            self.cidr_prefixlen = 0
+        else:
+            self.cidr_prefixlen = int(self.cidr.split("/")[2])
+
+        if self.country is None:
+            self.num_missing_values += 1
+
+        if self.name is None:
+            self.num_missing_values += 1
+
+    def __le__(self, other):
+        # TODO: compare to other Responses. The smallest subnets should be used first (higher prefixes are preferred),
+        # TODO: and in case of a match, the response with more fields should be used
+        pass
+
+
+def get_data_from_query(query, asn, ctr_code, cidr, name):
+    # get a dictionary of values in the response
+    data_dictionary = parse_raw_query(query)
+
+    # TODO: sort the responses. Then, choose elements from the best responses. This will lead to combined results from
+    # TODO: multiple responses, but this hopefuly doesn't matter
     result = {}
 
     # ASN
@@ -71,16 +166,33 @@ def get_data_from_response(response, asn, ctr_code, cidr, name):
     return result
 
 
-def parse_raw_response(response):
+def parse_raw_query(query):
     # remove comments and empty lines
     lines = []
 
-    for line in response.split("\n"):
+    responses = []
+
+    if "% Information related to" not in query:
+        print("### No information header")
+
+    for line in query.split("\n"):
         # remove comments
         if line.startswith("#"):
+            # start a new response section when '# start' is read
+            if "start" in line:
+                responses.append(Response)
             continue
         # remove comments
         if line.startswith("%"):
+            if line.startswith("% Information related to"):
+                responses.append(Response)
+                cidr, asn = get_cidr_from_whois_header(line)
+                if new_header == last_header:
+                    new_header = last_header + "_"
+                last_header = new_header
+                responses[last_header] = []
+                if asn != "None":
+                    responses[last_header].append("asn: " + asn)
             continue
         # remove empty lines
         if line == "":
@@ -88,7 +200,17 @@ def parse_raw_response(response):
         # ignore lines that don't follow the 'key: value' format
         if ": " not in line:
             continue
+
+        # if no responses are already in the array, start a new response
+        if len(responses) == 0:
+            responses.append(Response)
+
+        responses[-1].data.append(line)
         lines.append(line)
+
+    # the first thing in the response is information about the server. So the server's CIDR, name and country code
+    # are returned instead of actual data. If results are read backwards, actual data will be read first
+    lines.reverse()
 
     data_dictionary = {}
 
@@ -107,8 +229,20 @@ def parse_raw_response(response):
     if "country" in data_dictionary:
         data_dictionary["country"] = data_dictionary["country"][0:2]
 
+    # TODO: instead of one dictionaries, multiple responses are submitted
     return data_dictionary
 
+
+def get_cidr_from_whois_header(line: str):
+    line = line[25:]
+    # range of ips
+    if "-" in line:
+        line = line.replace("\'", "")
+        return get_cidr_from_net_range(line), "None"
+    if "AS" in line:
+        line = line.replace("\'", "")
+        cidr, asn = line.split("AS")
+        return cidr, asn
 
 def get_cidr_from_net_range(netrange):
     try:
