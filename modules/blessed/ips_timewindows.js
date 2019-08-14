@@ -598,12 +598,6 @@ var bar_state_two = true;
 			bar_one.setLabel({text:'DstPortsServerEstablished'.green,side:'left'});
 			bar_two.setLabel({text:'DstPortsServerNotEstablished'.green,side:'left'});
 			screen.render();
-			screen.key('Tab', function(ch, key) {
-				if(bar_one.focused == true)bar_two.focus();
-				else if(bar_two.focused == true)bar_one.focus();
-			   	screen.render()
-   			});
-   			
 			screen.key('right', function(ch, key) {
 				if(bar_one.focused == true){
 
@@ -663,12 +657,6 @@ var bar_state_three = true;
 			bar_one.setLabel({text:'DstIPsClientEstablished'.green,side:'left'});
 			bar_two.setLabel({text:'DstIPsClientNotEstablished'.green,side:'left'});
 			screen.render();
-			screen.key('Tab', function(ch, key) {
-				if(bar_one.focused == true)bar_two.focus();
-				else if(bar_two.focused == true)bar_one.focus();
-			   	screen.render()
-   			});
-   			
 			screen.key('right', function(ch, key) {
 				if(bar_one.focused == true){
 
@@ -704,7 +692,7 @@ var bar_state_three = true;
   			box_bar_state.hide();
   		}
   		bar_state_three = !bar_state_three;
-  		screen.render()
+  		screen.render();
 	
 });
 
@@ -715,14 +703,46 @@ var bar_state_three = true;
     	var data = [];
     	async.each(reply, function(line, callback){
     		var row = [];
+    		var regex_asn = /, asn='(.*)'/;
+			var matches_asn = line.match(regex_asn);
+			var regex_geo = /, geocountry='(.*)'/;
+			var matches_geo = line.match(regex_geo);
     		var line_arr = line.split(" ")
+    		var line_arr_comma = line.split(",")
+
 	      	var index_to = line_arr.indexOf('to')
-	      	var index_ip = index_to +1
-	      	if(index_to>=0)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
+	      	var index_asked = line_arr.indexOf('asked');
+	      	var index_ip = index_to +1;
+	      	if(index_to>=0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
+	      	for(var i =3; i < index_asked;i++){
+	      	line_arr[i] = line_arr[i].bold.cyan }
+	      	
+	        if(line_arr[index_to+2].includes('/'))line_arr[index_to+2]=line_arr[index_to+2].slice(0,-1).bold.yellow+','
 	      	line_arr[1]= line_arr[1].substring(0, line_arr[1].lastIndexOf('.'));
-			row.push(line_arr.join(" "));
-			data.push(row);
+			timeline_line = line_arr.join(" ");
+			if(matches_asn != null){
+			var timeline_without_asn  = timeline_line.replace(matches_asn[0],"")	
+				if(matches_geo != null){		
+					var timeline_without_geo =timeline_without_asn.replace(matches_geo[0],"")	
+					row.push(timeline_without_geo);
+					data.push(row);}
+				else{
+					row.push(timeline_without_asn);
+					data.push(row);}
+				}
+			else{
+				if(matches_geo != null){		
+					var timeline_without_geo =timeline_line.replace(matches_geo[0],"")	
+					row.push(timeline_without_geo);
+					data.push(row);}
+
+				else{
+					row.push(timeline_line);
+					data.push(row);}
+			}
+			
 			callback();
+			
     	},function(err) {
 
  		if( err ) {
@@ -752,7 +772,8 @@ var bar_state_three = true;
 
 table_timeline.rows.on('select', (item, index) => {
 	var timeline_line = item.content.split(" ");
-	var timeline_ip = timeline_line[6].slice(6,-7)
+	var index_to = timeline_line.indexOf('to')
+	var timeline_ip = timeline_line[index_to +1].slice(6,-7)
 	getIpInfo_box_ip(timeline_ip)
 });
 
@@ -769,7 +790,7 @@ screen.key(['escape', 'q', 'C-c'], function(ch, key) {
 
 screen.key(['tab'], function(ch, key) {
 	if(bar_one.focused == true){
-		bar_two.focus();}
+			bar_two.focus();}
 			else if(bar_two.focused == true)
 		{bar_one.focus();}
 
@@ -803,7 +824,7 @@ screen.on('resize', function() {
   box_hotkeys.emit('attach');
   map.emit('attach');
   bar_two.emit('attach');
-  bar_one.emit('attach');
+  bar_one.emit('attach');0
 });
 
 screen.render();
