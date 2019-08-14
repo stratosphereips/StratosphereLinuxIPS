@@ -31,8 +31,8 @@ def try_random_addresses(limit=500):
 
 def test_tricky_ips():
     ips = []
-    ips.append("8.218.236.191")  # cymruwhois correctly says its SG, but whois insists on AU
     ips.append("206.60.214.219")  # referring to other servers, unregistered segment, wrong country code
+    ips.append("8.218.236.191")  # cymruwhois correctly says its SG, but whois insists on AU
     ips.append("107.78.26.116")  # broken pipe in cymruwhois (didn't happen for the second time..)
     ips.append("163.194.132.190")  # ASN lookup failed
     ips.append("162.253.210.64")  # 404 error for rdap, however whois works

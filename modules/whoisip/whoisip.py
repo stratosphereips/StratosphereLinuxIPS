@@ -125,17 +125,17 @@ class WhoisIP(Module, multiprocessing.Process):
             cidr = message.prefix
             name = message.owner
             if asn == "NA":
-                asn = "None"
+                asn = None
                 check_manually = True
             if ctr_code == "" or ctr_code == "NA":
                 # unfortunately, IP addresses from Namibia (NA) will have to be checked again
-                ctr_code = "None"
+                ctr_code = None
                 check_manually = True
             if cidr == "NA":
-                cidr = "None"
+                cidr = None
                 check_manually = True
             if name == "NA":
-                name = "None"
+                name = None
                 check_manually = True
         except socket.gaierror as e:
             self.print(e)
@@ -148,10 +148,10 @@ class WhoisIP(Module, multiprocessing.Process):
             # __init__() missing 2 required positional arguments: 'cc' and 'owner'
             print("### CymruWhois crashed")
             check_manually = True
-            asn = "None"
-            ctr_code = "None"
-            cidr = "None"
-            name = "None"
+            asn = None
+            ctr_code = None
+            cidr = None
+            name = None
 
         if check_manually:
             print("### Running manual check")
@@ -159,7 +159,7 @@ class WhoisIP(Module, multiprocessing.Process):
 
         self.show_results(asn, ctr_code, cidr, name)
 
-        if asn == "None" or ctr_code == "None" or cidr == "None" or name == "None":
+        if asn is None or ctr_code is None or cidr is None or name is None:
             print("Results are incomplete")
 
         if "," in cidr:
@@ -194,7 +194,7 @@ class WhoisIP(Module, multiprocessing.Process):
 
         # decode as iso-8859-1, this fixes errors in French requests
         output = response.stdout.decode("iso-8859-1")
-        data = get_data_from_query(output, asn, ctr_code, cidr, name)
+        data = get_data_from_query(ip, output, asn, ctr_code, cidr, name)
         return data["asn"], data["country"], data["cidr"], data["name"]
 
     def show_results(self, asn, ctr_code, cidr, name):

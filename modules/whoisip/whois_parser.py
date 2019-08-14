@@ -2,7 +2,8 @@ import ipaddress
 
 
 class Response:
-    def __init__(self, cidr: str=None, asn: str=None):
+    def __init__(self, ip, cidr=None, asn=None):
+        self.ip = ip
         self.cidr = cidr
         self.asn = asn
         self.data = []
@@ -31,11 +32,11 @@ class Response:
 
         # TODO: It seems like the self.data field is not needed, maybe remove it
         # if key was already read, append to it
-        if key in self.data:
-            self.data[key] = self.data[key] + "\n" + value
+        # if key in self.data:
+        #     self.data[key] = self.data[key] + "\n" + value
         # if the key was not seen before, add it
-        else:
-            self.data[key] = value
+        # else:
+        #     self.data[key] = value
 
         # save important keys separately, this will make processing easier
         if key in self.important_fields and self.important_fields[key] is None:
@@ -80,7 +81,19 @@ class Response:
             # if no cidr is present, set prefix to zero. This way, it will be the least preferable network
             self.cidr_prefixlen = 0
         else:
-            self.cidr_prefixlen = int(self.cidr.split("/")[2])
+            # there may be more networks on one line, choose the smallest one
+            smallest_prefix = 0
+            smallest_network = "0.0.0.0/32"
+            networks = self.cidr.split(", ")
+            for network in networks:
+                if self.ip not in ipaddress.IPv4Network(network):
+                    networks.remove(network)
+                prefix = int(network.split("/")[1])
+                if prefix > smallest_prefix:
+                    smallest_prefix = prefix
+                    smallest_network = network
+            self.cidr_prefixlen = smallest_prefix
+            self.cidr = smallest_network
 
         if self.country is None:
             self.num_missing_values += 1
@@ -88,111 +101,105 @@ class Response:
         if self.name is None:
             self.num_missing_values += 1
 
-    def __le__(self, other):
-        # TODO: compare to other Responses. The smallest subnets should be used first (higher prefixes are preferred),
-        # TODO: and in case of a match, the response with more fields should be used
-        pass
+    def __lt__(self, other):
+        # responses for smaller subnets (higher prefixlen) are preferred
+        if self.cidr_prefixlen > other.cidr_prefixlen:
+            return True
+        elif self.cidr_prefixlen < other.cidr_prefixlen:
+            return False
+
+        # in case of same prefixlen, more informative responses are preferred
+        if self.num_missing_values < other.num_missing_values:
+            return True
+        elif self.num_missing_values > other.num_missing_values:
+            return False
+
+        # in case of same prefixlen and missing values, choose the one with lower asn
+        if self.asn is not None and other.asn is not None:
+            if self.asn < other.asn:
+                return True
+            elif self.asn > other.asn:
+                return False
+
+        return False
 
 
-def get_data_from_query(query, asn, ctr_code, cidr, name):
-    # get a dictionary of values in the response
-    data_dictionary = parse_raw_query(query)
+def get_data_from_query(ip, query, asn, ctr_code, cidr, name):
+    # get a set of responses
+    server_response, subnet_responses = parse_raw_query(ip, query)
 
-    # TODO: sort the responses. Then, choose elements from the best responses. This will lead to combined results from
-    # TODO: multiple responses, but this hopefuly doesn't matter
+    all_set = False
+    for response in subnet_responses:
+        asn, ctr_code, cidr, name, all_set = update_missing_fields(response, asn, ctr_code, cidr, name)
+        if all_set:
+            break
+
+    if server_response is not None and not all_set:
+        asn, ctr_code, cidr, name, _ = update_missing_fields(server_response, asn, ctr_code, cidr, name)
+
     result = {}
 
-    # ASN
-    # use original value if available
-    if asn != "None":
-        result["asn"] = asn
-    # use manually read value if available
-    elif "asn" in data_dictionary:
-        result["asn"] = data_dictionary["asn"]
-    # otherwise set "None"
-    else:
-        result["asn"] = "None"
-
-    # Country
-    # TODO: 163.194.132.190 is from US as far as cymruwhois says, but actually is in Australia. Who should I trust?
-    if ctr_code != "None":
-        result["country"] = ctr_code
-        if "country" in data_dictionary and data_dictionary["country"] != ctr_code:
-            print("### Warning: Country code from cymruwhois is", ctr_code, ", but whois returned", data_dictionary["country"])
-    elif "country" in data_dictionary:
-        result["country"] = data_dictionary["country"]
-    else:
-        result["country"] = "None"
-
-    # CIDR
-    if cidr != "None":
-        result["cidr"] = cidr
-    elif "cidr" in data_dictionary:
-        result["cidr"] = data_dictionary["cidr"]
-    # some servers use "route" instead of "cidr" for the key
-    elif "route" in data_dictionary:
-        result["cidr"] = data_dictionary["route"]
-    # some servers provide network data in different format: 163.0.0.0 - 163.255.255.255
-    elif "netrange" in data_dictionary:
-        result["cidr"] = get_cidr_from_net_range(data_dictionary["netrange"])
-    elif "inetnum" in data_dictionary:
-        result["cidr"] = get_cidr_from_net_range(data_dictionary["inetnum"])
-    else:
-        result["cidr"] = "None"
-
-    # Name
-    if name != "None":
-        result["name"] = name
-    elif "name" in data_dictionary:
-        result["name"] = data_dictionary["name"]
-    elif "orgname" in data_dictionary:
-        result["name"] = data_dictionary["orgname"]
-    elif "org-name" in data_dictionary:
-        result["name"] = data_dictionary["org-name"]
-    elif "netname" in data_dictionary:
-        result["name"] = data_dictionary["netname"]
-    else:
-        result["name"] = "None"
-
-    # if IP isn't registered, the mask of whole IPv4 range is returned (eg IP 194.31.224.157)
+    # if IP isn't registered, the mask of an empty network is returned (eg IP 194.31.224.157)
     # Description of the query: This object represents all IPv4 addresses. If you see this object as a result of a
     # single IP query, it means that the IP address you are querying is currently not assigned to any organisation
-    if result["cidr"] == "0.0.0.0/32":
-        result["cidr"] = "None"
-        result["asn"] = "None"
-        result["country"] = "None"
-        result["name"] = "None"
+    if cidr == "0.0.0.0/32":
+        result["cidr"] = None
+        result["asn"] = None
+        result["country"] = None
+        result["name"] = None
+    else:
+        result["cidr"] = str(cidr)
+        result["asn"] = str(asn)
+        result["country"] = str(ctr_code)
+        result["name"] = str(name)
 
     return result
 
 
-def parse_raw_query(query):
-    # remove comments and empty lines
-    lines = []
+def update_missing_fields(response, asn, country, cidr, name):
+    all_set = True
+    if asn is None:
+        if response.asn is not None:
+            asn = response.asn
+        else:
+            all_set = False
+    if country is None:
+        if response.country is not None:
+            country = response.country
+        else:
+            all_set = False
+    if cidr is None:
+        if response.cidr is not None:
+            cidr = response.cidr
+        else:
+            all_set = False
+    if name is None:
+        if response.name is not None:
+            name = response.name
+        else:
+            all_set = False
+    return asn, country, cidr, name, all_set
 
+
+def parse_raw_query(ip, query):
     responses = []
-
-    if "% Information related to" not in query:
-        print("### No information header")
 
     for line in query.split("\n"):
         # remove comments
         if line.startswith("#"):
             # start a new response section when '# start' is read
             if "start" in line:
-                responses.append(Response)
+                responses.append(Response(ip))
             continue
         # remove comments
         if line.startswith("%"):
             if line.startswith("% Information related to"):
-                responses.append(Response)
+                # start a new response section when '% Information related to ...' is read
+                responses.append(Response(ip))
+                # the header contains cidr and (sometimes) asn data
                 cidr, asn = get_cidr_from_whois_header(line)
-                if new_header == last_header:
-                    new_header = last_header + "_"
-                last_header = new_header
-                responses[last_header] = []
-                if asn != "None":
-                    responses[last_header].append("asn: " + asn)
+                responses[-1].cidr = cidr
+                responses[-1].asn = asn
             continue
         # remove empty lines
         if line == "":
@@ -203,34 +210,23 @@ def parse_raw_query(query):
 
         # if no responses are already in the array, start a new response
         if len(responses) == 0:
-            responses.append(Response)
+            responses.append(Response(ip))
 
-        responses[-1].data.append(line)
-        lines.append(line)
+        responses[-1].add_value(line)
 
-    # the first thing in the response is information about the server. So the server's CIDR, name and country code
-    # are returned instead of actual data. If results are read backwards, actual data will be read first
-    lines.reverse()
+    for response in responses:
+        response.process()
 
-    data_dictionary = {}
+    # sometimes, whois server first responds with information about itself. The server data should not be interpreted
+    # as data for IP, as the company name and country (and other stuff) may be different
+    if len(responses) > 1:
+        server_response = responses[0]
+        subnet_responses = responses[1:]
+        subnet_responses.sort()
+        return server_response, subnet_responses
 
-    for line in lines:
-        # read key and value
-        key, value = line.split(": ", 1)
-        key = key.lower()
-
-        # ignore repeating information from other servers (only first line with key gets read)
-        if key in data_dictionary:
-            continue
-
-        data_dictionary[key] = value.strip()
-
-    # only take first two letters of country code (country codes are always two letters, this removes comments)
-    if "country" in data_dictionary:
-        data_dictionary["country"] = data_dictionary["country"][0:2]
-
-    # TODO: instead of one dictionaries, multiple responses are submitted
-    return data_dictionary
+    else:
+        return None, responses
 
 
 def get_cidr_from_whois_header(line: str):
@@ -238,11 +234,12 @@ def get_cidr_from_whois_header(line: str):
     # range of ips
     if "-" in line:
         line = line.replace("\'", "")
-        return get_cidr_from_net_range(line), "None"
+        return get_cidr_from_net_range(line), None
     if "AS" in line:
         line = line.replace("\'", "")
         cidr, asn = line.split("AS")
         return cidr, asn
+
 
 def get_cidr_from_net_range(netrange):
     try:
@@ -253,13 +250,13 @@ def get_cidr_from_net_range(netrange):
         max_address = ipaddress.ip_address(max_address_str)
         # only IPv4 addresses can be handled at the moment
         if min_address.version != 4:
-            return "None"
+            return None
         # subtract edge addresses to get size of network
         dif = int(max_address) - int(min_address)
         # use size to create IP, which will have all ones: 000.255.255.255
         inverted_mask = ipaddress.ip_address(dif)
         # from the lower IP and the inverted mask, ipaddress can parse the network cidr correctly
-        network = ipaddress.IPv4Network(str(min_address) + "/" + str(inverted_mask))
+        network = str(ipaddress.IPv4Network(str(min_address) + "/" + str(inverted_mask)))
     except:
         network = None
-    return str(network)
+    return network
