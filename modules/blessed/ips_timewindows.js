@@ -697,7 +697,7 @@ tree.on('select',function(node){
 	
 });
 
-//display two bars of dstIPsClient established and non established connections
+//display to bars of dstIPsClient established and non established connections
 	screen.key('c', function(ch, key) {
 		// bar_one.hid, function(ch, key) {
 		// bar_one.hide();
