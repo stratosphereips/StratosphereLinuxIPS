@@ -70,9 +70,12 @@ class UpdateIPManager:
             #res = urllib.request.urlopen(request)
             #self.new_e_tag = res.info().get('Etag', None)
             # We use a command in os because if we use urllib or requests the process complains!:w
-            command = 'curl -s -I https://raw.githubusercontent.com/frenky-strasak/StratosphereLinuxIPS/frenky_develop/modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt|grep -i etag'
+            command = "curl -s -I https://raw.githubusercontent.com/frenky-strasak/StratosphereLinuxIPS/frenky_develop/modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt | grep -i etag"
             temp = os.popen(command).read()
-            self.new_e_tag = temp.split()[1].split('\n')[0].replace("\"",'')
+            try:
+                self.new_e_tag = temp.split()[1].split('\n')[0].replace("\"",'')
+            except IndexError:
+                self.new_e_tag = ''
         except Exception as inst:
             self.print('Error with __get_e_tag_from_web()', 0, 1)
             self.print('{}'.format(type(inst)), 0, 1)

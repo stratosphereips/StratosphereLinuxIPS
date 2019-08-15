@@ -14,6 +14,7 @@ var redis = require('redis')
   , screen = blessed.screen()
   , colors = require('colors');
 
+
 //read countries  location
 let country_loc = {};
 fs.readFile('country.txt', 'utf8', function(err,data) {
@@ -112,15 +113,8 @@ var table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table,
    		type: 'line'
  		},
 	})
-, box_hotkeys = grid.set(4.3, 1, 0.8, 1, blessed.box,
-      {top: 'center',
-      left: 'center',
-      width: '50%',
-      height: '50%',
-      style:{
-       	 focus: {
-      border:{ fg:'magenta'}
-    }},
+, box_hotkeys = grid.set(0, 0, 6, 6, blessed.text,
+      {
       content: "{bold}-e{/bold} -> SrcPortsClient\n{bold}-b{/bold} -> DstPortsServer\n{bold}-c{/bold} -> dstIpsClient\n{bold}-m{/bold} -> map", //{bold}-b{/bold} -> dstPortServer\n{bold}-c{/bold} -> SrcPortsClient\n
       tags: true,
       border: {
@@ -171,6 +165,24 @@ var table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table,
 	bar_two.hide()
 	map.hide()
 var number_bars = Math.floor((2*bar_one.width-2*bar_one.options.xOffset)/(bar_one.options.barSpacing+2*bar_one.options.barWidth));
+var bar_state_one = true;
+var bar_state_two = true;	
+var bar_state_three = true;
+var box_hotkeys_state = true;
+var map_state = true;
+var list_state = [bar_state_one, bar_state_two, bar_state_three,box_hotkeys_state, box_bar_state, map_state];
+
+
+
+// function state_handle(list_state, listi){
+// 	console.log(listi)
+// 	async.each(list_state, function(state, err){
+// 		if(listi != String(state)){
+// 			state = true;
+// 		}
+// 	})
+// }
+
 function round(value, decimals) {
  	return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
 };
@@ -199,7 +211,7 @@ function set_box_bar_state(bar_data, bar_data_two){
 	else{box_bar_state.setContent('Bars are not scrollable. {bold}Logarithmic scale.{/bold}')};
 	bar_one.show();
 	bar_two.show();
-	box_bar_state.show()
+	box_bar_state.show();
 }
 
 //function to fill data about destIpsCLient
@@ -363,8 +375,33 @@ function getIpInfo_box_ip(ip){
 	redis_timeline_ip.hgetall("IPsInfo",(err,reply)=>{
 		try{
 		var obj = JSON.parse(reply[ip]);
-  		var l =  Object.values(obj)
-  		box_ip.setContent(l.join(', '));
+  		var ip_values =  Object.values(obj);
+  		var ip_keys = Object.keys(obj);
+  		if(ip_keys.includes('VirusTotal')){
+  				var vt = obj['VirusTotal'];
+  				var vt_string ='VirusTotal : URL : ' + vt['URL']+', down_file : ' + vt['down_file']  + ', ref_file : '+ vt['ref_file'] + ', com_file : ' +vt['com_file']; 
+  				if(ip_keys.length == 3){
+		  			var ip_info_string = obj['asn']+' | ' + obj['geocountry']+' | '+ vt_string;
+		  			box_ip.setContent(ip_info_string);
+		  		}
+		  		else if(ip_keys.includes('asn')) {
+		  			var ip_info_string = obj['asn'] + ' | '+vt_string;
+		  			box_ip.setContent(ip_info_string);}
+		  		else if(ip_keys.includes('geocountry')){
+		  			var ip_info_string = obj['geocountry'] + ' | '+vt_string;
+		  			box_ip.setContent(ip_info_string);
+		  		}
+		  		else {
+		  			box_ip.setContent(vt_string);
+		  		}
+  			}
+  		else if(ip_keys.includes('asn') && ip_keys.includes('geocountry')) {
+  			var ip_info_string = obj['asn'] + ' | '+obj['geocountry'];
+  			box_ip.setContent(ip_info_string);}
+
+  		else{
+  			box_ip.setContent(ip_values.join(' '))
+  		}
       	screen.render();}
       	catch (err){
       		box_ip.setContent(reply[ip]);
@@ -520,8 +557,20 @@ tree.on('select',function(node){
 		});
 
 //display two bars of srcPortsClient established and non established connections
-	var bar_state_one = true;	
+	
+
 	screen.key('e', function(ch, key) {
+		// bar_one.hide();
+		// bar_two.hide();
+		// box_bar_state.hide();
+		map.hide();
+		box_hotkeys.hide()
+		
+		// bar_state_one = true;
+		bar_state_two = true;	
+		bar_state_three = true;
+		box_hotkeys_state = true;
+		map_state = true;
 		var first_bar_counter = 0;
 		var second_bar_counter = 0;
 		bar_one.options.barSpacing = 10;
@@ -581,8 +630,19 @@ tree.on('select',function(node){
 
 
 //display two bars of dstPortsServer established and non established connections
-var bar_state_two = true;
+
 	screen.key('b', function(ch, key) {
+		// bar_one.hide();
+		// bar_two.hide();
+		// box_bar_state.hide();
+		map.hide();
+		box_hotkeys.hide()
+		// state_handle(list_state, 'bar_state_two')
+		bar_state_one = true;
+		// bar_state_two = true;	
+		bar_state_three = true;
+		box_hotkeys_state = true;
+		map_state = true;
 		var first_bar_counter = 0;
 		var second_bar_counter = 0;
 		bar_one.options.barSpacing = 10;
@@ -598,12 +658,6 @@ var bar_state_two = true;
 			bar_one.setLabel({text:'DstPortsServerEstablished'.green,side:'left'});
 			bar_two.setLabel({text:'DstPortsServerNotEstablished'.green,side:'left'});
 			screen.render();
-			screen.key('Tab', function(ch, key) {
-				if(bar_one.focused == true)bar_two.focus();
-				else if(bar_two.focused == true)bar_one.focus();
-			   	screen.render()
-   			});
-   			
 			screen.key('right', function(ch, key) {
 				if(bar_one.focused == true){
 
@@ -644,8 +698,21 @@ var bar_state_two = true;
 });
 
 //display two bars of dstIPsClient established and non established connections
-var bar_state_three = true;
 	screen.key('c', function(ch, key) {
+		// bar_one.hid, function(ch, key) {
+		// bar_one.hide();
+		// bar_two.hide();
+		// box_bar_state.hide();e();
+		// bar_two.hide();
+		// box_bar_state.hide();
+		map.hide();
+		box_hotkeys.hide()
+		// state_handle(list_state, 'bar_state_three');
+		bar_state_one = true;
+		bar_state_two = true;	
+		// bar_state_three = true;
+		box_hotkeys_state = true;
+		map_state = true;
 		var first_bar_counter = 0;
 		var second_bar_counter = 0;
 		bar_one.options.barSpacing = 25;
@@ -663,12 +730,6 @@ var bar_state_three = true;
 			bar_one.setLabel({text:'DstIPsClientEstablished'.green,side:'left'});
 			bar_two.setLabel({text:'DstIPsClientNotEstablished'.green,side:'left'});
 			screen.render();
-			screen.key('Tab', function(ch, key) {
-				if(bar_one.focused == true)bar_two.focus();
-				else if(bar_two.focused == true)bar_one.focus();
-			   	screen.render()
-   			});
-   			
 			screen.key('right', function(ch, key) {
 				if(bar_one.focused == true){
 
@@ -704,7 +765,7 @@ var bar_state_three = true;
   			box_bar_state.hide();
   		}
   		bar_state_three = !bar_state_three;
-  		screen.render()
+  		screen.render();
 	
 });
 
@@ -717,12 +778,24 @@ var bar_state_three = true;
     		var row = [];
     		var line_arr = line.split(" ")
 	      	var index_to = line_arr.indexOf('to')
-	      	var index_ip = index_to +1
-	      	if(index_to>=0)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
+	      	var index_asked = line_arr.indexOf('asked');
+	      	var index_careful = line_arr.indexOf('careful!');
+	      	var index_ip = index_to +1;
+	      	if(index_to>=0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
+	      	if(index_careful > 0){
+	      		line_arr[index_careful] = line_arr[index_careful].red;
+	      		line_arr[index_careful - 1] = line_arr[index_careful - 1].red
+	      	}
+	      	for(var i =3; i < index_asked;i++){
+	      	line_arr[i] = line_arr[i].bold.cyan }   	
+	        if(line_arr[index_to+2].includes('/'))line_arr[index_to+2]=line_arr[index_to+2].slice(0,-1).bold.yellow+','
 	      	line_arr[1]= line_arr[1].substring(0, line_arr[1].lastIndexOf('.'));
-			row.push(line_arr.join(" "));
+			timeline_line = line_arr.join(" ");
+			row.push(timeline_line.replace(/\|.*/,''));
 			data.push(row);
+			
 			callback();
+			
     	},function(err) {
 
  		if( err ) {
@@ -734,9 +807,24 @@ var bar_state_three = true;
 		});
     	})
 
-    var map_state = true
+    
 	screen.key('m', function(ch, key) {
+		bar_one.hide();
+		bar_two.hide();
+		box_bar_state.hide();
+		// map.hide();
+		box_hotkeys.hide()
+		bar_state_one = true;
+		bar_state_two = true;	
+		bar_state_three = true;
+		box_hotkeys_state = true;
+		// map_state = true;
+
 		if(map_state){
+			bar_one.hide();
+			bar_two.hide();
+			box_bar_state.hide();
+			box_hotkeys.hide();
 			map.show()
 		}
 		else{
@@ -752,7 +840,8 @@ var bar_state_three = true;
 
 table_timeline.rows.on('select', (item, index) => {
 	var timeline_line = item.content.split(" ");
-	var timeline_ip = timeline_line[6].slice(6,-7)
+	var index_to = timeline_line.indexOf('to')
+	var timeline_ip = timeline_line[index_to +1].slice(6,-7)
 	getIpInfo_box_ip(timeline_ip)
 });
 
@@ -765,11 +854,36 @@ screen.key(['escape', 'q', 'C-c'], function(ch, key) {
   return process.exit(0);
 });
 
+box_hotkeys.hide();
+var box_hotkeys_state = true;
+screen.key('h', function(ch, key) {
+	bar_one.hide();
+	bar_two.hide();
+	box_bar_state.hide();
+	map.hide();
+	// box_hotkeys.hide()
+	bar_state_one = true;
+	bar_state_two = true;	
+	bar_state_three = true;
+	// box_hotkeys_state = true;
+	map_state = true;
+	if(box_hotkeys_state){
+		box_hotkeys.show()
+		box_bar_state.hide();
+		bar_one.hide();
+			bar_two.hide();
+			map.hide();
+	}
+	else{box_hotkeys.hide()}
+		box_hotkeys_state =! box_hotkeys_state
+ 	screen.render();
+});
+
 
 
 screen.key(['tab'], function(ch, key) {
 	if(bar_one.focused == true){
-		bar_two.focus();}
+			bar_two.focus();}
 			else if(bar_two.focused == true)
 		{bar_one.focus();}
 
@@ -803,7 +917,7 @@ screen.on('resize', function() {
   box_hotkeys.emit('attach');
   map.emit('attach');
   bar_two.emit('attach');
-  bar_one.emit('attach');
+  bar_one.emit('attach');0
 });
 
 screen.render();

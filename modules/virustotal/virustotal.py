@@ -1,12 +1,15 @@
 # Must imports
+import configparser
+
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
+import platform
 
 # Your imports
 import json
-import re
-import requests
+import urllib3
+import certifi
 import time
 import ipaddress
 
@@ -18,10 +21,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
     authors = ['Dita']
 
     def __init__(self, outputqueue, config, testing=False):
-        if testing:
-            self.print = self.testing_print
-        else:
-            multiprocessing.Process.__init__(self)
+        multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
@@ -31,8 +31,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # database and this line is necessary. Do not delete it, instead move it to line 21.
         __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
 
-        self.db_hashset_name = "virustotal-module-ipv4subnet-cache"
-        self.db_ip_hashset_name = "virustotal-module-ip-cache"
         # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
         # The options change, so the last list is on the slips/core/database.py file. However common options are:
         # - new_ip
@@ -42,8 +40,8 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
-
-        key_file = config["virustotal"]["api_key_file"]
+        # Read the conf file
+        key_file = self.__read_configuration("virustotal", "api_key_file")
         self.key = None
         try:
             with open(key_file, "r") as f:
@@ -51,11 +49,32 @@ class VirusTotalModule(Module, multiprocessing.Process):
         except FileNotFoundError:
             self.print("The file with API key (" + key_file + ") could not be loaded. VT module is stopping.")
 
-        # regex to check IP version (only IPv4 can be saved at the moment)
-        self.ipv4_reg = re.compile("^([0-9]{1,3}\.){3}[0-9]{1,3}$")
-
-        # self.print("Starting VirusTotal module at " + str(time.time()))
+        # query counter for debugging purposes
         self.counter = 0
+
+        # Pool manager to make HTTP requests with urllib3
+        # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
+        self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
+        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
+        if platform.system() == 'Darwin':
+            # macos
+            self.timeout = None
+        elif platform.system() == 'Linux':
+            # linux
+            self.timeout = -1
+        else:
+            #??
+            self.timeout = None
+
+    def __read_configuration(self, section: str, name: str) -> str:
+        """ Read the configuration file for what we need """
+        # Get the time of log report
+        try:
+            conf_variable = self.config.get(section, name)
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            conf_variable = None
+        return conf_variable
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -73,32 +92,21 @@ class VirusTotalModule(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def testing_print(self, text, verbose=1, debug=0):
-        """
-        Printing function that will be used automatically by the module, in case it is run in testing mode
-        (without SLIPS and outputprocess). 
-        :param text: String to print
-        :param verbose: ignored parameter
-        :param debug: ignored parameter
-        :return: None
-        """
-        print(text)
-
     def run(self):
         if self.key is None:
+            # We don't have a virustotal key
             return
-
         try:
             # Main loop function
             while True:
-                message = self.c1.get_message(timeout=-1)
+                message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 # Ignore the first message
                 if message['channel'] == 'new_ip' and message["type"] == "message":
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
-                    save_score_to_db(ip, ip_score)
-                    self.print("[" + ip + "] has score " + str(ip_score), verbose=5, debug=1)
+                    __database__.set_virustotal_score(ip, ip_score)
+                    self.print("[" + ip + "] has score " + str(ip_score), verbose=7, debug=1)
 
         except KeyboardInterrupt:
             return True
@@ -119,62 +127,21 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         addr = ipaddress.ip_address(ip)
         if addr.is_private:
-            self.print("[" + ip + "] is private, skipping", verbose=5, debug=1)
+            self.print("[" + ip + "] is private, skipping", verbose=7, debug=1)
             return 0, 0, 0, 0
 
         # check if the address is in the cache (probably not, since all IPs are unique)
-        cached_data = self.is_ip_in_db(ip)
+        cached_data = __database__.is_ip_in_virustotal_cache(ip)
         if cached_data:
             return cached_data
 
         # for unknown address, do the query
         response = self.api_query_(ip)
 
-        scores = interpret_response(response.json())
-        self.put_ip_to_db(ip, scores)
+        scores = interpret_response(response)
+        __database__.put_ip_to_virustotal_cache(ip, scores)
         self.counter += 1
         return scores
-
-    def check_ip_with_subnet_cache_(self, ip: str):
-        """
-        Unused.
-        Look if similar IP was already processed. If not, perform API call to VirusTotal and return scores for each of
-        the four processed categories. Response is cached in a dictionary.
-        IPv6 addresses are not cached, they will always be queried.
-        :param ip: IP address to check
-        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
-        """
-
-        # first, look if an address from the same network was already resolved
-        if re.match(self.ipv4_reg, ip):
-            # get first three bytes of address
-            ip_split = ip.split(".")
-            ip_subnet = ip_split[0] + "." + ip_split[1] + "." + ip_split[2]
-
-            if not is_ipv4_public(ip_split):
-                self.print("[" + ip + "] is private, skipping", verbose=5, debug=1)
-                return 0, 0, 0, 0
-
-            # compare if the first three bytes of address match
-            cached_data = self.is_subnet_in_db(ip_subnet)
-            if cached_data:
-                self.print("[" + ip + "] This IP was already processed", verbose=5, debug=1)
-                return cached_data
-
-            # for unknown ipv4 address, do the query
-            response = self.api_query_(ip)
-
-            # save query results
-            scores = interpret_response(response.json())
-            self.put_subnet_to_db(ip_subnet, scores)
-            self.counter += 1
-            return scores
-
-        # ipv6 addresses
-        response = self.api_query_(ip)
-        self.counter += 1
-
-        return interpret_response(response.json())
 
     def api_query_(self, ip, save_data=False):
         """
@@ -185,15 +152,23 @@ class VirusTotalModule(Module, multiprocessing.Process):
         """
 
         params = {'apikey': self.key, 'ip': ip}
-        response = requests.get(self.url, params=params)
+
+        # wait for network
+        while True:
+            try:
+                response = self.http.request("GET", self.url, fields=params)
+                break
+            except urllib3.exceptions.MaxRetryError:
+                self.print("Network is not available, waiting 10s")
+                time.sleep(10)
 
         sleep_attempts = 0
 
         # repeat query if API limit was reached (code 204)
-        while response.status_code != 200:
+        while response.status != 200:
 
             # requests per minute limit reached
-            if response.status_code == 204:
+            if response.status == 204:
                 # usually sleeping for 40 seconds is enough, if not, try adding 20 more
                 if sleep_attempts == 0:
                     sleep_time = 40
@@ -202,7 +177,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 sleep_attempts += 1
 
             # requests per hour limit reached
-            elif response.status_code == 403:
+            elif response.status == 403:
                 # 10 minutes
                 sleep_time = 600
                 self.print("Please check that your API key is correct. Code 403 means timeout but also wrong API key.")
@@ -215,114 +190,77 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 # Reason is a much shorter description ("Forbidden"), but it is always there
                 else:
                     message = response.reason
-                raise Exception("VT API returned unexpected code: " + str(response.status_code) + " - " + message)
+                raise Exception("VT API returned unexpected code: " + str(response.status) + " - " + message)
 
             # report that API limit is reached, wait one minute and try again
-            self.print("Status code is " + str(response.status_code) + " at " + str(time.asctime()) + ", query id: " + str(
+            self.print("Status code is " + str(response.status) + " at " + str(time.asctime()) + ", query id: " + str(
                 self.counter), verbose=5, debug=1)
 
             self.print("API limit reached, going to sleep for " + str(sleep_time) + " seconds", verbose=1, debug=0)
             time.sleep(sleep_time)
-            response = requests.get(self.url, params=params)
+            response = self.http.request("GET", self.url, fields=params)
+
+        data = json.loads(response.data)
 
         # optionally, save data to file
         if save_data:
-            data = response.json()
             filename = ip + ".txt"
             if filename:
                 with open(filename, 'w') as f:
                     json.dump(data, f)
 
-        return response
-
-    def is_subnet_in_db(self, subnet):
-        """ Check if subnet ip is in db. Unused """
-        data = __database__.r.hget(self.db_hashset_name, subnet)
-        if data:
-            return list(map(float, data.split(" ")))
-        else:
-            return data  # None, the key wasn't found
-
-    def put_subnet_to_db(self, subnet, score):
-        """ Add new subnet with score to db. Unused """
-        data = str(score[0]) + " " + str(score[1]) + " " + str(score[2]) + " " + str(score[3])
-        __database__.r.hset(self.db_hashset_name, subnet, data)
-
-    def is_ip_in_db(self, ip):
-        data = __database__.r.hget(self.db_ip_hashset_name, ip)
-        if data:
-            return list(map(float, data.split(" ")))
-        else:
-            return data  # None, the key wasn't found
-
-    def put_ip_to_db(self, ip, score):
-        data = str(score[0]) + " " + str(score[1]) + " " + str(score[2]) + " " + str(score[3])
-        __database__.r.hset(self.db_ip_hashset_name, ip, data)
-
-
-def save_score_to_db(ip, scores):
-    vtdata = {"URL": scores[0],
-              "down_file": scores[1],
-              "ref_file": scores[2],
-              "com_file": scores[3]}
-
-    data = {"VirusTotal": vtdata}
-    __database__.setInfoForIPs(ip, data)
-
-
-def is_ipv4_public(ip: list):
-    # Reserved addresses: https://en.wikipedia.org/wiki/Reserved_IP_addresses
-    ip = list(map(int, ip))
-
-    # private addresses
-    # 10.*
-    if ip[0] == 10:
-        return False
-    # 192.168.*
-    if ip[0] == 192 and ip[1] == 168:
-        return False
-    # 172.16.* - 172.32.*
-    if ip[0] == 172 and 16 <= ip[1] <= 32:
-        return False
-
-    # Used for link-local addresses between two hosts on a single link when no IP address is otherwise specified,
-    # such as would have normally been retrieved from a DHCP server.
-    # 169.254.*
-    if ip[0] == 169 and ip[1] == 254:
-        return False
-
-    # IETF Protocol Assignments
-    # 192.0.0.*
-    if ip[0] == 192 and ip[1] == 0 and ip[2] == 0:
-        return False
-
-    # In use for IP multicast. (Former Class D network) 224.* - 239.*
-    # Reserved for future use. (Former Class E network) 240.0.0.0 – 255.255.255.254
-    # Reserved for the "limited broadcast" destination address 255.255.255.255
-    if ip[0] >= 224:
-        return False
-
-    return True
+        return data
 
 
 def interpret_response(response: dict):
     """
-    Read the dictionary and compute ratio for each category
+    Read the dictionary and compute ratio for each category.
+    
+    The ratio is computed as follows:
+    For each IP, VT API returns data about four categories: URLs that resolved to the IP, samples (files) downloaded
+    from the IP, samples (files) that contain the given IP, and samples (programs) that contact the IP. The structure of
+    the data is same for all four categories.
+    
+    For each sample in a category, VT asks the antivirus engines and counts how many of them find the sample malicious.
+    For example, if VT asked 27 engines and four of them found the sample malicious, the sample would be given score
+    4/27, where 4 is the number of successful detections, and 27 is the total number of engines used.
+    
+    The response has two fields for each category. These are the "detected_<category>" field, which contains list of
+    samples that were found malicious by at least one engine, and the "undetected_<category>" field, which contains all 
+    the samples that none of the engines found malicious (all samples in undetected have score 0/x). This means that the
+    response has 8 fields with scores - two (detected and undetected) for each of the four categories. Some fields may
+    be missing if data for the category is not present.
+    
+    To compute the ratio for a category, scores across the two fields are summed together. A global number of detections
+    is computed (sum of all positive detections across all samples in the detected field) and the global number of tests
+    is computed (sum of all "total" values in both detected and undetected sample lists). Now we have detections for a 
+    category and total for a category. The ratio for a category is detections/total. If no tests were run (the field is
+    empty and total=0), this would be undefined, so the ratio is set to 0.
+    
+    Ratio is computed separately for each category.
+    
     :param response: dictionary (json data from the response)
     :return: four floats: url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
     """
-    # get score [positives, total] for the URL samples that weren't detected
-    # this is the only section where samples are lists and not dicts, that's why integers are passed as keys
+
+    # compute how many tests were run on the undetected samples. This will return tuple (0, total)
+    # the numbers 2 and 3 are keys to the dictionary, which is in this only case (probably by mistake) a list
     undetected_url_score = count_positives(response, "undetected_urls", 2, 3)
+
+    # compute how many tests were run on the detected samples. This will return tuple (detections, total)
     detected_url_score = count_positives(response, "detected_urls", "positives", "total")
+
+    # sum the previous results, to get the sum of detections and sum of total tests
     url_detections = undetected_url_score[0] + detected_url_score[0]
     url_total = undetected_url_score[1] + detected_url_score[1]
 
+    # compute the score for the category
     if url_total:
         url_ratio = url_detections/url_total
     else:
         url_ratio = 0
 
+    # following categories are computed in the same way
     undetected_download_score = count_positives(response, "undetected_downloaded_samples", "positives", "total")
     detected_download_score = count_positives(response, "detected_downloaded_samples", "positives", "total")
     down_file_detections = undetected_download_score[0] + detected_download_score[0]
