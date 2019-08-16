@@ -160,10 +160,10 @@ var table_timeline =  grid.set(0, 1, 2.5, 5, contrib.table,
     }}
        , width: "100%"
        , barBgColor: [ 'red', 'blue', 'green' ]})
-	box_bar_state.hide()
-	bar_one.hide()		
-	bar_two.hide()
-	map.hide()
+box_bar_state.hide()
+bar_one.hide()		
+bar_two.hide()
+map.hide()
 var number_bars = Math.floor((2*bar_one.width-2*bar_one.options.xOffset)/(bar_one.options.barSpacing+2*bar_one.options.barWidth));
 var bar_state_one = true;
 var bar_state_two = true;	
@@ -538,10 +538,8 @@ tree.on('select',function(node){
 
 	    async.each(keys, function(key,callback){
 	      var row = [];
-	      var tuple_info = obj_outTuples[key]
-	      ips.push(key.split(':')[0])
-
-
+	      var tuple_info = obj_outTuples[key];
+	      ips.push(key.split(':')[0]);
 	      row.push(key,tuple_info[0].trim());
 	      data.push(row);
 	      callback(null);
@@ -550,7 +548,7 @@ tree.on('select',function(node){
  		if( err ) {
 			console.log('unable to create user');
  		} else {
- 			table_outTuples.setData({headers: [''], data: data});
+ 			table_outTuples.setData({headers: [''], data: data.sort(function (a,b){return b[1].length - a[1].length})});
  			setMap(ips)
 		screen.render();	
  		}
@@ -697,7 +695,7 @@ tree.on('select',function(node){
 	
 });
 
-//display two bars of dstIPsClient established and non established connections
+//display to bars of dstIPsClient established and non established connections
 	screen.key('c', function(ch, key) {
 		// bar_one.hid, function(ch, key) {
 		// bar_one.hide();
@@ -768,6 +766,72 @@ tree.on('select',function(node){
   		screen.render();
 	
 });
+	// 	screen.key('v', function(ch, key) {
+	// 		// bar_one.hide();
+	// 		// bar_two.hide();
+	// 		// box_bar_state.hide();
+	// 		map.hide();
+	// 		box_hotkeys.hide()
+	// 		// state_handle(list_state, 'bar_state_two')
+	// 		bar_state_one = true;
+	// 		bar_state_two = true;	
+	// 		bar_state_three = true;
+	// 		box_hotkeys_state = true;
+	// 		map_state = true;
+	// 		var first_bar_counter = 0;
+	// 		var second_bar_counter = 0;
+	// 		bar_one.options.barSpacing = 10;
+	// 		bar_two.options.barSpacing = 10;
+	// 		if(bar_state_four){
+	// 			var est_connections_dstPortsClient = tcp_udp_connections("DstPortsClientTCPEstablished","DstPortsClientUDPEstablished",reply);
+	// 			var notEst_connections_dstPortsClient = tcp_udp_connections("DstPortsClientTCPNotEstablished","DstPortsClientUDPNotEstablished",reply);
+	// 			var est_bar_number_dstPortsClient = Math.ceil(est_connections_dstPortsServer[0].length / number_bars);
+	// 			var notEst_bar_number_dstPortsClient = Math.ceil(notEst_connections_dstPortsServer[0].length /number_bars);
+	// 			set_box_bar_state(est_connections_dstPortsServer,notEst_connections_dstPortsServer)
+	// 			bar_setdata(bar_one, first_bar_counter,est_connections_dstPortsServer, number_bars);
+	// 			bar_setdata(bar_two, second_bar_counter, notEst_connections_dstPortsServer, number_bars);
+	// 			bar_one.setLabel({text:'DstPortsServerEstablished'.green,side:'left'});
+	// 			bar_two.setLabel({text:'DstPortsServerNotEstablished'.green,side:'left'});
+	// 			screen.render();
+	// 			screen.key('right', function(ch, key) {
+	// 				if(bar_one.focused == true){
+
+	// 				  	if(first_bar_counter >= (est_bar_number_dstPortsServer-1)*number_bars);
+	// 				  	else{
+	// 						first_bar_counter += number_bars;				  		
+	// 				  		bar_setdata(bar_one, first_bar_counter, est_connections_dstPortsServer,number_bars);}}
+	// 			  	else{
+	// 			  		if(second_bar_counter >= (notEst_bar_number_dstPortsServer-1)*number_bars); 
+	// 				  	else {
+	// 				  		second_bar_counter += number_bars;
+	// 				  		bar_setdata(bar_two, second_bar_counter, notEst_connections_dstPortsServer, number_bars);}
+	// 			  	}
+	// 				screen.render()
+	// 		});
+	// 			screen.key('left', function(ch, key) {
+	// 				if(bar_one.focused == true){
+	// 				  	first_bar_counter -=number_bars;
+	// 				  	if(first_bar_counter<0)first_bar_counter=0;
+	// 				  	bar_setdata(bar_one, first_bar_counter, est_connections_dstPortsServer,number_bars);}
+	// 			  	else{
+	// 			  		second_bar_counter -= number_bars;
+	// 			  		if(second_bar_counter<0)second_bar_counter=0;
+	// 				  	bar_setdata(bar_two, second_bar_counter, notEst_connections_dstPortsServer,number_bars);
+	// 			  	}
+	// 				screen.render()
+	// 			});
+
+	// 		}
+	// 		else{
+	//   			bar_one.hide();
+	//   			bar_two.hide();
+	//   			box_bar_state.hide();
+	//   		}
+	//   		bar_state_two =! bar_state_two;
+	//   		screen.render()
+		
+	// });
+
 
 }) 
 
@@ -850,9 +914,6 @@ table_outTuples.rows.on('select', (item, index) => {
 	getIpInfo_box_ip(outTuple_ip)
 
 });
-screen.key(['escape', 'q', 'C-c'], function(ch, key) {
-  return process.exit(0);
-});
 
 box_hotkeys.hide();
 var box_hotkeys_state = true;
@@ -919,5 +980,7 @@ screen.on('resize', function() {
   bar_two.emit('attach');
   bar_one.emit('attach');0
 });
-
+screen.key('q', function() {
+    process.exit(0);
+});
 screen.render();
