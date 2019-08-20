@@ -15,24 +15,55 @@ class Response:
         self.important_fields = {"asn": None, "country": None, "cidr": None, "route": None, "netrange": None,
                                  "inetnum": None, "name": None, "orgname": None, "netname": None, "org-name": None,
                                  "last-modified": None}
+        self.network = {}
+        self.organization = {}
+        self.role = {}
+        self.key_translation = {"inetnum": "inetnum", "inet6num": "inetnum", "netrange": "inetnum",
+                                "org-name": "organization", "orgname": "organization", "organization": "organization",
+                                "organisation": "organization", "role": "role"}
+        self.processed_types = ["inetnum", "inet6num", "netrange", "organization", "orgname", "role"]
+        self.type_dictionaries = {"inetnum": self.network, "organization": self.organization, "role": self.role}
+        self.rir_server = ""
 
-    def add_value(self, line):
+    def add_value_to_type(self, line, object_type):
         """
         Save a line of data (in a "key:     value" format) to the Response object
+        :param object_type: Object type of the currently parsed object. Empty string if first line of new type is read
         :param line: one line of the input
-        :return: None
+        :return: type: the current type (string). If object type is given, it is not changed. If empty string is given,
+        the new object type is returned.
         """
+
+        # if type is set and it is not something to be processed, do nothing
+        if object_type != "" and object_type not in self.processed_types:
+            return object_type
+
+        # if type is known and processed, or if type is not known yet, process the line to get key
         key, value = line.split(": ", 1)
-        key = key.lower()
+        key = key.lower().strip()
         value = value.strip()
+
+        # some keys have different names on different servers, translate them
+        if key in self.key_translation.keys():
+            key = self.key_translation[key]
+
+        # if type is not set (we are reading the first line of a new type), the key is set as name of the new type
+        if object_type == "":
+            object_type = key
+            # if the new type is not to be processed, it is returned but not processed
+            if object_type not in self.processed_types:
+                return object_type
+
+        # at this point, object_type is the correct type that should be processed, and key-value is the pair to save
 
         # remove comments from lines with country codes. Codes always have two letters.
         if key == "country":
             value = value[0:2]
 
-        # save important keys separately, this will make processing easier
-        if key in self.important_fields and self.important_fields[key] is None:
-            self.important_fields[key] = value
+        # save value into dictionary for the correct object
+        self.type_dictionaries[object_type][key] = value
+
+        return object_type
 
     def process(self):
         """
@@ -175,6 +206,7 @@ def update_missing_fields(response, asn, country, cidr, name):
 
 def parse_raw_query(ip, query):
     responses = []
+    last_type = ""
 
     for line in query.split("\n"):
         # remove comments
@@ -195,16 +227,19 @@ def parse_raw_query(ip, query):
             continue
         # remove empty lines
         if line == "":
+            # reset last type, because types are separated by empty lines
+            last_type = ""
             continue
         # ignore lines that don't follow the 'key: value' format
         if ": " not in line:
+            # TODO: make sure no relevant lines are skipped
             continue
 
         # if no responses are already in the array, start a new response
         if len(responses) == 0:
             responses.append(Response(ip))
 
-        responses[-1].add_value(line)
+        last_type = responses[-1].add_value_to_type(line, last_type)
 
     for response in responses:
         response.process()
