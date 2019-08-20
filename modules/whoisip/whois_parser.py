@@ -30,14 +30,6 @@ class Response:
         if key == "country":
             value = value[0:2]
 
-        # TODO: It seems like the self.data field is not needed, maybe remove it
-        # if key was already read, append to it
-        # if key in self.data:
-        #     self.data[key] = self.data[key] + "\n" + value
-        # if the key was not seen before, add it
-        # else:
-        #     self.data[key] = value
-
         # save important keys separately, this will make processing easier
         if key in self.important_fields and self.important_fields[key] is None:
             self.important_fields[key] = value

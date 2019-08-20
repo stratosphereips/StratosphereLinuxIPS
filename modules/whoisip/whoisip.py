@@ -91,13 +91,15 @@ class WhoisIP(Module, multiprocessing.Process):
 
         return True
 
-    def check_ip(self, ip):
-        print("--- Checking ip " + ip)
+    def check_ip(self, ip, verbose=False):
+        if verbose:
+            print("--- Checking ip " + ip)
 
         address = ipaddress.ip_address(ip)
 
         if not self.is_checkable(address):
-            return
+            return None, None, None, None
+
 
         if address.version == 4:
             load_subnet = self.load_ipv4_subnet
@@ -111,11 +113,13 @@ class WhoisIP(Module, multiprocessing.Process):
         cached_data = load_subnet(address)
 
         if cached_data is not None:
-            self.print("Data found in cache!")
-            self.show_results(cached_data["asn"], cached_data["country"], cached_data["cidr"], cached_data["name"])
+            if verbose:
+                self.print("Data found in cache!")
+                self.show_results(cached_data["asn"], cached_data["country"], cached_data["cidr"], cached_data["name"])
             return cached_data
 
-        self.print("Data not found in cache!")
+        if verbose:
+            self.print("Data not found in cache!")
 
         try:
             check_manually = False
@@ -154,25 +158,91 @@ class WhoisIP(Module, multiprocessing.Process):
             name = None
 
         if check_manually:
-            print("### Running manual check")
+            if verbose:
+                print("### Running manual check")
             asn, ctr_code, cidr, name = self.check_whois_manually(address, asn, ctr_code, cidr, name)
 
-        self.show_results(asn, ctr_code, cidr, name)
+        if verbose:
+            self.show_results(asn, ctr_code, cidr, name)
 
         if asn is None or ctr_code is None or cidr is None or name is None:
-            print("Results are incomplete")
+            if verbose:
+                print("Results are incomplete")
 
-        if "," in cidr:
-            cidrs = cidr.split(", ")
+        if cidr is not None:
+            if "," in cidr:
+                cidrs = cidr.split(", ")
+            else:
+                cidrs = [cidr]
+
+            for cidr in cidrs:
+                try:
+                    mask = int(Interface(cidr))
+                    save_subnet(mask, asn, ctr_code, cidr, name)
+                except:
+                    pass
+        return asn, ctr_code, cidr, name
+
+    def check_ip_manual_only(self, ip, verbose=False):
+        if verbose:
+            print("--- Checking ip " + ip)
+
+        address = ipaddress.ip_address(ip)
+
+        if not self.is_checkable(address):
+            return None, None, None, None
+
+        if address.version == 4:
+            load_subnet = self.load_ipv4_subnet
+            save_subnet = self.save_ipv4_subnet
+            Interface = ipaddress.IPv4Interface
         else:
-            cidrs = [cidr]
+            load_subnet = self.load_ipv6_subnet
+            save_subnet = self.save_ipv6_subnet
+            Interface = ipaddress.IPv6Interface
 
-        for cidr in cidrs:
-            try:
-                mask = int(Interface(cidr))
-                save_subnet(mask, asn, ctr_code, cidr, name)
-            except:
-                pass
+        cached_data = load_subnet(address)
+
+        if cached_data is not None:
+            if verbose:
+                self.print("Data found in cache!")
+                self.show_results(cached_data["asn"], cached_data["country"], cached_data["cidr"], cached_data["name"])
+            return cached_data
+
+        if verbose:
+            self.print("Data not found in cache!")
+
+        check_manually = True
+        asn = None
+        ctr_code = None
+        cidr = None
+        name = None
+
+        if check_manually:
+            if verbose:
+               print("### Running manual check")
+            asn, ctr_code, cidr, name = self.check_whois_manually(address, asn, ctr_code, cidr, name)
+
+        if verbose:
+            self.show_results(asn, ctr_code, cidr, name)
+
+        if asn is None or ctr_code is None or cidr is None or name is None:
+            if verbose:
+                print("Results are incomplete")
+
+        if cidr is not None:
+            if "," in cidr:
+                cidrs = cidr.split(", ")
+            else:
+                cidrs = [cidr]
+
+            for cidr in cidrs:
+                try:
+                    mask = int(Interface(cidr))
+                    save_subnet(mask, asn, ctr_code, cidr, name)
+                except:
+                    pass
+        return asn, ctr_code, cidr, name
 
     def check_whois_manually(self, ip, asn, ctr_code, cidr, name):
         try:
@@ -188,9 +258,20 @@ class WhoisIP(Module, multiprocessing.Process):
             response = subprocess.run(["whois", "-r", str(ip)], stdout=subprocess.PIPE)
 
         if response.returncode != 0:
-            print(response.stderr)
-            # TODO: handle incorrect requests (don't cache them)
-            return None
+            stderr = response.stderr.decode("iso-8859-1")
+            if response.returncode == 2:
+                # code 2 == network error? Idk, it doesn't say in the docs/man
+                if len(response.stdout) == 0:
+                    # if there is no response in stdout, likely there is no network connection
+                    print(stderr)
+                    return None, None, None, None
+                else:
+                    # warning: there was a network issue, but some data was retrieved, maybe it is useful
+                    print("Query for", ip, "was rejected by the server. This is likely a redirection or network issue")
+            else:
+                # other error codes except for 2
+                print(stderr)
+                return None, None, None, None
 
         # decode as iso-8859-1, this fixes errors in French requests
         output = response.stdout.decode("iso-8859-1")
@@ -198,10 +279,10 @@ class WhoisIP(Module, multiprocessing.Process):
         return data["asn"], data["country"], data["cidr"], data["name"]
 
     def show_results(self, asn, ctr_code, cidr, name):
-        self.print("ASN: " + asn)
-        self.print("Country: " + ctr_code)
-        self.print("CIDR: " + cidr)
-        self.print("Name: " + name)
+        self.print("ASN: " + str(asn))
+        self.print("Country: " + str(ctr_code))
+        self.print("CIDR: " + str(cidr))
+        self.print("Name: " + str(name))
 
     def save_ipv4_subnet(self, mask: int, asn: str, ctr_code: str, cidr: str, name: str):
         data = {"asn": asn, "country": ctr_code, "cidr": cidr, "name": name}
@@ -212,6 +293,7 @@ class WhoisIP(Module, multiprocessing.Process):
         pass
 
     def load_ipv4_subnet(self, ip):
+        return None
         mask = 4294967295
         ip_value = int(ip)
         for i in range(0, 32):
@@ -223,6 +305,7 @@ class WhoisIP(Module, multiprocessing.Process):
         return None
 
     def load_ipv6_subnet(self, ip):
+
         pass
 
     def run(self):
