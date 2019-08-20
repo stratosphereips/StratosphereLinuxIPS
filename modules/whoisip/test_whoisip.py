@@ -46,6 +46,7 @@ def test_tricky_ips():
     ips.append("148.37.198.241")  # no line "Information related to ..."
     ips.append("47.216.133.94")  # b'fgets: Spojen\xc3\xad zru\xc5\xa1eno druhou stranou\n'
     ips.append("185.0.192.82")  # Type error
+    ips.append("211.42.167.245")  # response in both english and Korean from local Korean whois
 
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
@@ -93,10 +94,10 @@ def compare_methods(limit=500):
 
 if __name__ == "__main__":
     t = time.time()
-    test_tricky_ips()
+    # test_tricky_ips()
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
-    # try_random_addresses()
+    try_random_addresses()
     # TODO: check ip ranges in file
     # TODO: run query manually if the query doesn't return enough data
     print(time.time() - t)
