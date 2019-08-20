@@ -6,10 +6,10 @@ class Response:
         self.ip = ip
         self.cidr = cidr
         self.asn = asn
-        self.data = []
-        self.modified = None
+        self.updated = None
         self.country = None
         self.name = None
+        self.orgid = None
         self.cidr_prefixlen = 0
         self.num_missing_values = 0
         self.important_fields = {"asn": None, "country": None, "cidr": None, "route": None, "netrange": None,
@@ -19,6 +19,7 @@ class Response:
         self.organization = {}
         self.role = {}
         self.key_translation = {"inetnum": "inetnum", "inet6num": "inetnum", "netrange": "inetnum",
+                                "updated": "updated", "last-modified": "updated",
                                 "org-name": "organization", "orgname": "organization", "organization": "organization",
                                 "organisation": "organization", "role": "role"}
         self.processed_types = ["inetnum", "inet6num", "netrange", "organization", "orgname", "role"]
@@ -60,6 +61,10 @@ class Response:
         if key == "country":
             value = value[0:2]
 
+        # sometimes a field is mentioned, but there is no value. Skip those empty lines
+        if len(value) == 0:
+            return object_type
+
         # save value into dictionary for the correct object
         self.type_dictionaries[object_type][key] = value
 
@@ -71,33 +76,52 @@ class Response:
         :return: None
         """
 
-        if self.asn is None:
-            self.asn = self.important_fields["asn"]
+        # I do a query for an IP, and get a response. Every successful response will have at least one section, and in
+        #  each section,  there is the NetRange/inetnum/inet6num  type. I choose the smallest network and then:
+        # - I get the last updated date of the network
+        # - I get the country of the network
+        # - I get the organization name from the network. This is in the format "org-name (org-id)"
+        # - I get the ASN
+        # If Organization info is included in the response:
+        # - check the country if it was not set in the network
+        # - ignore the update date of the organization, we don't care about it
+        # If Organization is not set:
+        # - I set netname as "name"
+        # There are still some outliers.
+        # For example, UPC isn't an Organization, but rather a Role (which is similar to Person, but can include more
+        # people and people can change there). See whois -h whois.arin.net 213.220.193.103. I think role should be used
+        #  if Org is not set rather than using netname from Network.
+        # Sometimes the ASN is not set. This is also the case for UPC, where the ASN is included in the Route object.
+        #  These are "interdomain routes" and the ASN there is "ASN of the AS that originates the route into the interAS
+        #  routing system". Is it ok to use this?
 
-        if self.cidr is None:
-            if self.important_fields["cidr"] is not None:
-                self.cidr = self.important_fields["cidr"]
-            elif self.important_fields["route"] is not None:
-                self.cidr = self.important_fields["route"]
-            elif self.important_fields["netrange"] is not None:
-                self.cidr = get_cidr_from_net_range(self.important_fields["netrange"])
-            elif self.important_fields["inetnum"] is not None:
-                self.cidr = get_cidr_from_net_range(self.important_fields["inetnum"])
+        # if CIDR is given, use it. Otherwise parse it from netrange/inetnum
+        # TODO: handle IPv6
+        if "cidr" in self.network:
+            self.cidr = self.network["cidr"]
+        else:
+            self.cidr = get_cidr_from_net_range(self.network["inetnum"])
 
-        self.country = self.important_fields["country"]
+        if "updated" in self.network:
+            self.updated = self.network["updated"]  # TODO: parse the time and save as unix
 
-        if self.important_fields["name"] is not None:
-            self.name = self.important_fields["name"]
-        elif self.important_fields["orgname"] is not None:
-            self.name = self.important_fields["orgname"]
-        elif self.important_fields["org-name"] is not None:
-            self.name = self.important_fields["org-name"]
-        elif self.important_fields["netname"] is not None:
-            self.name = self.important_fields["netname"]
+        if "country" in self.network:
+            self.country = self.network["country"]
+        elif "country" in self.organization:
+            self.country = self.organization["country"]
 
-        # update which variables are missing, compute length of the mask prefix
-        if self.asn is None:
-            self.num_missing_values += 1
+        if "organization" in self.network:
+            self.name, self.orgid = get_company_name_and_shortcut(self.network["organization"])
+        if self.name is None:
+            if "organization" in self.organization:
+                self.name = self.organization["organization"]
+            elif "netname" in self.network:
+                self.name = self.network["netname"]
+        if self.orgid is None and "orgid" in self.organization:
+            self.orgid = self.organization["orgid"]
+
+        if "originas" in self.network:
+            self.asn = self.network["originas"]
 
         if self.cidr is None:
             self.num_missing_values += 1
@@ -205,6 +229,7 @@ def update_missing_fields(response, asn, country, cidr, name):
 
 
 def parse_raw_query(ip, query):
+    print(query)
     responses = []
     last_type = ""
 
@@ -287,3 +312,13 @@ def get_cidr_from_net_range(netrange):
     except:
         network = None
     return network
+
+
+def get_company_name_and_shortcut(organization):
+    if "(" not in organization:
+        return organization, None
+    else:
+        orgname, orgid = organization.split("(")
+        orgname = orgname.strip()
+        orgid = orgid.replace(")", "").strip()
+        return orgname, orgid
