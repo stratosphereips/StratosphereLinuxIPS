@@ -31,7 +31,7 @@ def try_random_addresses(limit=500):
 
 def test_tricky_ips():
     ips = []
-    ips.append("8.8.8.8")
+    ips.append("43.131.21.80")
     ips.append("245.51.167.150")  # manual check returns None
     ips.append("206.60.214.219")  # referring to other servers, unregistered segment, wrong country code
     ips.append("8.218.236.191")  # cymruwhois correctly says its SG, but whois insists on AU
@@ -94,10 +94,10 @@ def compare_methods(limit=500):
 
 if __name__ == "__main__":
     t = time.time()
-    # test_tricky_ips()
+    test_tricky_ips()
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
-    try_random_addresses()
+    # try_random_addresses()
     # TODO: check ip ranges in file
     # TODO: run query manually if the query doesn't return enough data
     print(time.time() - t)
