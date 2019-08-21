@@ -283,14 +283,8 @@ bar_two_dstIPsClient.hide()
 map.hide()
 
 var number_bars = Math.floor((2*bar_two_srcPortClient.width-2*bar_two_srcPortClient.options.xOffset)/(bar_two_srcPortClient.options.barSpacing+2*bar_two_srcPortClient.options.barWidth));
-var bar_state_one = true;
-var bar_state_two = true;	
-var bar_state_three = true;
-var bar_state_four = true;
-var box_hotkeys_state = true;
-var map_state = true;
-var box_hotkeys_state = true;
-var list_state = [bar_state_one, bar_state_two, bar_state_three,box_hotkeys_state, box_bar_state, map_state];
+
+// var list_state = [bar_state_one, bar_state_two, bar_state_three,box_hotkeys_state, box_bar_state, map_state];
 
 screen.render() 
 function ready() { screen.render() }
@@ -332,13 +326,27 @@ function port_ip_setdata(bar, counter, data, number){
 
 };
 
-// function bar
+//function to fill in data for a box (box displays the state of the bar)
+function set_box_bar_dstPortClient_state(bar_data, bar_data_two,bar_one,bar_two){
+	if(bar_data[0].length > number_bars && bar_data_two[0].length > number_bars){
+		box_bar_state.setContent('Bars are scrollable. -Tab to change bars. -Left and -Right to  scroll.');
+		bar_one.focus();}
+	else if(bar_data[0].length > number_bars){
+		box_bar_state.setContent('Upper bar is scrollable. -Left and -Right to  scroll.');
+		bar_one.focus();}
+	else if(bar_data_two[0].length > number_bars){
+		box_bar_state.setContent('Lower bar is scrollable. -Left and -Right to  scroll.');
+		bar_two.focus();}
+	else{box_bar_state.setContent('Bars are not scrollable.')
+	bar_one.focus()};
+	
+}
+
 
 //function to fill in data for a box (box displays the state of the bar)
-function set_box_bar_state(bar_data, bar_data_two,bar_one,bar_two){
+function set_box_bar_state(bar_data, bar_data_two,bar_one,bar_two,number_bars){
 	if(bar_data[0].length > number_bars && bar_data_two[0].length > number_bars){
 		box_bar_state.setContent('Bars are scrollable. -Tab to change bars. -Left and -Right to  scroll. {bold}Logarithmic scale.{/bold}');
-		// bar_one.options.style.border.
 		bar_one.focus();}
 	else if(bar_data[0].length > number_bars){
 		box_bar_state.setContent('Upper bar is scrollable. -Left and -Right to  scroll. {bold}Logarithmic scale.{/bold}');
@@ -742,10 +750,15 @@ tree.on('select',function(node){
  		}
 		});
 
-
-	// screen.key('e', function(ch, key) {
-		screen.on('keypress', function(key){
-			if(key === 'e'){
+var bar_state_one = true;
+var bar_state_two = true;	
+var bar_state_three = true;
+var bar_state_four = true;
+var box_hotkeys_state = true;
+var map_state = true;
+var box_hotkeys_state = true;
+	screen.key('e', function(ch, key) {
+		
 		// console.log('i am inside  e key')
 		box_bar_state.hide();
 		bar_one_srcPortClient.hide()
@@ -776,7 +789,6 @@ tree.on('select',function(node){
 			set_box_bar_state(est_connections_srcPortsClient,notEst_connections_srcPortsClient, bar_one_srcPortClient, bar_two_srcPortClient);
 			bar_setdata(bar_one_srcPortClient, first_bar_counter,est_connections_srcPortsClient, number_bars);
 			bar_setdata(bar_two_srcPortClient, second_bar_counter, notEst_connections_srcPortsClient, number_bars);
-
 			bar_one_srcPortClient.setLabel({text:'SrcPortsClientEstablished'.green,side:'left'});
 			bar_two_srcPortClient.setLabel({text:'SrcPortsClientNotEstablished'.green,side:'left'});
 			screen.render();
@@ -818,7 +830,7 @@ tree.on('select',function(node){
   			box_bar_state.hide();
   		}
   		bar_state_one = !bar_state_one;
-  		screen.render()}
+  		screen.render()
 	
 });
 
@@ -842,7 +854,7 @@ tree.on('select',function(node){
 
 		// bar_state_two = true;	
 		bar_state_three = true;
-		var bar_state_four = true;
+		bar_state_four = true;
 		box_hotkeys_state = true;
 		map_state = true;
 		var first_bar_counter = 0;
@@ -920,7 +932,7 @@ tree.on('select',function(node){
 		bar_state_one = true;
 		bar_state_two = true;	
 		// bar_state_three = true;
-		var bar_state_four = true;
+		bar_state_four = true;
 		box_hotkeys_state = true;
 		map_state = true;
 		var first_bar_counter = 0;
@@ -1005,6 +1017,7 @@ screen.key('v', function(ch, key) {
 		bar_one_dstPortClient.options.barSpacing = 25;
 		bar_two_dstPortClient.options.barSpacing = 25;
 		if(bar_state_four){
+			try{
 			number_bars = 5
 			var est_connections_dstPortsClient = port_ips_bars("DstPortsClientTCPEstablished","DstPortsClientUDPEstablished",reply);
 			var dstPortsClient_keys = Object.keys(est_connections_dstPortsClient);
@@ -1014,11 +1027,13 @@ screen.key('v', function(ch, key) {
 			var vertical = Math.ceil(dstPortsClient_keys.length / 2);
 			port_ip_setdata(bar_one_dstPortClient, first_bar_counter, dstPortsClient_values[vertical_counter], number_bars);
 			port_ip_setdata(bar_two_dstPortClient, second_bar_counter, dstPortsClient_values[vertical_counter+1], number_bars);
+			// set_box_bar_dstPortClient_state(dstPortsClient_values[vertical_counter][0],dstPortsClient_values[vertical_counter+1][0], bar_one_dstPortClient, bar_two_dstPortClient, number_bars)
 			bar_one_dstPortClient.setLabel({text:dstPortsClient_keys[0].green,side:'left'});
 			bar_two_dstPortClient.setLabel({text:dstPortsClient_keys[1].green,side:'left'});
 			bar_one_dstPortClient.show();
 			bar_list.show()
 			bar_two_dstPortClient.show();
+			box_bar_state.show();
 			bar_one_dstPortClient.focus();
 			// bar_two_srcPortClient.setLabel({text:'DstPortsClientNotEstablished'.green,side:'left'});
 			screen.render();
@@ -1034,8 +1049,8 @@ screen.key('v', function(ch, key) {
 			  	else{
 			  		if(second_bar_counter >= (est_bar_two_number_dstPortsClient-1)*number_bars); 
 				  	else {
-				  		second_bar_counter += number_bars;
-				  		port_ip_setdata(bar_two_srcPortClient, second_bar_counter, dstPortsClient_values[vertical_counter+1], number_bars);}
+				  		second_bar_counter += 5;
+				  		port_ip_setdata(bar_two_dstPortClient, second_bar_counter, dstPortsClient_values[vertical_counter+1], number_bars);}
 			  	}
 				screen.render()
 		});
@@ -1047,7 +1062,7 @@ screen.key('v', function(ch, key) {
 			  	else{
 			  		second_bar_counter -= number_bars;
 			  		if(second_bar_counter<0)second_bar_counter=0;
-				  	port_ip_setdata(bar_two_srcPortClient, second_bar_counter,dstPortsClient_values[vertical_counter+1], number_bars);
+				  	port_ip_setdata(bar_two_dstPortClient, second_bar_counter,dstPortsClient_values[vertical_counter+1], number_bars);
 			  	}
 				screen.render()
 			});
@@ -1074,7 +1089,9 @@ screen.key('v', function(ch, key) {
 							bar_one_dstPortClient.setLabel({text:dstPortsClient_keys[vertical_counter].green,side:'left'});
 							bar_two_dstPortClient.setLabel({text:dstPortsClient_keys[vertical_counter+1].green,side:'left'});
 							port_ip_setdata(bar_one_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter], number_bars);
-							port_ip_setdata(bar_two_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter+1], number_bars);}}
+							port_ip_setdata(bar_two_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter+1], number_bars);
+							// set_box_bar_dstPortClient_state(dstPortsClient_values[vertical_counter][0],dstPortsClient_values[vertical_counter+1][0], bar_one_dstPortClient, bar_two_dstPortClient, number_bars);
+						}}
 			  	
 				screen.render()
 			});
@@ -1101,15 +1118,25 @@ screen.key('v', function(ch, key) {
 							bar_one_dstPortClient.setLabel({text:dstPortsClient_keys[vertical_counter].green,side:'left'});
 							bar_two_dstPortClient.setLabel({text:dstPortsClient_keys[vertical_counter+1].green,side:'left'});
 							port_ip_setdata(bar_one_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter], number_bars);
-							port_ip_setdata(bar_two_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter+1], number_bars);}}
+							port_ip_setdata(bar_two_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter+1], number_bars);
+						// set_box_bar_dstPortClient_state(dstPortsClient_values[vertical_counter][0],dstPortsClient_values[vertical_counter+1][0], bar_one_dstPortClient, bar_two_dstPortClient, number_bars);
+					}}
 			  	
 				screen.render()
 			});
 
-		}
+		}catch(err){
+			box_bar_state.setContent('no information')
+			bar_list.show()
+			// bar_one_dstPortClient.clear()
+  	// 		bar_two_dstPortClient.clear()
+  	// 		bar_one_dstPortClient.show()
+
+			// bar_two_dstPortClient.show()
+  			box_bar_state.show()}}
 		else{
 			
-		bar_list.hide()
+			bar_list.hide()
 
   			bar_one_dstPortClient.hide()
 			bar_two_dstPortClient.hide()
@@ -1156,7 +1183,7 @@ screen.key('v', function(ch, key) {
 		});
     	})
 
-    }) 
+     
 	screen.key('m', function(ch, key) {
 		bar_one_srcPortClient.hide()
 		bar_two_srcPortClient.hide()
@@ -1188,10 +1215,9 @@ screen.key('v', function(ch, key) {
   		screen.render()
 	
 });
-   
+   })
     }
 });
-
 table_timeline.rows.on('select', (item, index) => {
 	var timeline_line = item.content.split(" ");
 	var index_to = timeline_line.indexOf('to')
