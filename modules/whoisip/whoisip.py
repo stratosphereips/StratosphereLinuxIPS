@@ -1,11 +1,11 @@
 # Must imports
+from modules.whoisip.whois_parser import WhoisQuery
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
 
 # Your imports
 import socket
-from modules.whoisip.whois_parser import get_data_from_query
 import ipaddress
 import json
 from cymruwhois import Client
@@ -100,7 +100,6 @@ class WhoisIP(Module, multiprocessing.Process):
         if not self.is_checkable(address):
             return None, None, None, None
 
-
         if address.version == 4:
             load_subnet = self.load_ipv4_subnet
             save_subnet = self.save_ipv4_subnet
@@ -160,7 +159,14 @@ class WhoisIP(Module, multiprocessing.Process):
         if check_manually:
             if verbose:
                 print("### Running manual check")
-            asn, ctr_code, cidr, name = self.check_whois_manually(address, asn, ctr_code, cidr, name)
+
+            query = WhoisQuery(address, asn=asn, country=ctr_code, cidr=cidr, name=name)
+            query.run()
+
+            asn = query.asn
+            ctr_code = query.country
+            cidr = query.cidr
+            name = query.name
 
         if verbose:
             self.show_results(asn, ctr_code, cidr, name)
@@ -182,100 +188,6 @@ class WhoisIP(Module, multiprocessing.Process):
                 except:
                     pass
         return asn, ctr_code, cidr, name
-
-    def check_ip_manual_only(self, ip, verbose=False):
-        if verbose:
-            print("--- Checking ip " + ip)
-
-        address = ipaddress.ip_address(ip)
-
-        if not self.is_checkable(address):
-            return None, None, None, None
-
-        if address.version == 4:
-            load_subnet = self.load_ipv4_subnet
-            save_subnet = self.save_ipv4_subnet
-            Interface = ipaddress.IPv4Interface
-        else:
-            load_subnet = self.load_ipv6_subnet
-            save_subnet = self.save_ipv6_subnet
-            Interface = ipaddress.IPv6Interface
-
-        cached_data = load_subnet(address)
-
-        if cached_data is not None:
-            if verbose:
-                self.print("Data found in cache!")
-                self.show_results(cached_data["asn"], cached_data["country"], cached_data["cidr"], cached_data["name"])
-            return cached_data
-
-        if verbose:
-            self.print("Data not found in cache!")
-
-        check_manually = True
-        asn = None
-        ctr_code = None
-        cidr = None
-        name = None
-
-        if check_manually:
-            if verbose:
-               print("### Running manual check")
-            asn, ctr_code, cidr, name = self.check_whois_manually(address, asn, ctr_code, cidr, name)
-
-        if verbose:
-            self.show_results(asn, ctr_code, cidr, name)
-
-        if asn is None or ctr_code is None or cidr is None or name is None:
-            if verbose:
-                print("Results are incomplete")
-
-        if cidr is not None:
-            if "," in cidr:
-                cidrs = cidr.split(", ")
-            else:
-                cidrs = [cidr]
-
-            for cidr in cidrs:
-                try:
-                    mask = int(Interface(cidr))
-                    save_subnet(mask, asn, ctr_code, cidr, name)
-                except:
-                    pass
-        return asn, ctr_code, cidr, name
-
-    def check_whois_manually(self, ip, asn, ctr_code, cidr, name):
-        # to stop whois queries after a given time, the timeout command is called. This is because when time is limited
-        # by subprocess, it is near impossible to read output of the terminated process
-        timeout = 4
-        command = ["timeout", "--preserve-status", str(timeout) + "s", "whois", str(ip), "-h", "whois.arin.net"]
-
-        # stdout: save output in response object
-        # stderr: save error output in response object
-        # universal newlines: output is string instead of byte array (this cannot be used due to encoding issues
-        #    with foreign characters, eg French: 86.255.141.19)
-        response = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        if response.returncode != 0:
-            stderr = response.stderr.decode("iso-8859-1")
-            if response.returncode == 2:
-                # code 2 == network error? Idk, it doesn't say in the docs/man
-                if len(response.stdout) == 0:
-                    # if there is no response in stdout, likely there is no network connection
-                    print(stderr)
-                    return None, None, None, None
-                else:
-                    # warning: there was a network issue, but some data was retrieved, maybe it is useful
-                    print("Query for", ip, "was rejected by the server. This is likely a redirection or network issue")
-            else:
-                # other error codes except for 2
-                print(stderr)
-                return None, None, None, None
-
-        # decode as iso-8859-1, this fixes errors in French requests
-        output = response.stdout.decode("iso-8859-1")
-        data = get_data_from_query(ip, output, asn, ctr_code, cidr, name)
-        return data["asn"], data["country"], data["cidr"], data["name"]
 
     def show_results(self, asn, ctr_code, cidr, name):
         self.print("ASN: " + str(asn))

@@ -52,7 +52,7 @@ def test_tricky_ips():
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
         print("-------------------------------------------")
-        print(wi.check_ip_manual_only(ip, verbose=True))
+        print(wi.check_ip(ip, verbose=True))
 
 
 def compare_methods(limit=500):
