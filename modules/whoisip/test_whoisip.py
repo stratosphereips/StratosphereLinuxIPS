@@ -31,9 +31,9 @@ def try_random_addresses(limit=500):
 
 def test_tricky_ips():
     ips = []
+    ips.append("206.60.214.219")  # referring to other servers, unregistered segment, wrong country code
     ips.append("43.131.21.80")
     ips.append("245.51.167.150")  # manual check returns None
-    ips.append("206.60.214.219")  # referring to other servers, unregistered segment, wrong country code
     ips.append("8.218.236.191")  # cymruwhois correctly says its SG, but whois insists on AU
     ips.append("107.78.26.116")  # broken pipe in cymruwhois (didn't happen for the second time..)
     ips.append("163.194.132.190")  # ASN lookup failed
@@ -44,13 +44,15 @@ def test_tricky_ips():
     ips.append("86.255.141.19")  # wrong encoding
     ips.append("71.163.76.208")  # no line "Information related to ..."
     ips.append("148.37.198.241")  # no line "Information related to ..."
-    ips.append("47.216.133.94")  # b'fgets: Spojen\xc3\xad zru\xc5\xa1eno druhou stranou\n'
+    ips.append("47.216.133.94")  # Referred whois server rejected connection
     ips.append("185.0.192.82")  # Type error
     ips.append("211.42.167.245")  # response in both english and Korean from local Korean whois
+    ips.append("169.251.240.44")  # double parentheses in orgname
 
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
-        wi.check_ip_manual_only(ip, verbose=True)
+        print("-------------------------------------------")
+        print(wi.check_ip_manual_only(ip, verbose=True))
 
 
 def compare_methods(limit=500):
@@ -102,4 +104,4 @@ if __name__ == "__main__":
     # TODO: run query manually if the query doesn't return enough data
     print(time.time() - t)
 
-    compare_methods(limit=50)
+    # compare_methods(limit=50)
