@@ -245,18 +245,16 @@ class WhoisIP(Module, multiprocessing.Process):
         return asn, ctr_code, cidr, name
 
     def check_whois_manually(self, ip, asn, ctr_code, cidr, name):
-        try:
-            # timeout: interrupt process after time in seconds
-            # stdout: save output in response object
-            # stderr: save error output in response object
-            # universal newlines: output is string instead of byte array (this cannot be used due to encoding issues
-            #    with foreign characters, eg French: 86.255.141.19)
-            response = subprocess.run(["whois", str(ip), "-h", "whois.arin.net"], timeout=3, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        except subprocess.TimeoutExpired as e:
-            # -r stops whois from following links to other databases
-            # but also some outputs are different, so it cannot be used by default
-            # TODO: check how redirection is limited if ARIN is used by default
-            response = subprocess.run(["whois", "-r", str(ip)], stdout=subprocess.PIPE)
+        # to stop whois queries after a given time, the timeout command is called. This is because when time is limited
+        # by subprocess, it is near impossible to read output of the terminated process
+        timeout = 4
+        command = ["timeout", "--preserve-status", str(timeout) + "s", "whois", str(ip), "-h", "whois.arin.net"]
+
+        # stdout: save output in response object
+        # stderr: save error output in response object
+        # universal newlines: output is string instead of byte array (this cannot be used due to encoding issues
+        #    with foreign characters, eg French: 86.255.141.19)
+        response = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         if response.returncode != 0:
             stderr = response.stderr.decode("iso-8859-1")

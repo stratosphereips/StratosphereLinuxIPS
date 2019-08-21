@@ -2,10 +2,10 @@ import ipaddress
 
 
 class Response:
-    def __init__(self, ip, cidr=None, asn=None):
+    def __init__(self, ip):
         self.ip = ip
-        self.cidr = cidr
-        self.asn = asn
+        self.cidr = None
+        self.asn = None
         self.updated = None
         self.country = None
         self.name = None
@@ -99,7 +99,7 @@ class Response:
         # TODO: handle IPv6
         if "cidr" in self.network:
             self.cidr = self.network["cidr"]
-        else:
+        elif "inetnum" in self.network:
             self.cidr = get_cidr_from_net_range(self.network["inetnum"])
 
         if "updated" in self.network:
@@ -229,6 +229,12 @@ def update_missing_fields(response, asn, country, cidr, name):
 
 
 def parse_raw_query(ip, query):
+    print()
+    print("-------------------------------------------")
+    print()
+    print(ip)
+    print()
+    print("-------------------------------------------")
     print(query)
     responses = []
     last_type = ""
@@ -257,7 +263,7 @@ def parse_raw_query(ip, query):
             continue
         # ignore lines that don't follow the 'key: value' format
         if ": " not in line:
-            # TODO: make sure no relevant lines are skipped
+            # TODO: make sure no relevant info is skipped (a regex to match line with url.*[-a-zA-Z0-9.]+\.[a-z]{2,}.*)
             continue
 
         # if no responses are already in the array, start a new response
@@ -318,7 +324,8 @@ def get_company_name_and_shortcut(organization):
     if "(" not in organization:
         return organization, None
     else:
-        orgname, orgid = organization.split("(")
+        # split by the last occurrence of "("
+        orgname, orgid = organization.rsplit("(", 1)
         orgname = orgname.strip()
         orgid = orgid.replace(")", "").strip()
         return orgname, orgid
