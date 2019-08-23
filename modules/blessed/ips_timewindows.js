@@ -318,7 +318,7 @@ function port_ip_setdata(bar, counter, data, number){
 			// bar.setLabel({text:Object..green,side:'left'})
 			bar.setData(
     	{ barCategory: data[0].slice(counter,counter+number)
-    	, stackedCategory: ['Number of connections']
+    	, stackedCategory: ['Connections']
     	, data: values_bars.slice(counter,counter+number)})
 
 		}
@@ -575,7 +575,7 @@ function getIpInfo_box_ip(ip){
   		var ip_keys = Object.keys(obj);
   		if(ip_keys.includes('VirusTotal')){
   				var vt = obj['VirusTotal'];
-  				var vt_string ='VirusTotal : URL : ' + round(vt['URL'],5)+', down_file : ' + round(vt['down_file'],5)  + ', ref_file : '+ round(vt['ref_file'],5) + ', com_file : ' + round(vt['com_file'],5); 
+  				var vt_string ='VirusTotal : URL : ' + 100*round(vt['URL'],5)+'%, down_file : ' + 100*round(vt['down_file'],5)  + '%, ref_file : '+ 100*round(vt['ref_file'],5) + '%, com_file : ' + 100*round(vt['com_file'],5)+'%'; 
   				if(ip_keys.length == 3){
 		  			var ip_info_string = obj['asn']+' | ' + obj['geocountry']+' | '+ vt_string;
 		  			box_ip.setContent(ip_info_string);
@@ -756,7 +756,7 @@ var bar_state_three = true;
 var bar_state_four = true;
 var box_hotkeys_state = true;
 var map_state = true;
-var box_hotkeys_state = true;
+
 	screen.key('e', function(ch, key) {
 		
 		// console.log('i am inside  e key')
@@ -1232,7 +1232,7 @@ table_outTuples.rows.on('select', (item, index) => {
 });
 
 box_hotkeys.hide();
-
+var box_hotkeys_state = true;
 screen.key('h', function(ch, key) {
 	bar_one_srcPortClient.hide()
 		bar_two_srcPortClient.hide()
