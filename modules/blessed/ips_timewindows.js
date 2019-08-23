@@ -1309,8 +1309,8 @@ tree.focus();
 //   box_ip.emit('attach');
 //   box_hotkeys.emit('attach');
 //   map.emit('attach');
-//   bar_two.emit('attach');
-//   bar_one.emit('attach');0
+ // bar_two.emit('attach');
+// bar_one.emit('attach');0
 // });
 screen.key(["escape", "q", "C-c"], function(ch, key) {
     return process.exit(0);
