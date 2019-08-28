@@ -88,7 +88,7 @@ class WhoisIP(Module, multiprocessing.Process):
 
     def check_ip(self, ip, verbose=False):
         if verbose:
-            print("--- Checking ip " + ip)
+            self.print("--- Checking ip " + ip)
 
         address = ipaddress.ip_address(ip)
 
@@ -115,7 +115,7 @@ class WhoisIP(Module, multiprocessing.Process):
         if verbose:
             self.print("Data not found in cache!")
 
-        print("ip:", ip)
+        self.print("ip: " + ip)
 
         query = WhoisQuery(address)
         query.run()
@@ -131,7 +131,7 @@ class WhoisIP(Module, multiprocessing.Process):
 
         if asn is None or ctr_code is None or cidr is None or name is None:
             if verbose:
-                print("Results are incomplete")
+                self.print("Results are incomplete")
 
         if cidr is not None:
             if "," in cidr:
@@ -141,8 +141,7 @@ class WhoisIP(Module, multiprocessing.Process):
 
             for cidr in cidrs:
                 try:
-                    if query.cidr_prefixlen == 32 or query.cidr_prefixlen < 9:
-                        # TODO: consult if this is a good idea
+                    if query.cidr_prefixlen == 32 or query.cidr_prefixlen == 0:
                         continue
                     mask = int(Interface(cidr))
                     save_subnet(mask, asn, ctr_code, cidr, name)
@@ -186,7 +185,7 @@ class WhoisIP(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message['channel'] == 'new_ip' and message["type"] == "message":
                     ip = message["data"]
-                    self.check_ip(ip)
+                    self.print(self.check_ip(ip))
 
         except KeyboardInterrupt:
             return True

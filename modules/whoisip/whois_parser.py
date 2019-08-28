@@ -127,6 +127,7 @@ class WhoisQuery:
                     return response.returncode, stderr
                 else:
                     # warning: there was a network issue, but some data was retrieved, maybe it is useful
+                    # TODO: This message is scary, change it
                     print("Whois", self.ip, "was rejected by the server. This is likely a redirection or network issue")
             else:
                 # other error codes except for 2

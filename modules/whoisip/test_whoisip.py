@@ -31,15 +31,15 @@ def try_random_addresses(limit=500):
 
 def test_tricky_ips():
     ips = []
-    ips.append("50.64.231.112")  # rejected by server TODO: This is suspicious and shouldn't happen, the response seems ok
+    ips.append("50.64.231.112")  # rejected by server
     ips.append("8.218.236.191")  # cymruwhois correctly says its SG, but whois insists on AU
     ips.append("194.54.110.205")  # NoneType is not iterable (likely empty cidr)
     ips.append("206.60.214.219")  # referring to other servers, unregistered segment, wrong country code
-    ips.append("43.131.21.80")
+    ips.append("43.131.21.80")  # japan
     ips.append("245.51.167.150")  # manual check returns None
     ips.append("107.78.26.116")  # broken pipe in cymruwhois (didn't happen for the second time..)
     ips.append("163.194.132.190")  # ASN lookup failed
-    ips.append("162.253.210.64")  # 404 error for rdap, however whois works
+    ips.append("162.253.210.64")  # empty result for both arin and ripe
     ips.append("71.163.76.208")  # there is a list of cidrs
     ips.append("223.43.28.222")  # Korean whois with encoding errs
     ips.append("76.42.110.168")  # cymruwhois crashes (it crashed last week with TypeError, now it works ¯\_(ツ)_/¯)
@@ -102,11 +102,11 @@ if __name__ == "__main__":
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
     try_random_addresses(limit=400000)
-    # TODO: verify other addresses manually and run on random ips
     # TODO: check behavior inside slips
     # TODO: add ipv6 support
     # TODO: test on malware data
     # TODO: parse last update time
+    # TODO: test if caching a large network will hide a smaller network
     print(time.time() - t)
 
     # compare_methods(limit=50)
