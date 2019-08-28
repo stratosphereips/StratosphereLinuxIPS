@@ -158,6 +158,7 @@ class Response:
             for network in networks:
                 if self.ip not in ipaddress.IPv4Network(network):
                     networks.remove(network)
+                    continue
                 prefix = int(network.split("/")[1])
                 if prefix > smallest_prefix:
                     smallest_prefix = prefix
