@@ -31,10 +31,9 @@ def try_random_addresses(limit=500):
 
 def test_tricky_ips():
     ips = []
+    ips.append("50.64.231.112")  # rejected by server TODO: This is suspicious and shouldn't happen, the response seems ok
     ips.append("8.218.236.191")  # cymruwhois correctly says its SG, but whois insists on AU
     ips.append("194.54.110.205")  # NoneType is not iterable (likely empty cidr)
-
-    """
     ips.append("206.60.214.219")  # referring to other servers, unregistered segment, wrong country code
     ips.append("43.131.21.80")
     ips.append("245.51.167.150")  # manual check returns None
@@ -51,8 +50,6 @@ def test_tricky_ips():
     ips.append("185.0.192.82")  # Type error
     ips.append("211.42.167.245")  # response in both english and Korean from local Korean whois
     ips.append("169.251.240.44")  # double parentheses in orgname
-    ips.append("50.64.231.112")  # rejected by server TODO: This is suspicious and shouldn't happen, the response seems ok
-    """
 
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:

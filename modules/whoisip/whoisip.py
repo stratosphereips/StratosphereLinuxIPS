@@ -4,10 +4,8 @@ import multiprocessing
 from slips.core.database import __database__
 
 # Your imports
-import socket
 import ipaddress
 import json
-from cymruwhois import Client
 from modules.whoisip.whois_parser import WhoisQuery
 
 
@@ -36,8 +34,6 @@ class WhoisIP(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
 
         self.db_hashset_ipv4 = "whois-module-ipv4subnet-cache"
-
-        self.client = Client()
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -69,23 +65,23 @@ class WhoisIP(Module, multiprocessing.Process):
 
     def is_checkable(self, address):
         if not address.is_global:
-            self.print("Address is not global")
+            self.print("Address " + str(address) + " is not global")
             return False
 
         if address.is_private:
-            self.print("Address is private")
+            self.print("Address " + str(address) + " is private")
             return False
 
         if address.is_multicast:
-            self.print("Address is multicast")
+            self.print("Address " + str(address) + " is multicast")
             return False
 
         if address.is_link_local:
-            self.print("Address is link local")
+            self.print("Address " + str(address) + " is link local")
             return False
 
         if address.is_loopback:
-            self.print("Address is loopback")
+            self.print("Address " + str(address) + " is loopback")
             return False
 
         return True
@@ -119,59 +115,16 @@ class WhoisIP(Module, multiprocessing.Process):
         if verbose:
             self.print("Data not found in cache!")
 
-        """
-
-        try:
-            check_manually = False
-            message = self.client.lookup(ip)
-            asn = message.asn
-            ctr_code = message.cc
-            cidr = message.prefix
-            name = message.owner
-            if asn == "NA":
-                asn = None
-                check_manually = True
-            if ctr_code == "" or ctr_code == "NA":
-                # unfortunately, IP addresses from Namibia (NA) will have to be checked again
-                ctr_code = None
-                check_manually = True
-            if cidr == "NA":
-                cidr = None
-                check_manually = True
-            if name == "NA":
-                name = None
-                check_manually = True
-        except socket.gaierror as e:
-            self.print(e)
-            return
-        except BrokenPipeError as e:
-            self.print(e)
-            return
-        except TypeError:
-            # error in cymruwhois when querying IP 76.42.110.168
-            # __init__() missing 2 required positional arguments: 'cc' and 'owner'
-            print("### CymruWhois crashed")
-            check_manually = True
-            asn = None
-            ctr_code = None
-            cidr = None
-            name = None
-        """
         print("ip:", ip)
-        check_manually = True
-        asn, ctr_code, cidr, name = None, None, None, None
 
-        if check_manually:
-            if verbose:
-                print("### Running manual check")
+        query = WhoisQuery(address)
+        query.run()
 
-            query = WhoisQuery(address, asn=asn, country=ctr_code, cidr=cidr, name=name)
-            query.run()
-
-            asn = query.asn
-            ctr_code = query.country
-            cidr = query.cidr
-            name = query.name
+        asn = query.asn
+        ctr_code = query.country
+        cidr = query.cidr
+        name = query.name
+        # TODO read date
 
         if verbose:
             self.show_results(asn, ctr_code, cidr, name)
@@ -223,7 +176,6 @@ class WhoisIP(Module, multiprocessing.Process):
         return None
 
     def load_ipv6_subnet(self, ip):
-
         pass
 
     def run(self):
