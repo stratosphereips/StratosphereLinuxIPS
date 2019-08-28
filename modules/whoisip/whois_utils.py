@@ -285,7 +285,7 @@ def parse_raw_query(ip, query):
 
 
 def get_cidr_from_whois_header(line: str):
-    line = line[25:]
+    line = line[25:].upper()
     # range of ips
     if "-" in line:
         line = line.replace("\'", "")
