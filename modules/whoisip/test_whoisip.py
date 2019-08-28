@@ -31,10 +31,13 @@ def try_random_addresses(limit=500):
 
 def test_tricky_ips():
     ips = []
+    ips.append("8.218.236.191")  # cymruwhois correctly says its SG, but whois insists on AU
+    ips.append("194.54.110.205")  # NoneType is not iterable (likely empty cidr)
+
+    """
     ips.append("206.60.214.219")  # referring to other servers, unregistered segment, wrong country code
     ips.append("43.131.21.80")
     ips.append("245.51.167.150")  # manual check returns None
-    ips.append("8.218.236.191")  # cymruwhois correctly says its SG, but whois insists on AU
     ips.append("107.78.26.116")  # broken pipe in cymruwhois (didn't happen for the second time..)
     ips.append("163.194.132.190")  # ASN lookup failed
     ips.append("162.253.210.64")  # 404 error for rdap, however whois works
@@ -48,11 +51,13 @@ def test_tricky_ips():
     ips.append("185.0.192.82")  # Type error
     ips.append("211.42.167.245")  # response in both english and Korean from local Korean whois
     ips.append("169.251.240.44")  # double parentheses in orgname
+    ips.append("50.64.231.112")  # rejected by server TODO: This is suspicious and shouldn't happen, the response seems ok
+    """
 
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
         print("-------------------------------------------")
-        print(wi.check_ip(ip, verbose=True))
+        print(wi.check_ip(ip, verbose=False))
 
 
 def compare_methods(limit=500):
@@ -99,9 +104,12 @@ if __name__ == "__main__":
     test_tricky_ips()
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
-    # try_random_addresses()
-    # TODO: check ip ranges in file
-    # TODO: run query manually if the query doesn't return enough data
+    try_random_addresses(limit=400000)
+    # TODO: verify other addresses manually and run on random ips
+    # TODO: check behavior inside slips
+    # TODO: add ipv6 support
+    # TODO: test on malware data
+    # TODO: parse last update time
     print(time.time() - t)
 
     # compare_methods(limit=50)

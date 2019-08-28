@@ -1,5 +1,4 @@
 # Must imports
-from modules.whoisip.whois_parser import WhoisQuery
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
@@ -9,7 +8,7 @@ import socket
 import ipaddress
 import json
 from cymruwhois import Client
-import subprocess
+from modules.whoisip.whois_parser import WhoisQuery
 
 
 class WhoisIP(Module, multiprocessing.Process):
@@ -120,6 +119,8 @@ class WhoisIP(Module, multiprocessing.Process):
         if verbose:
             self.print("Data not found in cache!")
 
+        """
+
         try:
             check_manually = False
             message = self.client.lookup(ip)
@@ -155,6 +156,10 @@ class WhoisIP(Module, multiprocessing.Process):
             ctr_code = None
             cidr = None
             name = None
+        """
+        print("ip:", ip)
+        check_manually = True
+        asn, ctr_code, cidr, name = None, None, None, None
 
         if check_manually:
             if verbose:
@@ -183,6 +188,9 @@ class WhoisIP(Module, multiprocessing.Process):
 
             for cidr in cidrs:
                 try:
+                    if query.cidr_prefixlen == 32 or query.cidr_prefixlen < 9:
+                        # TODO: consult if this is a good idea
+                        continue
                     mask = int(Interface(cidr))
                     save_subnet(mask, asn, ctr_code, cidr, name)
                 except:
@@ -204,7 +212,6 @@ class WhoisIP(Module, multiprocessing.Process):
         pass
 
     def load_ipv4_subnet(self, ip):
-        return None
         mask = 4294967295
         ip_value = int(ip)
         for i in range(0, 32):
