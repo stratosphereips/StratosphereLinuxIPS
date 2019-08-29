@@ -84,7 +84,7 @@ def test_ipv6():
     ips.append("2400:3200:2000:40::1")
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
-        wi.check_ip(ip)
+        result = wi.check_ip(ip)
 
 
 def test_tricky_ips():
@@ -108,6 +108,9 @@ def test_tricky_ips():
     ips.append("185.0.192.82")  # Type error
     ips.append("211.42.167.245")  # response in both english and Korean from local Korean whois
     ips.append("169.251.240.44")  # double parentheses in orgname
+    ips.append("52.88.0.1")  # multiple as in one result AS16509, AS14618
+    # TODO: handle status=-1
+    # TODO: where are the Nones printed?
 
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
@@ -117,13 +120,12 @@ def test_tricky_ips():
 
 if __name__ == "__main__":
     t = time.time()
-    test_tricky_ips()
+    # test_tricky_ips()
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
     # try_random_addresses(limit=10)
-    # test_ipv6()
+    test_ipv6()
     # TODO: test on malware data
-    # TODO: parse last update time
     # TODO: save data to db in a structured manner
     # TODO: test if caching a large network will hide a smaller network
     print(time.time() - t)

@@ -34,6 +34,7 @@ class WhoisIP(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
 
         self.db_hashset_ipv4 = "whois-module-ipv4subnet-cache"
+        self.db_hashset_ipv6 = "whois-module-ipv6subnet-cache"
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -118,48 +119,32 @@ class WhoisIP(Module, multiprocessing.Process):
         query = WhoisQuery(address)
         query.run()
 
-        asn = query.asn
-        ctr_code = query.country
-        cidr = query.cidr
-        name = query.name
-        # TODO read date
+        result = query.get_result_dictionary()
 
         if verbose:
-            self.show_results(asn, ctr_code, cidr, name)
+            self.show_results(result)
 
-        if asn is None or ctr_code is None or cidr is None or name is None:
-            if verbose:
-                self.print("Results are incomplete")
+        if verbose and not result["is_complete"]:
+            self.print("Results are incomplete")
 
-        if cidr is not None:
-            if "," in cidr:
-                cidrs = cidr.split(", ")
-            else:
-                cidrs = [cidr]
+        if result["cidr_prefix_len"] == 0 or (result["cidr_prefix_len"] == 32 and address.version == 4)\
+                or result["cidr"] is None or (result["cidr_prefix_len"] == 128 and address.version == 6):
+            self.print("Not suitable for caching")
+        else:
+            mask = int(Interface(result["cidr"]))
+            save_subnet(mask, result)
+            # TODO: check ipv6 masks
 
-            for cidr in cidrs:
-                try:
-                    if query.cidr_prefixlen == 32 or query.cidr_prefixlen == 0:
-                        continue
-                    mask = int(Interface(cidr))
-                    save_subnet(mask, asn, ctr_code, cidr, name)
-                except:
-                    pass
-        return asn, ctr_code, cidr, name
+    def show_results(self, result):
+        self.print(result)
 
-    def show_results(self, asn, ctr_code, cidr, name):
-        self.print("ASN: " + str(asn))
-        self.print("Country: " + str(ctr_code))
-        self.print("CIDR: " + str(cidr))
-        self.print("Name: " + str(name))
-
-    def save_ipv4_subnet(self, mask: int, asn: str, ctr_code: str, cidr: str, name: str):
-        data = {"asn": asn, "country": ctr_code, "cidr": cidr, "name": name}
-        str_data = json.dumps(data)
+    def save_ipv4_subnet(self, mask: int, result: dict):
+        str_data = json.dumps(result)
         __database__.r.hset(self.db_hashset_ipv4, mask, str_data)
 
-    def save_ipv6_subnet(self, mask, asn, ctr_code, cidr, name):
-        pass
+    def save_ipv6_subnet(self, mask, result):
+        str_data = json.dumps(result)
+        __database__.r.hset(self.db_hashset_ipv6, mask, str_data)
 
     def load_ipv4_subnet(self, ip):
         mask = 4294967295
@@ -183,7 +168,7 @@ class WhoisIP(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message['channel'] == 'new_ip' and message["type"] == "message":
                     ip = message["data"]
-                    self.print(self.check_ip(ip))
+                    self.check_ip(ip)
 
         except KeyboardInterrupt:
             return True

@@ -92,6 +92,32 @@ class WhoisQuery:
                 self.orgid = response.orgid
                 self.missing_values -= 1
 
+    def get_result_dictionary(self):
+        """
+        Return the object as a dictionary that can be saved to the database.
+        :return: Data dictionary containing a value or None. It has the following fields:
+         - name: Name of the organization owning the IP
+         - org_id: Short name of the organization
+         - cidr: network in CIDR notation (IP/mask len)
+         - cidr_prefix_len: length of the mask in prefix notation
+         - country: two letter country code of the country where the network likely is
+         - updated: unix date of when the network data was last updated on whois servers
+         - status: status of the query (-1 for not yet run, 0 for OK, otherwise an error message/code)
+         - asn: number of the autonomous system the IP is in
+         - is_complete: True if all fields have a value. False if some fields were None.
+        """
+        result = {"name": self.name, "org_id": self.orgid, "cidr": self.cidr, "cidr_prefix_len": self.cidr_prefixlen,
+                  "country": self.country, "updated": self.updated, "status": self.status, "asn": self.asn}
+
+        is_complete = True
+        for field in result:
+            if field is None:
+                is_complete = False
+                break
+
+        result["is_complete"] = is_complete
+        return result
+
     def run(self):
         """
         Retrieve whois information for ip manually using the whois command. The query will read some basic information 
