@@ -25,7 +25,6 @@ class WhoisQuery:
         # network this ip belongs to
         self.cidr = cidr
         if self.cidr is not None:
-            # TODO handle ipv6
             # number of bits in the mask
             self.cidr_prefixlen = int(self.cidr.split("/")[1])
         else:
@@ -108,6 +107,7 @@ class WhoisQuery:
         # Whois is contacting whois.arin.net (-h is the host), because servers follow different standards (if any) and
         # it is beyond the scope of this parser to read all of them
         timeout = 4
+        # TODO: why 4?
         command = ["timeout", "--preserve-status", str(timeout) + "s", "whois", str(self.ip), "-h", "whois.arin.net"]
 
         # stdout: save output in response object

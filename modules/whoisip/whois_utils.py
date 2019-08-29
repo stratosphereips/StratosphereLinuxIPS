@@ -1,4 +1,5 @@
 import ipaddress
+from dateutil import parser
 
 
 class Response:
@@ -127,7 +128,7 @@ class Response:
 
         # update time
         if "updated" in self.network:
-            self.updated = self.network["updated"]  # TODO: parse the time and save as unix
+            self.updated = get_update_time(self.network["updated"])
 
         # country code
         if "country" in self.network:
@@ -334,3 +335,7 @@ def get_company_name_and_shortcut(organization):
         orgname = orgname.strip()
         orgid = orgid.replace(")", "").strip()
         return orgname, orgid
+
+
+def get_update_time(raw_data):
+    return int(parser.parse(raw_data).timestamp())

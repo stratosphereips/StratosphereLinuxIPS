@@ -115,8 +115,6 @@ class WhoisIP(Module, multiprocessing.Process):
         if verbose:
             self.print("Data not found in cache!")
 
-        self.print("ip: " + ip)
-
         query = WhoisQuery(address)
         query.run()
 

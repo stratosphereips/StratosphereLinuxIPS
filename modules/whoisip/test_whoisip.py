@@ -84,7 +84,7 @@ def test_ipv6():
     ips.append("2400:3200:2000:40::1")
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
-        print(wi.check_ip(ip))
+        wi.check_ip(ip)
 
 
 def test_tricky_ips():
@@ -117,12 +117,11 @@ def test_tricky_ips():
 
 if __name__ == "__main__":
     t = time.time()
-    # test_tricky_ips()
+    test_tricky_ips()
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
     # try_random_addresses(limit=10)
-    test_ipv6()
-    # TODO: add ipv6 support
+    # test_ipv6()
     # TODO: test on malware data
     # TODO: parse last update time
     # TODO: save data to db in a structured manner
