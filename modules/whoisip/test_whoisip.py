@@ -29,6 +29,64 @@ def try_random_addresses(limit=500):
         wi.check_ip(ip)
 
 
+def test_ipv6():
+    ips = []
+    ips.append("2001:718:2:1611:0:1:0:90")
+    ips.append("2600:1404:18:380::6395")
+    ips.append("2600:3c00::f03c:91ff:fe73:6ac0")
+    ips.append("2604:4000:4000::64:98:151:2")
+    ips.append("2604:4000:4000::64:98:151:1")
+    ips.append("2001:19f0:6401:18f1:5400:1ff:febc:864a")
+    ips.append("2400:3200:2000:56::1")
+    ips.append("2400:3200:2000:57::1")
+    ips.append("2001:1398:276::200:7:5:7")
+    ips.append("2400:3200:2000:29::1")
+    ips.append("2400:3200:2000:28::1")
+    ips.append("2a02:750:5::538")
+    ips.append("2001:19f0:5001:1caf:5400:1ff:fec5:8d50")
+    ips.append("2a00:1a28:2010:1::89")
+    ips.append("2001:19f0:6801:474:5400:1ff:fec5:8efb")
+    ips.append("2a02:750:8::32")
+    ips.append("2001:8d8:fe:53::d9a0:5251:100")
+    ips.append("2001:8d8:fe:53::d9a0:5151:100")
+    ips.append("2001:8d8:fe:53::d9a0:5051:100")
+    ips.append("2001:8d8:fe:53::d9a0:5351:100")
+    ips.append("2a00:1ed0:2::1:5bef:c8f3:1")
+    ips.append("2001:4de8:fa22::1:5264:602:1")
+    ips.append("2a02:2b88:1:4::ac")
+    ips.append("2a00:f940:4::47")
+    ips.append("2a00:f940:5::190")
+    ips.append("2607:f798:140:202::2091:4813:2165")
+    ips.append("2607:f798:140:302::2091:4812:8212")
+    ips.append("2400:3200:2000:26::1")
+    ips.append("2400:3200:2000:27::1")
+    ips.append("2400:3200:2000:21::1")
+    ips.append("2400:3200:2000:20::1")
+    ips.append("2001:8d8:fe:53::d9a0:5274:100")
+    ips.append("2001:8d8:fe:53::d9a0:533c:100")
+    ips.append("2001:8d8:fe:53::d9a0:512d:100")
+    ips.append("2001:8d8:fe:53::d9a0:507b:100")
+    ips.append("2400:3200:2000:30::1")
+    ips.append("2600:1403:1:58c::6395")
+    ips.append("2001:8d8:fe:53::d9a0:5327:100")
+    ips.append("2001:8d8:fe:53::d9a0:5112:100")
+    ips.append("2001:8d8:fe:53::d9a0:525d:100")
+    ips.append("2001:8d8:fe:53::d9a0:505d:100")
+    ips.append("2a00:fa8:3::100:0:4:1")
+    ips.append("2001:19f0:5001:eed:5400:ff:fe1d:d24f")
+    ips.append("2001:19f0:5c01:bb0:5400:ff:fe1d:d1cc")
+    ips.append("240e:ff:9000:1100::19a")
+    ips.append("2607:a400:1:19::19a")
+    ips.append("2001:8d8:fe:53::d9a0:506e:100")
+    ips.append("2001:8d8:fe:53::d9a0:5166:100")
+    ips.append("2001:8d8:fe:53::d9a0:522b:100")
+    ips.append("2001:8d8:fe:53::d9a0:5329:100")
+    ips.append("2400:3200:2000:40::1")
+    wi = WhoisIP(None, get_default_config(), testing=True)
+    for ip in ips:
+        print(wi.check_ip(ip))
+
+
 def test_tricky_ips():
     ips = []
     ips.append("50.64.231.112")  # rejected by server
@@ -57,55 +115,17 @@ def test_tricky_ips():
         print(wi.check_ip(ip, verbose=False))
 
 
-def compare_methods(limit=500):
-    cymru = WhoisIP(None, get_default_config(), testing=True)
-    manual = WhoisIP(None, get_default_config(), testing=True)
-
-    cymru_results = []
-    manual_results = []
-
-    random_addresses = []
-
-    for i in range(0, limit):
-        ip = str(random.randint(0, 255)) + "." + str(random.randint(0, 255)) + "."\
-             + str(random.randint(0, 255)) + "." + str(random.randint(0, 255))
-        random_addresses.append(ip)
-
-    tmp_time = time.time()
-    for ip in random_addresses:
-        cymru_results.append(cymru.check_ip(ip))
-    cymru_time = time.time() - tmp_time
-
-    tmp_time = time.time()
-    for ip in random_addresses:
-        manual_results.append(manual.check_ip_manual_only(ip))
-    manual_time = time.time() - tmp_time
-
-    print("Cymru took", cymru_time)
-    print("Manual took", manual_time)
-
-    for ip, cr, mr in zip(random_addresses, cymru_results, manual_results):
-        if cr[0] != mr[0] or cr[1] != mr[1] or cr[2] != mr[2] or cr[3] != mr[3]:
-            print("IP:", ip, "has different results")
-            if cr[0] != mr[0]:
-                print("ASN - cumru:", cr[0] + ", manual:", mr[0])
-            if cr[1] != mr[1]:
-                print("Country - cumru:", cr[1] + ", manual:", mr[1])
-            if cr[2] != mr[2]:
-                print("CIDR - cumru:", cr[2] + ", manual:", mr[2])
-            if cr[3] != mr[3]:
-                print("Name - cumru:", cr[3] + ", manual:", mr[3])
-
 if __name__ == "__main__":
     t = time.time()
-    test_tricky_ips()
+    # test_tricky_ips()
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
-    try_random_addresses(limit=400000)
-    # TODO: check behavior inside slips
+    # try_random_addresses(limit=10)
+    test_ipv6()
     # TODO: add ipv6 support
     # TODO: test on malware data
     # TODO: parse last update time
+    # TODO: save data to db in a structured manner
     # TODO: test if caching a large network will hide a smaller network
     print(time.time() - t)
 
