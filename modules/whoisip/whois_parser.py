@@ -8,7 +8,7 @@ class WhoisQuery:
     WhoisQuery contains information gathered from one whois query. If it is initialized with some values, only missing
     fields will be filled, and provided data will not be changed. The query is started by calling self.run.
     """
-    def __init__(self, ip: str, cidr=None, asn=None, country=None, name=None):
+    def __init__(self, ip, cidr=None, asn=None, country=None, name=None):
         """
         Initialize the result with default data. This may be anything known about the IP before the query. This data
         will not be changed
@@ -20,6 +20,8 @@ class WhoisQuery:
         """
         # ip address that is to be checked
         self.ip = ip
+        self.version = ip.version
+
         # network this ip belongs to
         self.cidr = cidr
         if self.cidr is not None:

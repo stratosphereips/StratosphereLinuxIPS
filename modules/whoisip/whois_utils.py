@@ -45,6 +45,11 @@ class Response:
         # TODO: The whois authority that gave this response
         self.rir_server = ""
 
+        if ip.version == 4:
+            self.IPNetwork = ipaddress.IPv4Network
+        else:
+            self.IPNetwork = ipaddress.IPv6Network
+
     def add_value_to_type(self, line, object_type):
         """
         Save a line of data (in a "key:     value" format) to the Response object. This function also takes in the type
@@ -156,7 +161,7 @@ class Response:
             smallest_network = "0.0.0.0/32"
             networks = self.cidr.split(", ")
             for network in networks:
-                if self.ip not in ipaddress.IPv4Network(network):
+                if self.ip not in self.IPNetwork(network):
                     networks.remove(network)
                     continue
                 prefix = int(network.split("/")[1])
@@ -295,6 +300,8 @@ def get_cidr_from_whois_header(line: str):
         line = line.replace("\'", "")
         cidr, asn = line.split("AS")
         return cidr, asn
+    # for ipv6, the cidr is given directly, but without asn ('\\'2001:718:2::/48\\'')
+    return line.replace("\\", "").replace("\'", ""), None
 
 
 def get_cidr_from_net_range(netrange):
