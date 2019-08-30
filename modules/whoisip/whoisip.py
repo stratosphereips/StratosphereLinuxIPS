@@ -36,7 +36,10 @@ class WhoisIP(Module, multiprocessing.Process):
         self.db_hashset_ipv4 = "whois-module-ipv4subnet-cache"
         self.db_hashset_ipv6 = "whois-module-ipv6subnet-cache"
 
-    def print(self, text, verbose=1, debug=0):
+        self.print("Hello")
+        print("(hello)")
+
+    def print(self, text, verbose=2, debug=0):
         """ 
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the processes into account
@@ -87,9 +90,8 @@ class WhoisIP(Module, multiprocessing.Process):
 
         return True
 
-    def check_ip(self, ip, verbose=False):
-        if verbose:
-            self.print("--- Checking ip " + ip)
+    def check_ip(self, ip):
+        self.print("--- Checking ip " + ip)
 
         address = ipaddress.ip_address(ip)
 
@@ -108,24 +110,20 @@ class WhoisIP(Module, multiprocessing.Process):
         cached_data = load_subnet(address)
 
         if cached_data is not None:
-            if verbose:
-                self.print("Data found in cache!")
-                self.show_results(cached_data["asn"], cached_data["country"], cached_data["cidr"], cached_data["name"])
+            self.print("Data found in cache!", debug=3)
+            self.show_results(cached_data, debug=3)
             return cached_data
 
-        if verbose:
-            self.print("Data not found in cache!")
+        self.print("Data not found in cache!")
 
         query = WhoisQuery(address)
         query.run()
 
         result = query.get_result_dictionary()
 
-        if verbose:
-            self.show_results(result)
+        self.show_results(result)
 
-        if verbose and not result["is_complete"]:
-            self.print("Results are incomplete")
+        self.print("Results are incomplete")
 
         if result["cidr_prefix_len"] == 0 or (result["cidr_prefix_len"] == 32 and address.version == 4)\
                 or result["cidr"] is None or (result["cidr_prefix_len"] == 128 and address.version == 6):
@@ -135,8 +133,8 @@ class WhoisIP(Module, multiprocessing.Process):
             save_subnet(mask, result)
             # TODO: check ipv6 masks
 
-    def show_results(self, result):
-        self.print(result)
+    def show_results(self, result, verbose=2, debug=0):
+        self.print(result, verbose=verbose, debug=debug)
 
     def save_ipv4_subnet(self, mask: int, result: dict):
         str_data = json.dumps(result)

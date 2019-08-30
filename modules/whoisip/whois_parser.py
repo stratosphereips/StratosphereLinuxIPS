@@ -132,7 +132,7 @@ class WhoisQuery:
         # by subprocess, it is near impossible to read output of the terminated process.
         # Whois is contacting whois.arin.net (-h is the host), because servers follow different standards (if any) and
         # it is beyond the scope of this parser to read all of them
-        timeout = 4
+        timeout = 15
         # TODO: why 4?
         command = ["timeout", "--preserve-status", str(timeout) + "s", "whois", str(self.ip), "-h", "whois.arin.net"]
 
@@ -154,9 +154,8 @@ class WhoisQuery:
                     self.status = str(response.returncode) + " - " + stderr
                     return response.returncode, stderr
                 else:
-                    # warning: there was a network issue, but some data was retrieved, maybe it is useful
-                    # TODO: This message is scary, change it
-                    print("Whois", self.ip, "was rejected by the server. This is likely a redirection or network issue")
+                    # warning: there was a network issue, but some data was retrieved, will process it anyway
+                    print("Whois on ip: " + self.ip + " timeouted, data might be incomplete")
             else:
                 # other error codes except for 2
                 self.status = str(response.returncode) + " - " + stderr

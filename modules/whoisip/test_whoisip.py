@@ -128,6 +128,11 @@ if __name__ == "__main__":
     # TODO: test on malware data
     # TODO: save data to db in a structured manner
     # TODO: test if caching a large network will hide a smaller network
+    # TODO: {'name': 'Telegram Messenger LLP', 'org_id': 'RIPE', 'cidr': '2001:67C:4E8::/48', 'cidr_prefix_len': 48,
+    # TODO: 'country': 'NL', 'updated': 1524909694, 'status': -1, 'asn': '62041', 'is_complete': True} shouldn't be RIPE
+    # TODO: fix verbosity and debug
+    # TODO: change prints in all files, not just the whoisip.py
+
     print(time.time() - t)
 
     # compare_methods(limit=50)
