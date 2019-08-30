@@ -83,13 +83,14 @@ class WhoisQuery:
             if response.name is not None:
                 self.name = response.name
                 self.missing_values -= 1
+            # orgid should be only taken from the same response as the name. Otherwise, the RIR id will be returned
+            if self.orgid is None:
+                if response.orgid is not None:
+                    self.orgid = response.orgid
+                    self.missing_values -= 1
         if self.updated is None:
             if response.updated is not None:
                 self.updated = response.updated
-                self.missing_values -= 1
-        if self.orgid is None:
-            if response.orgid is not None:
-                self.orgid = response.orgid
                 self.missing_values -= 1
 
     def get_result_dictionary(self):
