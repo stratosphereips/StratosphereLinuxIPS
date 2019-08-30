@@ -109,8 +109,6 @@ def test_tricky_ips():
     ips.append("211.42.167.245")  # response in both english and Korean from local Korean whois
     ips.append("169.251.240.44")  # double parentheses in orgname
     ips.append("52.88.0.1")  # multiple as in one result AS16509, AS14618
-    # TODO: handle status=-1
-    # TODO: where are the Nones printed?
 
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:

@@ -118,13 +118,14 @@ class WhoisQuery:
         result["is_complete"] = is_complete
         return result
 
-    def run(self):
+    def run(self, slips_print):
         """
         Retrieve whois information for ip manually using the whois command. The query will read some basic information 
         and save it in the object. If something is already known about the IP, it will be left unchanged.
         If a field cannot be retrieved, it will remain None. If error occurs, the field will be None and the error will
         be returned and saved in self.status
-        :return: error code, error message. For succesful queries, this will be 0, "OK"
+        :param slips_print: a function for printing output to slips outputprocess
+        :return: error code, error message. For successful queries, this will be 0, "OK"
         """
 
         # get whois result from terminal
@@ -150,33 +151,36 @@ class WhoisQuery:
                 # code 2 == network error? Idk, it doesn't say in the docs/man
                 if len(response.stdout) == 0:
                     # if there is no response in stdout, likely there is no network connection
-                    print(stderr)
+                    slips_print(stderr)  # error
                     self.status = str(response.returncode) + " - " + stderr
                     return response.returncode, stderr
                 else:
                     # warning: there was a network issue, but some data was retrieved, will process it anyway
-                    print("Whois on ip: " + self.ip + " timeouted, data might be incomplete")
+                    slips_print("Query on ip: " + self.ip + " timeouted, data might be incomplete")  # warning
             else:
                 # other error codes except for 2
                 self.status = str(response.returncode) + " - " + stderr
                 return response.returncode, stderr
 
-        # decode iso-8859-1, this fixes errors in French requests (but some Czech chars are not correct in the comments)
-        output = response.stdout.decode("iso-8859-1")
+        # there may be unexpected errors in the processing - they should change query status, but not crash the module
+        try:
+            # decode iso-8859-1, this fixes errors in French requests (but some Czech chars are broken in the comments)
+            output = response.stdout.decode("iso-8859-1")
+            # get a set of responses: one query might contain more responses. This may be because multiple servers have
+            # responded (the query was redirected), or because the IP is in multiple networks with different properties.
+            # server response (about the RIR responsible for the range may appear as the first response in the query
+            # subnet responses is an array of more specific responses, and is sorted by smallest network first
+            server_response, subnet_responses = parse_raw_query(self.ip, output)
 
-        # get a set of responses: one query might contain multiple responses. This may be because multiple servers have
-        # responded (the query was redirected), or because the IP is in multiple networks with different properties.
-        # server response is the first response in the query, and usually describes the RIR responsible for the range
-        # subnet responses is an array of more specific responses, and is sorted by smallest network first
-        server_response, subnet_responses = parse_raw_query(self.ip, output)
+            # process all responses
+            # Because they are sorted, data will be likely taken from the specific response, and only if that response
+            # is incomplete, more general data will be used. In worst case scenario, server response is taken.
+            for response in subnet_responses:
+                self.add_response(response)
 
-        # process all responses
-        # Because they are sorted, data will be most likely taken from the specific response, and only if that response
-        # is incomplete, more general data will be used. In worst case scenario, server response is taken.
-        for response in subnet_responses:
-            self.add_response(response)
+            if server_response is not None:
+                self.add_response(server_response)
 
-        if server_response is not None:
-            self.add_response(server_response)
-
-        return 0, "0K"
+            self.status = 0
+        except Exception as e:
+            self.status = str(e)
