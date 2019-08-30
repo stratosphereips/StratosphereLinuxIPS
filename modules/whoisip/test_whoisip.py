@@ -31,14 +31,15 @@ def try_random_addresses(limit=500):
 
 def test_ipv6():
     ips = []
-    ips.append("2001:718:2:1611:0:1:0:90")
+    ips.append("2400:3200:2000:57::1")
     ips.append("2600:1404:18:380::6395")
+    ips.append("2600:1403:1:58c::6395")
+    ips.append("2001:718:2:1611:0:1:0:90")
     ips.append("2600:3c00::f03c:91ff:fe73:6ac0")
     ips.append("2604:4000:4000::64:98:151:2")
     ips.append("2604:4000:4000::64:98:151:1")
     ips.append("2001:19f0:6401:18f1:5400:1ff:febc:864a")
     ips.append("2400:3200:2000:56::1")
-    ips.append("2400:3200:2000:57::1")
     ips.append("2001:1398:276::200:7:5:7")
     ips.append("2400:3200:2000:29::1")
     ips.append("2400:3200:2000:28::1")
@@ -67,7 +68,6 @@ def test_ipv6():
     ips.append("2001:8d8:fe:53::d9a0:512d:100")
     ips.append("2001:8d8:fe:53::d9a0:507b:100")
     ips.append("2400:3200:2000:30::1")
-    ips.append("2600:1403:1:58c::6395")
     ips.append("2001:8d8:fe:53::d9a0:5327:100")
     ips.append("2001:8d8:fe:53::d9a0:5112:100")
     ips.append("2001:8d8:fe:53::d9a0:525d:100")
@@ -124,7 +124,6 @@ if __name__ == "__main__":
     # try_random_addresses(limit=10)
     test_ipv6()
     # TODO: test on malware data
-    # TODO: save data to db in a structured manner
     # TODO: test if caching a large network will hide a smaller network
     # TODO: {'name': 'Telegram Messenger LLP', 'org_id': 'RIPE', 'cidr': '2001:67C:4E8::/48', 'cidr_prefix_len': 48,
     # TODO: 'country': 'NL', 'updated': 1524909694, 'status': -1, 'asn': '62041', 'is_complete': True} shouldn't be RIPE

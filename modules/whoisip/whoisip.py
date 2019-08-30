@@ -130,7 +130,6 @@ class WhoisIP(Module, multiprocessing.Process):
         else:
             mask = int(Interface(result["cidr"]))
             save_subnet(mask, result)
-            # TODO: check ipv6 masks
 
     def save_ipv4_subnet(self, mask: int, result: dict):
         str_data = json.dumps(result)
@@ -152,8 +151,15 @@ class WhoisIP(Module, multiprocessing.Process):
         return None
 
     def load_ipv6_subnet(self, ip):
-        # 340282366920938463463374607431768211455
-        pass
+        mask = 340282366920938463463374607431768211455
+        ip_value = int(ip)
+        for i in range(0, 128):
+            mask -= pow(2, i)
+            masked_ip = mask & ip_value
+            data = __database__.r.hget(self.db_hashset_ipv6, masked_ip)
+            if data:
+                return json.loads(data)
+        return None
 
     def run(self):
         try:
