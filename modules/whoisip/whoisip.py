@@ -123,7 +123,6 @@ class WhoisIP(Module, multiprocessing.Process):
         self.print("Results are incomplete")  # debug
 
         # Do not cache if the mask is zero, or 32 (ipv4) or 128 (ipv6) or in case of error
-        # TODO: should I cache an error? What should I do with an error?
         if result["cidr_prefix_len"] == 0 or (result["cidr_prefix_len"] == 32 and address.version == 4)\
                 or result["cidr"] is None or (result["cidr_prefix_len"] == 128 and address.version == 6):
             self.print("Not suitable for caching")  # verbose

@@ -135,7 +135,6 @@ class WhoisQuery:
         # Whois is contacting whois.arin.net (-h is the host), because servers follow different standards (if any) and
         # it is beyond the scope of this parser to read all of them
         timeout = 15
-        # TODO: why 4?
         command = ["timeout", "--preserve-status", str(timeout) + "s", "whois", str(self.ip), "-h", "whois.arin.net"]
 
         # stdout: save output in response object

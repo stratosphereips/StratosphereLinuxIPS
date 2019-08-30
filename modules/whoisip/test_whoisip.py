@@ -126,7 +126,11 @@ if __name__ == "__main__":
     # TODO: test on malware data
     # TODO: test if caching a large network will hide a smaller network
     # TODO: fix verbosity and debug
-    # TODO: change prints in all files, not just the whoisip.py
+    # TODO: should I cache an error? What should I do with an error? (whois.py line 126)
+    # TODO: justify the wait delay (whois_parser.py line 137)
+    # TODO: make sure no relevant info is skipped (a regex to match line with url.*[-a-zA-Z0-9.]+\.[a-z]{2,}.*)
+    # TODO:      whois_utils.py line 266
+    # TODO: Save the whois authority that gave this response (whois_parser.py 46)
 
     print(time.time() - t)
 

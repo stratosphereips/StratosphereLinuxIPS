@@ -43,7 +43,6 @@ class Response:
         self.processed_types = ["inetnum", "inet6num", "netrange", "organization", "orgname", "role"]
         # a list to dynamically insert values to all types
         self.type_dictionaries = {"inetnum": self.network, "organization": self.organization, "role": self.role}
-        # TODO: The whois authority that gave this response
         self.rir_server = ""
 
         if ip.version == 4:
@@ -120,7 +119,6 @@ class Response:
         """
 
         # if CIDR is given, use it. Otherwise parse it from netrange/inetnum
-        # TODO: handle IPv6
         if "cidr" in self.network:
             self.cidr = self.network["cidr"]
         elif "inetnum" in self.network:
@@ -264,7 +262,6 @@ def parse_raw_query(ip, query):
             continue
         # ignore lines that don't follow the 'key: value' format
         if ": " not in line:
-            # TODO: make sure no relevant info is skipped (a regex to match line with url.*[-a-zA-Z0-9.]+\.[a-z]{2,}.*)
             continue
 
         # if no responses are already in the array, start a new response
