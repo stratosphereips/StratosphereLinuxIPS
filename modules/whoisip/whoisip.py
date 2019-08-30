@@ -36,9 +36,6 @@ class WhoisIP(Module, multiprocessing.Process):
         self.db_hashset_ipv4 = "whois-module-ipv4subnet-cache"
         self.db_hashset_ipv6 = "whois-module-ipv6subnet-cache"
 
-        self.print("Hello")
-        print("(hello)")
-
     def print(self, text, verbose=2, debug=0):
         """ 
         Function to use to print text using the outputqueue of slips.
@@ -69,29 +66,29 @@ class WhoisIP(Module, multiprocessing.Process):
 
     def is_checkable(self, address):
         if not address.is_global:
-            self.print("Address " + str(address) + " is not global")
+            self.print("Address " + str(address) + " is not global")  # debug
             return False
 
         if address.is_private:
-            self.print("Address " + str(address) + " is private")
+            self.print("Address " + str(address) + " is private")  # debug
             return False
 
         if address.is_multicast:
-            self.print("Address " + str(address) + " is multicast")
+            self.print("Address " + str(address) + " is multicast")  # debug
             return False
 
         if address.is_link_local:
-            self.print("Address " + str(address) + " is link local")
+            self.print("Address " + str(address) + " is link local")  # debug
             return False
 
         if address.is_loopback:
-            self.print("Address " + str(address) + " is loopback")
+            self.print("Address " + str(address) + " is loopback")  # debug
             return False
 
         return True
 
     def check_ip(self, ip):
-        self.print("--- Checking ip " + ip)
+        self.print("Checking ip " + ip)   # verbose
 
         address = ipaddress.ip_address(ip)
 
@@ -110,31 +107,30 @@ class WhoisIP(Module, multiprocessing.Process):
         cached_data = load_subnet(address)
 
         if cached_data is not None:
-            self.print("Data found in cache!", debug=3)
-            self.show_results(cached_data, debug=3)
+            self.print("Data found in cache!") # debug
+            self.print(cached_data) # debug
             return cached_data
 
-        self.print("Data not found in cache!")
+        self.print("Data not found in cache!") # debug
 
         query = WhoisQuery(address)
-        query.run()
+        query.run(self.print)
 
         result = query.get_result_dictionary()
 
-        self.show_results(result)
+        self.print(result)  # debug
 
-        self.print("Results are incomplete")
+        self.print("Results are incomplete")  # debug
 
+        # Do not cache if the mask is zero, or 32 (ipv4) or 128 (ipv6) or in case of error
+        # TODO: should I cache an error? What should I do with an error?
         if result["cidr_prefix_len"] == 0 or (result["cidr_prefix_len"] == 32 and address.version == 4)\
                 or result["cidr"] is None or (result["cidr_prefix_len"] == 128 and address.version == 6):
-            self.print("Not suitable for caching")
+            self.print("Not suitable for caching")  # verbose
         else:
             mask = int(Interface(result["cidr"]))
             save_subnet(mask, result)
             # TODO: check ipv6 masks
-
-    def show_results(self, result, verbose=2, debug=0):
-        self.print(result, verbose=verbose, debug=debug)
 
     def save_ipv4_subnet(self, mask: int, result: dict):
         str_data = json.dumps(result)
@@ -156,6 +152,7 @@ class WhoisIP(Module, multiprocessing.Process):
         return None
 
     def load_ipv6_subnet(self, ip):
+        # 340282366920938463463374607431768211455
         pass
 
     def run(self):

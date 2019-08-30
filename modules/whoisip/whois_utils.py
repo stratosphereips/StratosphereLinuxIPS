@@ -254,7 +254,6 @@ def parse_raw_query(ip, query):
                 responses.append(Response(ip))
                 # the header contains cidr and (sometimes) asn data
                 cidr, asn = get_cidr_from_whois_header(line)
-                # TODO: ignore asn in role
                 responses[-1].cidr = cidr
                 responses[-1].asn = asn
             continue
