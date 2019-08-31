@@ -39,6 +39,7 @@ class Module(Module, multiprocessing.Process):
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
+            self.timeout = None
         elif platform.system() == 'Linux':
             # linux
             self.timeout = None
