@@ -147,7 +147,7 @@ class Response:
 
         # ASN
         if "originas" in self.network:
-            self.asn = self.network["originas"]
+            self.asn = self.network["originas"].lower().replace("as", "")
 
         # check how many fields are set from this response, and how big the network is
         if self.cidr is None:

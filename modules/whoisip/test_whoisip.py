@@ -89,6 +89,7 @@ def test_ipv6():
 
 def test_tricky_ips():
     ips = []
+    ips.append("205.251.133.202")
     ips.append("50.64.231.112")  # rejected by server
     ips.append("8.218.236.191")  # cymruwhois correctly says its SG, but whois insists on AU
     ips.append("194.54.110.205")  # NoneType is not iterable (likely empty cidr)
@@ -113,16 +114,16 @@ def test_tricky_ips():
     wi = WhoisIP(None, get_default_config(), testing=True)
     for ip in ips:
         print("-------------------------------------------")
-        print(wi.check_ip(ip, verbose=False))
+        print(wi.check_ip(ip))
 
 
 if __name__ == "__main__":
     t = time.time()
-    # test_tricky_ips()
+    test_tricky_ips()
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
     # try_random_addresses(limit=10)
-    test_ipv6()
+    # test_ipv6()
     # TODO: test on malware data
     # TODO: test if caching a large network will hide a smaller network
     # TODO: fix verbosity and debug
