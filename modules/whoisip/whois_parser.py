@@ -109,8 +109,9 @@ class WhoisQuery:
         """
         result = {"name": self.name, "org_id": self.orgid, "cidr": self.cidr, "cidr_prefix_len": self.cidr_prefixlen,
                   "country": self.country, "updated": self.updated, "status": self.status, "asn": self.asn,
-                  "ip": self.ip}
+                  "ip": str(self.ip)}
 
+        # TODO: if asn is None, it is still marked as complete
         is_complete = True
         for field in result:
             if field is None:
@@ -157,7 +158,7 @@ class WhoisQuery:
                     return response.returncode, stderr
                 else:
                     # warning: there was a network issue, but some data was retrieved, will process it anyway
-                    slips_print("Query on ip: " + self.ip + " timeouted, data might be incomplete")  # warning
+                    slips_print("Query on ip: " + str(self.ip) + " timeouted, data might be incomplete")  # warning
             else:
                 # other error codes except for 2
                 self.status = str(response.returncode) + " - " + stderr
