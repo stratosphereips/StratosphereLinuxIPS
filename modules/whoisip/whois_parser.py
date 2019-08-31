@@ -108,7 +108,8 @@ class WhoisQuery:
          - is_complete: True if all fields have a value. False if some fields were None.
         """
         result = {"name": self.name, "org_id": self.orgid, "cidr": self.cidr, "cidr_prefix_len": self.cidr_prefixlen,
-                  "country": self.country, "updated": self.updated, "status": self.status, "asn": self.asn}
+                  "country": self.country, "updated": self.updated, "status": self.status, "asn": self.asn,
+                  "ip": self.ip}
 
         is_complete = True
         for field in result:
