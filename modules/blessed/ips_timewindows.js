@@ -698,7 +698,7 @@ tree.on('select',function(node){
           var tuple_info = obj_outTuples[key];
           var outTuple_ip = key.split(':')[0];
           ips.push(outTuple_ip);
-          getIpInfo_box_ip(outTuple_ip,0).then(function(result){console.log(result)})
+          getIpInfo_box_ip(outTuple_ip,0).then(function(result){})
          // console.log(k)
           row.push(outTuple_ip,tuple_info[0].trim());
           data.push(row);
