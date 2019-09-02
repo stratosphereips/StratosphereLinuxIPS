@@ -14,7 +14,7 @@ var redis = require('redis')
   , screen = blessed.screen()
   , colors = require('colors');
 
-
+screen.options.dockBorders=true;
 //read countries  location
 let country_loc = {};
 fs.readFile('country.txt', 'utf8', function(err,data) {
@@ -161,7 +161,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       border:{ fg:'magenta'}
     }}
        , barBgColor: [ 'red', 'blue', 'green' ]})
-, bar_two_srcPortClient = grid.set(3.5,0,2.7,6,contrib.stackedBar,
+, bar_two_srcPortClient = grid.set(3.4,0,2.7,6,contrib.stackedBar,
        { parent:bar_list
         , barWidth: 6
        , barSpacing: 10
@@ -278,7 +278,10 @@ var number_bars = Math.floor((2*bar_two_srcPortClient.width-2*bar_two_srcPortCli
 // var list_state = [bar_state_one, bar_state_two, bar_state_three,box_hotkeys_state, box_bar_state, map_state];
 
 screen.render() 
-function ready() { screen.render() }
+
+String.prototype.repeat = function(length) {
+ return Array(length + 1).join(this);
+};
 
 function round(value, decimals) {
   return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
@@ -558,7 +561,8 @@ function getIpInfo_box_ip(ip,mode){
   /*
   retrieves IPsInfo from redis.
   */
-  
+  var ip_info_str = "";
+  var ip_info_dict = {'asn':'', 'geocountry':'', 'VirusTotal':''}
   var promise = new Promise(function(resolve,reject){
     redis_timeline_ip.hget("IPsInfo",ip,(err,reply)=>{
 
@@ -567,34 +571,49 @@ function getIpInfo_box_ip(ip,mode){
       var obj = JSON.parse(reply);
       var ip_values =  Object.values(obj);
       var ip_keys = Object.keys(obj);
-      
+
       if(ip_keys.includes('VirusTotal')){
           var vt = obj['VirusTotal'];
           var vt_string ='VirusTotal : URL : ' + round(vt['URL'],5)+', down_file : ' + round(vt['down_file'],5)  + ', ref_file : '+ round(vt['ref_file'],5) + ', com_file : ' + round(vt['com_file'],5); 
-          if(ip_keys.length == 3){
-            ip_info_string = obj['asn']+' | ' + obj['geocountry']+' | '+ vt_string;}
-          else if(ip_keys.includes('asn')) {
-            ip_info_string = obj['asn'] + ' | '+vt_string;}
-          else if(ip_keys.includes('geocountry')){
-            ip_info_string = obj['geocountry'] + ' | '+vt_string;}
-          else {
-            ip_info_string = vt_string;}
+         ip_info_dict['VirusTotal'] = vt_string;
       }
-      else if(ip_keys.includes('asn') && ip_keys.includes('geocountry')) {
-        ip_info_string = obj['asn'] + ' | '+obj['geocountry'];}
-      else{
-        ip_info_string = ip_values.join(' ');}
+      else{ip_info_dict['VirusTotal'] = ' '}
+
+      if(ip_keys.includes('asn')){
+        var len_asn =  obj['asn'].length
+        if(len_asn>33){
+        ip_info_dict['asn'] = obj['asn'].slice(0,33);}
+        else{
+         var rep = 33- len_asn;
+         ip_info_dict['asn'] = obj['asn']+" ".repeat(rep) 
+        }
+      }
+      else{ip_info_dict['asn'] = ' '.repeat(33);}
+
+      if(ip_keys.includes('geocountry')){
+        var len_geocountry = obj['geocountry'].length;
+        if(len_geocountry > 33){
+        ip_info_dict['geocountry'] = obj['geocountry'].slice(0,33);}
+        else{
+          var rep = 33 - len_geocountry;
+          ip_info_dict['geocountry'] = obj['geocountry']+" ".repeat(rep)
+        }
+      }
+      else{ip_info_dict['geocountry'] = ' '.repeat(33);}
+      
       if(mode == 1){
-        box_ip.setContent(ip_info_string);
+        ip_info_str = Object.values(ip_info_dict).join("|")
+        box_ip.setContent(ip_info_str);
         screen.render();}
     }
     catch (err){
-      ip_info_string = reply;
+      // console.log(err)
       if(mode ==1){
-        box_ip.setContent(reply);
+        ip_info_str = " ".repeat(33) + "|"+" ".repeat(33) + "|"+" ".repeat(33)
+        box_ip.setContent(ip_info_str);
         screen.render();}
       }
-      resolve(ip_info_string)
+      resolve(ip_info_str)
       })
   });
   return promise;
