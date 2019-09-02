@@ -170,7 +170,7 @@ class Database(object):
                 return False, False
             data = json.loads(data)
             try:
-                (_, previous_two_timestamps) = data[tupleid]
+                (_, previous_two_timestamps, _) = data[tupleid]
                 return previous_two_timestamps
             except KeyError:
                 return False, False
@@ -478,15 +478,21 @@ class Database(object):
                 prev_symbols = data[tupleid][0]
                 # Add it to form the string of letters
                 new_symbol = prev_symbols + symbol_to_add
+                # Here get the info from the ipinfo key
+                ip = profileid.split('_')[1]
+                ipinfo = self.getIPData(ip)
                 # Bundle the data together
-                new_data = (new_symbol, previous_two_timestamps)
+                new_data = (new_symbol, previous_two_timestamps, ipinfo)
                 data[tupleid] = new_data
                 self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol), 0, 6)
                 data = json.dumps(data)
             except (TypeError, KeyError) as e:
                 # There was no previous data stored in the DB
                 self.print('First time for tuple {} as an {} for {} in TW {}'.format(tupleid, tuple_key, profileid, twid), 0, 5)
-                new_data = (symbol_to_add, previous_two_timestamps)
+                # Here get the info from the ipinfo key
+                ip = profileid.split('_')[1]
+                ipinfo = self.getIPData(ip)
+                new_data = (symbol_to_add, previous_two_timestamps, ipinfo)
                 data[tupleid] = new_data
                 # Convet the dictionary to json
                 data = json.dumps(data)
