@@ -716,7 +716,6 @@ tree.on('select',function(node){
           var outTuple_ip = key.split(':')[0];
           ips.push(outTuple_ip);
           
-
           row.push(outTuple_ip,tuple_info[0].trim());
           data.push(row)
           callback(null);
