@@ -106,7 +106,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
                     __database__.set_virustotal_score(ip, ip_score)
-                    self.print("[" + ip + "] has score " + str(ip_score), verbose=7, debug=1)
+                    self.print("[" + ip + "] has score " + str(ip_score), 5)
 
         except KeyboardInterrupt:
             return True
@@ -127,7 +127,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         addr = ipaddress.ip_address(ip)
         if addr.is_private:
-            self.print("[" + ip + "] is private, skipping", verbose=7, debug=1)
+            self.print("[" + ip + "] is private, skipping", 5, 1)
             return 0, 0, 0, 0
 
         # check if the address is in the cache (probably not, since all IPs are unique)
@@ -194,9 +194,9 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
             # report that API limit is reached, wait one minute and try again
             self.print("Status code is " + str(response.status) + " at " + str(time.asctime()) + ", query id: " + str(
-                self.counter), verbose=5, debug=1)
+                self.counter), verbose=5)
 
-            self.print("API limit reached, going to sleep for " + str(sleep_time) + " seconds", verbose=1, debug=0)
+            self.print("API limit reached, going to sleep for " + str(sleep_time) + " seconds", verbose=1, debug=1)
             time.sleep(sleep_time)
             response = self.http.request("GET", self.url, fields=params)
 
@@ -290,6 +290,12 @@ def interpret_response(response: dict):
         com_file_ratio = com_file_detections/com_file_total
     else:
         com_file_ratio = 0
+
+    # Convert the values into percentages before returning
+    url_ratio = url_ratio * 100
+    down_file_ratio = down_file_ratio * 100
+    ref_file_ratio = ref_file_ratio * 100
+    com_file_ratio = com_file_ratio * 100
 
     return url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
 
