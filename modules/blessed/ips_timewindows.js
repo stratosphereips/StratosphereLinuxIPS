@@ -51,7 +51,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
   , vi:true
   , scrollbar:true
   , label: "OutTuples"
-   , columnWidth:[25,30]})
+   , columnWidth:[25,30,30,30,30]})
 
   , tree =  grid.set(0,0,5,1,contrib.tree,
   { vi:true 
@@ -311,7 +311,7 @@ function port_ip_setdata(bar, counter, data, number){
     else{
       // bar.setLabel({text:Object..green,side:'left'})
       bar.setData(
-      { barCategory: data[0].slice(counter,counter+number)
+      { barCategory:'seblaspijaosd'                                                                       //data[0].slice(counter,counter+number)
       , stackedCategory: ['Number of connections']
       , data: values_bars.slice(counter,counter+number)})
 
@@ -563,7 +563,7 @@ function getIpInfo_box_ip(ip,mode){
   */
   var ip_info_str = "";
   var ip_info_dict = {'asn':'', 'geocountry':'', 'VirusTotal':''}
-  var promise = new Promise(function(resolve,reject){
+
     redis_timeline_ip.hget("IPsInfo",ip,(err,reply)=>{
 
     try{
@@ -613,10 +613,8 @@ function getIpInfo_box_ip(ip,mode){
         box_ip.setContent(ip_info_str);
         screen.render();}
       }
-      resolve(ip_info_str)
+
       })
-  });
-  return promise;
 };
 
 function getEvidence(reply){
@@ -717,10 +715,10 @@ tree.on('select',function(node){
           var tuple_info = obj_outTuples[key];
           var outTuple_ip = key.split(':')[0];
           ips.push(outTuple_ip);
-          getIpInfo_box_ip(outTuple_ip,0).then(function(result){})
-         // console.log(k)
+          
+
           row.push(outTuple_ip,tuple_info[0].trim());
-          data.push(row);
+          data.push(row)
           callback(null);
 
         },function(err) {
