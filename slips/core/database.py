@@ -40,10 +40,13 @@ class Database(object):
             self.deletePrevdb = True
         # Create the connection to redis
         if not hasattr(self, 'r'):
-            self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
-            if self.deletePrevdb:
-                print('Deleting the previous stored DB in Redis.')
-                self.r.flushdb()
+            try:
+                self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+                if self.deletePrevdb:
+                    print('Deleting the previous stored DB in Redis.')
+                    self.r.flushdb()
+            except redis.exceptions.ConnectionError:
+                print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
         # Even if the DB is not deleted. We need to delete some temp data
         # Zeek_files
         self.r.delete('zeekfiles')
@@ -199,7 +202,7 @@ class Database(object):
         return data
 
     def getTWforScore(self, profileid, time):
-        """ 
+        """
         Return the TW id and the time for the TW that includes the given time.
         The score in the DB is the start of the timewindow, so we should search a TW that includes 
         the given time by making sure the start of the TW is < time, and the end of the TW is > time.
@@ -318,8 +321,8 @@ class Database(object):
         role: 'Client' or 'Server'
 
         This function does two things:
-            1- Add the dstip to this tw in this profile, counting how many times it was contacted, and storing it in the key 'DstIPs' in the hash of the profile
-            2- Use the dstip as a key to count how many times that IP was contacted on each dstport. We store it like this because its the 
+            1- Add the ip to this tw in this profile, counting how many times it was contacted, and storing it in the key 'DstIPs' or 'SrcIPs' in the hash of the profile
+            2- Use the ip as a key to count how many times that IP was contacted on each port. We store it like this because its the
                pefect structure to detect vertical port scans later on
         """
         try:
@@ -333,7 +336,7 @@ class Database(object):
             proto = columns['proto'].upper()
             daddr = columns['daddr']
             saddr = columns['saddr']
-            
+
             # Depending if the traffic is going out or not, we are Client or Server
             if role == 'Client':
                 # We are receving and adding a destination address and a dst port
@@ -351,7 +354,7 @@ class Database(object):
             # It shoud be done here so the check is done with the data in the cache in the DB
             if role == 'Client':
                 # After we stored the new ip, check for all of them (new or not) if we have some detections already for it. If we do, add the evidence to this profileid and twid
-                # Only if we are a client. Because if we are a server, this evidence should be stored in the profile of the client 
+                # Only if we are a client. Because if we are a server, this evidence should be stored in the profile of the client
                 ipdata = self.getIPData(str(ip_as_obj))
                 if type(ipdata) == str:
                     # Convert the str to a dict
@@ -449,8 +452,8 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
     def add_tuple(self, profileid, twid, tupleid, data_tuple, role):
-        """ 
-        Add the tuple going in or out for this profile 
+        """
+        Add the tuple going in or out for this profile
         role: 'Client' or 'Server'
         """
         # If the traffic is going out it is part of our outtuples, if not, part of our intuples
@@ -519,16 +522,16 @@ class Database(object):
             proto = columns['proto'].upper()
             daddr = columns['daddr']
             saddr = columns['saddr']
-            
+
             # Choose which port to use based if we were asked Dst or Src
             if port_type == 'Dst':
                 port = dport
             elif port_type == 'Src':
                 port = sport
-            
+
             # If we are the Client, we want to store the dstips only
             # If we are the Server, we want to store the srcips only
-            # This is the only combination that makes sense. 
+            # This is the only combination that makes sense.
             if role == 'Client':
                 ip_key = 'dstips'
             elif role == 'Server':
@@ -579,13 +582,30 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
+    def get_data_from_profile_tw(self, hash_key: str, key_name: str):
+        try:
+            """
+            key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established, NotEstablihed] 
+            Example: key_name = 'SrcPortClientTCPEstablished'
+            """
+            data = self.r.hget(hash_key, key_name)
+            value = {}
+            if data:
+                portdata = json.loads(data)
+                value = portdata
+            return value
+        except Exception as inst:
+            self.outputqueue.put('01|database|[DB] Error in getDataFromProfileTW in database.py')
+            self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+
     def getOutTuplesfromProfileTW(self, profileid, twid):
-        """ Get the tuples """
+        """ Get the out tuples """
         data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
         return data
 
     def getInTuplesfromProfileTW(self, profileid, twid):
-        """ Get the tuples """
+        """ Get the in tuples """
         data = self.r.hget(profileid + self.separator + twid, 'InTuples')
         return data
 
@@ -598,6 +618,18 @@ class Database(object):
             #self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
             pre = state.split('_')[0]
             try:
+                # Try suricata states
+                """
+                 There are different states in which a flow can be. 
+                 Suricata distinguishes three flow-states for TCP and two for UDP. For TCP, 
+                 these are: New, Established and Closed,for UDP only new and established.
+                 For each of these states Suricata can employ different timeouts. 
+                 """
+                if 'new' in state or 'established' in state:
+                    return 'Established'
+                elif 'closed' in state:
+                    return 'NotEstablished'
+
                 # We have varius type of states depending on the type of flow.
                 # For Zeek 
                 if 'S0' in state or 'REJ' in state or 'RSTOS0' in state or 'RSTRH' in state or 'SH' in state or 'SHR' in state:
@@ -712,6 +744,7 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Error in getFinalStateFromFlags() in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+            self.print(traceback.format_exc())
 
     def getFieldSeparator(self):
         """ Return the field separator """
@@ -737,7 +770,7 @@ class Database(object):
         }
 
         Adapt to set the evidence of ips without profile and tw
-        
+
         """
         # See if we have and get the current evidence stored in the DB fot this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
@@ -815,7 +848,7 @@ class Database(object):
         """ Store this new ip in the IPs hash """
         if not self.getIP(ip):
             self.r.hset('IPsInfo', ip, '{}')
-            # Publish in the new_ip channel 
+            # Publish in the new_ip channel
             self.publish('new_ip', ip)
 
     def getIP(self, ip):
@@ -841,7 +874,7 @@ class Database(object):
                 # Convert the str to a dict
                 data = json.loads(data)
             to_store = ipdata[key]
-            
+
             # If the key is already stored, do not modify it
             #self.print(data)
             try:
@@ -880,7 +913,7 @@ class Database(object):
         self.r.publish(channel, data)
 
     def get_all_flows_in_profileid_twid(self, profileid, twid):
-        """ 
+        """
         Return a list of all the flows in this profileid and twid
         """
         data = self.r.hgetall(profileid + self.separator + twid + self.separator + 'flows')
@@ -931,8 +964,8 @@ class Database(object):
         data['proto'] = proto
         # Store the interpreted state, not the raw one
         summaryState = __database__.getFinalStateFromFlags(state, pkts)
-        data['origstate'] = state 
-        data['state'] = summaryState 
+        data['origstate'] = state
+        data['state'] = summaryState
         data['pkts'] = pkts
         data['allbytes'] = allbytes
         data['spkts'] = spkts
@@ -964,7 +997,7 @@ class Database(object):
             self.print('Adding complete flow to DB: {}'.format(data), 5, 0)
 
     def add_out_ssl(self, profileid, twid, flowtype, uid, version, cipher, resumed, established, cert_chain_fuids, client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
-        """ 
+        """
         Store in the DB an ssl request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
@@ -1027,7 +1060,7 @@ class Database(object):
         self.print('Adding HTTP flow to DB: {}'.format(data), 5,0)
 
     def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
-        """ 
+        """
         Store in the DB a DNS request
 
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
@@ -1064,6 +1097,12 @@ class Database(object):
         data = timestamp + ' ' + str(data)
         self.r.rpush(key, data)
 
+    def get_timeline_last_line(self, profileid, twid):
+        """ Add a line to the time line of this profileid and twid """
+        key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        data = self.r.lrange(key, -1, -1)
+        return data
+
     def get_timeline_last_lines(self, profileid, twid, first_index: int) -> Tuple[str, int]:
         """ Get all new items in this table."""
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
@@ -1099,8 +1138,8 @@ class Database(object):
         self.r.srem('zeekfiles', filename)
 
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
-        """ 
-        Store a group of IPs in the db as they were obtained from an IoC source 
+        """
+        Store a group of IPs in the db as they were obtained from an IoC source
         What is the format of ips_and_description?
         """
         if ips_and_description:
@@ -1118,7 +1157,7 @@ class Database(object):
         return ip_description
 
     def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
-        """ 
+        """
         Get the info about a certain role (Client or Server), for a particular protocol (TCP, UDP, ICMP, etc.) for a particular State (Established, etc.)
 
         direction: 'Dst' or 'Src'. This is used to know if you want the data of the src ip or ports, or the data from the dst ips or ports
@@ -1129,7 +1168,7 @@ class Database(object):
         """
         try:
             self.print('Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(profileid, twid, direction, state, protocol, role, type_data), 0, 4)
-            key = direction + type_data + role + protocol + state 
+            key = direction + type_data + role + protocol + state
             #self.print('Asked Key: {}'.format(key))
             data = self.r.hget( profileid + self.separator + twid, key)
             value = {}
@@ -1187,5 +1226,23 @@ class Database(object):
 
         data = {"VirusTotal": vtdata}
         self.setInfoForIPs(ip, data)
+
+    def add_all_loaded_malicous_ips(self, ips_and_description: dict) -> None:
+        self.r.hmset('loaded_malicious_ips', ips_and_description)
+
+    def add_loaded_malicious_ip(self, ip: str, description: str) -> None:
+        self.r.hset('loaded_malicious_ips', ip, description)
+
+    def get_loaded_malicious_ip(self, ip: str) -> str:
+        ip_description = self.r.hget('loaded_malicious_ips', ip)
+        return ip_description
+
+    def set_profile_as_malicious(self, profileid: str, description: str) -> None:
+        # Add description to this malicious ip profile.
+        self.r.hset(profileid, 'labeled_as_malicious', description)
+
+    def is_profile_malicious(self, profileid: str) -> str:
+        data = self.r.hget(profileid, 'labeled_as_malicious')
+        return data
 
 __database__ = Database()

@@ -11,8 +11,10 @@ import os
 import configparser
 from progress_bar import ProgressBar
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
+import traceback
 # To open the file in slices
 from itertools import islice
+
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -183,4 +185,5 @@ class Module(Module, multiprocessing.Process):
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            self.print(traceback.format_exc())
             return True

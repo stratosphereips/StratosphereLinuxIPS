@@ -40,6 +40,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         else:
             #??
             self.timeout = None
+        self.separator = '_'
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -64,7 +65,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
                 if message['channel'] == 'tw_modified':
-                    # 'profile_147.32.81.134:timewindow0'
                     # Get the profileid and twid
                     try:
                         profileid = message['data'].split(':')[0]
@@ -72,7 +72,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                     except AttributeError:
                         # When the channel is created the data '1' is sent
                         continue
-
                 # Start of the port scan detection
                 self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 6, 0)
                 # For port scan detection, we will measure different things:
@@ -212,6 +211,6 @@ class PortScanProcess(Module, multiprocessing.Process):
             self.print('Stopping the process', 0, 1)
             return True
         except Exception as inst:
-            self.print('Error in run() of ', 0, 1)
+            self.print('Error in run() of {}'.format(inst), 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
