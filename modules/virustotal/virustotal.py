@@ -106,7 +106,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
                     __database__.set_virustotal_score(ip, ip_score)
-                    self.print("[" + ip + "] has score " + str(ip_score), 5)
+                    self.print("[" + ip + "] has score " + str(ip_score), 2)
 
         except KeyboardInterrupt:
             return True
