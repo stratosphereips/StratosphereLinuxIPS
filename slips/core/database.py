@@ -361,13 +361,13 @@ class Database(object):
                 # If there are detections, store the evidence.
                 if False:
                     # Type of evidence
-                    type_evidence = 'asdf'
+                    type_evidence = 'xxxxx'
                     # Key
                     key = 'dstip' + ':' + dstip + ':' + type_evidence
                     # Threat level
                     threat_level = 50
                     confidence = 1
-                    description = 'sadf'
+                    description = 'xxxxxx'
                     __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
 
 
@@ -448,6 +448,15 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
+    def refresh_data_tuples(self):
+        """
+        Go through all the tuples and refresh the data about the ipsinfo
+        """
+        outtuples = self.getOutTuplesfromProfileTW()
+        intuples = self.getInTuplesfromProfileTW()
+
+
+
     def add_tuple(self, profileid, twid, tupleid, data_tuple, role):
         """ 
         Add the tuple going in or out for this profile 
@@ -487,12 +496,11 @@ class Database(object):
                 self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol), 0, 6)
                 data = json.dumps(data)
             except (TypeError, KeyError) as e:
+                # TODO check that this condition is triggered correctly only for the first case and not the rest after...
                 # There was no previous data stored in the DB
                 self.print('First time for tuple {} as an {} for {} in TW {}'.format(tupleid, tuple_key, profileid, twid), 0, 5)
                 # Here get the info from the ipinfo key
-                ip = profileid.split('_')[1]
-                ipinfo = self.getIPData(ip)
-                new_data = (symbol_to_add, previous_two_timestamps, ipinfo)
+                new_data = (symbol_to_add, previous_two_timestamps)
                 data[tupleid] = new_data
                 # Convet the dictionary to json
                 data = json.dumps(data)
