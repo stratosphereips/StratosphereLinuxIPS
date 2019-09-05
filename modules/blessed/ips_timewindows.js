@@ -822,7 +822,7 @@ tree.on('select',function(node){
         if(index_to>= 0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
         
         if(index_recognized >= 0){
-          for(var i =index_recognized - 10; i < index_recognized+3;i++){
+          for(var i =index_recognized - 1; i < index_recognized+3;i++){
           line_arr[i] = line_arr[i].red;}
           }
 
