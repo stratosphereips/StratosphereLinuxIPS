@@ -46,12 +46,30 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
   , label: "Timeline"
   , columnWidth:[200]})
 
-  ,table_outTuples =  grid.set(5,1,1.8,2.5, contrib.table, 
-  { keys: true
-  , vi:true
-  , scrollbar:true
-  , label: "OutTuples"
-   , columnWidth:[25,30]})
+  ,table_outTuples_liststable = grid.set(0,0,6,6, blessed.listtable, {
+        keys: true,
+      mouse: true,
+  
+      tags: true,
+      // interactive: false,
+      border: 'line',
+      style: {
+        bg: 'blue'
+      },
+      style: {
+        header: {
+          fg: 'blue',
+          bold: true
+        },
+        cell: {
+          fg: 'magenta',
+          selected: {
+            bg: 'blue'
+          }
+        }
+      },
+      align: 'left'
+    })
 
   , tree =  grid.set(0,0,5,1,contrib.tree,
   { vi:true 
@@ -113,45 +131,12 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       type: 'line'
     },
   })
-, box_hotkeys = grid.set(0, 0, 6, 6, blessed.text,
-      {
-      content: "{bold}-e{/bold} -> SrcPortsClient\n{bold}-b{/bold} -> DstPortsServer\n{bold}-c{/bold} -> dstIpsClient\n{bold}-m{/bold} -> map", 
-      tags: true,
-      border: {
-      type: 'line'
-    },
-    })
+
 
 , map = grid.set(0, 0, 6, 6,contrib.map,{label: 'World Map'})
-, bar_list = grid.set(0, 0, 6, 6, blessed.list,{
-    align: "center",
-    mouse: true,
-    width: "50%",
-    height: "50%",
-    interactive:true,
-    style:{
-      item:{
-        fg:'green'
-      },
-        selected:{
-          bg:'blue'
-        }
-          },
-    focused:true,
-    alwaysScroll: true,
-  scrollbar: {
-    ch: ' ',
-    inverse: true
-  },
-  scrollable:true,
-    keys: true,
-    vi: true,
-    top: "center",
-    left: "center"
-})
 , bar_one_srcPortClient = grid.set(0.5,0,3,6,contrib.stackedBar,
-        { parent:bar_list
-        , barWidth: 6
+        { 
+         barWidth: 6
        , barSpacing: 10
        , xOffset: 2
        , height: "50%"
@@ -162,8 +147,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
     }}
        , barBgColor: [ 'red', 'blue', 'green' ]})
 , bar_two_srcPortClient = grid.set(3.4,0,2.7,6,contrib.stackedBar,
-       { parent:bar_list
-        , barWidth: 6
+       {
+         barWidth: 6
        , barSpacing: 10
        , xOffset: 2
        , height: "100%"
@@ -174,8 +159,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
        , width: "100%"
        , barBgColor: [ 'red', 'blue', 'green' ]})
 , bar_one_dstPortsServer = grid.set(0.5,0,3,6,contrib.stackedBar,
-        { parent:bar_list
-        , barWidth: 6
+        { 
+         barWidth: 6
        , barSpacing: 10
        , xOffset: 2
        , height: "50%"
@@ -186,8 +171,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
     }}
        , barBgColor: [ 'red', 'blue', 'green' ]})
 , bar_two_dstPortsServer = grid.set(3.5,0,2.7,6,contrib.stackedBar,
-       { parent:bar_list
-        , barWidth: 6
+       { 
+         barWidth: 6
        , barSpacing: 10
        , xOffset: 2
        , height: "100%"
@@ -198,8 +183,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
        , width: "100%"
        , barBgColor: [ 'red', 'blue', 'green' ]})
 , bar_one_dstIPsClient = grid.set(0.5,0,3,6,contrib.stackedBar,
-        { parent:bar_list
-        , barWidth: 6
+        { //parent:bar_list
+         barWidth: 6
        , barSpacing: 10
        , xOffset: 2
        , height: "50%"
@@ -210,8 +195,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
     }}
        , barBgColor: [ 'red', 'blue', 'green' ]})
 , bar_two_dstIPsClient = grid.set(3.5,0,2.7,6,contrib.stackedBar,
-       { parent:bar_list
-        , barWidth: 6
+       { //parent:bar_list
+         barWidth: 6
        , barSpacing: 10
        , xOffset: 2
        , height: "100%"
@@ -236,8 +221,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
     },
     })
 , bar_one_dstPortClient = grid.set(0.5,0,3,6,contrib.stackedBar,
-        { parent:bar_list
-        , barWidth: 6
+        { //parent:bar_list
+         barWidth: 6
        , barSpacing: 10
        , xOffset: 2
        , height: "100%"
@@ -248,8 +233,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
     }}
        , barBgColor: [ 'green' ]})
 , bar_two_dstPortClient = grid.set(3.5,0,2.6,6,contrib.stackedBar,
-       { parent:bar_list
-        , barWidth: 6
+       { //parent:bar_list
+         barWidth: 6
        , barSpacing: 10
        , xOffset: 2
        , height: "100%"
@@ -259,25 +244,80 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
     }}
        , width: "100%"
        , barBgColor: [ 'green' ]})
-bar_list.hide()
+
+table_outTuples_liststable.hide()
+
 box_bar_state.hide()
 bar_two_dstPortClient.hide()
 bar_one_dstPortClient.hide()
 bar_one_dstPortsServer.hide()
 bar_two_dstPortsServer.hide()
-
 bar_one_srcPortClient.hide()
 bar_two_srcPortClient.hide()
-
 bar_one_dstIPsClient.hide()   
 bar_two_dstIPsClient.hide()
 map.hide()
+var focus_widget = tree;
+
+var bar_state_one = true;
+var bar_state_two = true; 
+var bar_state_three = true;
+var bar_state_four = true;
+var box_hotkeys_state = true;
+var map_state = true;
+var box_hotkeys_state = true;
+
+function hide_widgets(){
+  tree.hide()
+  box_evidence.hide()
+  box_detections.hide()
+  table_timeline.hide()
+  box_ip.hide()
+  table_outTuples_liststable.hide()
+  
+  box_bar_state.hide()
+  bar_two_dstPortClient.hide()
+  bar_one_dstPortClient.hide()
+  bar_one_dstPortsServer.hide()
+  bar_two_dstPortsServer.hide()
+  bar_one_srcPortClient.hide()
+  bar_two_srcPortClient.hide()
+  bar_one_dstIPsClient.hide()   
+  bar_two_dstIPsClient.hide()
+  map.hide()
+}
+function show_widgets(){
+  tree.show()
+  box_evidence.show()
+  box_detections.show()
+  table_timeline.show()
+  box_ip.show()
+  
+    focus_widget  .focus()
+  
+  // k.focus()9
+
+}
 
 var number_bars = Math.floor((2*bar_two_srcPortClient.width-2*bar_two_srcPortClient.options.xOffset)/(bar_two_srcPortClient.options.barSpacing+2*bar_two_srcPortClient.options.barWidth));
 
-// var list_state = [bar_state_one, bar_state_two, bar_state_three,box_hotkeys_state, box_bar_state, map_state];
+// var list_state = [bar_state_one, bar_state_two, bar_state_three,box_hottkeys_state, box_bar_state, map_state];
 
 screen.render() 
+
+function chunkString (str, len) {
+  const size = Math.ceil(str.length/len)
+  const r = Array(size)
+  let offset = 0
+  
+  for (let i = 0; i < size; i++) {
+    r[i] = str.substr(offset, len)
+    offset += len
+  }
+  
+  return r
+}
+
 
 String.prototype.repeat = function(length) {
  return Array(length + 1).join(this);
@@ -311,7 +351,7 @@ function port_ip_setdata(bar, counter, data, number){
     else{
       // bar.setLabel({text:Object..green,side:'left'})
       bar.setData(
-      { barCategory: data[0].slice(counter,counter+number)
+      { barCategory:'seblaspijaosd'                                                                       //data[0].slice(counter,counter+number)
       , stackedCategory: ['Number of connections']
       , data: values_bars.slice(counter,counter+number)})
 
@@ -556,18 +596,19 @@ function timewindows_list_per_ip(tw){
  };
 
 
-
 function getIpInfo_box_ip(ip,mode){
   /*
   retrieves IPsInfo from redis.
   */
-  var ip_info_str = "";
-  var ip_info_dict = {'asn':'', 'geocountry':'', 'VirusTotal':''}
-  var promise = new Promise(function(resolve,reject){
-    redis_timeline_ip.hget("IPsInfo",ip,(err,reply)=>{
 
-    try{
-      var ip_info_string = '';
+  return new Promise(function(resolve, reject) {
+ 
+    redis_timeline_ip.hget("IPsInfo",ip,(err,reply)=>{
+      var ip_info_str = "";
+      var ip_info_dict = {'asn':'', 'geocountry':'', 'VirusTotal':''}
+      var ip_info_dict_outtuple = {'asn':'', 'geocountry':'', 'VirusTotal':''}
+
+     try{
       var obj = JSON.parse(reply);
       var ip_values =  Object.values(obj);
       var ip_keys = Object.keys(obj);
@@ -576,10 +617,11 @@ function getIpInfo_box_ip(ip,mode){
           var vt = obj['VirusTotal'];
           var vt_string ='VirusTotal : URL : ' + round(vt['URL'],5)+', down_file : ' + round(vt['down_file'],5)  + ', ref_file : '+ round(vt['ref_file'],5) + ', com_file : ' + round(vt['com_file'],5); 
          ip_info_dict['VirusTotal'] = vt_string;
+         ip_info_dict_outtuple['VirusTotal'] = obj['VirusTotal']
       }
-      else{ip_info_dict['VirusTotal'] = ' '}
 
       if(ip_keys.includes('asn')){
+        ip_info_dict_outtuple['asn']=obj['asn'];
         var len_asn =  obj['asn'].length
         if(len_asn>33){
         ip_info_dict['asn'] = obj['asn'].slice(0,33);}
@@ -591,32 +633,28 @@ function getIpInfo_box_ip(ip,mode){
       else{ip_info_dict['asn'] = ' '.repeat(33);}
 
       if(ip_keys.includes('geocountry')){
+        ip_info_dict_outtuple['geocountry']=obj['geocountry'];
         var len_geocountry = obj['geocountry'].length;
         if(len_geocountry > 33){
         ip_info_dict['geocountry'] = obj['geocountry'].slice(0,33);}
         else{
           var rep = 33 - len_geocountry;
-          ip_info_dict['geocountry'] = obj['geocountry']+" ".repeat(rep)
+          ip_info_dict['geocountry'] = obj['geocountry']+" ".repeat(rep);
         }
       }
       else{ip_info_dict['geocountry'] = ' '.repeat(33);}
-      
-      if(mode == 1){
-        ip_info_str = Object.values(ip_info_dict).join("|")
-        box_ip.setContent(ip_info_str);
-        screen.render();}
-    }
+      ip_info_str = Object.values(ip_info_dict).join("|");
+      box_ip.setContent(ip_info_str);
+      screen.render();
+        resolve(ip_info_dict_outtuple);
+      }
     catch (err){
-      // console.log(err)
-      if(mode ==1){
         ip_info_str = " ".repeat(33) + "|"+" ".repeat(33) + "|"+" ".repeat(33)
         box_ip.setContent(ip_info_str);
-        screen.render();}
-      }
-      resolve(ip_info_str)
-      })
-  });
-  return promise;
+        screen.render();
+        resolve(ip_info_dict)}
+    })
+})
 };
 
 function getEvidence(reply){
@@ -698,11 +736,10 @@ tree.on('select',function(node){
       //get infor about outtuples of a selected timeline
       redis_outtuples_timewindow.hgetall("profile_"+node.parent.name+"_"+node.name, (err,reply)=>{
         var ips = [];
-
         timeline_reply_global = reply;
         map.innerMap.draw(null);
         if(reply == null){
-          table_outTuples.setData({headers: [''], data: []});
+          table_outTuples_liststable.setData( []);
           box_detections.setContent('');
           return;}
         box_detections.setContent(reply['Detections']);
@@ -711,51 +748,110 @@ tree.on('select',function(node){
         var obj_outTuples = JSON.parse(reply["OutTuples"]);
         var keys = Object.keys(obj_outTuples);
         var data = [];
-
         async.each(keys, function(key,callback){
+          var ip_dict = {'asn':'', 'geocountry':'', 'URL':'','down':'','ref':'', 'com':''}
           var row = [];
           var tuple_info = obj_outTuples[key];
           var outTuple_ip = key.split(':')[0];
-          ips.push(outTuple_ip);
-          getIpInfo_box_ip(outTuple_ip,0).then(function(result){})
-         // console.log(k)
-          row.push(outTuple_ip,tuple_info[0].trim());
-          data.push(row);
+          ips.push(outTuple_ip); 
+
+          getIpInfo_box_ip(outTuple_ip,0).then(function(result_dict){
+            var ipInfo_dict_keys = Object.keys(result_dict)
+            if(ipInfo_dict_keys.includes('asn')){
+              ip_dict['asn'] = result_dict['asn']
+            }
+            if(ipInfo_dict_keys.includes('geocountry')){
+              // console.log((result_dict))
+              ip_dict['geocountry'] = result_dict['geocountry']
+            }
+            if(ipInfo_dict_keys.includes('VirusTotal')){
+              ip_dict['URL'] = String(round(result_dict['VirusTotal']['URL'],3))
+              ip_dict['down'] = String(round(result_dict['VirusTotal']['down_file'],3))
+              ip_dict['ref'] = String(round(result_dict['VirusTotal']['ref_file'],3))
+              ip_dict['com'] = String(round(result_dict['VirusTotal']['com_file'],3))
+
+            }
+          if(tuple_info[0].trim().length>40){
+            var k = chunkString(tuple_info[0].trim(),40)
+            // console.log(k,tuple_info[0].trim())
+            async.forEachOf(k, function(ctr,ind, callback){
+              var row2 = []
+              if(ind == 0){
+                row2.push(key,ctr,Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
+              }
+              else{row2.push('',ctr, '', '' , '');}
+              data.push(row2)
+              callback(null)
+            }, function(err){
+              if(err){
+                console.log('kamila',err)
+              }
+            })
+
+          }  
+          else{     
+          row.push(key,tuple_info[0], Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
+          data.push(row)}
           callback(null);
+          })  
+          
+          
 
         },function(err) {
       if( err ) {
         console.log('unable to create user');
       } else {
-        table_outTuples.setData({headers: [''], data: data.sort(function (a,b){return b[1].length - a[1].length})});
+        data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
+        table_outTuples_liststable.setData( data);
         setMap(ips)
       screen.render();  
       }
       });
     })}
+      //get the timeline of a selected ip
+    redis_get_timeline.lrange("profile_"+node.parent.name+"_"+node.name+'_timeline',0,-1, (err,reply)=>{
+      var data = [];
+      async.each(reply, function(line, callback){
+        var row = [];
+        var line_arr = line.split(" ")
+        var index_to = line_arr.indexOf('to')
+        var index_asked = line_arr.indexOf('asked');
+        var index_careful = line_arr.indexOf('careful!');
+        var index_recognized = line_arr.indexOf('recognized');
+        var index_ip = index_to +1;
+        if(index_to>= 0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
+        
+        if(index_recognized >= 0){
+          for(var i =index_recognized - 1; i < index_recognized+3;i++){
+          line_arr[i] = line_arr[i].red;}
+          }
 
-var bar_state_one = true;
-var bar_state_two = true; 
-var bar_state_three = true;
-var bar_state_four = true;
-var box_hotkeys_state = true;
-var map_state = true;
-var box_hotkeys_state = true;
+        if(index_careful > 0){
+          line_arr[index_careful] = line_arr[index_careful].red;
+          line_arr[index_careful - 1] = line_arr[index_careful - 1].red
+        }
+        for(var i =3; i < index_asked;i++){
+          line_arr[i] = line_arr[i].bold.cyan }     
+        if(line_arr[index_to+2].includes('/'))line_arr[index_to+2]=line_arr[index_to+2].slice(0,-1).bold.yellow+','
+        line_arr[1]= line_arr[1].substring(0, line_arr[1].lastIndexOf('.'));
+        timeline_line = line_arr.join(" ");
+        row.push(timeline_line.replace(/\|.*/,''));
+        data.push(row);
+        callback();
+      },function(err) {
+        if( err ) {
+          console.log('unable to create user');
+        } else {
+          table_timeline.setData({headers:[node.parent.name+" "+node.name], data: data});
+          screen.render();}
+    });
+  })
+    })
+
+
   screen.key('e', function(ch, key) {
-    
-    // console.log('i am inside  e key')
-    box_bar_state.hide();
-    bar_one_srcPortClient.hide()
-    bar_two_srcPortClient.hide()
-    bar_one_dstIPsClient.hide()
-    bar_two_dstIPsClient.hide()
-    bar_one_dstPortsServer.hide()
-    bar_two_dstPortsServer.hide()
-    bar_one_dstPortClient.hide()
-    bar_two_dstPortClient.hide()
-    map.hide();
-    box_hotkeys.hide()
-    
+
+    hide_widgets()
     // bar_state_one = true;
     bar_state_two = true; 
     bar_state_three = true;
@@ -807,11 +903,12 @@ var box_hotkeys_state = true;
 
     }
     else{
-    bar_list.hide()
+    
 
         bar_one_srcPortClient.hide()
       bar_two_srcPortClient.hide()
         box_bar_state.hide();
+        show_widgets()
       }
       bar_state_one = !bar_state_one;
       screen.render()
@@ -822,18 +919,7 @@ var box_hotkeys_state = true;
 //display two bars of dstPortsServer established and non established connections
 
   screen.key('b', function(ch, key) {
-    bar_list.show()
-    bar_one_srcPortClient.hide()
-    bar_two_srcPortClient.hide()
-    bar_one_dstIPsClient.hide()
-    bar_two_dstIPsClient.hide()
-    bar_one_dstPortClient.hide()
-    bar_two_dstPortClient.hide()
-    // bar_one_dstPortsServer.hide()
-    // bar_two_dstPortsServer.hide()
-    map.hide();
-    box_hotkeys.hide()
-    // state_handle(list_state, 'bar_state_two')
+    hide_widgets()
     bar_state_one = true;
 
     // bar_state_two = true;  
@@ -886,11 +972,12 @@ var box_hotkeys_state = true;
 
     }
     else{
-    bar_list.hide()
+    
 
         bar_one_dstPortsServer.hide();
         bar_two_dstPortsServer.hide();
         box_bar_state.hide();
+        show_widgets()
       }
       bar_state_two= !bar_state_two;
       screen.render()
@@ -899,19 +986,9 @@ var box_hotkeys_state = true;
 
 //display to bars of dstIPsClient established and non established connections
   screen.key('c', function(ch, key) {
-    bar_one_srcPortClient.hide()
-    bar_two_srcPortClient.hide()
-    // bar_one_dstIPsClient.hide()
-    // bar_two_dstIPsClient.hide()
-    bar_one_dstPortsServer.hide()
-    bar_two_dstPortsServer.hide()
-    bar_one_dstPortClient.hide()
-    bar_two_dstPortClient.hide()
-    // box_bar_state.hide();
-    map.hide();
 
-    box_hotkeys.hide()
-    bar_list.show()
+    hide_widgets()
+    
     // state_handle(list_state, 'bar_state_three');
     bar_state_one = true;
     bar_state_two = true; 
@@ -966,11 +1043,12 @@ var box_hotkeys_state = true;
 
     }
     else{
-      bar_list.hide()
+      
 
         bar_one_dstIPsClient.hide();
         bar_two_dstIPsClient.hide();
         box_bar_state.hide();
+        show_widgets()
       }
       bar_state_three = !bar_state_three;
       screen.render();
@@ -979,16 +1057,7 @@ var box_hotkeys_state = true;
 
 
 screen.key('v', function(ch, key) {
-    
-    // box_bar_state.hide();
-    bar_one_srcPortClient.hide()
-    bar_two_srcPortClient.hide()
-    bar_one_dstIPsClient.hide()
-    bar_two_dstIPsClient.hide()
-    bar_one_dstPortsServer.hide()
-    bar_two_dstPortsServer.hide()
-    map.hide();
-    box_hotkeys.hide()
+    hide_widgets()
     bar_state_one = true;
     bar_state_two = true; 
     bar_state_three = true;
@@ -1015,7 +1084,7 @@ screen.key('v', function(ch, key) {
       bar_one_dstPortClient.setLabel({text:dstPortsClient_keys[0].green,side:'left'});
       bar_two_dstPortClient.setLabel({text:dstPortsClient_keys[1].green,side:'left'});
       bar_one_dstPortClient.show();
-      bar_list.show()
+      
       bar_two_dstPortClient.show();
       box_bar_state.show();
       bar_one_dstPortClient.focus();
@@ -1111,80 +1180,24 @@ screen.key('v', function(ch, key) {
 
     }catch(err){
       box_bar_state.setContent('no information')
-      bar_list.show()
-      // bar_one_dstPortClient.clear()
-    //    bar_two_dstPortClient.clear()
-    //    bar_one_dstPortClient.show()
-
-      // bar_two_dstPortClient.show()
         box_bar_state.show()}}
     else{
-      
-      bar_list.hide()
+      show_widgets()
 
-        bar_one_dstPortClient.hide()
+      bar_one_dstPortClient.hide()
       bar_two_dstPortClient.hide()
-        box_bar_state.hide();
+      box_bar_state.hide();
       }
       bar_state_four = !bar_state_four;
       screen.render()
   
 });
 // 
-    //get the timeline of a selected ip
-    redis_get_timeline.lrange("profile_"+node.parent.name+"_"+node.name+'_timeline',0,-1, (err,reply)=>{
-      var data = [];
-      async.each(reply, function(line, callback){
-        var row = [];
-        var line_arr = line.split(" ")
-        var index_to = line_arr.indexOf('to')
-        var index_asked = line_arr.indexOf('asked');
-        var index_careful = line_arr.indexOf('careful!');
-        var index_recognized = line_arr.indexOf('recognized');
-        var index_ip = index_to +1;
-        if(index_to>= 0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
-        
-        if(index_recognized >= 0){
-          for(var i =index_recognized - 10; i < index_recognized+3;i++){
-          line_arr[i] = line_arr[i].red;}
-          }
-
-        if(index_careful > 0){
-          line_arr[index_careful] = line_arr[index_careful].red;
-          line_arr[index_careful - 1] = line_arr[index_careful - 1].red
-        }
-        for(var i =3; i < index_asked;i++){
-          line_arr[i] = line_arr[i].bold.cyan }     
-        if(line_arr[index_to+2].includes('/'))line_arr[index_to+2]=line_arr[index_to+2].slice(0,-1).bold.yellow+','
-        line_arr[1]= line_arr[1].substring(0, line_arr[1].lastIndexOf('.'));
-        timeline_line = line_arr.join(" ");
-        row.push(timeline_line.replace(/\|.*/,''));
-        data.push(row);
-        callback();
-      },function(err) {
-        if( err ) {
-          console.log('unable to create user');
-        } else {
-          table_timeline.setData({headers:[node.parent.name+" "+node.name], data: data});
-          screen.render();}
-    });
-  })
+    
 
      
   screen.key('m', function(ch, key) {
-    bar_one_srcPortClient.hide()
-    bar_two_srcPortClient.hide()
-    bar_one_dstIPsClient.hide()
-    bar_two_dstIPsClient.hide()
-    bar_one_dstPortsServer.hide()
-    bar_two_dstPortsServer.hide()
-    bar_one_dstPortClient.hide()
-    bar_two_dstPortClient.hide()
-    bar_list.hide()
-    
-    box_bar_state.hide();
-    // map.hide();
-    box_hotkeys.hide()
+    hide_widgets()
     bar_state_one = true;
     bar_state_two = true; 
     bar_state_three = true;
@@ -1196,15 +1209,16 @@ screen.key('v', function(ch, key) {
       map.show()
     }
     else{
+       show_widgets()
         map.hide()  
       }
       map_state = !map_state;
       screen.render()
   
 });
-   })
-//     }
-// });
+   
+
+
 table_timeline.rows.on('select', (item, index) => {
   var timeline_line = item.content.split(" ");
   var index_to = timeline_line.indexOf('to')
@@ -1212,114 +1226,78 @@ table_timeline.rows.on('select', (item, index) => {
   getIpInfo_box_ip(timeline_ip,1)
 });
 
-table_outTuples.rows.on('select', (item, index) => {
-  var outTuple_ip = item.content.trim().split(":")[0]
-  getIpInfo_box_ip(outTuple_ip,1)
 
-});
-
-box_hotkeys.hide();
-
+// var l = true;
 screen.key('h', function(ch, key) {
-  bar_one_srcPortClient.hide()
-    bar_two_srcPortClient.hide()
-    bar_one_dstIPsClient.hide()
-    bar_two_dstIPsClient.hide()
-    bar_one_dstPortsServer.hide()
-    bar_two_dstPortsServer.hide()
-  // bar_two.hide();
-  box_bar_state.hide();
-  map.hide();
-  // box_hotkeys.hide()
-  bar_state_one = true;
-  bar_state_two = true; 
-  bar_state_three = true;
-  bar_state_four = true;
-  // box_hotkeys_state = true;
-  map_state = true;
+  hide_widgets()
   if(box_hotkeys_state){
-    box_hotkeys.show()
+    table_outTuples_liststable.show()
+    table_outTuples_liststable.focus()
   }
-  else{box_hotkeys.hide()}
+  else{table_outTuples_liststable.hide()
+    
+    
+  show_widgets()}
     box_hotkeys_state =! box_hotkeys_state
-  screen.render();
+    screen.render();
 });
-
-
 screen.key(['tab'], function(ch, key) {
   if(bar_one_srcPortClient.focused == true){
       bar_two_srcPortClient.focus();}
-  else if(bar_two_srcPortClient.focused == true)
-    {bar_one_srcPortClient.focus();}
+  else if(bar_two_srcPortClient.focused == true){
+    bar_one_srcPortClient.focus();}
   else if(bar_one_dstIPsClient.focused == true){
-      bar_two_dstIPsClient.focus();}
-  else if(bar_two_dstIPsClient.focused == true)
-    {bar_one_dstIPsClient.focus();}
+    bar_two_dstIPsClient.focus();}
+  else if(bar_two_dstIPsClient.focused == true){
+    bar_one_dstIPsClient.focus();}
   else if(bar_one_dstIPsClient.focused == true){
-      bar_two_dstPortsServer.focus();}
-  else if(bar_two_dstIPsClient.focused == true)
-    {bar_one_dstIPsClient.focus();}
+    bar_two_dstPortsServer.focus();}
+  else if(bar_two_dstIPsClient.focused == true){
+    bar_one_dstIPsClient.focus();}
   else if(bar_one_dstPortClient.focused == true){
-      bar_two_dstPortClient.focus();}
-  else if(bar_two_dstPortClient.focused == true)
-    {bar_one_dstPortClient.focus();}
+    bar_two_dstPortClient.focus();}
+  else if(bar_two_dstPortClient.focused == true){
+    bar_one_dstPortClient.focus();}
   else if(screen.focused == tree.rows){
+    focus_widget =table_timeline
     tree.style.border.fg = 'blue'
     table_timeline.style.border.fg='magenta'
     table_timeline.focus();}
   else if(screen.focused == table_timeline.rows){
+    focus_widget = box_detections
     table_timeline.style.border.fg='blue'
-    table_outTuples.style.border.fg='magenta'
-    table_outTuples.focus();}
-  else if(screen.focused == table_outTuples.rows){
-    table_outTuples.style.border.fg='blue'
     box_detections.focus()}
   else if(screen.focused == box_detections){
+    focus_widget = box_evidence
     box_evidence.focus()}
   else{
+    focus_widget = tree
     tree.style.border.fg = 'magenta'
     tree.focus();}
     screen.render()})
 
 screen.key(['S-tab'], function(ch, key) {
-  // if(bar_one_srcPortClient.focused == true){
-  //     bar_two_srcPortClient.focus();}
-  // else if(bar_two_srcPortClient.focused == true)
-  //   {bar_one_srcPortClient.focus();}
-  // else if(bar_one_dstIPsClient.focused == true){
-  //     bar_two_dstIPsClient.focus();}
-  // else if(bar_two_dstIPsClient.focused == true)
-  //   {bar_one_dstIPsClient.focus();}
-  // else if(bar_one_dstIPsClient.focused == true){
-  //     bar_two_dstPortsServer.focus();}
-  // else if(bar_two_dstIPsClient.focused == true)
-  //   {bar_one_dstIPsClient.focus();}
-
-  // else if(bar_one_dstPortClient.focused == true){
-  //     bar_two_dstPortClient.focus();}
-  // else if(bar_two_dstPortClient.focused == true)
-  //   {bar_one_dstPortClient.focus();}
-
   if(screen.focused == table_timeline.rows){
+    focus_widget =tree;
     table_timeline.style.border.fg = 'blue'
     tree.style.border.fg='magenta'
     tree.focus();}
-  else if(screen.focused == table_outTuples.rows){
-    table_outTuples.style.border.fg='blue'
+
+  else if(screen.focused == box_detections){
+    focus_widget = table_timeline;
     table_timeline.style.border.fg='magenta'
     table_timeline.focus();}
-  else if(screen.focused == box_detections){
-    table_outTuples.style.border.fg='magenta'
-    table_outTuples.focus()}
   else if(screen.focused == box_evidence){
+    focus_widget = box_detections;
     box_detections.focus()}
   else{
+    focus_widget = box_evidence;
     tree.style.border.fg = 'blue'
-    box_evidence.focus();}
-   
-screen.render();
+    box_evidence.focus();}   
+  screen.render();
 });
 tree.focus();
+
 // screen.on('resize', function() {
 //   tree.emit('attach');
 //   table_timeline.emit('attach');
@@ -1327,7 +1305,7 @@ tree.focus();
 //   box_detections.emit('attach');
 //   box_evidence.emit('attach');
 //   box_ip.emit('attach');
-//   box_hotkeys.emit('attach');
+//   table_outTuples_liststable.emit('attach');
 //   map.emit('attach');
 //   bar_two.emit('attach');
 //   bar_one.emit('attach');0
