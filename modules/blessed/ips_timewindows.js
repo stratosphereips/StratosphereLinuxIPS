@@ -13,7 +13,8 @@ var redis = require('redis')
   , fs = require('fs')
   , screen = blessed.screen()
   , colors = require('colors');
-
+const clipboardy = require('clipboardy');
+// import copy from 'copy-to-clipboard';
 screen.options.dockBorders=true;
 //read countries  location
 let country_loc = {};
@@ -46,7 +47,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
   , label: "Timeline"
   , columnWidth:[200]})
 
-  ,table_outTuples_liststable = grid.set(0,0,6,6, blessed.listtable, {
+  ,table_outTuples_listtable = grid.set(0,0,6,6, blessed.listtable, {
         keys: true,
       mouse: true,
   
@@ -69,6 +70,14 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
         }
       },
       align: 'left'
+    })
+,row_listtable = grid.set(0,0,3,2, blessed.listtable, {
+      border: 'line',
+      
+    })
+,row_listtable_two = grid.set(3,0,3,2, blessed.listtable, {
+      border: 'line',
+      
     })
 
   , tree =  grid.set(0,0,5,1,contrib.tree,
@@ -244,9 +253,68 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
     }}
        , width: "100%"
        , barBgColor: [ 'green' ]})
+, help_list_bar = grid.set(5.7,0,0.4,6,blessed.listbar,{
 
-table_outTuples_liststable.hide()
+      keys: false,
+      mouse: true,
+      // borders:'white',/
+      // style:{border:'red'}
+      style: {
+        // border:'red',
+        prefix: {
+          fg: 'yellow',
+          bg:'green'
+        },
+        item: {
+        },
+      },
+      autoCommandKeys: false,
+      commands:
+       {
+            'help': {
+              keys: ['h']
+                        },
+              'help': {
+              keys: ['']
+                        },
+              'bar': {
+              keys: ['b']
+                        },
+              'bar2': {
+              keys: ['c']
+                        }
 
+            // 'view mode': {
+            //   keys: ['v'],
+            //   callback: () => { this.emit('key', 't') }
+            // },
+            // // 'quit': {
+            //   keys: ['q'],
+            //   callback: () => { this.emit('key', 'q') }
+            // }
+          }
+}),
+gaugeList = grid.set(0, 2, 3, 4, contrib.gaugeList,
+      {
+        // gaugeSpacing: 5,
+        gaugeHeight: 1,
+        gauges:[]
+      }
+    ),
+gaugeList_two = grid.set(3, 2, 3, 4, contrib.gaugeList,
+      {
+        // gaugeSpacing: 5,
+        gaugeHeight: 1,
+        gauges:[]
+      }
+    )
+
+// help_list_bar.setItem()
+gaugeList_two.hide()
+row_listtable_two.hide()
+table_outTuples_listtable.hide()
+gaugeList.hide()
+row_listtable.hide()
 box_bar_state.hide()
 bar_two_dstPortClient.hide()
 bar_one_dstPortClient.hide()
@@ -266,14 +334,21 @@ var bar_state_four = true;
 var box_hotkeys_state = true;
 var map_state = true;
 var box_hotkeys_state = true;
-
+function clean_widgets(){
+  box_evidence.setContent('');
+  box_detections.setContent('');
+  table_timeline.setContent('');
+  table_outTuples_listtable.setItems('')
+  box_ip.setContent('')
+}
 function hide_widgets(){
+  help_list_bar.hide()
   tree.hide()
   box_evidence.hide()
   box_detections.hide()
   table_timeline.hide()
   box_ip.hide()
-  table_outTuples_liststable.hide()
+  table_outTuples_listtable.hide()
   
   box_bar_state.hide()
   bar_two_dstPortClient.hide()
@@ -287,6 +362,7 @@ function hide_widgets(){
   map.hide()
 }
 function show_widgets(){
+  help_list_bar.show()
   tree.show()
   box_evidence.show()
   box_detections.show()
@@ -351,7 +427,7 @@ function port_ip_setdata(bar, counter, data, number){
     else{
       // bar.setLabel({text:Object..green,side:'left'})
       bar.setData(
-      { barCategory:'seblaspijaosd'                                                                       //data[0].slice(counter,counter+number)
+      { barCategory:data[0].slice(counter,counter+number)
       , stackedCategory: ['Number of connections']
       , data: values_bars.slice(counter,counter+number)})
 
@@ -444,55 +520,55 @@ return data_dict;
 };
 
 
-//function to fill data about destIpsCLient
-function ip_tcp_bars(key, key2,reply){
-  var bar_category_ips = [];
-  var data_stacked_bar = [];
-  try{
-        var obj_ip = JSON.parse(reply[key]);
-      var keys_ip = Object.keys(obj_ip);
-    }
-  catch(err){
-        var obj_ip = [];
-        var keys_ip = [];
-      }
-  async.each(keys_ip, function(ip, callback) {
-    bar_category_ips.push('TCP/'+ip);
-    var ip_info = obj_ip[ip];
-    var row = [];
-    row.push(ip_info['totalflows'],ip_info['totalpkt']);
-    data_stacked_bar.push(row);
-    callback();
-  }, function(err){
-    if(err){
-      console.log('sasdfsaa')
-    }
-    else{
-      try{
-            var obj_ip = JSON.parse(reply[key2]);
-          var keys_ip = Object.keys(obj_ip);
-        }
-      catch(err){
-            var obj_ip = [];  
-            var keys_ip = [];
-          }
-      async.each(keys_ip, function(ip, callback) {
-        bar_category_ips.push('TCP/'+ip);
-        var ip_info = obj_ip[ip];
-        var row = [];
-        row.push(ip_info['totalflows'],ip_info['totalpkt']);
-        data_stacked_bar.push(row);
-        callback();
-      }, function(err){
-        if(err){
-          console.log('sasdfsaa')
-        }
-      });
+// //function to fill data about destIpsCLient
+// function ip_tcp_bars(key, key2,reply){
+//   var bar_category_ips = [];
+//   var data_stacked_bar = [];
+//   try{
+//         var obj_ip = JSON.parse(reply[key]);
+//       var keys_ip = Object.keys(obj_ip);
+//     }
+//   catch(err){
+//         var obj_ip = [];
+//         var keys_ip = [];
+//       }
+//   async.each(keys_ip, function(ip, callback) {
+//     bar_category_ips.push('TCP/'+ip);
+//     var ip_info = obj_ip[ip];
+//     var row = [];
+//     row.push(ip_info['totalflows'],ip_info['totalpkt']);
+//     data_stacked_bar.push(row);
+//     callback();
+//   }, function(err){
+//     if(err){
+//       console.log('sasdfsaa')
+//     }
+//     else{
+//       try{
+//             var obj_ip = JSON.parse(reply[key2]);
+//           var keys_ip = Object.keys(obj_ip);
+//         }
+//       catch(err){
+//             var obj_ip = [];  
+//             var keys_ip = [];
+//           }
+//       async.each(keys_ip, function(ip, callback) {
+//         bar_category_ips.push('TCP/'+ip);
+//         var ip_info = obj_ip[ip];
+//         var row = [];
+//         row.push(ip_info['totalflows'],ip_info['totalpkt']);
+//         data_stacked_bar.push(row);
+//         callback();
+//       }, function(err){
+//         if(err){
+//           console.log('sasdfsaa')
+//         }
+//       });
 
-    }
-  });
-return [data_stacked_bar, bar_category_ips]
-};
+//     }
+//   });
+// return [data_stacked_bar, bar_category_ips]
+// };
 
 //function to fill in the information about the map(loc and lot of a countries)
 function setMap(ips){
@@ -530,8 +606,10 @@ function setMap(ips){
 //function to fill the info about bars (srcPortsServer, dstPortsClient)
 function tcp_udp_connections(key, key2,reply){
       
-      var bar_categories_protocol_port  = []
-      var data_stacked_bar = []
+      var bar_categories_protocol_port  = [];
+      var data_stacked_bar = [];
+      var data_listtable = [];
+      var data_gaugeList = [];
   try{
       var obj_tcp = JSON.parse(reply[key]);
     var keys_tcp = Object.keys(obj_tcp);
@@ -547,8 +625,15 @@ function tcp_udp_connections(key, key2,reply){
     bar_categories_protocol_port.push('TCP/'+key_TCP_est);
     var service_info = obj_tcp[key_TCP_est];
     var row = [];
+    var row_listtable = [];
+    // var row_gauge = {stack:[]}
+    row_listtable.push('TCP/'+key_TCP_est,String(service_info['totalflows']), String(service_info['totalpkt']), String(service_info['totalbytes']))
+    data_listtable.push(row_listtable)
+    // row_listtable[1].push(String(service_info['totalpkt']))
+    // row_listtable[2].push(String(service_info['totalbytes']))
     row.push(round(Math.log(service_info['totalflows']),0), round(Math.log(service_info['totalpkt']),0), round(Math.log(service_info['totalbytes']),0));
     data_stacked_bar.push(row);
+    data_gaugeList.push({stack:row})
     callback();
   }, function(err) {
 
@@ -566,11 +651,18 @@ function tcp_udp_connections(key, key2,reply){
   }
 
   async.each(keys_udp, function(key_UDP_est, callback) {
+    var row_listtable = [];
     bar_categories_protocol_port.push('UDP/'+key_UDP_est);
     var service_info = obj_udp[key_UDP_est];
     var row = [];
+    // row_listtable[0].push(String(service_info['totalflows']))
+    // row_listtable[1].push(String(service_info['totalpkt']))
+    // row_listtable[2].push(String(service_info['totalbytes']))
+    row_listtable.push('UDP/'+key_UDP_est,String(service_info['totalflows']), String(service_info['totalpkt']), String(service_info['totalbytes']))
+    data_listtable.push(row_listtable)
     row.push(round(Math.log(service_info['totalflows']),0), round(Math.log(service_info['totalpkt']),0), round(Math.log(service_info['totalbytes']),0));
     data_stacked_bar.push(row);
+    data_gaugeList.push({stack:row})
     callback()
     }, function(err) {
       if( err ) {
@@ -580,7 +672,7 @@ function tcp_udp_connections(key, key2,reply){
   }
 
 });
-return [data_stacked_bar,bar_categories_protocol_port]}
+return [data_stacked_bar,bar_categories_protocol_port, data_listtable, data_gaugeList]}
 
 function timewindows_list_per_ip(tw){
 
@@ -727,8 +819,15 @@ redis_tree.keys('*', (err,reply)=>{
     timewindows_promises(reply);
 })        
 var timeline_reply_global  = {};
-tree.on('select',function(node){
 
+tree.on('select',function(node){
+  screen.key('w',function(ch,key){
+  clipboardy.writeSync(node.name);
+
+clipboardy.readSync();
+
+})
+    clean_widgets()
     if(!node.name.includes('timewindow')){
       getIpInfo_box_ip(node.name, 1)}
       
@@ -739,7 +838,7 @@ tree.on('select',function(node){
         timeline_reply_global = reply;
         map.innerMap.draw(null);
         if(reply == null){
-          table_outTuples_liststable.setData( []);
+          table_outTuples_listtable.setItems('');
           box_detections.setContent('');
           return;}
         box_detections.setContent(reply['Detections']);
@@ -802,7 +901,7 @@ tree.on('select',function(node){
         console.log('unable to create user');
       } else {
         data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
-        table_outTuples_liststable.setData( data);
+        table_outTuples_listtable.setData(data);
         setMap(ips)
       screen.render();  
       }
@@ -820,12 +919,10 @@ tree.on('select',function(node){
         var index_recognized = line_arr.indexOf('recognized');
         var index_ip = index_to +1;
         if(index_to>= 0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
-        
         if(index_recognized >= 0){
           for(var i =index_recognized - 1; i < index_recognized+3;i++){
           line_arr[i] = line_arr[i].red;}
           }
-
         if(index_careful > 0){
           line_arr[index_careful] = line_arr[index_careful].red;
           line_arr[index_careful - 1] = line_arr[index_careful - 1].red
@@ -849,71 +946,73 @@ tree.on('select',function(node){
     })
 
 
-  screen.key('e', function(ch, key) {
+//   screen.key('e', function(ch, key) {
 
-    hide_widgets()
-    // bar_state_one = true;
-    bar_state_two = true; 
-    bar_state_three = true;
-    box_hotkeys_state = true;
-    map_state = true;
-    var first_bar_counter = 0;
-    var second_bar_counter = 0;
-    bar_one_srcPortClient.options.barSpacing = 10;
-    bar_two_srcPortClient.options.barSpacing = 10;
-    if(bar_state_one){
-      var est_connections_srcPortsClient = tcp_udp_connections("SrcPortsClientTCPEstablished","SrcPortsClientUDPEstablished",timeline_reply_global);
-      var notEst_connections_srcPortsClient = tcp_udp_connections("SrcPortsClientTCPNotEstablished","SrcPortsClientUDPNotEstablished",timeline_reply_global);
-      var est_bar_number_srcPortsClient = Math.ceil(est_connections_srcPortsClient[0].length / number_bars);
-      var notEst_bar_number_srcPortsClient = Math.ceil(notEst_connections_srcPortsClient[0].length /number_bars);
-      set_box_bar_state(est_connections_srcPortsClient,notEst_connections_srcPortsClient, bar_one_srcPortClient, bar_two_srcPortClient);
-      bar_setdata(bar_one_srcPortClient, first_bar_counter,est_connections_srcPortsClient, number_bars);
-      bar_setdata(bar_two_srcPortClient, second_bar_counter, notEst_connections_srcPortsClient, number_bars);
-      bar_one_srcPortClient.setLabel({text:'SrcPortsClientEstablished'.green,side:'left'});
-      bar_two_srcPortClient.setLabel({text:'SrcPortsClientNotEstablished'.green,side:'left'});
-      screen.render();
+//     hide_widgets()
+//     // bar_state_one = true;
+//     bar_state_two = true; 
+//     bar_state_three = true;
+//     box_hotkeys_state = true;
+//     map_state = true;
+//     var first_bar_counter = 0;
+//     var second_bar_counter = 0;
+//     bar_one_srcPortClient.options.barSpacing = 10;
+//     bar_two_srcPortClient.options.barSpacing = 10;
+//     if(bar_state_one){
+//       var est_connections_srcPortsClient = tcp_udp_connections("SrcPortsClientTCPEstablished","SrcPortsClientUDPEstablished",timeline_reply_global);
+//       var notEst_connections_srcPortsClient = tcp_udp_connections("SrcPortsClientTCPNotEstablished","SrcPortsClientUDPNotEstablished",timeline_reply_global);
+//       var est_bar_number_srcPortsClient = Math.ceil(est_connections_srcPortsClient[0].length / number_bars);
+//       var notEst_bar_number_srcPortsClient = Math.ceil(notEst_connections_srcPortsClient[0].length /number_bars);
+//       set_box_bar_state(est_connections_srcPortsClient,notEst_connections_srcPortsClient, bar_one_srcPortClient, bar_two_srcPortClient);
+//       row_listtable.setData(notEst_connections_srcPortsClient[2])
+//       // console.log(notEst_connections_srcPortsClient[3; ])
+//       bar_setdata(bar_one_srcPortClient, first_bar_counter,est_connections_srcPortsClient, number_bars);
+//       bar_setdata(bar_two_srcPortClient, second_bar_counter, notEst_connections_srcPortsClient, number_bars);
+//       bar_one_srcPortClient.setLabel({text:'SrcPortsClientEstablished'.green,side:'left'});
+//       bar_two_srcPortClient.setLabel({text:'SrcPortsClientNotEstablished'.green,side:'left'});
+//       screen.render();
 
 
-      screen.key('right', function(ch, key) {
-        if(bar_one_srcPortClient.focused == true){
-            if(first_bar_counter >= (est_bar_number_srcPortsClient - 1)*number_bars);
-            else{
-            first_bar_counter += number_bars;             
-              bar_setdata(bar_one_srcPortClient, first_bar_counter, est_connections_srcPortsClient, number_bars);}}
-          else{
-            if(second_bar_counter >= (notEst_bar_number_srcPortsClient - 1)*number_bars); 
-            else {
-              second_bar_counter += number_bars;
-              bar_setdata(bar_two_srcPortClient, second_bar_counter, notEst_connections_srcPortsClient, number_bars);}
-          }
-        screen.render()
-    });
-      screen.key('left', function(ch, key) {
-        if(bar_one_srcPortClient.focused == true){
-            first_bar_counter -=number_bars;
-            if(first_bar_counter<0)first_bar_counter=0;
-            bar_setdata(bar_one_srcPortClient, first_bar_counter, est_connections_srcPortsClient, number_bars);}
-          else{
-            second_bar_counter -= number_bars;
-            if(second_bar_counter<0)second_bar_counter=0;
-            bar_setdata(bar_two_srcPortClient, second_bar_counter, notEst_connections_srcPortsClient, number_bars);
-          }
-        screen.render()
-      });
+//       screen.key('right', function(ch, key) {
+//         if(bar_one_srcPortClient.focused == true){
+//             if(first_bar_counter >= (est_bar_number_srcPortsClient - 1)*number_bars);
+//             else{
+//             first_bar_counter += number_bars;             
+//               bar_setdata(bar_one_srcPortClient, first_bar_counter, est_connections_srcPortsClient, number_bars);}}
+//           else{
+//             if(second_bar_counter >= (notEst_bar_number_srcPortsClient - 1)*number_bars); 
+//             else {
+//               second_bar_counter += number_bars;
+//               bar_setdata(bar_two_srcPortClient, second_bar_counter, notEst_connections_srcPortsClient, number_bars);}
+//           }
+//         screen.render()
+//     });
+//       screen.key('left', function(ch, key) {
+//         if(bar_one_srcPortClient.focused == true){
+//             first_bar_counter -=number_bars;
+//             if(first_bar_counter<0)first_bar_counter=0;
+//             bar_setdata(bar_one_srcPortClient, first_bar_counter, est_connections_srcPortsClient, number_bars);}
+//           else{
+//             second_bar_counter -= number_bars;
+//             if(second_bar_counter<0)second_bar_counter=0;
+//             bar_setdata(bar_two_srcPortClient, second_bar_counter, notEst_connections_srcPortsClient, number_bars);
+//           }
+//         screen.render()
+//       });
 
-    }
-    else{
+//     }
+//     else{
     
 
-        bar_one_srcPortClient.hide()
-      bar_two_srcPortClient.hide()
-        box_bar_state.hide();
-        show_widgets()
-      }
-      bar_state_one = !bar_state_one;
-      screen.render()
+//         bar_one_srcPortClient.hide()
+//       bar_two_srcPortClient.hide()
+//         box_bar_state.hide();
+//         show_widgets()
+//       }
+//       bar_state_one = !bar_state_one;
+//       screen.render()
   
-});
+// });
 
 
 //display two bars of dstPortsServer established and non established connections
@@ -1179,8 +1278,12 @@ screen.key('v', function(ch, key) {
       });
 
     }catch(err){
+      // console.log()
       box_bar_state.setContent('no information')
-        box_bar_state.show()}}
+      bar_one_dstPortClient.show()
+      bar_two_dstPortClient.show()
+      box_bar_state.show();
+      }}
     else{
       show_widgets()
 
@@ -1194,7 +1297,44 @@ screen.key('v', function(ch, key) {
 });
 // 
     
+ screen.key('k', function(ch, key) {
 
+    hide_widgets()
+    // bar_state_one = true;
+    bar_state_two = true; 
+    bar_state_three = true;
+    box_hotkeys_state = true;
+    map_state = true;
+    if(bar_state_one){
+      var est_connections_srcPortsClient = tcp_udp_connections("SrcPortsClientTCPEstablished","SrcPortsClientUDPEstablished",timeline_reply_global);
+      var notEst_connections_srcPortsClient = tcp_udp_connections("SrcPortsClientTCPNotEstablished","SrcPortsClientUDPNotEstablished",timeline_reply_global);
+      gaugeList_two.setGauges(est_connections_srcPortsClient[3])
+      row_listtable.setData(notEst_connections_srcPortsClient[2]) 
+      row_listtable_two.setData(est_connections_srcPortsClient[2])
+      gaugeList.setGauges(notEst_connections_srcPortsClient[3])
+      gaugeList.show()
+      gaugeList_two.show()
+      row_listtable_two.show()
+      row_listtable.show()
+      // console.log(notEst_connections_srcPortsClient[3; ])
+      // bar_setdata(bar_one_srcPortClient, first_bar_counter,est_connections_srcPortsClient, number_bars);
+      // bar_setdata(bar_two_srcPortClient, second_bar_counter, notEst_connections_srcPortsClient, number_bars);
+      // bar_one_srcPortClient.setLabel({text:'SrcPortsClientEstablished'.green,side:'left'});
+      // bar_two_srcPortClient.setLabel({text:'SrcPortsClientNotEstablished'.green,side:'left'});
+      screen.render();
+
+    }
+    else{
+
+      //   bar_one_srcPortClient.hide()
+      // bar_two_srcPortClient.hide()
+      //   box_bar_state.hide();
+        show_widgets()
+      }
+      bar_state_one = !bar_state_one;
+      screen.render()
+  
+});
      
   screen.key('m', function(ch, key) {
     hide_widgets()
@@ -1226,21 +1366,21 @@ table_timeline.rows.on('select', (item, index) => {
   getIpInfo_box_ip(timeline_ip,1)
 });
 
-
 // var l = true;
 screen.key('h', function(ch, key) {
   hide_widgets()
   if(box_hotkeys_state){
-    table_outTuples_liststable.show()
-    table_outTuples_liststable.focus()
+    table_outTuples_listtable.show()
+    table_outTuples_listtable.focus()
   }
-  else{table_outTuples_liststable.hide()
+  else{table_outTuples_listtable.hide()
     
     
   show_widgets()}
     box_hotkeys_state =! box_hotkeys_state
     screen.render();
 });
+
 screen.key(['tab'], function(ch, key) {
   if(bar_one_srcPortClient.focused == true){
       bar_two_srcPortClient.focus();}
@@ -1305,7 +1445,7 @@ tree.focus();
 //   box_detections.emit('attach');
 //   box_evidence.emit('attach');
 //   box_ip.emit('attach');
-//   table_outTuples_liststable.emit('attach');
+//   table_outTuples_listtable.emit('attach');
 //   map.emit('attach');
 //   bar_two.emit('attach');
 //   bar_one.emit('attach');0
