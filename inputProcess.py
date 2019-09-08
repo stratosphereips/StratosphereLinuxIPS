@@ -91,6 +91,7 @@ class InputProcess(multiprocessing.Process):
                         ts = nfdump_line.split(',')[0]
                         if not ts[0].isdigit():
                             # The first letter is not digit -> not valid line.
+                            # TODO: What is this valid line check?? explain
                             continue
                     except IndexError:
                         # There is no first item in  the line.
@@ -292,13 +293,15 @@ class InputProcess(multiprocessing.Process):
                 return True
             # Process the binary nfdump file.
             elif self.input_type == 'nfdump':
+                # Its not good to read the nfdump file to disk.
                 command = 'nfdump -b -N -o csv -r ' + self.input_information + ' >  ' + self.nfdump_output_file
                 os.system(command)
                 self.nfdump_timeout = 10
-                # Give nfdump some time to generate at least 1 file.
-                time.sleep(1)
                 lines = self.read_nfdump_file()
                 self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
+                # Delete the nfdump file
+                command = "rm " + self.nfdump_output_file + "2>&1 > /dev/null &"
+                os.system(command)
 
             # Process the pcap files
             elif self.input_type == 'pcap' or self.input_type == 'interface':
