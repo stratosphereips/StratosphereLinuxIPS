@@ -18,6 +18,18 @@ To run redis you can:
     - In macos, as a daemon: sudo port load redis
     - By hand and leaving redis running on the console: redis-server /opt/local/etc/redis.conf
 
+##### Installation of Zeek (Bro)
+- How to install and set Zeek (Bro) properly?
+ 
+  - Download the [Zeek] and follow the instructions for compilation.
+  - Make Zeek (Bro) visible for slips. Some ideas:
+    - Create a link to "/bin" folder from compiled Zeek (Bro) folder like 
+    ```
+    "sudo ln -s PATH_TO_COMPILED_BRO_FOLDER/bin/bro /bin"
+    ```
+    - or add path from your compiled zeek (bro) folder to ~/.bashrc file.
+
+
 # Fast usage
 1. Start Redis (as a daemon or not)
 2. `./slips.py -c slips.conf -i <interface>`

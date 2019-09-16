@@ -28,7 +28,6 @@ bootpc,68,udp,Bootstrap Protocol Client
 tftp,69,tcp,Trivial File Transfer
 tftp,69,udp,Trivial File Transfer
 http,80,tcp,HTTP
-http-alt,81,tcp,HTTP Alternative
 npp,92,tcp,Network Printing Protocol
 npp,92,udp,Network Printing Protocol
 pop3,110,tcp,Post Office Protocol - Version 3

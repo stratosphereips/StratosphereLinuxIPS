@@ -19,6 +19,7 @@ def read_configuration(config, section, name):
         # There is a conf, but there is no option, or no section or no configuration file specified
         return False
 
+
 def test_redis_database(redis_host='localhost', redis_port=6379) -> str:
     server_redis_version = None
     try:
@@ -29,22 +30,23 @@ def test_redis_database(redis_host='localhost', redis_port=6379) -> str:
         print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
     return server_redis_version
 
-def test_zeek() -> bool:
+
+def test_program(command: str) -> bool:
     """
-    Test if we can run zeek (bro).
+    Test if we can run some program (e.g.: zeek, nfdump).
     """
-    command = "bro --version 2>&1 > /dev/null"
+    command = command + " 2>&1 > /dev/null"
     ret = os.system(command)
     if ret != 0:
-        print("[main] Error: Zeek (Bro) was not found. Did you set the path?")
+        print("[main] Error: The command: " + command + " was not found. Did you set the path?")
         return False
     return True
+
 
 def terminate_slips():
     """
     Do all necessary stuff to stop process any clear any files.
     """
-    # Say something about why we ended.
     sys.exit(-1)
 
 
@@ -57,7 +59,7 @@ if __name__ == '__main__':
 
     # Parse the parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False) 
+    parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False)
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
@@ -65,6 +67,8 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-N', '--nodejs', help='Use the NodeJS interface.', required=False, default=False, action='store_true')
+    parser.add_argument('-b', '--nfdump', help='A binary file from NFDUMP to read. NFDUMP is used to send data to slips.', required=False)
+    parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     args = parser.parse_args()
@@ -82,16 +86,20 @@ if __name__ == '__main__':
 
     # check if redis server running
     server_redis_version = test_redis_database()
-    if not server_redis_version:
-        self.print('[!] Redis is not running.')
+    if server_redis_version is None:
         terminate_slips()
 
     # If we need zeek (bro), test if we can run it.
-    if args.pcapfile or args.interface:
-        visible_zeek = test_zeek()
-        if not visible_zeek:
-            self.print('[!] Zeek could not be found on this system.')
+    if args.pcapfile:
+        visible_zeek = test_program('bro --version')
+        if visible_zeek is False:
             # If we do not have access to zeek and we want to use it, kill it.
+            terminate_slips()
+
+    if args.nfdump:
+        visible_nfdump = test_program('nfdump -h')
+        if visible_nfdump is False:
+            # If we do not have access to nfdump and we want to use it, kill it.
             terminate_slips()
 
     """
@@ -145,6 +153,9 @@ if __name__ == '__main__':
     elif args.filepath:
         input_information = args.filepath
         input_type = 'file'
+    elif args.nfdump:
+        input_information = args.nfdump
+        input_type = 'nfdump'
     else:
         print('You need to define an input source.')
         sys.exit(-1)
@@ -156,7 +167,7 @@ if __name__ == '__main__':
     ##########################
 
     # Output thread. This thread should be created first because it handles the output of the rest of the threads.
-    # Create the queue 
+    # Create the queue
     outputProcessQueue = Queue()
     # Create the output thread and start it
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
@@ -168,8 +179,8 @@ if __name__ == '__main__':
 
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
+    to_ignore = read_configuration(config, 'modules', 'disable')
     for module_name in __modules__:
-        to_ignore = read_configuration(config, 'modules', 'disable')
         if not module_name in to_ignore:
             module_class = __modules__[module_name]['obj']
             ModuleProcess = module_class(outputProcessQueue, config)

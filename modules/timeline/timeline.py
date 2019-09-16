@@ -131,7 +131,7 @@ class Module(Module, multiprocessing.Process):
             except KeyError:
                 daddr_malicious = ''
                 daddr_malicious_info = ''
-            
+
             daddr_data_str = ', '.join("{!s}={!r}".format(key,val) for (key,val) in daddr_data.items())
 
             dport = flow_dict['dport']
@@ -237,7 +237,7 @@ class Module(Module, multiprocessing.Process):
             if activity:
                 __database__.add_timeline_line(profileid, twid, activity, timestamp)
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
-            
+
             #################################
             # Now print the alternative flows
             if alt_flow_json:

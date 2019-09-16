@@ -58,7 +58,7 @@ class EvidenceProcess(multiprocessing.Process):
         """ Read the configuration file for what we need """
         # Get the format of the time in the flows
         try:
-            self.timeformat = config.get('timestamp', 'format')
+            self.timeformat = self.config.get('timestamp', 'format')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.timeformat = '%Y/%m/%d %H:%M:%S.%f'
@@ -104,7 +104,8 @@ class EvidenceProcess(multiprocessing.Process):
                         twid = message['data'].split(':')[1]
                     except AttributeError:
                         # When the channel is created the data '1' is sent
-                        continue
+                        return True
+                        # continue
                     evidence = __database__.getEvidenceForTW(profileid, twid)
                     if evidence:
                         evidence = json.loads(evidence)
