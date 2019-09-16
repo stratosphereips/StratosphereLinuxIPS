@@ -114,7 +114,7 @@ class WhoisQuery:
         # TODO: if asn is None, it is still marked as complete
         is_complete = True
         for field in result:
-            if field is None:
+            if result[field] is None:
                 is_complete = False
                 break
 
