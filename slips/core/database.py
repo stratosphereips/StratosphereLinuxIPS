@@ -1115,9 +1115,11 @@ class Database(object):
         return data
 
     def get_timeline_last_lines(self, profileid, twid, first_index: int) -> Tuple[str, int]:
-        """ Get all new items in this table."""
+        """ Get only the new items in the timeline."""
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        # The the amount of lines in this list
         last_index = self.r.llen(key)
+        # Get the data in the list from the index asked (first_index) until the last
         data = self.r.lrange(key, first_index, last_index - 1)
         return data, last_index
 
