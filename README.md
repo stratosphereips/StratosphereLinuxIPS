@@ -39,14 +39,18 @@ To run redis you can:
 - The data collected and used is on the _profile_ level and up. Slips does not work with data at the _flow_ level or _packet_ level to classify. This means that the simplest data structure available inside slips is the profile of an IP address. The modules can not access individual flows.
 
 ## Input Data
-Slips can read:
-- Packets from a pcap file (using Zeek)
-- Packets from an interface (using Zeek). But not from the interface _any_ due to a limitation in Zeek.
-- Flows from a CSV file separated with commas (typically from Argus sensors)
-- Flows from a CSV file separated with TABS 
-- Flows from a file with JSON lines. (typically from Suricata)
-- Flows from a conn.log file from Zeek alone (under implementation)
-- Flows from a folder with all the Zeek log files all together (under implementation)
+Slips can read flows from different input types. In particular:
+- Pcap files (internally using Zeek).
+- Packets directly from an interface (internally using Zeek).
+- Suricata flows (from JSON files created by suricata, such as eve.json).
+- Argus flows (CSV file separated by commas or TABs).
+- Zeek/Bro flows from a Zeek folder with log files.
+- Zeek/Bro flows from a conn.log file only.
+- Nfdump flows from a binary nfdump file.
+
+All the flows are converted to an internal format so once read, slips works the same with all of them.
+The best formats to use are from a pcap file, from an interface or from a folder with Zeek logs. This is because then Zeek will generate other log files, such as http.log, that will be used by slips.
+
 
 ## Output
 
