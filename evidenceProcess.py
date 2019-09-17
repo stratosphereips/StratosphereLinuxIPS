@@ -104,8 +104,7 @@ class EvidenceProcess(multiprocessing.Process):
                         twid = message['data'].split(':')[1]
                     except AttributeError:
                         # When the channel is created the data '1' is sent
-                        return True
-                        # continue
+                        continue
                     evidence = __database__.getEvidenceForTW(profileid, twid)
                     if evidence:
                         evidence = json.loads(evidence)
