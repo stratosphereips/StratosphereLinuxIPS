@@ -88,12 +88,21 @@ class WhoisIP(Module, multiprocessing.Process):
         return True
 
     def check_ip(self, ip):
+        """
+        Look if IP is already cached. If a specific network cache is ready, save it to IP data. If a general cached
+        network is found, a query is attempted and depending on the result, either cached data or new results are saved
+        to IP data (and the new results are cached).
+        If there is nothing in the cache, a query is run, and either the result is saved and cached, or the IP is added
+        to the retry queue.
+        :param ip: IP address to work with
+        :return: True if the query was successful (meaning network is ok), False if no query was run or if it failed.
+        """
         self.print("Checking ip " + ip, verbose=5, debug=1)
 
         address = ipaddress.ip_address(ip)
 
         if not self.is_checkable(address):
-            return None, None, None, None
+            return False
 
         if address.version == 4:
             load_subnet = self.load_ipv4_subnet
@@ -109,7 +118,7 @@ class WhoisIP(Module, multiprocessing.Process):
         if cached_data is not None:
             self.print("Data found in cache!", verbose=9, debug=1)
             self.print(cached_data, verbose=9, debug=1)
-            return cached_data
+            return False
 
         self.print("Data not found in cache!", verbose=9, debug=1)
 
@@ -120,8 +129,6 @@ class WhoisIP(Module, multiprocessing.Process):
 
         self.print(result, verbose=9, debug=1)
 
-        self.print("Results are incomplete", verbose=9, debug=1)
-
         # Do not cache if the mask is zero, or 32 (ipv4) or 128 (ipv6) or in case of error
         if result["cidr_prefix_len"] == 0 or (result["cidr_prefix_len"] == 32 and address.version == 4)\
                 or result["cidr"] is None or (result["cidr_prefix_len"] == 128 and address.version == 6):
@@ -129,6 +136,22 @@ class WhoisIP(Module, multiprocessing.Process):
         else:
             mask = int(Interface(result["cidr"]))
             save_subnet(mask, result)
+
+    def retry_queue(self):
+        """
+        Read IP addresses from retry_queue and try to check them for a second time.
+        :return: None
+        """
+        pass
+
+    def save_ip_data(self, ip, data):
+        """
+        Save whois data about an IP to the database
+        :param ip: ip address
+        :param data: dictionary with the response
+        :return: None
+        """
+        pass
 
     def save_ipv4_subnet(self, mask: int, result: dict):
         str_data = json.dumps(result)
