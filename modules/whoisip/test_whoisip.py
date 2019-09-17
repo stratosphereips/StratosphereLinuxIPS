@@ -117,14 +117,22 @@ def test_tricky_ips():
         print(wi.check_ip(ip))
 
 
+def test_caching():
+    ips = ["8.218.236.191", "8.218.236.19", "211.13.204.89", "211.1.229.3", "211.0.0.5", "211.1.229.7"]
+    wi = WhoisIP(None, get_default_config(), testing=True)
+    for ip in ips:
+        print("-------------------------------------------")
+        print(wi.check_ip(ip))
+
+
 if __name__ == "__main__":
     t = time.time()
-    test_tricky_ips()
+    test_caching()
+    # test_tricky_ips()
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
     # try_random_addresses(limit=10)
     # test_ipv6()
-    # TODO: test if caching a large network will hide a smaller network
     # TODO: should I cache an error? What should I do with an error? (whois.py line 126)
 
     print(time.time() - t)
