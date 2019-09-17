@@ -135,7 +135,7 @@ class Module(Module, multiprocessing.Process):
             daddr_data_str = ', '.join("{!s}={!r}".format(key,val) for (key,val) in daddr_data.items())
 
             dport = flow_dict['dport']
-            proto = flow_dict['proto']
+            proto = flow_dict['proto'].lower()
 
             # Here is where we see if we know this dport
             dport_name = __database__.get_port_info(str(dport)+'/'+proto)
