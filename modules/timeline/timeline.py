@@ -187,7 +187,6 @@ class Module(Module, multiprocessing.Process):
                 else:
                     # This is not recognized. Do our best
                     activity = '[!] - Not recognized {} flow from {} to {} dport {}/{}, Sent: {}, Recv: {}, Tot: {} | {}\n'.format(state.lower(), saddr, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
-                    #activity = '[!!] Not recognized activity on flow {}\n'.format(flow)
             elif 'icmp' in proto:
                 if type(sport) == int:
                     # zeek puts the number
@@ -210,7 +209,7 @@ class Module(Module, multiprocessing.Process):
                         dport_name = 'ICMP Unknown type'
                         activity = '- {} sent to {}, Type: 0x{}, Size: {} | {}\n'.format(dport_name, daddr, sport, allbytes_human, daddr_data_str)
                 elif type(sport) == str:
-                    # Argus puts in hex 
+                    # Argus puts in hex the values of the ICMP
                     if '0x0008' in sport:
                         dport_name = 'PING echo'
                         activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
@@ -233,13 +232,13 @@ class Module(Module, multiprocessing.Process):
                 dport_name = 'IGMP'
                 activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
 
-            # Store the activity in the DB for this profileid and twid
+            # Store the activity of normal flows in the DB for this profileid and twid
             if activity:
                 __database__.add_timeline_line(profileid, twid, activity, timestamp)
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
             #################################
-            # Now print the alternative flows
+            # Now process the alternative flows
             if alt_flow_json:
                 alt_flow = json.loads(alt_flow_json)
                 self.print('Received an altflow of type {}: {}'.format(alt_flow['type'], alt_flow), 5,0)
@@ -260,10 +259,11 @@ class Module(Module, multiprocessing.Process):
                         validation = 'No'
                     activity = '	- {}. Issuer: {}. Trust Cert: {}. Subject: {}. Version: {}. Resumed: {} \n'.format(alt_flow['server_name'], alt_flow['issuer'], validation, alt_flow['subject'], alt_flow['version'], alt_flow['resumed'])
 
-                # Store the activity in the DB for this profileid and twid
-                if activity:
-                    __database__.add_timeline_line(profileid, twid, activity, timestamp)
-                self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+                ## Store the activity in the DB for this profileid and twid
+                #if activity:
+                    #__database__.add_timeline_line(profileid, twid, activity, timestamp)
+                #self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+
             elif not alt_flow_json and ('tcp' in proto or 'udp' in proto) and state.lower() == 'established' and dport_name:
                 # We have an established tcp or udp connection that we know the usual name of the port, but we don't know the type of connection!!!
 
@@ -276,10 +276,11 @@ class Module(Module, multiprocessing.Process):
                     pass
                 else:
                     activity = '	[!] Attention. We know this port number, but we couldn\'t identify the protocol. Check UID {}\n'.format(uid)
-                    # Store the activity in the DB for this profileid and twid
-                    if activity:
-                        __database__.add_timeline_line(profileid, twid, activity, timestamp)
-                    self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+
+            # Store the activity of alternative flows in the DB for this profileid and twid
+            if activity:
+                __database__.add_timeline_line(profileid, twid, activity, timestamp)
+            self.print('Alternative Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
         except KeyboardInterrupt:
             return True
@@ -293,12 +294,11 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # Main loop function
-            time.sleep(10)
+            #time.sleep(10)
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['channel'] == 'new_flow' and message['data'] != 1:
-                    # Example of printing the number of profiles in the Database every second
                     mdata = message['data']
                     # Convert from json to dict
                     mdata = json.loads(mdata)
