@@ -124,14 +124,8 @@ if __name__ == "__main__":
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
     # try_random_addresses(limit=10)
     # test_ipv6()
-    # TODO: test on malware data
     # TODO: test if caching a large network will hide a smaller network
-    # TODO: fix verbosity and debug
     # TODO: should I cache an error? What should I do with an error? (whois.py line 126)
-    # TODO: justify the wait delay (whois_parser.py line 137)
-    # TODO: make sure no relevant info is skipped (a regex to match line with url.*[-a-zA-Z0-9.]+\.[a-z]{2,}.*)
-    # TODO:      whois_utils.py line 266
-    # TODO: Save the whois authority that gave this response (whois_parser.py 46)
 
     print(time.time() - t)
 

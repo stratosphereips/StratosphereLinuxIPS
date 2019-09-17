@@ -111,7 +111,6 @@ class WhoisQuery:
                   "country": self.country, "updated": self.updated, "status": self.status, "asn": self.asn,
                   "ip": str(self.ip)}
 
-        # TODO: if asn is None, it is still marked as complete
         is_complete = True
         for field in result:
             if result[field] is None:
@@ -153,12 +152,12 @@ class WhoisQuery:
                 # code 2 == network error? Idk, it doesn't say in the docs/man
                 if len(response.stdout) == 0:
                     # if there is no response in stdout, likely there is no network connection
-                    slips_print(stderr)  # error
+                    slips_print(stderr, verbose=1, debug=0)
                     self.status = str(response.returncode) + " - " + stderr
                     return response.returncode, stderr
                 else:
                     # warning: there was a network issue, but some data was retrieved, will process it anyway
-                    slips_print("Query on ip: " + str(self.ip) + " timeouted, data might be incomplete")  # warning
+                    slips_print("Warning - query on ip: " + str(self.ip) + " timeouted, data might be incomplete", verbose=1, debug=0)
             else:
                 # other error codes except for 2
                 self.status = str(response.returncode) + " - " + stderr
