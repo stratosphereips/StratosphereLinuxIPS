@@ -52,7 +52,7 @@ class WhoisIP(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def testing_print(self, text, verbose=1, debug=0):
+    def testing_print(self, text, verbose=0, debug=0):
         """
         Printing function that will be used automatically by the module, in case it is run in testing mode
         (without SLIPS and outputprocess). 
@@ -66,29 +66,29 @@ class WhoisIP(Module, multiprocessing.Process):
 
     def is_checkable(self, address):
         if not address.is_global:
-            self.print("Address " + str(address) + " is not global")  # debug
+            self.print("Address " + str(address) + " is not global", verbose=9, debug=1)
             return False
 
         if address.is_private:
-            self.print("Address " + str(address) + " is private")  # debug
+            self.print("Address " + str(address) + " is private", verbose=9, debug=1)
             return False
 
         if address.is_multicast:
-            self.print("Address " + str(address) + " is multicast")  # debug
+            self.print("Address " + str(address) + " is multicast", verbose=9, debug=1)
             return False
 
         if address.is_link_local:
-            self.print("Address " + str(address) + " is link local")  # debug
+            self.print("Address " + str(address) + " is link local", verbose=9, debug=1)
             return False
 
         if address.is_loopback:
-            self.print("Address " + str(address) + " is loopback")  # debug
+            self.print("Address " + str(address) + " is loopback", verbose=9, debug=1)
             return False
 
         return True
 
     def check_ip(self, ip):
-        self.print("Checking ip " + ip)   # verbose
+        self.print("Checking ip " + ip, verbose=5, debug=1)
 
         address = ipaddress.ip_address(ip)
 
@@ -107,25 +107,25 @@ class WhoisIP(Module, multiprocessing.Process):
         cached_data = load_subnet(address)
 
         if cached_data is not None:
-            self.print("Data found in cache!") # debug
-            self.print(cached_data) # debug
+            self.print("Data found in cache!", verbose=9, debug=1)
+            self.print(cached_data, verbose=9, debug=1)
             return cached_data
 
-        self.print("Data not found in cache!") # debug
+        self.print("Data not found in cache!", verbose=9, debug=1)
 
         query = WhoisQuery(address)
         query.run(self.print)
 
         result = query.get_result_dictionary()
 
-        self.print(result)  # debug
+        self.print(result, verbose=9, debug=1)
 
-        self.print("Results are incomplete")  # debug
+        self.print("Results are incomplete", verbose=9, debug=1)
 
         # Do not cache if the mask is zero, or 32 (ipv4) or 128 (ipv6) or in case of error
         if result["cidr_prefix_len"] == 0 or (result["cidr_prefix_len"] == 32 and address.version == 4)\
                 or result["cidr"] is None or (result["cidr_prefix_len"] == 128 and address.version == 6):
-            self.print("Not suitable for caching")  # verbose
+            self.print("Not suitable for caching", verbose=5, debug=1)
         else:
             mask = int(Interface(result["cidr"]))
             save_subnet(mask, result)
