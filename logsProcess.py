@@ -212,12 +212,12 @@ class LogsProcess(multiprocessing.Process):
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             # Get the list of all the modifed TW for all the profiles
-            TWforProfile = __database__.getModifiedTWLogs()
-            amount_of_modified = len(TWforProfile)
+            TWModifiedforProfile = __database__.getModifiedTWLogs()
+            amount_of_modified = len(TWModifiedforProfile)
             self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {}. Modified TWs: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
             last_profile_id = None
             description_of_malicious_ip_profile = None
-            for profileTW in TWforProfile:
+            for profileTW in TWModifiedforProfile:
 
                 # Get the profileid and twid
                 profileid = profileTW.split(self.fieldseparator)[0] + self.fieldseparator + profileTW.split(self.fieldseparator)[1]
@@ -384,21 +384,21 @@ class LogsProcess(multiprocessing.Process):
                 # Mark it as not modified anymore
                 __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
 
+
                 ###########
-                # Complete Timeline
-                # Store the complete timeline in the DB in a file for each profile
-                # The complete timeline file is unique for all timewindows. Much easier to read this way.
+                # Create Timeline for each profile
+                # Store the timeline from the DB in a file
+                # The timeline file is unique for all timewindows. Much easier to read this way.
+
                 # Get all the TW for this profile
                 tws = __database__.getTWsfromProfile(profileid)
                 ip = profileid.split('_')[1]
 
                 timeline_path = profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt'
+                # If the file does not exists yet, create it
                 if not os.path.isfile(timeline_path):
                     self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
 
-                # If the file does not exists yet, create it
-                #if not os.path.isfile(timeline_path):
-                    #self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
                 for twid_tuple in tws:
                     (twid, starttime) = twid_tuple
                     hash_key = profileid + self.separator + twid
