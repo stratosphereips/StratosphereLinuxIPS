@@ -250,7 +250,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
               keys: ['v']
                         },
               'OutTuples and ipInfo': {
-              keys: ['h']
+              keys: ['h']}
                         
 
           }
