@@ -239,13 +239,14 @@ class Module(Module, multiprocessing.Process):
 
             #################################
             # Now process the alternative flows
+            alt_activity = ''
             if alt_flow_json:
                 alt_flow = json.loads(alt_flow_json)
                 self.print('Received an altflow of type {}: {}'.format(alt_flow['type'], alt_flow), 5,0)
                 if 'dns' in alt_flow['type']:
-                    activity = '	- Query: {}, Query Class: {}, Type: {}, Response Code: {}, Answers: {}\n'.format(alt_flow['query'], alt_flow['qclass_name'], alt_flow['qtype_name'], alt_flow['rcode_name'], alt_flow['answers'])
+                    alt_activity = '	- Query: {}, Query Class: {}, Type: {}, Response Code: {}, Answers: {}\n'.format(alt_flow['query'], alt_flow['qclass_name'], alt_flow['qtype_name'], alt_flow['rcode_name'], alt_flow['answers'])
                 elif alt_flow['type'] == 'http':
-                    activity = '	- {} http://{}{} HTTP/{} {}/{}  MIME:{} Sent:{}b, Recv:{}b UA:{} \n'.format(alt_flow['method'], alt_flow['host'], alt_flow['uri'], alt_flow['version'],alt_flow['status_code'], alt_flow['status_msg'], alt_flow['resp_mime_types'], alt_flow['request_body_len'], alt_flow['response_body_len'], alt_flow['user_agent'])
+                    alt_activity = '	- {} http://{}{} HTTP/{} {}/{}  MIME:{} Sent:{}b, Recv:{}b UA:{} \n'.format(alt_flow['method'], alt_flow['host'], alt_flow['uri'], alt_flow['version'],alt_flow['status_code'], alt_flow['status_msg'], alt_flow['resp_mime_types'], alt_flow['request_body_len'], alt_flow['response_body_len'], alt_flow['user_agent'])
                 elif alt_flow['type'] == 'ssl':
                     # {"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
                     # version":"TLSv12","resumed":false,"established":true,"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
@@ -257,7 +258,7 @@ class Module(Module, multiprocessing.Process):
                     else:
                         # If the validation is not ok and not empty
                         validation = 'No'
-                    activity = '	- {}. Issuer: {}. Trust Cert: {}. Subject: {}. Version: {}. Resumed: {} \n'.format(alt_flow['server_name'], alt_flow['issuer'], validation, alt_flow['subject'], alt_flow['version'], alt_flow['resumed'])
+                    alt_activity = '	- {}. Issuer: {}. Trust Cert: {}. Subject: {}. Version: {}. Resumed: {} \n'.format(alt_flow['server_name'], alt_flow['issuer'], validation, alt_flow['subject'], alt_flow['version'], alt_flow['resumed'])
 
                 ## Store the activity in the DB for this profileid and twid
                 #if activity:
@@ -275,12 +276,12 @@ class Module(Module, multiprocessing.Process):
                     # If it is established but no bytes were sent, then we will never have an alt_flow, so do not report that is missing.
                     pass
                 else:
-                    activity = '	[!] Attention. We know this port number, but we couldn\'t identify the protocol. Check UID {}\n'.format(uid)
+                    alt_activity = '	[!] Attention. We know this port number, but we couldn\'t identify the protocol. Check UID {}\n'.format(uid)
 
             # Store the activity of alternative flows in the DB for this profileid and twid
-            if activity:
-                __database__.add_timeline_line(profileid, twid, activity, timestamp)
-            self.print('Alternative Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+            if alt_activity:
+                __database__.add_timeline_line(profileid, twid, alt_activity, timestamp)
+            self.print('Alternative Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, alt_activity), 4, 0)
 
         except KeyboardInterrupt:
             return True
