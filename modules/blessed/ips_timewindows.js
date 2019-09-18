@@ -7,18 +7,17 @@ var redis = require('redis')
   , redis_outtuples_timewindow = redis.createClient()
   , redis_detections_timewindow = redis.createClient()
   , redis_timeline_ip = redis.createClient()
+  ,redis_blocked_tws = redis.createClient()
   , async = require('async')
   , blessed = require('blessed')
   , contrib = require('blessed-contrib')
   , fs = require('fs')
   , screen = blessed.screen()
-  , colors = require('colors');
+  , color = require('ansi-colors');
 
 
 const clipboardy = require('clipboardy');
-// import copy from 'copy-to-clipboard';
-screen.options.dockBorders=true;
-//read countries  location
+screen.dockBorders=true;
 let country_loc = {};
 fs.readFile('country.txt', 'utf8', function(err,data) {
     if(err) throw err;
@@ -33,6 +32,29 @@ fs.readFile('country.txt', 'utf8', function(err,data) {
     }
 });
 
+
+function blockedTW(){ 
+  return new Promise(function(resolve,reject){
+    var blockedTWs = {};
+    redis_blocked_tws.smembers("BlockedProfTW",(err,reply)=>{
+    async.each(reply,function(blocked_line,callback){
+      var blocked_list = blocked_line.split('_');
+      if(!Object.keys(blockedTWs).includes(blocked_list[1])){
+        blockedTWs[blocked_list[1]] = [];
+        blockedTWs[blocked_list[1]].push(blocked_list[2])
+      }
+      else{
+        blockedTWs[blocked_list[1]].push(blocked_list[2])
+      }
+      callback(null)
+    },function(err){
+      if(err){
+        console.log(err);
+      }
+     else{resolve(blockedTWs)}
+    })
+  })
+})}
 
 // set up elements of the interface.
 
@@ -50,7 +72,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
   , columnWidth:[200]})
 
   ,table_outTuples_listtable = grid.set(0,0,6,6, blessed.listtable, {
-        keys: true,
+      keys: true,
       mouse: true,
   
       tags: true,
@@ -73,22 +95,23 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       },
       align: 'left'
     })
+
 ,listtable_est_srcPort = grid.set(0,0,3,2, blessed.listtable, {
-      border: 'line',
-      // scrollable: true,
-      // alwaysScroll: true,
-      // keys:true
+      border: 'line'
     })
 ,listtable_notEst_srcPort = grid.set(3,0,3,2, blessed.listtable, {
-      border: 'line',
-      // scrollable: true,
-      // alwaysScroll: true,
-      // keys:true
+      border: 'line'
+    })
+,listtable_est_dstIPs = grid.set(0,0,3,2, blessed.listtable, {
+      border: 'line'
+    })
+,listtable_notEst_dstIPs = grid.set(3,0,3,2, blessed.listtable, {
+      border: 'line'
     })
 
   , tree =  grid.set(0,0,5,1,contrib.tree,
   { vi:true 
-  , style: {border: {fg:'magenta'}}
+  , style: {fg:'green',border: {fg:'magenta'}}
   , template: { lines: true }
   , label: 'Ips from slips'})
 
@@ -107,22 +130,6 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       type: 'line'
     }})
 
- , box_detections = grid.set(4.2, 1, 0.9, 2.5,blessed.box,{
-      top: 'center',
-      left: 'center',
-      width: '50%',
-      height: '50%',
-      label:'Detections',
-      tags: true,
-    vi:true,
-    style:{
-         focus: {
-      border:{ fg:'magenta'}
-    }},
-    border: {
-      type: 'line'
-    }
-  })
  , box_evidence = grid.set(4.2, 3.5, 0.9, 2.5,blessed.box,{
       top: 'center',
       left: 'center',
@@ -149,30 +156,6 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
 
 
 , map = grid.set(0, 0, 6, 6,contrib.map,{label: 'World Map'})
-, bar_one_srcPortClient = grid.set(0.5,0,3,6,contrib.stackedBar,
-        { 
-         barWidth: 6
-       , barSpacing: 10
-       , xOffset: 2
-       , height: "50%"
-       , width: "50%"
-       , style:{
-         focus: {
-      border:{ fg:'magenta'}
-    }}
-       , barBgColor: [ 'red', 'blue', 'green' ]})
-, bar_two_srcPortClient = grid.set(3.4,0,2.7,6,contrib.stackedBar,
-       {
-         barWidth: 6
-       , barSpacing: 10
-       , xOffset: 2
-       , height: "100%"
-       , style:{
-         focus: {
-      border:{ fg:'magenta'}
-    }}
-       , width: "100%"
-       , barBgColor: [ 'red', 'blue', 'green' ]})
 , bar_one_dstPortsServer = grid.set(0.5,0,3,6,contrib.stackedBar,
         { 
          barWidth: 6
@@ -187,30 +170,6 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
        , barBgColor: [ 'red', 'blue', 'green' ]})
 , bar_two_dstPortsServer = grid.set(3.5,0,2.7,6,contrib.stackedBar,
        { 
-         barWidth: 6
-       , barSpacing: 10
-       , xOffset: 2
-       , height: "100%"
-       , style:{
-         focus: {
-      border:{ fg:'magenta'}
-    }}
-       , width: "100%"
-       , barBgColor: [ 'red', 'blue', 'green' ]})
-, bar_one_dstIPsClient = grid.set(0.5,0,3,6,contrib.stackedBar,
-        { //parent:bar_list
-         barWidth: 6
-       , barSpacing: 10
-       , xOffset: 2
-       , height: "50%"
-       , width: "50%"
-       , style:{
-         focus: {
-      border:{ fg:'magenta'}
-    }}
-       , barBgColor: [ 'red', 'blue', 'green' ]})
-, bar_two_dstIPsClient = grid.set(3.5,0,2.7,6,contrib.stackedBar,
-       { //parent:bar_list
          barWidth: 6
        , barSpacing: 10
        , xOffset: 2
@@ -266,8 +225,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       style: {
         // border:'red',
         prefix: {
-          fg: 'yellow',
-          bg:'green'
+          fg: 'yellow'
+          // bg:'white'
         },
         item: {
         },
@@ -275,30 +234,28 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       autoCommandKeys: false,
       commands:
        {
-            'help': {
-              keys: ['h']
+            'srcPortClient': {
+              keys: ['e']
                         },
-              'help': {
-              keys: ['']
+            'dstIPsClient': {
+              keys: ['c']
                         },
-              'bar': {
+              'dstPortServer': {
               keys: ['b']
                         },
-              'bar2': {
-              keys: ['c']
-                        }
+              'map': {
+              keys: ['m']
+                        },
+            'dstPortsNotEstablished': {
+              keys: ['v']
+                        },
+              'OutTuples and ipInfo': {
+              keys: ['h']
+                        
 
-            // 'view mode': {
-            //   keys: ['v'],
-            //   callback: () => { this.emit('key', 't') }
-            // },
-            // // 'quit': {
-            //   keys: ['q'],
-            //   callback: () => { this.emit('key', 'q') }
-            // }
           }
 }),
-gaugeList_est_srcPort = grid.set(0, 2, 3, 4, contrib.gaugeList,
+gaugeList_est_srcPort = grid.set(0.3, 2, 2.8, 4, contrib.gaugeList,
       {
       style:{
          focus: {
@@ -310,7 +267,7 @@ gaugeList_est_srcPort = grid.set(0, 2, 3, 4, contrib.gaugeList,
         gauges:[]
       }
     ),
-gaugeList_notEst_srcPort = grid.set(3, 2, 3, 4, contrib.gaugeList,
+gaugeList_notEst_srcPort = grid.set(3.3, 2, 2.8, 4, contrib.gaugeList,
       {
 
         style:{
@@ -323,7 +280,7 @@ gaugeList_notEst_srcPort = grid.set(3, 2, 3, 4, contrib.gaugeList,
         gauges:[]
       }
     ),
-gaugeList_three = grid.set(0, 2, 1, 4, contrib.gaugeList,
+gaugeList_est_dstIPs = grid.set(0.3, 2, 2.8, 4, contrib.gaugeList,
       {
 
       style:{
@@ -331,29 +288,30 @@ gaugeList_three = grid.set(0, 2, 1, 4, contrib.gaugeList,
       border:{ fg:'magenta'}
     }},
       keys:true,
-        // gaugeSpacing: 5,
-        // gaugeHeight: 1,
+        gaugeSpacing: 1,
+        gaugeHeight: 1,
         gauges:[]
       }
     ),
-gaugeList_four = grid.set(0, 2, 6, 4, contrib.gaugeList,
+gaugeList_notEst_dstIPs = grid.set(3.3, 2, 2.8, 4, contrib.gaugeList,
       {
         style:{
          focus: {
       border:{ fg:'magenta'}
     }},
       keys:true,
-        gaugeSpacing: 5,
+        gaugeSpacing: 1,
         gaugeHeight: 1,
         gauges:[]
       }
     )
 
-// help_list_bar.setItem()
-gaugeList_three.hide()
-gaugeList_four.hide()
 gaugeList_notEst_srcPort.hide()
 listtable_notEst_srcPort.hide()
+gaugeList_notEst_dstIPs.hide()
+listtable_notEst_dstIPs.hide()
+gaugeList_est_dstIPs.hide()
+listtable_est_dstIPs.hide()
 table_outTuples_listtable.hide()
 gaugeList_est_srcPort.hide()
 listtable_est_srcPort.hide()
@@ -362,13 +320,9 @@ bar_two_dstPortClient.hide()
 bar_one_dstPortClient.hide()
 bar_one_dstPortsServer.hide()
 bar_two_dstPortsServer.hide()
-bar_one_srcPortClient.hide()
-bar_two_srcPortClient.hide()
-bar_one_dstIPsClient.hide()   
-bar_two_dstIPsClient.hide()
 map.hide()
-var focus_widget = tree;
 
+var focus_widget = tree;
 var bar_state_one = true;
 var bar_state_two = true; 
 var bar_state_three = true;
@@ -376,56 +330,49 @@ var bar_state_four = true;
 var box_hotkeys_state = true;
 var map_state = true;
 var box_hotkeys_state = true;
+
 function clean_widgets(){
   box_evidence.setContent('');
-  box_detections.setContent('');
   table_timeline.setContent('');
   table_outTuples_listtable.setItems('')
   box_ip.setContent('')
 }
+
 function hide_widgets(){
-  gaugeList_three.hide()
-  gaugeList_four.hide()
   listtable_est_srcPort.hide()
   gaugeList_notEst_srcPort.hide()
   listtable_notEst_srcPort.hide()
-  table_outTuples_listtable.hide()
   gaugeList_est_srcPort.hide()
+  listtable_est_dstIPs.hide()
+  gaugeList_notEst_dstIPs.hide()
+  listtable_notEst_dstIPs.hide()
+  gaugeList_est_dstIPs.hide()
   help_list_bar.hide()
   tree.hide()
   box_evidence.hide()
-  box_detections.hide()
   table_timeline.hide()
   box_ip.hide()
-  table_outTuples_listtable.hide()
-  
+  table_outTuples_listtable.hide()  
   box_bar_state.hide()
   bar_two_dstPortClient.hide()
   bar_one_dstPortClient.hide()
   bar_one_dstPortsServer.hide()
   bar_two_dstPortsServer.hide()
-  bar_one_srcPortClient.hide()
-  bar_two_srcPortClient.hide()
-  bar_one_dstIPsClient.hide()   
-  bar_two_dstIPsClient.hide()
   map.hide()
 }
+
 function show_widgets(){
   help_list_bar.show()
   tree.show()
   box_evidence.show()
-  box_detections.show()
   table_timeline.show()
   box_ip.show()
   focus_widget  .focus()
-  
-  // k.focus()9
+
 
 }
 
-var number_bars = Math.floor((2*bar_two_srcPortClient.width-2*bar_two_srcPortClient.options.xOffset)/(bar_two_srcPortClient.options.barSpacing+2*bar_two_srcPortClient.options.barWidth));
-
-// var list_state = [bar_state_one, bar_state_two, bar_state_three,box_hottkeys_state, box_bar_state, map_state];
+// var number_bars = Math.floor((2*bar_two_srcPortClient.width-2*bar_two_srcPortClient.options.xOffset)/(bar_two_srcPortClient.options.barSpacing+2*bar_two_srcPortClient.options.barWidth));
 
 screen.render() 
 
@@ -500,7 +447,6 @@ function set_box_bar_dstPortClient_state(bar_data, bar_data_two,bar_one,bar_two)
   
 }
 
-
 //function to fill in data for a box (box displays the state of the bar)
 function set_box_bar_state(bar_data, bar_data_two,bar_one,bar_two,number_bars){
   if(bar_data[0].length > number_bars && bar_data_two[0].length > number_bars){
@@ -533,8 +479,7 @@ function port_ips_bars(key, key2,reply){
       }
   async.each(keys_port, function(port, callback) {  
     var port_info = obj_port[port];
-    var row = []
-    // row.push(Object.values(port_info['dstips']))
+    var row = [];
     data_dict['TCP'+port] = [Object.keys(port_info['dstips']), Object.values(port_info['dstips'])]
     callback();
   }, function(err){
@@ -543,18 +488,17 @@ function port_ips_bars(key, key2,reply){
     }
     else{
       try{
-            var obj_port = JSON.parse(reply[key2]);
-          var keys_port = Object.keys(obj_port);
+        var obj_port = JSON.parse(reply[key2]);
+        var keys_port = Object.keys(obj_port);
         }
       catch(err){
-            var obj_port = [];  
-            var keys_port = [];
+        var obj_port = [];  
+        var keys_port = [];
           }
       async.each(keys_port, function(port, callback) {
         var port_info = obj_port[port];
-        var row = []
-    // row.push(Object.values(port_info['dstips']))
-        data_dict['UDP'+port] = [Object.keys(port_info['dstips']),Object.values(port_info['dstips'])]
+        var row = [];
+        data_dict['UDP'+port] = [Object.keys(port_info['dstips']),Object.values(port_info['dstips'])];
         callback();
       }, function(err){
         if(err){
@@ -732,7 +676,7 @@ function getIpInfo_box_ip(ip,mode){
       }
       else{ip_info_dict['geocountry'] = ' '.repeat(33);}
       ip_info_str = Object.values(ip_info_dict).join("|");
-      box_ip.setContent(ip_info_str);
+      if(mode == 1)box_ip.setContent(ip_info_str);
       screen.render();
         resolve(ip_info_dict_outtuple);
       }
@@ -754,7 +698,7 @@ function getEvidence(reply){
     var obj = JSON.parse(reply);
     var keys = Object.keys(obj);
     async.each(keys, (key,callback)=>{
-      ev = ev+'{bold}'+key.green+'{/bold}'+" "+obj[key]+'\n'
+      ev = ev+'{bold}'+color.green(key)+'{/bold}'+" "+obj[key]+'\n'
       callback();
       }, function(err){
         if(err);
@@ -767,28 +711,35 @@ function getEvidence(reply){
 };
 var ips_with_timewindows = {}
 
-function set_tree_data(timewindows_list){
+function set_tree_data(timewindows_list, blockedTW){
   /*
   sets ips and their tws for the tree.
 
   */
   // console.log(timewindows_list)
   var ips_with_profiles = Object.keys(timewindows_list);
-
   var explorer = { extended: true
   , children: function(self){
       var result = {};
-      try {
-        if (!self.childrenContent) {
-          for(i=0;i<ips_with_profiles.length;i++){
-            var tw = timewindows_list[ips_with_profiles[i]];
-            child = ips_with_profiles[i];
-            result[child] = { name: child, extended:false, children: tw[0]};
+             try {
+            if (!self.childrenContent) {
+          // var blockedTW = {};
+            // blockedTW = Object.assign({}, blockedTWs);
+            for(i=0;i<ips_with_profiles.length;i++){
+              var tw = timewindows_list[ips_with_profiles[i]];
+              child = ips_with_profiles[i];
+            if(Object.keys(blockedTW).includes(child)){
+              result[child] = { name:color.red(child), extended:false, children: tw[0]};
             }
-        }else
+            else{
+              result[child] = { name:child, extended:false, children: tw[0]};
+            }
+           
+            }
+            }else
         result = self.childrenContent;
-      } catch (e){}
-      return result;
+        } catch (e){}
+        return result;
     }
 }
 return explorer;};
@@ -807,8 +758,8 @@ function getTreeData(key){
 }
 function timewindows_promises(reply) {
     return Promise.all(reply.map( key_redis => getTreeData(key_redis)))
-      .then(tree.setData(set_tree_data(ips_with_timewindows)))
-      .then(screen.render());
+      .then(blockedTW()
+      .then(function(blocked_dict){tree.setData(set_tree_data(ips_with_timewindows,blocked_dict)); screen.render();return;}))
 }
 
 redis_tree.keys('*', (err,reply)=>{
@@ -817,19 +768,26 @@ redis_tree.keys('*', (err,reply)=>{
 var timeline_reply_global  = {};
 
 tree.on('select',function(node){
+  try{
+  // console.log((tree.data.childrenContent.name))
+  }
+  catch(err){}
   screen.key('w',function(ch,key){
-  clipboardy.writeAsync(node.name);
+  clipboardy.writeSync(node.name);
 
-clipboardy.readAsync();
+clipboardy.readSync();
 
 })
     clean_widgets()
+
     if(!node.name.includes('timewindow')){
-      getIpInfo_box_ip(node.name, 1)}
+      getIpInfo_box_ip(color.unstyle(node.name), 1)}
       
     else{
-      //get infor about outtuples of a selected timeline
-      redis_outtuples_timewindow.hgetall("profile_"+node.parent.name+"_"+node.name, (err,reply)=>{
+      var ip  = color.unstyle(node.parent.name)
+      var timewindow = color.unstyle(node.name)
+
+      redis_outtuples_timewindow.hgetall("profile_"+ip+"_"+node.name, (err,reply)=>{
         var ips = [];
         timeline_reply_global = reply;
         map.innerMap.draw(null);
@@ -837,7 +795,7 @@ clipboardy.readAsync();
           table_outTuples_listtable.setItems('');
           box_detections.setContent('');
           return;}
-        box_detections.setContent(reply['Detections']);
+        //box_detections.setContent(reply['Detections']);
         getEvidence(reply['Evidence']);
         
         var obj_outTuples = JSON.parse(reply["OutTuples"]);
@@ -868,7 +826,7 @@ clipboardy.readAsync();
             }
           if(tuple_info[0].trim().length>40){
             var k = chunkString(tuple_info[0].trim(),40)
-            // console.log(k,tuple_info[0].trim())
+          
             async.forEachOf(k, function(ctr,ind, callback){
               var row2 = []
               if(ind == 0){
@@ -904,7 +862,7 @@ clipboardy.readAsync();
       });
     })}
       //get the timeline of a selected ip
-    redis_get_timeline.lrange("profile_"+node.parent.name+"_"+node.name+'_timeline',0,-1, (err,reply)=>{
+    redis_get_timeline.lrange("profile_"+ip+"_"+node.name+'_timeline',0,-1, (err,reply)=>{
       var data = [];
       async.each(reply, function(line, callback){
         var row = [];
@@ -917,15 +875,15 @@ clipboardy.readAsync();
         if(index_to>= 0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
         if(index_recognized >= 0){
           for(var i =index_recognized - 1; i < index_recognized+3;i++){
-          line_arr[i] = line_arr[i].red;}
+          line_arr[i] = color.red(line_arr[i]);}
           }
         if(index_careful > 0){
-          line_arr[index_careful] = line_arr[index_careful].red;
-          line_arr[index_careful - 1] = line_arr[index_careful - 1].red
+          line_arr[index_careful] = color.red(line_arr[index_careful]);
+          line_arr[index_careful - 1] = color.red(line_arr[index_careful - 1])
         }
         for(var i =3; i < index_asked;i++){
-          line_arr[i] = line_arr[i].bold.cyan }     
-        if(line_arr[index_to+2].includes('/'))line_arr[index_to+2]=line_arr[index_to+2].slice(0,-1).bold.yellow+','
+          line_arr[i] = color.bold.cyan(line_arr[i]) }     
+        if(line_arr[index_to+2].includes('/'))line_arr[index_to+2]=color.bold.yellow(line_arr[index_to+2].slice(0,-1))+','
         line_arr[1]= line_arr[1].substring(0, line_arr[1].lastIndexOf('.'));
         timeline_line = line_arr.join(" ");
         row.push(timeline_line.replace(/\|.*/,''));
@@ -946,7 +904,7 @@ clipboardy.readAsync();
   screen.key('b', function(ch, key) {
     hide_widgets()
     bar_state_one = true;
-
+    var number_bars = 9
     // bar_state_two = true;  
     bar_state_three = true;
     bar_state_four = true;
@@ -964,8 +922,8 @@ clipboardy.readAsync();
       set_box_bar_state(est_connections_dstPortsServer,notEst_connections_dstPortsServer,bar_one_dstPortsServer,bar_two_dstPortsServer)
       bar_setdata(bar_one_dstPortsServer, first_bar_counter,est_connections_dstPortsServer, number_bars);
       bar_setdata(bar_two_dstPortsServer, second_bar_counter, notEst_connections_dstPortsServer, number_bars);
-      bar_one_dstPortsServer.setLabel({text:'DstPortsServerEstablished'.green,side:'left'});
-      bar_two_dstPortsServer.setLabel({text:'DstPortsServerNotEstablished'.green,side:'left'});
+      bar_one_dstPortsServer.setLabel({text:color.green('DstPortsServerEstablished'),side:'left'});
+      bar_two_dstPortsServer.setLabel({text:color.green('DstPortsServerNotEstablished'),side:'left'});
       screen.render();
       screen.key('right', function(ch, key) {
         if(bar_one_dstPortsServer.focused == true){
@@ -1025,7 +983,7 @@ screen.key('v', function(ch, key) {
     if(bar_state_four){
       try{
       number_bars = 5
-      var est_connections_dstPortsClient = port_ips_bars("DstPortsClientTCPEstablished","DstPortsClientUDPEstablished",timeline_reply_global);
+      var est_connections_dstPortsClient = port_ips_bars("DstPortsClientTCPNotEstablished","DstPortsClientUDPNotEstablished",timeline_reply_global);
       var dstPortsClient_keys = Object.keys(est_connections_dstPortsClient);
       var dstPortsClient_values = Object.values(est_connections_dstPortsClient);
       var est_bar_one_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter][0].length / number_bars);
@@ -1033,15 +991,13 @@ screen.key('v', function(ch, key) {
       var vertical = Math.ceil(dstPortsClient_keys.length / 2);
       port_ip_setdata(bar_one_dstPortClient, first_bar_counter, dstPortsClient_values[vertical_counter], number_bars);
       port_ip_setdata(bar_two_dstPortClient, second_bar_counter, dstPortsClient_values[vertical_counter+1], number_bars);
-      // set_box_bar_dstPortClient_state(dstPortsClient_values[vertical_counter][0],dstPortsClient_values[vertical_counter+1][0], bar_one_dstPortClient, bar_two_dstPortClient, number_bars)
-      bar_one_dstPortClient.setLabel({text:dstPortsClient_keys[0].green,side:'left'});
-      bar_two_dstPortClient.setLabel({text:dstPortsClient_keys[1].green,side:'left'});
+      bar_one_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[0]),side:'left'});
+      bar_two_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[1]),side:'left'});
       bar_one_dstPortClient.show();
       
       bar_two_dstPortClient.show();
       box_bar_state.show();
       bar_one_dstPortClient.focus();
-      // bar_two_srcPortClient.setLabel({text:'DstPortsClientNotEstablished'.green,side:'left'});
       screen.render();
 
 
@@ -1078,25 +1034,24 @@ screen.key('v', function(ch, key) {
           else{
             if(dstPortsClient_keys[vertical_counter]===undefined){
               bar_one_dstPortClient.clear();
-              bar_one_dstPortClient.setLabel({text:'empty'.green,side:'left'})
+              bar_one_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
               bar_two_dstPortClient.clear();
-              bar_two_dstPortClient.setLabel({text:'empty'.green,side:'left'})
+              bar_two_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
             }
             else if(dstPortsClient_keys[vertical_counter+1]===undefined){
               est_bar_one_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter][0].length / number_bars);
-              bar_one_dstPortClient.setLabel({text:dstPortsClient_keys[vertical_counter].green,side:'left'});
+              bar_one_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter]),side:'left'});
               port_ip_setdata(bar_one_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter], number_bars);
               bar_two_dstPortClient.clear();
-              bar_two_dstPortClient.setLabel({text:'empty'.green,side:'left'})
+              bar_two_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
             }
             else{
               est_bar_one_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter][0].length / number_bars);
               est_bar_two_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter+1][0].length / number_bars);
-              bar_one_dstPortClient.setLabel({text:dstPortsClient_keys[vertical_counter].green,side:'left'});
-              bar_two_dstPortClient.setLabel({text:dstPortsClient_keys[vertical_counter+1].green,side:'left'});
+              bar_one_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter]),side:'left'});
+              bar_two_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter+1]),side:'left'});
               port_ip_setdata(bar_one_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter], number_bars);
               port_ip_setdata(bar_two_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter+1], number_bars);
-              // set_box_bar_dstPortClient_state(dstPortsClient_values[vertical_counter][0],dstPortsClient_values[vertical_counter+1][0], bar_one_dstPortClient, bar_two_dstPortClient, number_bars);
             }}
           
         screen.render()
@@ -1107,32 +1062,30 @@ screen.key('v', function(ch, key) {
           else{
             if(dstPortsClient_keys[vertical_counter]===undefined){
               bar_one_dstPortClient.clear();
-              bar_one_dstPortClient.setLabel({text:'empty'.green,side:'left'})
+              bar_one_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
               bar_two_dstPortClient.clear();
-              bar_two_dstPortClient.setLabel({text:'empty'.green,side:'left'})
+              bar_two_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
             }
             else if(dstPortsClient_keys[vertical_counter+1]===undefined){
               est_bar_one_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter][0].length / number_bars);
-              bar_one_dstPortClient.setLabel({text:dstPortsClient_keys[vertical_counter].green,side:'left'});
+              bar_one_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter]),side:'left'});
               port_ip_setdata(bar_one_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter], number_bars);
               bar_two_dstPortClient.clear();
-              bar_two_dstPortClient.setLabel({text:'empty'.green,side:'left'})
+              bar_two_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
             }
             else{
               est_bar_one_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter][0].length / number_bars);
               est_bar_two_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter+1][0].length / number_bars);
-              bar_one_dstPortClient.setLabel({text:dstPortsClient_keys[vertical_counter].green,side:'left'});
-              bar_two_dstPortClient.setLabel({text:dstPortsClient_keys[vertical_counter+1].green,side:'left'});
+              bar_one_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter]),side:'left'});
+              bar_two_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter+1]),side:'left'});
               port_ip_setdata(bar_one_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter], number_bars);
               port_ip_setdata(bar_two_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter+1], number_bars);
-            // set_box_bar_dstPortClient_state(dstPortsClient_values[vertical_counter][0],dstPortsClient_values[vertical_counter+1][0], bar_one_dstPortClient, bar_two_dstPortClient, number_bars);
           }}
           
         screen.render()
       });
 
     }catch(err){
-      // console.log()
       box_bar_state.setContent('no information')
       bar_one_dstPortClient.show()
       bar_two_dstPortClient.show()
@@ -1171,10 +1124,13 @@ screen.key('v', function(ch, key) {
 
       gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[3].slice(0,10))
       gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[3].slice(0,10))
+      var data_est =  [['estSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]]
+      data_est.push(...est_connections_srcPortsClient[2].slice(0,20))
+      listtable_est_srcPort.setData(data_est)
 
-      listtable_est_srcPort.setData(est_connections_srcPortsClient[2].slice(0,20)) 
-      listtable_notEst_srcPort.setData(notEst_connections_srcPortsClient[2].slice(0,20))
-
+      var data_notest =  [['notEstSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]]
+      data_notest.push(...notEst_connections_srcPortsClient[2].slice(0,20))
+      listtable_notEst_srcPort.setData(data_notest) 
 
       gaugeList_est_srcPort.show()
       gaugeList_notEst_srcPort.show()
@@ -1184,33 +1140,38 @@ screen.key('v', function(ch, key) {
       screen.render();
 
     screen.key('down', function(ch, key){
-      if(gaugeList_est_srcPort.focused == true || gaugeList_three.focused == true){
+      if(gaugeList_est_srcPort.focused == true || gaugeList_est_dstIPs.focused == true){
         if(gauge_counter1 >= (est_bar_one_number_srcPortsClient-1)*10);
-        else{ 
+        else{
+          var data_est_srcPortClient =[['estSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]];
           listtable_counter1 += 20;
           gauge_counter1 += 10;
-          listtable_est_srcPort.setData(est_connections_srcPortsClient[2].slice(listtable_counter1,listtable_counter1 + 20));
-          gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[3].slice(gauge_counter1,gauge_counter1 + 10))
+          data_est_srcPortClient.push(...est_connections_srcPortsClient[2].slice(listtable_counter1,listtable_counter1 + 20));
+          listtable_est_srcPort.setData(data_est_srcPortClient);
+          gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[3].slice(gauge_counter1,gauge_counter1 + 10));
           screen.render();}
       }
       else{
         if(gauge_counter2 >= (notEst_bar_one_number_srcPortsClient-1)*10);
         else{
-
-        listtable_counter2 += 20;
-        gauge_counter2 += 10;
-        listtable_notEst_srcPort.setData(notEst_connections_srcPortsClient[2].slice(listtable_counter2,listtable_counter2 + 20));
-        gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[3].slice(gauge_counter2,gauge_counter2 + 10));
-        screen.render();}
+          var data_notEst_srcPortClient =[['notEstSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+          listtable_counter2 += 20;
+          gauge_counter2 += 10;
+          data_notEst_srcPortClient.push(...notEst_connections_srcPortsClient[2].slice(listtable_counter2,listtable_counter2 + 20));
+          listtable_notEst_srcPort.setData(data_notEst_srcPortClient);
+          gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[3].slice(gauge_counter2,gauge_counter2 + 10));
+          screen.render();}
       }
       })
 
     screen.key('up', function(ch, key){
-      if(gaugeList_est_srcPort.focused == true || gaugeList_three.focused == true){
+      if(gaugeList_est_srcPort.focused == true ||gaugeList_est_dstIPs.focused == true){
         listtable_counter1 -= 20;
         gauge_counter1 -= 10;
         if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
-        listtable_est_srcPort.setData(est_connections_srcPortsClient[2].slice(listtable_counter1,listtable_counter1+20));
+        var data_est_srcPortClient =[['estSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+        data_est_srcPortClient.push(...est_connections_srcPortsClient[2].slice(listtable_counter1,listtable_counter1 + 20));
+        listtable_est_srcPort.setData(data_est_srcPortClient);
         gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[3].slice(gauge_counter1,gauge_counter1+10));
         screen.render();
 
@@ -1219,7 +1180,9 @@ screen.key('v', function(ch, key) {
         listtable_counter2 -=20;
         gauge_counter2 -= 10;
         if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
-        listtable_notEst_srcPort.setData(notEst_connections_srcPortsClient[2].slice(listtable_counter2,listtable_counter2+20));
+        var data_notEst_srcPortClient = [['notEstSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+        data_notEst_srcPortClient.push(...notEst_connections_srcPortsClient[2].slice(listtable_counter2,listtable_counter2 + 20));
+        listtable_notEst_srcPort.setData(data_notEst_srcPortClient);
         gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[3].slice(gauge_counter2,gauge_counter2+10));
         screen.render();  }
     })
@@ -1239,49 +1202,97 @@ screen.key('v', function(ch, key) {
      
 //display to bars of dstIPsClient established and non established connections
 screen.key('c', function(ch, key) {
-
     hide_widgets()
     bar_state_one = true;
     bar_state_two = true; 
     // bar_state_three = true;
-    bar_state_four = true;
     box_hotkeys_state = true;
     map_state = true;
+    var gauge_counter1 = 0;
+    var gauge_counter2 = 0;
+    var listtable_counter1 = 0;
+    var listtable_counter2 = 0;
     if(bar_state_three){
-      var number_bars_ips = 5
-      var est_connections_ips = tcp_udp_connections("DstIPsClientTCPEstablished","DstIPsClientUDPEstablished",timeline_reply_global);
-      var notEst_connections_ips= tcp_udp_connections("DstIPsClientTCPNotEstablished","DstIPsClientUDPNotEstablished",timeline_reply_global);
+      var est_connections_dstIPsClient = tcp_udp_connections("DstIPsClientTCPEstablished","DstIPsClientUDPEstablished",timeline_reply_global);
+      var notEst_connections_dstIPsClient = tcp_udp_connections("DstIPsClientTCPNotEstablished","DstIPsClientUDPNotEstablished",timeline_reply_global);
+      var est_bar_one_number_dstIPsClient= Math.ceil(est_connections_dstIPsClient[3].length / 10);
+      var notEst_bar_one_number_dstIPsClient = Math.ceil(notEst_connections_dstIPsClient[3].length / 10);
 
-      // setTimeout(function(){
-      // //   fs.writeFile("gauges.txt", est_connections_ips[3], (err) => {
-      // //   if (err) console.log(err);
-      // //   console.log("Successfully Written to File.");
-      // // });
-      //   gaugeList_four.setGauges(est_connections_ips[3]);
-      //   gaugeList_four.show();
-      //   screen.render()
-      // },3000)
-      // setTimeout(function(){console.log(est_connections_ips[3].slice(0,28))},2000)
+      gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[3].slice(0,10))
+      gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[3].slice(0,10))
+      var data_est =  [['estDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]]
+      data_est.push(...est_connections_dstIPsClient[2].slice(0,20))
+      listtable_est_dstIPs.setData(data_est)
 
-      listtable_est_srcPort.setData(notEst_connections_ips[2]) 
-      gaugeList_three.setGauges(notEst_connections_ips[3])
-      listtable_notEst_srcPort.setData(est_connections_ips[2])
-      listtable_notEst_srcPort.show()
-      listtable_est_srcPort.show()
-      // gaugeList_three.show()
-      gaugeList_four.focus()
+      var data_notest =  [['notEstDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]]
+      data_notest.push(...notEst_connections_dstIPsClient[2].slice(0,20))
+      listtable_notEst_dstIPs.setData(data_notest) 
+
+      gaugeList_est_dstIPs.show()
+      gaugeList_notEst_dstIPs.show()
+      listtable_notEst_dstIPs.show()
+      listtable_est_dstIPs.show()
+      gaugeList_est_dstIPs.focus()
       screen.render();
+
+    screen.key('down', function(ch, key){
+      if(gaugeList_est_dstIPs.focused == true || gaugeList_est_srcPort.focused == true){
+        if(gauge_counter1 >= (est_bar_one_number_dstIPsClient-1)*10);
+        else{
+          var data_est_dstIPsClient =[['estDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+          listtable_counter1 += 20;
+          gauge_counter1 += 10;
+          data_est_dstIPsClient.push(...est_connections_dstIPsClient[2].slice(listtable_counter1,listtable_counter1 + 20));
+          listtable_est_dstIPs.setData(data_est_dstIPsClient);
+          gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[3].slice(gauge_counter1,gauge_counter1 + 10));
+          screen.render();}
+      }
+      else{
+        if(gauge_counter2 >= (notEst_bar_one_number_dstIPsClient-1)*10);
+        else{
+          var data_notEst_dstIPsClient =[['notEstDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+          listtable_counter2 += 20;
+          gauge_counter2 += 10;
+          data_notEst_dstIPsClient.push(...notEst_connections_dstIPsClient[2].slice(listtable_counter2,listtable_counter2 + 20));
+          listtable_notEst_dstIPs.setData(data_notEst_dstIPsClient);
+          gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[3].slice(gauge_counter2,gauge_counter2 + 10));
+          screen.render();}
+      }
+      })
+
+    screen.key('up', function(ch, key){
+      if(gaugeList_est_dstIPs.focused == true || gaugeList_est_srcPort.focused == true){
+        listtable_counter1 -= 20;
+        gauge_counter1 -= 10;
+        if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
+        var data_est_dstIPsClient =[['estDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+        data_est_dstIPsClient.push(...est_connections_dstIPsClient[2].slice(listtable_counter1,listtable_counter1 + 20));
+        listtable_est_dstIPs.setData(data_est_dstIPsClient);
+        gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[3].slice(gauge_counter1,gauge_counter1+10));
+        screen.render();
+
+      }
+      else{
+        listtable_counter2 -=20; 
+        gauge_counter2 -= 10;
+        if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
+        var data_notEst_dstIPsClient = [['notEstDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+        data_notEst_dstIPsClient.push(...notEst_connections_dstIPsClient[2].slice(listtable_counter2,listtable_counter2 + 20));
+        listtable_notEst_dstIPs.setData(data_notEst_dstIPsClient);
+        gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[3].slice(gauge_counter2,gauge_counter2+10));
+        screen.render();  }
+    })
 
     }
     else{
-        listtable_est_srcPort.hide()
-        listtable_notEst_srcPort.hide()
-        gaugeList_four.hide()
-        gaugeList_three.hide()
+        listtable_est_dstIPs.hide()
+        listtable_notEst_dstIPs.hide()
+        gaugeList_notEst_dstIPs.hide()
+        gaugeList_est_dstIPs.hide()
         show_widgets();
       }
-      bar_state_three = !bar_state_three;
-      screen.render();
+    bar_state_three = !bar_state_three;
+    screen.render()
   
 });
 
@@ -1343,11 +1354,11 @@ screen.key(['tab'], function(ch, key) {
     gaugeList_est_srcPort.focus()
     // console.log('ss')
   }
-  else if(gaugeList_three.focused == true){
-    gaugeList_four.focus()
+  else if(gaugeList_notEst_dstIPs.focused == true){
+    gaugeList_est_dstIPs.focus()
   }
-  else if(gaugeList_four.focused == true){
-    gaugeList_three.focus()
+  else if(gaugeList_est_dstIPs.focused == true){
+    gaugeList_notEst_dstIPs.focus()
   }
   else if(bar_one_srcPortClient.focused == true){
       bar_two_srcPortClient.focus();}
@@ -1422,3 +1433,4 @@ screen.key(["escape", "q", "C-c"], function(ch, key) {
     return process.exit(0);
 });
 screen.render();
+
