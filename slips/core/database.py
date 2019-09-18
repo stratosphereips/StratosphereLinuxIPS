@@ -1107,6 +1107,8 @@ class Database(object):
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = timestamp + ' ' + str(data)
         self.r.rpush(key, data)
+        # Mark the tw as modified since the timeline line is new data in the TW
+        self.markProfileTWAsModified(profileid, twid)
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
