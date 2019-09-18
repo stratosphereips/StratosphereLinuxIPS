@@ -324,8 +324,7 @@ class InputProcess(multiprocessing.Process):
                 # This double if is horrible but we just need to change a string
                 if self.input_type == 'interface':
                     # Change the bro command
-                    bro_parameter = '-i'
-                    prefix = ''
+                    bro_parameter = '-i ' + self.input_information
                     # We don't want to stop bro if we read from an interface
                     self.bro_timeout = 9999999999999999
                 elif self.input_type == 'pcap':
@@ -333,9 +332,11 @@ class InputProcess(multiprocessing.Process):
                     bro_parameter = '-r'
                     # Find if the pcap file name was absolute or relative
                     if self.input_information[0] == '/':
-                        prefix = ''
+                        # If absolute, do nothing
+                        bro_parameter = '-r ' + self.input_information
                     else:
-                        prefix = '../'
+                        # If relative, add ../ since we will move into a special folder
+                        bro_parameter = '-r ' + '../' + self.input_information
                     # This is for stoping the input if bro does not receive any new line while reading a pcap
                     self.bro_timeout = 30
 
@@ -344,9 +345,10 @@ class InputProcess(multiprocessing.Process):
                     # The rm should not be in background because we must wait until the folder is empty
                     command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null &"
                     os.system(command)
-                # Run zeek on the pcap. The redef is to have json files
+
+                # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                command = "cd " + self.zeek_folder + "; bro -C -r " + prefix + self.input_information + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                command = "cd " + self.zeek_folder + "; bro -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
                 # Run zeek.
                 os.system(command)
 
