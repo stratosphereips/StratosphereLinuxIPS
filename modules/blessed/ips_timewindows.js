@@ -67,9 +67,33 @@ var grid = new contrib.grid({
 var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table, 
   {keys: true
   , vi:true
+  , style:{border:{ fg:'blue'}}
   , scrollbar: true
   , label: "Timeline"
   , columnWidth:[200]})
+, box_generic_dashboard = grid.set(2, 2, 2, 2,blessed.box,{
+      top: 'center',
+      left: 'center',
+      width: '50%',
+      height: '50%',
+      label:'GENERIC DASHBOARD',
+      tags: true,
+      keys: true,
+      style:{
+         focus: {
+      border:{ fg:'red'}
+    }},
+      vi:true,
+      scrollable: true,
+      alwaysScroll: true,
+    scrollbar: {
+        ch: ' ',
+        inverse: true
+      },
+    border: {
+      type: 'line'
+    },
+  })
 
   ,table_outTuples_listtable = grid.set(0,0,6,6, blessed.listtable, {
       keys: true,
@@ -108,10 +132,15 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
 ,listtable_notEst_dstIPs = grid.set(3,0,3,2, blessed.listtable, {
       border: 'line'
     })
-
+,listtable_est_dstPort = grid.set(0,0,3,2, blessed.listtable, {
+      border: 'line'
+    })
+,listtable_notEst_dstPort = grid.set(3,0,3,2, blessed.listtable, {
+      border: 'line'
+    })
   , tree =  grid.set(0,0,5,1,contrib.tree,
   { vi:true 
-  , style: {fg:'green',border: {fg:'magenta'}}
+  , style: {fg:'green',border: {fg:'blue'}}
   , template: { lines: true }
   , label: 'Ips from slips'})
 
@@ -139,6 +168,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       tags: true,
       keys: true,
       style:{
+        border:{ fg:'blue'},
          focus: {
       border:{ fg:'magenta'}
     }},
@@ -156,44 +186,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
 
 
 , map = grid.set(0, 0, 6, 6,contrib.map,{label: 'World Map'})
-, bar_one_dstPortsServer = grid.set(0.5,0,3,6,contrib.stackedBar,
-        { 
-         barWidth: 6
-       , barSpacing: 10
-       , xOffset: 2
-       , height: "50%"
-       , width: "50%"
-       , style:{
-         focus: {
-      border:{ fg:'magenta'}
-    }}
-       , barBgColor: [ 'red', 'blue', 'green' ]})
-, bar_two_dstPortsServer = grid.set(3.5,0,2.7,6,contrib.stackedBar,
-       { 
-         barWidth: 6
-       , barSpacing: 10
-       , xOffset: 2
-       , height: "100%"
-       , style:{
-         focus: {
-      border:{ fg:'magenta'}
-    }}
-       , width: "100%"
-       , barBgColor: [ 'red', 'blue', 'green' ]})
-, box_bar_state = grid.set(0, 0, 0.5, 6, blessed.box,
-      {top: 'center',
-      left: 'center',
-      width: '50%',
-      style:{
-         focus: {
-      border:{ fg:'magenta'}
-    }},
-      height: '50%',
-      tags: true,
-      border: {
-      type: 'line'
-    },
-    })
+
 , bar_one_dstPortClient = grid.set(0.5,0,3,6,contrib.stackedBar,
         { //parent:bar_list
          barWidth: 6
@@ -202,6 +195,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
        , height: "100%"
        , width: "100%"
        , style:{
+          border:{ fg:'blue'},
+
          focus: {
       border:{ fg:'magenta'}
     }}
@@ -213,6 +208,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
        , xOffset: 2
        , height: "100%"
        , style:{
+          border:{ fg:'blue'},
+
          focus: {
       border:{ fg:'magenta'}
     }}
@@ -258,6 +255,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
 gaugeList_est_srcPort = grid.set(0.3, 2, 2.8, 4, contrib.gaugeList,
       {
       style:{
+        border:{ fg:'blue'},
          focus: {
       border:{ fg:'magenta'}
     }},
@@ -271,6 +269,7 @@ gaugeList_notEst_srcPort = grid.set(3.3, 2, 2.8, 4, contrib.gaugeList,
       {
 
         style:{
+          border:{ fg:'blue'},
          focus: {
       border:{ fg:'magenta'}
     }},
@@ -284,6 +283,8 @@ gaugeList_est_dstIPs = grid.set(0.3, 2, 2.8, 4, contrib.gaugeList,
       {
 
       style:{
+          border:{ fg:'blue'},
+        
          focus: {
       border:{ fg:'magenta'}
     }},
@@ -296,6 +297,37 @@ gaugeList_est_dstIPs = grid.set(0.3, 2, 2.8, 4, contrib.gaugeList,
 gaugeList_notEst_dstIPs = grid.set(3.3, 2, 2.8, 4, contrib.gaugeList,
       {
         style:{
+          border:{ fg:'blue'},
+
+         focus: {
+      border:{ fg:'magenta'}
+    }},
+      keys:true,
+        gaugeSpacing: 1,
+        gaugeHeight: 1,
+        gauges:[]
+      }
+    )
+gaugeList_est_dstPort = grid.set(0.3, 2, 2.8, 4, contrib.gaugeList,
+      {
+
+      style:{
+          border:{ fg:'blue'},
+
+         focus: {
+      border:{ fg:'magenta'}
+    }},
+      keys:true,
+        gaugeSpacing: 1,
+        gaugeHeight: 1,
+        gauges:[]
+      }
+    ),
+gaugeList_notEst_dstPort = grid.set(3.3, 2, 2.8, 4, contrib.gaugeList,
+      {
+        style:{
+          border:{ fg:'blue'},
+
          focus: {
       border:{ fg:'magenta'}
     }},
@@ -306,6 +338,12 @@ gaugeList_notEst_dstIPs = grid.set(3.3, 2, 2.8, 4, contrib.gaugeList,
       }
     )
 
+box_generic_dashboard.focus()
+gaugeList_notEst_dstPort.hide()
+listtable_notEst_dstPort.hide()
+gaugeList_est_dstPort.hide()
+listtable_est_dstPort.hide()
+
 gaugeList_notEst_srcPort.hide()
 listtable_notEst_srcPort.hide()
 gaugeList_notEst_dstIPs.hide()
@@ -315,13 +353,12 @@ listtable_est_dstIPs.hide()
 table_outTuples_listtable.hide()
 gaugeList_est_srcPort.hide()
 listtable_est_srcPort.hide()
-box_bar_state.hide()
+
 bar_two_dstPortClient.hide()
 bar_one_dstPortClient.hide()
-bar_one_dstPortsServer.hide()
-bar_two_dstPortsServer.hide()
-map.hide()
 
+map.hide()
+box_generic_dashboard.setContent('\n This is a generic dashboard I dont know what info should be in there but uuuuuiiiiiiiiiiiii hi sebastian miss you\n\nPress Tab to exit this window\n\n do not press any hotkeys for now cause it will be broken thanks')
 var focus_widget = tree;
 var bar_state_one = true;
 var bar_state_two = true; 
@@ -339,6 +376,10 @@ function clean_widgets(){
 }
 
 function hide_widgets(){
+  gaugeList_notEst_dstPort.hide()
+  listtable_notEst_dstPort.hide()
+  gaugeList_est_dstPort.hide()
+  listtable_est_dstPort.hide()
   listtable_est_srcPort.hide()
   gaugeList_notEst_srcPort.hide()
   listtable_notEst_srcPort.hide()
@@ -353,11 +394,10 @@ function hide_widgets(){
   table_timeline.hide()
   box_ip.hide()
   table_outTuples_listtable.hide()  
-  box_bar_state.hide()
+
   bar_two_dstPortClient.hide()
   bar_one_dstPortClient.hide()
-  bar_one_dstPortsServer.hide()
-  bar_two_dstPortsServer.hide()
+ 
   map.hide()
 }
 
@@ -430,40 +470,6 @@ function port_ip_setdata(bar, counter, data, number){
   })
 
 };
-
-//function to fill in data for a box (box displays the state of the bar)
-function set_box_bar_dstPortClient_state(bar_data, bar_data_two,bar_one,bar_two){
-  if(bar_data[0].length > number_bars && bar_data_two[0].length > number_bars){
-    box_bar_state.setContent('Bars are scrollable. -Tab to change bars. -Left and -Right to  scroll.');
-    bar_one.focus();}
-  else if(bar_data[0].length > number_bars){
-    box_bar_state.setContent('Upper bar is scrollable. -Left and -Right to  scroll.');
-    bar_one.focus();}
-  else if(bar_data_two[0].length > number_bars){
-    box_bar_state.setContent('Lower bar is scrollable. -Left and -Right to  scroll.');
-    bar_two.focus();}
-  else{box_bar_state.setContent('Bars are not scrollable.')
-  bar_one.focus()};
-  
-}
-
-//function to fill in data for a box (box displays the state of the bar)
-function set_box_bar_state(bar_data, bar_data_two,bar_one,bar_two,number_bars){
-  if(bar_data[0].length > number_bars && bar_data_two[0].length > number_bars){
-    box_bar_state.setContent('Bars are scrollable. -Tab to change bars. -Left and -Right to  scroll. {bold}Logarithmic scale.{/bold}');
-    bar_one.focus();}
-  else if(bar_data[0].length > number_bars){
-    box_bar_state.setContent('Upper bar is scrollable. -Left and -Right to  scroll. {bold}Logarithmic scale.{/bold}');
-    bar_one.focus();}
-  else if(bar_data_two[0].length > number_bars){
-    box_bar_state.setContent('Lower bar is scrollable. -Left and -Right to  scroll. {bold}Logarithmic scale.{/bold}');
-    bar_two.focus();}
-  else{box_bar_state.setContent('Bars are not scrollable. {bold}Logarithmic scale.{/bold}')
-  bar_one.focus()};
-  bar_one.show();
-  bar_two.show();
-  box_bar_state.show();
-}
 
 //function to fill data about destIpsCLient
 function port_ips_bars(key, key2,reply){
@@ -902,68 +908,97 @@ clipboardy.readSync();
 //display two bars of dstPortsServer established and non established connections
 
   screen.key('b', function(ch, key) {
-    hide_widgets()
+        hide_widgets()
     bar_state_one = true;
-    var number_bars = 9
-    // bar_state_two = true;  
+    // bar_state_two = true; 
     bar_state_three = true;
-    bar_state_four = true;
     box_hotkeys_state = true;
     map_state = true;
-    var first_bar_counter = 0;
-    var second_bar_counter = 0;
-    bar_two_dstPortsServer.options.barSpacing = 10;
-    bar_one_dstPortsServer.options.barSpacing = 10;
+    var gauge_counter1 = 0;
+    var gauge_counter2 = 0;
+    var listtable_counter1 = 0;
+    var listtable_counter2 = 0;
     if(bar_state_two){
-      var est_connections_dstPortsServer = tcp_udp_connections("DstPortsServerTCPEstablished","DstPortsServerUDPEstablished",timeline_reply_global);
-      var notEst_connections_dstPortsServer = tcp_udp_connections("DstPortsServerTCPNotEstablished","DstPortsServerUDPNotEstablished",timeline_reply_global);
-      var est_bar_number_dstPortsServer = Math.ceil(est_connections_dstPortsServer[0].length / number_bars);
-      var notEst_bar_number_dstPortsServer = Math.ceil(notEst_connections_dstPortsServer[0].length /number_bars);
-      set_box_bar_state(est_connections_dstPortsServer,notEst_connections_dstPortsServer,bar_one_dstPortsServer,bar_two_dstPortsServer)
-      bar_setdata(bar_one_dstPortsServer, first_bar_counter,est_connections_dstPortsServer, number_bars);
-      bar_setdata(bar_two_dstPortsServer, second_bar_counter, notEst_connections_dstPortsServer, number_bars);
-      bar_one_dstPortsServer.setLabel({text:color.green('DstPortsServerEstablished'),side:'left'});
-      bar_two_dstPortsServer.setLabel({text:color.green('DstPortsServerNotEstablished'),side:'left'});
-      screen.render();
-      screen.key('right', function(ch, key) {
-        if(bar_one_dstPortsServer.focused == true){
+      var est_connections_dstPortsServer = tcp_udp_connections("dstPortsServerTCPEstablished","dstPortsServerUDPEstablished",timeline_reply_global);
+      var notEst_connections_dstPortsServer = tcp_udp_connections("dstPortsServerTCPNotEstablished","dstPortsServerUDPNotEstablished",timeline_reply_global);
+      var est_bar_one_number_dstPortsServer = Math.ceil(est_connections_dstPortsServer[3].length / 10);
+      var notEst_bar_one_number_dstPortsServer = Math.ceil(notEst_connections_dstPortsServer[3].length / 10);
 
-            if(first_bar_counter >= (est_bar_number_dstPortsServer-1)*number_bars);
-            else{
-            first_bar_counter += number_bars;             
-              bar_setdata(bar_one_dstPortsServer, first_bar_counter, est_connections_dstPortsServer,number_bars);}}
-          else{
-            if(second_bar_counter >= (notEst_bar_number_dstPortsServer-1)*number_bars); 
-            else {
-              second_bar_counter += number_bars;
-              bar_setdata(bar_two_dstPortsServer, second_bar_counter, notEst_connections_dstPortsServer, number_bars);}
-          }
-        screen.render()
-    });
-      screen.key('left', function(ch, key) {
-        if(bar_one_dstPortsServer.focused == true){
-            first_bar_counter -=number_bars;
-            if(first_bar_counter<0)first_bar_counter=0;
-            bar_setdata(bar_one_dstPortsServer, first_bar_counter, est_connections_dstPortsServer,number_bars);}
-          else{
-            second_bar_counter -= number_bars;
-            if(second_bar_counter<0)second_bar_counter=0;
-            bar_setdata(bar_two_dstPortsServer, second_bar_counter, notEst_connections_dstPortsServer,number_bars);
-          }
-        screen.render()
-      });
+      gaugeList_notEst_dstPort.setGauges(notEst_connections_dstPortsServer[3].slice(0,10))
+      gaugeList_est_dstPort.setGauges(est_connections_dstPortsServer[3].slice(0,10))
+      var data_est =  [['estdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]]
+      data_est.push(...est_connections_dstPortsServer[2].slice(0,20))
+      listtable_est_dstPort.setData(data_est)
+
+      var data_notest =  [['notEstdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]]
+      data_notest.push(...notEst_connections_dstPortsServer[2].slice(0,20))
+      listtable_notEst_dstPort.setData(data_notest) 
+
+      gaugeList_est_dstPort.show()
+      gaugeList_notEst_dstPort.show()
+      listtable_notEst_dstPort.show()
+      listtable_est_dstPort.show()
+      gaugeList_est_dstPort.focus()
+      screen.render();
+
+    screen.key('down', function(ch, key){
+      if(gaugeList_est_dstPort.focused == true || gaugeList_est_dstIPs.focused == true){
+        if(gauge_counter1 >= (est_bar_one_number_dstPortsServer-1)*10);
+        else{
+          var data_est_dstPortServer =[['estdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]];
+          listtable_counter1 += 20;
+          gauge_counter1 += 10;
+          data_est_dstPortServer.push(...est_connections_dstPortsServer[2].slice(listtable_counter1,listtable_counter1 + 20));
+          listtable_est_dstPort.setData(data_est_dstPortServer);
+          gaugeList_est_dstPort.setGauges(est_connections_dstPortsServer[3].slice(gauge_counter1,gauge_counter1 + 10));
+          screen.render();}
+      }
+      else{
+        if(gauge_counter2 >= (notEst_bar_one_number_dstPortsServer-1)*10);
+        else{
+          var data_notEst_dstPortServer =[['notEstdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]];
+          listtable_counter2 += 20;
+          gauge_counter2 += 10;
+          data_notEst_dstPortServer.push(...notEst_connections_dstPortsServer[2].slice(listtable_counter2,listtable_counter2 + 20));
+          listtable_notEst_dstPort.setData(data_notEst_dstPortServer);
+          gaugeList_notEst_dstPort.setGauges(notEst_connections_dstPortsServer[3].slice(gauge_counter2,gauge_counter2 + 10));
+          screen.render();}
+      }
+      })
+
+    screen.key('up', function(ch, key){
+      if(gaugeList_est_dstPort.focused == true ||gaugeList_est_dstIPs.focused == true){
+        listtable_counter1 -= 20;
+        gauge_counter1 -= 10;
+        if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
+        var data_est_dstPortServer =[['estdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]];
+        data_est_dstPortServer.push(...est_connections_dstPortsServer[2].slice(listtable_counter1,listtable_counter1 + 20));
+        listtable_est_dstPort.setData(data_est_dstPortServer);
+        gaugeList_est_dstPort.setGauges(est_connections_dstPortsServer[3].slice(gauge_counter1,gauge_counter1+10));
+        screen.render();
+
+      }
+      else{
+        listtable_counter2 -=20;
+        gauge_counter2 -= 10;
+        if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
+        var data_notEst_dstPortServer = [['notEstdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]];
+        data_notEst_dstPortServer.push(...notEst_connections_dstPortsServer[2].slice(listtable_counter2,listtable_counter2 + 20));
+        listtable_notEst_dstPort.setData(data_notEst_dstPortServer);
+        gaugeList_notEst_dstPort.setGauges(notEst_connections_dstPortsServer[3].slice(gauge_counter2,gauge_counter2+10));
+        screen.render();  }
+    })
 
     }
     else{
-    
-
-        bar_one_dstPortsServer.hide();
-        bar_two_dstPortsServer.hide();
-        box_bar_state.hide();
-        show_widgets()
+        listtable_est_dstPort.hide()
+        listtable_notEst_dstPort.hide()
+        gaugeList_notEst_dstPort.hide()
+        gaugeList_est_dstPort.hide()
+        show_widgets();
       }
-      bar_state_two= !bar_state_two;
-      screen.render()
+    bar_state_two = !bar_state_two;
+    screen.render();
   
 });
 
@@ -996,7 +1031,6 @@ screen.key('v', function(ch, key) {
       bar_one_dstPortClient.show();
       
       bar_two_dstPortClient.show();
-      box_bar_state.show();
       bar_one_dstPortClient.focus();
       screen.render();
 
@@ -1086,17 +1120,14 @@ screen.key('v', function(ch, key) {
       });
 
     }catch(err){
-      box_bar_state.setContent('no information')
       bar_one_dstPortClient.show()
       bar_two_dstPortClient.show()
-      box_bar_state.show();
       }}
     else{
       show_widgets()
 
       bar_one_dstPortClient.hide()
       bar_two_dstPortClient.hide()
-      box_bar_state.hide();
       }
       bar_state_four = !bar_state_four;
       screen.render()
@@ -1124,11 +1155,11 @@ screen.key('v', function(ch, key) {
 
       gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[3].slice(0,10))
       gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[3].slice(0,10))
-      var data_est =  [['estSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]]
+      var data_est =  [['estSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],[]]
       data_est.push(...est_connections_srcPortsClient[2].slice(0,20))
       listtable_est_srcPort.setData(data_est)
 
-      var data_notest =  [['notEstSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]]
+      var data_notest =  [['notEstSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],[]]
       data_notest.push(...notEst_connections_srcPortsClient[2].slice(0,20))
       listtable_notEst_srcPort.setData(data_notest) 
 
@@ -1143,7 +1174,7 @@ screen.key('v', function(ch, key) {
       if(gaugeList_est_srcPort.focused == true || gaugeList_est_dstIPs.focused == true){
         if(gauge_counter1 >= (est_bar_one_number_srcPortsClient-1)*10);
         else{
-          var data_est_srcPortClient =[['estSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+          var data_est_srcPortClient =[['estSrcPortClient','totalflows', 'totalpkts','totalbytes'],[]];
           listtable_counter1 += 20;
           gauge_counter1 += 10;
           data_est_srcPortClient.push(...est_connections_srcPortsClient[2].slice(listtable_counter1,listtable_counter1 + 20));
@@ -1154,7 +1185,7 @@ screen.key('v', function(ch, key) {
       else{
         if(gauge_counter2 >= (notEst_bar_one_number_srcPortsClient-1)*10);
         else{
-          var data_notEst_srcPortClient =[['notEstSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+          var data_notEst_srcPortClient =[['notEstSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],[]];
           listtable_counter2 += 20;
           gauge_counter2 += 10;
           data_notEst_srcPortClient.push(...notEst_connections_srcPortsClient[2].slice(listtable_counter2,listtable_counter2 + 20));
@@ -1169,7 +1200,7 @@ screen.key('v', function(ch, key) {
         listtable_counter1 -= 20;
         gauge_counter1 -= 10;
         if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
-        var data_est_srcPortClient =[['estSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+        var data_est_srcPortClient =[['estSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],[]];
         data_est_srcPortClient.push(...est_connections_srcPortsClient[2].slice(listtable_counter1,listtable_counter1 + 20));
         listtable_est_srcPort.setData(data_est_srcPortClient);
         gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[3].slice(gauge_counter1,gauge_counter1+10));
@@ -1180,7 +1211,7 @@ screen.key('v', function(ch, key) {
         listtable_counter2 -=20;
         gauge_counter2 -= 10;
         if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
-        var data_notEst_srcPortClient = [['notEstSrcPortClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+        var data_notEst_srcPortClient = [['notEstSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],[]];
         data_notEst_srcPortClient.push(...notEst_connections_srcPortsClient[2].slice(listtable_counter2,listtable_counter2 + 20));
         listtable_notEst_srcPort.setData(data_notEst_srcPortClient);
         gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[3].slice(gauge_counter2,gauge_counter2+10));
@@ -1220,11 +1251,11 @@ screen.key('c', function(ch, key) {
 
       gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[3].slice(0,10))
       gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[3].slice(0,10))
-      var data_est =  [['estDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]]
+      var data_est =  [['estDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]]
       data_est.push(...est_connections_dstIPsClient[2].slice(0,20))
       listtable_est_dstIPs.setData(data_est)
 
-      var data_notest =  [['notEstDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]]
+      var data_notest =  [['notEstDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]]
       data_notest.push(...notEst_connections_dstIPsClient[2].slice(0,20))
       listtable_notEst_dstIPs.setData(data_notest) 
 
@@ -1239,7 +1270,7 @@ screen.key('c', function(ch, key) {
       if(gaugeList_est_dstIPs.focused == true || gaugeList_est_srcPort.focused == true){
         if(gauge_counter1 >= (est_bar_one_number_dstIPsClient-1)*10);
         else{
-          var data_est_dstIPsClient =[['estDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+          var data_est_dstIPsClient =[['estDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]];
           listtable_counter1 += 20;
           gauge_counter1 += 10;
           data_est_dstIPsClient.push(...est_connections_dstIPsClient[2].slice(listtable_counter1,listtable_counter1 + 20));
@@ -1250,7 +1281,7 @@ screen.key('c', function(ch, key) {
       else{
         if(gauge_counter2 >= (notEst_bar_one_number_dstIPsClient-1)*10);
         else{
-          var data_notEst_dstIPsClient =[['notEstDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+          var data_notEst_dstIPsClient =[['notEstDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]];
           listtable_counter2 += 20;
           gauge_counter2 += 10;
           data_notEst_dstIPsClient.push(...notEst_connections_dstIPsClient[2].slice(listtable_counter2,listtable_counter2 + 20));
@@ -1265,7 +1296,7 @@ screen.key('c', function(ch, key) {
         listtable_counter1 -= 20;
         gauge_counter1 -= 10;
         if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
-        var data_est_dstIPsClient =[['estDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+        var data_est_dstIPsClient =[['estDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]];
         data_est_dstIPsClient.push(...est_connections_dstIPsClient[2].slice(listtable_counter1,listtable_counter1 + 20));
         listtable_est_dstIPs.setData(data_est_dstIPsClient);
         gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[3].slice(gauge_counter1,gauge_counter1+10));
@@ -1276,7 +1307,7 @@ screen.key('c', function(ch, key) {
         listtable_counter2 -=20; 
         gauge_counter2 -= 10;
         if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
-        var data_notEst_dstIPsClient = [['notEstDstIPsClient', 'totalpkts','totalflows', 'totalbyes'],[]];
+        var data_notEst_dstIPsClient = [['notEstDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]];
         data_notEst_dstIPsClient.push(...notEst_connections_dstIPsClient[2].slice(listtable_counter2,listtable_counter2 + 20));
         listtable_notEst_dstIPs.setData(data_notEst_dstIPsClient);
         gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[3].slice(gauge_counter2,gauge_counter2+10));
@@ -1293,11 +1324,7 @@ screen.key('c', function(ch, key) {
       }
     bar_state_three = !bar_state_three;
     screen.render()
-  
 });
-
-
-
 
 
 screen.key('m', function(ch, key) {
@@ -1330,7 +1357,6 @@ table_timeline.rows.on('select', (item, index) => {
   getIpInfo_box_ip(timeline_ip,1)
 });
 
-// var l = true;
 screen.key('h', function(ch, key) {
   hide_widgets()
   if(box_hotkeys_state){
@@ -1346,13 +1372,17 @@ screen.key('h', function(ch, key) {
 });
 
 screen.key(['tab'], function(ch, key) {
-  if(gaugeList_est_srcPort.focused == true){
+  if(box_generic_dashboard.focused == true){
+    box_generic_dashboard.hide();
+    tree.style.border.fg='magenta';
+    tree.focus();
+    screen.render();
+  }
+  else if(gaugeList_est_srcPort.focused == true){
     gaugeList_notEst_srcPort.focus()
-    // console.log('sdsds')
   }
   else if(gaugeList_notEst_srcPort.focused == true){
     gaugeList_est_srcPort.focus()
-    // console.log('ss')
   }
   else if(gaugeList_notEst_dstIPs.focused == true){
     gaugeList_est_dstIPs.focus()
@@ -1360,18 +1390,13 @@ screen.key(['tab'], function(ch, key) {
   else if(gaugeList_est_dstIPs.focused == true){
     gaugeList_notEst_dstIPs.focus()
   }
-  else if(bar_one_srcPortClient.focused == true){
-      bar_two_srcPortClient.focus();}
-  else if(bar_two_srcPortClient.focused == true){
-    bar_one_srcPortClient.focus();}
-  else if(bar_one_dstIPsClient.focused == true){
-    bar_two_dstIPsClient.focus();}
-  else if(bar_two_dstIPsClient.focused == true){
-    bar_one_dstIPsClient.focus();}
-  else if(bar_one_dstIPsClient.focused == true){
-    bar_two_dstPortsServer.focus();}
-  else if(bar_two_dstIPsClient.focused == true){
-    bar_one_dstIPsClient.focus();}
+  else if(gaugeList_notEst_dstPort.focused == true){
+    gaugeList_est_dstPort.focus()
+  }
+  else if(gaugeList_est_dstPort.focused == true){
+    gaugeList_notEst_dstPort.focus()
+  }
+
   else if(bar_one_dstPortClient.focused == true){
     bar_two_dstPortClient.focus();}
   else if(bar_two_dstPortClient.focused == true){
@@ -1382,10 +1407,7 @@ screen.key(['tab'], function(ch, key) {
     table_timeline.style.border.fg='magenta'
     table_timeline.focus();}
   else if(screen.focused == table_timeline.rows){
-    focus_widget = box_detections
     table_timeline.style.border.fg='blue'
-    box_detections.focus()}
-  else if(screen.focused == box_detections){
     focus_widget = box_evidence
     box_evidence.focus()}
   else{
@@ -1402,20 +1424,16 @@ screen.key(['S-tab'], function(ch, key) {
     tree.style.border.fg='magenta'
     tree.focus();}
 
-  else if(screen.focused == box_detections){
+  else if(screen.focused == box_evidence){
     focus_widget = table_timeline;
     table_timeline.style.border.fg='magenta'
     table_timeline.focus();}
-  else if(screen.focused == box_evidence){
-    focus_widget = box_detections;
-    box_detections.focus()}
   else{
     focus_widget = box_evidence;
     tree.style.border.fg = 'blue'
     box_evidence.focus();}   
   screen.render();
 });
-tree.focus();
 
 // screen.on('resize', function() {
 //   tree.emit('attach');
