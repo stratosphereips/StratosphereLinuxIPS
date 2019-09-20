@@ -146,8 +146,8 @@ class WhoisQuery:
 
         # handle errors (the --preserve-status option in timeout means that error codes thrown by whois will be used)
         if response.returncode != 0:
-            # decode stderr (this fixes errors in French requests, but some czech chars are not correct in the comments)
-            stderr = response.stderr.decode("iso-8859-1")
+            # decode stderr
+            stderr = response.stderr.decode("utf-8")
             if response.returncode == 2:
                 # code 2 == network error? Idk, it doesn't say in the docs/man
                 if len(response.stdout) == 0:
@@ -165,8 +165,8 @@ class WhoisQuery:
 
         # there may be unexpected errors in the processing - they should change query status, but not crash the module
         try:
-            # decode iso-8859-1, this fixes errors in French requests (but some Czech chars are broken in the comments)
-            output = response.stdout.decode("iso-8859-1")
+            # decode output
+            output = response.stdout.decode("utf-8")
             # get a set of responses: one query might contain more responses. This may be because multiple servers have
             # responded (the query was redirected), or because the IP is in multiple networks with different properties.
             # server response (about the RIR responsible for the range may appear as the first response in the query

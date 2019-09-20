@@ -181,13 +181,12 @@ def test_retry():
 
 if __name__ == "__main__":
     t = time.time()
-    test_retry()
+    test_tricky_ips()
     # test_tricky_ips()
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")
     # try_random_addresses(limit=10)
     # test_ipv6()
-    # TODO: should I cache an error? What should I do with an error? (whois.py line 126)
 
     print(time.time() - t)
 
