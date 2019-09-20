@@ -123,7 +123,7 @@ class WhoisIP(Module, multiprocessing.Process):
             self.print("Data not found in cache!", verbose=9, debug=1)
 
         query = WhoisQuery(address)
-        query.run(self.print)
+        query.run(self.print, timeout=4)
 
         result = query.get_result_dictionary()
 
@@ -180,9 +180,8 @@ class WhoisIP(Module, multiprocessing.Process):
                 continue
 
             # if no cache entry is present, run query again
-            # TODO: maybe run the query first with small timeout (4s) and retry later with bigger timeout (20s)
             query = WhoisQuery(address)
-            query.run(self.print)
+            query.run(self.print, timeout=15)
 
             result = query.get_result_dictionary()
 

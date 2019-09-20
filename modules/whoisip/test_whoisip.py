@@ -102,7 +102,7 @@ def test_tricky_ips():
     ips.append("71.163.76.208")  # there is a list of cidrs
     ips.append("223.43.28.222")  # Korean whois with encoding errs
     ips.append("76.42.110.168")  # cymruwhois crashes (it crashed last week with TypeError, now it works ¯\_(ツ)_/¯)
-    ips.append("86.255.141.19")  # wrong encoding
+    ips.append("86.255.141.19")  # wrong encoding (french)
     ips.append("71.163.76.208")  # no line "Information related to ..."
     ips.append("148.37.198.241")  # no line "Information related to ..."
     ips.append("47.216.133.94")  # Referred whois server rejected connection
@@ -181,7 +181,7 @@ def test_retry():
 
 if __name__ == "__main__":
     t = time.time()
-    test_tricky_ips()
+    test_retry()
     # test_tricky_ips()
     # run("modules/whoisip/data/errs_out_of_erx.txt", "modules/whoisip/data/tmp.txt")
     # run("modules/whoisip/data/asn_lookup_err_ips.txt", "modules/whoisip/data/tmp.txt")

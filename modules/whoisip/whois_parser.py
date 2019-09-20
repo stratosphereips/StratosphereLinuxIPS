@@ -120,13 +120,14 @@ class WhoisQuery:
         result["is_complete"] = is_complete
         return result
 
-    def run(self, slips_print):
+    def run(self, slips_print, timeout=15):
         """
         Retrieve whois information for ip manually using the whois command. The query will read some basic information 
         and save it in the object. If something is already known about the IP, it will be left unchanged.
         If a field cannot be retrieved, it will remain None. If error occurs, the field will be None and the error will
         be returned and saved in self.status
         :param slips_print: a function for printing output to slips outputprocess
+        :param timeout: how long (in seconds) should the module wait before killing the subprocess (15 by default)
         :return: error code, error message. For successful queries, this will be 0, "OK"
         """
 
@@ -135,7 +136,6 @@ class WhoisQuery:
         # by subprocess, it is near impossible to read output of the terminated process.
         # Whois is contacting whois.arin.net (-h is the host), because servers follow different standards (if any) and
         # it is beyond the scope of this parser to read all of them
-        timeout = 15
         command = ["timeout", "--preserve-status", str(timeout) + "s", "whois", str(self.ip), "-h", "whois.arin.net"]
 
         # stdout: save output in response object
@@ -147,7 +147,7 @@ class WhoisQuery:
         # handle errors (the --preserve-status option in timeout means that error codes thrown by whois will be used)
         if response.returncode != 0:
             # decode stderr
-            stderr = response.stderr.decode("utf-8")
+            stderr = response.stderr.decode("utf-8", errors="ignore")
             if response.returncode == 2:
                 # code 2 == network error? Idk, it doesn't say in the docs/man
                 if len(response.stdout) == 0:
@@ -166,7 +166,7 @@ class WhoisQuery:
         # there may be unexpected errors in the processing - they should change query status, but not crash the module
         try:
             # decode output
-            output = response.stdout.decode("utf-8")
+            output = response.stdout.decode("utf-8", errors="ignore")
             # get a set of responses: one query might contain more responses. This may be because multiple servers have
             # responded (the query was redirected), or because the IP is in multiple networks with different properties.
             # server response (about the RIR responsible for the range may appear as the first response in the query
