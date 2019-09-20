@@ -111,7 +111,6 @@ class WhoisIP(Module, multiprocessing.Process):
 
         cidr_prefix_len = None
         if cached_data is not None:
-            # TODO: is cidr always defined?
             cidr_prefix_len = cached_data["cidr_prefix_len"]
             if cidr_prefix_len > 8:
                 self.print("Data found in cache!", verbose=9, debug=1)
@@ -152,7 +151,7 @@ class WhoisIP(Module, multiprocessing.Process):
             # if there is something cached already, compare the two responses and choose the more detailed one
             else:
                 # if the new result is more specific, cache it
-                if cidr_prefix_len < result["cidr_prefix_len"]:
+                if result["cidr_prefix_len"] is not None and cidr_prefix_len < result["cidr_prefix_len"]:
                     self.check_and_cache(address.version, result)
                 # save the newly found result
                 self.save_ip_data(ip, result)
@@ -210,9 +209,17 @@ class WhoisIP(Module, multiprocessing.Process):
         """
         pass
 
-    def should_data_be_cached(self, prefix_len, version):
+    def should_data_be_cached(self, prefix_len, cidr, version):
         # Do not cache if the mask is zero, or 32 (ipv4) or 128 (ipv6)
-        return not (prefix_len == 0 or (prefix_len == 32 and version == 4) or (prefix_len == 128 and version == 6))
+        if prefix_len == 0:
+            return False
+        if prefix_len == 32 and version == 4:
+            return False
+        if prefix_len == 128 and version == 6:
+            return False
+        if cidr is None:
+            return False
+        return True
 
     def check_and_cache(self, version, result):
         if version == 4:
@@ -223,7 +230,7 @@ class WhoisIP(Module, multiprocessing.Process):
             save_subnet = self.save_ipv6_subnet
 
         # check if data should be cached
-        if self.should_data_be_cached(result["cidr_prefix_len"], version):
+        if self.should_data_be_cached(result["cidr_prefix_len"], result["cidr"], version):
             mask = int(Interface(result["cidr"]))
             save_subnet(mask, result)
         else:
