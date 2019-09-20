@@ -135,6 +135,7 @@ class WhoisIP(Module, multiprocessing.Process):
             # if there is nothing about the ip in cache, add it to the queue so it will be retried later
             if cidr_prefix_len is None:
                 self.ip_queue.append(address)
+                self.print("Query failed, appending to queue!", verbose=9, debug=1)
             # if at least something is present in cache about the ip, use the generic data
             else:
                 self.save_ip_data(ip, cached_data)
@@ -162,7 +163,43 @@ class WhoisIP(Module, multiprocessing.Process):
         Read IP addresses from retry_queue and try to check them for a second time.
         :return: None
         """
-        pass
+        if len(self.ip_queue) == 0:
+            return
+        self.print("Loading unsuccessful queries from the queue", verbose=5, debug=1)
+
+        while len(self.ip_queue) > 0:
+            address = self.ip_queue.pop(0)
+            ip = str(address)
+            self.print("Retrying unsuccessful query for " + ip, verbose=5, debug=1)
+
+            # if the network was found while the ip was waiting in queue, use the cached value
+            cached_data = self.load_subnet(address)
+            if cached_data is not None:
+                self.print("Data found in cache", verbose=9, debug=1)
+                self.save_ip_data(ip, cached_data)
+                # go to next ip in queue
+                continue
+
+            # if no cache entry is present, run query again
+            # TODO: maybe run the query first with small timeout (4s) and retry later with bigger timeout (20s)
+            query = WhoisQuery(address)
+            query.run(self.print)
+
+            result = query.get_result_dictionary()
+
+            self.print(result, verbose=9, debug=1)
+
+            # in case the query fails (again), then maybe there is an issue with it, and we should give up trying
+            if str(result["status"]) != "0":
+                self.print("Retry query failed, dropping!", verbose=9, debug=1)
+                # however, this might also be a sign of network failure (unfortunately for that ip), in that case,
+                # pause retrying until a successful query is run for a new ip
+                break
+
+            # getting here means that the query was successful, cache it and save it
+            self.print("Retry query successful, saving!", verbose=9, debug=1)
+            self.check_and_cache(address.version, result)
+            self.save_ip_data(ip, result)
 
     def save_ip_data(self, ip, data):
         """
@@ -230,7 +267,8 @@ class WhoisIP(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message['channel'] == 'new_ip' and message["type"] == "message":
                     ip = message["data"]
-                    self.check_ip(ip)
+                    if self.check_ip(ip):
+                        self.retry_queue()
 
         except KeyboardInterrupt:
             return True
