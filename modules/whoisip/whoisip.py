@@ -206,6 +206,9 @@ class WhoisIP(Module, multiprocessing.Process):
         :param data: dictionary with the response
         :return: None
         """
+
+        data = {"Whois": data}
+        __database__.setInfoForIPs(ip, data)
         pass
 
     def should_data_be_cached(self, prefix_len, cidr, version):
