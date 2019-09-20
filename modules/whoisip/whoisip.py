@@ -33,9 +33,6 @@ class WhoisIP(Module, multiprocessing.Process):
         # - evidence_added
         self.c1 = __database__.subscribe('new_ip')
 
-        self.db_hashset_ipv4 = "whois-module-ipv4subnet-cache"
-        self.db_hashset_ipv6 = "whois-module-ipv6subnet-cache"
-
         # a queue to store all the ips that will have to be retried, as ipaddress objects
         self.ip_queue = []
 
@@ -107,7 +104,7 @@ class WhoisIP(Module, multiprocessing.Process):
         if not self.is_checkable(address):
             return False
 
-        cached_data = self.load_subnet(address)
+        cached_data = __database__.is_ip_in_whois_cache(address)
 
         cidr_prefix_len = None
         if cached_data is not None:
@@ -115,7 +112,7 @@ class WhoisIP(Module, multiprocessing.Process):
             if cidr_prefix_len > 8:
                 self.print("Data found in cache!", verbose=9, debug=1)
                 self.print(cached_data, verbose=9, debug=1)
-                self.save_ip_data(ip, cached_data)
+                __database__.save_whois_data(ip, cached_data)
                 return False
             else:
                 self.print("Data found in cache with mask /"+str(cidr_prefix_len), verbose=9, debug=1)
@@ -137,7 +134,7 @@ class WhoisIP(Module, multiprocessing.Process):
                 self.print("Query failed, appending to queue!", verbose=9, debug=1)
             # if at least something is present in cache about the ip, use the generic data
             else:
-                self.save_ip_data(ip, cached_data)
+                __database__.save_whois_data(ip, cached_data)
             # the query didn't run, so return False
             return False
 
@@ -147,14 +144,14 @@ class WhoisIP(Module, multiprocessing.Process):
             if cidr_prefix_len is None:
                 self.check_and_cache(address.version, result)
                 # save it
-                self.save_ip_data(ip, result)
+                __database__.save_whois_data(ip, result)
             # if there is something cached already, compare the two responses and choose the more detailed one
             else:
                 # if the new result is more specific, cache it
                 if result["cidr_prefix_len"] is not None and cidr_prefix_len < result["cidr_prefix_len"]:
                     self.check_and_cache(address.version, result)
                 # save the newly found result
-                self.save_ip_data(ip, result)
+                __database__.save_whois_data(ip, result)
             return True
 
     def retry_queue(self):
@@ -172,10 +169,10 @@ class WhoisIP(Module, multiprocessing.Process):
             self.print("Retrying unsuccessful query for " + ip, verbose=5, debug=1)
 
             # if the network was found while the ip was waiting in queue, use the cached value
-            cached_data = self.load_subnet(address)
+            cached_data = __database__.is_ip_in_whois_cache(address)
             if cached_data is not None:
                 self.print("Data found in cache", verbose=9, debug=1)
-                self.save_ip_data(ip, cached_data)
+                __database__.save_whois_data(ip, cached_data)
                 # go to next ip in queue
                 continue
 
@@ -197,19 +194,7 @@ class WhoisIP(Module, multiprocessing.Process):
             # getting here means that the query was successful, cache it and save it
             self.print("Retry query successful, saving!", verbose=9, debug=1)
             self.check_and_cache(address.version, result)
-            self.save_ip_data(ip, result)
-
-    def save_ip_data(self, ip, data):
-        """
-        Save whois data about an IP to the database
-        :param ip: ip address
-        :param data: dictionary with the response
-        :return: None
-        """
-
-        data = {"Whois": data}
-        __database__.setInfoForIPs(ip, data)
-        pass
+            __database__.save_whois_data(ip, result)
 
     def should_data_be_cached(self, prefix_len, cidr, version):
         # Do not cache if the mask is zero, or 32 (ipv4) or 128 (ipv6)
@@ -226,47 +211,15 @@ class WhoisIP(Module, multiprocessing.Process):
     def check_and_cache(self, version, result):
         if version == 4:
             Interface = ipaddress.IPv4Interface
-            save_subnet = self.save_ipv4_subnet
         else:
             Interface = ipaddress.IPv6Interface
-            save_subnet = self.save_ipv6_subnet
 
         # check if data should be cached
         if self.should_data_be_cached(result["cidr_prefix_len"], result["cidr"], version):
             mask = int(Interface(result["cidr"]))
-            save_subnet(mask, result)
+            __database__.put_subnet_to_whois_cache(mask, result, version)
         else:
             self.print("Not suitable for caching", verbose=5, debug=1)
-
-    def save_ipv4_subnet(self, mask: int, result: dict):
-        str_data = json.dumps(result)
-        __database__.r.hset(self.db_hashset_ipv4, mask, str_data)
-
-    def save_ipv6_subnet(self, mask, result):
-        str_data = json.dumps(result)
-        __database__.r.hset(self.db_hashset_ipv6, mask, str_data)
-
-    def load_subnet(self, ip):
-        if ip.version == 4:
-            mask = 4294967295
-            ip_value = int(ip)
-            for i in range(0, 32):
-                mask -= pow(2, i)
-                masked_ip = mask & ip_value
-                data = __database__.r.hget(self.db_hashset_ipv4, masked_ip)
-                if data:
-                    return json.loads(data)
-            return None
-        else:
-            mask = 340282366920938463463374607431768211455
-            ip_value = int(ip)
-            for i in range(0, 128):
-                mask -= pow(2, i)
-                masked_ip = mask & ip_value
-                data = __database__.r.hget(self.db_hashset_ipv6, masked_ip)
-                if data:
-                    return json.loads(data)
-            return None
 
     def run(self):
         try:
