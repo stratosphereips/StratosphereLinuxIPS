@@ -157,7 +157,8 @@ class WhoisQuery:
                     return response.returncode, stderr
                 else:
                     # warning: there was a network issue, but some data was retrieved, will process it anyway
-                    slips_print("Warning - query on ip: " + str(self.ip) + " timeouted, data might be incomplete", verbose=1, debug=0)
+                    slips_print("Warning - query on ip: " + str(self.ip) + " timeouted, data might be incomplete",
+                                verbose=1, debug=0)
             else:
                 # other error codes except for 2
                 self.status = str(response.returncode) + " - " + stderr
