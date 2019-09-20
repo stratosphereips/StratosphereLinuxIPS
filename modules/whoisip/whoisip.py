@@ -5,7 +5,6 @@ from slips.core.database import __database__
 
 # Your imports
 import ipaddress
-import json
 from modules.whoisip.whois_parser import WhoisQuery
 
 
