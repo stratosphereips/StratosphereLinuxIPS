@@ -1367,7 +1367,7 @@ class ProfilerProcess(multiprocessing.Process):
                 role = 'Server'
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
                     # Tuple
-                    tupleid = str(saddr_as_obj) + ':' + sport + ':' + proto
+                    tupleid = str(saddr_as_obj) + ':' + str(sport) + ':' + proto
                     # Compute symbols.
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
                     # Add the src tuple
