@@ -137,6 +137,18 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
 ,listtable_notEst_dstPort = grid.set(2.8,0,2.8,2, blessed.listtable, {
       border: 'line'
     })
+,listtable_est_dstPortClient = grid.set(0,0,2.8,2, blessed.listtable, {
+      border: 'line'
+    })
+,listtable_notEst_dstPortClient = grid.set(2.8,0,2.8,2, blessed.listtable, {
+      border: 'line'
+    })
+,listtable_est_dstPortClientIps = grid.set(0,0,2.8,2, blessed.listtable, {
+      border: 'line'
+    })
+,listtable_notEst_dstPortClientIps = grid.set(2.8,0,2.8,2, blessed.listtable, {
+      border: 'line'
+    })
   , tree =  grid.set(0,0,5,1,contrib.tree,
   { vi:true 
   , style: {fg:'green',border: {fg:'blue'}}
@@ -184,9 +196,9 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
   })
 
 
-, map = grid.set(0, 0, 5.8, 6,contrib.map,{label: 'World Map'})
+, map = grid.set(0, 0, 5.7, 6,contrib.map,{label: 'World Map'})
 
-, bar_one_dstPortClient = grid.set(0,0,2.8,6,contrib.stackedBar,
+, bar_one_est_dstPortClient = grid.set(0,0,2.8,6,contrib.stackedBar,
         { 
          barWidth: 6
        , barSpacing: 10
@@ -200,7 +212,35 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       border:{ fg:'magenta'}
     }}
        , barBgColor: [ 'green' ]})
-, bar_two_dstPortClient = grid.set(2.8,0,2.8,6,contrib.stackedBar,
+, bar_two_est_dstPortClient = grid.set(2.8,0,2.8,6,contrib.stackedBar,
+       { 
+         barWidth: 6
+       , barSpacing: 10
+       , xOffset: 2
+       , height: "100%"
+       , style:{
+          border:{ fg:'blue'},
+
+         focus: {
+      border:{ fg:'magenta'}
+    }}
+       , width: "100%"
+       , barBgColor: [ 'green' ]})
+, bar_one_notest_dstPortClient = grid.set(0,0,2.8,6,contrib.stackedBar,
+        { 
+         barWidth: 6
+       , barSpacing: 10
+       , xOffset: 2
+       , height: "100%"
+       , width: "100%"
+       , style:{
+          border:{ fg:'blue'},
+
+         focus: {
+      border:{ fg:'magenta'}
+    }}
+       , barBgColor: [ 'green' ]})
+, bar_two_notest_dstPortClient = grid.set(2.8,0,2.8,6,contrib.stackedBar,
        { 
          barWidth: 6
        , barSpacing: 10
@@ -217,7 +257,6 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
 , help_list_bar = grid.set(5.7,0,0.4,6,blessed.listbar,{
 
       keys: false,
-      // mouse: true,
       style: {
         // border:'red',
         prefix: {
@@ -243,11 +282,11 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
             'dstPortServer': {
               keys: ['b']
                         },
-            'dstPortsClientEstablished': {
-              keys: ['n']
+            'dstPortsClient': {
+              keys: ['p']
                         },
-            'dstPortsClientNotEstablished': {
-              keys: ['v']
+            'dstPortsClientIPs': {
+              keys: ['n']
                         },
             
               'OutTuples': {
@@ -344,6 +383,64 @@ gaugeList_notEst_dstPort = grid.set(3.1, 2, 2.6, 4, contrib.gaugeList,
         gaugeHeight: 1,
         gauges:[]
       }
+    ),
+gaugeList_est_dstPortClient = grid.set(0.3, 2, 2.6, 4, contrib.gaugeList,
+      {
+
+      style:{
+          border:{ fg:'blue'},
+
+         focus: {
+      border:{ fg:'magenta'}
+    }},
+      keys:true,
+        gaugeSpacing: 1,
+        gaugeHeight: 1,
+        gauges:[]
+      }
+    ),
+gaugeList_notEst_dstPortClient = grid.set(3.1, 2, 2.6, 4, contrib.gaugeList,
+      {
+        style:{
+          border:{ fg:'blue'},
+
+         focus: {
+      border:{ fg:'magenta'}
+    }},
+      keys:true,
+        gaugeSpacing: 1,
+        gaugeHeight: 1,
+        gauges:[]
+      }
+    ),
+gaugeList_est_dstPortClientIps = grid.set(0.3, 2, 2.6, 4, contrib.gaugeList,
+      {
+
+      style:{
+          border:{ fg:'blue'},
+
+         focus: {
+      border:{ fg:'magenta'}
+    }},
+      keys:true,
+        gaugeSpacing: 1,
+        gaugeHeight: 1,
+        gauges:[]
+      }
+    ),
+gaugeList_notEst_dstPortClientIps = grid.set(3.1, 2, 2.6, 4, contrib.gaugeList,
+      {
+        style:{
+          border:{ fg:'blue'},
+
+         focus: {
+      border:{ fg:'magenta'}
+    }},
+      keys:true,
+        gaugeSpacing: 1,
+        gaugeHeight: 1,
+        gauges:[]
+      }
     )
 var gauge_number = 9;
 
@@ -352,7 +449,14 @@ gaugeList_notEst_dstPort.hide()
 listtable_notEst_dstPort.hide()
 gaugeList_est_dstPort.hide()
 listtable_est_dstPort.hide()
-
+gaugeList_notEst_dstPortClient.hide()
+listtable_notEst_dstPortClient.hide()
+gaugeList_est_dstPortClient.hide()
+listtable_est_dstPortClient.hide()
+gaugeList_notEst_dstPortClientIps.hide()
+listtable_notEst_dstPortClientIps.hide()
+gaugeList_est_dstPortClientIps.hide()
+listtable_est_dstPortClientIps.hide()
 gaugeList_notEst_srcPort.hide()
 listtable_notEst_srcPort.hide()
 gaugeList_notEst_dstIPs.hide()
@@ -362,12 +466,13 @@ listtable_est_dstIPs.hide()
 table_outTuples_listtable.hide()
 gaugeList_est_srcPort.hide()
 listtable_est_srcPort.hide()
-
-bar_two_dstPortClient.hide()
-bar_one_dstPortClient.hide()
+bar_two_notest_dstPortClient.hide()
+bar_one_notest_dstPortClient.hide()
+bar_two_est_dstPortClient.hide()
+bar_one_est_dstPortClient.hide()
 
 map.hide()
-box_generic_dashboard.setContent('\n This is a generic dashboard I dont know what info should be in there but uuuuuiiiiiiiiiiiii hi sebastian miss you\n\nPress Tab to exit this window\n\n do not press any hotkeys for now cause it will be broken thanks')
+box_generic_dashboard.setContent('\n what should be there?')
 var focus_widget = tree;
 var bar_state_four_two = true;
 var bar_state_one = true;
@@ -386,6 +491,10 @@ function clean_widgets(){
 }
 
 function hide_widgets(){
+  gaugeList_notEst_dstPortClient.hide()
+  listtable_notEst_dstPortClient.hide()
+  gaugeList_est_dstPortClient.hide()
+  listtable_est_dstPortClient.hide()
   gaugeList_notEst_dstPort.hide()
   listtable_notEst_dstPort.hide()
   gaugeList_est_dstPort.hide()
@@ -398,15 +507,20 @@ function hide_widgets(){
   gaugeList_notEst_dstIPs.hide()
   listtable_notEst_dstIPs.hide()
   gaugeList_est_dstIPs.hide()
+  gaugeList_notEst_dstPortClientIps.hide()
+  listtable_notEst_dstPortClientIps.hide()
+  gaugeList_est_dstPortClientIps.hide()
+  listtable_est_dstPortClientIps.hide()
   // help_list_bar.hide()
   tree.hide()
   box_evidence.hide()
   table_timeline.hide()
   box_ip.hide()
   table_outTuples_listtable.hide()  
-
-  bar_two_dstPortClient.hide()
-  bar_one_dstPortClient.hide()
+  bar_two_notest_dstPortClient.hide()
+  bar_one_notest_dstPortClient.hide()
+  bar_two_est_dstPortClient.hide()
+  bar_one_est_dstPortClient.hide()
  
   map.hide()
 }
@@ -456,75 +570,94 @@ function bar_setdata(bar, counter, data, number){
       , stackedCategory: ['totalflows', 'totalpkt','totalbytes']
       , data: data[0].slice(counter,counter+number)})
 };
-function port_ip_setdata(bar, counter, data, number){
-  var d = data[1]
-  var values_bars = []
-  bar.clear()
-  async.each(d, function(value, callback){
-    var row = []
-    row.push(value)
-    values_bars.push(row)
-    callback()
-  }, function(err){
-    if(err){
-      console.log('sds')
-    }
-    else{
-      bar.setData(
-      { barCategory:data[0].slice(counter,counter+number)
-      , stackedCategory: ['Number of connections']
-      , data: values_bars.slice(counter,counter+number)})
 
-    }
-  })
-
-};
-
-//function to fill data about destIpsCLient
-function port_ips_bars(key, key2,reply){
+function tcp_udp_connections_dstPortsClient(key, key2,reply){    
+  var bar_categories_protocol_port  = [];
+  var data_stacked_bar = [];
+  var data_listtable = [];
+  var data_gaugeList = [];
   
-  var data_dict = {};
   try{
-      var obj_port = JSON.parse(reply[key]);
-      var keys_port = Object.keys(obj_port);
-    }
-  catch(err){
-      var obj_port = [];
-      var keys_port = [];
-      }
-  async.each(keys_port, function(port, callback) {  
-    var port_info = obj_port[port];
-    var row = [];
-    data_dict['TCP'+port] = [Object.keys(port_info['dstips']), Object.values(port_info['dstips'])]
-    callback();
-  }, function(err){
-    if(err){
-      console.log('sasdfsaa')
-    }
-    else{
-      try{
-        var obj_port = JSON.parse(reply[key2]);
-        var keys_port = Object.keys(obj_port);
-        }
-      catch(err){
-        var obj_port = [];  
-        var keys_port = [];
-          }
-      async.each(keys_port, function(port, callback) {
-        var port_info = obj_port[port];
-        var row = [];
-        data_dict['UDP'+port] = [Object.keys(port_info['dstips']),Object.values(port_info['dstips'])];
-        callback();
-      }, function(err){
-        if(err){
-          console.log('sasdfsaa')
-        }
-      });
+    var obj_tcp = JSON.parse(reply[key]);
+    
 
+    var keys_tcp = Object.keys(obj_tcp);
+  }
+  catch(err){   
+    var obj_tcp =[];
+    var keys_tcp = [];
     }
-  });
-return data_dict;
-};
+
+  async.each(keys_tcp, function(key_TCP_est, callback) {
+    bar_categories_protocol_port.push('TCP/'+key_TCP_est);
+    var service_info = obj_tcp[key_TCP_est];
+    var row = [];
+    var listtable_est_dstPort = [];
+    var dst_ips = []
+
+    dst_ips = Object.keys(service_info["dstips"]);
+    var dst_ips_connections = Object.values(service_info["dstips"]);
+
+    async.forEachOf(dst_ips, function(dst_ip_counter,dst_ip_index, callback){
+      listtable_est_dstPort.push('TCP/'+key_TCP_est,String(dst_ip_counter));
+      data_listtable.push(listtable_est_dstPort)
+      data_listtable.push([])
+      row.push(round(Math.log(dst_ips_connections[dst_ip_index]),0));
+      data_stacked_bar.push(row);
+      data_gaugeList.push({stack:row})
+      callback();
+
+    }, function(err){
+      if( err ) {
+        console.log('unable to create user');
+      }
+      // console.log()
+    });
+    callback();
+  }, function(err) {
+    if( err ) {
+      console.log('unable to create user');
+    } else {
+
+    try{
+      var obj_udp = JSON.parse(reply[key2]);
+      var keys_udp = Object.keys(obj_udp);
+    }
+    catch(err){
+      var obj_udp = []
+      var keys_udp = []
+    }
+
+  async.each(keys_udp, function(key_UDP_est, callback) {
+    var listtable_est_dstPort = [];
+    bar_categories_protocol_port.push('UDP/'+key_UDP_est);
+    var service_info = obj_udp[key_UDP_est];
+    var row = [];
+    var listtable_est_dstPort = [];
+    var dst_ips = Object.keys(service_info["dstips"]);
+    var dst_ips_connections = Object.values(service_info["dstips"]);
+    async.forEachOf(dst_ips, function(dst_ip_counter,dst_ip_index, callback){
+      listtable_est_dstPort.push('UDP/'+key_UDP_est,String(dst_ip_counter));
+      data_listtable.push(listtable_est_dstPort)
+      data_listtable.push([])
+      row.push(round(Math.log(dst_ips_connections[dst_ip_index]),0));
+      data_stacked_bar.push(row);
+      data_gaugeList.push({stack:row})
+      callback();
+
+    }, function(err){
+      if( err ) {
+        console.log('unable to create user');
+      }})
+    callback()
+    }, function(err) {
+      if( err ) {
+        console.log('unable to create user');
+      }
+    });
+  }
+});
+return [data_stacked_bar,bar_categories_protocol_port, data_listtable, data_gaugeList]} 
 
 
 //function to fill in the information about the map(loc and lot of a countries)
@@ -1027,156 +1160,207 @@ tree.on('select',function(node){
     screen.render();
   
 });
-
-screen.key(['v','n'], function(ch, key) {
+  screen.key('n', function(ch, key) {
+    help_list_bar.selectTab(5)
     hide_widgets()
-    if(ch ==  'n')bar_state_four_two=true;
-    else{bar_state_four=true}
+
     bar_state_one = true;
     bar_state_two = true; 
     bar_state_three = true;
     box_hotkeys_state = true;
     map_state = true;
-     bar_one_dstPortClient.setData({ barCategory:[['']]
-      , stackedCategory: ['Number of connections']
-      , data: [['']]})
-      bar_two_dstPortClient.setData({ barCategory:[['']]
-      , stackedCategory: ['Number of connections']
-      , data: [['']]})
-      bar_one_dstPortClient.setLabel({text:''})
-      bar_two_dstPortClient.setLabel({text:''})
+    // bar_state_four = true;
+    bar_state_four_two = true;
+    var gauge_counter1 = 0;
+    var gauge_counter2 = 0;
+    var listtable_counter1 = 0;
+    var listtable_counter2 = 0;
+    if(bar_state_four){
+      var est_connections_dstPortsClient = tcp_udp_connections_dstPortsClient("DstPortsClientTCPEstablished","DstPortsClientUDPEstablished",timeline_reply_global);
+      var notEst_connections_dstPortsClient = tcp_udp_connections_dstPortsClient("DstPortsClientTCPNotEstablished","DstPortsClientUDPNotEstablished",timeline_reply_global);
+      var est_bar_one_number_dstPortsClient = Math.ceil(est_connections_dstPortsClient[3].length / gauge_number);
+      var notEst_bar_one_number_dstPortsClient = Math.ceil(notEst_connections_dstPortsClient[3].length / gauge_number);
 
-    var first_bar_counter = 0;
-    var second_bar_counter = 0;
-    var vertical_counter = 0;
-    bar_one_dstPortClient.options.barSpacing = 25;
-    bar_two_dstPortClient.options.barSpacing = 25;
-    if(bar_state_four && bar_state_four_two){
-      try{
-        number_bars = 5
-        if(ch == 'n'){
-  help_list_bar.selectTab(4)
-        var est_connections_dstPortsClient = port_ips_bars("DstPortsClientTCPEstablished","DstPortsClientUDPEstablished",timeline_reply_global);}
+      gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[3].slice(0,gauge_number))
+      gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[3].slice(0,gauge_number))
+      var data_est =  [['estdstPortClient',  'IP'],[]]
+      data_est.push(...est_connections_dstPortsClient[2].slice(0,gauge_number*2))
+      listtable_est_dstPortClientIps.setData(data_est)
+
+      var data_notest =  [['notEstdstPortClient', 'IP'],[]]
+      data_notest.push(...notEst_connections_dstPortsClient[2].slice(0,gauge_number*2))
+      listtable_notEst_dstPortClientIps.setData(data_notest) 
+
+      gaugeList_est_dstPortClientIps.show()
+      gaugeList_notEst_dstPortClientIps.show()
+      listtable_notEst_dstPortClientIps.show()
+      listtable_est_dstPortClientIps.show()
+      gaugeList_est_dstPortClientIps.focus()
+      screen.render();
+
+    screen.key('down', function(ch, key){
+      if(gaugeList_est_dstPortClientIps.focused == true || gaugeList_est_dstIPs.focused == true){
+        if(gauge_counter1 >= (est_bar_one_number_dstPortsClient-1)*gauge_number);
         else{
-  help_list_bar.selectTab(5)
-          var est_connections_dstPortsClient = port_ips_bars("DstPortsClientTCPNotEstablished","DstPortsClientUDPNotEstablished",timeline_reply_global);
-        }
-        var dstPortsClient_keys = Object.keys(est_connections_dstPortsClient);
-        var dstPortsClient_values = Object.values(est_connections_dstPortsClient);
-        var est_bar_one_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter][0].length / number_bars);
-        var est_bar_two_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter+1][0].length / number_bars);
-        var vertical = Math.ceil(dstPortsClient_keys.length / 2);
-        port_ip_setdata(bar_one_dstPortClient, first_bar_counter, dstPortsClient_values[vertical_counter], number_bars);
-        port_ip_setdata(bar_two_dstPortClient, second_bar_counter, dstPortsClient_values[vertical_counter+1], number_bars);
-        bar_one_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[0]),side:'left'});
-        bar_two_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[1]),side:'left'});
-        bar_one_dstPortClient.show();
-      
-        bar_two_dstPortClient.show();
-        bar_one_dstPortClient.focus();
-        screen.render();
-
-
-        screen.key('right', function(ch, key) {
-          
-          if(bar_one_dstPortClient.focused == true){
-              if(first_bar_counter >= (est_bar_one_number_dstPortsClient-1)*number_bars);
-              else{
-                first_bar_counter += number_bars;             
-                port_ip_setdata(bar_one_dstPortClient, first_bar_counter, dstPortsClient_values[vertical_counter], number_bars);}}
-            else{
-              if(second_bar_counter >= (est_bar_two_number_dstPortsClient-1)*number_bars); 
-              else {
-                second_bar_counter += 5;
-                port_ip_setdata(bar_two_dstPortClient, second_bar_counter, dstPortsClient_values[vertical_counter+1], number_bars);}
-            }
-          screen.render()
-      });
-        screen.key('left', function(ch, key) {
-          if(bar_one_dstPortClient.focused == true){
-              first_bar_counter -=number_bars;
-              if(first_bar_counter<0)first_bar_counter=0;
-              port_ip_setdata(bar_one_dstPortClient, first_bar_counter, dstPortsClient_values[vertical_counter], number_bars);}
-            else{
-              second_bar_counter -= number_bars;
-              if(second_bar_counter<0)second_bar_counter=0;
-              port_ip_setdata(bar_two_dstPortClient, second_bar_counter,dstPortsClient_values[vertical_counter+1], number_bars);
-            }
-          screen.render()
-        });
-        screen.key('down', function(ch, key) {
-            vertical_counter +=2;
-            if(vertical_counter > (vertical-1)*2){vertical_counter -=2;}
-            else{
-              if(dstPortsClient_keys[vertical_counter]===undefined){
-                bar_one_dstPortClient.clear();
-                bar_one_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
-                bar_two_dstPortClient.clear();
-                bar_two_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
-              }
-              else if(dstPortsClient_keys[vertical_counter+1]===undefined){
-                est_bar_one_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter][0].length / number_bars);
-                bar_one_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter]),side:'left'});
-                port_ip_setdata(bar_one_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter], number_bars);
-                bar_two_dstPortClient.clear();
-                bar_two_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
-              }
-              else{
-                est_bar_one_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter][0].length / number_bars);
-                est_bar_two_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter+1][0].length / number_bars);
-                bar_one_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter]),side:'left'});
-                bar_two_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter+1]),side:'left'});
-                port_ip_setdata(bar_one_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter], number_bars);
-                port_ip_setdata(bar_two_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter+1], number_bars);
-              }}
-            
-          screen.render()
-        });
-        screen.key('up', function(ch, key) {
-            vertical_counter -=2;
-            if(vertical_counter <0){vertical_counter =0;}
-            else{
-              if(dstPortsClient_keys[vertical_counter]===undefined){
-                bar_one_dstPortClient.clear();
-                bar_one_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
-                bar_two_dstPortClient.clear();
-                bar_two_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
-              }
-              else if(dstPortsClient_keys[vertical_counter+1]===undefined){
-                est_bar_one_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter][0].length / number_bars);
-                bar_one_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter]),side:'left'});
-                port_ip_setdata(bar_one_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter], number_bars);
-                bar_two_dstPortClient.clear();
-                bar_two_dstPortClient.setLabel({text:color.green('empty'),side:'left'})
-              }
-              else{
-                est_bar_one_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter][0].length / number_bars);
-                est_bar_two_number_dstPortsClient = Math.ceil(dstPortsClient_values[vertical_counter+1][0].length / number_bars);
-                bar_one_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter]),side:'left'});
-                bar_two_dstPortClient.setLabel({text:color.green(dstPortsClient_keys[vertical_counter+1]),side:'left'});
-                port_ip_setdata(bar_one_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter], number_bars);
-                port_ip_setdata(bar_two_dstPortClient, 0, Object.values(est_connections_dstPortsClient)[vertical_counter+1], number_bars);
-            }}
-            
-          screen.render()
-        });
-
-    }catch(err){
-      bar_one_dstPortClient.show()
-      bar_two_dstPortClient.show()
-      }}
-    else{
-      show_widgets()
-  help_list_bar.selectTab(0)
-      bar_one_dstPortClient.setContent('')
-      bar_one_dstPortClient.hide()
-      bar_two_dstPortClient.hide()
+          var data_est_dstPortClientIps =[['estdstPortClient', 'IP'],[]];
+          listtable_counter1 += gauge_number*2;
+          gauge_counter1 += gauge_number;
+          data_est_dstPortClientIps.push(...est_connections_dstPortsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          listtable_est_dstPortClientIps.setData(data_est_dstPortClientIps);
+          gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[3].slice(gauge_counter1,gauge_counter1 + gauge_number));
+          screen.render();}
       }
-      if(ch == 'n')bar_state_four = !bar_state_four;
-      else{bar_state_four_two =! bar_state_four_two}
-      screen.render()
+      else{
+        if(gauge_counter2 >= (notEst_bar_one_number_dstPortsClient-1)*gauge_number);
+        else{
+          var data_notEst_dstPortClientIps =[['notEstdstPortClient', 'IP'],[]];
+          listtable_counter2 += gauge_number*2;
+          gauge_counter2 += gauge_number;
+          data_notEst_dstPortClientIps.push(...notEst_connections_dstPortsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          listtable_notEst_dstPortClientIps.setData(data_notEst_dstPortClientIps);
+          gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[3].slice(gauge_counter2,gauge_counter2 + gauge_number));
+          screen.render();}
+      }
+      })
+
+    screen.key('up', function(ch, key){
+      if(gaugeList_est_dstPortClientIps.focused == true ||gaugeList_est_dstIPs.focused == true){
+        listtable_counter1 -= gauge_number*2;
+        gauge_counter1 -= gauge_number;
+        if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
+          var data_est_dstPortClientIps =[['estdstPortClient', 'IP'],[]];
+          data_est_dstPortClientIps.push(...est_connections_dstPortsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          listtable_est_dstPortClientIps.setData(data_est_dstPortClientIps);
+          gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[3].slice(gauge_counter1,gauge_counter1+gauge_number));
+          screen.render();
+      }
+      else{
+        listtable_counter2 -=gauge_number*2;
+        gauge_counter2 -= gauge_number;
+        if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
+          var data_notEst_dstPortClientIps = [['notEstdstPortClient', 'IP'],[]];
+          data_notEst_dstPortClientIps.push(...notEst_connections_dstPortsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          listtable_notEst_dstPortClientIps.setData(data_notEst_dstPortClientIps);
+          gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[3].slice(gauge_counter2,gauge_counter2+gauge_number));
+          screen.render();  }
+    })
+
+    }
+    else{
+        listtable_est_dstPortClientIps.hide()
+        listtable_notEst_dstPortClientIps.hide()
+        gaugeList_notEst_dstPortClientIps.hide()
+        gaugeList_est_dstPortClientIps.hide()
+        show_widgets();
+      help_list_bar.selectTab(0)
+
+      }
+    bar_state_four =! bar_state_four;
+    screen.render()
   
 });
+
+  screen.key('p', function(ch, key) {
+  help_list_bar.selectTab(4)
+
+    hide_widgets()
+
+    bar_state_one = true;
+    bar_state_two = true; 
+    bar_state_three = true;
+    box_hotkeys_state = true;
+    map_state = true;
+    bar_state_four = true;
+    // bar_state_four_two = true;
+    var gauge_counter1 = 0;
+    var gauge_counter2 = 0;
+    var listtable_counter1 = 0;
+    var listtable_counter2 = 0;
+    if(bar_state_four_two){
+      var est_connections_dstPortsClient = tcp_udp_connections("DstPortsClientTCPEstablished","DstPortsClientUDPEstablished",timeline_reply_global);
+      var notEst_connections_dstPortsClient = tcp_udp_connections("DstPortsClientTCPNotEstablished","DstPortsClientUDPNotEstablished",timeline_reply_global);
+      var est_bar_one_number_dstPortsClient = Math.ceil(est_connections_dstPortsClient[3].length / gauge_number);
+      var notEst_bar_one_number_dstPortsClient = Math.ceil(notEst_connections_dstPortsClient[3].length / gauge_number);
+
+      gaugeList_notEst_dstPortClient.setGauges(notEst_connections_dstPortsClient[3].slice(0,gauge_number))
+      gaugeList_est_dstPortClient.setGauges(est_connections_dstPortsClient[3].slice(0,gauge_number))
+      var data_est =  [['estdstPortClient',  'totalflows','totalpkts','totalbytes'],[]]
+      data_est.push(...est_connections_dstPortsClient[2].slice(0,gauge_number*2))
+      listtable_est_dstPortClient.setData(data_est)
+
+      var data_notest =  [['notEstdstPortClient',  'totalflows','totalpkts','totalbytes'],[]]
+      data_notest.push(...notEst_connections_dstPortsClient[2].slice(0,gauge_number*2))
+      listtable_notEst_dstPortClient.setData(data_notest) 
+
+      gaugeList_est_dstPortClient.show()
+      gaugeList_notEst_dstPortClient.show()
+      listtable_notEst_dstPortClient.show()
+      listtable_est_dstPortClient.show()
+      gaugeList_est_dstPortClient.focus()
+      screen.render();
+
+    screen.key('down', function(ch, key){
+      if(gaugeList_est_dstPortClient.focused == true || gaugeList_est_dstIPs.focused == true){
+        if(gauge_counter1 >= (est_bar_one_number_dstPortsClient-1)*gauge_number);
+        else{
+          var data_est_dstPortClient =[['estdstPortClient',  'totalflows','totalpkts','totalbytes'],[]];
+          listtable_counter1 += gauge_number*2;
+          gauge_counter1 += gauge_number;
+          data_est_dstPortClient.push(...est_connections_dstPortsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          listtable_est_dstPortClient.setData(data_est_dstPortClient);
+          gaugeList_est_dstPortClient.setGauges(est_connections_dstPortsClient[3].slice(gauge_counter1,gauge_counter1 + gauge_number));
+          screen.render();}
+      }
+      else{
+        if(gauge_counter2 >= (notEst_bar_one_number_dstPortsClient-1)*gauge_number);
+        else{
+          var data_notEst_dstPortClient =[['notEstdstPortClient',  'totalflows','totalpkts','totalbytes'],[]];
+          listtable_counter2 += gauge_number*2;
+          gauge_counter2 += gauge_number;
+          data_notEst_dstPortClient.push(...notEst_connections_dstPortsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          listtable_notEst_dstPortClient.setData(data_notEst_dstPortClient);
+          gaugeList_notEst_dstPortClient.setGauges(notEst_connections_dstPortsClient[3].slice(gauge_counter2,gauge_counter2 + gauge_number));
+          screen.render();}
+      }
+      })
+
+    screen.key('up', function(ch, key){
+      if(gaugeList_est_dstPortClient.focused == true ||gaugeList_est_dstIPs.focused == true){
+        listtable_counter1 -= gauge_number*2;
+        gauge_counter1 -= gauge_number;
+        if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
+          var data_est_dstPortClient =[['estdstPortClient',  'totalflows','totalpkts','totalbytes'],[]];
+          data_est_dstPortClient.push(...est_connections_dstPortsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          listtable_est_dstPortClient.setData(data_est_dstPortClient);
+          gaugeList_est_dstPortClient.setGauges(est_connections_dstPortsClient[3].slice(gauge_counter1,gauge_counter1+gauge_number));
+          screen.render();
+      }
+      else{
+        listtable_counter2 -=gauge_number*2;
+        gauge_counter2 -= gauge_number;
+        if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
+          var data_notEst_dstPortClient = [['notEstdstPortClient',  'totalflows','totalpkts','totalbytes'],[]];
+          data_notEst_dstPortClient.push(...notEst_connections_dstPortsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          listtable_notEst_dstPortClient.setData(data_notEst_dstPortClient);
+          gaugeList_notEst_dstPortClient.setGauges(notEst_connections_dstPortsClient[3].slice(gauge_counter2,gauge_counter2+gauge_number));
+          screen.render();  }
+    })
+
+    }
+    else{
+        listtable_est_dstPortClient.hide()
+        listtable_notEst_dstPortClient.hide()
+        gaugeList_notEst_dstPortClient.hide()
+        gaugeList_est_dstPortClient.hide()
+        show_widgets();
+      help_list_bar.selectTab(0)
+
+      }
+    bar_state_four_two =! bar_state_four_two;
+    screen.render()
+  
+});
+
 
 //display to bars of SrcPortsClient established and non established connections    
  screen.key('e', function(ch, key) {
@@ -1382,6 +1566,7 @@ screen.key('c', function(ch, key) {
 
 screen.key('m', function(ch, key) {
   hide_widgets()
+  help_list_bar.selectTab(7)
   bar_state_one = true;
   bar_state_two = true; 
   bar_state_three = true;
@@ -1396,6 +1581,7 @@ screen.key('m', function(ch, key) {
   else{
      show_widgets()
       map.hide()  
+      help_list_bar.selectTab(0)
     }
     map_state = !map_state;
     screen.render()
@@ -1418,12 +1604,13 @@ table_timeline.rows.on('select', (item, index) => {
 
 screen.key('h', function(ch, key) {
   hide_widgets();
+  help_list_bar.selectTab(6)
    bar_state_one = true;
   bar_state_two = true; 
   bar_state_three = true;
   bar_state_four = true;
   bar_state_four_two = true;
-  box_hotkeys_state = true;
+  // box_hotkeys_state = true;
   map_state = true;
   if(box_hotkeys_state){
     table_outTuples_listtable.show()
@@ -1431,7 +1618,7 @@ screen.key('h', function(ch, key) {
   }
   else{table_outTuples_listtable.hide()
     
-    
+    help_list_bar.selectTab(0)
   show_widgets()}
     box_hotkeys_state =! box_hotkeys_state
     screen.render();
@@ -1463,10 +1650,10 @@ screen.key(['tab'], function(ch, key) {
     gaugeList_notEst_dstPort.focus()
   }
 
-  else if(bar_one_dstPortClient.focused == true){
-    bar_two_dstPortClient.focus();}
-  else if(bar_two_dstPortClient.focused == true){
-    bar_one_dstPortClient.focus();}
+  else if(bar_one_est_dstPortClient.focused == true){
+    bar_two_est_dstPortClient.focus();}
+  else if(bar_two_est_dstPortClient.focused == true){
+    bar_one_est_dstPortClient.focus();}
   else if(screen.focused == tree.rows){
     focus_widget =table_timeline
     tree.style.border.fg = 'blue'
