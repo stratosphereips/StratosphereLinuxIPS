@@ -61,7 +61,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
             self.timeout = None
         elif platform.system() == 'Linux':
             # linux
-            self.timeout = None
+            self.timeout = -1
         else:
             #??
             self.timeout = None
