@@ -6,34 +6,76 @@ Slips is an intrusion prevention system that is based on behavioral detections a
 ## Dependencies
 The minimum slips requirements are:
 
-- redis database running (see http://redis.org)
 - python 3.7 or more
+- redis database running (see http://redis.org)
+    - In debian/ubuntu: ```apt-get install redis```
 - py37-redis 
-- maxminddb libraries for python (pip install maxminddb). Or ignore the geoip module in the conf.
-- watchdog python library
+    - In debian/ubuntu: ```apt-get install python3-redis```
+- maxminddb libraries for python (pip3 install maxminddb). Or ignore the geoip module in the conf.
 - Zeek (Bro) https://docs.zeek.org/en/stable/install/install.html
+- python-watchdog
+    - In debian/ubuntu: ```apt-get install python3-watchdog```
   
 To run redis you can:
     - In Linux, as a daemon: redis-server --daemonize yes
     - In macos, as a daemon: sudo port load redis
-    - By hand and leaving redis running on the console: redis-server /opt/local/etc/redis.conf
+    - By hand and leaving redis running on the console in the foreground: redis-server /opt/local/etc/redis.conf
+
+For using the kalipso interface you need to have
+- nodejs
+- npm
+With npm you should install the following libraries
+    - npm install blessed-contrib
+    - npm install redis
+    - npm install async
+    - npm install ansi-colors
+    - npm install clipboardy 
 
 ##### Installation of Zeek (Bro)
+Zeek is a main part of slips and is used to convert all the pcaps and packets to nice information.
+
 - How to install and set Zeek (Bro) properly?
+
+    - Download a binary package ready for your system. Complete up to date instructions here: https://software.opensuse.org//download.html?project=security%3Azeek&package=zeek
+
+        - For Ubuntu, for example, you can do:
+            ```
+            sudo sh -c "echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_19.04/ /' > /etc/apt/sources.list.d/security:zeek.list"
+            wget -nv https://download.opensuse.org/repositories/security:zeek/xUbuntu_19.04/Release.key -O Release.key
+            sudo apt-key add - < Release.key
+            sudo apt-get update
+            sudo apt-get install zeek
+            ```
  
-  - Download the [Zeek] and follow the instructions for compilation.
-  - Make Zeek (Bro) visible for slips. Some ideas:
-    - Create a link to "/bin" folder from compiled Zeek (Bro) folder like 
-    ```
-    "sudo ln -s PATH_TO_COMPILED_BRO_FOLDER/bin/bro /bin"
-    ```
-    - or add path from your compiled zeek (bro) folder to ~/.bashrc file.
+    - Make Zeek visible for slips. Some ideas:
+        - Create a link to "/bin" folder from compiled Zeek (Bro) folder like 
+            ```
+            "sudo ln -s PATH_TO_COMPILED_BRO_FOLDER/bin/bro /usr/local/bin"
+            ```
+        
+            This is usually in /opt/bro
+            ```
+            "sudo ln -s /opt/bro/bin/bro /usr/local/bin"
+            ```
+
+            In case you installed Zeek 3.0, the binaries and folders are now called zeek
+            ```
+            "sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro"
+            ```
+
+            Notice how we still call the binary bro, until we update slips.
+
+        - or add path from your compiled zeek (bro) folder to ~/.bashrc file.
 
 
-# Fast usage
-1. Start Redis (as a daemon or not)
-2. `./slips.py -c slips.conf -i <interface>`
+# Fast usage in your own traffic
+1. Start Redis: `redis-server --daemonize yes`
+2. Run slips: `./slips.py -c slips.conf -i <interface>` (be sure you use python3)
 3. Check the folder called with the date of today. All files are updated every 5 seconds.
+4. Use kalipso to see the results
+
+
+-------
 
 # Architecture of operation
 - The data collected and used is on the _profile_ level and up. Slips does not work with data at the _flow_ level or _packet_ level to classify. This means that the simplest data structure available inside slips is the profile of an IP address. The modules can not access individual flows.
