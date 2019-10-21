@@ -32,6 +32,11 @@ fs.readFile('country.txt', 'utf8', function(err,data) {
 });
 
 
+
+
+var ip_timewindow_outTuple = {};
+
+
 function blockedTW(){ 
   return new Promise(function(resolve,reject){
     var blockedTWs = {};
@@ -258,10 +263,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
 
       keys: false,
       style: {
-        // border:'red',
         prefix: {
           fg: 'yellow'
-          // bg:'white'
         },
         item: {
         },
@@ -830,6 +833,13 @@ function getIpInfo_box_ip(ip,mode){
   })
 };
 
+
+
+ function setDataOuttuples(data){
+  table_outTuples_listtable.setData(data);
+   table_outTuples_listtable.show()
+            table_outTuples_listtable.focus()
+ }
 function getEvidence(reply){
   /*
   retrieves IPsInfo from redis.
@@ -937,89 +947,47 @@ screen.key('o', function(ch, key){
 
 })
 var timeline_reply_global  = {};
-
+var ip;
+var timewindow;
 tree.on('select',function(node){
+  
   screen.key('w',function(ch,key){
-  clipboardy.writeSync(color.unstyle(node.name));
-  clipboardy.readSync();
-})
+    clipboardy.writeSync(color.unstyle(node.name));
+    clipboardy.readSync();
+  })
     clean_widgets()
 
     if(!node.name.includes('timewindow')){
       getIpInfo_box_ip(color.unstyle(node.name), 1);}
       
     else{
-      var ip  = color.unstyle(node.parent.name);
-      var timewindow = color.unstyle(node.name);
+      ip  = color.unstyle(node.parent.name);
+      timewindow = color.unstyle(node.name);
+  
       redis_outtuples_timewindow.hgetall("profile_"+ip+"_"+timewindow, (err,reply)=>{
         var ips = [];
         timeline_reply_global = reply;
         map.innerMap.draw(null);
-        if(reply == null){
-          table_outTuples_listtable.setItems('');
-          return;}
         getEvidence(reply['Evidence']);
         
         var obj_outTuples = JSON.parse(reply["OutTuples"]);
         var keys = Object.keys(obj_outTuples);
-        var data = [];
-        async.each(keys, function(key,callback){
-          var ip_dict = {'asn':'', 'geocountry':'', 'URL':'','down':'','ref':'', 'com':''}
-          var row = [];
-          var tuple_info = obj_outTuples[key];
+        async.each(keys, function(key,callback){        
           var outTuple_ip = key.split(':')[0];
           ips.push(outTuple_ip); 
-
-          getIpInfo_box_ip(outTuple_ip,0).then(function(result_dict){
-            var ipInfo_dict_keys = Object.keys(result_dict)
-            if(ipInfo_dict_keys.includes('asn')){
-              ip_dict['asn'] = result_dict['asn']
-            }
-            if(ipInfo_dict_keys.includes('geocountry')){
-              ip_dict['geocountry'] = result_dict['geocountry']
-            }
-            if(ipInfo_dict_keys.includes('VirusTotal')){
-              ip_dict['URL'] = String(round(result_dict['VirusTotal']['URL'],3));
-              ip_dict['down'] = String(round(result_dict['VirusTotal']['down_file'],3));
-              ip_dict['ref'] = String(round(result_dict['VirusTotal']['ref_file'],3));
-              ip_dict['com'] = String(round(result_dict['VirusTotal']['com_file'],3));
-            }
-          if(tuple_info[0].trim().length>40){
-            var k = chunkString(tuple_info[0].trim(),40);
-          
-            async.forEachOf(k, function(ctr,ind, callback){
-              var row2 = [];
-              if(ind == 0){
-                row2.push(key,ctr,Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
-              }
-              else{row2.push('',ctr, '', '' , '');}
-                data.push(row2);
-                callback(null);
-            }, function(err){
-              if(err){
-                console.log('kamila',err);
-              }
-            })
-
-          }  
-          else{     
-            row.push(key,tuple_info[0], Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
-            data.push(row)}
-            callback(null);
-          })  
+          callback(null);  
         },function(err) {
       if( err ) {
         console.log('unable to create user');
       } else {
-        data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
-        table_outTuples_listtable.setData(data);
         setMap(ips)
       screen.render();  
       }
-      });
-    })}
+      });})
+    
+
       //get the timeline of a selected ip
-    redis_get_timeline.lrange("profile_"+ip+"_"+timewindow+'_timeline',0,-1, (err,reply)=>{
+  redis_get_timeline.lrange("profile_"+ip+"_"+timewindow+'_timeline',0,-1, (err,reply)=>{
       var data = [];
       async.each(reply, function(line, callback){
         var row = [];
@@ -1054,11 +1022,98 @@ tree.on('select',function(node){
           console.log('unable to create user');
         } else {
           table_timeline.setData({headers:[node.parent.name+" "+node.name], data: data});
+          // console.log(data.length)
           screen.render();}
     });
   })
-})
 
+    }})
+  
+
+ screen.key('h', function(ch, key) {
+          hide_widgets();
+          help_list_bar.selectTab(6)
+          bar_state_one = true;
+          bar_state_two = true; 
+          bar_state_three = true;
+          bar_state_four = true;
+          bar_state_four_two = true;
+          // box_hotkeys_state = true;
+          map_state = true;
+          if(box_hotkeys_state){
+         
+              if(timeline_reply_global == null){
+                table_outTuples_listtable.setItems('');} 
+              else if(Object.keys(ip_timewindow_outTuple).includes(ip+timewindow)){
+                setDataOuttuples(ip_timewindow_outTuple[ip+timewindow]);
+
+              }
+              else{
+              var obj_outTuples = JSON.parse(timeline_reply_global["OutTuples"]);
+              var keys = Object.keys(obj_outTuples);
+              var data = [];
+              async.each(keys, function(key,callback){
+                var ip_dict = {'asn':'', 'geocountry':'', 'URL':'','down':'','ref':'', 'com':''}
+                var row = [];
+                var tuple_info = obj_outTuples[key];
+                var outTuple_ip = key.split(':')[0];
+                getIpInfo_box_ip(outTuple_ip,0).then(function(result_dict){
+                  var ipInfo_dict_keys = Object.keys(result_dict)
+                  if(ipInfo_dict_keys.includes('asn')){
+                    ip_dict['asn'] = result_dict['asn']
+                  }
+                  if(ipInfo_dict_keys.includes('geocountry')){
+                    ip_dict['geocountry'] = result_dict['geocountry']
+                  }
+                  if(ipInfo_dict_keys.includes('VirusTotal')){
+                    ip_dict['URL'] = String(round(result_dict['VirusTotal']['URL'],3));
+                    ip_dict['down'] = String(round(result_dict['VirusTotal']['down_file'],3));
+                    ip_dict['ref'] = String(round(result_dict['VirusTotal']['ref_file'],3));
+                    ip_dict['com'] = String(round(result_dict['VirusTotal']['com_file'],3));
+                  }
+                if(tuple_info[0].trim().length>40){
+                  var k = chunkString(tuple_info[0].trim(),40);
+                
+                  async.forEachOf(k, function(ctr,ind, callback){
+                    var row2 = [];
+                    if(ind == 0){
+                      row2.push(key,ctr,Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
+                    }
+                    else{row2.push('',ctr, '', '' , '');}
+                      data.push(row2);
+                      callback(null);
+                  }, function(err){
+                    if(err){
+                      console.log('kamila',err);}
+                  })
+
+                }  
+          else{     
+            row.push(key,tuple_info[0], Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
+            data.push(row)}
+            callback(null);
+          })  
+        },function(err) {
+      if( err ) {
+        console.log('unable to create user');
+      } else {
+        data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
+        ip_timewindow_outTuple[ip+timewindow] = data;
+        setDataOuttuples(data);
+        screen.render();  
+        }
+      });
+      }}
+      else{
+        table_outTuples_listtable.setItems('');
+        table_outTuples_listtable.hide()
+        help_list_bar.selectTab(0)
+        show_widgets()}
+        box_hotkeys_state =! box_hotkeys_state
+        screen.render();
+        });
+
+     
 //display two bars of dstPortsServer established and non established connections
 
   screen.key('b', function(ch, key) {
@@ -1602,27 +1657,33 @@ table_timeline.rows.on('select', (item, index) => {
 
 });
 
-screen.key('h', function(ch, key) {
-  hide_widgets();
-  help_list_bar.selectTab(6)
-   bar_state_one = true;
-  bar_state_two = true; 
-  bar_state_three = true;
-  bar_state_four = true;
-  bar_state_four_two = true;
-  // box_hotkeys_state = true;
-  map_state = true;
-  if(box_hotkeys_state){
-    table_outTuples_listtable.show()
-    table_outTuples_listtable.focus()
-  }
-  else{table_outTuples_listtable.hide()
+// table_timeline.rows.on('focus', (item, index) => {
+// console.log(item)
+
+// });
+
+// screen.key('h', function(ch, key) {
+
+//   hide_widgets();
+//   help_list_bar.selectTab(6)
+//    bar_state_one = true;
+//   bar_state_two = true; 
+//   bar_state_three = true;
+//   bar_state_four = true;
+//   bar_state_four_two = true;
+//   // box_hotkeys_state = true;
+//   map_state = true;
+//   if(box_hotkeys_state){
+//     table_outTuples_listtable.show()
+//     table_outTuples_listtable.focus()
+//   }
+//   else{table_outTuples_listtable.hide()
     
-    help_list_bar.selectTab(0)
-  show_widgets()}
-    box_hotkeys_state =! box_hotkeys_state
-    screen.render();
-});
+//     help_list_bar.selectTab(0)
+//   show_widgets()}
+//     box_hotkeys_state =! box_hotkeys_state
+//     screen.render();
+// });
 
 screen.key(['tab'], function(ch, key) {
   if(box_generic_dashboard.focused == true){
