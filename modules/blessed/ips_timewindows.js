@@ -936,6 +936,13 @@ tree.on('select',function(node){
       //get the timeline of a selected ip
   redis_get_timeline.lrange("profile_"+ip+"_"+timewindow+'_timeline',0,-1, (err,reply)=>{
       var data = [];
+      if(reply.length < 1){
+        table_timeline.setData({headers:[node.parent.name+" "+node.name], data: data});
+          // console.log(data.length)
+          timeline_length = data.length;
+          screen.render();
+      }
+      else{
       async.each(reply, function(line, callback){
         var row = [];
         var line_arr = line.split(" ")
@@ -971,8 +978,9 @@ tree.on('select',function(node){
           table_timeline.setData({headers:[node.parent.name+" "+node.name], data: data});
           // console.log(data.length)
           timeline_length = data.length;
-          screen.render();}
-    });
+          screen.render();
+        }
+    });}
   })
 
     }})
@@ -1606,6 +1614,7 @@ table_timeline.rows.on('select', (item, index) => {
   var index_to = timeline_line.indexOf('to')
   var timeline_ip = timeline_line[index_to +1].slice(6,-7)
   getIpInfo_box_ip(timeline_ip,1)
+
 });
 
 screen.key(['tab'], function(ch, key) {
