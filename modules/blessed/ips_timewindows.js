@@ -68,14 +68,14 @@ var grid = new contrib.grid({
   screen: screen
 });
 
-var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table, 
+var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table, 
   {keys: true
   , vi:true
   , style:{border:{ fg:'blue'}}
   , scrollbar: true
   , label: "Timeline"
   , columnWidth:[200]})
-, box_generic_dashboard = grid.set(2, 2, 2, 2,blessed.box,{
+, box_generic_dashboard = grid.set(1, 1, 4, 4,blessed.box,{
       top: 'center',
       left: 'center',
       width: '50%',
@@ -83,10 +83,13 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       label:'GENERIC DASHBOARD',
       tags: true,
       keys: true,
+      
       style:{
-         focus: {
-      border:{ fg:'red'}
-    }},
+         // focus: {
+
+      border:{ fg:'red',type: 'line'
+      ,bold: true}
+    },
       vi:true,
       scrollable: true,
       alwaysScroll: true,
@@ -94,9 +97,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
         ch: ' ',
         inverse: true
       },
-    border: {
-      type: 'line'
-    },
+    
   })
 
   ,table_outTuples_listtable = grid.set(0,0,5.7,6, blessed.listtable, {
@@ -126,35 +127,46 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
 
 ,listtable_est_srcPort = grid.set(0,0,2.8,2, blessed.listtable, {
       border: 'line'
+  , style: {border: {fg:'blue'}}
+
     })
 ,listtable_notEst_srcPort = grid.set(2.8,0,2.8,2, blessed.listtable, {
       border: 'line'
+  , style: {border: {fg:'blue'}}
     })
 ,listtable_est_dstIPs = grid.set(0,0,2.8,2, blessed.listtable, {
       border: 'line'
+  , style: {border: {fg:'blue'}}
     })
 ,listtable_notEst_dstIPs = grid.set(2.8,0,2.8,2, blessed.listtable, {
       border: 'line'
+  , style: {border: {fg:'blue'}}
     })
 ,listtable_est_dstPort = grid.set(0,0,2.8,2, blessed.listtable, {
       border: 'line'
+  , style: {border: {fg:'blue'}}
     })
 ,listtable_notEst_dstPort = grid.set(2.8,0,2.8,2, blessed.listtable, {
       border: 'line'
+  , style: {border: {fg:'blue'}}
     })
 ,listtable_est_dstPortClient = grid.set(0,0,2.8,2, blessed.listtable, {
       border: 'line'
+  , style: {border: {fg:'blue'}}
     })
 ,listtable_notEst_dstPortClient = grid.set(2.8,0,2.8,2, blessed.listtable, {
       border: 'line'
+  , style: {border: {fg:'blue'}}
     })
 ,listtable_est_dstPortClientIps = grid.set(0,0,2.8,2, blessed.listtable, {
       border: 'line'
+  , style: {border: {fg:'blue'}}
     })
 ,listtable_notEst_dstPortClientIps = grid.set(2.8,0,2.8,2, blessed.listtable, {
       border: 'line'
+  , style: {border: {fg:'blue'}}
     })
-  , tree =  grid.set(0,0,5,1,contrib.tree,
+  , tree =  grid.set(0,0,5.7,1,contrib.tree,
   { vi:true 
   , style: {fg:'green',border: {fg:'blue'}}
   , template: { lines: true }
@@ -166,6 +178,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       width: '50%',
       height: '50%',
       content: "SELECT IP TO SEE IPS INFO!",
+
       tags: true,
        style:{
          focus: {
@@ -175,7 +188,7 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       type: 'line'
     }})
 
- , box_evidence = grid.set(4.2, 3.5, 0.9, 2.5,blessed.box,{
+ , box_evidence = grid.set(4.8,1, 0.9, 5,blessed.box,{
       top: 'center',
       left: 'center',
       width: '50%',
@@ -184,9 +197,8 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       tags: true,
       keys: true,
       style:{
-        border:{ fg:'blue'},
-         focus: {
-      border:{ fg:'magenta'}
+        border:{ fg:'blue',type: 'line'},
+        focus: {border:{ fg:'magenta'}
     }},
       vi:true,
       scrollable: true,
@@ -195,72 +207,16 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
         ch: ' ',
         inverse: true
       },
-    border: {
-      type: 'line'
-    },
+
   })
 
 
-, map = grid.set(0, 0, 5.7, 6,contrib.map,{label: 'World Map'})
+, map = grid.set(0, 0, 5.7, 6,contrib.map,{label: 'World Map',style:{border: {fg:'blue'}}
+})
 
-, bar_one_est_dstPortClient = grid.set(0,0,2.8,6,contrib.stackedBar,
-        { 
-         barWidth: 6
-       , barSpacing: 10
-       , xOffset: 2
-       , height: "100%"
-       , width: "100%"
-       , style:{
-          border:{ fg:'blue'},
-
-         focus: {
-      border:{ fg:'magenta'}
-    }}
-       , barBgColor: [ 'green' ]})
-, bar_two_est_dstPortClient = grid.set(2.8,0,2.8,6,contrib.stackedBar,
-       { 
-         barWidth: 6
-       , barSpacing: 10
-       , xOffset: 2
-       , height: "100%"
-       , style:{
-          border:{ fg:'blue'},
-
-         focus: {
-      border:{ fg:'magenta'}
-    }}
-       , width: "100%"
-       , barBgColor: [ 'green' ]})
-, bar_one_notest_dstPortClient = grid.set(0,0,2.8,6,contrib.stackedBar,
-        { 
-         barWidth: 6
-       , barSpacing: 10
-       , xOffset: 2
-       , height: "100%"
-       , width: "100%"
-       , style:{
-          border:{ fg:'blue'},
-
-         focus: {
-      border:{ fg:'magenta'}
-    }}
-       , barBgColor: [ 'green' ]})
-, bar_two_notest_dstPortClient = grid.set(2.8,0,2.8,6,contrib.stackedBar,
-       { 
-         barWidth: 6
-       , barSpacing: 10
-       , xOffset: 2
-       , height: "100%"
-       , style:{
-          border:{ fg:'blue'},
-
-         focus: {
-      border:{ fg:'magenta'}
-    }}
-       , width: "100%"
-       , barBgColor: [ 'green' ]})
 , help_list_bar = grid.set(5.7,0,0.4,6,blessed.listbar,{
-
+  style:{
+        border:{ fg:'blue'}},
       keys: false,
       style: {
         prefix: {
@@ -273,8 +229,11 @@ var table_timeline =  grid.set(0.5, 1, 3.7, 5, contrib.table,
       autoCommandKeys: true,
       commands:
        {
-            'name':{
+            'main':{
               keys : ' '
+            },
+            'help':{
+              keys : ['g']
             },
             'srcPortClient': {
               keys: ['e']
@@ -446,7 +405,8 @@ gaugeList_notEst_dstPortClientIps = grid.set(3.1, 2, 2.6, 4, contrib.gaugeList,
       }
     )
 var gauge_number = 9;
-
+var timeline_length;
+box_generic_dashboard.setFront()
 box_generic_dashboard.focus()
 gaugeList_notEst_dstPort.hide()
 listtable_notEst_dstPort.hide()
@@ -469,10 +429,7 @@ listtable_est_dstIPs.hide()
 table_outTuples_listtable.hide()
 gaugeList_est_srcPort.hide()
 listtable_est_srcPort.hide()
-bar_two_notest_dstPortClient.hide()
-bar_one_notest_dstPortClient.hide()
-bar_two_est_dstPortClient.hide()
-bar_one_est_dstPortClient.hide()
+
 
 map.hide()
 box_generic_dashboard.setContent('\n what should be there?')
@@ -485,6 +442,7 @@ var bar_state_four = true;
 var box_hotkeys_state = true;
 var map_state = true;
 var box_hotkeys_state = true;
+var box_generic_dashboard_status = false;
 
 function clean_widgets(){
   box_evidence.setContent('');
@@ -520,11 +478,7 @@ function hide_widgets(){
   table_timeline.hide()
   box_ip.hide()
   table_outTuples_listtable.hide()  
-  bar_two_notest_dstPortClient.hide()
-  bar_one_notest_dstPortClient.hide()
-  bar_two_est_dstPortClient.hide()
-  bar_one_est_dstPortClient.hide()
- 
+
   map.hide()
 }
 
@@ -534,8 +488,7 @@ function show_widgets(){
   box_evidence.show()
   table_timeline.show()
   box_ip.show()
-  focus_widget  .focus()
-
+  focus_widget.focus()
 
 }
 
@@ -575,8 +528,7 @@ function bar_setdata(bar, counter, data, number){
 };
 
 function tcp_udp_connections_dstPortsClient(key, key2,reply){    
-  var bar_categories_protocol_port  = [];
-  var data_stacked_bar = [];
+  
   var data_listtable = [];
   var data_gaugeList = [];
   
@@ -592,21 +544,21 @@ function tcp_udp_connections_dstPortsClient(key, key2,reply){
     }
 
   async.each(keys_tcp, function(key_TCP_est, callback) {
-    bar_categories_protocol_port.push('TCP/'+key_TCP_est);
+    
     var service_info = obj_tcp[key_TCP_est];
-    var row = [];
-    var listtable_est_dstPort = [];
     var dst_ips = []
 
     dst_ips = Object.keys(service_info["dstips"]);
     var dst_ips_connections = Object.values(service_info["dstips"]);
 
     async.forEachOf(dst_ips, function(dst_ip_counter,dst_ip_index, callback){
+      var row = [];
+        var listtable_est_dstPort = [];
       listtable_est_dstPort.push('TCP/'+key_TCP_est,String(dst_ip_counter));
       data_listtable.push(listtable_est_dstPort)
       data_listtable.push([])
       row.push(round(Math.log(dst_ips_connections[dst_ip_index]),0));
-      data_stacked_bar.push(row);
+
       data_gaugeList.push({stack:row})
       callback();
 
@@ -625,26 +577,26 @@ function tcp_udp_connections_dstPortsClient(key, key2,reply){
     try{
       var obj_udp = JSON.parse(reply[key2]);
       var keys_udp = Object.keys(obj_udp);
+
     }
     catch(err){
       var obj_udp = []
       var keys_udp = []
+      
+
     }
 
   async.each(keys_udp, function(key_UDP_est, callback) {
-    var listtable_est_dstPort = [];
-    bar_categories_protocol_port.push('UDP/'+key_UDP_est);
     var service_info = obj_udp[key_UDP_est];
-    var row = [];
-    var listtable_est_dstPort = [];
     var dst_ips = Object.keys(service_info["dstips"]);
     var dst_ips_connections = Object.values(service_info["dstips"]);
     async.forEachOf(dst_ips, function(dst_ip_counter,dst_ip_index, callback){
+      var row = [];
+    var listtable_est_dstPort = [];
       listtable_est_dstPort.push('UDP/'+key_UDP_est,String(dst_ip_counter));
       data_listtable.push(listtable_est_dstPort)
       data_listtable.push([])
       row.push(round(Math.log(dst_ips_connections[dst_ip_index]),0));
-      data_stacked_bar.push(row);
       data_gaugeList.push({stack:row})
       callback();
 
@@ -660,7 +612,7 @@ function tcp_udp_connections_dstPortsClient(key, key2,reply){
     });
   }
 });
-return [data_stacked_bar,bar_categories_protocol_port, data_listtable, data_gaugeList]} 
+return [data_listtable, data_gaugeList]} 
 
 
 //function to fill in the information about the map(loc and lot of a countries)
@@ -698,8 +650,6 @@ function setMap(ips){
 
 //function to fill the info about bars (srcPortsServer, dstPortsClient)
 function tcp_udp_connections(key, key2,reply){    
-  var bar_categories_protocol_port  = [];
-  var data_stacked_bar = [];
   var data_listtable = [];
   var data_gaugeList = [];
   
@@ -713,7 +663,7 @@ function tcp_udp_connections(key, key2,reply){
     }
 
   async.each(keys_tcp, function(key_TCP_est, callback) {
-    bar_categories_protocol_port.push('TCP/'+key_TCP_est);
+    
     var service_info = obj_tcp[key_TCP_est];
     var row = [];
     var listtable_est_srcPort = [];
@@ -721,7 +671,6 @@ function tcp_udp_connections(key, key2,reply){
     data_listtable.push(listtable_est_srcPort)
     data_listtable.push([])
     row.push(round(Math.log(service_info['totalflows']),0), round(Math.log(service_info['totalpkt']),0), round(Math.log(service_info['totalbytes']),0));
-    data_stacked_bar.push(row);
     data_gaugeList.push({stack:row})
     callback();
   }, function(err) {
@@ -740,14 +689,12 @@ function tcp_udp_connections(key, key2,reply){
 
   async.each(keys_udp, function(key_UDP_est, callback) {
     var listtable_est_srcPort = [];
-    bar_categories_protocol_port.push('UDP/'+key_UDP_est);
     var service_info = obj_udp[key_UDP_est];
     var row = [];
     listtable_est_srcPort.push('UDP/'+key_UDP_est,String(service_info['totalflows']), String(service_info['totalpkt']), String(service_info['totalbytes']))
     data_listtable.push(listtable_est_srcPort)
     data_listtable.push([])
     row.push(round(Math.log(service_info['totalflows']),0), round(Math.log(service_info['totalpkt']),0), round(Math.log(service_info['totalbytes']),0));
-    data_stacked_bar.push(row);
     data_gaugeList.push({stack:row})
     callback()
     }, function(err) {
@@ -757,7 +704,7 @@ function tcp_udp_connections(key, key2,reply){
     });
   }
 });
-return [data_stacked_bar,bar_categories_protocol_port, data_listtable, data_gaugeList]}
+return [ data_listtable, data_gaugeList]}
 
 function timewindows_list_per_ip(tw){
 
@@ -1023,6 +970,7 @@ tree.on('select',function(node){
         } else {
           table_timeline.setData({headers:[node.parent.name+" "+node.name], data: data});
           // console.log(data.length)
+          timeline_length = data.length;
           screen.render();}
     });
   })
@@ -1032,7 +980,7 @@ tree.on('select',function(node){
 
  screen.key('h', function(ch, key) {
           hide_widgets();
-          help_list_bar.selectTab(6)
+          help_list_bar.selectTab(7)
           bar_state_one = true;
           bar_state_two = true; 
           bar_state_three = true;
@@ -1117,7 +1065,7 @@ tree.on('select',function(node){
 //display two bars of dstPortsServer established and non established connections
 
   screen.key('b', function(ch, key) {
-  help_list_bar.selectTab(3)
+  help_list_bar.selectTab(4)
 
         hide_widgets()
     bar_state_one = true;
@@ -1134,17 +1082,17 @@ tree.on('select',function(node){
     if(bar_state_two){
       var est_connections_dstPortsServer = tcp_udp_connections("dstPortsServerTCPEstablished","dstPortsServerUDPEstablished",timeline_reply_global);
       var notEst_connections_dstPortsServer = tcp_udp_connections("dstPortsServerTCPNotEstablished","dstPortsServerUDPNotEstablished",timeline_reply_global);
-      var est_bar_one_number_dstPortsServer = Math.ceil(est_connections_dstPortsServer[3].length / gauge_number);
-      var notEst_bar_one_number_dstPortsServer = Math.ceil(notEst_connections_dstPortsServer[3].length / gauge_number);
+      var est_bar_one_number_dstPortsServer = Math.ceil(est_connections_dstPortsServer[1].length / gauge_number);
+      var notEst_bar_one_number_dstPortsServer = Math.ceil(notEst_connections_dstPortsServer[1].length / gauge_number);
 
-      gaugeList_notEst_dstPort.setGauges(notEst_connections_dstPortsServer[3].slice(0,gauge_number))
-      gaugeList_est_dstPort.setGauges(est_connections_dstPortsServer[3].slice(0,gauge_number))
+      gaugeList_notEst_dstPort.setGauges(notEst_connections_dstPortsServer[1].slice(0,gauge_number))
+      gaugeList_est_dstPort.setGauges(est_connections_dstPortsServer[1].slice(0,gauge_number))
       var data_est =  [['estdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]]
-      data_est.push(...est_connections_dstPortsServer[2].slice(0,gauge_number*2))
+      data_est.push(...est_connections_dstPortsServer[0].slice(0,gauge_number*2))
       listtable_est_dstPort.setData(data_est)
 
       var data_notest =  [['notEstdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]]
-      data_notest.push(...notEst_connections_dstPortsServer[2].slice(0,gauge_number*2))
+      data_notest.push(...notEst_connections_dstPortsServer[0].slice(0,gauge_number*2))
       listtable_notEst_dstPort.setData(data_notest) 
 
       gaugeList_est_dstPort.show()
@@ -1161,9 +1109,9 @@ tree.on('select',function(node){
           var data_est_dstPortServer =[['estdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]];
           listtable_counter1 += gauge_number*2;
           gauge_counter1 += gauge_number;
-          data_est_dstPortServer.push(...est_connections_dstPortsServer[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          data_est_dstPortServer.push(...est_connections_dstPortsServer[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_dstPort.setData(data_est_dstPortServer);
-          gaugeList_est_dstPort.setGauges(est_connections_dstPortsServer[3].slice(gauge_counter1,gauge_counter1 + gauge_number));
+          gaugeList_est_dstPort.setGauges(est_connections_dstPortsServer[1].slice(gauge_counter1,gauge_counter1 + gauge_number));
           screen.render();}
       }
       else{
@@ -1172,9 +1120,9 @@ tree.on('select',function(node){
           var data_notEst_dstPortServer =[['notEstdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]];
           listtable_counter2 += gauge_number*2;
           gauge_counter2 += gauge_number;
-          data_notEst_dstPortServer.push(...notEst_connections_dstPortsServer[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          data_notEst_dstPortServer.push(...notEst_connections_dstPortsServer[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_dstPort.setData(data_notEst_dstPortServer);
-          gaugeList_notEst_dstPort.setGauges(notEst_connections_dstPortsServer[3].slice(gauge_counter2,gauge_counter2 + gauge_number));
+          gaugeList_notEst_dstPort.setGauges(notEst_connections_dstPortsServer[1].slice(gauge_counter2,gauge_counter2 + gauge_number));
           screen.render();}
       }
       })
@@ -1185,9 +1133,9 @@ tree.on('select',function(node){
         gauge_counter1 -= gauge_number;
         if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
           var data_est_dstPortServer =[['estdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]];
-          data_est_dstPortServer.push(...est_connections_dstPortsServer[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          data_est_dstPortServer.push(...est_connections_dstPortsServer[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_dstPort.setData(data_est_dstPortServer);
-          gaugeList_est_dstPort.setGauges(est_connections_dstPortsServer[3].slice(gauge_counter1,gauge_counter1+gauge_number));
+          gaugeList_est_dstPort.setGauges(est_connections_dstPortsServer[1].slice(gauge_counter1,gauge_counter1+gauge_number));
           screen.render();
       }
       else{
@@ -1195,9 +1143,9 @@ tree.on('select',function(node){
         gauge_counter2 -= gauge_number;
         if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
           var data_notEst_dstPortServer = [['notEstdstPortServer', 'totalflows', 'totalpkts','totalbytes'],[]];
-          data_notEst_dstPortServer.push(...notEst_connections_dstPortsServer[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          data_notEst_dstPortServer.push(...notEst_connections_dstPortsServer[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_dstPort.setData(data_notEst_dstPortServer);
-          gaugeList_notEst_dstPort.setGauges(notEst_connections_dstPortsServer[3].slice(gauge_counter2,gauge_counter2+gauge_number));
+          gaugeList_notEst_dstPort.setGauges(notEst_connections_dstPortsServer[1].slice(gauge_counter2,gauge_counter2+gauge_number));
           screen.render();  }
     })
 
@@ -1216,7 +1164,7 @@ tree.on('select',function(node){
   
 });
   screen.key('n', function(ch, key) {
-    help_list_bar.selectTab(5)
+    help_list_bar.selectTab(6)
     hide_widgets()
 
     bar_state_one = true;
@@ -1233,17 +1181,18 @@ tree.on('select',function(node){
     if(bar_state_four){
       var est_connections_dstPortsClient = tcp_udp_connections_dstPortsClient("DstPortsClientTCPEstablished","DstPortsClientUDPEstablished",timeline_reply_global);
       var notEst_connections_dstPortsClient = tcp_udp_connections_dstPortsClient("DstPortsClientTCPNotEstablished","DstPortsClientUDPNotEstablished",timeline_reply_global);
-      var est_bar_one_number_dstPortsClient = Math.ceil(est_connections_dstPortsClient[3].length / gauge_number);
-      var notEst_bar_one_number_dstPortsClient = Math.ceil(notEst_connections_dstPortsClient[3].length / gauge_number);
+      var est_bar_one_number_dstPortsClient = Math.ceil(est_connections_dstPortsClient[1].length / gauge_number);
+      var notEst_bar_one_number_dstPortsClient = Math.ceil(notEst_connections_dstPortsClient[1].length / gauge_number);
 
-      gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[3].slice(0,gauge_number))
-      gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[3].slice(0,gauge_number))
+      gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[1].slice(0,gauge_number))
+      gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[1].slice(0,gauge_number))
       var data_est =  [['estdstPortClient',  'IP'],[]]
-      data_est.push(...est_connections_dstPortsClient[2].slice(0,gauge_number*2))
+      data_est.push(...est_connections_dstPortsClient[0].slice(0,gauge_number*2))
+      // console.log(data_est)
       listtable_est_dstPortClientIps.setData(data_est)
 
       var data_notest =  [['notEstdstPortClient', 'IP'],[]]
-      data_notest.push(...notEst_connections_dstPortsClient[2].slice(0,gauge_number*2))
+      data_notest.push(...notEst_connections_dstPortsClient[0].slice(0,gauge_number*2))
       listtable_notEst_dstPortClientIps.setData(data_notest) 
 
       gaugeList_est_dstPortClientIps.show()
@@ -1254,15 +1203,15 @@ tree.on('select',function(node){
       screen.render();
 
     screen.key('down', function(ch, key){
-      if(gaugeList_est_dstPortClientIps.focused == true || gaugeList_est_dstIPs.focused == true){
+      if(gaugeList_est_dstPortClientIps.focused == true){
         if(gauge_counter1 >= (est_bar_one_number_dstPortsClient-1)*gauge_number);
         else{
           var data_est_dstPortClientIps =[['estdstPortClient', 'IP'],[]];
           listtable_counter1 += gauge_number*2;
           gauge_counter1 += gauge_number;
-          data_est_dstPortClientIps.push(...est_connections_dstPortsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          data_est_dstPortClientIps.push(...est_connections_dstPortsClient[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_dstPortClientIps.setData(data_est_dstPortClientIps);
-          gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[3].slice(gauge_counter1,gauge_counter1 + gauge_number));
+          gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[1].slice(gauge_counter1,gauge_counter1 + gauge_number));
           screen.render();}
       }
       else{
@@ -1271,22 +1220,22 @@ tree.on('select',function(node){
           var data_notEst_dstPortClientIps =[['notEstdstPortClient', 'IP'],[]];
           listtable_counter2 += gauge_number*2;
           gauge_counter2 += gauge_number;
-          data_notEst_dstPortClientIps.push(...notEst_connections_dstPortsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          data_notEst_dstPortClientIps.push(...notEst_connections_dstPortsClient[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_dstPortClientIps.setData(data_notEst_dstPortClientIps);
-          gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[3].slice(gauge_counter2,gauge_counter2 + gauge_number));
+          gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[1].slice(gauge_counter2,gauge_counter2 + gauge_number));
           screen.render();}
       }
       })
 
     screen.key('up', function(ch, key){
-      if(gaugeList_est_dstPortClientIps.focused == true ||gaugeList_est_dstIPs.focused == true){
+      if(gaugeList_est_dstPortClientIps.focused == true){
         listtable_counter1 -= gauge_number*2;
         gauge_counter1 -= gauge_number;
         if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
           var data_est_dstPortClientIps =[['estdstPortClient', 'IP'],[]];
-          data_est_dstPortClientIps.push(...est_connections_dstPortsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          data_est_dstPortClientIps.push(...est_connections_dstPortsClient[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_dstPortClientIps.setData(data_est_dstPortClientIps);
-          gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[3].slice(gauge_counter1,gauge_counter1+gauge_number));
+          gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[1].slice(gauge_counter1,gauge_counter1+gauge_number));
           screen.render();
       }
       else{
@@ -1294,9 +1243,9 @@ tree.on('select',function(node){
         gauge_counter2 -= gauge_number;
         if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
           var data_notEst_dstPortClientIps = [['notEstdstPortClient', 'IP'],[]];
-          data_notEst_dstPortClientIps.push(...notEst_connections_dstPortsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          data_notEst_dstPortClientIps.push(...notEst_connections_dstPortsClient[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_dstPortClientIps.setData(data_notEst_dstPortClientIps);
-          gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[3].slice(gauge_counter2,gauge_counter2+gauge_number));
+          gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[1].slice(gauge_counter2,gauge_counter2+gauge_number));
           screen.render();  }
     })
 
@@ -1316,7 +1265,7 @@ tree.on('select',function(node){
 });
 
   screen.key('p', function(ch, key) {
-  help_list_bar.selectTab(4)
+  help_list_bar.selectTab(5)
 
     hide_widgets()
 
@@ -1334,17 +1283,17 @@ tree.on('select',function(node){
     if(bar_state_four_two){
       var est_connections_dstPortsClient = tcp_udp_connections("DstPortsClientTCPEstablished","DstPortsClientUDPEstablished",timeline_reply_global);
       var notEst_connections_dstPortsClient = tcp_udp_connections("DstPortsClientTCPNotEstablished","DstPortsClientUDPNotEstablished",timeline_reply_global);
-      var est_bar_one_number_dstPortsClient = Math.ceil(est_connections_dstPortsClient[3].length / gauge_number);
-      var notEst_bar_one_number_dstPortsClient = Math.ceil(notEst_connections_dstPortsClient[3].length / gauge_number);
+      var est_bar_one_number_dstPortsClient = Math.ceil(est_connections_dstPortsClient[1].length / gauge_number);
+      var notEst_bar_one_number_dstPortsClient = Math.ceil(notEst_connections_dstPortsClient[1].length / gauge_number);
 
-      gaugeList_notEst_dstPortClient.setGauges(notEst_connections_dstPortsClient[3].slice(0,gauge_number))
-      gaugeList_est_dstPortClient.setGauges(est_connections_dstPortsClient[3].slice(0,gauge_number))
+      gaugeList_notEst_dstPortClient.setGauges(notEst_connections_dstPortsClient[1].slice(0,gauge_number))
+      gaugeList_est_dstPortClient.setGauges(est_connections_dstPortsClient[1].slice(0,gauge_number))
       var data_est =  [['estdstPortClient',  'totalflows','totalpkts','totalbytes'],[]]
-      data_est.push(...est_connections_dstPortsClient[2].slice(0,gauge_number*2))
+      data_est.push(...est_connections_dstPortsClient[0].slice(0,gauge_number*2))
       listtable_est_dstPortClient.setData(data_est)
 
       var data_notest =  [['notEstdstPortClient',  'totalflows','totalpkts','totalbytes'],[]]
-      data_notest.push(...notEst_connections_dstPortsClient[2].slice(0,gauge_number*2))
+      data_notest.push(...notEst_connections_dstPortsClient[0].slice(0,gauge_number*2))
       listtable_notEst_dstPortClient.setData(data_notest) 
 
       gaugeList_est_dstPortClient.show()
@@ -1355,15 +1304,15 @@ tree.on('select',function(node){
       screen.render();
 
     screen.key('down', function(ch, key){
-      if(gaugeList_est_dstPortClient.focused == true || gaugeList_est_dstIPs.focused == true){
+      if(gaugeList_est_dstPortClient.focused == true){
         if(gauge_counter1 >= (est_bar_one_number_dstPortsClient-1)*gauge_number);
         else{
           var data_est_dstPortClient =[['estdstPortClient',  'totalflows','totalpkts','totalbytes'],[]];
           listtable_counter1 += gauge_number*2;
           gauge_counter1 += gauge_number;
-          data_est_dstPortClient.push(...est_connections_dstPortsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          data_est_dstPortClient.push(...est_connections_dstPortsClient[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_dstPortClient.setData(data_est_dstPortClient);
-          gaugeList_est_dstPortClient.setGauges(est_connections_dstPortsClient[3].slice(gauge_counter1,gauge_counter1 + gauge_number));
+          gaugeList_est_dstPortClient.setGauges(est_connections_dstPortsClient[1].slice(gauge_counter1,gauge_counter1 + gauge_number));
           screen.render();}
       }
       else{
@@ -1372,22 +1321,22 @@ tree.on('select',function(node){
           var data_notEst_dstPortClient =[['notEstdstPortClient',  'totalflows','totalpkts','totalbytes'],[]];
           listtable_counter2 += gauge_number*2;
           gauge_counter2 += gauge_number;
-          data_notEst_dstPortClient.push(...notEst_connections_dstPortsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          data_notEst_dstPortClient.push(...notEst_connections_dstPortsClient[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_dstPortClient.setData(data_notEst_dstPortClient);
-          gaugeList_notEst_dstPortClient.setGauges(notEst_connections_dstPortsClient[3].slice(gauge_counter2,gauge_counter2 + gauge_number));
+          gaugeList_notEst_dstPortClient.setGauges(notEst_connections_dstPortsClient[1].slice(gauge_counter2,gauge_counter2 + gauge_number));
           screen.render();}
       }
       })
 
     screen.key('up', function(ch, key){
-      if(gaugeList_est_dstPortClient.focused == true ||gaugeList_est_dstIPs.focused == true){
+      if(gaugeList_est_dstPortClient.focused == true){
         listtable_counter1 -= gauge_number*2;
         gauge_counter1 -= gauge_number;
         if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
           var data_est_dstPortClient =[['estdstPortClient',  'totalflows','totalpkts','totalbytes'],[]];
-          data_est_dstPortClient.push(...est_connections_dstPortsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          data_est_dstPortClient.push(...est_connections_dstPortsClient[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_dstPortClient.setData(data_est_dstPortClient);
-          gaugeList_est_dstPortClient.setGauges(est_connections_dstPortsClient[3].slice(gauge_counter1,gauge_counter1+gauge_number));
+          gaugeList_est_dstPortClient.setGauges(est_connections_dstPortsClient[1].slice(gauge_counter1,gauge_counter1+gauge_number));
           screen.render();
       }
       else{
@@ -1395,9 +1344,9 @@ tree.on('select',function(node){
         gauge_counter2 -= gauge_number;
         if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
           var data_notEst_dstPortClient = [['notEstdstPortClient',  'totalflows','totalpkts','totalbytes'],[]];
-          data_notEst_dstPortClient.push(...notEst_connections_dstPortsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          data_notEst_dstPortClient.push(...notEst_connections_dstPortsClient[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_dstPortClient.setData(data_notEst_dstPortClient);
-          gaugeList_notEst_dstPortClient.setGauges(notEst_connections_dstPortsClient[3].slice(gauge_counter2,gauge_counter2+gauge_number));
+          gaugeList_notEst_dstPortClient.setGauges(notEst_connections_dstPortsClient[1].slice(gauge_counter2,gauge_counter2+gauge_number));
           screen.render();  }
     })
 
@@ -1419,7 +1368,7 @@ tree.on('select',function(node){
 
 //display to bars of SrcPortsClient established and non established connections    
  screen.key('e', function(ch, key) {
-  help_list_bar.selectTab(1)
+  help_list_bar.selectTab(2)
 
     hide_widgets()
     // bar_state_one = true;
@@ -1436,17 +1385,17 @@ tree.on('select',function(node){
     if(bar_state_one){
       var est_connections_srcPortsClient = tcp_udp_connections("SrcPortsClientTCPEstablished","SrcPortsClientUDPEstablished",timeline_reply_global);
       var notEst_connections_srcPortsClient = tcp_udp_connections("SrcPortsClientTCPNotEstablished","SrcPortsClientUDPNotEstablished",timeline_reply_global);
-      var est_bar_one_number_srcPortsClient = Math.ceil(est_connections_srcPortsClient[3].length / gauge_number);
-      var notEst_bar_one_number_srcPortsClient = Math.ceil(notEst_connections_srcPortsClient[3].length / gauge_number);
+      var est_bar_one_number_srcPortsClient = Math.ceil(est_connections_srcPortsClient[1].length / gauge_number);
+      var notEst_bar_one_number_srcPortsClient = Math.ceil(notEst_connections_srcPortsClient[1].length / gauge_number);
 
-      gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[3].slice(0,gauge_number))
-      gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[3].slice(0,gauge_number))
+      gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[1].slice(0,gauge_number))
+      gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[1].slice(0,gauge_number))
       var data_est =  [['estSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],[]]
-      data_est.push(...est_connections_srcPortsClient[2].slice(0,gauge_number*2))
+      data_est.push(...est_connections_srcPortsClient[0].slice(0,gauge_number*2))
       listtable_est_srcPort.setData(data_est)
 
       var data_notest =  [['notEstSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],[]]
-      data_notest.push(...notEst_connections_srcPortsClient[2].slice(0,gauge_number*2))
+      data_notest.push(...notEst_connections_srcPortsClient[0].slice(0,gauge_number*2))
       listtable_notEst_srcPort.setData(data_notest) 
 
       gaugeList_est_srcPort.show()
@@ -1463,9 +1412,9 @@ tree.on('select',function(node){
           var data_est_srcPortClient =[['estSrcPortClient','totalflows', 'totalpkts','totalbytes'],[]];
           listtable_counter1 += gauge_number*2;
           gauge_counter1 += gauge_number;
-          data_est_srcPortClient.push(...est_connections_srcPortsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          data_est_srcPortClient.push(...est_connections_srcPortsClient[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_srcPort.setData(data_est_srcPortClient);
-          gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[3].slice(gauge_counter1,gauge_counter1 + gauge_number));
+          gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[1].slice(gauge_counter1,gauge_counter1 + gauge_number));
           screen.render();}
       }
       else{
@@ -1474,9 +1423,9 @@ tree.on('select',function(node){
           var data_notEst_srcPortClient =[['notEstSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],[]];
           listtable_counter2 += gauge_number*2;
           gauge_counter2 += gauge_number;
-          data_notEst_srcPortClient.push(...notEst_connections_srcPortsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          data_notEst_srcPortClient.push(...notEst_connections_srcPortsClient[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_srcPort.setData(data_notEst_srcPortClient);
-          gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[3].slice(gauge_counter2,gauge_counter2 + gauge_number));
+          gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[1].slice(gauge_counter2,gauge_counter2 + gauge_number));
           screen.render();}
       }
       })
@@ -1487,9 +1436,9 @@ tree.on('select',function(node){
         gauge_counter1 -= gauge_number;
         if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
           var data_est_srcPortClient =[['estSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],[]];
-          data_est_srcPortClient.push(...est_connections_srcPortsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          data_est_srcPortClient.push(...est_connections_srcPortsClient[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_srcPort.setData(data_est_srcPortClient);
-          gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[3].slice(gauge_counter1,gauge_counter1+gauge_number));
+          gaugeList_est_srcPort.setGauges(est_connections_srcPortsClient[1].slice(gauge_counter1,gauge_counter1+gauge_number));
           screen.render();
       }
       else{
@@ -1497,9 +1446,9 @@ tree.on('select',function(node){
         gauge_counter2 -= gauge_number;
         if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
           var data_notEst_srcPortClient = [['notEstSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],[]];
-          data_notEst_srcPortClient.push(...notEst_connections_srcPortsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          data_notEst_srcPortClient.push(...notEst_connections_srcPortsClient[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_srcPort.setData(data_notEst_srcPortClient);
-          gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[3].slice(gauge_counter2,gauge_counter2+gauge_number));
+          gaugeList_notEst_srcPort.setGauges(notEst_connections_srcPortsClient[1].slice(gauge_counter2,gauge_counter2+gauge_number));
           screen.render();  }
     })
 
@@ -1521,7 +1470,7 @@ tree.on('select',function(node){
 
 //display to bars of dstIPsClient established and non established connections
 screen.key('c', function(ch, key) {
-  help_list_bar.selectTab(2)
+  help_list_bar.selectTab(3)
     hide_widgets()
     bar_state_one = true;
     bar_state_two = true; 
@@ -1537,17 +1486,17 @@ screen.key('c', function(ch, key) {
     if(bar_state_three){
       var est_connections_dstIPsClient = tcp_udp_connections("DstIPsClientTCPEstablished","DstIPsClientUDPEstablished",timeline_reply_global);
       var notEst_connections_dstIPsClient = tcp_udp_connections("DstIPsClientTCPNotEstablished","DstIPsClientUDPNotEstablished",timeline_reply_global);
-      var est_bar_one_number_dstIPsClient= Math.ceil(est_connections_dstIPsClient[3].length / gauge_number);
-      var notEst_bar_one_number_dstIPsClient = Math.ceil(notEst_connections_dstIPsClient[3].length / gauge_number);
+      var est_bar_one_number_dstIPsClient= Math.ceil(est_connections_dstIPsClient[1].length / gauge_number);
+      var notEst_bar_one_number_dstIPsClient = Math.ceil(notEst_connections_dstIPsClient[1].length / gauge_number);
 
-      gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[3].slice(0,gauge_number))
-      gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[3].slice(0,gauge_number))
+      gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[1].slice(0,gauge_number))
+      gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[1].slice(0,gauge_number))
       var data_est =  [['estDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]]
-      data_est.push(...est_connections_dstIPsClient[2].slice(0,gauge_number*2))
+      data_est.push(...est_connections_dstIPsClient[0].slice(0,gauge_number*2))
       listtable_est_dstIPs.setData(data_est)
 
       var data_notest =  [['notEstDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]]
-      data_notest.push(...notEst_connections_dstIPsClient[2].slice(0,gauge_number*2))
+      data_notest.push(...notEst_connections_dstIPsClient[0].slice(0,gauge_number*2))
       listtable_notEst_dstIPs.setData(data_notest) 
 
       gaugeList_est_dstIPs.show()
@@ -1564,9 +1513,9 @@ screen.key('c', function(ch, key) {
           var data_est_dstIPsClient =[['estDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]];
           listtable_counter1 += gauge_number*2;
           gauge_counter1 += gauge_number;
-          data_est_dstIPsClient.push(...est_connections_dstIPsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          data_est_dstIPsClient.push(...est_connections_dstIPsClient[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_dstIPs.setData(data_est_dstIPsClient);
-          gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[3].slice(gauge_counter1,gauge_counter1 + gauge_number));
+          gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[1].slice(gauge_counter1,gauge_counter1 + gauge_number));
           screen.render();}
       }
       else{
@@ -1575,9 +1524,9 @@ screen.key('c', function(ch, key) {
           var data_notEst_dstIPsClient =[['notEstDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]];
           listtable_counter2 += gauge_number*2;
           gauge_counter2 += gauge_number;
-          data_notEst_dstIPsClient.push(...notEst_connections_dstIPsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          data_notEst_dstIPsClient.push(...notEst_connections_dstIPsClient[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_dstIPs.setData(data_notEst_dstIPsClient);
-          gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[3].slice(gauge_counter2,gauge_counter2 + gauge_number));
+          gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[1].slice(gauge_counter2,gauge_counter2 + gauge_number));
           screen.render();}
       }
       })
@@ -1588,9 +1537,9 @@ screen.key('c', function(ch, key) {
         gauge_counter1 -= gauge_number;
         if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
           var data_est_dstIPsClient =[['estDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]];
-          data_est_dstIPsClient.push(...est_connections_dstIPsClient[2].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
+          data_est_dstIPsClient.push(...est_connections_dstIPsClient[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_dstIPs.setData(data_est_dstIPsClient);
-          gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[3].slice(gauge_counter1,gauge_counter1+gauge_number));
+          gaugeList_est_dstIPs.setGauges(est_connections_dstIPsClient[1].slice(gauge_counter1,gauge_counter1+gauge_number));
           screen.render();
       }
       else{
@@ -1598,9 +1547,9 @@ screen.key('c', function(ch, key) {
         gauge_counter2 -= gauge_number;
         if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
           var data_notEst_dstIPsClient = [['notEstDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],[]];
-          data_notEst_dstIPsClient.push(...notEst_connections_dstIPsClient[2].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
+          data_notEst_dstIPsClient.push(...notEst_connections_dstIPsClient[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_dstIPs.setData(data_notEst_dstIPsClient);
-          gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[3].slice(gauge_counter2,gauge_counter2+gauge_number));
+          gaugeList_notEst_dstIPs.setGauges(notEst_connections_dstIPsClient[1].slice(gauge_counter2,gauge_counter2+gauge_number));
           screen.render();  }
     })
 
@@ -1611,9 +1560,8 @@ screen.key('c', function(ch, key) {
         gaugeList_notEst_dstIPs.hide()
         gaugeList_est_dstIPs.hide()
         show_widgets();
-  help_list_bar.selectTab(0)
-
-      }
+        help_list_bar.selectTab(0);
+    }
     bar_state_three = !bar_state_three;
     screen.render()
 });
@@ -1621,14 +1569,13 @@ screen.key('c', function(ch, key) {
 
 screen.key('m', function(ch, key) {
   hide_widgets()
-  help_list_bar.selectTab(7)
+  help_list_bar.selectTab(8)
   bar_state_one = true;
   bar_state_two = true; 
   bar_state_three = true;
   bar_state_four = true;
   bar_state_four_two = true;
   box_hotkeys_state = true;
-  // map_state = true;
 
   if(map_state){
     map.show()
@@ -1648,51 +1595,21 @@ screen.key('m', function(ch, key) {
 // clipboardy.readSync();
 // })
 
+table_timeline.rows.on('focus', (item, index) => {
+
+  // table_timeline.options.data = (Math.round(item.selected / timeline_length *100,0));
+
+});
 
 table_timeline.rows.on('select', (item, index) => {
   var timeline_line = item.content.split(" ");
   var index_to = timeline_line.indexOf('to')
   var timeline_ip = timeline_line[index_to +1].slice(6,-7)
   getIpInfo_box_ip(timeline_ip,1)
-
 });
 
-// table_timeline.rows.on('focus', (item, index) => {
-// console.log(item)
-
-// });
-
-// screen.key('h', function(ch, key) {
-
-//   hide_widgets();
-//   help_list_bar.selectTab(6)
-//    bar_state_one = true;
-//   bar_state_two = true; 
-//   bar_state_three = true;
-//   bar_state_four = true;
-//   bar_state_four_two = true;
-//   // box_hotkeys_state = true;
-//   map_state = true;
-//   if(box_hotkeys_state){
-//     table_outTuples_listtable.show()
-//     table_outTuples_listtable.focus()
-//   }
-//   else{table_outTuples_listtable.hide()
-    
-//     help_list_bar.selectTab(0)
-//   show_widgets()}
-//     box_hotkeys_state =! box_hotkeys_state
-//     screen.render();
-// });
-
 screen.key(['tab'], function(ch, key) {
-  if(box_generic_dashboard.focused == true){
-    box_generic_dashboard.hide();
-    tree.style.border.fg='magenta';
-    tree.focus();
-    screen.render();
-  }
-  else if(gaugeList_est_srcPort.focused == true){
+  if(gaugeList_est_srcPort.focused == true){
     gaugeList_notEst_srcPort.focus()
   }
   else if(gaugeList_notEst_srcPort.focused == true){
@@ -1710,11 +1627,18 @@ screen.key(['tab'], function(ch, key) {
   else if(gaugeList_est_dstPort.focused == true){
     gaugeList_notEst_dstPort.focus()
   }
-
-  else if(bar_one_est_dstPortClient.focused == true){
-    bar_two_est_dstPortClient.focus();}
-  else if(bar_two_est_dstPortClient.focused == true){
-    bar_one_est_dstPortClient.focus();}
+  else if(gaugeList_notEst_dstPortClient.focused == true){
+    gaugeList_est_dstPortClient.focus()
+  }
+  else if(gaugeList_est_dstPortClient.focused == true){
+    gaugeList_notEst_dstPortClient.focus()
+  }
+  else if(gaugeList_notEst_dstPortClientIps.focused == true){
+    gaugeList_est_dstPortClientIps.focus()
+  }
+  else if(gaugeList_est_dstPortClientIps.focused == true){
+    gaugeList_notEst_dstPortClientIps.focus()
+  }
   else if(screen.focused == tree.rows){
     focus_widget =table_timeline
     tree.style.border.fg = 'blue'
@@ -1730,6 +1654,10 @@ screen.key(['tab'], function(ch, key) {
     tree.focus();}
     screen.render()})
 
+screen.key("g", function(ch,key){
+  box_generic_dashboard.toggle()
+  screen.render();
+})
 
 screen.key(['S-tab'], function(ch, key) {
   if(screen.focused == table_timeline.rows){
@@ -1746,23 +1674,44 @@ screen.key(['S-tab'], function(ch, key) {
     focus_widget = box_evidence;
     tree.style.border.fg = 'blue'
     box_evidence.focus();}   
-  screen.render();
+    screen.render();
 });
 
-// screen.on('resize', function() {
-//   tree.emit('attach');
-//   table_timeline.emit('attach');
-//   table_outTuples.emit('attach');
-//   box_detections.emit('attach');
-//   box_evidence.emit('attach');
-//   box_ip.emit('attach');
-//   table_outTuples_listtable.emit('attach');
-//   map.emit('attach');
-//   bar_two.emit('attach');
-//   bar_one.emit('attach');0
-// });
+screen.on('resize', function() {
+  box_generic_dashboard.emit('attach');
+  gaugeList_notEst_dstPort.emit('attach');
+  listtable_notEst_dstPort.emit('attach');
+  gaugeList_est_dstPort.emit('attach');
+  listtable_est_dstPort.emit('attach');
+  gaugeList_notEst_dstPortClient.emit('attach');
+  listtable_notEst_dstPortClient.emit('attach');
+  gaugeList_est_dstPortClient.emit('attach');
+  listtable_est_dstPortClient.emit("attach");
+  gaugeList_notEst_dstPortClientIps.emit("attach");
+  listtable_notEst_dstPortClientIps.emit("attach");
+  gaugeList_est_dstPortClientIps.emit("attach");
+  listtable_est_dstPortClientIps.emit("attach");
+  gaugeList_notEst_srcPort.emit("attach");
+  listtable_notEst_srcPort.emit("attach");
+  gaugeList_notEst_dstIPs.emit("attach");
+  listtable_notEst_dstIPs.emit("attach");
+  gaugeList_est_dstIPs.emit("attach");
+  listtable_est_dstIPs.emit("attach");
+  table_outTuples_listtable.emit("attach");
+  gaugeList_est_srcPort.emit("attach");
+  listtable_est_srcPort.emit("attach");
+  help_list_bar.emit("attach");
+  tree.emit("attach");
+  box_evidence.emit("attach");
+  table_timeline.emit("attach");
+  box_ip.emit("attach");
+  focus_widget.emit("attach");
+});
+
+
 screen.key(["escape", "q", "C-c"], function(ch, key) {
     return process.exit(0);
 });
 screen.render();
-
+tree.focus();
+tree.style.border.fg = 'magenta';
