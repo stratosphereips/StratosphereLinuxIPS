@@ -204,6 +204,43 @@ This version of slips comes with the following features:
 - 0.3.3alpha
     - First stable version with a minimal algorithm for detecting behavioral threats.
 
+
+# Common errors
+- If you see the error 
+
+    ```
+    Error in run() of timeout must be non-negative
+    <class 'ValueError'>
+    timeout must be non-negative
+    ```
+
+It means that you have an older version of the xxx library. Please update to version > 
+
+Fails
+python3-redis 3.0.1
+python3-redis 3.3.11
+ii  redis-server                              5:5.0.2-1                                amd64        Persistent key-value database with network interface
+ii  redis-server                              5:5.0.6-1                                amd64        Persistent key-value database with network interface
+
+
+
+Works
+redis (2.10.5)
+
+VM
+apt
+    python3-redis 3.3.11
+    ii  redis-server                              5:5.0.6-1                            amd64        Persistent key-value database with network interface
+
+jin
+apt
+    ii  redis-server                              4:4.0.1-7                            amd64        Persistent key-value database with network interface
+pip
+redis               3.2.1
+
+
+
+
 ### Author and Contributors
 [rewrite]
 
