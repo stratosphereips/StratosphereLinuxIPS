@@ -232,9 +232,9 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
             'main':{
               keys : ' '
             },
-            'help':{
-              keys : ['g']
-            },
+            // 'help':{
+            //   keys : ['g']
+            // },
             'srcPortClient': {
               keys: ['e']
                         },
@@ -491,6 +491,30 @@ function show_widgets(){
   focus_widget.focus()
 
 }
+function clean_hotkeys(){
+  listtable_est_srcPort.setData([]);
+  listtable_notEst_srcPort.setData([]);
+  gaugeList_notEst_srcPort.setGauges([]);
+  gaugeList_est_srcPort.setGauges([]);
+
+        listtable_est_dstPort.setData([]);
+        listtable_notEst_dstPort.setData([]);
+        gaugeList_notEst_dstPort.setGauges([]);
+        gaugeList_est_dstPort.setGauges([]);
+
+         listtable_est_dstPortClientIps.setData([]);
+        listtable_notEst_dstPortClientIps.setData([]);
+        gaugeList_notEst_dstPortClientIps.setGauges([]);
+        gaugeList_est_dstPortClientIps.setGauges([]);
+
+        listtable_est_dstPortClient.setData([]);
+        listtable_notEst_dstPortClient.setData([]);
+        gaugeList_notEst_dstPortClient.setGauges([]);
+        gaugeList_est_dstPortClient.setGauges([]);
+        listtable_est_dstIPs.setData([]);
+        listtable_notEst_dstIPs.setData([]);
+        gaugeList_notEst_dstIPs.setGauges([]);
+        gaugeList_est_dstIPs.setGauges([]);}
 
 // var number_bars = Math.floor((2*bar_two_srcPortClient.width-2*bar_two_srcPortClient.options.xOffset)/(bar_two_srcPortClient.options.barSpacing+2*bar_two_srcPortClient.options.barWidth));
 
@@ -1159,6 +1183,7 @@ tree.on('select',function(node){
 
     }
     else{
+        clean_hotkeys();
         listtable_est_dstPort.hide()
         listtable_notEst_dstPort.hide()
         gaugeList_notEst_dstPort.hide()
@@ -1259,6 +1284,8 @@ tree.on('select',function(node){
 
     }
     else{
+        clean_hotkeys();
+
         listtable_est_dstPortClientIps.hide()
         listtable_notEst_dstPortClientIps.hide()
         gaugeList_notEst_dstPortClientIps.hide()
@@ -1360,6 +1387,8 @@ tree.on('select',function(node){
 
     }
     else{
+        clean_hotkeys();
+
         listtable_est_dstPortClient.hide()
         listtable_notEst_dstPortClient.hide()
         gaugeList_notEst_dstPortClient.hide()
@@ -1412,7 +1441,7 @@ tree.on('select',function(node){
       listtable_est_srcPort.show()
       gaugeList_est_srcPort.focus()
       screen.render();
-
+     
     screen.key('down', function(ch, key){
       if(gaugeList_est_srcPort.focused == true || gaugeList_est_dstIPs.focused == true){
         if(gauge_counter1 >= (est_bar_one_number_srcPortsClient-1)*gauge_number);
@@ -1462,6 +1491,12 @@ tree.on('select',function(node){
 
     }
     else{
+        // clean_hotkeys();
+      listtable_est_srcPort.setData();
+      listtable_notEst_srcPort.setData();
+      gaugeList_notEst_srcPort.setGauges([]);
+      gaugeList_est_srcPort.setGauges([]);
+
         listtable_est_srcPort.hide()
         listtable_notEst_srcPort.hide()
         gaugeList_notEst_srcPort.hide()
@@ -1563,6 +1598,8 @@ screen.key('c', function(ch, key) {
 
     }
     else{
+        clean_hotkeys();
+
         listtable_est_dstIPs.hide()
         listtable_notEst_dstIPs.hide()
         gaugeList_notEst_dstIPs.hide()
@@ -1603,11 +1640,11 @@ screen.key('m', function(ch, key) {
 // clipboardy.readSync();
 // })
 
-table_timeline.rows.on('focus', (item, index) => {
+// table_timeline.rows.on('focus', (item, index) => {
 
-  // table_timeline.options.data = (Math.round(item.selected / timeline_length *100,0));
+//   // table_timeline.options.data = (Math.round(item.selected / timeline_length *100,0));
 
-});
+// });
 
 table_timeline.rows.on('select', (item, index) => {
   var timeline_line = item.content.split(" ");
@@ -1616,9 +1653,23 @@ table_timeline.rows.on('select', (item, index) => {
   getIpInfo_box_ip(timeline_ip,1)
 
 });
+// screen.key("g", function(ch,key){
+//   box_generic_dashboard.toggle()
+//   box_generic_dashboard.focus();
+//   screen.render();
+// })
+
+
+
 
 screen.key(['tab'], function(ch, key) {
-  if(gaugeList_est_srcPort.focused == true){
+  if(box_generic_dashboard.focused == true){
+    box_generic_dashboard.hide()
+    focus_widget = tree
+    tree.style.border.fg = 'magenta'
+    tree.focus();
+  }
+  else if(gaugeList_est_srcPort.focused == true){
     gaugeList_notEst_srcPort.focus()
   }
   else if(gaugeList_notEst_srcPort.focused == true){
@@ -1663,10 +1714,7 @@ screen.key(['tab'], function(ch, key) {
     tree.focus();}
     screen.render()})
 
-screen.key("g", function(ch,key){
-  box_generic_dashboard.toggle()
-  screen.render();
-})
+
 
 screen.key(['S-tab'], function(ch, key) {
   if(screen.focused == table_timeline.rows){
@@ -1722,5 +1770,4 @@ screen.key(["escape", "q", "C-c"], function(ch, key) {
     return process.exit(0);
 });
 screen.render();
-tree.focus();
 tree.style.border.fg = 'magenta';
