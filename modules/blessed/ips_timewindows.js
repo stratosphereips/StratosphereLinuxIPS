@@ -75,7 +75,7 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
   , scrollbar: true
   , label: "Timeline"
   , columnWidth:[200]})
-, box_generic_dashboard = grid.set(1, 1, 4, 4,blessed.box,{
+, box_generic_dashboard = grid.set(2,2, 1.5, 2,blessed.box,{
       top: 'center',
       left: 'center',
       width: '50%',
@@ -84,11 +84,10 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
       tags: true,
       keys: true,
       
-      style:{
-         // focus: {
-
-      border:{ fg:'red',type: 'line'
-      ,bold: true}
+      style:{bg:'green',fg:'red',bold:true,
+      border:{ bg:'red',fg:'red',type: 'line'
+      ,bold: true},
+      label:{fg:'magenta'}
     },
       vi:true,
       scrollable: true,
@@ -232,9 +231,9 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
             'main':{
               keys : ' '
             },
-            'help':{
-              keys : ['g']
-            },
+            // 'help':{
+            //   keys : ['g']
+            // },
             'srcPortClient': {
               keys: ['e']
                         },
@@ -432,7 +431,7 @@ listtable_est_srcPort.hide()
 
 
 map.hide()
-box_generic_dashboard.setContent('\n what should be there?')
+box_generic_dashboard.setContent('\n\n Welcome to Kalipso v0.1, Stratosphere Linux IPS v0.6.1\n\n https://stratosphereips.org\n\n Press TAB to exit this widget')
 var focus_widget = tree;
 var bar_state_four_two = true;
 var bar_state_one = true;
@@ -822,7 +821,7 @@ function set_tree_data(timewindows_list, blockedTW){
              try {
             if (!self.childrenContent) {
           // var blockedTW = {};
-            // blockedTW = Object.assign({}, blockedTWs);
+          //   blockedTW = Object.assign({}, blockedTWs);
             for(i=0;i<ips_with_profiles.length;i++){
               var tw = timewindows_list[ips_with_profiles[i]];
               child = ips_with_profiles[i];
@@ -845,10 +844,11 @@ return explorer;};
 
 
 function sortTWs(blocked,tws_dict, ip){
+  // var new_keys = []
   var blocked_tws = blocked[ip];
   var keys = Object.keys(tws_dict); // or loop over the object to get the array
 // keys will be in any order
-  keys.sort(); // maybe use custom sort, to change direction use .reverse()
+   keys.sort(); // maybe use custom sort, to change direction use .reverse()
 // keys now will be in wanted order
   var temp_tws_dict = {};
   for (var i=0; i<keys.length; i++) { // now lets iterate in sort order
@@ -858,6 +858,7 @@ function sortTWs(blocked,tws_dict, ip){
       else{
         temp_tws_dict[key] = {};}
   } 
+  // console.log(temp_tws_dict)
   return temp_tws_dict;
   }
 
@@ -988,7 +989,7 @@ tree.on('select',function(node){
 
  screen.key('h', function(ch, key) {
           hide_widgets();
-          help_list_bar.selectTab(7)
+          help_list_bar.selectTab(6)
           bar_state_one = true;
           bar_state_two = true; 
           bar_state_three = true;
@@ -1073,7 +1074,7 @@ tree.on('select',function(node){
 //display two bars of dstPortsServer established and non established connections
 
   screen.key('b', function(ch, key) {
-  help_list_bar.selectTab(4)
+  help_list_bar.selectTab(3)
 
         hide_widgets()
     bar_state_one = true;
@@ -1159,6 +1160,7 @@ tree.on('select',function(node){
 
     }
     else{
+
         listtable_est_dstPort.hide()
         listtable_notEst_dstPort.hide()
         gaugeList_notEst_dstPort.hide()
@@ -1172,7 +1174,7 @@ tree.on('select',function(node){
   
 });
   screen.key('n', function(ch, key) {
-    help_list_bar.selectTab(6)
+    help_list_bar.selectTab(5)
     hide_widgets()
 
     bar_state_one = true;
@@ -1259,6 +1261,8 @@ tree.on('select',function(node){
 
     }
     else{
+
+
         listtable_est_dstPortClientIps.hide()
         listtable_notEst_dstPortClientIps.hide()
         gaugeList_notEst_dstPortClientIps.hide()
@@ -1273,7 +1277,7 @@ tree.on('select',function(node){
 });
 
   screen.key('p', function(ch, key) {
-  help_list_bar.selectTab(5)
+  help_list_bar.selectTab(4)
 
     hide_widgets()
 
@@ -1360,6 +1364,7 @@ tree.on('select',function(node){
 
     }
     else{
+
         listtable_est_dstPortClient.hide()
         listtable_notEst_dstPortClient.hide()
         gaugeList_notEst_dstPortClient.hide()
@@ -1376,7 +1381,7 @@ tree.on('select',function(node){
 
 //display to bars of SrcPortsClient established and non established connections    
  screen.key('e', function(ch, key) {
-  help_list_bar.selectTab(2)
+  help_list_bar.selectTab(1)
 
     hide_widgets()
     // bar_state_one = true;
@@ -1412,7 +1417,7 @@ tree.on('select',function(node){
       listtable_est_srcPort.show()
       gaugeList_est_srcPort.focus()
       screen.render();
-
+     
     screen.key('down', function(ch, key){
       if(gaugeList_est_srcPort.focused == true || gaugeList_est_dstIPs.focused == true){
         if(gauge_counter1 >= (est_bar_one_number_srcPortsClient-1)*gauge_number);
@@ -1462,6 +1467,7 @@ tree.on('select',function(node){
 
     }
     else{
+
         listtable_est_srcPort.hide()
         listtable_notEst_srcPort.hide()
         gaugeList_notEst_srcPort.hide()
@@ -1478,7 +1484,7 @@ tree.on('select',function(node){
 
 //display to bars of dstIPsClient established and non established connections
 screen.key('c', function(ch, key) {
-  help_list_bar.selectTab(3)
+  help_list_bar.selectTab(2)
     hide_widgets()
     bar_state_one = true;
     bar_state_two = true; 
@@ -1563,6 +1569,7 @@ screen.key('c', function(ch, key) {
 
     }
     else{
+
         listtable_est_dstIPs.hide()
         listtable_notEst_dstIPs.hide()
         gaugeList_notEst_dstIPs.hide()
@@ -1577,7 +1584,7 @@ screen.key('c', function(ch, key) {
 
 screen.key('m', function(ch, key) {
   hide_widgets()
-  help_list_bar.selectTab(8)
+  help_list_bar.selectTab(7)
   bar_state_one = true;
   bar_state_two = true; 
   bar_state_three = true;
@@ -1603,11 +1610,11 @@ screen.key('m', function(ch, key) {
 // clipboardy.readSync();
 // })
 
-table_timeline.rows.on('focus', (item, index) => {
+// table_timeline.rows.on('focus', (item, index) => {
 
-  // table_timeline.options.data = (Math.round(item.selected / timeline_length *100,0));
+//   // table_timeline.options.data = (Math.round(item.selected / timeline_length *100,0));
 
-});
+// });
 
 table_timeline.rows.on('select', (item, index) => {
   var timeline_line = item.content.split(" ");
@@ -1616,9 +1623,23 @@ table_timeline.rows.on('select', (item, index) => {
   getIpInfo_box_ip(timeline_ip,1)
 
 });
+// screen.key("g", function(ch,key){
+//   box_generic_dashboard.toggle()
+//   box_generic_dashboard.focus();
+//   screen.render();
+// })
+
+
+
 
 screen.key(['tab'], function(ch, key) {
-  if(gaugeList_est_srcPort.focused == true){
+  if(box_generic_dashboard.focused == true){
+    box_generic_dashboard.hide()
+    focus_widget = tree
+    tree.style.border.fg = 'magenta'
+    tree.focus();
+  }
+  else if(gaugeList_est_srcPort.focused == true){
     gaugeList_notEst_srcPort.focus()
   }
   else if(gaugeList_notEst_srcPort.focused == true){
@@ -1663,10 +1684,7 @@ screen.key(['tab'], function(ch, key) {
     tree.focus();}
     screen.render()})
 
-screen.key("g", function(ch,key){
-  box_generic_dashboard.toggle()
-  screen.render();
-})
+
 
 screen.key(['S-tab'], function(ch, key) {
   if(screen.focused == table_timeline.rows){
@@ -1722,5 +1740,4 @@ screen.key(["escape", "q", "C-c"], function(ch, key) {
     return process.exit(0);
 });
 screen.render();
-tree.focus();
 tree.style.border.fg = 'magenta';
