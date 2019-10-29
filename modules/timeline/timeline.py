@@ -167,6 +167,10 @@ class Module(Module, multiprocessing.Process):
 
             # Check if we have an alternative flow related to this one. Like DNS or HTTP from Zeek
             alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
+            # Sometimes we need to wait a little to give time to Zeek to find the related flow since they are read very fast together.
+            # This should be improved algorithmically probably
+            time.sleep(0.05)
+            alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
 
 
             # Now that we have the flow processed. Try to interpret it and create the activity line
