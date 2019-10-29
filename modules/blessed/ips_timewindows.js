@@ -84,7 +84,7 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
       tags: true,
       keys: true,
       
-      style:{bg:'green',fg:'red',bold:true,
+      style:{bg:'cyan',fg:'red',bold:true,
       border:{ bg:'red',fg:'red',type: 'line'
       ,bold: true},
       label:{fg:'magenta'}
@@ -553,7 +553,7 @@ function tcp_udp_connections_dstPortsClient(key, key2,reply){
     async.forEachOf(dst_ips, function(dst_ip_counter,dst_ip_index, callback){
       var row = [];
         var listtable_est_dstPort = [];
-      listtable_est_dstPort.push('TCP/'+key_TCP_est,String(dst_ip_counter));
+      listtable_est_dstPort.push('TCP/'+key_TCP_est,String(dst_ip_counter),String(dst_ips_connections[dst_ip_index]));
       data_listtable.push(listtable_est_dstPort)
       data_listtable.push([])
       row.push(round(Math.log(dst_ips_connections[dst_ip_index]),0));
@@ -592,7 +592,7 @@ function tcp_udp_connections_dstPortsClient(key, key2,reply){
     async.forEachOf(dst_ips, function(dst_ip_counter,dst_ip_index, callback){
       var row = [];
     var listtable_est_dstPort = [];
-      listtable_est_dstPort.push('UDP/'+key_UDP_est,String(dst_ip_counter));
+      listtable_est_dstPort.push('UDP/'+key_UDP_est,String(dst_ip_counter),String(dst_ips_connections[dst_ip_index]));
       data_listtable.push(listtable_est_dstPort)
       data_listtable.push([])
       row.push(round(Math.log(dst_ips_connections[dst_ip_index]),0));
@@ -1196,12 +1196,12 @@ tree.on('select',function(node){
 
       gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[1].slice(0,gauge_number))
       gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[1].slice(0,gauge_number))
-      var data_est =  [['estdstPortClient',  'IP'],[]]
+      var data_est =  [['estdstPortClient',  'IP','Number of connections'],[]]
       data_est.push(...est_connections_dstPortsClient[0].slice(0,gauge_number*2))
       // console.log(data_est)
       listtable_est_dstPortClientIps.setData(data_est)
 
-      var data_notest =  [['notEstdstPortClient', 'IP'],[]]
+      var data_notest =  [['notEstdstPortClient', 'IP','Number of connections'],[]]
       data_notest.push(...notEst_connections_dstPortsClient[0].slice(0,gauge_number*2))
       listtable_notEst_dstPortClientIps.setData(data_notest) 
 
@@ -1216,7 +1216,7 @@ tree.on('select',function(node){
       if(gaugeList_est_dstPortClientIps.focused == true){
         if(gauge_counter1 >= (est_bar_one_number_dstPortsClient-1)*gauge_number);
         else{
-          var data_est_dstPortClientIps =[['estdstPortClient', 'IP'],[]];
+          var data_est_dstPortClientIps =[['estdstPortClient', 'IP','Number of connections'],[]];
           listtable_counter1 += gauge_number*2;
           gauge_counter1 += gauge_number;
           data_est_dstPortClientIps.push(...est_connections_dstPortsClient[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
@@ -1227,7 +1227,7 @@ tree.on('select',function(node){
       else{
         if(gauge_counter2 >= (notEst_bar_one_number_dstPortsClient-1)*gauge_number);
         else{
-          var data_notEst_dstPortClientIps =[['notEstdstPortClient', 'IP'],[]];
+          var data_notEst_dstPortClientIps =[['notEstdstPortClient', 'IP','Number of connections'],[]];
           listtable_counter2 += gauge_number*2;
           gauge_counter2 += gauge_number;
           data_notEst_dstPortClientIps.push(...notEst_connections_dstPortsClient[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
@@ -1242,7 +1242,7 @@ tree.on('select',function(node){
         listtable_counter1 -= gauge_number*2;
         gauge_counter1 -= gauge_number;
         if(listtable_counter1 <=0){listtable_counter1 = 0; gauge_counter1 = 0}
-          var data_est_dstPortClientIps =[['estdstPortClient', 'IP'],[]];
+          var data_est_dstPortClientIps =[['estdstPortClient', 'IP','Number of connections'],[]];
           data_est_dstPortClientIps.push(...est_connections_dstPortsClient[0].slice(listtable_counter1,listtable_counter1 + gauge_number*2));
           listtable_est_dstPortClientIps.setData(data_est_dstPortClientIps);
           gaugeList_est_dstPortClientIps.setGauges(est_connections_dstPortsClient[1].slice(gauge_counter1,gauge_counter1+gauge_number));
@@ -1252,7 +1252,7 @@ tree.on('select',function(node){
         listtable_counter2 -=gauge_number*2;
         gauge_counter2 -= gauge_number;
         if(listtable_counter2 <=0){listtable_counter2 = 0; gauge_counter2 = 0}
-          var data_notEst_dstPortClientIps = [['notEstdstPortClient', 'IP'],[]];
+          var data_notEst_dstPortClientIps = [['notEstdstPortClient', 'IP','Number of connections'],[]];
           data_notEst_dstPortClientIps.push(...notEst_connections_dstPortsClient[0].slice(listtable_counter2,listtable_counter2 + gauge_number*2));
           listtable_notEst_dstPortClientIps.setData(data_notEst_dstPortClientIps);
           gaugeList_notEst_dstPortClientIps.setGauges(notEst_connections_dstPortsClient[1].slice(gauge_counter2,gauge_counter2+gauge_number));
