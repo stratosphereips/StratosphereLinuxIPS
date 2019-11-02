@@ -2,6 +2,30 @@
 __pycache__/
 *.py[cod]
 *$py.class
+2019*/
+.DS_Store
+# Do not store in git the files from the IoCs that we downloaded
+malicious_ips.etag
+malicious_ips.time
+malicious_ips.txt
+# Ignore the secret api key of virustotal
+api_key_secret
+# Ignore the results folders
+2019-
+2020-
+2021-
+2022-
+2023-
+# Be careful after 2023
+
+*.swp
+*.swo
+
+# apple shit
+*.bst
+
+# pcap
+*.pcap
 
 # C extensions
 *.so
@@ -97,3 +121,6 @@ ENV/
 logs/
 *.swp
 *.pyc
+*.xml
+.idea/StratosphereLinuxIPS.iml
+dump.rdb
