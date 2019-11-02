@@ -1,4 +1,4 @@
-# Stratosphere Linux IPS (slips) Version 0.6rc1
+# Stratosphere Linux IPS (slips) Version 0.6.2
 Slips is an intrusion prevention system that is based on behavioral detections and machine learning algorithms. It's core is to separate the traffic into profiles for each IP address, and then separate the traffic further into time windows. Into each of these time windows slips extracts dozens of features and then analyses them in different ways. Slips also implements a module API, so anyone can create a single python file that quickly implements a new detection algorithm. 
 
 # Installation
