@@ -13,7 +13,8 @@ class UpdateIPManager:
         self.outputqueue = outputqueue
         # For now, read the malicious IPs from here
         self.name = 'UpdateManager'
-        self.url_to_malicious_ips = 'https://raw.githubusercontent.com/frenky-strasak/StratosphereLinuxIPS/frenky_develop/modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt'
+        #self.url_to_malicious_ips = 'https://raw.githubusercontent.com/frenky-strasak/StratosphereLinuxIPS/frenky_develop/modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt'
+        self.url_to_malicious_ips = 'https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Today.csv'
         # This is where we are going to store it
         self.path_to_thret_intelligence_data = 'modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.txt'
         self.old_e_tag = ''
@@ -63,14 +64,10 @@ class UpdateIPManager:
             return True
         return False
 
-
     def __get_e_tag_from_web(self) -> str:
         try:
-            #request = urllib.request.Request(self.url_to_malicious_ips)
-            #res = urllib.request.urlopen(request)
-            #self.new_e_tag = res.info().get('Etag', None)
             # We use a command in os because if we use urllib or requests the process complains!:w
-            command = "curl -s -I https://raw.githubusercontent.com/frenky-strasak/StratosphereLinuxIPS/frenky_develop/modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt | grep -i etag"
+            command = "curl --insecure -s -I " + self.url_to_malicious_ips + " | grep -i etag"
             temp = os.popen(command).read()
             try:
                 self.new_e_tag = temp.split()[1].split('\n')[0].replace("\"",'')
@@ -90,51 +87,57 @@ class UpdateIPManager:
             path = path.replace('\`', '')
             url = url.replace(';', '')
             url = url.replace('\`', '')
-            command = 'curl -s ' + url + ' -o ' + path
+            command = 'curl --insecure -s ' + url + ' -o ' + path
             os.system(command)
             # Get the time of update
-            self.new_update_time = time.time()
+            uself.new_update_time = time.time()
         except:
             self.print('An error occurred during updating Threat intelligence module.', 0, 1)
             return False
         return True
 
     def __download_malicious_ips(self) -> bool:
-        # Take last e-tag of our maliciou ips file.
         try:
-            with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.etag', 'r') as f:
-                self.old_e_tag = f.readlines()[0]
-        except FileNotFoundError: 
-            # The file is not there
-            pass
-
-        # Check now if E-TAG of file in github is same as downloaded file here.
-        self.__get_e_tag_from_web()
-
-        if self.new_e_tag and self.old_e_tag != self.new_e_tag:
-            # Our malicious file is old. Download new one.
-            self.print('Trying to download the file')
-            self.__download_file(self.url_to_malicious_ips, self.path_to_thret_intelligence_data)
-            # Store the new etag in the file
             # Take last e-tag of our maliciou ips file.
-            with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.etag', 'w+') as f:
-                f.write(self.new_e_tag)
-            # Write the last we checked the update time
-            with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.time', 'w+') as f:
-                f.write(str(self.new_update_time))
-            return True
-        elif self.new_e_tag and self.old_e_tag == self.new_e_tag:
-            self.print('File is still the same. Not downloading the file', 2, 0)
-            # Store the update time like we downloaded it anyway
-            self.new_update_time = time.time()
-            # Write the last we checked the update time
-            with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.time', 'w+') as f:
-                f.write(str(self.new_update_time))
-            return True
-        elif not self.new_e_tag:
-            # Something failed. Do not download
-            self.print('Not downloading the file', 3, 0)
-            return False
+            try:
+                with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.etag', 'r') as f:
+                    self.old_e_tag = f.readlines()[0]
+            except FileNotFoundError: 
+                # The file is not there
+                pass
+
+            # Check now if E-TAG of file in github is same as downloaded file here.
+            self.__get_e_tag_from_web()
+
+            if self.new_e_tag and self.old_e_tag != self.new_e_tag:
+                # Our malicious file is old. Download new one.
+                self.print('Trying to download the file')
+                self.__download_file(self.url_to_malicious_ips, self.path_to_thret_intelligence_data)
+                # Store the new etag in the file
+                # Take last e-tag of our maliciou ips file.
+                with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.etag', 'w+') as f:
+                    f.write(self.new_e_tag)
+                # Write the last we checked the update time
+                with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.time', 'w+') as f:
+                    f.write(str(self.new_update_time))
+                return True
+            elif self.new_e_tag and self.old_e_tag == self.new_e_tag:
+                self.print('File is still the same. Not downloading the file', 2, 0)
+                # Store the update time like we downloaded it anyway
+                self.new_update_time = time.time()
+                # Write the last we checked the update time
+                with open('modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.time', 'w+') as f:
+                    f.write(str(self.new_update_time))
+                return True
+            elif not self.new_e_tag:
+                # Something failed. Do not download
+                self.print('Not downloading the file', 2, 0)
+                return False
+        except Exception as inst:
+            self.print('Problem on __download_malicious_ips()', 0, 0)
+            self.print(str(type(inst)), 0, 0)
+            self.print(str(inst.args), 0, 0)
+            self.print(str(inst), 0, 0)
 
     def update(self, update_period) -> bool:
         """
