@@ -79,7 +79,9 @@ class UpdateIPManager:
             self.print('{}'.format(inst), 0, 1)
 
     def __download_file(self, url: str, path: str) -> bool:
-        # Download file from github
+        """
+        Download file from the location specified in the url
+        """
         try:
             #urllib.request.urlretrieve(url, path)
             # This replaces are to be sure that a user can not inject commands in curl
