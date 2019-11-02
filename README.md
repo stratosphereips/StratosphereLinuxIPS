@@ -72,7 +72,7 @@ Zeek is a main part of slips and is used to convert all the pcaps and packets to
 1. Start Redis: `redis-server --daemonize yes`
 2. Run slips: `./slips.py -c slips.conf -i <interface>` (be sure you use python3)
 3. Check the folder called with the date of today. All files are updated every 5 seconds.
-4. Use kalipso to see the results
+4. Use kalipso to see the results (option -G in slips)
 
 
 -------
@@ -140,6 +140,10 @@ To read your own packets you can do:
     sudo argus -i eth0 -S 5 -w - |ra -n -r -  | ./slips.py -l -v 2 -c slips.conf
 
     Which means run argus in eth0, report flows every 5s, give them to ra, ra only prints the flows, and slips works with them.
+
+
+## Kalipso
+Kalipso is the Nodejs-based console interface of slips. It works by reading the redis datbase and showing you the results. You start it by running slips with -G option. You can get out of it by pressiong q.
 
 
 ## Detection Models
