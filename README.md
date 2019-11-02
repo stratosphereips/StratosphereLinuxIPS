@@ -133,8 +133,6 @@ Slips can be used by passing flows in its stdin, like this:
 
     cat test-flows/test3.binetflow | ./slips.py -l -c slips.conf -v 2 
 
-Or it can be told to open a certain file, like this:
-
     ./slips.py -r test-flows/test3.binetflow -l -c slips.conf -v 2 
 
 To read your own packets you can do:
@@ -161,20 +159,18 @@ The behavioral models are stored in the __models__ folder and will be updated re
 [rewrite]
 This version of slips comes with the following features:
 
-- If you execute slips without the -m parameter it will __not__ detect any behavior in the network but just print the tuples (see the Stratosphere web page for more information). So actually you can also use slips to see what is happening in your network even without detection.
-- Use -a to restrict the minimum amount of letters that the tuples had to have to be considered for detection. The default is a minimum of 3 letters which is enough for having at least one periodic letter.
-- slips works by separating the traffic in time windows. This allows it to report to the user the detections in a fixed amount of time. The default time window is now __1 minute__ but you can change it with the parameter -w (a time window of five minutes is also recommended). (Warning: In the future we will update this to also consider the detection of IP addresses instead of tuples)
-- If you want to tell slips to actually try to detect something, you should specify -m to tell slips where to find the behavioral models.
-- The -p option tells slips to print the tuples that were detected. Even if the detection is working, without -p the tuples are not printed.
-- If you want to be alerted of any detection without looking at the screen you can specify -s to have a sound alert. You need to install the pygames libraries.
-- If you want to avoid doing any detection you should use -D.
-- If you want to anonymize the source IP addresses before doing any processing, you can use -A. This will force all the source IPs to be hashed to MD5 in memory. Also a file is created in the current folder with the relationship of original IP addresses and new hashed IP addresses. So you can later relate the detections.
-
+- If you execute slips without the `-m` parameter it will __not__ detect any behavior in the network but just print the tuples (see the Stratosphere web page for more information). So actually you can also use slips to see what is happening in your network even without detection.
+- Use `-a` to restrict the minimum amount of letters that the tuples had to have to be considered for detection. The default is a minimum of 3 letters which is enough for having at least one periodic letter.
+- slips works by separating the traffic in time windows. This allows it to report to the user the detections in a fixed amount of time. The default time window is now __1 minute__ but you can change it with the parameter `-w` (a time window of five minutes is also recommended). (Warning: In the future we will update this to also consider the detection of IP addresses instead of tuples)
+- If you want to tell slips to actually try to detect something, you should specify `-m` to tell slips where to find the behavioral models.
+- The `-p` option tells slips to print the tuples that were detected. Even if the detection is working, without `-p` the tuples are not printed.
+- If you want to be alerted of any detection without looking at the screen you can specify `-s` to have a sound alert. You need to install the pygames libraries.
+- If you want to avoid doing any detection you should use `-D`.
+- If you want to anonymize the source IP addresses before doing any processing, you can use `-A`. This will force all the source IPs to be hashed to MD5 in memory. Also a file is created in the current folder with the relationship of original IP addresses and new hashed IP addresses. So you can later relate the detections.
 
 
 ## The use of verbose (-v)
 [rewrite]
-
 
 
 ### Where does it work

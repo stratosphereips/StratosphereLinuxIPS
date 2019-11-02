@@ -11,6 +11,8 @@ class OutputProcess(multiprocessing.Process):
         self.debug = debug
         self.queue = inputqueue
         self.config = config
+        # self.quiet manages if we should really print stuff or not
+        self.quiet = False
         if self.verbose > 2:
             print('Verbosity: {}. Debugging: {}'.format(str(self.verbose), str(self.debug)))
 
@@ -82,8 +84,11 @@ class OutputProcess(multiprocessing.Process):
         try:
             while True:
                 line = self.queue.get()
-                if 'stop' != line:
-                    self.output_line(line)
+                if 'quiet' == line:
+                    self.quiet = True
+                elif 'stop' != line:
+                    if not self.quiet:
+                        self.output_line(line)
                 else:
                     # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
                     print('Stopping the output thread')

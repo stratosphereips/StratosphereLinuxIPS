@@ -9,7 +9,7 @@ import sys
 import redis
 import os
 
-version = '0.6.1'
+version = '0.6.2'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
@@ -66,9 +66,8 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--filepath', help='Path to the flow input file to read. It can be a Argus binetflow flow, a Zeek conn.log file, or a Zeek folder with all the log files.', required=False)
     parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
-    parser.add_argument('-N', '--nodejs', help='Use the NodeJS interface.', required=False, default=False, action='store_true')
     parser.add_argument('-b', '--nfdump', help='A binary file from NFDUMP to read. NFDUMP is used to send data to slips.', required=False)
-    parser.add_argument('-C', '--curses', help='Use the curses output interface.', required=False, default=False, action='store_true')
+    parser.add_argument('-G', '--gui', help='Use the nodejs gui interface.', required=False, default=False, action='store_true')
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     args = parser.parse_args()
@@ -109,7 +108,7 @@ if __name__ == '__main__':
     from inputProcess import InputProcess
     from outputProcess import OutputProcess
     from profilerProcess import ProfilerProcess
-    from cursesProcess import CursesProcess
+    from guiProcess import GuiProcess
     from logsProcess import LogsProcess
     from evidenceProcess import EvidenceProcess
     # This plugins import will automatially load the modules and put them in the __modules__ variable
@@ -189,12 +188,12 @@ if __name__ == '__main__':
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
-    if args.nodejs:
+    if args.gui:
         # Create the curses thread
-        cursesProcessQueue = Queue()
-        cursesProcessThread = CursesProcess(cursesProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
-        cursesProcessThread.start()
-        outputProcessQueue.put('20|main|Started Curses thread [PID {}]'.format(cursesProcessThread.pid))
+        guiProcessQueue = Queue()
+        guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+        guiProcessThread.start()
+        outputProcessQueue.put('quiet')
     elif not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
         do_logs = read_configuration(config, 'parameters', 'create_log_files')
