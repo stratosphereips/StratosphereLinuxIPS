@@ -224,7 +224,7 @@ class WhoisIP(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                message = self.c1.get_message(timeout=-1)
+                message = self.c1.get_message(timeout=None)
                 # Check that the message is for you. Probably unnecessary...
                 if message['channel'] == 'new_ip' and message["type"] == "message":
                     ip = message["data"]

@@ -85,7 +85,7 @@ class EvidenceProcess(multiprocessing.Process):
             # Adapt this process to process evidence from only IPs and not profileid or twid
             while True:
                 # Wait for a message from the channel that a TW was modified
-                message = self.c1.get_message(timeout=-1)
+                message = self.c1.get_message(timeout=None)
                 if message['channel'] == 'evidence_added':
                     # Get the profileid and twid
                     try:
