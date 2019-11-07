@@ -1245,6 +1245,67 @@ class Database(object):
     def add_all_loaded_malicous_ips(self, ips_and_description: dict) -> None:
         self.r.hmset('loaded_malicious_ips', ips_and_description)
 
+    def save_whois_data(self, ip, data):
+        """
+        Save whois data about an IP to the database
+        :param ip: ip address
+        :param data: dictionary with the response
+        :return: None
+        """
+
+        data = {"Whois": data}
+        self.setInfoForIPs(ip, data)
+        pass
+
+    def put_subnet_to_whois_cache(self, mask: int, result: dict, version: int):
+        """
+        Save data about a subnet to the whois cache
+        :param mask: int representation of the network. Obtained by int(ipaddress.Interface(cidr))
+        :param result: data to save
+        :param version: ip version (4 or 6) 
+        :return: None
+        """
+        if version == 4:
+            str_data = json.dumps(result)
+            self.r.hset("whois-module-ipv4subnet-cache", mask, str_data)
+        else:
+            str_data = json.dumps(result)
+            self.r.hset("whois-module-ipv6subnet-cache", mask, str_data)
+
+    def is_ip_in_whois_cache(self, ip):
+        """
+        Load data about an ip from the cache. The smallest network that contains the ip will be returned. If there is no
+        network that contains the IP, None is returned
+        :param ip: ipaddress object, either version 4 or 6
+        :return: data dictionary or None
+        """
+        if ip.version == 4:
+            # start from the smallest network (all mask bits are set)
+            mask = 4294967295
+            # convert the ip to integer as well
+            ip_value = int(ip)
+            for i in range(0, 32):
+                # gradually subtract powers of two, this can be interpreted as replacing ones in the mask by zeros
+                mask -= pow(2, i)
+                # anding the ip and mask will give the mask of the smallest common network
+                masked_ip = mask & ip_value
+                # check if this network is cached already, if not, decrease the mask and try again
+                data = self.r.hget("whois-module-ipv4subnet-cache", masked_ip)
+                if data:
+                    return json.loads(data)
+            return None
+        else:
+            # ipv6 masking works the same way, but the mask has 128b, therefore it is bigger and has more loops
+            mask = 340282366920938463463374607431768211455
+            ip_value = int(ip)
+            for i in range(0, 128):
+                mask -= pow(2, i)
+                masked_ip = mask & ip_value
+                data = self.r.hget("whois-module-ipv6subnet-cache", masked_ip)
+                if data:
+                    return json.loads(data)
+            return None
+
     def add_loaded_malicious_ip(self, ip: str, description: str) -> None:
         self.r.hset('loaded_malicious_ips', ip, description)
 
