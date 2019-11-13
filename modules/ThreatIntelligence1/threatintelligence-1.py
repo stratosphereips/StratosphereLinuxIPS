@@ -122,11 +122,11 @@ class Module(Module, multiprocessing.Process):
                 # Separate the lines like CSV
                 #ip_address = line.rstrip().split(',')[0]
                 # In the new format the ip is in the second position. And surronded by "
-                ip_address = line.replace("\n","").replace("\"","").split(",")[1]
+                ip_address = line.replace("\n","").replace("\"","").split(",")[1].strip()
                 try:
                     #ip_description = line.rstrip().split(',')[1]
                     # In the new format the description is position 4
-                    ip_description = line.replace("\n","").replace("\"","").split(",")[3]
+                    ip_description = line.replace("\n","").replace("\"","").split(",")[3].strip()
                 except IndexError:
                     ip_description = ''
                 self.print('\tRead IP {}: {}'.format(ip_address, ip_description), 6, 0)
