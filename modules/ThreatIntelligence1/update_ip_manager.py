@@ -14,7 +14,7 @@ class UpdateIPManager:
         # For now, read the malicious IPs from here
         self.name = 'UpdateManager'
         #self.url_to_malicious_ips = 'https://raw.githubusercontent.com/frenky-strasak/StratosphereLinuxIPS/frenky_develop/modules/ThreatIntelligence/malicious_ips_files/malicious_ips.txt'
-        self.url_to_malicious_ips = 'https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Today.csv'
+        self.url_to_malicious_ips = 'https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/All-Time-Top-IPs.csv'
         # This is where we are going to store it
         self.path_to_thret_intelligence_data = 'modules/ThreatIntelligence1/malicious_ips_files/malicious_ips.txt'
         self.old_e_tag = ''
