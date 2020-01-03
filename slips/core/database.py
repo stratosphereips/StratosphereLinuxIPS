@@ -887,7 +887,6 @@ class Database(object):
             to_store = ipdata[key]
 
             # If the key is already stored, do not modify it
-            #self.print(data)
             try:
                 value = data[key]
             except KeyError:
@@ -896,6 +895,7 @@ class Database(object):
                 #data.update(ipdata)
                 data = json.dumps(data)
                 self.r.hset('IPsInfo', ip, data)
+                self.print('\tNew Info added to IP {}: {}'.format(ip, data),8,8)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
