@@ -24,6 +24,8 @@ class VirusTotalModule(Module, multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
         self.outputqueue = outputqueue
+        if testing:
+            self.print = self.testing_print
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         # Start the DB
@@ -91,6 +93,9 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+
+    def testing_print(self, text, verbose=1, debug=0):
+        print(text)
 
     def run(self):
         if self.key is None:
