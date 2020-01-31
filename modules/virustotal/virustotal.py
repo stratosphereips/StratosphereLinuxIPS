@@ -42,7 +42,9 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
-        # Read the conf file
+        # Read retry limit from configuration
+        self.retry_limit = self.__read_configuration("virustotal", "retry_limit")
+        # Read API key location from configuration
         key_file = self.__read_configuration("virustotal", "api_key_file")
         self.key = None
         try:
@@ -56,7 +58,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         # Pool manager to make HTTP requests with urllib3
         # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
-        self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
+        self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where(), timeout=3)
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -156,21 +158,36 @@ class VirusTotalModule(Module, multiprocessing.Process):
         :return: Response object
         """
 
+        self.print("Starting query on IP:" + ip, 0, 1)
+
         params = {'apikey': self.key, 'ip': ip}
 
-        # wait for network
+        # this is used to track API usage. The API denies requests if too many are made, and then has 1 minute cooldown.
+        # However, it is not always necessary to wait a full minute, usually 40s is enough. If not, 20s is added.
+        sleep_attempts = 0
+
+        # main query loop
         while True:
             try:
                 response = self.http.request("GET", self.url, fields=params)
-                break
+
+            # network unreachable
             except urllib3.exceptions.MaxRetryError:
                 self.print("Network is not available, waiting 10s")
                 time.sleep(10)
+                continue
 
-        sleep_attempts = 0
+            # success
+            if response.status == 200:
+                data = json.loads(response.data)
 
-        # repeat query if API limit was reached (code 204)
-        while response.status != 200:
+                # optionally, save data to file
+                if save_data:
+                    filename = ip + ".txt"
+                    if filename:
+                        with open(filename, 'w') as f:
+                            json.dump(data, f)
+                return data
 
             # requests per minute limit reached
             if response.status == 204:
@@ -181,13 +198,14 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     sleep_time = 20
                 sleep_attempts += 1
 
-            # requests per hour limit reached
+            # requests per hour limit reached (or wrong API key)
             elif response.status == 403:
                 # 10 minutes
                 sleep_time = 600
                 self.print("Please check that your API key is correct. Code 403 means timeout but also wrong API key.")
 
-            else:
+            # unknown response status
+            if response.status not in [200, 204, 403]:
                 # if the query was unsuccessful but it is not caused by API limit, abort (this is some unknown error)
                 # X-Api-Message is a comprehensive error description, but it is not always present
                 if "X-Api-Message" in response.headers:
@@ -203,18 +221,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
             self.print("API limit reached, going to sleep for " + str(sleep_time) + " seconds", verbose=1, debug=1)
             time.sleep(sleep_time)
-            response = self.http.request("GET", self.url, fields=params)
-
-        data = json.loads(response.data)
-
-        # optionally, save data to file
-        if save_data:
-            filename = ip + ".txt"
-            if filename:
-                with open(filename, 'w') as f:
-                    json.dump(data, f)
-
-        return data
 
 
 def interpret_response(response: dict):
