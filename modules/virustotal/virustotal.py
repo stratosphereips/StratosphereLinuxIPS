@@ -43,7 +43,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
         # Read retry limit from configuration
-        self.retry_limit = self.__read_configuration("virustotal", "retry_limit")
+        self.retry_limit = int(self.__read_configuration("virustotal", "retry_limit"))
         # Read API key location from configuration
         key_file = self.__read_configuration("virustotal", "api_key_file")
         self.key = None
@@ -67,7 +67,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
             # linux
             self.timeout = -1
         else:
-            #??
+            # ??
             self.timeout = None
 
     def __read_configuration(self, section: str, name: str) -> str:
@@ -165,16 +165,31 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # this is used to track API usage. The API denies requests if too many are made, and then has 1 minute cooldown.
         # However, it is not always necessary to wait a full minute, usually 40s is enough. If not, 20s is added.
         sleep_attempts = 0
+        sleep_time = 20
+
+        # number of failed requests before the module gives up
+        # API limitation is not considered failed, as waiting is guaranteed to help
+        # network error and unreadable response (unknown response status) do increment the counter
+        # 0: do not retry
+        # 1: try once more (this makes two queries)
+        # 2: try two more times (this makes three queries)
+        # 3: ... so on
+        # -1: never stop trying
+        retry_attempts = 0
 
         # main query loop
-        while True:
+        while retry_attempts <= self.retry_limit or self.retry_limit < 0:
+            self.print(retry_attempts)
             try:
                 response = self.http.request("GET", self.url, fields=params)
 
             # network unreachable
             except urllib3.exceptions.MaxRetryError:
-                self.print("Network is not available, waiting 10s")
-                time.sleep(10)
+                # do not waste time waiting 10s if maximum query time is reached
+                if retry_attempts < self.retry_limit or self.retry_limit < 0:
+                    self.print("Network is not available, waiting 10s")
+                    time.sleep(10)
+                retry_attempts += 1
                 continue
 
             # success
@@ -206,6 +221,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
             # unknown response status
             if response.status not in [200, 204, 403]:
+                retry_attempts += 1
                 # if the query was unsuccessful but it is not caused by API limit, abort (this is some unknown error)
                 # X-Api-Message is a comprehensive error description, but it is not always present
                 if "X-Api-Message" in response.headers:
@@ -221,6 +237,10 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
             self.print("API limit reached, going to sleep for " + str(sleep_time) + " seconds", verbose=1, debug=1)
             time.sleep(sleep_time)
+
+        # in case of errors or too many retries, return an empty dictionary
+        self.print("Too many failed attempts, aborting", 1, 1)
+        return {}
 
 
 def interpret_response(response: dict):
