@@ -170,8 +170,11 @@ class Module(Module, multiprocessing.Process):
             self.__load_malicious_ips()
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. 
-                if message['channel'] == 'new_ip':
+                # Check that the message is for you.
+                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message['data'] == 'stop_process':
+                    return True
+                elif message['channel'] == 'new_ip':
                     new_ip = message['data']
                     # Get what we know about this IP so far
                     ip_description = __database__.search_IP_in_IoC(new_ip)

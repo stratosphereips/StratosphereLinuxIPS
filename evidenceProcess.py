@@ -97,7 +97,10 @@ class EvidenceProcess(multiprocessing.Process):
             while True:
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=self.timeout)
-                if message['channel'] == 'evidence_added':
+                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message['data'] == 'stop_process':
+                    return True
+                elif message['channel'] == 'evidence_added':
                     # Get the profileid and twid
                     try:
                         profileid = message['data'].split(':')[0]

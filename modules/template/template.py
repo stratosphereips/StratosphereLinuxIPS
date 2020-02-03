@@ -73,6 +73,8 @@ class Module(Module, multiprocessing.Process):
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
+                if message['data'] == 'stop_process':
+                    return True
                 if message['channel'] == 'new_ip':
                     # Example of printing the number of profiles in the Database every second
                     data = len(__database__.getProfiles())

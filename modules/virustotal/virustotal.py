@@ -102,12 +102,14 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 # Ignore the first message
-                if message['channel'] == 'new_ip' and message["type"] == "message":
+                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message['data'] == 'stop_process':
+                    return True
+                elif message['channel'] == 'new_ip' and message["type"] == "message":
                     ip = message["data"]
                     ip_score = self.check_ip(ip)
                     __database__.set_virustotal_score(ip, ip_score)
                     self.print("[" + ip + "] has score " + str(ip_score), 2)
-
         except KeyboardInterrupt:
             return True
         except Exception as inst:

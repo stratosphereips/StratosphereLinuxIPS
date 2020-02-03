@@ -63,7 +63,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=self.timeout)
                 #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
-                if message['channel'] == 'tw_modified':
+                if message['data'] == 'stop_process':
+                    return True
+                elif message['channel'] == 'tw_modified':
                     # Get the profileid and twid
                     try:
                         profileid = message['data'].split(':')[0]
@@ -71,6 +73,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     except AttributeError:
                         # When the channel is created the data '1' is sent
                         continue
+
                 # Start of the port scan detection
                 self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 6, 0)
                 # For port scan detection, we will measure different things:

@@ -922,6 +922,11 @@ class Database(object):
     def publish(self, channel, data):
         """ Publish something """
         self.r.publish(channel, data)
+    def publish_stop(self):
+        """ Publish stop command to terminate slips """
+        all_channels_list = self.r.pubsub_channels()
+        for channel in all_channels_list:
+            self.r.publish(channel, 'stop_process')
 
     def get_all_flows_in_profileid_twid(self, profileid, twid):
         """
