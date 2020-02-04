@@ -185,6 +185,16 @@ if __name__ == '__main__':
             ModuleProcess = module_class(outputProcessQueue, config)
             ModuleProcess.start()
             outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, __modules__[module_name]['description'], ModuleProcess.pid))
+    try:
+        for module_name in __modules__:
+            if not module_name in to_ignore:
+                module_class = __modules__[module_name]['obj']
+                ModuleProcess = module_class(outputProcessQueue, config)
+                ModuleProcess.start()
+                outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, __modules__[module_name]['description'], ModuleProcess.pid))
+    except TypeError:
+        # There are not modules in the configuration to ignore?
+        print('No modules are ignored')
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
