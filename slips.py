@@ -198,7 +198,7 @@ if __name__ == '__main__':
         guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
         guiProcessThread.start()
         outputProcessQueue.put('quiet')
-    elif not args.nologfiles:
+    if not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
         do_logs = read_configuration(config, 'parameters', 'create_log_files')
         if do_logs == 'yes':
