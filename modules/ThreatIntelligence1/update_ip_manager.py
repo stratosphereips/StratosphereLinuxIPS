@@ -2,7 +2,6 @@ import configparser
 import time
 import urllib.request
 from log_file_manager import __log_file_manager__
-from progress_bar import ProgressBar
 from slips.core.database import __database__
 import os
 
