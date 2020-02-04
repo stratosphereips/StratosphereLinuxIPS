@@ -9,7 +9,6 @@ import time
 import ipaddress
 import os
 import configparser
-from progress_bar import ProgressBar
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
 import traceback
 # To open the file in slices
