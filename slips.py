@@ -179,12 +179,6 @@ if __name__ == '__main__':
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
-    for module_name in __modules__:
-        if not module_name in to_ignore:
-            module_class = __modules__[module_name]['obj']
-            ModuleProcess = module_class(outputProcessQueue, config)
-            ModuleProcess.start()
-            outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, __modules__[module_name]['description'], ModuleProcess.pid))
     try:
         for module_name in __modules__:
             if not module_name in to_ignore:
