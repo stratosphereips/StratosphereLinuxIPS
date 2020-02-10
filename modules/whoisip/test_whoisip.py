@@ -150,6 +150,8 @@ def test_retry():
     outputProcessThread = OutputProcess(outputProcessQueue, 0, 1, config)
     outputProcessThread.start()
 
+    __database__.setOutputQueue(outputProcessQueue)
+
     ModuleProcess = WhoisIP(outputProcessQueue, config)
     ModuleProcess.start()
 
