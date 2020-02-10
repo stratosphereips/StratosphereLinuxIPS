@@ -1,3 +1,4 @@
+import platform
 import subprocess
 
 from modules.whoisip.whois_utils import *
@@ -136,7 +137,13 @@ class WhoisQuery:
         # by subprocess, it is near impossible to read output of the terminated process.
         # Whois is contacting whois.arin.net (-h is the host), because servers follow different standards (if any) and
         # it is beyond the scope of this parser to read all of them
-        command = ["timeout", "--preserve-status", str(timeout) + "s", "whois", str(self.ip), "-h", "whois.arin.net"]
+
+        if platform.system() == 'Darwin':
+            # macos
+            command = ["gtimeout --preserve-status " + str(timeout) + "s " + "whois " + str(self.ip) + " -h " + "whois.arin.net"]
+        else:
+            # now linux also needs to be non-negative
+            command = ["timeout", "--preserve-status", str(timeout) + "s", "whois", str(self.ip), "-h", "whois.arin.net"]
 
         # stdout: save output in response object
         # stderr: save error output in response object
