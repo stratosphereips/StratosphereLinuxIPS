@@ -9,7 +9,6 @@ import time
 import ipaddress
 import os
 import configparser
-from progress_bar import ProgressBar
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
 import traceback
 # To open the file in slices
@@ -119,9 +118,14 @@ class Module(Module, multiprocessing.Process):
                 if '#' in line:
                     # '#' is a comment line, ignore
                     continue
-                ip_address = line.rstrip().split(',')[0]
+                # Separate the lines like CSV
+                #ip_address = line.rstrip().split(',')[0]
+                # In the new format the ip is in the second position. And surronded by "
+                ip_address = line.replace("\n","").replace("\"","").split(",")[1].strip()
                 try:
-                    ip_description = line.rstrip().split(',')[1]
+                    #ip_description = line.rstrip().split(',')[1]
+                    # In the new format the description is position 4
+                    ip_description = line.replace("\n","").replace("\"","").split(",")[3].strip()
                 except IndexError:
                     ip_description = ''
                 self.print('\tRead IP {}: {}'.format(ip_address, ip_description), 6, 0)

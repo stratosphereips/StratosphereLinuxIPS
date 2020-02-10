@@ -1338,7 +1338,7 @@ class ProfilerProcess(multiprocessing.Process):
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
-                    # Compute the symbol for this flow, for this TW, for this profile
+                    # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
                     # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
                     # Add the out tuple
