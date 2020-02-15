@@ -254,11 +254,17 @@ class InputProcess(multiprocessing.Process):
                 Path to the flow input file to read. It can be a Argus binetflow flow,
                 a Zeek conn.log file or a Zeek folder with all the log files. 
                 """
-                if not self.input_information:
+
+                # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
+                if not self.input_information or self.input_information == '-':
                     # By default read the stdin
                     sys.stdin.close()
                     sys.stdin = os.fdopen(0, 'r')
                     file_stream = sys.stdin
+                    for line in file_stream:
+                        self.print('	> Sent Line: {}'.format(line.replace('\n', '')), 0, 3)
+                        self.profilerqueue.put(line)
+                        lines += 1
 
                 # If we were given a filename, manage the input from a file instead
                 elif self.input_information:
