@@ -45,7 +45,7 @@ class Module(Module, multiprocessing.Process):
             # macos
             self.timeout = None
         elif platform.system() == 'Linux':
-            self.timeout = -1
+            self.timeout = None
         else:
             #??
             self.timeout = None
