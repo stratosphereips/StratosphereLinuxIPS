@@ -7,7 +7,6 @@ import configparser
 import traceback
 
 
-
 def timing(f):
     """ Function to measure the time another function takes."""
     def wrap(*args):
@@ -17,6 +16,7 @@ def timing(f):
         self.outputqueue.put('01|database|Function took {:.3f} ms'.format((time2-time1)*1000.0))
         return ret
     return wrap
+
 
 class Database(object):
     """ Database object management """
@@ -88,7 +88,8 @@ class Database(object):
                 # The IP of the profile should also be added as a new IP we know about.
                 ip = profileid.split(self.separator)[1]
                 # If the ip is new add it to the list of ips
-                self.setNewIP(ip)
+                self.setNewIPThreatIntel(ip,None,None)
+
                 # Publish that we have a new profile
                 self.publish('new_profile', ip)
                 # After we stored the new, check for all of them (new or not) if we have some detections already.
@@ -346,7 +347,7 @@ class Database(object):
 
             #############
             # Store the Dst as IP address and notify in the channel
-            self.setNewIP(str(ip_as_obj))
+            self.setNewIPThreatIntel(str(ip_as_obj), profileid,twid)
 
             #############
             # Try to find evidence for this dst ip, in case we need to report it
@@ -536,9 +537,10 @@ class Database(object):
 
             # Choose which port to use based if we were asked Dst or Src
             if port_type == 'Dst':
-                port = dport
+                port = str(dport)
+
             elif port_type == 'Src':
-                port = sport
+                port = str(sport)
 
             # If we are the Client, we want to store the dstips only
             # If we are the Server, we want to store the srcips only
@@ -580,6 +582,8 @@ class Database(object):
                 innerdata[ip_key] = temp_dstips
                 prev_data[port] = innerdata
                 self.print('add_port(): First time for port {} for {}. Key: {}. Data: {}'.format(port, profileid, key_name, innerdata), 0, 3)
+            # self.outputqueue.put('01|database|[DB] {} '.format(ip_address))
+
             # Convet the dictionary to json
             data = json.dumps(prev_data)
             self.print('add_port(): Storing info about port {} for {}. Key: {}. Data: {}'.format(port, profileid, key_name, prev_data), 0, 3)
@@ -862,6 +866,27 @@ class Database(object):
             # Publish in the new_ip channel
             self.publish('new_ip', ip)
 
+    def setNewIPThreatIntel(self, ip, profileid, twid):
+        """ Store this new ip in the IPs hash """
+        data = self.getIPData(ip)
+        if not bool(data):
+            self.r.hset('IPsInfo', ip, '{}')
+            self.publish('new_ip', ip)
+            ThIn_signal = 0
+            self.publish('ip_Threat_Intelligence', str(ThIn_signal) + '-' + str(ip) + '-' + str(profileid) + '-' + str(twid))
+        else:
+            try:
+                malicious = data['Malicious']
+                if malicious == 'Not Malicious':
+                    pass
+                else:
+                    ThIn_signal = 1
+                    self.publish('ip_Threat_Intelligence', str(ThIn_signal) + '-' + str(ip) + '-' + str(profileid) + '-' + str(twid))
+            except KeyError:
+                ThIn_signal = 0
+                self.publish('ip_Threat_Intelligence',  str(ThIn_signal) + '-' + str(ip) + '-' + str(profileid) + '-' + str(twid))
+
+
     def getIP(self, ip):
         """ Check if this ip is the hash of the profiles! """
         data = self.r.hget('IPsInfo', ip)
@@ -917,11 +942,14 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_profile' in channel:
             pubsub.subscribe(channel)
+        elif 'ip_Threat_Intelligence' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
         """ Publish something """
         self.r.publish(channel, data)
+
     def publish_stop(self):
         """ Publish stop command to terminate slips """
         all_channels_list = self.r.pubsub_channels()
@@ -1170,6 +1198,23 @@ class Database(object):
         Store in the DB 1 IP we read from an IoC source  with its description
         """
         self.r.hset('IoC_ips', ip, description)
+
+    def add_malicious_ip(self, ip, profileid_twid):
+        """
+        Save in DB malicious IP met in the traffic and Threat Intelligence with its profileid and twid
+        """
+        self.r.hset('MaliciousIPs', ip, profileid_twid)
+
+    def get_malicious_ip(self, ip):
+        """
+        Return malicious IP and its list of presence in the traffic (profileid, twid)
+        """
+        data = self.r.hget('MaliciousIPs', ip)
+        if data:
+            data = json.loads(data)
+        else:
+            data = {}
+        return data
 
     def search_IP_in_IoC(self, ip: str) -> str:
         """ Search in the dB of malicious IPs and return a description if we found a match """
