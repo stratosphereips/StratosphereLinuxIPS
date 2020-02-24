@@ -97,6 +97,10 @@ class Module(Module, multiprocessing.Process):
                     return False
 
             while True:
+                message = self.c1.get_message(-1)
+
+                if message['data'] == 'stop_process':
+                    return True
                 """
                 message = self.c1.get_message(timeout=-1)
                 #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
