@@ -42,7 +42,7 @@ class Module(Module, multiprocessing.Process):
             self.timeout = None
         elif platform.system() == 'Linux':
             # linux
-            self.timeout = -1
+            self.timeout = None
         else:
             #??
             self.timeout = None
@@ -318,9 +318,10 @@ class Module(Module, multiprocessing.Process):
                     # Convert flow to a dict
                     flow = json.loads(flow)
                     # Process the flow
-                    self.process_flow(profileid, twid, flow, timestamp)
-
-
+                    return_value = self.process_flow(profileid, twid, flow, timestamp)
+                    # This to killa timeline process when CTRL-C is executed.
+                    if return_value:
+                        return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:
