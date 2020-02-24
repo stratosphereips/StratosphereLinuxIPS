@@ -33,7 +33,7 @@ class EvidenceProcess(multiprocessing.Process):
             self.timeout = None
         elif platform.system() == 'Linux':
             # now linux also needs to be non-negative
-            self.timeout = -1
+            self.timeout = None
         else:
             #??
             self.timeout = None
