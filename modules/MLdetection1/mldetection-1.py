@@ -11,6 +11,7 @@ from sklearn.preprocessing import StandardScaler
 import pickle
 import pandas as pd
 import json
+import platform
 
 
 # This horrible hack is only to stop sklearn from printing those warnings
@@ -46,6 +47,16 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
         # To know when to retrain. We store the number of labels when we last retrain
         self.retrain = 0
+
+        if platform.system() == 'Darwin':
+            # macos
+            self.timeout = None
+        elif platform.system() == 'Linux':
+            # linux
+            self.timeout = None
+        else:
+            # ??
+            self.timeout = None
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -97,10 +108,17 @@ class Module(Module, multiprocessing.Process):
                     return False
 
             while True:
+                message = self.c1.get_message(timeout=self.timeout)
+
+                if message['data'] == 'stop_process':
+                    return True
                 """
                 message = self.c1.get_message(timeout=-1)
                 #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
-                if message['channel'] == 'new_flow' and message['data'] != 1:
+                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message['data'] == 'stop_process':
+                    return True
+                elif message['channel'] == 'new_flow' and message['data'] != 1:
                     mdata = message['data']
                     # Convert from json to dict
                     mdata = json.loads(mdata)

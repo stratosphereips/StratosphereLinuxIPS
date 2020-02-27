@@ -7,7 +7,8 @@ Slips is an intrusion prevention system that is based on behavioral detections a
 The minimum slips requirements are:
 
 - python 3.7 or more
-- redis database running (see http://redis.org)
+
+- Redis database running (see http://redis.org)
     - In debian/ubuntu: ```apt-get install redis```
 - py37-redis 
     - In debian/ubuntu: ```apt-get install python3-redis```

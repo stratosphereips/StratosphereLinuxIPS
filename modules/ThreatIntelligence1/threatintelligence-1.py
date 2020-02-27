@@ -9,6 +9,9 @@ import time
 import ipaddress
 import os
 import configparser
+import json
+import ast
+from progress_bar import ProgressBar
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
 import traceback
 # To open the file in slices
@@ -33,7 +36,7 @@ class Module(Module, multiprocessing.Process):
         self.path_to_malicious_ip_folder = 'modules/ThreatIntelligence1/malicious_ips_files/'
         # Subscribe to the new_ip channel
         __database__.start(self.config)
-        self.c1 = __database__.subscribe('new_ip')
+        self.c1 = __database__.subscribe('ip_Threat_Intelligence')
         # Create the update manager. This manager takes care of the re-downloading of the list of IoC when needed.
         self.update_manager = UpdateIPManager(self.outputqueue)
         # Update the remote file containing malicious IPs.
@@ -43,7 +46,7 @@ class Module(Module, multiprocessing.Process):
             # macos
             self.timeout = None
         elif platform.system() == 'Linux':
-            self.timeout = -1
+            self.timeout = None
         else:
             #??
             self.timeout = None
@@ -147,6 +150,41 @@ class Module(Module, multiprocessing.Process):
                 self.malicious_ips_dict[str(ip_address)] = ip_description
                 lines_read += 1
 
+    def add_maliciousIP(self, ip = '', profileid = '', twid='' ):
+        '''
+        Add malicious IP to DB 'MaliciousIPs' with a profileid and twid where it was met
+        Returns nothing
+        '''
+
+        ip_location = __database__.get_malicious_ip(ip)
+        # if profileid or twid is None, do not put any value in a dictionary
+        if profileid != 'None':
+            try:
+                profile_tws = ip_location[profileid]
+                profile_tws = ast.literal_eval(profile_tws)
+                profile_tws.add(twid)
+                ip_location[profileid] = str(profile_tws)
+            except KeyError:
+                ip_location[profileid] = str({twid})
+        elif not ip_location:
+            ip_location = {}
+        data = json.dumps(ip_location)
+        __database__.add_malicious_ip(ip, data)
+
+    def set_evidence(self, ip, ip_description = '', profileid = '', twid = '' ):
+        '''
+        Set an evidence for malicious IP met in the timewindow
+        If profileid is None, do not set an Evidence
+        Returns nothing
+        '''
+        if profileid!= 'None':
+            type_evidence = 'Malicious IP'
+            key = 'dstip' + ':' + ip + ':' + type_evidence
+            threat_level = 50
+            confidence = 1
+            description = ip_description
+            __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
     def print(self, text, verbose=1, debug=0):
         """ 
         Function to use to print text using the outputqueue of slips.
@@ -156,7 +194,7 @@ class Module(Module, multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
@@ -170,18 +208,37 @@ class Module(Module, multiprocessing.Process):
             self.__load_malicious_ips()
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. 
-                if message['channel'] == 'new_ip':
-                    new_ip = message['data']
-                    # Get what we know about this IP so far
-                    ip_description = __database__.search_IP_in_IoC(new_ip)
-                    if ip_description:
-                        self.print('\tIs in our DB as malicious. Description {}'.format(ip_description))
-                        # Mark this IP as being malicious in the DB
-                        ip_data = {}
-                        ip_data['Malicious'] = ip_description
-                        __database__.setInfoForIPs(new_ip, ip_data)
-
+                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message['data'] == 'stop_process':
+                    return True
+                # Check that the message is for you.
+                elif message['channel'] == 'ip_Threat_Intelligence':
+                    data = message['data']
+                    try:
+                        data = data.split('-')
+                        thIn_signal = int(data[0])
+                        new_ip = data[1]
+                        profileid = data[2]
+                        twid = data[3]
+                        if not thIn_signal:
+                            ip_description = __database__.search_IP_in_IoC(new_ip)
+                            if ip_description:
+                                ip_data = {}
+                                ip_data['Malicious'] = ip_description
+                                __database__.setInfoForIPs(new_ip, ip_data)
+                                self.print('\tIs in our DB as malicious. Description {}'.format(ip_description))
+                                self.add_maliciousIP(new_ip, profileid, twid)
+                                self.set_evidence(new_ip, ip_description, profileid, twid)
+                            else:
+                                ip_data = {}
+                                ip_data['Malicious'] = "Not Malicious"
+                                __database__.setInfoForIPs(new_ip, ip_data)
+                        else:
+                            ip_description = __database__.getIPData(new_ip)['Malicious']
+                            self.add_maliciousIP(new_ip, profileid, twid)
+                            self.set_evidence(new_ip, ip_description, profileid, twid)
+                    except KeyError and AttributeError:
+                        self.print('There is no such a key', data)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
