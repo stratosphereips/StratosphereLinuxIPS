@@ -315,8 +315,10 @@ class Module(Module, multiprocessing.Process):
                     # Convert flow to a dict
                     flow = json.loads(flow)
                     # Process the flow
-                    self.process_flow(profileid, twid, flow, timestamp)
-
+                    return_value = self.process_flow(profileid, twid, flow, timestamp)
+                    # This is to try to kill the timeline when the user press CTRL-C.
+                    if return_value:
+                        return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:
