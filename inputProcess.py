@@ -333,6 +333,7 @@ class InputProcess(multiprocessing.Process):
                 self.event_observer.schedule(self.event_handler, self.zeek_folder, recursive=True)
                 # Start the observer
                 self.event_observer.start()
+                # Start the observer
 
                 # This double if is horrible but we just need to change a string
                 if self.input_type == 'interface':
@@ -390,5 +391,7 @@ class InputProcess(multiprocessing.Process):
             self.print(type(inst),0,1)
             self.print(inst.args,0,1)
             self.print(inst,0,1)
+            self.event_observer.stop()
+            self.event_observer.join()
             self.print(traceback.format_exc())
             sys.exit(1)
