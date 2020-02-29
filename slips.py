@@ -8,6 +8,7 @@ import argparse
 import sys
 import redis
 import os
+import time
 
 version = '0.6.2'
 
@@ -83,7 +84,7 @@ if __name__ == '__main__':
         # No conf file provided
         pass
 
-    # check if redis server running
+    # Check if redis server running
     server_redis_version = test_redis_database()
     if server_redis_version is None:
         terminate_slips()
@@ -95,6 +96,7 @@ if __name__ == '__main__':
             # If we do not have access to zeek and we want to use it, kill it.
             terminate_slips()
 
+    # See if we have the nfdump program, if we need it according to the input type
     if args.nfdump:
         visible_nfdump = test_program('nfdump -h')
         if visible_nfdump is False:
@@ -142,6 +144,8 @@ if __name__ == '__main__':
     if args.debug < 0:
         args.debug = 0
 
+
+
     # Check the type of input
     if args.interface:
         input_information = args.interface
@@ -164,6 +168,7 @@ if __name__ == '__main__':
     ##########################
     # Creation of the threads
     ##########################
+    from slips.core.database import __database__
 
     # Output thread. This thread should be created first because it handles the output of the rest of the threads.
     # Create the queue
@@ -215,7 +220,6 @@ if __name__ == '__main__':
     # Create the thread and start it
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config)
     evidenceProcessThread.start()
-    evidenceProcessQueue.close()
     outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
 
     # Profile thread
@@ -232,5 +236,33 @@ if __name__ == '__main__':
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
 
-    profilerProcessQueue.close()
-    outputProcessQueue.close()
+
+    # As the main program, keep checking if we should stop slips or not
+    # This is not easy since we need to be sure all the modules are stopped
+    # Each interval of checking is every 5 seconds
+    check_time_sleep = 5
+    # In each interval we check if there has been any modifications to the database by any module. 
+    # If not, wait this amount of intervals and then stop slips. 
+    # We choose 6 to wait 30 seconds.
+    minimum_intervals_to_wait = 6
+    while True:
+        # Sleep 
+        time.sleep(check_time_sleep)
+        # Get the amount of modified time windows in the last interval
+        TWModifiedforProfile = __database__.getModifiedTWLogs()
+        amount_of_modified = len(TWModifiedforProfile)
+        # If there were no modified TW in the last timewindow time, then start counting down
+        if amount_of_modified == 0:
+            #print('Counter to stop Slips. Amount of modified timewindows: {}. Stop counter: {}'.format(amount_of_modified, stop_counter))
+            if minimum_intervals_to_wait == 0:
+                # Stop the output Process
+                print('Stoping all processes after ')
+                # Stop the modules that are subscribed to channels
+                __database__.publish_stop()
+                # Send manual stops to the process not using channels
+                logsProcessQueue.put('stop_process')
+                outputProcessQueue.put('stop_process')
+                break
+            minimum_intervals_to_wait -= 1
+        else:
+            minimum_intervals_to_wait = 0
