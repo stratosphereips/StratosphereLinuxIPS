@@ -47,7 +47,7 @@ class LogsProcess(multiprocessing.Process):
         __database__.setOutputQueue(self.outputqueue)
 
         self.timeline_first_index = {}
-        self.stop_counter = 0
+        #self.stop_counter = 0
         self.is_timline_file = False
 
     def read_configuration(self):
@@ -95,16 +95,20 @@ class LogsProcess(multiprocessing.Process):
             while True:
                 line = self.inputqueue.get()
                 if 'stop_process' in line:
+                    timer.shutdown()
                     return True
                 elif 'stop' != line:
+                    # CHECK if we ever go here...
                     # we are not processing input from the queue yet
                     # without this line the complete output thread does not work!!
                     # WTF???????
                     print(line)
                     pass
                 else:
+                    # CHECK if we ever go here...
                     # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
                     self.outputqueue.put('stop')
+                    timer.shutdown()
                     return True
             # Stop the timer
             timer.shutdown()
@@ -213,26 +217,12 @@ class LogsProcess(multiprocessing.Process):
         Read the global data and output it on logs 
         """
         try:
-            #1. Get the list of profiles modified
+            # 1. Get the list of profiles modified
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             # Get the list of all the modifed TW for all the profiles
             TWModifiedforProfile = __database__.getModifiedTWLogs()
             amount_of_modified = len(TWModifiedforProfile)
-            if amount_of_modified == 0:
-                self.stop_counter += 1
-                self.outputqueue.put("20|logs|[Logs] COUNTER TO STOP Amount of modified timewindows {} counter {}".format(amount_of_modified, self.stop_counter))
-                if self.stop_counter > 5:
-                    #stop the modules that are subscribed to channels
-                    __database__.publish_stop()
-                    # Stop the output Process
-                    self.print('stop_process')
-                    #stop the log process
-                    self.inputqueue.put('20|logs|[Logs] stop_process')
-
-
-            else:
-                self.stop_counter = 0
 
             self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {}. Modified TWs: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
             last_profile_id = None
@@ -470,7 +460,7 @@ class TimerThread(threading.Thread):
     def run(self):
         try:
             while 1:
-                if self._finished.isSet(): return
+                if self._finished.isSet(): return True
                 self.task()
                 
                 # sleep for interval or until shutdown
