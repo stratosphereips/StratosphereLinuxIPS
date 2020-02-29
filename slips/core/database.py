@@ -953,6 +953,7 @@ class Database(object):
     def publish_stop(self):
         """ Publish stop command to terminate slips """
         all_channels_list = self.r.pubsub_channels()
+        self.print('Sending the stop signal to all listeners',3,3)
         for channel in all_channels_list:
             self.r.publish(channel, 'stop_process')
 
