@@ -62,7 +62,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             while True:
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=self.timeout)
-                #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
+                #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
                 if message['data'] == 'stop_process':
                     return True
                 elif message['channel'] == 'tw_modified':
@@ -205,10 +205,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 self.print(description, 3, 0)
                                 # Store in our local cache how many dips were there:
                                 self.cache_det_thresholds[cache_key] = amount_of_dports
-
-
-
-
 
                     except AttributeError:
                         # When the channel is created the data '1' is sent
