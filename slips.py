@@ -11,7 +11,7 @@ import os
 import time
 from datetime import datetime
 
-version = '0.6.2'
+version = '0.6.3'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
@@ -260,7 +260,8 @@ if __name__ == '__main__':
         #outputProcessQueue.put('11|Main|[Main] Counter to stop Slips. Amount of modified timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
 
         # If there were no modified TW in the last timewindow time, then start counting down
-        if amount_of_modified == 0:
+        # Dont try to stop slips if its catpurting from an interface 
+        if amount_of_modified == 0 and not args.interface:
             #print('Counter to stop Slips. Amount of modified timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
             if minimum_intervals_to_wait == 0:
                 # Stop the output Process
