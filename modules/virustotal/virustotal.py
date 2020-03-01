@@ -127,7 +127,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
         addr = ipaddress.ip_address(ip)
         if addr.is_private:
-            self.print("[" + ip + "] is private, skipping", 5, 1)
+            self.print("[" + ip + "] is private, skipping", 5, 3)
             return 0, 0, 0, 0
 
         # check if the address is in the cache (probably not, since all IPs are unique)
