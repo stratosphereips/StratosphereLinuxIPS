@@ -217,14 +217,8 @@ class LogsProcess(multiprocessing.Process):
         Read the global data and output it on logs 
         """
         try:
-            # 1. Get the list of profiles modified
-            # How many profiles we have?
-            profilesLen = str(__database__.getProfilesLen())
             # Get the list of all the modifed TW for all the profiles
             TWModifiedforProfile = __database__.getModifiedTWLogs()
-            amount_of_modified = len(TWModifiedforProfile)
-
-            self.outputqueue.put('20|logs|[Logs] Number of Profiles in DB: {}. Modified TWs: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
             last_profile_id = None
             description_of_malicious_ip_profile = None
             for profileTW in TWModifiedforProfile:
