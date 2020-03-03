@@ -11,7 +11,6 @@ import os
 import configparser
 import json
 import ast
-from progress_bar import ProgressBar
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
 import traceback
 # To open the file in slices
