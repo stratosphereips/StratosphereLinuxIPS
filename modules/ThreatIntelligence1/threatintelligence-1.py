@@ -12,6 +12,7 @@ import configparser
 import json
 import ast
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
+from progress_bar import ProgressBar
 import traceback
 # To open the file in slices
 from itertools import islice
@@ -222,6 +223,7 @@ class Module(Module, multiprocessing.Process):
                         if not thIn_signal:
                             ip_description = __database__.search_IP_in_IoC(new_ip)
                             if ip_description:
+                                print('here')
                                 ip_data = {}
                                 ip_data['Malicious'] = ip_description
                                 __database__.setInfoForIPs(new_ip, ip_data)
