@@ -83,10 +83,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # FILTER by Protocol and then Category
-    normal_data = filter_by_string(filter_by_string(df, 'label', 'UDP'),
-        'label', 'Normal')['state'].values.tolist()
-    botnet_data = filter_by_string(filter_by_string(df, 'label', 'UDP'),
-        'label', 'Botnet')['state'].values.tolist()
+    normal_data = filter_by_string(filter_by_string(df, 'label', 'UDP'), 'label', 'Normal')['state'].values.tolist()
+    botnet_data = filter_by_string(filter_by_string(df, 'label', 'UDP'), 'label', 'Botnet')['state'].values.tolist()
 
     # Set 0 or 1 depending on the sample Category
     y_data = [0 for i in xrange(len(normal_data))] + [1 for i in xrange(len(botnet_data))]
@@ -105,8 +103,7 @@ if __name__ == "__main__":
     maxlen = min(len(max(train_x_data, key=len)), 100)
 
     # vectorize the data to feed the net
-    train_x_data, train_y_data = stf_dataset.vectorize(train_x_data,
-        train_y_data, mode='int', sampling='OverSampler', maxlen=maxlen, minlen=maxlen, start_offset=5)
+    train_x_data, train_y_data = stf_dataset.vectorize(train_x_data, train_y_data, mode='int', sampling='OverSampler', maxlen=maxlen, minlen=maxlen, start_offset=5)
 
     # build the net
     model = build_lstm(input_shape=(maxlen, 4))
