@@ -493,6 +493,10 @@ class Database(object):
                 new_symbol = prev_symbols + symbol_to_add
                 # Bundle the data together
                 new_data = (new_symbol, previous_two_timestamps)
+
+                # if len(new_symbol) > 100:
+                #     self.publish('new_letters', 'outtuple data : ' + str(new_symbol) + ' profileid: '+ profileid + ' tw: '+ twid)
+
                 data[tupleid] = new_data
                 self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol), 0, 6)
                 data = json.dumps(data)
@@ -943,6 +947,8 @@ class Database(object):
         elif 'new_profile' in channel:
             pubsub.subscribe(channel)
         elif 'ip_Threat_Intelligence' in channel:
+            pubsub.subscribe(channel)
+        elif 'new_letters' in channel:
             pubsub.subscribe(channel)
         return pubsub
 
