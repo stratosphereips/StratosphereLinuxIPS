@@ -237,8 +237,10 @@ class Module(Module, multiprocessing.Process):
                             ip_description = __database__.getIPData(new_ip)['Malicious']
                             self.add_maliciousIP(new_ip, profileid, twid)
                             self.set_evidence(new_ip, ip_description, profileid, twid)
-                    except KeyError and AttributeError as error :
-                        self.print('There is no such a key', error)
+                    except Exception as e:
+                        self.print(e)
+
+
         except KeyboardInterrupt:
             return True
         except Exception as inst:
