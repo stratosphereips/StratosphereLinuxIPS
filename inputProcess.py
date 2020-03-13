@@ -147,7 +147,7 @@ class InputProcess(multiprocessing.Process):
                 except KeyError:
                     # First time we opened this file.
                     # Ignore the files that do not contain data.
-                    if 'capture_loss' in filename or 'loaded_scripts' in filename or 'packet_filter' in filename or 'stats' in filename or 'weird' in filename or 'reporter' in filename:
+                    if 'capture_loss' in filename or 'loaded_scripts' in filename or 'packet_filter' in filename or 'stats' in filename or 'weird' in filename or 'reporter' in filename or 'irc_features' in filename:
                         continue
                     file_handler = open(filename + '.log', 'r')
                     open_file_handlers[filename] = file_handler
@@ -362,7 +362,7 @@ class InputProcess(multiprocessing.Process):
 
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                command = "cd " + self.zeek_folder + "; bro -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                command = "cd " + self.zeek_folder + "; bro -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;@load ./irc_feature_extractor.zeek' -f " + self.packet_filter + " 2>&1 > /dev/null &"
                 # Run zeek.
                 os.system(command)
 
