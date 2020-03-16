@@ -22,7 +22,7 @@ import time
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'lstm-cc detection'
+    name = 'lstm-cc-detection-1'
     description = 'Detect C&C channels based on behavioral letters'
     authors = ['Sebastian Garcia','Kamila Babayeva']
 
