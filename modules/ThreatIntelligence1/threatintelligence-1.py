@@ -12,7 +12,7 @@ import configparser
 import json
 import ast
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
-from progress_bar import ProgressBar
+
 import traceback
 # To open the file in slices
 from itertools import islice
