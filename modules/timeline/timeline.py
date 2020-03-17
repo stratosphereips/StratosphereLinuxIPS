@@ -35,6 +35,7 @@ class Module(Module, multiprocessing.Process):
         self.alerted_malicous_ips_dict = {}
         # Read information how we should print timestamp.
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
+        self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         # Wait a little so we give time to have something to print 
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
@@ -108,12 +109,13 @@ class Module(Module, multiprocessing.Process):
             # Convert the common fields to something that can be interpreted
             uid = next(iter(flow))
             flow_dict = json.loads(flow[uid])
-            
+            profile_ip = profileid.split('_')[1]
             dur = flow_dict['dur']
             stime = flow_dict['ts']
             saddr = flow_dict['saddr']
             sport = flow_dict['sport']
             daddr = flow_dict['daddr']
+
             # Get data from the dst IP address
             daddr_data = __database__.getIPData(daddr)
             try:
@@ -142,6 +144,8 @@ class Module(Module, multiprocessing.Process):
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
+            if self.analysis_direction == 'all' and str(daddr) == str(profile_ip):
+                self.print(flow)
             if type(allbytes) != int:
                 allbytes = 0
             allbytes_human = 0.0
