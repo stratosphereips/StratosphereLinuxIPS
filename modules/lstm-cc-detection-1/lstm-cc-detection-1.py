@@ -19,6 +19,8 @@ import platform
 
 # Your imports
 import time
+from keras.preprocessing.sequence import pad_sequences
+from keras.models import load_model
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -69,6 +71,7 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         try:
+            model = load_model('modules/lstm-cc-detection-1/lstm_model.h5')
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
@@ -76,9 +79,21 @@ class Module(Module, multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     return True
                 if message['channel'] == 'new_letters':
-                    data = message['data']
-                    # Example of printing the number of profiles in the Database every second
-                    self.print(data)
+                    try:
+                        # Receive behavioral string
+                        data = message['data']
+                        max_length = 500
+                        # Function to convert each letter of string to ascii
+                        str_to_ascii = lambda i: [ord(x) for x in i]
+                        data = str_to_ascii(data)
+                        # Pad with zeros. If it is one string - needed to be in square brackets. Otherwise, not iterable.
+                        data = pad_sequences([data], maxlen=max_length, padding='post')
+                        score = model.predict(data, verbose=2)
+                        self.print(score)
+                    except Exception:
+                        # CHANGE IT
+                        self.print('THIS IS ONE')
+
 
         except KeyboardInterrupt:
             return True
