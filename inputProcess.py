@@ -373,8 +373,12 @@ class InputProcess(multiprocessing.Process):
                 self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
 
                 # Stop the observer
-                self.event_observer.stop()
-                self.event_observer.join()
+                try:
+                    self.event_observer.stop()
+                    self.event_observer.join()
+                except AttributeError:
+                    # In the case of nfdump, there is no observer
+                    pass
                 return True
 
         except KeyboardInterrupt:
@@ -382,6 +386,9 @@ class InputProcess(multiprocessing.Process):
             try:
                 self.event_observer.stop()
                 self.event_observer.join()
+            except AttributeError:
+                # In the case of nfdump, there is no observer
+                pass
             except NameError:
                 pass
             return True
@@ -391,7 +398,11 @@ class InputProcess(multiprocessing.Process):
             self.print(type(inst),0,1)
             self.print(inst.args,0,1)
             self.print(inst,0,1)
-            self.event_observer.stop()
-            self.event_observer.join()
+            try:
+                self.event_observer.stop()
+                self.event_observer.join()
+            except AttributeError:
+                # In the case of nfdump, there is no observer
+                pass
             self.print(traceback.format_exc())
             sys.exit(1)
