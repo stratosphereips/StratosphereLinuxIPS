@@ -12,7 +12,7 @@ import configparser
 import json
 import ast
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
-from progress_bar import ProgressBar
+
 import traceback
 # To open the file in slices
 from itertools import islice
@@ -223,7 +223,6 @@ class Module(Module, multiprocessing.Process):
                         if not thIn_signal:
                             ip_description = __database__.search_IP_in_IoC(new_ip)
                             if ip_description:
-                                print('here')
                                 ip_data = {}
                                 ip_data['Malicious'] = ip_description
                                 __database__.setInfoForIPs(new_ip, ip_data)
@@ -238,8 +237,10 @@ class Module(Module, multiprocessing.Process):
                             ip_description = __database__.getIPData(new_ip)['Malicious']
                             self.add_maliciousIP(new_ip, profileid, twid)
                             self.set_evidence(new_ip, ip_description, profileid, twid)
-                    except KeyError and AttributeError:
-                        self.print('There is no such a key', data)
+                    except Exception as e:
+                        self.print(e)
+
+
         except KeyboardInterrupt:
             return True
         except Exception as inst:
