@@ -919,7 +919,7 @@ class Database(object):
                 data = json.dumps(data)
                 self.r.hset('IPsInfo', ip, data)
                 # disable, because gives an error of no attribute outputqueue
-                #self.print('\tNew Info added to IP {}: {}'.format(ip, data),8,8)
+                self.print('\tNew Info added to IP {}: {}'.format(ip, data),8,8)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
