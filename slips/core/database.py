@@ -868,14 +868,21 @@ class Database(object):
         """ Store this new ip in the IPs hash """
         data = self.getIPData(ip)
         if not bool(data):
+            # If there is no data about this IP
+            # Set this IP for the first time in the IPsInfo 
             self.r.hset('IPsInfo', ip, '{}')
+            # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
+            # Set the ThreatIntelligence Signal to 0
             ThIn_signal = 0
+            # Publish in the ip_Threat_Intelligence channel that we need info about this IP
+            # The threat intelligence module will process it and store the info back in IPsInfo
             self.publish('ip_Threat_Intelligence', str(ThIn_signal) + '-' + str(ip) + '-' + str(profileid) + '-' + str(twid))
         else:
+            # There is previous data about this IP
             try:
-                malicious = data['Malicious']
-                if malicious == 'Not Malicious':
+                state = data['Malicious']
+                if state == 'Not Malicious':
                     pass
                 else:
                     ThIn_signal = 1
