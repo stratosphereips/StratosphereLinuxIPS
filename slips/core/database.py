@@ -312,8 +312,6 @@ class Database(object):
         self.r.sadd('ModifiedTWForLogs', profileid + self.separator + twid)
         self.publish('tw_modified', profileid + ':' + twid)
 
-    # old def add_out_dstips(self, profileid, twid, daddr_as_obj, state, pkts, proto, dport):
-    # old def add_out_dstips(self, profileid, twid, columns):
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
         Function to add information about the IP
