@@ -810,12 +810,6 @@ class Database(object):
         # Tell everyone an evidence was added
         self.publish('evidence_added', profileid + ':' + twid)
 
-        # Add this evidence to the timeline
-        # Default time now because I did not resolve how to add here timestamp.
-        # It is tricky to define when. No time for this.
-        #timestamp = '\t\t\t\t  '
-        #self.add_timeline_line(profileid, twid, current_evidence, timestamp)
-
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
