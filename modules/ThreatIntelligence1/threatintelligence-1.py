@@ -182,13 +182,14 @@ class Module(Module, multiprocessing.Process):
         If profileid is None, do not set an Evidence
         Returns nothing
         '''
-        if profileid!= 'None':
-            type_evidence = 'Malicious IP'
-            key = 'dstip' + ':' + ip + ':' + type_evidence
-            threat_level = 50
-            confidence = 1
-            description = ip_description
-            __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+        type_evidence = 'ThreatIntelligenceBlacklist'
+        key = 'dstip' + ':' + ip + ':' + type_evidence
+        threat_level = 50
+        confidence = 1
+        description = 'Threat Intelligence. ' + ip_description
+        if not twid:
+            twid=''
+        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def print(self, text, verbose=1, debug=0):
         """ 
