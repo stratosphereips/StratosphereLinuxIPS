@@ -316,7 +316,7 @@ class Database(object):
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
-        Function to add information about the IP
+        Function to add information about the an IP address
         The flow can go out of the IP (we are acting as Client) or into the IP (we are acting as Server)
         ip_as_obj: IP to add. It can be a dstIP or srcIP depending on the rol
         role: 'Client' or 'Server'
@@ -325,8 +325,11 @@ class Database(object):
             1- Add the ip to this tw in this profile, counting how many times it was contacted, and storing it in the key 'DstIPs' or 'SrcIPs' in the hash of the profile
             2- Use the ip as a key to count how many times that IP was contacted on each port. We store it like this because its the
                pefect structure to detect vertical port scans later on
+
+            3- Check if this IP has any detection in the threat intelligence module. The information is added by the module directly in the DB.
         """
         try:
+            # Get the fields
             dport = columns['dport']
             sport = columns['sport']
             totbytes = columns['bytes']
@@ -339,6 +342,7 @@ class Database(object):
             saddr = columns['saddr']
 
             # Depending if the traffic is going out or not, we are Client or Server
+            # Set the type of ip as Dst if we are a client, or Src if we are a server
             if role == 'Client':
                 # We are receving and adding a destination address and a dst port
                 type_host_key = 'Dst'
