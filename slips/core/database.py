@@ -1216,7 +1216,10 @@ class Database(object):
     def search_IP_in_IoC(self, ip: str) -> str:
         """ Search in the dB of malicious IPs and return a description if we found a match """
         ip_description = self.r.hget('IoC_ips', ip)
-        return ip_description
+        if ip_description == None:
+            return False
+        else:
+            return ip_description
 
     def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
         """
