@@ -88,12 +88,14 @@ class Database(object):
                 # The IP of the profile should also be added as a new IP we know about.
                 ip = profileid.split(self.separator)[1]
                 # If the ip is new add it to the list of ips
-                self.setNewIPThreatIntel(ip,None,None)
+                self.setNewIP(ip)
 
                 # Publish that we have a new profile
                 self.publish('new_profile', ip)
-                # After we stored the new, check for all of them (new or not) if we have some detections already.
-                # TODO
+
+                # The IP of the profile should also be checked in case is malicious, but we only have the profileid, not the tw.
+                self.publish('give_threat_intelligence', str(ip) + '-' + str(profileid) + '-None')
+
 
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put('00|database|Error in addProfile in database.py')
@@ -345,37 +347,32 @@ class Database(object):
 
             #############
             # Store the Dst as IP address and notify in the channel
-            self.setNewIPThreatIntel(str(ip_as_obj), profileid,twid)
+            self.setNewIP(str(ip_as_obj))
 
             #############
-            # Try to find evidence for this dst ip, in case we need to report it
-            # The idea is that here is where we check that the dst ip was already reported by some module and then we add the evidence
-            # It shoud be done here so the check is done with the data in the cache in the DB
+            # Try to find evidence for this ip, in case we need to report it
+
+            # Ask the threat intelligence modules, using a channel, that we need info about this IP
+            # The threat intelligence module will process it and store the info back in IPsInfo
+            # It doesn't matter if we are client or server, since the ip_as_obj changes accordingly from being the dstip for client to being the srcip for server. 
+            # Therefore both ips will be checked for each flow
+            self.publish('give_threat_intelligence', str(ip_as_obj) + '-' + str(profileid) + '-' + str(twid))
+
             if role == 'Client':
-                # After we stored the new ip, check for all of them (new or not) if we have some detections already for it. If we do, add the evidence to this profileid and twid
-                # Only if we are a client. Because if we are a server, this evidence should be stored in the profile of the client
-                ipdata = self.getIPData(str(ip_as_obj))
-                if type(ipdata) == str:
-                    # Convert the str to a dict
-                    ipdata = json.loads(ipdata)
-                #for key in ipdata:
-                #self.print('For IP {}, data stored: {}'.format(str(ip_as_obj), ipdata))
-                # If there are detections, store the evidence.
-                if False:
-                    # Type of evidence
-                    type_evidence = 'xxxxx'
-                    # Key
-                    key = 'dstip' + ':' + dstip + ':' + type_evidence
-                    # Threat level
-                    threat_level = 50
-                    confidence = 1
-                    description = 'xxxxxx'
-                    __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+                # The profile corresponds to the src ip that received this flow
+                # The dstip is here the one receiving data from your profile
+                # So check the dst ip
+                pass
+
+            elif role == 'Server':
+                # The profile corresponds to the dst ip that received this flow
+                # The srcip is here the one sending data to your profile
+                # So check the src ip
+                pass
 
 
             #############
-            # 1- Count the dstips and store them
-            # TODO: Retire this info after we finish 2-. Because its duplicated
+            # 1- Count the dstips, and store the dstip in the db of this profile+tw
             self.print('add_ips(): As a {}, add the {} IP {} to profile {}, twid {}'.format(role, type_host_key, str(ip_as_obj), profileid, twid), 0, 5)
             # Get the hash of the timewindow
             hash_id = profileid + self.separator + twid
