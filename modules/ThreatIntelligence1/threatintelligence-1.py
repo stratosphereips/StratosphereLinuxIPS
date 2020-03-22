@@ -36,7 +36,7 @@ class Module(Module, multiprocessing.Process):
         self.path_to_malicious_ip_folder = 'modules/ThreatIntelligence1/malicious_ips_files/'
         # Subscribe to the new_ip channel
         __database__.start(self.config)
-        self.c1 = __database__.subscribe('ip_Threat_Intelligence')
+        self.c1 = __database__.subscribe('give_threat_intelligence')
         # Create the update manager. This manager takes care of the re-downloading of the list of IoC when needed.
         self.update_manager = UpdateIPManager(self.outputqueue)
         # Update the remote file containing malicious IPs.
@@ -217,32 +217,21 @@ class Module(Module, multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     return True
                 # Check that the message is for you.
-                elif message['channel'] == 'ip_Threat_Intelligence':
+                elif message['channel'] == 'give_threat_intelligence' and type(message['data']) is not int:
                     data = message['data']
-                    try:
-                        data = data.split('-')
-                    except AttributeError:
-                        # The first message is a text '1', which can not be splited. Not sure why.
-                        break
-                    thIn_signal = int(data[0])
-                    new_ip = data[1]
-                    profileid = data[2]
-                    twid = data[3]
-                    if not thIn_signal:
-                        ip_description = __database__.search_IP_in_IoC(new_ip)
-                        if ip_description:
-                            ip_data = {}
-                            ip_data['Malicious'] = ip_description
-                            __database__.setInfoForIPs(new_ip, ip_data)
-                            self.print('\tIs in our DB as malicious. Description {}'.format(ip_description))
-                            self.add_maliciousIP(new_ip, profileid, twid)
-                            self.set_evidence(new_ip, ip_description, profileid, twid)
-                        else:
-                            ip_data = {}
-                            ip_data['Malicious'] = "Not Malicious"
-                            __database__.setInfoForIPs(new_ip, ip_data)
-                    else:
-                        ip_description = __database__.getIPData(new_ip)['Malicious']
+                    data = data.split('-')
+                    new_ip = data[0]
+                    profileid = data[1]
+                    twid = data[2]
+                    # Search for this IP in our database of IoC
+                    ip_description = __database__.search_IP_in_IoC(new_ip)
+
+                    if ip_description != False:
+                        # If the IP is in the blacklist of IoC. Add it as Malicious
+                        ip_data = {}
+                        # Maybe we should change the key to 'status' or something like that.
+                        ip_data['Malicious'] = ip_description
+                        __database__.setInfoForIPs(new_ip, ip_data)
                         self.add_maliciousIP(new_ip, profileid, twid)
                         self.set_evidence(new_ip, ip_description, profileid, twid)
         except KeyboardInterrupt:
