@@ -866,38 +866,19 @@ class Database(object):
         return data
 
     def setNewIP(self, ip):
-        """ Store this new ip in the IPs hash """
-        if not self.getIP(ip):
-            self.r.hset('IPsInfo', ip, '{}')
-            # Publish in the new_ip channel
-            self.publish('new_ip', ip)
-
-    def setNewIPThreatIntel(self, ip, profileid, twid):
-        """ Store this new ip in the IPs hash """
+        """ 
+        1- Stores this new IP in the IPs hash
+        2- Publishes in the channels that there is a new IP, and that we want data from the Threat Intelligence modules
+        """
         data = self.getIPData(ip)
-        if not bool(data):
+        if data == False:
             # If there is no data about this IP
             # Set this IP for the first time in the IPsInfo 
+            # Its VERY important that the data of the first time we see an IP must be '{}', an empty dictionary! if not the logic breaks. 
+            # We use the empty dictionary to find if an IP exists or not 
             self.r.hset('IPsInfo', ip, '{}')
             # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
-            # Set the ThreatIntelligence Signal to 0
-            ThIn_signal = 0
-            # Publish in the ip_Threat_Intelligence channel that we need info about this IP
-            # The threat intelligence module will process it and store the info back in IPsInfo
-            self.publish('ip_Threat_Intelligence', str(ThIn_signal) + '-' + str(ip) + '-' + str(profileid) + '-' + str(twid))
-        else:
-            # There is previous data about this IP
-            try:
-                state = data['Malicious']
-                if state == 'Not Malicious':
-                    pass
-                else:
-                    ThIn_signal = 1
-                    self.publish('ip_Threat_Intelligence', str(ThIn_signal) + '-' + str(ip) + '-' + str(profileid) + '-' + str(twid))
-            except KeyError:
-                ThIn_signal = 0
-                self.publish('ip_Threat_Intelligence',  str(ThIn_signal) + '-' + str(ip) + '-' + str(profileid) + '-' + str(twid))
 
 
     def getIP(self, ip):
@@ -913,12 +894,12 @@ class Database(object):
         Store information for this IP 
         We receive a dictionary, such as {'geocountry': 'rumania'} that we are going to store for this IP. 
         If it was not there before we store it. If it was there before, we overwrite it
-
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
 
         for key in iter(ipdata):
+            # I think we dont need this anymore of the conversion
             if type(data) == str:
                 # Convert the str to a dict
                 data = json.loads(data)
@@ -954,7 +935,7 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_profile' in channel:
             pubsub.subscribe(channel)
-        elif 'ip_Threat_Intelligence' in channel:
+        elif 'give_threat_intelligence' in channel:
             pubsub.subscribe(channel)
         elif 'new_letters' in channel:
             pubsub.subscribe(channel)
@@ -1010,6 +991,7 @@ class Database(object):
     def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto='', uid='', label=''):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
+        The profileid is the main profile that this flow is related too.
 
         """
         data = {}
