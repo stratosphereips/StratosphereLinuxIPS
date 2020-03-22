@@ -88,12 +88,14 @@ class Database(object):
                 # The IP of the profile should also be added as a new IP we know about.
                 ip = profileid.split(self.separator)[1]
                 # If the ip is new add it to the list of ips
-                self.setNewIPThreatIntel(ip,None,None)
+                self.setNewIP(ip)
 
                 # Publish that we have a new profile
                 self.publish('new_profile', ip)
-                # After we stored the new, check for all of them (new or not) if we have some detections already.
-                # TODO
+
+                # The IP of the profile should also be checked in case is malicious, but we only have the profileid, not the tw.
+                self.publish('give_threat_intelligence', str(ip) + '-' + str(profileid) + '-None')
+
 
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put('00|database|Error in addProfile in database.py')
@@ -312,11 +314,9 @@ class Database(object):
         self.r.sadd('ModifiedTWForLogs', profileid + self.separator + twid)
         self.publish('tw_modified', profileid + ':' + twid)
 
-    # old def add_out_dstips(self, profileid, twid, daddr_as_obj, state, pkts, proto, dport):
-    # old def add_out_dstips(self, profileid, twid, columns):
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
-        Function to add information about the IP
+        Function to add information about the an IP address
         The flow can go out of the IP (we are acting as Client) or into the IP (we are acting as Server)
         ip_as_obj: IP to add. It can be a dstIP or srcIP depending on the rol
         role: 'Client' or 'Server'
@@ -325,8 +325,11 @@ class Database(object):
             1- Add the ip to this tw in this profile, counting how many times it was contacted, and storing it in the key 'DstIPs' or 'SrcIPs' in the hash of the profile
             2- Use the ip as a key to count how many times that IP was contacted on each port. We store it like this because its the
                pefect structure to detect vertical port scans later on
+
+            3- Check if this IP has any detection in the threat intelligence module. The information is added by the module directly in the DB.
         """
         try:
+            # Get the fields
             dport = columns['dport']
             sport = columns['sport']
             totbytes = columns['bytes']
@@ -339,6 +342,7 @@ class Database(object):
             saddr = columns['saddr']
 
             # Depending if the traffic is going out or not, we are Client or Server
+            # Set the type of ip as Dst if we are a client, or Src if we are a server
             if role == 'Client':
                 # We are receving and adding a destination address and a dst port
                 type_host_key = 'Dst'
@@ -347,37 +351,32 @@ class Database(object):
 
             #############
             # Store the Dst as IP address and notify in the channel
-            self.setNewIPThreatIntel(str(ip_as_obj), profileid,twid)
+            self.setNewIP(str(ip_as_obj))
 
             #############
-            # Try to find evidence for this dst ip, in case we need to report it
-            # The idea is that here is where we check that the dst ip was already reported by some module and then we add the evidence
-            # It shoud be done here so the check is done with the data in the cache in the DB
+            # Try to find evidence for this ip, in case we need to report it
+
+            # Ask the threat intelligence modules, using a channel, that we need info about this IP
+            # The threat intelligence module will process it and store the info back in IPsInfo
+            # It doesn't matter if we are client or server, since the ip_as_obj changes accordingly from being the dstip for client to being the srcip for server. 
+            # Therefore both ips will be checked for each flow
+            self.publish('give_threat_intelligence', str(ip_as_obj) + '-' + str(profileid) + '-' + str(twid))
+
             if role == 'Client':
-                # After we stored the new ip, check for all of them (new or not) if we have some detections already for it. If we do, add the evidence to this profileid and twid
-                # Only if we are a client. Because if we are a server, this evidence should be stored in the profile of the client
-                ipdata = self.getIPData(str(ip_as_obj))
-                if type(ipdata) == str:
-                    # Convert the str to a dict
-                    ipdata = json.loads(ipdata)
-                #for key in ipdata:
-                #self.print('For IP {}, data stored: {}'.format(str(ip_as_obj), ipdata))
-                # If there are detections, store the evidence.
-                if False:
-                    # Type of evidence
-                    type_evidence = 'xxxxx'
-                    # Key
-                    key = 'dstip' + ':' + dstip + ':' + type_evidence
-                    # Threat level
-                    threat_level = 50
-                    confidence = 1
-                    description = 'xxxxxx'
-                    __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+                # The profile corresponds to the src ip that received this flow
+                # The dstip is here the one receiving data from your profile
+                # So check the dst ip
+                pass
+
+            elif role == 'Server':
+                # The profile corresponds to the dst ip that received this flow
+                # The srcip is here the one sending data to your profile
+                # So check the src ip
+                pass
 
 
             #############
-            # 1- Count the dstips and store them
-            # TODO: Retire this info after we finish 2-. Because its duplicated
+            # 1- Count the dstips, and store the dstip in the db of this profile+tw
             self.print('add_ips(): As a {}, add the {} IP {} to profile {}, twid {}'.format(role, type_host_key, str(ip_as_obj), profileid, twid), 0, 5)
             # Get the hash of the timewindow
             hash_id = profileid + self.separator + twid
@@ -403,9 +402,13 @@ class Database(object):
             # Store the dstips in the dB
             self.r.hset(hash_id, type_host_key + 'IPs', str(data))
 
-            #############
-            # 2- Store, for each ip, how many times each DSTport was contacted
 
+            #############
+            # 2- Store, for each ip: 
+            # - Update how many times each individual DstPort was contacted
+            # - Update the total flows sent by this ip
+            # - Update the total packets sent by this ip
+            # - Update the total bytes sent by this ip
             # Get the state. Established, NotEstablished
             summaryState = __database__.getFinalStateFromFlags(state, pkts)
             # Get the previous data about this key
@@ -439,6 +442,10 @@ class Database(object):
                 innerdata['dstports'] = temp_dstports
                 self.print('add_ips() First time for dst port {}. Data: {}'.format(dport, innerdata), 0, 3)
                 prev_data[str(ip_as_obj)] = innerdata
+
+
+            ###########
+            # After processing all the features of the ip, store all the info in the database
             # Convert the dictionary to json
             data = json.dumps(prev_data)
             # Create the key for storing
@@ -810,12 +817,6 @@ class Database(object):
         # Tell everyone an evidence was added
         self.publish('evidence_added', profileid + ':' + twid)
 
-        # Add this evidence to the timeline
-        # Default time now because I did not resolve how to add here timestamp.
-        # It is tricky to define when. No time for this.
-        #timestamp = '\t\t\t\t  '
-        #self.add_timeline_line(profileid, twid, current_evidence, timestamp)
-
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
@@ -850,10 +851,11 @@ class Database(object):
         Returns a dictionary
         """
         data = self.r.hget('IPsInfo', ip)
-        if data:
+        if data == '{}':
             data = json.loads(data)
         else:
-            data = {}
+            # If there is no data, it means the IP was not there
+            data = False
         # Always return a dictionary
         return data
 
@@ -864,31 +866,19 @@ class Database(object):
         return data
 
     def setNewIP(self, ip):
-        """ Store this new ip in the IPs hash """
-        if not self.getIP(ip):
-            self.r.hset('IPsInfo', ip, '{}')
-            # Publish in the new_ip channel
-            self.publish('new_ip', ip)
-
-    def setNewIPThreatIntel(self, ip, profileid, twid):
-        """ Store this new ip in the IPs hash """
+        """ 
+        1- Stores this new IP in the IPs hash
+        2- Publishes in the channels that there is a new IP, and that we want data from the Threat Intelligence modules
+        """
         data = self.getIPData(ip)
-        if not bool(data):
+        if data == False:
+            # If there is no data about this IP
+            # Set this IP for the first time in the IPsInfo 
+            # Its VERY important that the data of the first time we see an IP must be '{}', an empty dictionary! if not the logic breaks. 
+            # We use the empty dictionary to find if an IP exists or not 
             self.r.hset('IPsInfo', ip, '{}')
+            # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
-            ThIn_signal = 0
-            self.publish('ip_Threat_Intelligence', str(ThIn_signal) + '-' + str(ip) + '-' + str(profileid) + '-' + str(twid))
-        else:
-            try:
-                malicious = data['Malicious']
-                if malicious == 'Not Malicious':
-                    pass
-                else:
-                    ThIn_signal = 1
-                    self.publish('ip_Threat_Intelligence', str(ThIn_signal) + '-' + str(ip) + '-' + str(profileid) + '-' + str(twid))
-            except KeyError:
-                ThIn_signal = 0
-                self.publish('ip_Threat_Intelligence',  str(ThIn_signal) + '-' + str(ip) + '-' + str(profileid) + '-' + str(twid))
 
 
     def getIP(self, ip):
@@ -904,12 +894,12 @@ class Database(object):
         Store information for this IP 
         We receive a dictionary, such as {'geocountry': 'rumania'} that we are going to store for this IP. 
         If it was not there before we store it. If it was there before, we overwrite it
-
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
 
         for key in iter(ipdata):
+            # I think we dont need this anymore of the conversion
             if type(data) == str:
                 # Convert the str to a dict
                 data = json.loads(data)
@@ -920,8 +910,6 @@ class Database(object):
                 value = data[key]
             except KeyError:
                 # Append the new data
-                data[key] = to_store
-                #data.update(ipdata)
                 data = json.dumps(data)
                 self.r.hset('IPsInfo', ip, data)
                 # disable, because gives an error of no attribute outputqueue
@@ -947,7 +935,7 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_profile' in channel:
             pubsub.subscribe(channel)
-        elif 'ip_Threat_Intelligence' in channel:
+        elif 'give_threat_intelligence' in channel:
             pubsub.subscribe(channel)
         elif 'new_letters' in channel:
             pubsub.subscribe(channel)
@@ -1003,6 +991,7 @@ class Database(object):
     def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto='', uid='', label=''):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
+        The profileid is the main profile that this flow is related too.
 
         """
         data = {}
@@ -1227,7 +1216,10 @@ class Database(object):
     def search_IP_in_IoC(self, ip: str) -> str:
         """ Search in the dB of malicious IPs and return a description if we found a match """
         ip_description = self.r.hget('IoC_ips', ip)
-        return ip_description
+        if ip_description == None:
+            return False
+        else:
+            return ip_description
 
     def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
         """
