@@ -398,9 +398,13 @@ class Database(object):
             # Store the dstips in the dB
             self.r.hset(hash_id, type_host_key + 'IPs', str(data))
 
-            #############
-            # 2- Store, for each ip, how many times each DSTport was contacted
 
+            #############
+            # 2- Store, for each ip: 
+            # - Update how many times each individual DstPort was contacted
+            # - Update the total flows sent by this ip
+            # - Update the total packets sent by this ip
+            # - Update the total bytes sent by this ip
             # Get the state. Established, NotEstablished
             summaryState = __database__.getFinalStateFromFlags(state, pkts)
             # Get the previous data about this key
@@ -434,6 +438,10 @@ class Database(object):
                 innerdata['dstports'] = temp_dstports
                 self.print('add_ips() First time for dst port {}. Data: {}'.format(dport, innerdata), 0, 3)
                 prev_data[str(ip_as_obj)] = innerdata
+
+
+            ###########
+            # After processing all the features of the ip, store all the info in the database
             # Convert the dictionary to json
             data = json.dumps(prev_data)
             # Create the key for storing
@@ -916,12 +924,10 @@ class Database(object):
                 value = data[key]
             except KeyError:
                 # Append the new data
-                data[key] = to_store
-                #data.update(ipdata)
                 data = json.dumps(data)
                 self.r.hset('IPsInfo', ip, data)
                 # disable, because gives an error of no attribute outputqueue
-                self.print('\tNew Info added to IP {}: {}'.format(ip, data),8,8)
+                #self.print('\tNew Info added to IP {}: {}'.format(ip, data),8,8)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
