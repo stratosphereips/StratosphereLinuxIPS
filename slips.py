@@ -11,7 +11,7 @@ import os
 import time
 from datetime import datetime
 
-version = '0.6.4'
+version = '0.6.5'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
