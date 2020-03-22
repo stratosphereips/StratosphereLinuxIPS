@@ -118,21 +118,24 @@ class Module(Module, multiprocessing.Process):
             daddr_data = __database__.getIPData(daddr)
             try:
                 daddr_country = daddr_data['geocountry']
-            except KeyError:
+            except (KeyError, TypeError):
                 daddr_country = 'Unknown'
             try:
                 daddr_asn = daddr_data['asn']
-            except KeyError:
+            except (KeyError, TypeError):
                 daddr_asn = 'Unknown'
             try:
                 if daddr_data['Malicious']:
                     daddr_malicious = 'Malicious'
                 daddr_malicious_info = daddr_data['description']
-            except KeyError:
+            except (KeyError, TypeError):
                 daddr_malicious = ''
                 daddr_malicious_info = ''
 
-            daddr_data_str = ', '.join("{!s}={!r}".format(key,val) for (key,val) in daddr_data.items())
+            try:
+                daddr_data_str = ', '.join("{!s}={!r}".format(key,val) for (key,val) in daddr_data.items())
+            except AttributeError:
+                daddr_data_str = ''
 
             dport = flow_dict['dport']
             proto = flow_dict['proto'].lower()
