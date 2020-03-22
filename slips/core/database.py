@@ -851,10 +851,11 @@ class Database(object):
         Returns a dictionary
         """
         data = self.r.hget('IPsInfo', ip)
-        if data:
+        if data == '{}':
             data = json.loads(data)
         else:
-            data = {}
+            # If there is no data, it means the IP was not there
+            data = False
         # Always return a dictionary
         return data
 
