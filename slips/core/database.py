@@ -903,17 +903,25 @@ class Database(object):
             if type(data) == str:
                 # Convert the str to a dict
                 data = json.loads(data)
+
             to_store = ipdata[key]
 
-            # If the key is already stored, do not modify it
-            try:
-                value = data[key]
-            except KeyError:
-                # Append the new data
-                data = json.dumps(data)
-                self.r.hset('IPsInfo', ip, data)
+            # THIS IS NOT WORKING CORRECTLY!!! FIX THE WAY WE STORE THE DATA, WE ARE NEVER STORING NOW
+            # Do we have any previous data?
+            if data:
+                # If there is data previously stored, check if we have this key already
+                try:
+                    # If the key is already stored, do not modify it
+                    value = data[key]
+                except KeyError:
+                    newdata_str = json.dumps(to_store)
+                    self.r.hset('IPsInfo', ip, newdata_str)
+            else:
+                # There no data so far, so add the new data
+                newdata_str = json.dumps(to_store)
+                self.r.hset('IPsInfo', ip, newdata_str)
                 # disable, because gives an error of no attribute outputqueue
-                #self.print('\tNew Info added to IP {}: {}'.format(ip, data),8,8)
+                #print('\tNew Info added to IP {}: {}'.format(ip, newdata_str))
 
     def subscribe(self, channel):
         """ Subscribe to channel """
