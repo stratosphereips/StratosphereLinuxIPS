@@ -849,13 +849,21 @@ class Database(object):
         """ 
         Return information about this IP from the IPs has 
         Returns a dictionary
+        We need to separate these three cases:
+        1- IP is in the DB without data
+        2- IP is in the DB with data
+        3- IP is not in the DB
         """
         data = self.r.hget('IPsInfo', ip)
-        if data == '{}':
+        if data or data == {}:
+            # This means the IP was in the database, with or without data
+            # Convert the data
             data = json.loads(data)
+            #print(f'In the DB: IP {ip}, and data {data}')
         else:
-            # If there is no data, it means the IP was not there
+            # The IP was not in the DB
             data = False
+            #print(f'In the DB: IP {ip}, and data {data}')
         # Always return a dictionary
         return data
 
