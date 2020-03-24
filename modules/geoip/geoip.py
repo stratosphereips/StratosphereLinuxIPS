@@ -80,27 +80,26 @@ class Module(Module, multiprocessing.Process):
                     # The first message comes with data=1
                     if type(ip) == str:
                         data = __database__.getIPData(ip)
-                        if data:
-                            # If we alredy have the country for this ip, do not ask the file
-                            if 'geocountry' not in data:
-                                geoinfo = self.reader.get(ip)
-                                if geoinfo:
-                                    try:
-                                        countrydata = geoinfo['country']
-                                        countryname = countrydata['names']['en']
-                                        data = {}
-                                        data['geocountry'] = countryname
-                                    except KeyError:
-                                        data = {}
-                                        data['geocountry'] = 'Unknown'
-                                elif ipaddress.ip_address(ip).is_private:
-                                    # Try to find if it is a local/private IP
+                        # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
+                        if (data or data == {}) and 'geocountry' not in data:
+                            geoinfo = self.reader.get(ip)
+                            if geoinfo:
+                                try:
+                                    countrydata = geoinfo['country']
+                                    countryname = countrydata['names']['en']
                                     data = {}
-                                    data['geocountry'] = 'Private'
-                                else:
+                                    data['geocountry'] = countryname
+                                except KeyError:
                                     data = {}
                                     data['geocountry'] = 'Unknown'
-                                __database__.setInfoForIPs(ip, data)
+                            elif ipaddress.ip_address(ip).is_private:
+                                # Try to find if it is a local/private IP
+                                data = {}
+                                data['geocountry'] = 'Private'
+                            else:
+                                data = {}
+                                data['geocountry'] = 'Unknown'
+                            __database__.setInfoForIPs(ip, data)
 
 
         except KeyboardInterrupt:
