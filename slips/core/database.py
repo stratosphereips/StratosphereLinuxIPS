@@ -905,14 +905,15 @@ class Database(object):
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
-
         for key in iter(ipdata):
+            # ipdata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
+            # ipdata can be {'VirusTotal': [1,2,3,4]}
             # I think we dont need this anymore of the conversion
             if type(data) == str:
                 # Convert the str to a dict
                 data = json.loads(data)
 
-            to_store = ipdata[key]
+            data_to_store = ipdata[key]
 
             # THIS IS NOT WORKING CORRECTLY!!! FIX THE WAY WE STORE THE DATA, WE ARE NEVER STORING NOW
             # Do we have any previous data?
@@ -922,11 +923,14 @@ class Database(object):
                     # If the key is already stored, do not modify it
                     value = data[key]
                 except KeyError:
-                    newdata_str = json.dumps(to_store)
+                    data[key] = data_to_store
+                    newdata_str = json.dumps(data)
                     self.r.hset('IPsInfo', ip, newdata_str)
             else:
                 # There no data so far, so add the new data
-                newdata_str = json.dumps(to_store)
+                # Create a temp dict to store the key and value
+                data[key] = data_to_store
+                newdata_str = json.dumps(data)
                 self.r.hset('IPsInfo', ip, newdata_str)
                 # disable, because gives an error of no attribute outputqueue
                 #print('\tNew Info added to IP {}: {}'.format(ip, newdata_str))
