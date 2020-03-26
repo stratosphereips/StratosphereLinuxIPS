@@ -109,12 +109,16 @@ class EvidenceProcess(multiprocessing.Process):
                         # When the channel is created the data '1' is sent
                         continue
                     evidence = __database__.getEvidenceForTW(profileid, twid)
+                    # Important! It may happen that the evidence is not related to a profileid and twid.
+                    # For example when the evidence is on some src IP attacking our home net, and we are not creating
+                    # profiles for attackers
                     if evidence:
                         evidence = json.loads(evidence)
+                        #self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
+                        # CONTINUE HERE
                         ip = profileid.split(self.separator)[1]
-                        self.print('Evidence for IP {}'.format(ip), 5, 0)
                         for key in evidence:
                             data = evidence[key]
                             self.print('\tEvidence for key {}'.format(key), 5, 0)
@@ -135,7 +139,7 @@ class EvidenceProcess(multiprocessing.Process):
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.getBlockingRequest(profileid, twid):
-                                self.print('\tDETECTED IP: {}. Accumulated evidence: {}'.format(ip, accumulated_threat_level), 1,0)
+                                self.print('\tDETECTED IP: {} due to {}. Accumulated evidence: {}'.format(ip, description, accumulated_threat_level), 1,0)
                                 __database__.setBlockingRequest(profileid, twid)
                             
         except KeyboardInterrupt:

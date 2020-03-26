@@ -1181,6 +1181,8 @@ class ProfilerProcess(multiprocessing.Process):
         This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each colum 
+        
+        A flow has two IP addresses, so treat both of them correctly.
         """
         try:
             # For now we only process the argus flows and the zeek conn logs
@@ -1315,7 +1317,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # The dst ip is also not part of our home net. So ignore completely
                     return False
             elif not self.home_net:
-                # We don't have a home net, so create profiles for everyone
+                # We don't have a home net, so create profiles for everyone. 
 
                 # Add the profile for the srcip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
                 __database__.addProfile(profileid, starttime, self.width)
@@ -1335,6 +1337,7 @@ class ProfilerProcess(multiprocessing.Process):
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
                 role = 'Client'
+                #self.print(f'Storing features going out for profile {profileid} and tw {twid}')
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
@@ -1365,6 +1368,7 @@ class ProfilerProcess(multiprocessing.Process):
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
                 role = 'Server'
+                #self.print(f'Storing features going in for profile {profileid} and tw {twid}')
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(saddr_as_obj) + ':' + str(sport) + ':' + proto
