@@ -500,10 +500,9 @@ class Database(object):
                 new_symbol = prev_symbols + symbol_to_add
                 # Bundle the data together
                 new_data = (new_symbol, previous_two_timestamps)
-                # analyze behavioral string with lstm model iff its length is divided by 3 - so we send when there is 3 more characters added
+                # analyze behavioral model with lstm model if the length is divided by 3 - so we send when there is 3 more characters added
                 if len(new_symbol) % 3 == 0:
-                    # self.publish('new_letters', 'lenght: '+str(len(new_symbol))+' outtuple data : ' + str(new_symbol) + ' profileid: '+ profileid + ' tw: '+ twid)
-                    self.publish('new_letters',new_symbol)
+                    self.publish('new_letters', new_symbol + '-' + profileid + '-' + twid + '-' + str(tupleid))
 
                 data[tupleid] = new_data
                 self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol), 0, 6)
