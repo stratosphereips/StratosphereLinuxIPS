@@ -917,8 +917,11 @@ tree.on('select',function(node){
         timeline_reply_global = reply;
         map.innerMap.draw(null);
         getEvidence(reply['Evidence']);
-        
-        var obj_outTuples = JSON.parse(reply["OutTuples"]);
+        try {
+  		var obj_outTuples = JSON.parse(reply["OutTuples"]);
+	}
+	catch(error) {
+  		var obj_outTuples = JSON.parse(reply["InTuples"]);}
         var keys = Object.keys(obj_outTuples);
         async.each(keys, function(key,callback){        
           var outTuple_ip = key.split(':')[0];
