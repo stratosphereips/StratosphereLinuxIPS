@@ -195,7 +195,7 @@ class Module(Module, multiprocessing.Process):
                         activity = f'- NOT Established {dport_name}/{proto} asked from {saddr}, Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
                     else:
                         # This is not recognized. Do our best
-                        activity = f'[!] - Not recognized {state.lower()} flow from {saddr} {dport}/{proto}, Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
+                        activity = f'[!] - Not recognized {state.lower()} flow from {saddr} to {dport}/{proto}, Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
                 elif 'icmp' in proto:
                     if type(sport) == int:
                         # zeek puts the number
