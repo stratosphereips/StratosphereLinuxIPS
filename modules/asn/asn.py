@@ -75,7 +75,7 @@ class Module(Module, multiprocessing.Process):
                     if type(ip) == str:
                         data = __database__.getIPData(ip)
                         # If we alredy have the country for this ip, do not ask the file
-                        if 'asn' not in data:
+                        if data and 'asn' not in data:
                             asninfo = self.reader.get(ip)
                             if asninfo:
                                 try:

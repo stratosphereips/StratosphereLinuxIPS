@@ -12,7 +12,7 @@ import configparser
 import json
 import ast
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
-from progress_bar import ProgressBar
+
 import traceback
 # To open the file in slices
 from itertools import islice
@@ -36,7 +36,7 @@ class Module(Module, multiprocessing.Process):
         self.path_to_malicious_ip_folder = 'modules/ThreatIntelligence1/malicious_ips_files/'
         # Subscribe to the new_ip channel
         __database__.start(self.config)
-        self.c1 = __database__.subscribe('ip_Threat_Intelligence')
+        self.c1 = __database__.subscribe('give_threat_intelligence')
         # Create the update manager. This manager takes care of the re-downloading of the list of IoC when needed.
         self.update_manager = UpdateIPManager(self.outputqueue)
         # Update the remote file containing malicious IPs.
@@ -105,50 +105,55 @@ class Module(Module, multiprocessing.Process):
         This also helps in having unique ioc accross files
         Returns nothing, but the dictionary should be filled
         """
+        try:
 
-        # Internal function to load the file in slices
-        # The slices are needed because for some reason python 3.7.3 in macos gives error when we try to fill a dict that is too big.
-        #def next_n_lines(file_opened, N):
-            #return [x.strip() for x in islice(file_opened, N)]
+            # Internal function to load the file in slices
+            # The slices are needed because for some reason python 3.7.3 in macos gives error when we try to fill a dict that is too big.
+            #def next_n_lines(file_opened, N):
+                #return [x.strip() for x in islice(file_opened, N)]
 
-        # Max num of ips per batch 7000
-        lines_read = 0
-        with open(malicious_ips_path) as malicious_file:
-            #lines = next_n_lines(malicious_file, 7000)
+            # Max num of ips per batch 7000
+            lines_read = 0
+            with open(malicious_ips_path) as malicious_file:
+                #lines = next_n_lines(malicious_file, 7000)
 
-            self.print('Reading next lines in the file {} for IoC'.format(malicious_ips_path), 3, 0)
-            for line in malicious_file:
-                if '#' in line:
-                    # '#' is a comment line, ignore
-                    continue
-                # Separate the lines like CSV
-                #ip_address = line.rstrip().split(',')[0]
-                # In the new format the ip is in the second position. And surronded by "
-                ip_address = line.replace("\n","").replace("\"","").split(",")[1].strip()
-                try:
-                    #ip_description = line.rstrip().split(',')[1]
-                    # In the new format the description is position 4
-                    ip_description = line.replace("\n","").replace("\"","").split(",")[3].strip()
-                except IndexError:
-                    ip_description = ''
-                self.print('\tRead IP {}: {}'.format(ip_address, ip_description), 6, 0)
-
-                # Check if ip is valid.
-                try:
-                    ip_address = ipaddress.IPv4Address(ip_address)
-                    # Is ipv4?
-                except ipaddress.AddressValueError:
-                    # Is it ipv6?
-                    try:
-                        ip_address = ipaddress.IPv6Address(ip_address)
-                    except ipaddress.AddressValueError:
-                        # It does not look as IP address.
-                        self.print('The IP address {} is not valid. It was found in {}.'.format(ip_address, malicious_ips_path), 1, 1)
+                self.print('Reading next lines in the file {} for IoC'.format(malicious_ips_path), 3, 0)
+                for line in malicious_file:
+                    if '#' in line:
+                        # '#' is a comment line, ignore
                         continue
+                    # Separate the lines like CSV
+                    # In the new format the ip is in the second position. And surronded by "
+                    ip_address = line.replace("\n","").replace("\"","").split(",")[1].strip()
+                    try:
+                        # In the new format the description is position 4
+                        ip_description = line.replace("\n","").replace("\"","").split(",")[3].strip()
+                    except IndexError:
+                        ip_description = ''
+                    self.print('\tRead IP {}: {}'.format(ip_address, ip_description), 6, 0)
 
-                # Store the ip in our local dict
-                self.malicious_ips_dict[str(ip_address)] = ip_description
-                lines_read += 1
+                    # Check if ip is valid.
+                    try:
+                        ip_address = ipaddress.IPv4Address(ip_address)
+                        # Is ipv4?
+                    except ipaddress.AddressValueError:
+                        # Is it ipv6?
+                        try:
+                            ip_address = ipaddress.IPv6Address(ip_address)
+                        except ipaddress.AddressValueError:
+                            # It does not look as IP address.
+                            self.print('The IP address {} is not valid. It was found in {}.'.format(ip_address, malicious_ips_path), 1, 1)
+                            continue
+
+                    # Store the ip in our local dict
+                    self.malicious_ips_dict[str(ip_address)] = ip_description
+                    lines_read += 1
+        except Exception as inst:
+            self.print('Problem on the __load_malicious_ips_file()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
 
     def add_maliciousIP(self, ip = '', profileid = '', twid='' ):
         '''
@@ -177,13 +182,14 @@ class Module(Module, multiprocessing.Process):
         If profileid is None, do not set an Evidence
         Returns nothing
         '''
-        if profileid!= 'None':
-            type_evidence = 'Malicious IP'
-            key = 'dstip' + ':' + ip + ':' + type_evidence
-            threat_level = 50
-            confidence = 1
-            description = ip_description
-            __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+        type_evidence = 'ThreatIntelligenceBlacklist'
+        key = 'dstip' + ':' + ip + ':' + type_evidence
+        threat_level = 50
+        confidence = 1
+        description = 'Threat Intelligence. ' + ip_description
+        if not twid:
+            twid=''
+        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -212,35 +218,23 @@ class Module(Module, multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     return True
                 # Check that the message is for you.
-                elif message['channel'] == 'ip_Threat_Intelligence':
+                elif message['channel'] == 'give_threat_intelligence' and type(message['data']) is not int:
                     data = message['data']
-                    try:
-                        data = data.split('-')
-                        thIn_signal = int(data[0])
-                        new_ip = data[1]
-                        profileid = data[2]
-                        twid = data[3]
-                        if not thIn_signal:
-                            ip_description = __database__.search_IP_in_IoC(new_ip)
-                            if ip_description:
-                                ip_data = {}
-                                ip_data['Malicious'] = ip_description
-                                __database__.setInfoForIPs(new_ip, ip_data)
-                                self.print('\tIs in our DB as malicious. Description {}'.format(ip_description))
-                                self.add_maliciousIP(new_ip, profileid, twid)
-                                self.set_evidence(new_ip, ip_description, profileid, twid)
-                            else:
-                                ip_data = {}
-                                ip_data['Malicious'] = "Not Malicious"
-                                __database__.setInfoForIPs(new_ip, ip_data)
-                        else:
-                            ip_description = __database__.getIPData(new_ip)['Malicious']
-                            self.add_maliciousIP(new_ip, profileid, twid)
-                            self.set_evidence(new_ip, ip_description, profileid, twid)
-                    except Exception as e:
-                        self.print(e)
+                    data = data.split('-')
+                    new_ip = data[0]
+                    profileid = data[1]
+                    twid = data[2]
+                    # Search for this IP in our database of IoC
+                    ip_description = __database__.search_IP_in_IoC(new_ip)
 
-
+                    if ip_description != False:
+                        # If the IP is in the blacklist of IoC. Add it as Malicious
+                        ip_data = {}
+                        # Maybe we should change the key to 'status' or something like that.
+                        ip_data['Malicious'] = ip_description
+                        __database__.setInfoForIPs(new_ip, ip_data)
+                        self.add_maliciousIP(new_ip, profileid, twid)
+                        self.set_evidence(new_ip, ip_description, profileid, twid)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
