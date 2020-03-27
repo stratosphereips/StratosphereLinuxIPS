@@ -144,8 +144,6 @@ class Module(Module, multiprocessing.Process):
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
-            if self.analysis_direction == 'all' and str(daddr) == str(profile_ip):
-                self.print(flow)
             if type(allbytes) != int:
                 allbytes = 0
             allbytes_human = 0.0
@@ -180,65 +178,128 @@ class Module(Module, multiprocessing.Process):
             # Now that we have the flow processed. Try to interpret it and create the activity line
             # Record Activity
             activity = ''
-            if 'tcp' in proto or 'udp' in proto:
-                if dport_name and state.lower() == 'established':
-                    # Check if appart from being established the connection sent anything!
-                    if allbytes:
-                        activity = '- {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {} | {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
+            # Change the format of timeline in the case of inbound flows for external IP, i.e direction 'all' and destination IP == profile IP.
+            # If not changed, it would have printed  'IP1 https asked to IP1'.
+            if self.analysis_direction == 'all' and str(daddr) == str(profile_ip):
+                if 'tcp' in proto or 'udp' in proto:
+                    if dport_name and state.lower() == 'established':
+                        # Check if appart from being established the connection sent anything!
+                        if allbytes:
+                            activity = f'- {dport_name}/{proto} asked from {saddr}, Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
+                        else:
+                            activity = f'- {dport_name}/{proto} asked from {saddr}, Be careful! Established but empty! Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
+                    # In here we try to capture the situation when only 1 udp packet is sent. Looks like not established, but is actually maybe ok
+                    elif dport_name and 'notest' in state.lower() and proto == 'udp' and allbytes == sbytes:
+                        activity = f'- Not answered {dport_name}/{proto} asked from {saddr}, Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
+                    elif dport_name and 'notest' in state.lower():
+                        activity = f'- NOT Established {dport_name}/{proto} asked from {saddr}, Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
                     else:
-                        activity = '- {} asked to {} {}/{}, Be careful! Established but empty! Sent: {}, Recv: {}, Tot: {} | {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
-                # In here we try to capture the situation when only 1 udp packet is sent. Looks like not established, but is actually maybe ok
-                elif dport_name and 'notest' in state.lower() and proto == 'udp' and allbytes == sbytes:
-                    activity = '- Not answered {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {} | {} \n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
-                elif dport_name and 'notest' in state.lower():
-                    activity = '- NOT Established {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {} | {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
-                else:
-                    # This is not recognized. Do our best
-                    activity = '[!] - Not recognized {} flow from {} to {} dport {}/{}, Sent: {}, Recv: {}, Tot: {} | {}\n'.format(state.lower(), saddr, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
-            elif 'icmp' in proto:
-                if type(sport) == int:
-                    # zeek puts the number
-                    if sport == 8:
-                        dport_name = 'PING echo'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    # SEARCH FOR ZEEK for 0x0103
-                    # dport_name = 'ICMP Host Unreachable'
-                    # activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
-                    #elif '0x0303' in sport: # SEARCH FOR ZEEK
-                    #    dport_name = 'ICMP Port Unreachable'
-                    #    activity = '- {} sent to {}, unreachable port is {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_country, daddr_asn)
-                    elif sport == 11:
-                        dport_name = 'ICMP Time Excedded in Transit'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    elif sport == 3:
-                        dport_name = 'ICMP Destination Net Unreachable'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
+                        # This is not recognized. Do our best
+                        activity = f'[!] - Not recognized {state.lower()} flow from {saddr} {dport}/{proto}, Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
+                elif 'icmp' in proto:
+                    if type(sport) == int:
+                        # zeek puts the number
+                        if sport == 8:
+                            dport_name = 'PING echo'
+                            activity = f'- {dport_name} sent from {saddr}, Size: {allbytes_human}\n'
+                        # SEARCH FOR ZEEK for 0x0103
+                        # dport_name = 'ICMP Host Unreachable'
+                        # activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                        #elif '0x0303' in sport: # SEARCH FOR ZEEK
+                        #    dport_name = 'ICMP Port Unreachable'
+                        #    activity = '- {} sent to {}, unreachable port is {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_country, daddr_asn)
+                        elif sport == 11:
+                            dport_name = 'ICMP Time Excedded in Transit'
+                            activity = f'- {dport_name} sent from {saddr}, Size: {allbytes_human} \n'
+                        elif sport == 3:
+                            dport_name = 'ICMP Destination Net Unreachable'
+                            activity = f'- {dport_name} sent from {saddr}, Size: {allbytes_human}\n'
+                        else:
+                            dport_name = 'ICMP Unknown type'
+                            activity = f'- {dport_name} sent from {saddr}, Type: 0x{sport}, Size: {allbytes_human}'
+                    elif type(sport) == str:
+                        # Argus puts in hex the values of the ICMP
+                        if '0x0008' in sport:
+                            dport_name = 'PING echo'
+                            activity = f'- {dport_name} sent from {saddr}, Size: {allbytes_human}\n'
+                        elif '0x0103' in sport:
+                            dport_name = 'ICMP Host Unreachable'
+                            activity = f'- {dport_name} sent from {saddr}, Size: {allbytes_human}\n'
+                        elif '0x0303' in sport:
+                            dport_name = 'ICMP Port Unreachable'
+                            activity = f'- {dport_name} sent from {saddr}, unreachable port is { int(dport,16)}, Size: {allbytes_human}\n'
+                        elif '0x000b' in sport:
+                            #activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                            activity = f'- {dport_name} sent from {saddr}, Size: {allbytes_human}\n'
+                        elif '0x0003' in sport:
+                            dport_name = 'ICMP Destination Net Unreachable'
+                            activity = f'- {dport_name} sent from {saddr}, Size: {allbytes_human}\n'
+                        else:
+                            dport_name = 'ICMP Unknown type'
+                            activity = f'- {dport_name} sent from {saddr}, Size: {allbytes_human}\n'
+                elif 'igmp' in proto:
+                    dport_name = 'IGMP'
+                    activity = f'- {dport_name} sent from {saddr}, Size: {allbytes_human}\n'
+            else:
+                if 'tcp' in proto or 'udp' in proto:
+                    if dport_name and state.lower() == 'established':
+                        # Check if appart from being established the connection sent anything!
+                        if allbytes:
+                            activity = f'- {dport_name} asked to {daddr} {dport}/{proto}, Sent: {sbytes}, Recv: {allbytes - sbytes}, Tot: {allbytes_human} | {daddr_data_str}\n'
+                        else:
+                            activity = f'- {dport_name} asked to {daddr} {dport}/{proto}, Be careful! Established but empty! Sent: {sbytes}, Recv: {allbytes - sbytes}, Tot: {allbytes_human} | {daddr_data_str}\n'
+                    # In here we try to capture the situation when only 1 udp packet is sent. Looks like not established, but is actually maybe ok
+                    elif dport_name and 'notest' in state.lower() and proto == 'udp' and allbytes == sbytes:
+                        activity = f'- Not answered {dport_name} asked to {daddr} {dport}/{proto}, Sent: {sbytes}, Recv: {allbytes - sbytes}, Tot: {allbytes_human} | {daddr_data_str} \n'
+                    elif dport_name and 'notest' in state.lower():
+                        activity = f'- NOT Established {dport_name} asked to {daddr} {dport}/{proto}, Sent: {sbytes}, Recv: {allbytes - sbytes}, Tot: {allbytes_human} | {daddr_data_str}\n'
                     else:
-                        dport_name = 'ICMP Unknown type'
-                        activity = '- {} sent to {}, Type: 0x{}, Size: {} | {}\n'.format(dport_name, daddr, sport, allbytes_human, daddr_data_str)
-                elif type(sport) == str:
-                    # Argus puts in hex the values of the ICMP
-                    if '0x0008' in sport:
-                        dport_name = 'PING echo'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    elif '0x0103' in sport:
-                        dport_name = 'ICMP Host Unreachable'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    elif '0x0303' in sport:
-                        dport_name = 'ICMP Port Unreachable'
-                        activity = '- {} sent to {}, unreachable port is {}, Size: {} | {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_data_str)
-                    elif '0x000b' in sport:
-                        #activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    elif '0x0003' in sport:
-                        dport_name = 'ICMP Destination Net Unreachable'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    else:
-                        dport_name = 'ICMP Unknown type'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-            elif 'igmp' in proto:
-                dport_name = 'IGMP'
-                activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
+                        # This is not recognized. Do our best
+                        activity = f'[!] - Not recognized {state.lower()} flow from {saddr} to {daddr} dport {dport}/{proto}, Sent: {sbytes}, Recv: {allbytes - sbytes}, Tot: {allbytes_human} | {daddr_data_str}\n'
+                elif 'icmp' in proto:
+                    if type(sport) == int:
+                        # zeek puts the number
+                        if sport == 8:
+                            dport_name = 'PING echo'
+                            activity =f'- {dport_name} sent to {daddr}, Size: {allbytes_human} | {daddr_data_str}\n'
+                        # SEARCH FOR ZEEK for 0x0103
+                        # dport_name = 'ICMP Host Unreachable'
+                        # activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                        #elif '0x0303' in sport: # SEARCH FOR ZEEK
+                        #    dport_name = 'ICMP Port Unreachable'
+                        #    activity = '- {} sent to {}, unreachable port is {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_country, daddr_asn)
+                        elif sport == 11:
+                            dport_name = 'ICMP Time Excedded in Transit'
+                            activity = f'- {dport_name} sent to {daddr}, Size: {allbytes_human} | {daddr_data_str}\n'
+                        elif sport == 3:
+                            dport_name = 'ICMP Destination Net Unreachable'
+                            activity = f'- {dport_name} sent to {daddr}, Size: {allbytes_human} | {daddr_data_str}\n'
+                        else:
+                            dport_name = 'ICMP Unknown type'
+                            activity = f'- {dport_name} sent to {daddr}, Type: 0x{sport}, Size: {allbytes_human} | {daddr_data_str}\n'
+                    elif type(sport) == str:
+                        # Argus puts in hex the values of the ICMP
+                        if '0x0008' in sport:
+                            dport_name = 'PING echo'
+                            activity = f'- {dport_name} sent to {daddr}, Size: {allbytes_human} | {daddr_data_str}\n'
+                        elif '0x0103' in sport:
+                            dport_name = 'ICMP Host Unreachable'
+                            activity = f'- {dport_name} sent to {daddr}, Size: {allbytes_human} | {daddr_data_str}\n'
+                        elif '0x0303' in sport:
+                            dport_name = 'ICMP Port Unreachable'
+                            activity = f'- {dport_name} sent to {daddr}, unreachable port is {int(dport,16)}, Size: {allbytes_human} | {daddr_data_str}\n'
+                        elif '0x000b' in sport:
+                            #activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
+                            activity = f'- {dport_name} sent to {daddr}, Size: {allbytes_human} | {daddr_data_str}\n'
+                        elif '0x0003' in sport:
+                            dport_name = 'ICMP Destination Net Unreachable'
+                            activity = f'- {dport_name} sent to {daddr}, Size: {allbytes_human} | {daddr_data_str}\n'
+                        else:
+                            dport_name = 'ICMP Unknown type'
+                            activity = f'- {dport_name} sent to {daddr}, Size: {allbytes_human} | {daddr_data_str}\n'
+                elif 'igmp' in proto:
+                    dport_name = 'IGMP'
+                    activity = f'- {dport_name} sent to {daddr}, Size: {allbytes_human} | {daddr_data_str}\n'
 
             # Store the activity of normal flows in the DB for this profileid and twid
             if activity:
