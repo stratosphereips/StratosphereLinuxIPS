@@ -125,23 +125,29 @@ class VirusTotalModule(Module, multiprocessing.Process):
         :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
         """
 
-        addr = ipaddress.ip_address(ip)
-        if addr.is_private:
-            self.print("[" + ip + "] is private, skipping", 5, 3)
-            return 0, 0, 0, 0
+        try:
+            addr = ipaddress.ip_address(ip)
+            if addr.is_private:
+                self.print("[" + ip + "] is private, skipping", 5, 3)
+                return 0, 0, 0, 0
 
-        # check if the address is in the cache (probably not, since all IPs are unique)
-        cached_data = __database__.is_ip_in_virustotal_cache(ip)
-        if cached_data:
-            return cached_data
+            # check if the address is in the cache (probably not, since all IPs are unique)
+            cached_data = __database__.is_ip_in_virustotal_cache(ip)
+            if cached_data:
+                return cached_data
 
-        # for unknown address, do the query
-        response = self.api_query_(ip)
+            # for unknown address, do the query
+            response = self.api_query_(ip)
 
-        scores = interpret_response(response)
-        __database__.put_ip_to_virustotal_cache(ip, scores)
-        self.counter += 1
-        return scores
+            scores = interpret_response(response)
+            __database__.put_ip_to_virustotal_cache(ip, scores)
+            self.counter += 1
+            return scores
+        except Exception as inst:
+            self.print('Problem in the check_ip()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
 
     def api_query_(self, ip, save_data=False):
         """
