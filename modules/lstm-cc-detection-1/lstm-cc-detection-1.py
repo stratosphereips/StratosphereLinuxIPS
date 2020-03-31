@@ -16,13 +16,16 @@ from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
 import platform
+import warnings
+warnings.filterwarnings('ignore',category=FutureWarning)
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+
 
 # Your imports
 import time
 import numpy as np
 from keras.preprocessing.sequence import pad_sequences
 from keras.models import load_model
-
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -87,7 +90,7 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # Download lstm model
-            model = load_model('modules/lstm-cc-detection-1/lstm_model.h5')
+            model = load_model('modules/lstm-cc-detection-1/detection_model.h5')
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
