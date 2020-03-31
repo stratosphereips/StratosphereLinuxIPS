@@ -921,7 +921,8 @@ tree.on('select',function(node){
   		var obj_outTuples = JSON.parse(reply["OutTuples"]);
 	}
 	catch(error) {
-  		var obj_outTuples = JSON.parse(reply["InTuples"]);}
+  		var obj_outTuples = JSON.parse(reply["InTuples"]);
+		}
         var keys = Object.keys(obj_outTuples);
         async.each(keys, function(key,callback){        
           var outTuple_ip = key.split(':')[0];
@@ -1009,7 +1010,12 @@ tree.on('select',function(node){
 
               }
               else{
-              var obj_outTuples = JSON.parse(timeline_reply_global["OutTuples"]);
+              try {
+  		var obj_outTuples = JSON.parse(timeline_reply_global["OutTuples"]);
+		}
+		catch(error) {
+  			var obj_outTuples = JSON.parse(timeline_reply_global["InTuples"]);
+		}
               var keys = Object.keys(obj_outTuples);
               var data = [];
               async.each(keys, function(key,callback){
