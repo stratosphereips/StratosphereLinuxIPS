@@ -2,7 +2,7 @@
 # Instructions
 # 1. Create a new folder on ./modules with the name of your template. Example:
 #    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder. 
+# 2. Copy this template file in that folder.
 #    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
 # 3. Make it a module
 #    touch modules/template/__init__.py
@@ -16,15 +16,22 @@ from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
 import platform
+import warnings
+warnings.filterwarnings('ignore',category=FutureWarning)
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+
 
 # Your imports
 import time
+import numpy as np
+from keras.preprocessing.sequence import pad_sequences
+from keras.models import load_model
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'lstm-cc-detection-1'
     description = 'Detect C&C channels based on behavioral letters'
-    authors = ['Sebastian Garcia','Kamila Babayeva']
+    authors = ['Sebastian Garcia', 'Kamila Babayeva']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -48,11 +55,11 @@ class Module(Module, multiprocessing.Process):
             # linux
             self.timeout = None
         else:
-            #??
+            # ??
             self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -60,25 +67,57 @@ class Module(Module, multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def set_evidence(self, score, tupleid='', profileid='', twid=''):
+        '''
+        Set an evidence for malicious IP met in the timewindow
+        If profileid is None, do not set an Evidence
+        Returns nothing
+        '''
+        type_evidence = 'C&C channels detection'
+        key = 'outTuple' + ':' + tupleid + ':' + type_evidence
+        threat_level = 50
+        confidence = 1
+        description = 'LSTM C&C channels detection, score: ' + str(score)
+        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
     def run(self):
         try:
+            # Download lstm model
+            model = load_model('modules/lstm-cc-detection-1/detection_model.h5')
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
-                # Check that pthe message is for you. Probably unnecessary...
+                # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
                     return True
-                if message['channel'] == 'new_letters':
+                if message['channel'] == 'new_letters' and type(message['data']) is not int:
+                    threshold = 0.8
                     data = message['data']
-                    # Example of printing the number of profiles in the Database every second
-                    self.print(data)
+                    data = data.split('-')
+                    behavioral_model = data[0]
+                    profileid = data[1]
+                    twid = data[2]
+                    tupleid = data[3]
+                    # Length of behavioral model with which we trained our module
+                    max_length = 500
+                    # Function to convert each letter of behavioral model to ascii
+                    str_to_ascii = lambda i: [ord(x) for x in i]
+                    behavioral_model = str_to_ascii(behavioral_model)
+                    # Pad with zeros. If it is one string - needed to be in square brackets. Otherwise, not iterable.
+                    behavioral_model = pad_sequences([behavioral_model], maxlen=max_length, padding='post')
+                    # Predict the score of behavioral model being C&C channel
+                    score = model.predict(behavioral_model, verbose=2)
+                    # get a float instead of numpy array
+                    score = score.item()
+                    if score > threshold:
+                        self.set_evidence(score, tupleid, profileid, twid)
 
         except KeyboardInterrupt:
             return True

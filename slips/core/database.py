@@ -500,9 +500,9 @@ class Database(object):
                 new_symbol = prev_symbols + symbol_to_add
                 # Bundle the data together
                 new_data = (new_symbol, previous_two_timestamps)
-
-                # if len(new_symbol) > 100:
-                #     self.publish('new_letters', 'outtuple data : ' + str(new_symbol) + ' profileid: '+ profileid + ' tw: '+ twid)
+                # analyze behavioral model with lstm model if the length is divided by 3 - so we send when there is 3 more characters added
+                if len(new_symbol) % 3 == 0:
+                    self.publish('new_letters', new_symbol + '-' + profileid + '-' + twid + '-' + str(tupleid))
 
                 data[tupleid] = new_data
                 self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol), 0, 6)
@@ -849,13 +849,21 @@ class Database(object):
         """ 
         Return information about this IP from the IPs has 
         Returns a dictionary
+        We need to separate these three cases:
+        1- IP is in the DB without data
+        2- IP is in the DB with data
+        3- IP is not in the DB
         """
         data = self.r.hget('IPsInfo', ip)
-        if data == '{}':
+        if data or data == {}:
+            # This means the IP was in the database, with or without data
+            # Convert the data
             data = json.loads(data)
+            #print(f'In the DB: IP {ip}, and data {data}')
         else:
-            # If there is no data, it means the IP was not there
+            # The IP was not in the DB
             data = False
+            #print(f'In the DB: IP {ip}, and data {data}')
         # Always return a dictionary
         return data
 
@@ -897,23 +905,35 @@ class Database(object):
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
-
         for key in iter(ipdata):
+            # ipdata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
+            # ipdata can be {'VirusTotal': [1,2,3,4]}
             # I think we dont need this anymore of the conversion
             if type(data) == str:
                 # Convert the str to a dict
                 data = json.loads(data)
-            to_store = ipdata[key]
 
-            # If the key is already stored, do not modify it
-            try:
-                value = data[key]
-            except KeyError:
-                # Append the new data
-                data = json.dumps(data)
-                self.r.hset('IPsInfo', ip, data)
+            data_to_store = ipdata[key]
+
+            # THIS IS NOT WORKING CORRECTLY!!! FIX THE WAY WE STORE THE DATA, WE ARE NEVER STORING NOW
+            # Do we have any previous data?
+            if data:
+                # If there is data previously stored, check if we have this key already
+                try:
+                    # If the key is already stored, do not modify it
+                    value = data[key]
+                except KeyError:
+                    data[key] = data_to_store
+                    newdata_str = json.dumps(data)
+                    self.r.hset('IPsInfo', ip, newdata_str)
+            else:
+                # There no data so far, so add the new data
+                # Create a temp dict to store the key and value
+                data[key] = data_to_store
+                newdata_str = json.dumps(data)
+                self.r.hset('IPsInfo', ip, newdata_str)
                 # disable, because gives an error of no attribute outputqueue
-                #self.print('\tNew Info added to IP {}: {}'.format(ip, data),8,8)
+                #print('\tNew Info added to IP {}: {}'.format(ip, newdata_str))
 
     def subscribe(self, channel):
         """ Subscribe to channel """
