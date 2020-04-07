@@ -198,7 +198,7 @@ class Module(Module, multiprocessing.Process):
                         activity = f'- NOT Established {dport_name}/{proto} asked from {saddr}, Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
                     else:
                         # This is not recognized. Do our best
-                        activity = f'[!] - Not recognized {state.lower()} flow from {saddr} to {dport}/{proto}, Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
+                        activity = f'- Not recognized {state.lower()} flow from {saddr} to {dport}/{proto}, Sent: {allbytes-sbytes}, Recv: {sbytes}, Tot: {allbytes_human}\n'
                 elif 'icmp' in proto:
                     if type(sport) == int:
                         # zeek puts the number
@@ -258,7 +258,7 @@ class Module(Module, multiprocessing.Process):
                         activity = f'- NOT Established {dport_name} asked to {daddr} {dport}/{proto}, Sent: {sbytes}, Recv: {allbytes - sbytes}, Tot: {allbytes_human} | {daddr_data_str}\n'
                     else:
                         # This is not recognized. Do our best
-                        activity = f'[!] - Not recognized {state.lower()} flow from {saddr} to {daddr} dport {dport}/{proto}, Sent: {sbytes}, Recv: {allbytes - sbytes}, Tot: {allbytes_human} | {daddr_data_str}\n'
+                        activity = f'- Not recognized {state.lower()} flow from {saddr} to {daddr} dport {dport}/{proto}, Sent: {sbytes}, Recv: {allbytes - sbytes}, Tot: {allbytes_human} | {daddr_data_str}\n'
                 elif 'icmp' in proto:
                     if type(sport) == int:
                         # zeek puts the number
@@ -348,11 +348,12 @@ class Module(Module, multiprocessing.Process):
                     # If it is established but no bytes were sent, then we will never have an alt_flow, so do not report that is missing.
                     pass
                 else:
-                    alt_activity = '	[!] Attention. We know this port number, but we couldn\'t identify the protocol. Check UID {}\n'.format(uid)
+                    pass
+                    # alt_activity = '	[!] Attention. We know this port number, but we couldn\'t identify the protocol. Check UID {}\n'.format(uid)
 
             # Store the activity of alternative flows in the DB for this profileid and twid
-            if alt_activity:
-                __database__.add_timeline_line(profileid, twid, alt_activity, timestamp)
+            # if alt_activity:
+            #     __database__.add_timeline_line(profileid, twid, alt_activity, timestamp)
             self.print('Alternative Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, alt_activity), 4, 0)
 
         except KeyboardInterrupt:
