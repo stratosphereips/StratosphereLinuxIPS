@@ -13,7 +13,7 @@ import traceback
 # Input Process
 class InputProcess(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, outputqueue, profilerqueue, input_type, input_information, config, packet_filter):
+    def __init__(self, outputqueue, profilerqueue, input_type, input_information, config, packet_filter, zeek_or_bro):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
@@ -26,6 +26,7 @@ class InputProcess(multiprocessing.Process):
         self.nfdump_output_file = 'nfdump_output.txt'
         self.nfdump_timeout = None
         self.name = 'input'
+        self.zeek_or_bro = zeek_or_bro
         # Read the configuration
         self.read_configuration()
         # If we were given something from command line, has preference over the configuration file
@@ -362,7 +363,7 @@ class InputProcess(multiprocessing.Process):
 
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                command = "cd " + self.zeek_folder + "; bro -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                command = "cd " + self.zeek_folder + "; "+self.zeek_or_bro +" -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
                 # Run zeek.
                 os.system(command)
 
