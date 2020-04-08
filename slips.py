@@ -41,10 +41,10 @@ def check_zeek_or_bro():
     """
     Check if we have zeek or bro
     """
-    if shutil.which('bro'):
-        return 'bro'
-    elif shutil.which('zeek'):
+    if shutil.which('zeek'):
         return 'zeek'
+    elif shutil.which('bro'):
+        return 'bro'
     return False
 
 
@@ -93,8 +93,9 @@ if __name__ == '__main__':
         terminate_slips()
 
     # If we need zeek (bro), test if we can run it.
+    # Need to be assign to something because we pass it to inputProcess later
     zeek_bro = None
-    if args.pcapfile:
+    if args.pcapfile or args.interface:
         zeek_bro = check_zeek_or_bro()
         if zeek_bro is False:
             # If we do not have bro or zeek, terminate Slips.
