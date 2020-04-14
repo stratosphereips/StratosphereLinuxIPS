@@ -905,6 +905,8 @@ class Database(object):
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
+        # Assign to None, to check if there is new data
+        newdata_str = None
         for key in iter(ipdata):
             # ipdata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
             # ipdata can be {'VirusTotal': [1,2,3,4]}
@@ -934,6 +936,9 @@ class Database(object):
                 self.r.hset('IPsInfo', ip, newdata_str)
                 # disable, because gives an error of no attribute outputqueue
                 #print('\tNew Info added to IP {}: {}'.format(ip, newdata_str))
+        # publish if the IP info was changed
+        if newdata_str is not None:
+            self.r.publish('ip_info_change', ip)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
@@ -958,6 +963,8 @@ class Database(object):
         elif 'give_threat_intelligence' in channel:
             pubsub.subscribe(channel)
         elif 'new_letters' in channel:
+            pubsub.subscribe(channel)
+        elif 'ip_info_change' in channel:
             pubsub.subscribe(channel)
         return pubsub
 
