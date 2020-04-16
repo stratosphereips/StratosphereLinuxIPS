@@ -951,26 +951,13 @@ tree.on('select',function(node){
       async.each(reply, function(line, callback){
         var row = [];
         var line_arr = line.split(" ")
-        var index_to = line_arr.indexOf('to')
-        var index_asked = line_arr.indexOf('asked');
-        var index_careful = line_arr.indexOf('careful!');
-        var index_recognized = line_arr.indexOf('recognized');
-        var index_attention  = line_arr.indexOf('Attention.');
-        var index_ip = index_to +1;
-        if(index_attention>=0){line_arr[index_attention] =color.red(line_arr[index_attention]);
-          line_arr[index_attention-1]=color.red(line_arr[index_attention-1])}
-        if(index_to>= 0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
-        if(index_recognized >= 0){
-          for(var i =index_recognized - 1; i < index_recognized+3;i++){
-          line_arr[i] = color.red(line_arr[i]);}
-          }
-        if(index_careful > 0){
-          line_arr[index_careful] = color.red(line_arr[index_careful]);
-          line_arr[index_careful - 1] = color.red(line_arr[index_careful - 1])
-        }
-        for(var i =3; i < index_asked;i++){
-          line_arr[i] = color.bold.cyan(line_arr[i]) }     
-        if(line_arr[index_to+2].includes('/'))line_arr[index_to+2]=color.bold.yellow(line_arr[index_to+2].slice(0,-1))+','
+        var index_to_from = line_arr.indexOf('to')
+	if(index_to_from <= 0){
+	  index_to_from = line_arr.indexOf('from');}
+        var index_ip = index_to_from +1;
+
+        if(index_to_from > 0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}" 
+        if(line_arr[index_to_from+2].includes('/'))line_arr[index_to_from+2]=color.bold.yellow(line_arr[index_to_from+2])+','
           line_arr[1]= line_arr[1].substring(0, line_arr[1].lastIndexOf('.'));
           timeline_line = line_arr.join(" ");
           row.push(timeline_line.replace(/\|.*/,''));
@@ -981,7 +968,6 @@ tree.on('select',function(node){
           console.log('unable to create user');
         } else {
           table_timeline.setData({headers:[node.parent.name+" "+node.name], data: data});
-          // console.log(data.length)
           timeline_length = data.length;
           screen.render();
         }
