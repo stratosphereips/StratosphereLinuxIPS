@@ -68,7 +68,7 @@ airport discovery,udp,192,Apple AirPort Base Station PPP status or discovery (ce
 imap3,220,tcp,Interactive Mail Access Protocol v3
 imap3,220,udp,Interactive Mail Access Protocol v3
 https,443,tcp,http protocol over TLS/SSL
-quick,443,udp,QUICK http protocol over TLS/SSL
+quic,443,udp,QUICK http protocol over TLS/SSL
 https,443,sctp,HTTPS
 microsoft-ds,445,tcp,Microsoft-DS
 microsoft-ds,445,udp,Microsoft-DS
