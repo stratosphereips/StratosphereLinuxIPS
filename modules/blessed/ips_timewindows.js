@@ -12,8 +12,8 @@ var redis = require('redis')
   , contrib = require('blessed-contrib')
   , fs = require('fs')
   , screen = blessed.screen()
-  , color = require('ansi-colors');
-
+  , color = require('chalk');
+const stripAnsi = require('strip-ansi');
 
 const clipboardy = require('clipboardy');
 screen.dockBorders=true;
@@ -900,17 +900,18 @@ var timewindow;
 tree.on('select',function(node){
   
   screen.key('w',function(ch,key){
-    clipboardy.writeSync(color.unstyle(node.name));
+    clipboardy.writeSync(stripAnsi(node.name));
     clipboardy.readSync();
   })
     clean_widgets()
 
     if(!node.name.includes('timewindow')){
-      getIpInfo_box_ip(color.unstyle(node.name), 1);}
+      getIpInfo_box_ip(stripAnsi(node.name), 1);}
       
     else{
-      ip  = color.unstyle(node.parent.name);
-      timewindow = color.unstyle(node.name);
+      ip  = stripAnsi(node.parent.name);
+      timewindow = stripAnsi(node.name);
+
   
       redis_outtuples_timewindow.hgetall("profile_"+ip+"_"+timewindow, (err,reply)=>{
         var ips = [];
@@ -930,6 +931,7 @@ tree.on('select',function(node){
           callback(null);  
         },function(err) {
       if( err ) {
+	console.log(ip)
         console.log('unable to create user');
       } else {
         setMap(ips)
@@ -951,17 +953,53 @@ tree.on('select',function(node){
       async.each(reply, function(line, callback){
         var row = [];
         var line_arr = line.split(" ")
+	if(line_arr[0].includes('/')){
+	
         var index_to_from = line_arr.indexOf('to')
 	if(index_to_from <= 0){
 	  index_to_from = line_arr.indexOf('from');}
         var index_ip = index_to_from +1;
+	var index_port_protocol = index_to_from+2;
+	var index_sent = index_port_protocol + 2
+	var index_rec = index_sent + 2
+	var index_total = index_rec + 2
+	line_arr[1]= line_arr[1].substring(0,8);
+	for(i = 2; i<index_to_from; i++){
+		line_arr[i] = color.rgb(51, 153, 255)(line_arr[i]);}
+	  var keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
+	  var http_keywords = ['method','Status', 'UA', 'MIME', 'Ref']
+	  var attention_keywords = ['No', 'Protocol' ]
+	  line_arr[index_ip]= color.rgb(0, 153, 153)(line_arr[index_ip])
+	  line_arr[index_port_protocol]=color.bold.yellow(line_arr[index_port_protocol])
+	  line_arr[index_sent + 1] = color.rgb(255, 153, 51)(line_arr[index_sent + 1])
+	  line_arr[index_rec + 1] = color.rgb(255, 153, 51)(line_arr[index_rec + 1])
+	  line_arr[index_total + 1] = color.rgb(255, 153, 51)(line_arr[index_total + 1])
+	  if(index_total + 2 < line_arr.length && attention_keywords.some(el => line_arr[index_total + 2].includes(el))){
+	for(ind = index_total+2; ind < line_arr.length; ind++){		
+		line_arr[ind] = color.red(line_arr[ind])		}
+}
+	  else{increase = 0
+	  while(true){
+	  increase = increase + 2
+	  if(index_total+increase +1 >= line_arr.length){
+		break;}
 
-        if(index_to_from > 0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}" 
-        if(line_arr[index_to_from+2].includes('/'))line_arr[index_to_from+2]=color.bold.yellow(line_arr[index_to_from+2])+','
-          line_arr[1]= line_arr[1].substring(0, line_arr[1].lastIndexOf('.'));
-          timeline_line = line_arr.join(" ");
-          row.push(timeline_line.replace(/\|.*/,''));
+	  if(keywords.some(el => line_arr[index_total + increase].includes(el))){
+		line_arr[index_total + increase+1] = color.rgb(255, 153, 51)(line_arr[index_total+increase + 1])}
+}}
+	  timeline_line = line_arr.join(" ");
+	  row.push(timeline_line.replace(/\|.*/,''));
+	  data.push(row);}
+	else{
+	  http = JSON.parse(line)
+	for (let [key, value] of Object.entries(http)) {
+	  row = []
+	  line = key.padStart(21+key.length) +':' +color.rgb(51, 153, 255)(value);
+	  row.push(line);
           data.push(row);
+}
+
+}
         callback();
       },function(err) {
         if( err ) {
