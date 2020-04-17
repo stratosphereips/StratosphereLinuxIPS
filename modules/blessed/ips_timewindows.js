@@ -12,10 +12,9 @@ var redis = require('redis')
   , contrib = require('blessed-contrib')
   , fs = require('fs')
   , screen = blessed.screen()
-  , color = require('chalk');
-const stripAnsi = require('strip-ansi');
-
-const clipboardy = require('clipboardy');
+  , color = require('chalk')
+   , stripAnsi = require('strip-ansi')
+    , clipboardy = require('clipboardy');
 screen.dockBorders=true;
 let country_loc = {};
 fs.readFile('country.txt', 'utf8', function(err,data) {
@@ -801,7 +800,7 @@ function getIpInfo_box_ip(ip,mode){
     catch (err){
         ip_info_str = " ".repeat(33) + "|"+" ".repeat(33) + "|"+" ".repeat(33)
         box_ip.setContent(ip_info_str);
-        box_ip.setLabel('')
+        box_ip.setLabel(ip)
         screen.render();
         resolve(ip_info_dict)}
     })
@@ -1000,7 +999,7 @@ tree.on('select',function(node){
 	  var keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
 	  var http_keywords = ['method','Status', 'UA', 'MIME', 'Ref']
 	  var attention_keywords = ['No', 'Protocol' ]
-	  line_arr[index_ip]= color.rgb(0, 153, 153)(line_arr[index_ip])
+	  line_arr[index_ip]= color.bold(line_arr[index_ip])
 	  line_arr[index_port_protocol]=color.bold.yellow(line_arr[index_port_protocol])
 	  line_arr[index_sent + 1] = color.rgb(255, 153, 51)(line_arr[index_sent + 1])
 	  line_arr[index_rec + 1] = color.rgb(255, 153, 51)(line_arr[index_rec + 1])
@@ -1770,7 +1769,7 @@ table_timeline.rows.on('select', (item, index) => {
   var timeline_line = item.content.split(" ");
   var index_to = timeline_line.indexOf('to')
   var timeline_ip = timeline_line[index_to +1].slice(6,-7)
-  getIpInfo_box_ip(stripAnsi(timeline_ip),1)
+  getIpInfo_box_ip(timeline_ip,1)
 
 });
 // screen.key("g", function(ch,key){
