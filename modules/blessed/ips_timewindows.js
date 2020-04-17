@@ -123,6 +123,31 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
       },
       align: 'left'
     })
+    // ,table_inTuples = grid.set(0,0,5.7,6, blessed.listtable, {
+    //   keys: true,
+    //   mouse: true,
+  
+    //   tags: true,
+    //   // interactive: false,
+    //   border: 'line',
+    //   style: {
+    //     bg: 'blue'
+    //   },
+    //   style: {
+    //     header: {
+    //       fg: 'blue',
+    //       bold: true
+    //     },
+    //     cell: {
+    //       fg: 'magenta',
+    //       selected: {
+    //         bg: 'blue'
+    //       }
+    //     }
+    //   },
+    //   align: 'left'
+    // })
+
 
 ,listtable_est_srcPort = grid.set(0,0,2.8,2, blessed.listtable, {
       border: 'line'
@@ -177,7 +202,6 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
       width: '50%',
       height: '50%',
       content: "SELECT IP TO SEE IPS INFO!",
-
       tags: true,
        style:{
          focus: {
@@ -231,9 +255,7 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
             'main':{
               keys : ' '
             },
-            // 'help':{
-            //   keys : ['g']
-            // },
+            
             'srcPortClient': {
               keys: ['e']
                         },
@@ -256,6 +278,11 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
               'map': {
               keys: ['m']
                         },
+              'InTuples': {
+              keys: ['i']},
+              'reload':{
+              keys : ['o']
+            },
                         
 
           }
@@ -767,12 +794,14 @@ function getIpInfo_box_ip(ip,mode){
         else{ip_info_dict['geocountry'] = ' '.repeat(33);}
           ip_info_str = Object.values(ip_info_dict).join("|");
         if(mode == 1)box_ip.setContent(ip_info_str);
+          box_ip.setLabel(ip)
           screen.render();
           resolve(ip_info_dict_outtuple);
         }
     catch (err){
         ip_info_str = " ".repeat(33) + "|"+" ".repeat(33) + "|"+" ".repeat(33)
         box_ip.setContent(ip_info_str);
+        box_ip.setLabel('')
         screen.render();
         resolve(ip_info_dict)}
     })
@@ -781,10 +810,10 @@ function getIpInfo_box_ip(ip,mode){
 
 
 
- function setDataOuttuples(data){
-  table_outTuples_listtable.setData(data);
-   table_outTuples_listtable.show()
-            table_outTuples_listtable.focus()
+ function setDataTuples(table, data){
+  table.setData(data);
+  table.show()
+  table.focus()
  }
 function getEvidence(reply){
   /*
@@ -909,10 +938,12 @@ tree.on('select',function(node){
       getIpInfo_box_ip(stripAnsi(node.name), 1);}
       
     else{
+
       ip  = stripAnsi(node.parent.name);
       timewindow = stripAnsi(node.name);
 
-  
+      box_ip.setLabel('')
+
       redis_outtuples_timewindow.hgetall("profile_"+ip+"_"+timewindow, (err,reply)=>{
         var ips = [];
         timeline_reply_global = reply;
@@ -1013,7 +1044,93 @@ tree.on('select',function(node){
   })
 
     }})
-  
+ // screen.key('i', function(ch, key) {
+ //          hide_widgets();
+ //          help_list_bar.selectTab(6)
+ //          bar_state_one = true;
+ //          bar_state_two = true; 
+ //          bar_state_three = true;
+ //          bar_state_four = true;
+ //          bar_state_four_two = true;
+ //          // box_hotkeys_state = true;
+ //          map_state = true;
+ //          if(box_hotkeys_state){
+         
+ //              if(timeline_reply_global == null){
+ //                table_inTuples.setItems('');} 
+ //              else if(Object.keys(ip_timewindow_inTuple).includes(ip+timewindow)){
+ //                setDataTuples(table_inTuples,ip_timewindow_inTuple[ip+timewindow]);
+
+ //              }
+ //              else{
+ //              try {
+ //      var obj_inTuples = JSON.parse(timeline_reply_global["InTuples"]);
+ //    }
+ //    catch(error) {
+
+ //        }
+ //              var keys = Object.keys(obj_inTuples);
+ //              var data = [];
+ //              async.each(keys, function(key,callback){
+ //                var ip_dict = {'asn':'', 'geocountry':'', 'URL':'','down':'','ref':'', 'com':''}
+ //                var row = [];
+ //                var tuple_info = obj_inTuples[key];
+ //                var inTuple_ip = key.split(':')[0];
+ //                getIpInfo_box_ip(inTuple_ip,0).then(function(result_dict){
+ //                  var ipInfo_dict_keys = Object.keys(result_dict)
+ //                  if(ipInfo_dict_keys.includes('asn')){
+ //                    ip_dict['asn'] = result_dict['asn']
+ //                  }
+ //                  if(ipInfo_dict_keys.includes('geocountry')){
+ //                    ip_dict['geocountry'] = result_dict['geocountry']
+ //                  }
+ //                  if(ipInfo_dict_keys.includes('VirusTotal')){
+ //                    ip_dict['URL'] = String(round(result_dict['VirusTotal']['URL'],3));
+ //                    ip_dict['down'] = String(round(result_dict['VirusTotal']['down_file'],3));
+ //                    ip_dict['ref'] = String(round(result_dict['VirusTotal']['ref_file'],3));
+ //                    ip_dict['com'] = String(round(result_dict['VirusTotal']['com_file'],3));
+ //                  }
+ //                if(tuple_info[0].trim().length>40){
+ //                  var k = chunkString(tuple_info[0].trim(),40);
+                
+ //                  async.forEachOf(k, function(ctr,ind, callback){
+ //                    var row2 = [];
+ //                    if(ind == 0){
+ //                      row2.push(key,ctr,Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
+ //                    }
+ //                    else{row2.push('',ctr, '', '' , '');}
+ //                      data.push(row2);
+ //                      callback(null);
+ //                  }, function(err){
+ //                    if(err){
+ //                      console.log('kamila',err);}
+ //                  })
+
+ //                }  
+ //          else{     
+ //            row.push(key,tuple_info[0], Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
+ //            data.push(row)}
+ //            callback(null);
+ //          })  
+ //        },function(err) {
+ //      if( err ) {
+ //        console.log('unable to create user');
+ //      } else {
+ //        data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
+ //        ip_timewindow_inTuple[ip+timewindow] = data;
+ //        setDataTuples(table_inTuples,data);
+ //        screen.render();  
+ //        }
+ //      });
+ //      }}
+ //      else{
+ //        table_inTuples.setItems('');
+ //        table_inTuples.hide()
+ //        help_list_bar.selectTab(0)
+ //        show_widgets()}
+ //        box_hotkeys_state =! box_hotkeys_state
+ //        screen.render();
+ //        });
 
  screen.key('h', function(ch, key) {
           hide_widgets();
@@ -1030,7 +1147,7 @@ tree.on('select',function(node){
               if(timeline_reply_global == null){
                 table_outTuples_listtable.setItems('');} 
               else if(Object.keys(ip_timewindow_outTuple).includes(ip+timewindow)){
-                setDataOuttuples(ip_timewindow_outTuple[ip+timewindow]);
+                setDataTuples(table_outTuples_listtable,ip_timewindow_outTuple[ip+timewindow]);
 
               }
               else{
@@ -1089,7 +1206,7 @@ tree.on('select',function(node){
       } else {
         data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
         ip_timewindow_outTuple[ip+timewindow] = data;
-        setDataOuttuples(data);
+        setDataTuples(table_outTuples_listtable,data);
         screen.render();  
         }
       });
@@ -1653,7 +1770,7 @@ table_timeline.rows.on('select', (item, index) => {
   var timeline_line = item.content.split(" ");
   var index_to = timeline_line.indexOf('to')
   var timeline_ip = timeline_line[index_to +1].slice(6,-7)
-  getIpInfo_box_ip(timeline_ip,1)
+  getIpInfo_box_ip(stripAnsi(timeline_ip),1)
 
 });
 // screen.key("g", function(ch,key){

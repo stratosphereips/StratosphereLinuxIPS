@@ -9,6 +9,7 @@ import sys
 import redis
 import os
 import time
+import shutil
 from datetime import datetime
 
 version = '0.6.5'
@@ -22,27 +23,29 @@ def read_configuration(config, section, name):
         return False
 
 
-def test_redis_database(redis_host='localhost', redis_port=6379) -> str:
-    server_redis_version = None
+def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
+    """
+    Check if we have redis-server running
+    """
     try:
         r = redis.StrictRedis(host=redis_host, port=redis_port, db=0, charset="utf-8",
                                    decode_responses=True)
-        server_redis_version = r.execute_command('INFO')['redis_version']
-    except redis.exceptions.ConnectionError:
+        r.ping()
+    except Exception as ex:
         print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
-    return server_redis_version
-
-
-def test_program(command: str) -> bool:
-    """
-    Test if we can run some program (e.g.: zeek, nfdump).
-    """
-    command = command + " 2>&1 > /dev/null"
-    ret = os.system(command)
-    if ret != 0:
-        print("[main] Error: The command: " + command + " was not found. Did you set the path?")
         return False
     return True
+
+
+def check_zeek_or_bro():
+    """
+    Check if we have zeek or bro
+    """
+    if shutil.which('zeek'):
+        return 'zeek'
+    elif shutil.which('bro'):
+        return 'bro'
+    return False
 
 
 def terminate_slips():
@@ -86,23 +89,22 @@ if __name__ == '__main__':
         pass
 
     # Check if redis server running
-    server_redis_version = test_redis_database()
-    if server_redis_version is None:
+    if check_redis_database() is False:
         terminate_slips()
 
     # If we need zeek (bro), test if we can run it.
-    if args.pcapfile:
-        visible_zeek = test_program('bro --version')
-        if visible_zeek is False:
-            # If we do not have access to zeek and we want to use it, kill it.
+    # Need to be assign to something because we pass it to inputProcess later
+    zeek_bro = None
+    if args.pcapfile or args.interface:
+        zeek_bro = check_zeek_or_bro()
+        if zeek_bro is False:
+            # If we do not have bro or zeek, terminate Slips.
             terminate_slips()
 
-    # See if we have the nfdump program, if we need it according to the input type
-    if args.nfdump:
-        visible_nfdump = test_program('nfdump -h')
-        if visible_nfdump is False:
-            # If we do not have access to nfdump and we want to use it, kill it.
-            terminate_slips()
+    # See if we have the nfdump, if we need it according to the input type
+    if args.nfdump and shutil.which('nfdump') is None:
+        # If we do not have nfdump, terminate Slips.
+        terminate_slips()
 
     """
     Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
@@ -233,7 +235,7 @@ if __name__ == '__main__':
 
     # Input process
     # Create the input process and start it
-    inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter)
+    inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
 
@@ -253,7 +255,6 @@ if __name__ == '__main__':
             # Get the amount of modified time windows in the last interval
             TWModifiedforProfile = __database__.getModifiedTWLogs()
             amount_of_modified = len(TWModifiedforProfile)
-
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
