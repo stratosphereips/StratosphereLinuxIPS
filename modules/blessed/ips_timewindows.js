@@ -6,15 +6,17 @@ var redis = require('redis')
   , redis_get_timeline = redis.createClient()
   , redis_outtuples_timewindow = redis.createClient()
   , redis_timeline_ip = redis.createClient()
-  ,redis_blocked_tws = redis.createClient()
+  , redis_blocked_tws = redis.createClient()
   , async = require('async')
   , blessed = require('blessed')
   , contrib = require('blessed-contrib')
   , fs = require('fs')
   , screen = blessed.screen()
   , color = require('chalk')
-   , stripAnsi = require('strip-ansi')
-    , clipboardy = require('clipboardy');
+  , stripAnsi = require('strip-ansi')
+  , clipboardy = require('clipboardy');
+
+
 screen.dockBorders=true;
 let country_loc = {};
 fs.readFile('country.txt', 'utf8', function(err,data) {
@@ -59,7 +61,6 @@ function blockedTW(){
   })
 })}
 
-// set up elements of the interface.
 
 var grid = new contrib.grid({
   rows: 6,
@@ -981,56 +982,69 @@ tree.on('select',function(node){
           screen.render();
       }
       else{
-      async.each(reply, function(line, callback){
+      async.each(reply, function(timeline, callback){
         var row = [];
-        var line_arr = line.split(" ")
-	if(line_arr[0].includes('/')){
-	
-        var index_to_from = line_arr.indexOf('to')
-	if(index_to_from <= 0){
-	  index_to_from = line_arr.indexOf('from');}
-        var index_ip = index_to_from +1;
-	var index_port_protocol = index_to_from+2;
-	var index_sent = index_port_protocol + 2
-	var index_rec = index_sent + 2
-	var index_total = index_rec + 2
-	line_arr[1]= line_arr[1].substring(0,8);
-	for(i = 2; i<index_to_from; i++){
-		line_arr[i] = color.rgb(51, 153, 255)(line_arr[i]);}
-	  var keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
-	  var http_keywords = ['method','Status', 'UA', 'MIME', 'Ref']
-	  var attention_keywords = ['No', 'Protocol' ]
-	  line_arr[index_ip]= color.bold(line_arr[index_ip])
-	  line_arr[index_port_protocol]=color.bold.yellow(line_arr[index_port_protocol])
-	  line_arr[index_sent + 1] = color.rgb(255, 153, 51)(line_arr[index_sent + 1])
-	  line_arr[index_rec + 1] = color.rgb(255, 153, 51)(line_arr[index_rec + 1])
-	  line_arr[index_total + 1] = color.rgb(255, 153, 51)(line_arr[index_total + 1])
-	  if(index_total + 2 < line_arr.length && attention_keywords.some(el => line_arr[index_total + 2].includes(el))){
-	for(ind = index_total+2; ind < line_arr.length; ind++){		
-		line_arr[ind] = color.red(line_arr[ind])		}
-}
-	  else{increase = 0
-	  while(true){
-	  increase = increase + 2
-	  if(index_total+increase +1 >= line_arr.length){
-		break;}
+        var timeline_json = JSON.parse(timeline)
 
-	  if(keywords.some(el => line_arr[index_total + increase].includes(el))){
-		line_arr[index_total + increase+1] = color.rgb(255, 153, 51)(line_arr[index_total+increase + 1])}
-}}
-	  timeline_line = line_arr.join(" ");
-	  row.push(timeline_line.replace(/\|.*/,''));
-	  data.push(row);}
-	else{
-	  http = JSON.parse(line)
-	for (let [key, value] of Object.entries(http)) {
-	  row = []
-	  line = key.padStart(21+key.length) +':' +color.rgb(51, 153, 255)(value);
-	  row.push(line);
-          data.push(row);
+        var pink_protocol_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
+        var red_attention_keywords = ['critical warning' ]
+        var orange_number_of_bytes = ['Sent','Recv','Tot','Size']
+        var blue_highlight= ['dport_name', 'dport_name/proto']
+        var cyan_highlight = ['daddr', 'saddr']
+
+        // split the timeline on parts
+        if(timeline_json['timestamp']){
+
+        var final_timeline = ''
+
+        for (let [key, value] of Object.entries(timeline_json)) {
+          if(key.includes('critical warning')){
+            value = color.red(value)
+          }
+          else if(key.includes('warning')){
+            value = color.rgb(255,165,0)(value)
+          }
+          else if(key.includes('timestamp')){
+            value = value.substring(0, value.indexOf('.'));
+          }
+          else if(key.includes('dport/proto')){
+            value = color.bold.yellow(value)
+          }
+          else if(key.includes('info')){
+            value = color.rgb(105,105,105)(value)
+          }
+          else if (blue_highlight.some(element => key.includes(element))){
+            value = color.rgb(51, 153, 255)(value);
+          }
+          else if( cyan_highlight.some(element => key.includes(element))){
+            value = color.bold(value);
+          }
+          else if (orange_number_of_bytes.some(element => key.includes(element))){
+            value =key + ':' + color.rgb(255, 153, 51)(value);
+          }
+          else if (red_attention_keywords .some(element => key.includes(element))){
+            value = color.red(value);
+          }
+          else if (pink_protocol_keywords .some(element => key.includes(element))){
+            value = key + ':'+color.rgb(219,112,147)(value);
+          }
+            if(value){
+            final_timeline += value +' ';}}
+            row.push(final_timeline);
+            data.push(row);
+}
+        else{
+          var final_timeline = ''
+
+          for (let [key, value] of Object.entries(timeline_json)) {
+            row = []
+            final_timeline = key.padStart(21+key.length) +': ' +color.rgb(51, 153, 255)(value);
+            row.push(final_timeline);
+            data.push(row);
 }
 
-}
+        }
+
         callback();
       },function(err) {
         if( err ) {
