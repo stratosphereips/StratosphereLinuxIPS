@@ -988,7 +988,7 @@ tree.on('select',function(node){
 
         var pink_protocol_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
         var red_attention_keywords = ['critical warning' ]
-        var orange_number_of_bytes = ['Sent','Recv','Tot','Size']
+        var orange_number_of_bytes = ['Sent','Recv','Tot','Size','Type']
         var blue_highlight= ['dport_name', 'dport_name/proto']
         var cyan_highlight = ['daddr', 'saddr']
 
