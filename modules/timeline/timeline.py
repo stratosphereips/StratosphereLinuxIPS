@@ -115,9 +115,6 @@ class Module(Module, multiprocessing.Process):
             saddr = flow_dict['saddr']
             sport = flow_dict['sport']
             daddr = flow_dict['daddr']
-
-
-
             dport = flow_dict['dport']
             proto = flow_dict['proto'].upper()
 
@@ -178,7 +175,7 @@ class Module(Module, multiprocessing.Process):
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
 
-                    activity = { 'timestamp': timestamp, 'dport_name/proto': dport_name+'/'+str(proto), 'preposition': 'from', 'saddr': saddr,'state': state.lower(), 'warning': warning_empty, 'Sent': allbytes-sbytes, 'Recv': sbytes, 'Tot': allbytes_human, 'Critical warning': critical_warning_dport_name}
+                    activity = { 'timestamp': timestamp, 'dport_name/proto': dport_name+'/'+str(proto), 'preposition': 'from', 'saddr': saddr,'state': state.lower(), 'warning': warning_empty, 'Sent': allbytes-sbytes, 'Recv': sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
 
                 elif 'ICMP' in proto:
                     if type(sport) == int:
@@ -194,7 +191,7 @@ class Module(Module, multiprocessing.Process):
                             activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                         else:
                             dport_name = 'ICMP Unknown type'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Type':'0x'+sport, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Type':'0x'+str(sport), 'Size': allbytes_human}
                     elif type(sport) == str:
                         # Argus puts in hex the values of the ICMP
                         if '0x0008' in sport:
@@ -216,7 +213,7 @@ class Module(Module, multiprocessing.Process):
                             activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                 elif 'IGMP' in proto:
                     dport_name = 'IGMP'
-                    activity = {'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                    activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
             else:
                 if 'TCP' in proto or 'UDP' in proto:
                     warning_empty = ''
@@ -224,14 +221,14 @@ class Module(Module, multiprocessing.Process):
 
                     # Check if the connection sent anything!
                     if not allbytes:
-                        warning_empty = ', Empty!'
+                        warning_empty = 'Empty!'
 
                     # Check if slips and zeek know dport_name!
                     if not dport_name:
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
 
-                    activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'Critical warning': critical_warning_dport_name}
+                    activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
 
                 elif 'ICMP' in proto:
                     if type(sport) == int:
@@ -247,7 +244,7 @@ class Module(Module, multiprocessing.Process):
                             activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
                         else:
                             dport_name = 'ICMP Unknown type'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Type': '0x' + sport, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Type': '0x' + str(sport), 'Size': allbytes_human}
 
                     elif type(sport) == str:
                         # Argus puts in hex the values of the ICMP
@@ -285,7 +282,7 @@ class Module(Module, multiprocessing.Process):
                         answer = 'NXDOMAIN'
                     alt_activity = {'Query': alt_flow["query"], 'Answers': answer}
                 elif alt_flow['type'] == 'http':
-                    http_data = {'Method': alt_flow["method"] + ' http://'+alt_flow["host"]+alt_flow["uri"], 'Status Code': str(alt_flow["status_code"])+ '/' + alt_flow["status_msg"],'MIME':alt_flow["resp_mime_types"] ,'UA':alt_flow["user_agent"]}
+                    http_data = {'Method': alt_flow["method"] + ' http://'+alt_flow["host"]+alt_flow["uri"], 'Status Code': str(alt_flow["status_code"])+ '/' + alt_flow["status_msg"],'MIME':str(alt_flow["resp_mime_types"] ),'UA':alt_flow["user_agent"]}
                 elif alt_flow['type'] == 'ssl':
                     # {"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
                     # version":"TLSv12","resumed":false,"established":true,"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
@@ -300,21 +297,26 @@ class Module(Module, multiprocessing.Process):
                         # If the validation is not ok and not empty
                         validation = 'No'
                         resumed = 'False'
-                    alt_activity = {'SN':alt_flow["subject"].split(",")[0], 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"]}
+                    # if there is no CN
+                    if alt_flow["subject"]:
+                        subject = alt_flow["subject"].split(",")[0]
+                    else:
+                        subject = '????'
+                    alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"]}
 
 
             else:
                 alt_activity = {'info': 'No extra data from Zeek.'}
 
             # Combine the activity of normal flows and activity of alternative flows and store in the DB for this profileid and twid
-            total_activity = activity + alt_activity
-            if total_activity:
-                __database__.add_timeline_line(profileid, twid, total_activity)
+            activity.update(alt_activity)
+            if activity:
+                __database__.add_timeline_line(profileid, twid, activity)
             # http data should be parsed in multiple lines
             if http_data:
                 __database__.add_http_timeline_line(profileid,twid,http_data)
 
-            self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, total_activity), 4, 0)
+            self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
 
         except KeyboardInterrupt:
