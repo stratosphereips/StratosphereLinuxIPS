@@ -18,24 +18,27 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-certifi \
     python3-maxminddb \
     python3-pandas \
-    python3-redis \
     python3-scipy \
     python3-sklearn \
     python3-urllib3 \
     python3-watchdog \
     redis-server \
     zeek \
+    python3-pip \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+
+# Install redis using PIP3
+RUN pip3 install redis
 
 # Download and unpack Slips.
 #RUN wget -nv https://github.com/stratosphereips/StratosphereLinuxIPS/archive/master.tar.gz -O /slips.tar.gz \
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-RUN chmod 774 StratosphereLinuxIPS/slips.py
+RUN cd StratosphereLinuxIPS && git checkout develop && chmod 774 slips.py && mkdir dataset
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_10.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
-RUN cd /StratosphereLinuxIPS/modules/blessed && npm install \
+RUN cd StratosphereLinuxIPS/modules/blessed && npm install \
     async \
     ansi-colors \
     blessed \
@@ -43,6 +46,6 @@ RUN cd /StratosphereLinuxIPS/modules/blessed && npm install \
     clipboardy \
     redis
 
-# Switch to Slips installation dir.
+# Switch to Slips installation dir when login.
 WORKDIR /StratosphereLinuxIPS
 CMD redis-server --daemonize yes && /bin/bash
