@@ -158,7 +158,7 @@ class Module(Module, multiprocessing.Process):
 
             # Now that we have the flow processed. Try to interpret it and create the activity line
             # Record Activity
-            activity = ''
+            activity = {}
             # Change the format of timeline in the case of inbound flows for external IP, i.e direction 'all' and destination IP == profile IP.
             # If not changed, it would have printed  'IP1 https asked to IP1'.
             if self.analysis_direction == 'all' and str(daddr) == str(profile_ip):
@@ -270,8 +270,8 @@ class Module(Module, multiprocessing.Process):
                     activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
             #################################
             # Now process the alternative flows
-            alt_activity = ''
-            http_data = ''
+            alt_activity ={}
+            http_data = {}
             if alt_flow_json:
                 alt_flow = json.loads(alt_flow_json)
                 self.print('Received an altflow of type {}: {}'.format(alt_flow['type'], alt_flow), 5,0)
