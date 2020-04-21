@@ -801,7 +801,7 @@ function getIpInfo_box_ip(ip,mode){
     catch (err){
         ip_info_str = " ".repeat(33) + "|"+" ".repeat(33) + "|"+" ".repeat(33)
         box_ip.setContent(ip_info_str);
-        box_ip.setLabel('')
+        box_ip.setLabel(ip)
         screen.render();
         resolve(ip_info_dict)}
     })
