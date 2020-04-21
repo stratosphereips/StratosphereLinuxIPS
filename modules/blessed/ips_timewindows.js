@@ -902,6 +902,7 @@ function getTreeData(key){
         }
     }
 }
+
 function timewindows_promises(reply) {
     return Promise.all(reply.map( key_redis => getTreeData(key_redis)))
       .then(blockedTW()
@@ -1768,7 +1769,8 @@ screen.key('m', function(ch, key) {
 table_timeline.rows.on('select', (item, index) => {
   var timeline_line = item.content.split(" ");
   var index_to = timeline_line.indexOf('to')
-  var timeline_ip = timeline_line[index_to +1].slice(6,-7)
+  var clean_ip = stripAnsi(timeline_line[index_to +1])
+  var timeline_ip = clean_ip
   getIpInfo_box_ip(timeline_ip,1)
 
 });
