@@ -6,16 +6,17 @@ var redis = require('redis')
   , redis_get_timeline = redis.createClient()
   , redis_outtuples_timewindow = redis.createClient()
   , redis_timeline_ip = redis.createClient()
-  ,redis_blocked_tws = redis.createClient()
+  , redis_blocked_tws = redis.createClient()
   , async = require('async')
   , blessed = require('blessed')
   , contrib = require('blessed-contrib')
   , fs = require('fs')
   , screen = blessed.screen()
-  , color = require('ansi-colors');
+  , color = require('chalk')
+  , stripAnsi = require('strip-ansi')
+  , clipboardy = require('clipboardy');
 
 
-const clipboardy = require('clipboardy');
 screen.dockBorders=true;
 let country_loc = {};
 fs.readFile('country.txt', 'utf8', function(err,data) {
@@ -60,7 +61,6 @@ function blockedTW(){
   })
 })}
 
-// set up elements of the interface.
 
 var grid = new contrib.grid({
   rows: 6,
@@ -903,6 +903,7 @@ function getTreeData(key){
         }
     }
 }
+
 function timewindows_promises(reply) {
     return Promise.all(reply.map( key_redis => getTreeData(key_redis)))
       .then(blockedTW()
@@ -929,19 +930,21 @@ var timewindow;
 tree.on('select',function(node){
   
   screen.key('w',function(ch,key){
-    clipboardy.writeSync(color.unstyle(node.name));
+    clipboardy.writeSync(stripAnsi(node.name));
     clipboardy.readSync();
   })
     clean_widgets()
 
     if(!node.name.includes('timewindow')){
-      getIpInfo_box_ip(color.unstyle(node.name), 1);}
+      getIpInfo_box_ip(stripAnsi(node.name), 1);}
       
     else{
+
+      ip  = stripAnsi(node.parent.name);
+      timewindow = stripAnsi(node.name);
+
       box_ip.setLabel('')
-      ip  = color.unstyle(node.parent.name);
-      timewindow = color.unstyle(node.name);
-  
+
       redis_outtuples_timewindow.hgetall("profile_"+ip+"_"+timewindow, (err,reply)=>{
         var ips = [];
         timeline_reply_global = reply;
@@ -960,6 +963,7 @@ tree.on('select',function(node){
           callback(null);  
         },function(err) {
       if( err ) {
+	console.log(ip)
         console.log('unable to create user');
       } else {
         setMap(ips)
@@ -978,40 +982,75 @@ tree.on('select',function(node){
           screen.render();
       }
       else{
-      async.each(reply, function(line, callback){
+      async.each(reply, function(timeline, callback){
         var row = [];
-        var line_arr = line.split(" ")
-        var index_to = line_arr.indexOf('to')
-        var index_asked = line_arr.indexOf('asked');
-        var index_careful = line_arr.indexOf('careful!');
-        var index_recognized = line_arr.indexOf('recognized');
-        var index_attention  = line_arr.indexOf('Attention.');
-        var index_ip = index_to +1;
-        if(index_attention>=0){line_arr[index_attention] =color.red(line_arr[index_attention]);
-          line_arr[index_attention-1]=color.red(line_arr[index_attention-1])}
-        if(index_to>= 0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
-        if(index_recognized >= 0){
-          for(var i =index_recognized - 1; i < index_recognized+3;i++){
-          line_arr[i] = color.red(line_arr[i]);}
+        var timeline_json = JSON.parse(timeline)
+
+        var pink_protocol_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
+        var red_attention_keywords = ['critical warning' ]
+        var orange_number_of_bytes = ['Sent','Recv','Tot','Size']
+        var blue_highlight= ['dport_name', 'dport_name/proto']
+        var cyan_highlight = ['daddr', 'saddr']
+
+        // split the timeline on parts
+        if(timeline_json['timestamp']){
+
+        var final_timeline = ''
+
+        for (let [key, value] of Object.entries(timeline_json)) {
+          if(key.includes('critical warning')){
+            value = color.red(value)
           }
-        if(index_careful > 0){
-          line_arr[index_careful] = color.red(line_arr[index_careful]);
-          line_arr[index_careful - 1] = color.red(line_arr[index_careful - 1])
+          else if(key.includes('warning')){
+            value = color.rgb(255,165,0)(value)
+          }
+          else if(key.includes('timestamp')){
+            value = value.substring(0, value.indexOf('.'));
+          }
+          else if(key.includes('dport/proto')){
+            value = color.bold.yellow(value)
+          }
+          else if(key.includes('info')){
+            value = color.rgb(105,105,105)(value)
+          }
+          else if (blue_highlight.some(element => key.includes(element))){
+            value = color.rgb(51, 153, 255)(value);
+          }
+          else if( cyan_highlight.some(element => key.includes(element))){
+            value = color.bold(value);
+          }
+          else if (orange_number_of_bytes.some(element => key.includes(element))){
+            value =key + ':' + color.rgb(255, 153, 51)(value);
+          }
+          else if (red_attention_keywords .some(element => key.includes(element))){
+            value = color.red(value);
+          }
+          else if (pink_protocol_keywords .some(element => key.includes(element))){
+            value = key + ':'+color.rgb(219,112,147)(value);
+          }
+            if(value){
+            final_timeline += value +' ';}}
+            row.push(final_timeline);
+            data.push(row);
+}
+        else{
+          var final_timeline = ''
+
+          for (let [key, value] of Object.entries(timeline_json)) {
+            row = []
+            final_timeline = key.padStart(21+key.length) +': ' +color.rgb(51, 153, 255)(value);
+            row.push(final_timeline);
+            data.push(row);
+}
+
         }
-        for(var i =3; i < index_asked;i++){
-          line_arr[i] = color.bold.cyan(line_arr[i]) }     
-        if(line_arr[index_to+2].includes('/'))line_arr[index_to+2]=color.bold.yellow(line_arr[index_to+2].slice(0,-1))+','
-          line_arr[1]= line_arr[1].substring(0, line_arr[1].lastIndexOf('.'));
-          timeline_line = line_arr.join(" ");
-          row.push(timeline_line.replace(/\|.*/,''));
-          data.push(row);
+
         callback();
       },function(err) {
         if( err ) {
           console.log('unable to create user');
         } else {
           table_timeline.setData({headers:[node.parent.name+" "+node.name], data: data});
-          // console.log(data.length)
           timeline_length = data.length;
           screen.render();
         }
@@ -1744,7 +1783,8 @@ screen.key('m', function(ch, key) {
 table_timeline.rows.on('select', (item, index) => {
   var timeline_line = item.content.split(" ");
   var index_to = timeline_line.indexOf('to')
-  var timeline_ip = timeline_line[index_to +1].slice(6,-7)
+  var clean_ip = stripAnsi(timeline_line[index_to +1])
+  var timeline_ip = clean_ip
   getIpInfo_box_ip(timeline_ip,1)
 
 });

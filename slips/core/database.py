@@ -1158,11 +1158,20 @@ class Database(object):
         """ Given a uid, get the alternative flow realted to it """
         return self.r.hget(profileid + self.separator + twid + self.separator + 'altflows', uid)
 
-    def add_timeline_line(self, profileid, twid, data, timestamp: str):
+    def add_timeline_line(self, profileid, twid, data):
         """ Add a line to the time line of this profileid and twid """
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
-        data = timestamp + ' ' + str(data)
+        data = json.dumps(data)
+        self.r.rpush(key, data)
+        # Mark the tw as modified since the timeline line is new data in the TW
+        self.markProfileTWAsModified(profileid, twid)
+
+    def add_http_timeline_line(self, profileid, twid, data):
+        """ Add a http line to the time line of this profileid and twid """
+        self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
+        key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        data = json.dumps(data)
         self.r.rpush(key, data)
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid)
