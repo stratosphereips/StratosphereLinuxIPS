@@ -11,6 +11,7 @@ import os
 import time
 import shutil
 from datetime import datetime
+import socket
 
 version = '0.6.5'
 
@@ -22,6 +23,15 @@ def read_configuration(config, section, name):
         # There is a conf, but there is no option, or no section or no configuration file specified
         return False
 
+def recognize_host_ip():
+    """
+    Recognize the IP address of the machine
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("1.1.1.1", 80))
+    ipaddr_check = s.getsockname()[0]
+    s.close()
+    return ipaddr_check
 
 def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
     """
@@ -91,6 +101,7 @@ if __name__ == '__main__':
     # Check if redis server running
     if check_redis_database() is False:
         terminate_slips()
+
 
     # If we need zeek (bro), test if we can run it.
     # Need to be assign to something because we pass it to inputProcess later
@@ -172,7 +183,6 @@ if __name__ == '__main__':
     # Creation of the threads
     ##########################
     from slips.core.database import __database__
-
     # Output thread. This thread should be created first because it handles the output of the rest of the threads.
     # Create the queue
     outputProcessQueue = Queue()
@@ -238,6 +248,10 @@ if __name__ == '__main__':
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
+
+    # Store the host IP address if input type is interface
+    if input_type == 'interface':
+        __database__.set_host_ip(recognize_host_ip())
 
 
     # As the main program, keep checking if we should stop slips or not
