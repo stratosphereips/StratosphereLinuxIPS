@@ -1294,6 +1294,14 @@ class Database(object):
         """ Return the time of last update of the remote malicious file from the db """
         self.r.set('last_update_malicious_file', time)
 
+    def get_host_ip(self):
+        """ Get the IP address of the host from a db"""
+        return self.r.get('hostIP')
+
+    def set_host_ip(self, ip):
+        """ Store the IP address of the host in a db"""
+        self.r.set('hostIP', ip)
+
     def is_ip_in_virustotal_cache(self, ip):
         """ Check if the IP was cached by VT module. If yes, return list of 4 floats (the score). If not, return None.
         :param ip: the IP address to check
