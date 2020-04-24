@@ -7,6 +7,7 @@ var redis = require('redis')
   , redis_outtuples_timewindow = redis.createClient()
   , redis_timeline_ip = redis.createClient()
   , redis_blocked_tws = redis.createClient()
+  , client = redis.createClient()
   , async = require('async')
   , blessed = require('blessed')
   , contrib = require('blessed-contrib')
@@ -837,13 +838,14 @@ function getEvidence(reply){
 };
 var ips_with_timewindows = {}
 
-function set_tree_data(timewindows_list, blockedTW){
+function set_tree_data(timewindows_list, blockedTW,ip){
   /*
   sets ips and their tws for the tree.
 
   */
   // console.log(timewindows_list)
   var ips_with_profiles = Object.keys(timewindows_list);
+
   var explorer = { extended: true
   , children: function(self){
       var result = {};
@@ -855,12 +857,22 @@ function set_tree_data(timewindows_list, blockedTW){
               var tw = timewindows_list[ips_with_profiles[i]];
               child = ips_with_profiles[i];
               var sorted_tws = sortTWs(blockedTW,tw[0], child)
+              if(child.includes(ip)){
+
+
+                new_child = child+ '(host)'}
+
+              // }
+              else{
+                new_child = child
+              }
             if(Object.keys(blockedTW).includes(child)){
-              result[child] = { name:color.red(child), extended:false, children: sorted_tws};
+              result[child] = { name:color.red(new_child), extended:false, children: sorted_tws};
             }
             else{
-              result[child] = { name:child, extended:false, children: sorted_tws};
+              result[child] = { name:new_child, extended:false, children: sorted_tws};
             }
+
            
             }
             }else
@@ -904,10 +916,24 @@ function getTreeData(key){
     }
 }
 
+ function get_host_ip(){
+  return new Promise(function(resolve,reject){
+    var hostIP = '';
+    client.get('hostIP',function(err,value) {
+      if(err){
+        reject(hostIP)
+      }
+      else{
+      hostIP = value
+ resolve(hostIP)}
+    })
+  })
+}
+
+
+
 function timewindows_promises(reply) {
-    return Promise.all(reply.map( key_redis => getTreeData(key_redis)))
-      .then(blockedTW()
-      .then(function(blocked_dict){tree.setData(set_tree_data(ips_with_timewindows,blocked_dict)); screen.render();return;}))
+    return Promise.all([reply.map( key_redis => getTreeData(key_redis)),blockedTW(), get_host_ip()]).then(values => {tree.setData(set_tree_data(ips_with_timewindows,values[1], values[2])); screen.render();return;})
 }
 
 redis_tree.keys('*', (err,reply)=>{
@@ -936,11 +962,13 @@ tree.on('select',function(node){
     clean_widgets()
 
     if(!node.name.includes('timewindow')){
-      getIpInfo_box_ip(stripAnsi(node.name), 1);}
+      ip = node.name.replace('(host)','')
+      getIpInfo_box_ip(stripAnsi(ip), 1);}
       
     else{
 
       ip  = stripAnsi(node.parent.name);
+      ip = ip.replace('(host)','')
       timewindow = stripAnsi(node.name);
 
       box_ip.setLabel('')
