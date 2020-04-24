@@ -37,6 +37,7 @@ fs.readFile('country.txt', 'utf8', function(err,data) {
 
 
 var ip_timewindow_outTuple = {};
+var ip_timewindow_inTuple = {}
 
 
 function blockedTW(){ 
@@ -124,30 +125,30 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
       },
       align: 'left'
     })
-    // ,table_inTuples = grid.set(0,0,5.7,6, blessed.listtable, {
-    //   keys: true,
-    //   mouse: true,
+    ,table_inTuples = grid.set(0,0,5.7,6, blessed.listtable, {
+      keys: true,
+      mouse: true,
   
-    //   tags: true,
-    //   // interactive: false,
-    //   border: 'line',
-    //   style: {
-    //     bg: 'blue'
-    //   },
-    //   style: {
-    //     header: {
-    //       fg: 'blue',
-    //       bold: true
-    //     },
-    //     cell: {
-    //       fg: 'magenta',
-    //       selected: {
-    //         bg: 'blue'
-    //       }
-    //     }
-    //   },
-    //   align: 'left'
-    // })
+      tags: true,
+      // interactive: false,
+      border: 'line',
+      style: {
+        bg: 'blue'
+      },
+      style: {
+        header: {
+          fg: 'blue',
+          bold: true
+        },
+        cell: {
+          fg: 'magenta',
+          selected: {
+            bg: 'blue'
+          }
+        }
+      },
+      align: 'left'
+    })
 
 
 ,listtable_est_srcPort = grid.set(0,0,2.8,2, blessed.listtable, {
@@ -456,6 +457,7 @@ listtable_est_dstIPs.hide()
 table_outTuples_listtable.hide()
 gaugeList_est_srcPort.hide()
 listtable_est_srcPort.hide()
+table_inTuples.hide()
 
 
 map.hide()
@@ -463,13 +465,14 @@ box_generic_dashboard.setContent('\n\n Welcome to Kalipso v0.1, Stratosphere Lin
 var focus_widget = tree;
 var bar_state_four_two = true;
 var bar_state_one = true;
-var bar_state_two = true; 
+var bar_state_two = true; table_inTuples
 var bar_state_three = true;
 var bar_state_four = true;
 var box_hotkeys_state = true;
 var map_state = true;
 var box_hotkeys_state = true;
 var box_generic_dashboard_status = false;
+var tablle_for_inTuples = true
 
 function clean_widgets(){
   box_evidence.setContent('');
@@ -505,6 +508,7 @@ function hide_widgets(){
   table_timeline.hide()
   box_ip.hide()
   table_outTuples_listtable.hide()  
+  table_inTuples.hide()
 
   map.hide()
 }
@@ -981,7 +985,7 @@ tree.on('select',function(node){
         try {
   		var obj_outTuples = JSON.parse(reply["OutTuples"]);
 	}
-	catch(error) {
+	     catch(error) {
   		var obj_outTuples = JSON.parse(reply["InTuples"]);
 		}
         var keys = Object.keys(obj_outTuples);
@@ -1086,93 +1090,99 @@ tree.on('select',function(node){
   })
 
     }})
- // screen.key('i', function(ch, key) {
- //          hide_widgets();
- //          help_list_bar.selectTab(6)
- //          bar_state_one = true;
- //          bar_state_two = true; 
- //          bar_state_three = true;
- //          bar_state_four = true;
- //          bar_state_four_two = true;
- //          // box_hotkeys_state = true;
- //          map_state = true;
- //          if(box_hotkeys_state){
+ screen.key('i', function(ch, key) {
+          hide_widgets();
+          help_list_bar.selectTab(8)
+          bar_state_one = true;
+          bar_state_two = true; 
+          bar_state_three = true;
+          bar_state_four = true;
+          bar_state_four_two = true;
+          box_hotkeys_state = true;
+          //tablle_for_inTuples = true;
+          map_state = true;
+          if(tablle_for_inTuples){
          
- //              if(timeline_reply_global == null){
- //                table_inTuples.setItems('');} 
- //              else if(Object.keys(ip_timewindow_inTuple).includes(ip+timewindow)){
- //                setDataTuples(table_inTuples,ip_timewindow_inTuple[ip+timewindow]);
+              if(timeline_reply_global == null){
+                table_inTuples.setItems('');} 
+              else if(Object.keys(ip_timewindow_inTuple).includes(ip+timewindow)){
+                setDataTuples(table_inTuples,ip_timewindow_inTuple[ip+timewindow]);
 
- //              }
- //              else{
- //              try {
- //      var obj_inTuples = JSON.parse(timeline_reply_global["InTuples"]);
- //    }
- //    catch(error) {
-
- //        }
- //              var keys = Object.keys(obj_inTuples);
- //              var data = [];
- //              async.each(keys, function(key,callback){
- //                var ip_dict = {'asn':'', 'geocountry':'', 'URL':'','down':'','ref':'', 'com':''}
- //                var row = [];
- //                var tuple_info = obj_inTuples[key];
- //                var inTuple_ip = key.split(':')[0];
- //                getIpInfo_box_ip(inTuple_ip,0).then(function(result_dict){
- //                  var ipInfo_dict_keys = Object.keys(result_dict)
- //                  if(ipInfo_dict_keys.includes('asn')){
- //                    ip_dict['asn'] = result_dict['asn']
- //                  }
- //                  if(ipInfo_dict_keys.includes('geocountry')){
- //                    ip_dict['geocountry'] = result_dict['geocountry']
- //                  }
- //                  if(ipInfo_dict_keys.includes('VirusTotal')){
- //                    ip_dict['URL'] = String(round(result_dict['VirusTotal']['URL'],3));
- //                    ip_dict['down'] = String(round(result_dict['VirusTotal']['down_file'],3));
- //                    ip_dict['ref'] = String(round(result_dict['VirusTotal']['ref_file'],3));
- //                    ip_dict['com'] = String(round(result_dict['VirusTotal']['com_file'],3));
- //                  }
- //                if(tuple_info[0].trim().length>40){
- //                  var k = chunkString(tuple_info[0].trim(),40);
+              }
+              else{
+              try {
+            var obj_inTuples = JSON.parse(timeline_reply_global["InTuples"]);
+            var keys = Object.keys(obj_inTuples);
+              var data = [];
+              async.each(keys, function(key,callback){
+                var ip_dict = {'asn':'', 'geocountry':'', 'URL':'','down':'','ref':'', 'com':''}
+                var row = [];
+                var tuple_info = obj_inTuples[key];
+                var inTuple_ip = key.split(':')[0];
+                getIpInfo_box_ip(inTuple_ip,0).then(function(result_dict){
+                  var ipInfo_dict_keys = Object.keys(result_dict)
+                  if(ipInfo_dict_keys.includes('asn')){
+                    ip_dict['asn'] = result_dict['asn']
+                  }
+                  if(ipInfo_dict_keys.includes('geocountry')){
+                    ip_dict['geocountry'] = result_dict['geocountry']
+                  }
+                  if(ipInfo_dict_keys.includes('VirusTotal')){
+                    ip_dict['URL'] = String(round(result_dict['VirusTotal']['URL'],3));
+                    ip_dict['down'] = String(round(result_dict['VirusTotal']['down_file'],3));
+                    ip_dict['ref'] = String(round(result_dict['VirusTotal']['ref_file'],3));
+                    ip_dict['com'] = String(round(result_dict['VirusTotal']['com_file'],3));
+                  }
+                if(tuple_info[0].trim().length>40){
+                  var k = chunkString(tuple_info[0].trim(),40);
                 
- //                  async.forEachOf(k, function(ctr,ind, callback){
- //                    var row2 = [];
- //                    if(ind == 0){
- //                      row2.push(key,ctr,Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
- //                    }
- //                    else{row2.push('',ctr, '', '' , '');}
- //                      data.push(row2);
- //                      callback(null);
- //                  }, function(err){
- //                    if(err){
- //                      console.log('kamila',err);}
- //                  })
+                  async.forEachOf(k, function(ctr,ind, callback){
+                    var row2 = [];
+                    if(ind == 0){
+                      row2.push(key,ctr,Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
+                    }
+                    else{row2.push('',ctr, '', '' , '');}
+                      data.push(row2);
+                      callback(null);
+                  }, function(err){
+                    if(err){
+                      console.log('kamila',err);}
+                  })
 
- //                }  
- //          else{     
- //            row.push(key,tuple_info[0], Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
- //            data.push(row)}
- //            callback(null);
- //          })  
- //        },function(err) {
- //      if( err ) {
- //        console.log('unable to create user');
- //      } else {
- //        data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
- //        ip_timewindow_inTuple[ip+timewindow] = data;
- //        setDataTuples(table_inTuples,data);
- //        screen.render();  
- //        }
- //      });
- //      }}
- //      else{
- //        table_inTuples.setItems('');
- //        table_inTuples.hide()
- //        help_list_bar.selectTab(0)
- //        show_widgets()}
- //        box_hotkeys_state =! box_hotkeys_state
- //        screen.render();
- //        });
+                }  
+          else{     
+            row.push(key,tuple_info[0], Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
+            data.push(row)}
+            callback(null);
+          })  
+        },function(err) {
+      if( err ) {
+        console.log('unable to create user');
+      } else {
+        table_inTuples.setLabel('InTuples')
+
+        data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
+        ip_timewindow_inTuple[ip+timewindow] = data;
+        setDataTuples(table_inTuples,data);
+        screen.render();  
+        }
+      });
+      }  
+    catch(error) {
+              table_inTuples.setLabel('InTuples')
+
+      setDataTuples(table_inTuples,[['info'],['no data']]);
+                screen.render();  
+        }
+          }}
+      else{
+        table_inTuples.setItems('');
+        table_inTuples.hide()
+        help_list_bar.selectTab(0)
+        show_widgets()}
+        tablle_for_inTuples =! tablle_for_inTuples
+        screen.render();
+        }    )
 
  screen.key('h', function(ch, key) {
           hide_widgets();
@@ -1182,6 +1192,7 @@ tree.on('select',function(node){
           bar_state_three = true;
           bar_state_four = true;
           bar_state_four_two = true;
+          tablle_for_inTuples = true;
           // box_hotkeys_state = true;
           map_state = true;
           if(box_hotkeys_state){
@@ -1193,12 +1204,10 @@ tree.on('select',function(node){
 
               }
               else{
-              try {
-  		var obj_outTuples = JSON.parse(timeline_reply_global["OutTuples"]);
-		}
-		catch(error) {
-  			var obj_outTuples = JSON.parse(timeline_reply_global["InTuples"]);
-		}
+              
+  		try{var obj_outTuples = JSON.parse(timeline_reply_global["OutTuples"]);
+		
+
               var keys = Object.keys(obj_outTuples);
               var data = [];
               async.each(keys, function(key,callback){
@@ -1246,13 +1255,20 @@ tree.on('select',function(node){
       if( err ) {
         console.log('unable to create user');
       } else {
+        table_outTuples_listtable.setLabel('OutTuples')
         data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
         ip_timewindow_outTuple[ip+timewindow] = data;
         setDataTuples(table_outTuples_listtable,data);
         screen.render();  
         }
       });
-      }}
+      } catch(err){
+      table_outTuples_listtable.setLabel('OutTuples')
+      setDataTuples(table_outTuples_listtable,[['info'],['no data']]);
+      screen.render();  
+
+
+      }}}
       else{
         table_outTuples_listtable.setItems('');
         table_outTuples_listtable.hide()
@@ -1273,6 +1289,7 @@ tree.on('select',function(node){
     // bar_state_two = true; 
     bar_state_three = true;
     box_hotkeys_state = true;
+    tablle_for_inTuples = true;
     bar_state_four = true;
     bar_state_four_two = true;
     map_state = true;
@@ -1368,7 +1385,7 @@ tree.on('select',function(node){
   screen.key('n', function(ch, key) {
     help_list_bar.selectTab(5)
     hide_widgets()
-
+    tablle_for_inTuples = true;
     bar_state_one = true;
     bar_state_two = true; 
     bar_state_three = true;
@@ -1472,7 +1489,7 @@ tree.on('select',function(node){
   help_list_bar.selectTab(4)
 
     hide_widgets()
-
+    tablle_for_inTuples = true;
     bar_state_one = true;
     bar_state_two = true; 
     bar_state_three = true;
@@ -1577,6 +1594,7 @@ tree.on('select',function(node){
 
     hide_widgets()
     // bar_state_one = true;
+    tablle_for_inTuples = true;
     bar_state_two = true; 
     bar_state_three = true;
     box_hotkeys_state = true;
@@ -1681,6 +1699,7 @@ screen.key('c', function(ch, key) {
     bar_state_one = true;
     bar_state_two = true; 
     // bar_state_three = true;
+    tablle_for_inTuples = true;
     bar_state_four = true;
     bar_state_four_two = true;
     box_hotkeys_state = true;
@@ -1780,6 +1799,7 @@ screen.key('m', function(ch, key) {
   bar_state_one = true;
   bar_state_two = true; 
   bar_state_three = true;
+  tablle_for_inTuples = true;
   bar_state_four = true;
   bar_state_four_two = true;
   box_hotkeys_state = true;
