@@ -218,6 +218,7 @@ class Module(Module, multiprocessing.Process):
                 if 'TCP' in proto or 'UDP' in proto:
                     warning_empty = ''
                     critical_warning_dport_name = ''
+                    dns_resolution = ''
 
                     # Check if the connection sent anything!
                     if not allbytes:
@@ -227,8 +228,10 @@ class Module(Module, multiprocessing.Process):
                     if not dport_name:
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
-
-                    activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
+                    dns_resolution =__database__.get_dns_resolution(daddr)
+                    if not dns_resolution:
+                        dns_resolution = '????'
+                    activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to','dns_resolution':dns_resolution, 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
 
                 elif 'ICMP' in proto:
                     if type(sport) == int:
