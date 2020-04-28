@@ -44,6 +44,8 @@ RUN cd StratosphereLinuxIPS/modules/blessed && npm install \
     blessed \
     blessed-contrib \
     clipboardy \
+    chalk \
+    strip-ansi \
     redis
 
 # Switch to Slips installation dir when login.
