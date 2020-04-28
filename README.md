@@ -4,6 +4,41 @@ Slips is a modular software
 
 # Installation
 
+## Running in a Docker
+
+Slips can be now run inside a docker if you want to analyze flow files or pcap files. If you need to analyze the traffic of your computer (access to the network card) then, for now, you need to install slips in your own computer.
+
+## From the Docker Hub
+
+	docker run -it --rm --net=host stratosphereips/slips:v0.6.5
+	./slips.py -c slips.conf -f test-flows/test3.binetflow
+
+
+### If you want to share files between your host and the docker, you can do:
+
+	mkdir ~/dataset
+	cp <some-place>/myfile.pcap ~/dataset
+	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:v0.6.5
+	./slips.py -c slips.conf -f dataset/myfile.pcap
+
+
+## Build the docker from the Dockerfile
+
+To build the docker locally from the Docker file, you can do as folows.
+If you cloned StratosphereLinuxIPS in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
+
+	cd docker
+	docker build -t slips -f Dockerfile .
+	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
+	./slips.py -c slips.conf -f test-flows/test3.binetflow
+
+You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
+
+	cp some-pcap-file.pcap ~/code/StratosphereLinuxIPS/dataset
+	docker run -it --rm --net=host -v ../dataset/:/StratosphereLinuxIPS/dataset slips
+	./slips.py -c slips.conf -f dataset/some-pcap-file.pcap
+
+
 ## Dependencies
 The minimum Slips requirements are:
 
