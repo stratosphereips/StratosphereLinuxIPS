@@ -1018,11 +1018,12 @@ tree.on('select',function(node){
         var row = [];
         var timeline_json = JSON.parse(timeline)
 
-        var pink_protocol_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
+        var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
         var red_attention_keywords = ['critical warning' ]
         var orange_number_of_bytes = ['Sent','Recv','Tot','Size','Type']
-        var blue_highlight= ['dport_name', 'dport_name/proto']
-        var cyan_highlight = ['daddr', 'saddr']
+        var blue_keywords = ['dport_name', 'dport_name/proto']
+        var cyan_keywords = ['daddr', 'saddr']
+        var light_pink_keywords = ['dns_resolution']
 
         // split the timeline on parts
         if(timeline_json['timestamp']){
@@ -1045,11 +1046,11 @@ tree.on('select',function(node){
           else if(key.includes('info')){
             value = color.rgb(105,105,105)(value)
           }
-          else if (blue_highlight.some(element => key.includes(element))){
+          else if (blue_keywords.some(element => key.includes(element))){
             value = color.rgb(51, 153, 255)(value);
           }
-          else if( cyan_highlight.some(element => key.includes(element))){
-            value = color.bold(value);
+          else if(cyan_keywords.some(element => key.includes(element))){
+            value = color.rgb(112, 168, 154)('[' + value+']')
           }
           else if (orange_number_of_bytes.some(element => key.includes(element))){
             value =key + ':' + color.rgb(255, 153, 51)(value);
@@ -1057,10 +1058,13 @@ tree.on('select',function(node){
           else if (red_attention_keywords .some(element => key.includes(element))){
             value = color.red(value);
           }
-          else if (pink_protocol_keywords .some(element => key.includes(element))){
+          else if (light_pink_keywords.some(element => key.includes(element))){
+            value = color.rgb(255,182,193)(value) ;
+          }
+          else if (pink_keywords .some(element => key.includes(element))){
             value = key + ':'+color.rgb(219,112,147)(value);
           }
-            if(value){
+          if(value){
             final_timeline += value +' ';}}
             row.push(final_timeline);
             data.push(row);
@@ -1829,11 +1833,12 @@ screen.key('m', function(ch, key) {
 // });
 
 table_timeline.rows.on('select', (item, index) => {
-  var timeline_line = item.content.split(" ");
-  var index_to = timeline_line.indexOf('to')
-  var clean_ip = stripAnsi(timeline_line[index_to +1])
-  var timeline_ip = clean_ip
-  getIpInfo_box_ip(timeline_ip,1)
+  var timeline_line = stripAnsi(item.content)
+  var ip = timeline_line.substring(
+    timeline_line.lastIndexOf("[") + 1,
+    timeline_line.lastIndexOf("]")
+);
+  getIpInfo_box_ip(ip,1)
 
 });
 // screen.key("g", function(ch,key){
