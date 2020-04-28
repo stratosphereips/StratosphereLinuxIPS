@@ -1249,6 +1249,21 @@ class Database(object):
             data = {}
         return data
 
+    def add_dns_resolution(self, query, answers):
+        """
+        Save in DB DNS name for each IP
+        """
+        for ans in answers:
+            self.r.hset('DNSresolution', ans, query)
+
+    def get_dns_resolution(self, ip):
+        """
+        Get DNS name of the IP
+        """
+        data = self.r.hget('DNSresolution', ip)
+        return data
+
+
     def search_IP_in_IoC(self, ip: str) -> str:
         """ Search in the dB of malicious IPs and return a description if we found a match """
         ip_description = self.r.hget('IoC_ips', ip)
@@ -1301,6 +1316,7 @@ class Database(object):
     def set_host_ip(self, ip):
         """ Store the IP address of the host in a db"""
         self.r.set('hostIP', ip)
+
 
     def is_ip_in_virustotal_cache(self, ip):
         """ Check if the IP was cached by VT module. If yes, return list of 4 floats (the score). If not, return None.
