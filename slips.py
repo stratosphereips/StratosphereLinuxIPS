@@ -13,7 +13,7 @@ import shutil
 from datetime import datetime
 import socket
 
-version = '0.6.5'
+version = '0.6.6'
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
