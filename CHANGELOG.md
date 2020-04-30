@@ -2,7 +2,7 @@
 - Added DNS resolution for IPs in timeline
 - Added inTuple key to the timeline for inbound flows when abalysis_direction = 'all'
 - Changed the timeline format in Slips and Kalipso
-- Defined host IP in Slips and Kalipso
+- Defined host IP in Slips and Kalipso if Slips is run on interface
 # Sun Mar 31 13:52:00 CET 2020. Up to commit b8d89a
 - Fixed the display of inbound flows in Kalipso and h hotkey to display out tuples
 # Fri Mar 27 11:55:00 CET 2020. Up to commit 2407d6

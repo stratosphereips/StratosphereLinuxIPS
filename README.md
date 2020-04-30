@@ -215,7 +215,7 @@ The core of the Slips program is not only the machine learning algorithm, but mo
 	- Added DNS resolution for IPs in timeline
 	- Added inTuple key to the timeline for inbound flows when abalysis_direction = 'all'
 	- Changed the timeline format in Slips and Kalipso
-	- Defined host IP in Slips and Kalipso
+	- Defined host IP in Slips and Kalipso if Slips is run on interface
 - 0.6.5 
 	- Fixed ThreatIntellignce module to be fully functional.
 	- Added new feature to stop Slips automatically when input files ends.
