@@ -6,7 +6,7 @@ Slips is a modular software
 
 ## Running in a Docker
 
-Slips can be now run inside a docker if you want to analyze flow files or pcap files. If you need to analyze the traffic of your computer (access to the network card) then, for now, you need to install slips in your own computer.
+Now Slips can be run inside a docker if you want to analyze flow or pcap files. If you need to analyze the traffic of your computer (access to the network card) then, for now, you need to install Slips in your own computer.
 
 ## From the Docker Hub
 
@@ -66,9 +66,11 @@ With npm you should install the following libraries
     - npm install blessed-contrib
     - npm install redis
     - npm install async
-    - npm install ansi-colors
+    - npm install chalk
+    - nom install strip-ansi
     - npm install clipboardy 
     - npm install fs
+
 ##### Installation of Zeek (Bro)
 Slips uses Zeek to generate files for most input types.
 
@@ -209,6 +211,11 @@ The core of the Slips program is not only the machine learning algorithm, but mo
 
 ### Changelog
 [rewrite]
+- 0.6.6 
+	- Added DNS resolution for IPs in timeline
+	- Added inTuple key to the timeline for inbound flows when abalysis_direction = 'all'
+	- Changed the timeline format in Slips and Kalipso
+	- Defined host IP in Slips and Kalipso
 - 0.6.5 
 	- Fixed ThreatIntellignce module to be fully functional.
 	- Added new feature to stop Slips automatically when input files ends.
