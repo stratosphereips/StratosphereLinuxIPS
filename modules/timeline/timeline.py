@@ -308,7 +308,7 @@ class Module(Module, multiprocessing.Process):
                     alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"]}
 
 
-            else:
+            elif activity:
                 alt_activity = {'info': 'No extra data from Zeek.'}
 
             # Combine the activity of normal flows and activity of alternative flows and store in the DB for this profileid and twid
