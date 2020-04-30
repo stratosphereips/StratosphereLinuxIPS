@@ -40,7 +40,7 @@ RUN curl -sL https://deb.nodesource.com/setup_10.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
 RUN cd StratosphereLinuxIPS/modules/blessed && npm install \
     async \
-    ansi-colors \
+    fs \
     blessed \
     blessed-contrib \
     clipboardy \
