@@ -1,4 +1,5 @@
-# Stratosphere Linux IPS (Slips) Version 0.6.5
+# Stratosphere Linux IPS (Slips) Version 0.6.6
+
 Slips is a behavioral-based Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels to provide good visualisation for the analyst.
 Slips is a modular software 
 
@@ -10,7 +11,7 @@ Now Slips can be run inside a docker if you want to analyze flow or pcap files. 
 
 ## From the Docker Hub
 
-	docker run -it --rm --net=host stratosphereips/slips:v0.6.5
+	docker run -it --rm --net=host stratosphereips/slips:v0.6.6
 	./slips.py -c slips.conf -f test-flows/test3.binetflow
 
 
@@ -18,7 +19,7 @@ Now Slips can be run inside a docker if you want to analyze flow or pcap files. 
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
-	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:v0.6.5
+	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:v0.6.6
 	./slips.py -c slips.conf -f dataset/myfile.pcap
 
 
