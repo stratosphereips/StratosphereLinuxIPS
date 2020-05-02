@@ -24,11 +24,11 @@ Now Slips can be run inside a docker if you want to analyze flow or pcap files. 
 
 ## Build the docker from the Dockerfile
 
-To build the docker locally from the Docker file, you can do as folows.
+To build the docker locally from the Docker file, you can do as follows (we use --no-cache so the git clone is done all the time).
 If you cloned StratosphereLinuxIPS in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
 
 	cd docker
-	docker build -t slips -f Dockerfile .
+	docker build --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f test-flows/test3.binetflow
 
