@@ -33,7 +33,7 @@ RUN pip3 install redis
 # Download and unpack Slips.
 #RUN wget -nv https://github.com/stratosphereips/StratosphereLinuxIPS/archive/master.tar.gz -O /slips.tar.gz \
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-RUN cd StratosphereLinuxIPS && git checkout develop && chmod 774 slips.py && mkdir dataset
+RUN cd StratosphereLinuxIPS && git checkout develop && chmod 774 slips.py 
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_10.x  | bash -
