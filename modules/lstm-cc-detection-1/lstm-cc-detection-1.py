@@ -17,7 +17,7 @@ import multiprocessing
 from slips.core.database import __database__
 import platform
 import warnings
-warnings.filterwarnings('ignore',category=FutureWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
