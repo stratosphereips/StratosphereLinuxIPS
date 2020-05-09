@@ -14,6 +14,8 @@ RUN apt update && apt install -y --no-install-recommends \
 # Install Slips dependencies.
 RUN apt update && apt install -y --no-install-recommends \
     curl \
+    gcc \
+    g++ \
     python3 \
     python3-certifi \
     python3-maxminddb \
@@ -28,10 +30,14 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-pip \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
+# Upgrade pip3
+RUN pip3 install --upgrade pip
+
 # Install redis using PIP3
+RUN pip3 install wheel
 RUN pip3 install redis
 RUN pip3 install setuptools
-RUN pip3 install tensorflow
+RUN pip3 install --upgrade tensorflow==2.1.0
 
 # Download and unpack Slips.
 #RUN wget -nv https://github.com/stratosphereips/StratosphereLinuxIPS/archive/master.tar.gz -O /slips.tar.gz \
@@ -52,7 +58,8 @@ RUN cd StratosphereLinuxIPS/modules/blessed && npm install \
     redis
 
 # Change the backed of keras to tensorflow
-RUN sed -i 's/theano/tensorflow/' $HOME/.keras/keras.json
+#RUN sed -i 's/theano/tensorflow/' $HOME/.keras/keras.json
+RUN echo "{\n \"floatx\": \"float32\",\n \"epsilon\": 1e-07, \n \"backend\": \"tensorflow\",\n \"image_data_format\": \"channels_last\" \n }"
 
 # Switch to Slips installation dir when login.
 WORKDIR /StratosphereLinuxIPS
