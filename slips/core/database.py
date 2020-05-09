@@ -966,6 +966,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'ip_info_change' in channel:
             pubsub.subscribe(channel)
+        elif 'new_irc_features' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -1153,6 +1155,38 @@ class Database(object):
         to_send = json.dumps(to_send)
         self.publish('new_dns', to_send)
         self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
+    
+    def add_out_irc_features(self, profileid, twid, uid, column_values):
+        """
+        Store in the DB a DNS request
+
+        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        """
+        data = {}
+        data['src'] = column_values['src']
+        data['saddr'] = column_values['saddr']
+        data['src_ports_count'] = column_values['src_ports_count']
+        data['dst'] = column_values['dst']
+        data['dport'] = column_values['dport']
+        data['daddr'] = column_values['daddr']
+        data['duration'] = column_values['duration']
+        data['msg_count'] = column_values['msg_count']
+        data['size_total'] = column_values['size_total']
+        data['spec_chars_username_mean'] = column_values['spec_chars_username_mean']
+        data['spec_chars_msg_mean'] = column_values['spec_chars_msg_mean']
+        data['msg_word_entropy'] = column_values['msg_word_entropy']
+        data['periodicity'] = column_values['periodicity']
+        # Convert to json string
+        data = json.dumps(data)
+        self.r.hset(profileid + self.separator + twid + self.separator + 'irc_features', uid, data)
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['features'] = data
+        to_send = json.dumps(to_send)
+        self.publish('new_irc_features', to_send)
+        self.print('Adding IRC Features to DB: {}'.format(data), 5,0)
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """

@@ -479,6 +479,8 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['server_name'] = ''
         elif 'ssh' in line[-1]:
             self.column_values['type'] = 'ssh'
+        elif 'irc_features' in line[-1]:
+            self.column_values['type'] = 'irc_features'
         elif 'irc' in line[-1]:
             self.column_values['type'] = 'irc'
         elif 'long' in line[-1]:
@@ -725,6 +727,8 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['server_name'] = ''
         elif 'ssh' in line['type']:
             self.column_values['type'] = 'ssh'
+        elif 'irc_features' in line['type']:
+            self.column_values = {**self.column_values, **line}
         elif 'irc' in line['type']:
             self.column_values['type'] = 'irc'
         elif 'long' in line['type']:
@@ -1188,7 +1192,7 @@ class ProfilerProcess(multiprocessing.Process):
             # For now we only process the argus flows and the zeek conn logs
             if not self.column_values:
                 return True
-            elif not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type']:
+            elif not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type'] and not 'irc_features' in self.column_values['type']:
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
@@ -1222,6 +1226,8 @@ class ProfilerProcess(multiprocessing.Process):
             # This uid check is for when we read things that are not zeek
             try:
                 uid = self.column_values['uid']
+                if not uid:
+                    uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
             except KeyError:
                 # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
                 # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
@@ -1356,6 +1362,8 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                elif 'irc_features' in flow_type:
+                    __database__.add_out_irc_features(profileid, twid, uid, self.column_values)
                 elif 'dns' in flow_type:
                     __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                     # Add DNS resolution if there are answers for the query
