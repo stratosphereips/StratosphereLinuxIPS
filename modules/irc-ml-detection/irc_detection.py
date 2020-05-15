@@ -120,7 +120,7 @@ class IRCDetector(Module, multiprocessing.Process):
 
                     profile_id = data['profileid']
                     tw_id = data['twid']
-                    new_ip = features['saddr']
+                    new_ip = features['daddr']
 
                     # predict maliciousness of irc conneciton based on data features
                     out = self.predict_irc(features)
