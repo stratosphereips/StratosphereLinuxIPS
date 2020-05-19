@@ -190,6 +190,8 @@ The behavioral models are stored in the __models__ folder and will be updated re
 
 The core of the Slips program is not only the machine learning algorithm, but more importantly the __behavioral models__ that are used to describe flows based on flows' duration, size, and periodicty. This is very important because the models are _curated_ to maximize the detection. More about behavioral models is in [Stratosphere Testing Framework].
 
+# Zeek Modules
+If you want to add your own zeek modules to use in your own slips modules, you can add the .zeek file directly in the 'zeek_modules' folder and it will be loaded and executed by zeek automatically.
 
 ## The use of verbose (-v)
 [rewrite]
