@@ -15,7 +15,7 @@ class IRCDetector(Module, multiprocessing.Process):
     name = 'irc-ml-detection'
     description = 'Module to detect malicious irc communication.'
     authors = ['Ondrej Prenek']
-    model_fn = './modules/irc-ml-detection/irc_det_model-12-04-2020.sav'
+    model_fn = './modules/irc-ml-detection/irc_det_model-19-05-2020.sav'
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
