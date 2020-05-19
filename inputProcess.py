@@ -9,6 +9,8 @@ import configparser
 import time
 import json
 import traceback
+from os import listdir
+from os.path import isfile, join
 
 # Input Process
 class InputProcess(multiprocessing.Process):
@@ -253,14 +255,23 @@ class InputProcess(multiprocessing.Process):
             open_file_handlers[file].close()
         return lines
 
+    def read_zeek_modules(self):
+        """
+        Read the list of files in the zeek_modules folder and return that list
+        so we can load them with zeek later
+        """
+        zeek_module_list = [f for f in listdir('./zeek_modules/') if isfile(join('./zeek_modules/', f))]
+        return zeek_module_list
+
     def run(self):
         try:
             # Process the file that was given
             lines = 0
             if self.input_type == 'file':
-                """ 
-                Path to the flow input file to read. It can be a Argus binetflow flow,
-                a Zeek conn.log file or a Zeek folder with all the log files. 
+                """
+                Path to the flow input file to read. It can be a Argus
+                binetflow flow, a Zeek conn.log file or a Zeek folder
+                with all the log files.
                 """
 
                 # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
@@ -361,14 +372,20 @@ class InputProcess(multiprocessing.Process):
                     command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null &"
                     os.system(command)
 
+                # Read the list of zeek modules names custom for slips that are stored in the zeek_modules folder
+                zeek_module_list = self.read_zeek_modules()
+
+                # Convert the list of modules in a string
+                zeek_modules_string = ""
+                for zeek_module in zeek_module_list:
+                    zeek_modules_string += os.path.abspath('./zeek_modules/')  + '/' + zeek_module
+                    zeek_modules_string += " "
+
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " " + zeek_modules_string + " 2>&1 > /dev/null &"
                 # Run zeek.
                 os.system(command)
-
-                irc_command = "cd " + self.zeek_folder + ";" + self.zeek_or_bro + " irc_feature_extractor.zeek -C " + bro_parameter
-                os.system(irc_command)
 
                 # Give Zeek some time to generate at least 1 file.
                 time.sleep(3)
