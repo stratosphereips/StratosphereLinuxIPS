@@ -80,9 +80,9 @@ class IRCDetector(Module, multiprocessing.Process):
             prediction: 1 if malicious, 0 otherwise
         """
 
-        X_in = [features['periodicity'], features['duration'], features['size_total'], features['msg_count'],
-                features['src_ports_count'], features['dport'], features['spec_chars_username_mean'],
-                features['spec_chars_msg_mean'], features['msg_word_entropy']]
+        X_in = [features['size_total'], features['msg_count'], features['src_ports_count'],
+            features['dport'], features['duration'], features['periodicity'], 
+            features['spec_chars_username_mean'], features['spec_chars_msg_mean'], features['msg_word_entropy']]
         X_in = np.array(X_in).reshape(1, -1)
         return self.detection_model.predict(X_in)
 
