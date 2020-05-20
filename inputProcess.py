@@ -372,14 +372,14 @@ class InputProcess(multiprocessing.Process):
                     command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null &"
                     os.system(command)
 
-                # Read the list of zeek modules names custom for slips that are stored in the zeek_modules folder
-                zeek_module_list = self.read_zeek_modules()
+                # # Read the list of zeek modules names custom for slips that are stored in the zeek_modules folder
+                # zeek_module_list = self.read_zeek_modules()
 
-                # Convert the list of modules in a string
-                zeek_modules_string = ""
-                for zeek_module in zeek_module_list:
-                    zeek_modules_string += os.path.abspath('./zeek_modules/')  + '/' + zeek_module
-                    zeek_modules_string += " "
+                # # Convert the list of modules in a string
+                # zeek_modules_string = ""
+                # for zeek_module in zeek_module_list:
+                #     zeek_modules_string += os.path.abspath('./zeek_modules/')  + '/' + zeek_module
+                #     zeek_modules_string += " "
 
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
