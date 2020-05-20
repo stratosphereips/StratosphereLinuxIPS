@@ -18,6 +18,7 @@ The extrated features for each IRC three-tuple are
 - **Message Word Entropy** - To consider whether the user sends the same message multiple times in a row, or whether the message contains a limited number of words, we compute a word entropy across all of the messages in the IRC three-tuple.
 - **Mean of Nickname Special Characters** - To identify whether the nickname of the user in the IRC three-tuple is randomly generated or not. Therefore, in this feature, we compute the average usage of non-alphabetic characters in the nickname.
 - **Mean of Message Special Characters** - If the message contains many sent commands, it will most likely contain a lot of different characters than the ordinary message. With this feature, we obtain the mean usage of non-alphabetic characters across all messages in the IRC three-tuple.
+- **Destination port** 
 
 Classification
 ----
