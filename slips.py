@@ -286,11 +286,7 @@ if __name__ == '__main__':
                     __database__.publish_stop()
                     # Here we should Wait for any channel if it has still data to receive in its channel
                     # Send manual stops to the process not using channels
-                    try:
-                        logsProcessQueue.put('stop_process')
-                    except NameError:
-                        # The logsProcessQueue is not there because we didnt started the logs files (used -l)
-                        pass
+                    logsProcessQueue.put('stop_process')
                     outputProcessQueue.put('stop_process')
                     profilerProcessQueue.put('stop_process')
                     break
@@ -305,7 +301,11 @@ if __name__ == '__main__':
         __database__.publish_stop()
         # Here we should Wait for any channel if it has still data to receive in its channel
         # Send manual stops to the process not using channels
-        logsProcessQueue.put('stop_process')
+        try:
+            logsProcessQueue.put('stop_process')
+        except NameError:
+            # The logsProcessQueue is not there because we didnt started the logs files (used -l)
+            pass
         outputProcessQueue.put('stop_process')
         profilerProcessQueue.put('stop_process')
 
