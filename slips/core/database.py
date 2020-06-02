@@ -848,48 +848,53 @@ class Database(object):
         return data
 
     def getIPData(self, ip):
-        """ 
-        Return information about this IP from the IPs has 
-        Returns a dictionary
+        """
+        Return information about this IP
+        Returns a dictionary or False if there is no IP in the database
         We need to separate these three cases:
-        1- IP is in the DB without data
-        2- IP is in the DB with data
-        3- IP is not in the DB
+        1- IP is in the DB without data. Return empty dict.
+        2- IP is in the DB with data. Return dict.
+        3- IP is not in the DB. Return False
         """
         data = self.r.hget('IPsInfo', ip)
         if data or data == {}:
             # This means the IP was in the database, with or without data
+            # Case 1 and 2
             # Convert the data
             data = json.loads(data)
-            #print(f'In the DB: IP {ip}, and data {data}')
+            # print(f'In the DB: IP {ip}, and data {data}')
         else:
             # The IP was not in the DB
+            # Case 3
             data = False
-            #print(f'In the DB: IP {ip}, and data {data}')
-        # Always return a dictionary
+            # print(f'In the DB: IP {ip}, and data {data}')
         return data
 
     def getallIPs(self):
         """ Return list of all IPs in the DB """
         data = self.r.hgetall('IPsInfo')
-        #data = json.loads(data)
+        # data = json.loads(data)
         return data
 
-    def setNewIP(self, ip):
-        """ 
+    def setNewIP(self, ip: str):
+        """
         1- Stores this new IP in the IPs hash
-        2- Publishes in the channels that there is a new IP, and that we want data from the Threat Intelligence modules
+        2- Publishes in the channels that there is a new IP, and that we want
+            data from the Threat Intelligence modules
+        Sometimes it can happend that the ip comes as an IP object, but when
+        accessed as str, it is automatically
+        converted to str
         """
         data = self.getIPData(ip)
-        if data == False:
+        if data is False:
             # If there is no data about this IP
-            # Set this IP for the first time in the IPsInfo 
-            # Its VERY important that the data of the first time we see an IP must be '{}', an empty dictionary! if not the logic breaks. 
-            # We use the empty dictionary to find if an IP exists or not 
+            # Set this IP for the first time in the IPsInfo
+            # Its VERY important that the data of the first time we see an IP
+            # must be '{}', an empty dictionary! if not the logic breaks.
+            # We use the empty dictionary to find if an IP exists or not
             self.r.hset('IPsInfo', ip, '{}')
             # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
-
 
     def getIP(self, ip):
         """ Check if this ip is the hash of the profiles! """
@@ -899,11 +904,13 @@ class Database(object):
         else:
             return False
 
-    def setInfoForIPs(self, ip, ipdata):
-        """ 
-        Store information for this IP 
-        We receive a dictionary, such as {'geocountry': 'rumania'} that we are going to store for this IP. 
-        If it was not there before we store it. If it was there before, we overwrite it
+    def setInfoForIPs(self, ip: str, ipdata: dict):
+        """
+        Store information for this IP
+        We receive a dictionary, such as {'geocountry': 'rumania'} that we are
+        going to store for this IP.
+        If it was not there before we store it. If it was there before, we
+        overwrite it
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
