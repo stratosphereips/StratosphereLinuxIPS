@@ -351,6 +351,8 @@ class Database(object):
 
             #############
             # Store the Dst as IP address and notify in the channel
+            # We send the obj but when accessed as str, it is automatically
+            # converted to str
             self.setNewIP(str(ip_as_obj))
 
             #############
