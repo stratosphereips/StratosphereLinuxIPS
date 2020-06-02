@@ -15,7 +15,7 @@ class IRCDetector(Module, multiprocessing.Process):
     name = 'irc-ml-detection'
     description = 'Module to detect malicious irc communication.'
     authors = ['Ondrej Prenek']
-    model_fn = './modules/irc-ml-detection/irc_det_model-12-04-2020.sav'
+    model_fn = './modules/irc-ml-detection/irc_det_model-19-05-2020.sav'
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -80,9 +80,9 @@ class IRCDetector(Module, multiprocessing.Process):
             prediction: 1 if malicious, 0 otherwise
         """
 
-        X_in = [features['periodicity'], features['duration'], features['size_total'], features['msg_count'],
-                features['src_ports_count'], features['dport'], features['spec_chars_username_mean'],
-                features['spec_chars_msg_mean'], features['msg_word_entropy']]
+        X_in = [features['size_total'], features['msg_count'], features['src_ports_count'],
+            features['dport'], features['duration'], features['periodicity'], 
+            features['spec_chars_username_mean'], features['spec_chars_msg_mean'], features['msg_word_entropy']]
         X_in = np.array(X_in).reshape(1, -1)
         return self.detection_model.predict(X_in)
 

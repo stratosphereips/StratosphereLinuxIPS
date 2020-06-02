@@ -728,7 +728,67 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'ssh' in line['type']:
             self.column_values['type'] = 'ssh'
         elif 'irc_features' in line['type']:
+            # {"src":"T!T@null","saddr":"192.168.100.103","src_ports_count":7,"dst":"#a925d765","daddr":"111.230.241.23","dport":2407,"ts":1531297450.532089,
+            # "end_time":1534860900.996931,"duration":3563450.464842081,"msg_count":44,"size_total":105272,"periodicity":0.026915817147229239,
+            # "spec_chars_username_mean":0.24999968750039065,"spec_chars_msg_mean":0.9083676749118314,"msg_word_entropy":2.0752813208858207}
             self.column_values = {**self.column_values, **line}
+            self.column_values['type'] = 'irc_features'
+            try:
+                self.column_values['src'] = line['src']
+            except KeyError:
+                self.column_values['src'] = ''
+            try:
+                self.column_values['saddr'] = line['saddr']
+            except KeyError:
+                self.column_values['saddr'] = ''
+            try:
+                self.column_values['src_ports_count'] = line['src_ports_count']
+            except KeyError:
+                self.column_values['src_ports_count'] = ''
+            try:
+                self.column_values['dst'] = line['dst']
+            except KeyError:
+                self.column_values['dst'] = ''
+            try:
+                self.column_values['daddr'] = line['daddr']
+            except KeyError:
+                self.column_values['daddr'] = ''
+            try:
+                self.column_values['dport'] = line['dport']
+            except KeyError:
+                self.column_values['dport'] = ''
+            try:
+                self.column_values['end_time'] = line['end_time']
+            except KeyError:
+                self.column_values['end_time'] = ''
+            try:
+                self.column_values['duration'] = line['duration']
+            except KeyError:
+                self.column_values['duration'] = ''
+            try:
+                self.column_values['msg_count'] = line['msg_count']
+            except KeyError:
+                self.column_values['msg_count'] = ''
+            try:
+                self.column_values['size_total'] = line['size_total']
+            except KeyError:
+                self.column_values['size_total'] = ''
+            try:
+                self.column_values['periodicity'] = line['periodicity']
+            except KeyError:
+                self.column_values['periodicity'] = ''
+            try:
+                self.column_values['spec_chars_username_mean'] = line['spec_chars_username_mean']
+            except KeyError:
+                self.column_values['spec_chars_username_mean'] = ''
+            try:
+                self.column_values['spec_chars_msg_mean'] = line['spec_chars_msg_mean']
+            except KeyError:
+                self.column_values['spec_chars_msg_mean'] = ''
+            try:
+                self.column_values['msg_word_entropy'] = line['msg_word_entropy']
+            except KeyError:
+                self.column_values['msg_word_entropy'] = ''
         elif 'irc' in line['type']:
             self.column_values['type'] = 'irc'
         elif 'long' in line['type']:

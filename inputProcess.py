@@ -372,21 +372,23 @@ class InputProcess(multiprocessing.Process):
                     command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null &"
                     os.system(command)
 
-                # Read the list of zeek modules names custom for slips that are stored in the zeek_modules folder
-                zeek_module_list = self.read_zeek_modules()
+                # # Read the list of zeek modules names custom for slips that are stored in the zeek_modules folder
+                # zeek_module_list = self.read_zeek_modules()
 
-                # Convert the list of modules in a string
-                zeek_modules_string = ""
-                for zeek_module in zeek_module_list:
-                    zeek_modules_string += os.path.abspath('./zeek_modules/')  + '/' + zeek_module
-                    zeek_modules_string += " "
+                # # Convert the list of modules in a string
+                # zeek_modules_string = ""
+                # for zeek_module in zeek_module_list:
+                #     zeek_modules_string += os.path.abspath('./zeek_modules/')  + '/' + zeek_module
+                #     zeek_modules_string += " "
 
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " " + zeek_modules_string + " 2>&1 > /dev/null &"
+                command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                # command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " " + zeek_modules_string + " 2>&1 > /dev/null &"
+                irc_pkg_command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + " ../zeek_modules/irc_feature_extractor.zeek"
                 # Run zeek.
                 os.system(command)
-
+                os.system(irc_pkg_command)
                 # Give Zeek some time to generate at least 1 file.
                 time.sleep(3)
 
