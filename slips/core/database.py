@@ -914,9 +914,15 @@ class Database(object):
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
-        # Assign to None, to check if there is new data
-        newdata_str = None
+
+        if not data:
+            # This IP is not in the dictionary, add it first:
+            self.setNewIP(ip)
+            # Now get the data, which should be empty, but just in case
+            data = self.getIPData(ip)
+
         for key in iter(ipdata):
+            # print(f'Trying key {key}, for ip {ip}, with data {ipdata}')
             # ipdata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
             # ipdata can be {'VirusTotal': [1,2,3,4]}
             # I think we dont need this anymore of the conversion
@@ -926,28 +932,20 @@ class Database(object):
 
             data_to_store = ipdata[key]
 
-            # THIS IS NOT WORKING CORRECTLY!!! FIX THE WAY WE STORE THE DATA, WE ARE NEVER STORING NOW
-            # Do we have any previous data?
-            if data:
-                # If there is data previously stored, check if we have this key already
-                try:
-                    # If the key is already stored, do not modify it
-                    value = data[key]
-                except KeyError:
-                    data[key] = data_to_store
-                    newdata_str = json.dumps(data)
-                    self.r.hset('IPsInfo', ip, newdata_str)
-            else:
-                # There no data so far, so add the new data
-                # Create a temp dict to store the key and value
+            # If there is data previously stored, check if we have
+            # this key already
+            try:
+                # If the key is already stored, do not modify it
+                # Check if this decision is ok! or we should modify
+                # the data
+                _ = data[key]
+            except KeyError:
+                # There is no data for they key so far. Add it
                 data[key] = data_to_store
                 newdata_str = json.dumps(data)
                 self.r.hset('IPsInfo', ip, newdata_str)
-                # disable, because gives an error of no attribute outputqueue
-                #print('\tNew Info added to IP {}: {}'.format(ip, newdata_str))
-        # publish if the IP info was changed
-        if newdata_str is not None:
-            self.r.publish('ip_info_change', ip)
+                # Publish the changes
+                self.r.publish('ip_info_change', ip)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
