@@ -91,51 +91,46 @@ class Module(Module, multiprocessing.Process):
         threat_level = 50
         confidence = 1
         description = 'LSTM C&C channels detection, score: ' + str(score)
+        self.print(f'Setting evidence of {description} with threat level {threat_level} and confidence {confidence}. For {profileid} on {twid}')
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def convert_input_for_module(self, pre_behavioral_model):
-        """ 
-        Takes the input from the letters and converts them 
-        to whatever is needed by the model 
+        """
+        Takes the input from the letters and converts them
+        to whatever is needed by the model
         The pre_behavioral_model is a 1D array of letters in an array
         """
 
         # Length of behavioral model with which we trained our module
         max_length = 500
-        # str_to_ascii = lambda i: [ord(x) for x in i]
-        # behavioral_model = str_to_ascii(behavioral_model)
-        # Convert the string into a list and then into a numpy array
-        pre_behavioral_model = np.array(list(pre_behavioral_model))
-        #print(f'1 BM: {pre_behavioral_model}')
 
         # Convert each of the stratosphere letters to an integer. There are 50
         vocabulary = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', ',', '.', '+', '*']
         int_of_letters = {}
         for i, letter in enumerate(vocabulary):
-            int_of_letters[letter] = i
-        # vocabulary_size = len(int_of_letters)
-        # Convert each of the letters in the model into the integer
-        convert_to_int = lambda x : [int_of_letters[i] for i in x]
-        pre_behavioral_model = np.array(convert_to_int(pre_behavioral_model), ndmin=2)
-        #print(f'2 BM: {pre_behavioral_model}')
-        # Now  the pre_behavioral_model is a list of ints
-        # Padd the list to 500
-        pre_behavioral_model = np.array(pad_sequences(pre_behavioral_model, maxlen=max_length, padding='post'))
-        #print(f'3 BM: {pre_behavioral_model}')
-        #print(type(pre_behavioral_model))
-        #print(pre_behavioral_model.shape)
+            int_of_letters[letter] = float(i)
 
-        # Convert to one-hot encoding
-        pre_behavioral_model_oh = np.empty((pre_behavioral_model.shape[0], 500, 50))
-        for i, a_list in enumerate(pre_behavioral_model):
-            pre_behavioral_model_oh[i] = to_categorical(a_list, num_classes=50)
-        #print(f'4 BM: {pre_behavioral_model_oh}')
-        return pre_behavioral_model_oh
+        # String
+        #pre_behavioral_model = "88*y*y*h*h*h*h*h*h*h*y*y*h*h*h*y*y*"
+        # Add padding to the letters passed
+        # self.print(f'Seq sent: {pre_behavioral_model}')
+        pre_behavioral_model += '0' * (max_length - len(pre_behavioral_model))
+        # self.print(f'Padded Seq sent: {pre_behavioral_model}')
+
+        # Convert to ndarray
+        pre_behavioral_model = np.array([[int_of_letters[i]] for i in pre_behavioral_model])
+        #self.print(f'The sequence has shape {pre_behavioral_model.shape}')
+
+        # Reshape into (1, 500, 1) We need the first 1, because this is one sample only, but keras expects a 3d vector
+        pre_behavioral_model = np.reshape(pre_behavioral_model, (1, max_length, 1))
+
+        # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
+        return pre_behavioral_model
 
     def run(self):
         try:
             # Download lstm model
-            model = load_model('modules/lstm-cc-detection-1/detection_model.h5')
+            model = load_model('modules/lstm-cc-detection-1/detection_model-9.h5')
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
@@ -144,7 +139,7 @@ class Module(Module, multiprocessing.Process):
                     return True
                 if message['channel'] == 'new_letters' and type(message['data']) is not int:
                     # Define why this threshold
-                    threshold = 0.8
+                    threshold = 0.6
                     data = message['data']
                     data = data.split('-')
                     pre_behavioral_model = data[0]
@@ -154,17 +149,13 @@ class Module(Module, multiprocessing.Process):
                     # Function to convert each letter of behavioral model to ascii
                     behavioral_model = self.convert_input_for_module(pre_behavioral_model)
                     # Predict the score of behavioral model being C&C channel
-                    print('a')
-                    score = model.predict(behavioral_model, verbose=2)
-                    print('b')
+                    #self.print(f'Predicting the sequence: {behavioral_model}')
+                    score = model.predict(behavioral_model)
+                    self.print(f' >> Sequence: {pre_behavioral_model}. Final prediction score: {score[0][0]:.20f}', 2, 0)
                     # get a float instead of numpy array
-                    print(score)
-                    print(type(score))
-                    score = score.item()
-                    print('c')
+                    score = score[0][0]
                     if score > threshold:
                         self.set_evidence(score, tupleid, profileid, twid)
-                    print('d')
 
         except KeyboardInterrupt:
             return True
