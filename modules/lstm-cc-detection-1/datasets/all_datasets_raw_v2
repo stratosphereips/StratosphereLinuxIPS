@@ -882,4 +882,19 @@
 [7391] | From-Normal-TCP-HTTP--335                                     | [36m147.32.84.170-94.127.76.60-80-tcp[0m         | 99.I.I.Z.Z.z.Z.z.Z.
 [7386] | From-Normal-TCP-HTTP--332                                     | [36m147.32.84.170-94.127.76.70-80-tcp[0m         | 99.I.z.Z.Z.z.Z.Z.Z.Z.Z.
 [7387] | From-Normal-UDP-DNS-CVUT_WEBSERVER-1                          | [36m147.32.87.36-147.32.80.9-53-udp[0m           | 44.R+u*R.R,R.R*R.R,R.
-[7388] | From-Botnet-TCP-CC1                                           | [36m147.32.87.36-147.32.80.9-80-tcp[0m           | 1,1.V+V.V.e.V.E.v.v.U.U.D.u.U.U.U,s.V.R.V.U.U.u.u.U,U.D.U.U.U.V.E.V.U.U+U.U.U.u.u.V.V.u.u.U.U.V.V.v.v.u.u.U.U.E.v.u.U.U.v.u.V.U.u.u.U.U.U.V.E.v.u.V.V.R.u.u.u.u.u.V.V.V.u.V.u.V.U.r.v.u.U.u.U.V.U.V.U.u.U.V.V.u.d.U.U.U.U.U.U.V.U.v.E.V.u.u.U.U.U.U.U.u.u.u.u.u.u.V,R.R.U.V,U.V+U.U+U.V+U.U+U.U+U.V+U.V+U.V+V.V+U.U+U.U+U.V+U.. Final prediction score: 0.61658364534378051758
+[1] | From-Botnet | asdf | 11,a,a,A,a,a,a,a,a,A,a,A,A,.
+[1] | From-Botnet | asdf | 11,a,a,A,a,a,a,a,a,A,a,A,A,A,A,A,.
+[1] | From-Botnet | asdf | 11,a,a,A,a,a,a,a,a,A,a,A,A,A,A,A,a,A,A,a,A,a,a,a,a,A,b,a,A,F,A,.
+[1] | From-Botnet | asdf | 11,a,a,A,a,a,a,a,a,A,a,A,A,A,A,F,a,A,A,a,A,a,a,f,a,A,b,a,A,A,A,A,A,a,a,a,A,a,A,a,A,a,a,a,a,A,A,a,A,A,A,a,A,B,A,A,a,A,.
+[1] | From-Botnet | asdf | 55+e+e+e+
+[1] | From-Botnet | asdf | 55+e+e+e+e+e+e+.
+[1] | From-Botnet | asdf | 99.Z+z+I+i+i+i+i+i+i+i+i+i+.
+[1] | From-Botnet | asdf | 88.Y+H+h+h+h+h+h+h+h+h+h+h+.
+[1] | From-Botnet | asdf | 55+e+e+e+e+e+e+e+e+e+e+e+e+e+e+e+.
+[1] | From-Botnet | asdf | 99.y.Z.y.Z,Z+I+i+i+i+i+i+i+i+i+i+i+h+i+.
+[1] | From-Botnet | asdf | 99+i+i+i+.
+[1] | From-Botnet | asdf | 99+I+i+i+.
+[1] | From-Botnet | asdf | 56+w+B+s+b+b+b+.
+[1] | From-Botnet | asdf | 99+i+i+i+i+i+i+i+i+i+i+i+i+i+i+i+i+i+i+.
+[1] | From-Normal | asdf | 99,r,r+r+r*r+r*r+F+
+[1] | From-Normal | asdf | 91,r+r+r*r+r*r+E+
