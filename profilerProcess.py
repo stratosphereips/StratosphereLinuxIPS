@@ -1337,7 +1337,7 @@ class ProfilerProcess(multiprocessing.Process):
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
                 role = 'Client'
-                #self.print(f'Storing features going out for profile {profileid} and tw {twid}')
+                # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
@@ -1371,7 +1371,7 @@ class ProfilerProcess(multiprocessing.Process):
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
                 role = 'Server'
-                #self.print(f'Storing features going in for profile {profileid} and tw {twid}')
+                # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
                     # Tuple
                     tupleid = str(saddr_as_obj) + ':' + str(sport) + ':' + proto
@@ -1435,19 +1435,20 @@ class ProfilerProcess(multiprocessing.Process):
 
     def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size, tuple_key: str):
         """
-        This function computes the new symbol for the tuple according to the original stratosphere ips model of letters
-        Here we do not apply any detection model, we just create the letters as one more feature
-        current_time is the starttime of the flow
+        This function computes the new symbol for the tuple according to the
+        original stratosphere ips model of letters
+        Here we do not apply any detection model, we just create the letters
+        as one more feature current_time is the starttime of the flow
         """
         try:
             current_duration = float(current_duration)
             current_size = int(current_size)
             now_ts = float(current_time)
-            self.print("Starting compute symbol. Tupleid {}, time:{} ({}), dur:{}, size:{}".format(tupleid, current_time, type(current_time), current_duration, current_size), 0, 8)
+            self.print("Starting compute symbol. Profileid: {}, Tupleid {}, time:{} ({}), dur:{}, size:{}".format(profileid, tupleid, current_time, type(current_time), current_duration, current_size), 0, 8)
             # Variables for computing the symbol of each tuple
             T2 = False
             TD = False
-            # Thresholds learng from Stratosphere ips first version
+            # Thresholds learnt from Stratosphere ips first version
             # Timeout time, after 1hs
             tto = timedelta(seconds=3600)
             tt1 = float(1.05)
@@ -1464,17 +1465,15 @@ class ProfilerProcess(multiprocessing.Process):
             # Get the time of the last flow in this tuple, and the last last
             # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
             (last_last_ts, last_ts) = __database__.getT2ForProfileTW(profileid, twid, tupleid, tuple_key)
-
-
-            ## BE SURE THAT HERE WE RECEIVE THE PROPER DATA
-            #T1 = timedelta(seconds=10)
-            #previous_time = datetime.now() - timedelta(seconds=3600)
+            # self.print(f'Profileid: {profileid}. Data extracted from DB. last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
 
             def compute_periodicity(now_ts: float, last_ts: float, last_last_ts: float):
                 """ Function to compute the periodicity """
                 zeros = ''
                 if last_last_ts is False or last_ts is False:
                     TD = -1
+                    T1 = None
+                    T2 = None
                 else:
                     # Time diff between the past flow and the past-past flow.
                     T1 = last_ts - last_last_ts
@@ -1515,7 +1514,7 @@ class ProfilerProcess(multiprocessing.Process):
                     elif TD > tt3:
                         # Strongly not periodicity
                         TD = 4
-
+                self.print("Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, T2={}, TD={}".format(profileid, tupleid, T1, T2, TD), 0, 5)
                 return TD, zeros
 
             def compute_duration():
@@ -1651,6 +1650,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             def compute_timechar():
                 """ Function to compute the timechar """
+                # self.print(f'Compute timechar. Profileid: {profileid} T2: {T2}', 0, 5)
                 if not isinstance(T2, bool):
                     if T2 <= timedelta(seconds=5).total_seconds():
                         return '.'
@@ -1663,17 +1663,22 @@ class ProfilerProcess(multiprocessing.Process):
                     else:
                         # Changed from 0 to ''
                         return ''
+                else:
+                    return ''
 
             # Here begins the function's code
             try:
                 # Update value of T2
-                T2 = now_ts - last_ts
+                if now_ts and last_ts:
+                    T2 = now_ts - last_ts
+                else:
+                    T2 = False
                 # Are flows sorted?
                 if T2 < 0:
                     # Flows are not sorted!
                     # What is going on here when the flows are not ordered?? Are we losing flows?
                     # Put a warning
-                    # self.print("Warning: Coming flows are not sorted -> Some time diff are less than zero.", 0, 1)
+                    self.print("Warning: Coming flows are not sorted -> Some time diff are less than zero.", 0, 1)
                     pass
             except TypeError:
                 T2 = False
@@ -1689,7 +1694,7 @@ class ProfilerProcess(multiprocessing.Process):
             # self.print("Letter: {}".format(letter), 0, 1)
             timechar = compute_timechar()
             # self.print("TimeChar: {}".format(timechar), 0, 1)
-            self.print("Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(periodicity, duration, size, letter, timechar), 0, 5)
+            self.print("Profileid: {}, Tuple: {}, Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(profileid, tupleid, periodicity, duration, size, letter, timechar), 0, 5)
 
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value

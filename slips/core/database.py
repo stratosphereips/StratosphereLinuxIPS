@@ -351,6 +351,8 @@ class Database(object):
 
             #############
             # Store the Dst as IP address and notify in the channel
+            # We send the obj but when accessed as str, it is automatically
+            # converted to str
             self.setNewIP(str(ip_as_obj))
 
             #############
@@ -846,48 +848,53 @@ class Database(object):
         return data
 
     def getIPData(self, ip):
-        """ 
-        Return information about this IP from the IPs has 
-        Returns a dictionary
+        """
+        Return information about this IP
+        Returns a dictionary or False if there is no IP in the database
         We need to separate these three cases:
-        1- IP is in the DB without data
-        2- IP is in the DB with data
-        3- IP is not in the DB
+        1- IP is in the DB without data. Return empty dict.
+        2- IP is in the DB with data. Return dict.
+        3- IP is not in the DB. Return False
         """
         data = self.r.hget('IPsInfo', ip)
         if data or data == {}:
             # This means the IP was in the database, with or without data
+            # Case 1 and 2
             # Convert the data
             data = json.loads(data)
-            #print(f'In the DB: IP {ip}, and data {data}')
+            # print(f'In the DB: IP {ip}, and data {data}')
         else:
             # The IP was not in the DB
+            # Case 3
             data = False
-            #print(f'In the DB: IP {ip}, and data {data}')
-        # Always return a dictionary
+            # print(f'In the DB: IP {ip}, and data {data}')
         return data
 
     def getallIPs(self):
         """ Return list of all IPs in the DB """
         data = self.r.hgetall('IPsInfo')
-        #data = json.loads(data)
+        # data = json.loads(data)
         return data
 
-    def setNewIP(self, ip):
-        """ 
+    def setNewIP(self, ip: str):
+        """
         1- Stores this new IP in the IPs hash
-        2- Publishes in the channels that there is a new IP, and that we want data from the Threat Intelligence modules
+        2- Publishes in the channels that there is a new IP, and that we want
+            data from the Threat Intelligence modules
+        Sometimes it can happend that the ip comes as an IP object, but when
+        accessed as str, it is automatically
+        converted to str
         """
         data = self.getIPData(ip)
-        if data == False:
+        if data is False:
             # If there is no data about this IP
-            # Set this IP for the first time in the IPsInfo 
-            # Its VERY important that the data of the first time we see an IP must be '{}', an empty dictionary! if not the logic breaks. 
-            # We use the empty dictionary to find if an IP exists or not 
+            # Set this IP for the first time in the IPsInfo
+            # Its VERY important that the data of the first time we see an IP
+            # must be '{}', an empty dictionary! if not the logic breaks.
+            # We use the empty dictionary to find if an IP exists or not
             self.r.hset('IPsInfo', ip, '{}')
             # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
-
 
     def getIP(self, ip):
         """ Check if this ip is the hash of the profiles! """
@@ -897,17 +904,25 @@ class Database(object):
         else:
             return False
 
-    def setInfoForIPs(self, ip, ipdata):
-        """ 
-        Store information for this IP 
-        We receive a dictionary, such as {'geocountry': 'rumania'} that we are going to store for this IP. 
-        If it was not there before we store it. If it was there before, we overwrite it
+    def setInfoForIPs(self, ip: str, ipdata: dict):
+        """
+        Store information for this IP
+        We receive a dictionary, such as {'geocountry': 'rumania'} that we are
+        going to store for this IP.
+        If it was not there before we store it. If it was there before, we
+        overwrite it
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
-        # Assign to None, to check if there is new data
-        newdata_str = None
+
+        if not data:
+            # This IP is not in the dictionary, add it first:
+            self.setNewIP(ip)
+            # Now get the data, which should be empty, but just in case
+            data = self.getIPData(ip)
+
         for key in iter(ipdata):
+            # print(f'Trying key {key}, for ip {ip}, with data {ipdata}')
             # ipdata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
             # ipdata can be {'VirusTotal': [1,2,3,4]}
             # I think we dont need this anymore of the conversion
@@ -917,28 +932,20 @@ class Database(object):
 
             data_to_store = ipdata[key]
 
-            # THIS IS NOT WORKING CORRECTLY!!! FIX THE WAY WE STORE THE DATA, WE ARE NEVER STORING NOW
-            # Do we have any previous data?
-            if data:
-                # If there is data previously stored, check if we have this key already
-                try:
-                    # If the key is already stored, do not modify it
-                    value = data[key]
-                except KeyError:
-                    data[key] = data_to_store
-                    newdata_str = json.dumps(data)
-                    self.r.hset('IPsInfo', ip, newdata_str)
-            else:
-                # There no data so far, so add the new data
-                # Create a temp dict to store the key and value
+            # If there is data previously stored, check if we have
+            # this key already
+            try:
+                # If the key is already stored, do not modify it
+                # Check if this decision is ok! or we should modify
+                # the data
+                _ = data[key]
+            except KeyError:
+                # There is no data for they key so far. Add it
                 data[key] = data_to_store
                 newdata_str = json.dumps(data)
                 self.r.hset('IPsInfo', ip, newdata_str)
-                # disable, because gives an error of no attribute outputqueue
-                #print('\tNew Info added to IP {}: {}'.format(ip, newdata_str))
-        # publish if the IP info was changed
-        if newdata_str is not None:
-            self.r.publish('ip_info_change', ip)
+                # Publish the changes
+                self.r.publish('ip_info_change', ip)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
@@ -975,7 +982,7 @@ class Database(object):
     def publish_stop(self):
         """ Publish stop command to terminate slips """
         all_channels_list = self.r.pubsub_channels()
-        self.print('Sending the stop signal to all listeners',3,3)
+        self.print('Sending the stop signal to all listeners', 3, 3)
         for channel in all_channels_list:
             self.r.publish(channel, 'stop_process')
 
