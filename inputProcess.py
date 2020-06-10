@@ -299,7 +299,7 @@ class InputProcess(multiprocessing.Process):
 
 
                 self.profilerqueue.put("stop")
-                self.outputqueue.put("01|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+                self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
 
                 self.outputqueue.close()
                 self.profilerqueue.close()
