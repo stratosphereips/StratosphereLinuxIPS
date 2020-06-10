@@ -6,9 +6,10 @@ __pycache__/
 2020*/
 .DS_Store
 # Do not store in git the files from the IoCs that we downloaded
-malicious_ips.etag
-malicious_ips.time
-malicious_ips.txt
+*.etag
+*.time
+*.txt
+*.csv
 # Ignore the secret api key of virustotal
 api_key_secret
 # Ignore the results folders
