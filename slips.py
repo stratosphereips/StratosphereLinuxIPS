@@ -12,8 +12,15 @@ import time
 import shutil
 from datetime import datetime
 import socket
+import warnings
 
 version = '0.6.6'
+
+# Ignore warnings on CPU from tenorflow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# Ignore warnings in general
+warnings.filterwarnings('ignore')
+
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
