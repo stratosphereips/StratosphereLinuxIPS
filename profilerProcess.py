@@ -1794,11 +1794,11 @@ class ProfilerProcess(multiprocessing.Process):
             while True:
                 line = self.inputqueue.get()
                 if 'stop' == line:
-                    self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 1)
+                    self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 2)
                     return True
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
-                    self.print("Stopping Profiler Process. Received {} lines ({})")
+                    self.print("Stopping Profiler Process. Received {} lines ({})", 0, 2)
                     return True
                 else:
                     # Received new input data
