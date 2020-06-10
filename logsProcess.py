@@ -385,10 +385,6 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(profilefolder + '/' + twlog, 'Was requested to block in this time window: ' + str(blocking), file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
 
-                # Mark it as not modified anymore
-                __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
-
-
                 ###########
                 # Create Timeline for each profile
                 # Store the timeline from the DB in a file
