@@ -1678,7 +1678,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # Flows are not sorted!
                     # What is going on here when the flows are not ordered?? Are we losing flows?
                     # Put a warning
-                    self.print("Warning: Coming flows are not sorted -> Some time diff are less than zero.", 0, 1)
+                    self.print("Warning: Coming flows are not sorted -> Some time diff are less than zero.", 0, 2)
                     pass
             except TypeError:
                 T2 = False
