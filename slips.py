@@ -12,8 +12,15 @@ import time
 import shutil
 from datetime import datetime
 import socket
+import warnings
 
 version = '0.6.6'
+
+# Ignore warnings on CPU from tenorflow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# Ignore warnings in general
+warnings.filterwarnings('ignore')
+
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
@@ -258,10 +265,11 @@ if __name__ == '__main__':
     # This is not easy since we need to be sure all the modules are stopped
     # Each interval of checking is every 5 seconds
     check_time_sleep = 5
-    # In each interval we check if there has been any modifications to the database by any module. 
-    # If not, wait this amount of intervals and then stop slips. 
+    # In each interval we check if there has been any modifications to the database by any module.
+    # If not, wait this amount of intervals and then stop slips.
     # We choose 6 to wait 30 seconds.
     minimum_intervals_to_wait = 6
+    fieldseparator = __database__.getFieldSeparator()
     try:
         while True:
             # Sleep 
@@ -271,30 +279,44 @@ if __name__ == '__main__':
             amount_of_modified = len(TWModifiedforProfile)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
-            outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+            outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
 
-            #outputProcessQueue.put('11|Main|[Main] Counter to stop Slips. Amount of modified timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
+            # outputProcessQueue.put('11|Main|[Main] Counter to stop Slips. Amount of modified timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
 
-            # If there were no modified TW in the last timewindow time, then start counting down
-            # Dont try to stop slips if its catpurting from an interface 
+            # If there were no modified TW in the last timewindow time,
+            # then start counting down
+            # Dont try to stop slips if its catpurting from an interface
             if amount_of_modified == 0 and not args.interface:
-                #print('Counter to stop Slips. Amount of modified timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
+                # print('Counter to stop Slips. Amount of modified
+                # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                 if minimum_intervals_to_wait == 0:
                     # Stop the output Process
                     print('Stopping Slips')
                     # Stop the modules that are subscribed to channels
                     __database__.publish_stop()
-                    # Here we should Wait for any channel if it has still data to receive in its channel
+                    # Here we should Wait for any channel if it has still
+                    # data to receive in its channel
                     # Send manual stops to the process not using channels
-                    logsProcessQueue.put('stop_process')
+                    try:
+                        logsProcessQueue.put('stop_process')
+                    except NameError:
+                        # The logsProcessQueue is not there because we didnt started the logs files (used -l)
+                        pass
                     outputProcessQueue.put('stop_process')
                     profilerProcessQueue.put('stop_process')
                     break
-                #outputProcessQueue.put('11|Main|[Main] Decreasing one')
+                # outputProcessQueue.put('11|Main|[Main] Decreasing one')
                 minimum_intervals_to_wait -= 1
             else:
-                #outputProcessQueue.put('11|Main|[Main] Back to 0')
-                minimum_intervals_to_wait = 6
+                # If there are still modified TWs, just mark them as
+                # notmodified since we alredy 'waited' on them
+                for profileTW in TWModifiedforProfile:
+                    profileid = profileTW.split(fieldseparator)[0] + fieldseparator + profileTW.split(fieldseparator)[1]
+                    twid = profileTW.split(fieldseparator)[2]
+                    __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
+
+                # outputProcessQueue.put('11|Main|[Main] Back to 0')
+                minimum_intervals_to_wait = 5
     except KeyboardInterrupt:
         print('Stopping Slips')
         # Stop the modules that are subscribed to channels
@@ -308,4 +330,3 @@ if __name__ == '__main__':
             pass
         outputProcessQueue.put('stop_process')
         profilerProcessQueue.put('stop_process')
-

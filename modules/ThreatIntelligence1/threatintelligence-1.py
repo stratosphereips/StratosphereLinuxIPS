@@ -22,7 +22,7 @@ class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'threatintelligence1'
     description = 'Check if the srcIP or dstIP are in a malicious list of IPs.'
-    authors = ['Frantisek Strasak']
+    authors = ['Frantisek Strasak, Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -37,10 +37,13 @@ class Module(Module, multiprocessing.Process):
         # Subscribe to the new_ip channel
         __database__.start(self.config)
         self.c1 = __database__.subscribe('give_threat_intelligence')
+
         # Create the update manager. This manager takes care of the re-downloading of the list of IoC when needed.
-        self.update_manager = UpdateIPManager(self.outputqueue)
-        # Update the remote file containing malicious IPs.
+        self.update_manager = UpdateIPManager(self.outputqueue, config)
+
+        # First step is to Update the remote file containing malicious IPs.
         self.__update_remote_malicious_file()
+
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -48,7 +51,6 @@ class Module(Module, multiprocessing.Process):
         elif platform.system() == 'Linux':
             self.timeout = None
         else:
-            #??
             self.timeout = None
 
     def __read_configuration(self, section: str, name: str) -> str:
@@ -62,23 +64,21 @@ class Module(Module, multiprocessing.Process):
         return conf_variable
 
     def __update_remote_malicious_file(self) -> None:
-        """ 
+        """
         Prepare to download a remote file with malicious ips. This file is remotely updated
         """
-        # How often we should update malicious IP list.
-        update_period = self.__read_configuration('modules', 'malicious_ips_update_period')
         # Run the update manager
-        self.update_manager.update(update_period)
+        self.update_manager.update()
 
     def __load_malicious_ips(self) -> None:
-        """ 
+        """
         Load the names of malicious ips files in a folder and ask to read them into a dictionary.
         Then load the dictionary into our DB
 
         This is not going to the internet. Only from files to DB
         """
         # First look if a variable "malicious_ip_file_path" in slips.conf is set. If not, we have the default ready
-        self.path_to_malicious_ip_folder = self.__read_configuration('modules', 'malicious_ip_file_path')
+        self.path_to_malicious_ip_folder = self.__read_configuration('threatintelligence', 'malicious_ip_file_path')
 
         # Read all files in "modules/ThreatIntelligence/malicious_ips_files/" folder.
         self.print('Loading malicious IPs from files in folder {}.'.format(self.path_to_malicious_ip_folder), 0, 3)
@@ -86,10 +86,11 @@ class Module(Module, multiprocessing.Process):
             # No files to read.
             self.print('There are no files in {}.'.format(self.path_to_malicious_ip_folder), 1, 0)
         else:
+            # For each file in the folder with malicious files
             for ip_file in os.listdir(self.path_to_malicious_ip_folder):
                 try:
                     # Only read the files with .txt or .csv
-                    if '.txt' in ip_file or '.csv' in ip_file:
+                    if '.txt' in ip_file[-4:] or '.csv' in ip_file[-4:]:
                         self.print('\tLoading malicious IPs from file {}.'.format(ip_file), 3, 0)
                         self.__load_malicious_ips_file(self.path_to_malicious_ip_folder + '/' + ip_file)
                         self.print('Finished loading the IPs from {}'.format(ip_file), 3, 0)
@@ -100,8 +101,9 @@ class Module(Module, multiprocessing.Process):
         __database__.add_ips_to_IoC(self.malicious_ips_dict)
 
     def __load_malicious_ips_file(self, malicious_ips_path: str) -> None:
-        """ 
-        Read all the files holding IP addresses and a description and put the info in a large dict.
+        """
+        Read all the files holding IP addresses and a description and put the
+        info in a large dict.
         This also helps in having unique ioc accross files
         Returns nothing, but the dictionary should be filled
         """
@@ -109,13 +111,13 @@ class Module(Module, multiprocessing.Process):
 
             # Internal function to load the file in slices
             # The slices are needed because for some reason python 3.7.3 in macos gives error when we try to fill a dict that is too big.
-            #def next_n_lines(file_opened, N):
-                #return [x.strip() for x in islice(file_opened, N)]
+            # def next_n_lines(file_opened, N):
+            #   return [x.strip() for x in islice(file_opened, N)]
 
             # Max num of ips per batch 7000
             lines_read = 0
             with open(malicious_ips_path) as malicious_file:
-                #lines = next_n_lines(malicious_file, 7000)
+                # lines = next_n_lines(malicious_file, 7000)
 
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_ips_path), 3, 0)
                 for line in malicious_file:
