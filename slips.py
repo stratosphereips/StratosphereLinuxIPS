@@ -85,7 +85,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
-    parser.add_argument('-f', '--filepath', help='Path to the flow input file to read. It can be a Argus binetflow flow, a Zeek conn.log file, or a Zeek folder with all the log files.', required=False)
+    parser.add_argument('-f', '--filepath', help='If a filename is specified, then it is a path to the flow file to read (usually Argus binetflow files or conn.log file). If a folder is specified then a Zeek folder.', required=False)
     parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-b', '--nfdump', help='A binary file from NFDUMP to read. NFDUMP is used to send data to slips.', required=False)
