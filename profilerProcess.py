@@ -1813,19 +1813,18 @@ class ProfilerProcess(multiprocessing.Process):
 
                     # What type of input do we have?
                     if self.input_type == 'zeek':
-                        #self.print('Zeek line')
+                        # self.print('Zeek line')
                         self.process_zeek_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
 
                     elif self.input_type == 'argus':
-                        #self.print('Argus line')
+                        # self.print('Argus line')
                         # Argus puts the definition of the columns on the first line only
                         # So read the first line and define the columns
-
                         try:
                             # Are the columns defined? Just try to access them
-                            temp = self.column_idx['starttime']
+                            _ = self.column_idx['starttime']
                             # Yes
                             # Quickly process all lines
                             self.process_argus_input(line)
@@ -1834,15 +1833,18 @@ class ProfilerProcess(multiprocessing.Process):
                         except AttributeError:
                             # No. Define columns. Do not add this line to profile, its only headers
                             self.define_columns(line)
+                        except KeyError:
+                            # When the columns are not there. Not sure if it works
+                            self.define_columns(line)
 
                     elif self.input_type == 'suricata':
-                        #self.print('Suricata line')
+                        # self.print('Suricata line')
                         self.process_suricata_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
 
                     elif self.input_type == 'zeek-tabs':
-                        #self.print('Zeek-tabs line')
+                        # self.print('Zeek-tabs line')
                         self.process_zeek_tabs_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
