@@ -165,7 +165,8 @@ Example of specific usage: Slips can be used by passing input files:
 
 Other parameters for different input types:
 	-r is for pcap
-	-f is for binetflow
+	-f <filename: is for binetflow files 
+	-f <folder name: for zeek folders with log files 
 	-b is for nfdump 
 	-i interface
 
