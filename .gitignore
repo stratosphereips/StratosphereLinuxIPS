@@ -126,3 +126,5 @@ logs/
 *.xml
 .idea/StratosphereLinuxIPS.iml
 dump.rdb
+package-lock.json
+modules/blessed/node_modules/
