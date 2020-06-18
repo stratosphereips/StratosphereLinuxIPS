@@ -47,8 +47,8 @@ The minimum Slips requirements are:
 
 - Redis database running (see http://redis.org)
     - In debian/ubuntu: ```apt-get install redis```
-- py37-redis 
-    - In debian/ubuntu: ```apt-get install python3-redis```
+- py37-redis 3.4.1+ 
+    - In debian/ubuntu: ```pip3 install redis```
 - maxminddb libraries for python (pip3 install maxminddb). Or ignore the geoip module in the conf.
 - Zeek (Bro) https://docs.zeek.org/en/stable/install/install.html
 - python-watchdog
