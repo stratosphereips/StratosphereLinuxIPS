@@ -1,24 +1,31 @@
 class screen {
-  constructor(blessed, contrib, redis_database,tree_class, timeline_class) {
+  constructor(blessed, contrib, redis_database,tree_class, timeline_class, box_class) {
       this.blessed = blessed
       this.contrib = contrib
       this.tree_class = tree_class
       this.redis_database = redis_database
       this.timeline_class= timeline_class
+      this.box_class = box_class
       this.screen = undefined
       this.grid = undefined
       this.tree_widget = undefined
       this.timeline_widget = undefined
+      this.evidence_box_widget = undefined
+      this.ipinfo_widget = undefined
+      this.focus_widget = undefined
       }
 
     init(){
     	this.initScreen()
     	this.initGrid()
+      this.initBoxEvidence()
       this.initTimeline()
+      this.initIPInfo()
     	this.initTree()
+
     	this.render()
     }
-
+    
     initScreen(){
     	this.screen =this.blessed.screen()
     }
@@ -31,17 +38,31 @@ class screen {
 		});
 		
     }
+    initBoxEvidence(){
+      this.evidence_box_widget = new this.box_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [4.8,1, 0.9, 5,'Evidence'])
+      this.append(this.evidence_box_widget.widget)
+      this.render()
+    }
     initTimeline(){
-      this.timeline_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen)
+      this.timeline_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
       this.append(this.timeline_widget.widget)
       this.render()
     }
+    initIPInfo(){
+      this.ipinfo_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 1, 0.6, 5,'IPInfo',[30,30,10,10,10,10], false])
+      this.append(this.ipinfo_widget.widget)
+      this.render()
+
+    }
     initTree(){
-    	this.tree_widget = new this.tree_class(this.grid, this.blessed, this.contrib, this.redis_database, this.timeline_widget, this.screen)
+    	this.tree_widget = new this.tree_class(this.grid, this.blessed, this.contrib, this.redis_database, this.timeline_widget, this.screen, this.evidence_box_widget, this.ipinfo_widget)
       this.append(this.tree_widget.widget)
     	this.tree_widget.getTreeDataFromDatabase() 
       this.tree_widget.focus()
       this.tree_widget.on()
+                  this.tree_widget.widget.style.border.fg = 'magenta'
+
+      this.focus_widget = this.tree_widget.widget
     	this.render()
 
     }
@@ -52,12 +73,19 @@ class screen {
 
     registerEvents(){
         this.screen.on('keypress', (ch, key)=>{
-        	if(key.name == 'tab'){
-        		this.timeline_widget.focus()
-        		this.render()
-        	}	
-        	else if(key.name == 'f'){
-        		this.tree_widget.show()
+        if(key.name == 'tab'){
+          if(this.focus_widget == this.tree_widget.widget){
+            this.focus_widget = this.timeline_widget.widget
+            this.tree_widget.widget.style.border.fg = 'blue'
+            this.timeline_widget.widget.focus();}
+          else if(this.focus_widget == this.timeline_widget.widget){
+            this.timeline_widget.widget.style.border.fg='blue'
+            this.focus_widget = this.evidence_box_widget.widget
+            this.evidence_box_widget.widget.focus()}
+          else{
+            this.focus_widget = this.tree_widget.widget
+            this.tree_widget.widget.style.border.fg = 'magenta'
+            this.tree_widget.focus();}
         		this.render()
         	}	
         	else if(key.name == 'q'){

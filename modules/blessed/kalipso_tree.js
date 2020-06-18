@@ -2,13 +2,15 @@ var async = require('async')
 var stripAnsi = require('strip-ansi')
 
 class Tree{
-	constructor(grid, blessed, contrib, redis_database, timeline_widget, screen){
+	constructor(grid, blessed, contrib, redis_database, timeline_widget, screen, evidence_widget,ipinfo_widget){
 		  this.contrib = contrib
 		  this.screen = screen
 		  this.blessed = blessed
 		  this.grid = grid
 		  this.redis_database = redis_database
 		  this.timeline = timeline_widget
+		  this.evidence = evidence_widget
+		  this.ipinfo = ipinfo_widget
 		  this.widget =this.grid.set(0,0,5.7,1,this.contrib.tree,
 			  { vi:true 
 			  , style: {fg:'green',border: {fg:'blue'}}
@@ -21,39 +23,34 @@ class Tree{
       this.widget.focus()
       }
 
-     on(){
+    on(){
      	this.widget.on('select',node=>{
 	  if(!node.name.includes('timewindow')){
-
       	var ip = node.name.replace('(host)','')
-      	// getIpInfo_box_ip(stripAnsi(ip), 1);}
+      	this.ipinfo.setIPInfo(stripAnsi(ip))
       }
       else{
 
       	var ip  = stripAnsi(node.parent.name);
       	ip = ip.replace('(host)','')
     	var timewindow = stripAnsi(node.name);
+    	this.evidence.setEvidence(ip, timewindow)
     	this.timeline.setTimeline(ip, timewindow)
-    	this.screen.render();
-    this.screen.render()}
-    this.screen.render()
-
+    	this.screen.render()}
 		});
-
-     }
-     hide(){
+    }
+    hide(){
         this.widget.hide()
-      }
-      show(){
-        this.widget.show()
-      }
+  	}
+    show(){
+	    this.widget.show()
+    }
 
-      setData(data){
+    setData(data){
       	this.widget.setData({extended:true, children:data})
+    }
 
-      }
-
-      setTree(values){
+    setTree(values){
       	return new Promise(resolve=>{
       		var ips_tws = this.tree_data
       	    var result = {};
@@ -73,8 +70,7 @@ class Tree{
         }
         resolve (result)	     
       	})
-
-}
+	}
 
 	sortTWs(blocked,tws_dict, ip){
 	  // var new_keys = []
@@ -92,7 +88,7 @@ class Tree{
 	        temp_tws_dict[key] = {};}
 	  } 
 	  return temp_tws_dict;
-	  }
+	}
 
 
 	fillTreeData(redis_keys){
