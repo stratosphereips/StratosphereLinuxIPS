@@ -205,6 +205,10 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_idx['pkts'] = nline.index(field)
                 elif 'totbytes' in field.lower():
                     self.column_idx['bytes'] = nline.index(field)
+                elif 'srcbytes' in field.lower():
+                    self.column_idx['sbytes'] = nline.index(field)
+
+
             # Some of the fields were not found probably, 
             # so just delete them from the index if their value is False. 
             # If not we will believe that we have data on them
@@ -835,27 +839,27 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             pass
         try:
-            self.column_values['pkts'] = nline[self.column_idx['pkts']]
+            self.column_values['pkts'] = int(nline[self.column_idx['pkts']])
         except KeyError:
             pass
         try:
-            self.column_values['spkts'] = nline[self.column_idx['spkts']]
+            self.column_values['spkts'] = int(nline[self.column_idx['spkts']])
         except KeyError:
             pass
         try:
-            self.column_values['dpkts'] = nline[self.column_idx['dpkts']]
+            self.column_values['dpkts'] = int(nline[self.column_idx['dpkts']])
         except KeyError:
             pass
         try:
-            self.column_values['bytes'] = nline[self.column_idx['bytes']]
+            self.column_values['bytes'] = int(nline[self.column_idx['bytes']])
         except KeyError:
             pass
         try:
-            self.column_values['sbytes'] = nline[self.column_idx['sbytes']]
+            self.column_values['sbytes'] = int(nline[self.column_idx['sbytes']])
         except KeyError:
             pass
         try:
-            self.column_values['dbytes'] = nline[self.column_idx['dbytes']]
+            self.column_values['dbytes'] = int(nline[self.column_idx['dbytes']])
         except KeyError:
             pass
 
