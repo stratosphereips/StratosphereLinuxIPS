@@ -1,4 +1,4 @@
-// var async = require('async')
+var async = require('async')
 // var color = require('chalk')
 
 class ListTable{
@@ -38,7 +38,7 @@ class ListTable{
   }
 
   setData(data){
-    this.widget.setContent(data)
+    this.widget.setData(data)
       }
   hide(){
     this.widget.hide()
@@ -64,19 +64,18 @@ class ListTable{
 
   getIPInfo_dict(ip){
 
-    try{ 
-        this.redis_database.getIpInfo(ip).then(redis_IpInfo_data=>{
-          var ip_info_dict = {'asn':'', 'geocountry':'', 'VirusTotal':{'URL':'', 'down':'','ref':'','com':''}}
+    return new Promise ((resolve, reject)=>{this.redis_database.getIpInfo(ip).then(redis_IpInfo_data=>{
+          var ip_info_dict = {'asn':'', 'geocountry':'', 'URL':'', 'down':'','ref':'','com':''}
 
           var ipInfo_json = JSON.parse(redis_IpInfo_data);
           var ip_values =  Object.values(ipInfo_json);
           var ip_keys = Object.keys(ipInfo_json);
 
           if (ipInfo_json.hasOwnProperty('VirusTotal')){
-            ip_info_dict['VirusTotal']['URL'] = this.round(ipInfo_json['VirusTotal']['URL'],5)
-            ip_info_dict['VirusTotal']['down'] = this.round(ipInfo_json['VirusTotal']['down'],5)
-            ip_info_dict['VirusTotal']['ref'] = this.round(ipInfo_json['VirusTotal']['ref'],5)
-            ip_info_dict['VirusTotal']['com'] = this.round(ipInfo_json['VirusTotal']['com'],5)
+            ip_info_dict['VirusTotal']['URL'] = this.round(ipInfo_json['URL'],5)
+            ip_info_dict['VirusTotal']['down'] = this.round(ipInfo_json['down'],5)
+            ip_info_dict['VirusTotal']['ref'] = this.round(ipInfo_json['ref'],5)
+            ip_info_dict['VirusTotal']['com'] = this.round(ipInfo_json['com'],5)
           }
           if(ipInfo_json.hasOwnProperty('asn')){
             ip_info_dict['asn'] = ipInfo_json['asn']
@@ -84,24 +83,25 @@ class ListTable{
           if(ipInfo_json.hasOwnProperty('geocountry')){
             ip_info_dict['geocountry'] = ipInfo_json['geocountry']
           }
-          return ip_info_dict
+          resolve( ip_info_dict)
     })
-      }
-      catch (err){
-        console.log(err)
-      }
+      })
+      
   }
   setOutTuples(ip, timewindow){
     try{
       this.redis_database.getOutTuples(ip, timewindow).then(redis_outTuples=>{
-        var keys = Object.keys(redis_outTuples)
+        // console.log(redis_outTuples)
+        var json_outTuples = JSON.parse(redis_outTuples)
+        var keys = Object.keys(json_outTuples)
         var data = [['key','string','asn','geocountry','url','down','ref','com']]
         async.each(keys,(key, callback)=>{
+          // colognsole.log(key)
           var row = [];
-          var tuple_info = redis_outTuples[key];
+          var tuple_info = json_outTuples[key];
           var outTuple_ip = key.split(':')[0];
           var letters_string = tuple_info[0]
-          var ip_info_dict = this.getIPInfo_dict(outTuple_ip)
+          this.getIPInfo_dict(outTuple_ip).then(ip_info_dict=>{
           if(letters_string.trim().length > 40){
                 var letter_string_chunks = this.chunkString(tuple_info[0].trim(),40);
                 async.forEachOf(letter_string_chunks, (chunk,ind,callback)=>{
@@ -117,7 +117,8 @@ class ListTable{
                 })}
           else{     
             row.push(key,letters_string, Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
-            data.push(row)}
+            data.push(row)
+          }
             callback(null);
           })
         },(err)=>{
@@ -126,7 +127,7 @@ class ListTable{
           } else {
             this.setData(data);
             this.screen.render();  
-            }
+            }})
       });
       } catch(err){
         console.log(err)
