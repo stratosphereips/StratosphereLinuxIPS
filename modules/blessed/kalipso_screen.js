@@ -93,10 +93,12 @@ class screen {
         	else if(key.name == 'q'){
         		return process.exit(0);
         	}
-          else if(key.name == 'h'){  
+          else if(key.name == 'h'){ 
+          console.log(this.tree_widget.current_ip, this.tree_widget.current_tw) 
             for(var widget = 0; widget<this.mainPage.length; widget++){
                 this.mainPage[widget].hide()
               }
+            this.outTuple_widget.setOutTuples(this.tree_widget.current_ip, this.tree_widget.current_tw)
             this.outTuple_widget.show()
             this.outTuple_widget.focus()
             this.render()
