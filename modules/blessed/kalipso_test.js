@@ -6,12 +6,13 @@ var redis_database_class = require('./kalipso_redis')
 var tree = require('./kalipso_tree')
 var table = require('./kalipso_table')
 var box = require('./kalipso_box')
+var listtable = require('./kalipso_listtable')
 
 
 const redis_database = new redis_database_class(redis)
 redis_database.createClient()
 
-const screen = new screen_class(blessed, contrib, redis_database,tree, table, box)
+const screen = new screen_class(blessed, contrib, redis_database,tree, table, box,listtable)
 
 screen.init()
 screen.render()
