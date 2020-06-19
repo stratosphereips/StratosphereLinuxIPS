@@ -17,6 +17,8 @@ class Tree{
 			  , template: { lines: true }
 			  , label: 'IPs'})
 		  this.tree_data = {}
+		  this.current_ip = ''
+		  this.current_tw = ''
     }
 
     focus(){
@@ -27,6 +29,7 @@ class Tree{
      	this.widget.on('select',node=>{
 	  if(!node.name.includes('timewindow')){
       	var ip = node.name.replace('(host)','')
+      	this.current_ip = ip
       	this.ipinfo.setIPInfo(stripAnsi(ip))
       }
       else{
@@ -34,6 +37,7 @@ class Tree{
       	var ip  = stripAnsi(node.parent.name);
       	ip = ip.replace('(host)','')
     	var timewindow = stripAnsi(node.name);
+    	this.current_tw = timewindow
     	this.evidence.setEvidence(ip, timewindow)
     	this.timeline.setTimeline(ip, timewindow)
     	this.screen.render()}
