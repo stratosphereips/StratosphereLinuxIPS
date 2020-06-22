@@ -865,7 +865,7 @@ class ProfilerProcess(multiprocessing.Process):
 
     def process_nfdump_input(self, line):
         """
-        Process the line and extract columns for argus
+        Process the line and extract columns for nfdump
         """
         self.column_values = {}
         self.column_values['starttime'] = False
@@ -885,7 +885,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values['bytes'] = False
         self.column_values['sbytes'] = False
         self.column_values['dbytes'] = False
-        self.column_values['type'] = 'argus'
+        self.column_values['type'] = 'nfdump'
 
         # Read the lines fast
         nline = line.strip().split(self.separator)
