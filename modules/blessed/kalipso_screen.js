@@ -14,6 +14,7 @@ class screen {
       this.evidence_box_widget = undefined
       this.ipinfo_widget = undefined
       this.focus_widget = undefined
+      this.current_shown_widgets = undefined
       this.outTuple_widget = undefined
       }
 
@@ -73,6 +74,17 @@ class screen {
     	this.screen.append(widget)
     }
 
+    h_hotkey_routine(){
+      for(var widget = 0; widget<this.mainPage.length; widget++){
+            this.mainPage[widget].hide()
+          }
+        this.outTuple_widget.setOutTuples(this.tree_widget.current_ip, this.tree_widget.current_tw)
+        this.outTuple_widget.show()
+        this.outTuple_widget.focus()
+        this.render()
+
+    }
+
     registerEvents(){
         this.screen.on('keypress', (ch, key)=>{
         if(key.name == 'tab'){
@@ -93,15 +105,9 @@ class screen {
         	else if(key.name == 'q'){
         		return process.exit(0);
         	}
-          else if(key.name == 'h'){ 
-          console.log(this.tree_widget.current_ip, this.tree_widget.current_tw) 
-            for(var widget = 0; widget<this.mainPage.length; widget++){
-                this.mainPage[widget].hide()
-              }
-            this.outTuple_widget.setOutTuples(this.tree_widget.current_ip, this.tree_widget.current_tw)
-            this.outTuple_widget.show()
-            this.outTuple_widget.focus()
-            this.render()
+          else if(key.name == 'h'){
+
+            this.h_hotkey_routine() 
           }
         })}
 
