@@ -20,7 +20,7 @@ class UpdateIPManager:
         """ Read the configuration file for what we need """
         try:
             # update period
-            self.update_period = self.config.get('threatintelligence', 'malicious_ips_update_period')
+            self.update_period = self.config.get('threatintelligence', 'malicious_data_update_period')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.update_period = 86400
@@ -29,7 +29,7 @@ class UpdateIPManager:
             self.path_to_thret_intelligence_data = self.config.get('threatintelligence', 'malicious_ip_file_path')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.path_to_thret_intelligence_data = 'modules/ThreatIntelligence1/malicious_ips_files/'
+            self.path_to_thret_intelligence_data = 'modules/ThreatIntelligence1/malicious_data_files/'
         try:
             # Read the list of URLs to download. Convert to list
             self.list_of_urls = self.config.get('threatintelligence', 'ti_files').split(',')
@@ -38,7 +38,7 @@ class UpdateIPManager:
             self.list_of_urls = []
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -46,7 +46,7 @@ class UpdateIPManager:
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
