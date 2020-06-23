@@ -115,7 +115,11 @@ Slips uses Zeek to generate files for most input types.
 3. Check the folder called with the date of today. All files are updated every 5 seconds.
 4. Use Kalipso to see the results (option -G in Slips to start Kalipso automatically, or go to StratosphereLinuxIPS/modules/blessed and execute `node ips_timewindows.js` to start Kalipso when needed)
 
-
+Requirements to capture your own traffic:
+- curl
+    - In debian/ubuntu: ```apt-get install curl```
+- get authorization to zeek to capture the traffic in the linux interface:
+    - ```setcap cap_net_raw,cap_net_admin=eip /usr/local/zeek/bin/zeek```
 -------
 
 # Architecture of operation
@@ -124,7 +128,7 @@ Slips works at a flow level, instead of a packet level, gaining a high level vie
 #Slips processes
 When Slips is run, it spawns several child processes to manage the I/O, to profile attackers and to run the detection modules. It also connects to the Redis database to store all the information. In order to detect attacks, Slips runs its Kalipso interface.
 
-
+ 
 ## Input Data 
 The input process reads flows of different types:
 	-Pcap files (internally using Zeek) 
