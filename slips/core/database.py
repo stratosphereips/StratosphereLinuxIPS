@@ -1233,11 +1233,25 @@ class Database(object):
         if ips_and_description:
             self.r.hmset('IoC_ips', ips_and_description)
 
+    def add_domains_to_IoC(self, domains_and_description: dict) -> None:
+        """
+        Store a group of domains in the db as they were obtained from an IoC source
+        What is the format of domains_and_description?
+        """
+        if domains_and_description:
+            self.r.hmset('IoC_domains', domains_and_description)
+
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
         """
         Store in the DB 1 IP we read from an IoC source  with its description
         """
         self.r.hset('IoC_ips', ip, description)
+
+    def add_domain_to_IoC(self, domain: str, description: str) -> None:
+        """
+        Store in the DB 1 domain we read from an IoC source with its description
+        """
+        self.r.hset('IoC_domains', ip, description)
 
     def add_malicious_ip(self, ip, profileid_twid):
         """
@@ -1270,7 +1284,6 @@ class Database(object):
         data = self.r.hget('DNSresolution', ip)
         return data
 
-
     def search_IP_in_IoC(self, ip: str) -> str:
         """ Search in the dB of malicious IPs and return a description if we found a match """
         ip_description = self.r.hget('IoC_ips', ip)
@@ -1278,6 +1291,14 @@ class Database(object):
             return False
         else:
             return ip_description
+
+    def search_Domain_in_IoC(self, domain: str) -> str:
+        """ Search in the dB of malicious domainss and return a description if we found a match """
+        domain_description = self.r.hget('IoC_domains', ip)
+        if domain_description == None:
+            return False
+        else:
+            return domain_description
 
     def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
         """
