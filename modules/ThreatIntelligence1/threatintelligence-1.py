@@ -5,17 +5,13 @@ from slips.core.database import __database__
 import platform
 
 # Your imports
-import time
 import ipaddress
 import os
 import configparser
 import json
 import ast
 from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
-
 import traceback
-# To open the file in slices
-from itertools import islice
 
 
 class Module(Module, multiprocessing.Process):
@@ -157,7 +153,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst), 0, 1)
             return True
 
-    def add_maliciousIP(self, ip = '', profileid = '', twid='' ):
+    def add_maliciousIP(self, ip='', profileid='', twid=''):
         '''
         Add malicious IP to DB 'MaliciousIPs' with a profileid and twid where it was met
         Returns nothing
@@ -178,7 +174,27 @@ class Module(Module, multiprocessing.Process):
         data = json.dumps(ip_location)
         __database__.add_malicious_ip(ip, data)
 
-    def set_evidence(self, ip, ip_description = '', profileid = '', twid = '' ):
+    def add_maliciousDomain(self, domain='', profileid='', twid=''):
+        '''
+        Add malicious domain to DB 'MaliciousDomainss' with a profileid and twid where domain was met
+        Returns nothing
+        '''
+        domain_location = __database__.get_malicious_domain(domain)
+        # if profileid or twid is None, do not put any value in a dictionary
+        if profileid != 'None':
+            try:
+                profile_tws = domain_location[profileid]
+                profile_tws = ast.literal_eval(profile_tws)
+                profile_tws.add(twid)
+                domain_location[profileid] = str(profile_tws)
+            except KeyError:
+                domain_location[profileid] = str({twid})
+        elif not domain_location:
+            domain_location = {}
+        data = json.dumps(domain_location)
+        __database__.add_malicious_domain(domain, data)
+
+    def set_evidence_ip(self, ip, ip_description='', profileid='', twid=''):
         '''
         Set an evidence for malicious IP met in the timewindow
         If profileid is None, do not set an Evidence
@@ -193,8 +209,23 @@ class Module(Module, multiprocessing.Process):
             twid=''
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
 
+    def set_evidence_domain(self, domain, domain_description='', profileid='', twid=''):
+        '''
+        Set an evidence for malicious domain met in the timewindow
+        If profileid is None, do not set an Evidence
+        Returns nothing
+        '''
+        type_evidence = 'ThreatIntelligenceBlacklist'
+        key = 'dstdomain' + ':' + domain + ':' + type_evidence
+        threat_level = 50
+        confidence = 1
+        description = 'Threat Intelligence. ' + domain_description
+        if not twid:
+            twid=''
+        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -220,23 +251,44 @@ class Module(Module, multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     return True
                 # Check that the message is for you.
+                # The channel now can receive an IP address or a domain name
                 elif message['channel'] == 'give_threat_intelligence' and type(message['data']) is not int:
                     data = message['data']
                     data = data.split('-')
-                    new_ip = data[0]
+                    new_data = data[0]
                     profileid = data[1]
                     twid = data[2]
-                    # Search for this IP in our database of IoC
-                    ip_description = __database__.search_IP_in_IoC(new_ip)
+                    # Check if the new data is an ip or a domain
+                    try:
+                        # Just try to see if it has the format of an ipv4 or ipv6
+                        new_ip = ipaddress.ip_address(new_data)
+                        # We need the string, not the ip object
+                        new_ip = new_data
+                        # Is an IP address (ipv4 or ipv6)
+                        # Search for this IP in our database of IoC
+                        ip_description = __database__.search_IP_in_IoC(new_ip)
 
-                    if ip_description != False:
-                        # If the IP is in the blacklist of IoC. Add it as Malicious
-                        ip_data = {}
-                        # Maybe we should change the key to 'status' or something like that.
-                        ip_data['Malicious'] = ip_description
-                        __database__.setInfoForIPs(new_ip, ip_data)
-                        self.add_maliciousIP(new_ip, profileid, twid)
-                        self.set_evidence(new_ip, ip_description, profileid, twid)
+                        if ip_description != False: # Dont change this condition. This is the only way it works
+                            # If the IP is in the blacklist of IoC. Add it as Malicious
+                            ip_data = {}
+                            # Maybe we should change the key to 'status' or something like that.
+                            ip_data['Malicious'] = ip_description
+                            __database__.setInfoForIPs(new_ip, ip_data)
+                            self.add_maliciousIP(new_ip, profileid, twid)
+                            self.set_evidence_ip(new_ip, ip_description, profileid, twid)
+                    except ValueError:
+                        # This is not an IP
+                        new_domain = new_data
+                        # Search for this domain in our database of IoC
+                        domain_description = __database__.search_Domain_in_IoC(new_domain)
+                        if domain_description != False: # Dont change this condition. This is the only way it works
+                            # If the IP is in the blacklist of IoC. Add it as Malicious
+                            domain_data = {}
+                            # Maybe we should change the key to 'status' or something like that.
+                            domain_data['Malicious'] = domain_description
+                            __database__.setInfoForDomainss(new_domain, domain_data)
+                            self.add_maliciousDomain(new_domain, profileid, twid)
+                            self.set_evidence_domain(new_domain, domain_description, profileid, twid)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
