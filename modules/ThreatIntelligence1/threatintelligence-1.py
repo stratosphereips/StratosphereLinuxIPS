@@ -25,12 +25,14 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # This dictionary will hold each malicious ip to store in the db
         self.malicious_ips_dict = {}
+        # This dictionary will hold each malicious domain to store in the db
+        self.malicious_domain_dict = {}
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         self.separator = __database__.getFieldSeparator()
         # This default path is only used in case there is no path in the configuration file
-        self.path_to_malicious_ip_folder = 'modules/ThreatIntelligence1/malicious_ips_files/'
-        # Subscribe to the new_ip channel
+        self.path_to_malicious_data_folder = 'modules/ThreatIntelligence1/malicious_data_files/'
+        # Subscribe to the channel
         __database__.start(self.config)
         self.c1 = __database__.subscribe('give_threat_intelligence')
 
@@ -66,37 +68,39 @@ class Module(Module, multiprocessing.Process):
         # Run the update manager
         self.update_manager.update()
 
-    def __load_malicious_ips(self) -> None:
+    def __load_malicious_datafiles(self) -> None:
         """
-        Load the names of malicious ips files in a folder and ask to read them into a dictionary.
+        Load the content of malicious datafiles in a folder and ask to read them into a dictionary.
         Then load the dictionary into our DB
 
         This is not going to the internet. Only from files to DB
         """
         # First look if a variable "malicious_ip_file_path" in slips.conf is set. If not, we have the default ready
-        self.path_to_malicious_ip_folder = self.__read_configuration('threatintelligence', 'malicious_ip_file_path')
+        self.path_to_malicious_data_folder = self.__read_configuration('threatintelligence', 'malicious_data_file_path')
 
         # Read all files in "modules/ThreatIntelligence/malicious_ips_files/" folder.
-        self.print('Loading malicious IPs from files in folder {}.'.format(self.path_to_malicious_ip_folder), 0, 3)
-        if len(os.listdir(self.path_to_malicious_ip_folder)) == 0:
+        self.print('Loading malicious data from files in folder {}.'.format(self.path_to_malicious_data_folder), 0, 3)
+        if len(os.listdir(self.path_to_malicious_data_folder)) == 0:
             # No files to read.
-            self.print('There are no files in {}.'.format(self.path_to_malicious_ip_folder), 1, 0)
+            self.print('There are no files in {}.'.format(self.path_to_malicious_data_folder), 1, 0)
         else:
             # For each file in the folder with malicious files
-            for ip_file in os.listdir(self.path_to_malicious_ip_folder):
+            for data_file in os.listdir(self.path_to_malicious_data_folder):
                 try:
                     # Only read the files with .txt or .csv
-                    if '.txt' in ip_file[-4:] or '.csv' in ip_file[-4:]:
-                        self.print('\tLoading malicious IPs from file {}.'.format(ip_file), 3, 0)
-                        self.__load_malicious_ips_file(self.path_to_malicious_ip_folder + '/' + ip_file)
-                        self.print('Finished loading the IPs from {}'.format(ip_file), 3, 0)
+                    if '.txt' in data_file[-4:] or '.csv' in data_file[-4:]:
+                        self.print('\tLoading malicious data from file {}.'.format(data_file), 3, 0)
+                        self.__load_malicious_datafile(self.path_to_malicious_data_folder + '/' + data_file)
+                        self.print('Finished loading the data from {}'.format(data_file), 3, 0)
                 except FileNotFoundError as e:
                     self.print(e, 1, 0)
 
         # Add all loaded malicious ips to the database
         __database__.add_ips_to_IoC(self.malicious_ips_dict)
+        # Add all loaded malicious domains to the database
+        #__database__.add_domains_to_IoC(self.malicious_domains_dict)
 
-    def __load_malicious_ips_file(self, malicious_ips_path: str) -> None:
+    def __load_malicious_datafile(self, malicious_data_path: str) -> None:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
@@ -104,22 +108,26 @@ class Module(Module, multiprocessing.Process):
         Returns nothing, but the dictionary should be filled
         """
         try:
-
-            # Internal function to load the file in slices
-            # The slices are needed because for some reason python 3.7.3 in macos gives error when we try to fill a dict that is too big.
-            # def next_n_lines(file_opened, N):
-            #   return [x.strip() for x in islice(file_opened, N)]
-
-            # Max num of ips per batch 7000
             lines_read = 0
-            with open(malicious_ips_path) as malicious_file:
-                # lines = next_n_lines(malicious_file, 7000)
+            with open(malicious_data_path) as malicious_file:
 
-                self.print('Reading next lines in the file {} for IoC'.format(malicious_ips_path), 3, 0)
+                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
+
+                # Remove comments
+                while True:
+                    line = malicious_file.readline()
+                    # break while statement if it is not a comment line
+                    # i.e. does not startwith #
+                    if not line.startswith('#'):
+                        break
+
                 for line in malicious_file:
-                    if '#' in line:
-                        # '#' is a comment line, ignore
-                        continue
+                    #if '#' in line:
+                    #    # '#' is a comment line, ignore
+                    #    continue
+
+                    # "0", "103.15.53.231","90", "Karel from our village. He is bad guy."
+
                     # Separate the lines like CSV
                     # In the new format the ip is in the second position. And surronded by "
                     ip_address = line.replace("\n","").replace("\"","").split(",")[1].strip()
@@ -140,14 +148,14 @@ class Module(Module, multiprocessing.Process):
                             ip_address = ipaddress.IPv6Address(ip_address)
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
-                            self.print('The IP address {} is not valid. It was found in {}.'.format(ip_address, malicious_ips_path), 1, 1)
+                            self.print('The IP address {} is not valid. It was found in {}.'.format(ip_address, malicious_data_path), 1, 1)
                             continue
 
                     # Store the ip in our local dict
                     self.malicious_ips_dict[str(ip_address)] = ip_description
                     lines_read += 1
         except Exception as inst:
-            self.print('Problem on the __load_malicious_ips_file()', 0, 1)
+            self.print('Problem on the __load_malicious_datafile()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -243,8 +251,8 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # Main loop function
-            # First load the malicious ips from the file to the DB
-            self.__load_malicious_ips()
+            # First load the malicious data from the files to the DB
+            self.__load_malicious_datafiles()
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
