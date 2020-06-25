@@ -14,6 +14,8 @@
       this.evidence_data = this.redis.createClient()
       this.ipInfo_data = this.redis.createClient()
       this.outTuples_data = this.redis.createClient()
+      this.tcp_data = this.redis.createClient()
+      this.udp_data = this.redis.createClient()
   	}
 
   	getAllKeys(){
@@ -59,6 +61,19 @@
     }
     getOutTuples(ip,timewindow){
       return new Promise ((resolve, reject)=>{this.outTuples_data.hget("profile_"+ip+"_"+timewindow,'OutTuples',(err,reply)=>{
+        if(err){console.log(err); reject(err);}
+        else{resolve(reply);}
+      });})
+    }
+    
+    getUDP(ip, timewindow){
+      return new Promise ((resolve, reject)=>{this.udp_data.hget("profile_"+ip+"_"+timewindow,'dstPortsServerUDPEstablished',(err,reply)=>{
+        if(err){console.log(err); reject(err);}
+        else{resolve(reply);}
+      });})
+    }
+    getTCP(ip, timewindow){
+      return new Promise ((resolve, reject)=>{this.tcp_data.hget("profile_"+ip+"_"+timewindow,'dstPortsServerTCPEstablished',(err,reply)=>{
         if(err){console.log(err); reject(err);}
         else{resolve(reply);}
       });})
