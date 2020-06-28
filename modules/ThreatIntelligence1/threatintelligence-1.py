@@ -10,7 +10,9 @@ import os
 import configparser
 import json
 import ast
-from modules.ThreatIntelligence1.update_ip_manager import UpdateIPManager
+from modules.ThreatIntelligence1.update_file_manager import UpdateFileManager
+import traceback
+import validators
 import traceback
 
 
@@ -26,7 +28,7 @@ class Module(Module, multiprocessing.Process):
         # This dictionary will hold each malicious ip to store in the db
         self.malicious_ips_dict = {}
         # This dictionary will hold each malicious domain to store in the db
-        self.malicious_domain_dict = {}
+        self.malicious_domains_dict = {}
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         self.separator = __database__.getFieldSeparator()
@@ -37,7 +39,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('give_threat_intelligence')
 
         # Create the update manager. This manager takes care of the re-downloading of the list of IoC when needed.
-        self.update_manager = UpdateIPManager(self.outputqueue, config)
+        self.update_manager = UpdateFileManager(self.outputqueue, config)
 
         # First step is to Update the remote file containing malicious IPs.
         self.__update_remote_malicious_file()
@@ -55,9 +57,10 @@ class Module(Module, multiprocessing.Process):
         """ Read the configuration file for what we need """
         # Get the time of log report
         try:
-             conf_variable = self.config.get(section, name)
+            conf_variable = self.config.get(section, name)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
+            # There is a conf, but there is no option,
+            # or no section or no configuration file specified
             conf_variable = None
         return conf_variable
 
@@ -70,15 +73,16 @@ class Module(Module, multiprocessing.Process):
 
     def __load_malicious_datafiles(self) -> None:
         """
-        Load the content of malicious datafiles in a folder and ask to read them into a dictionary.
+        Load the content of malicious datafiles in a folder and ask to read
+        them into a dictionary.
         Then load the dictionary into our DB
 
         This is not going to the internet. Only from files to DB
         """
-        # First look if a variable "malicious_ip_file_path" in slips.conf is set. If not, we have the default ready
+        # First look if a variable "malicious_data_file_path" in slips.conf is set. If not, we have the default ready
         self.path_to_malicious_data_folder = self.__read_configuration('threatintelligence', 'malicious_data_file_path')
 
-        # Read all files in "modules/ThreatIntelligence/malicious_ips_files/" folder.
+        # Read all files in "modules/ThreatIntelligence/malicious_data_files/" folder.
         self.print('Loading malicious data from files in folder {}.'.format(self.path_to_malicious_data_folder), 0, 3)
         if len(os.listdir(self.path_to_malicious_data_folder)) == 0:
             # No files to read.
@@ -98,7 +102,7 @@ class Module(Module, multiprocessing.Process):
         # Add all loaded malicious ips to the database
         __database__.add_ips_to_IoC(self.malicious_ips_dict)
         # Add all loaded malicious domains to the database
-        #__database__.add_domains_to_IoC(self.malicious_domains_dict)
+        __database__.add_domains_to_IoC(self.malicious_domains_dict)
 
     def __load_malicious_datafile(self, malicious_data_path: str) -> None:
         """
@@ -122,43 +126,56 @@ class Module(Module, multiprocessing.Process):
                         break
 
                 for line in malicious_file:
-                    #if '#' in line:
-                    #    # '#' is a comment line, ignore
-                    #    continue
-
+                    # The format of the file should be
                     # "0", "103.15.53.231","90", "Karel from our village. He is bad guy."
+                    # So the second column will be used as important data with
+                    # an IP or domain
+                    # In the case of domains can be
+                    # domain,www.netspy.net,NetSpy
 
                     # Separate the lines like CSV
-                    # In the new format the ip is in the second position. And surronded by "
-                    ip_address = line.replace("\n","").replace("\"","").split(",")[1].strip()
+                    # In the new format the ip is in the second position.
+                    # And surronded by "
+                    data = line.replace("\n","").replace("\"","").split(",")[1].strip()
+
                     try:
                         # In the new format the description is position 4
-                        ip_description = line.replace("\n","").replace("\"","").split(",")[3].strip()
+                        description = line.replace("\n","").replace("\"","").split(",")[3].strip()
                     except IndexError:
-                        ip_description = ''
-                    self.print('\tRead IP {}: {}'.format(ip_address, ip_description), 6, 0)
+                        description = ''
+                    self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
 
                     # Check if ip is valid.
                     try:
-                        ip_address = ipaddress.IPv4Address(ip_address)
-                        # Is ipv4?
+                        ip_address = ipaddress.IPv4Address(data)
+                        # Is IPv4!
+                        # Store the ip in our local dict
+                        self.malicious_ips_dict[str(ip_address)] = description
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
                         try:
-                            ip_address = ipaddress.IPv6Address(ip_address)
+                            ip_address = ipaddress.IPv6Address(data)
+                            # Is IPv6!
+                            # Store the ip in our local dict
+                            self.malicious_ips_dict[str(ip_address)] = description
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
-                            self.print('The IP address {} is not valid. It was found in {}.'.format(ip_address, malicious_data_path), 1, 1)
-                            continue
+                            # So it should be a domain
+                            if validators.domain(data):
+                                domain = data
+                                # Store the ip in our local dict
+                                self.malicious_domains_dict[str(domain)] = description
+                            else:
+                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 1, 1)
+                                continue
 
-                    # Store the ip in our local dict
-                    self.malicious_ips_dict[str(ip_address)] = ip_description
                     lines_read += 1
         except Exception as inst:
             self.print('Problem on the __load_malicious_datafile()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            print(traceback.format_exc())
             return True
 
     def add_maliciousIP(self, ip='', profileid='', twid=''):
@@ -214,7 +231,7 @@ class Module(Module, multiprocessing.Process):
         confidence = 1
         description = 'Threat Intelligence. ' + ip_description
         if not twid:
-            twid=''
+            twid = ''
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def set_evidence_domain(self, domain, domain_description='', profileid='', twid=''):
@@ -229,7 +246,7 @@ class Module(Module, multiprocessing.Process):
         confidence = 1
         description = 'Threat Intelligence. ' + domain_description
         if not twid:
-            twid=''
+            twid = ''
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def print(self, text, verbose=1, debug=0):
@@ -255,7 +272,9 @@ class Module(Module, multiprocessing.Process):
             self.__load_malicious_datafiles()
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
-                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                # if timewindows are not updated for a long time
+                # (see at logsProcess.py), we will stop slips automatically.
+                # The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
                     return True
                 # Check that the message is for you.
@@ -285,16 +304,18 @@ class Module(Module, multiprocessing.Process):
                             self.add_maliciousIP(new_ip, profileid, twid)
                             self.set_evidence_ip(new_ip, ip_description, profileid, twid)
                     except ValueError:
-                        # This is not an IP
+                        # This is not an IP, then should be a domain
                         new_domain = new_data
+                        self.print(f'We received a domain to check: {new_domain}')
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(new_domain)
+                        self.print(f'We found data {domain_description}')
                         if domain_description != False: # Dont change this condition. This is the only way it works
-                            # If the IP is in the blacklist of IoC. Add it as Malicious
+                            # If the domain is in the blacklist of IoC. Add it as Malicious
                             domain_data = {}
                             # Maybe we should change the key to 'status' or something like that.
                             domain_data['Malicious'] = domain_description
-                            __database__.setInfoForDomainss(new_domain, domain_data)
+                            __database__.setInfoForDomains(new_domain, domain_data)
                             self.add_maliciousDomain(new_domain, profileid, twid)
                             self.set_evidence_domain(new_domain, domain_description, profileid, twid)
         except KeyboardInterrupt:
