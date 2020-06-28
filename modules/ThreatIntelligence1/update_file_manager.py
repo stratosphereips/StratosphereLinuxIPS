@@ -1,11 +1,9 @@
 import configparser
 import time
-from log_file_manager import __log_file_manager__
-from slips.core.database import __database__
 import os
 
 
-class UpdateIPManager:
+class UpdateFileManager:
 
     def __init__(self, outputqueue, config):
         self.outputqueue = outputqueue
@@ -20,7 +18,7 @@ class UpdateIPManager:
         """ Read the configuration file for what we need """
         try:
             # update period
-            self.update_period = self.config.get('threatintelligence', 'malicious_ips_update_period')
+            self.update_period = self.config.get('threatintelligence', 'malicious_data_update_period')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.update_period = 86400
@@ -29,7 +27,7 @@ class UpdateIPManager:
             self.path_to_thret_intelligence_data = self.config.get('threatintelligence', 'malicious_ip_file_path')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.path_to_thret_intelligence_data = 'modules/ThreatIntelligence1/malicious_ips_files/'
+            self.path_to_thret_intelligence_data = 'modules/ThreatIntelligence1/malicious_data_files/'
         try:
             # Read the list of URLs to download. Convert to list
             self.list_of_urls = self.config.get('threatintelligence', 'ti_files').split(',')
@@ -38,7 +36,7 @@ class UpdateIPManager:
             self.list_of_urls = []
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -46,7 +44,7 @@ class UpdateIPManager:
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
@@ -103,14 +101,15 @@ class UpdateIPManager:
             # Get the time of update
             self.new_update_time = time.time()
             return True
-        except:
+        except Exception as e:
             self.print(f'An error occurred while downloading the file {url}.', 0, 1)
+            self.print(f'Error: {e}')
             return False
 
-    def __download_malicious_ips(self, file_to_download: str) -> bool:
+    def __download_malicious_file(self, file_to_download: str) -> bool:
         try:
             file_name_to_download = file_to_download.split('/')[-1]
-            # Take last e-tag of our maliciou ips file.
+            # Take last e-tag of our malicious file.
             try:
                 with open(self.path_to_thret_intelligence_data + file_name_to_download + '.etag', 'r') as f:
                     old_e_tag = f.readlines()[0]
@@ -147,7 +146,7 @@ class UpdateIPManager:
                 self.print(f'Some error ocurred. Not downloading the file {file_to_download}', 0, 1)
                 return False
         except Exception as inst:
-            self.print('Problem on __download_malicious_ips()', 0, 0)
+            self.print('Problem on __download_malicious_file()', 0, 0)
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
@@ -161,12 +160,12 @@ class UpdateIPManager:
             self.update_period = float(self.update_period)
         except (TypeError, ValueError):
             # User does not want to update the malicious IP list.
-            self.print('Not Updating the remote file of maliciuos IPs because the user did not configure an update time.', 0, 1)
+            self.print('Not Updating the remote file of maliciuos IPs and domains because the user did not configure an update time.', 0, 1)
             return False
 
         if self.update_period <= 0:
             # User does not want to update the malicious IP list.
-            self.print('Not Updating the remote file of maliciuos IPs because the update period is <= 0.', 0, 1)
+            self.print('Not Updating the remote file of maliciuos IPs and domains because the update period is <= 0.', 0, 1)
             return False
 
         # Check if the remote file is newer than our own
@@ -175,7 +174,7 @@ class UpdateIPManager:
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
                 self.print(f'We should update the remote file {file_to_download}', 3, 0)
-                if self.__download_malicious_ips(file_to_download):
+                if self.__download_malicious_file(file_to_download):
                     self.print(f'Successfully updated remote file {file_to_download}.', 3, 0)
                 else:
                     self.print(f'An error occured during downloading file {file_to_download}. Updating was aborted.', 0, 1)

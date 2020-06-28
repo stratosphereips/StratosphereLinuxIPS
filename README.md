@@ -53,6 +53,8 @@ The minimum Slips requirements are:
 - Zeek (Bro) https://docs.zeek.org/en/stable/install/install.html
 - python-watchdog
     - In debian/ubuntu: ```apt-get install python3-watchdog```
+- validators (For threatintellingence module)
+	- ```pythong -m pip install validators```
   
 To run redis you can:
     - In Linux, as a daemon: redis-server --daemonize yes

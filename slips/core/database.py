@@ -847,6 +847,29 @@ class Database(object):
         data = self.r.smembers('BlockedProfTW')
         return data
 
+    def getDomainData(self, domain):
+        """
+        Return information about this domain
+        Returns a dictionary or False if there is no domain in the database
+        We need to separate these three cases:
+        1- Domain is in the DB without data. Return empty dict.
+        2- Domain is in the DB with data. Return dict.
+        3- Domain is not in the DB. Return False
+        """
+        data = self.r.hget('DomainsInfo', domain)
+        if data or data == {}:
+            # This means the domain was in the database, with or without data
+            # Case 1 and 2
+            # Convert the data
+            data = json.loads(data)
+            # print(f'In the DB: Domain {domain}, and data {data}')
+        else:
+            # The Domain was not in the DB
+            # Case 3
+            data = False
+            # print(f'In the DB: Domain {domain}, and data {data}')
+        return data
+
     def getIPData(self, ip):
         """
         Return information about this IP
@@ -876,6 +899,23 @@ class Database(object):
         # data = json.loads(data)
         return data
 
+    def setNewDomain(self, domain: str):
+        """
+        1- Stores this new domain in the Domains hash
+        2- Publishes in the channels that there is a new domain, and that we want
+            data from the Threat Intelligence modules
+        """
+        data = self.getDomainData(domain)
+        if data is False:
+            # If there is no data about this domain
+            # Set this domain for the first time in the IPsInfo
+            # Its VERY important that the data of the first time we see a domain
+            # must be '{}', an empty dictionary! if not the logic breaks.
+            # We use the empty dictionary to find if a domain exists or not
+            self.r.hset('DomainsInfo', domain, '{}')
+            # Publish that there is a new IP ready in the channel
+            self.publish('new_dns', domain)
+
     def setNewIP(self, ip: str):
         """
         1- Stores this new IP in the IPs hash
@@ -903,6 +943,48 @@ class Database(object):
             return True
         else:
             return False
+
+    def setInfoForDomains(self, domain: str, domaindata: dict):
+        """
+        Store information for this domain
+        We receive a dictionary, such as {'geocountry': 'rumania'} that we are
+        going to store for this domain
+        If it was not there before we store it. If it was there before, we
+        overwrite it
+        """
+        # Get the previous info already stored
+        data = self.getDomainData(domain)
+
+        if not data:
+            # This domain is not in the dictionary, add it first:
+            self.setNewDomain(domain)
+            # Now get the data, which should be empty, but just in case
+            data = self.getDomainData(domain)
+
+        for key in iter(domaindata):
+            # domaindata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
+            # domaindata can be {'VirusTotal': [1,2,3,4]}
+            # I think we dont need this anymore of the conversion
+            if type(data) == str:
+                # Convert the str to a dict
+                data = json.loads(data)
+
+            data_to_store = domaindata[key]
+
+            # If there is data previously stored, check if we have
+            # this key already
+            try:
+                # If the key is already stored, do not modify it
+                # Check if this decision is ok! or we should modify
+                # the data
+                _ = data[key]
+            except KeyError:
+                # There is no data for they key so far. Add it
+                data[key] = data_to_store
+                newdata_str = json.dumps(data)
+                self.r.hset('DomainsInfo', domain, newdata_str)
+                # Publish the changes
+                self.r.publish('dns_info_change', domain)
 
     def setInfoForIPs(self, ip: str, ipdata: dict):
         """
@@ -972,6 +1054,8 @@ class Database(object):
         elif 'new_letters' in channel:
             pubsub.subscribe(channel)
         elif 'ip_info_change' in channel:
+            pubsub.subscribe(channel)
+        elif 'dns_info_change' in channel:
             pubsub.subscribe(channel)
         return pubsub
 
@@ -1152,7 +1236,11 @@ class Database(object):
         data['ttls'] = ttls
         # Convert to json string
         data = json.dumps(data)
+        
+        # Set the dns as alternative flow
         self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
+
+        # Publish the new dns received
         to_send = {}
         to_send['profileid'] = profileid
         to_send['twid'] = twid
@@ -1160,6 +1248,9 @@ class Database(object):
         to_send = json.dumps(to_send)
         self.publish('new_dns', to_send)
         self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
+
+        # Check if the dns is detected by the threat intelligence
+        self.publish('give_threat_intelligence', str(query) + '-' + str(profileid) + '-' + str(twid))
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
@@ -1233,23 +1324,60 @@ class Database(object):
         if ips_and_description:
             self.r.hmset('IoC_ips', ips_and_description)
 
+    def add_domains_to_IoC(self, domains_and_description: dict) -> None:
+        """
+        Store a group of domains in the db as they were obtained from
+        an IoC source
+        What is the format of domains_and_description?
+        """
+        if domains_and_description:
+            self.r.hmset('IoC_domains', domains_and_description)
+
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
         """
         Store in the DB 1 IP we read from an IoC source  with its description
         """
         self.r.hset('IoC_ips', ip, description)
 
+    def add_domain_to_IoC(self, domain: str, description: str) -> None:
+        """
+        Store in the DB 1 domain we read from an IoC source
+        with its description
+        """
+        self.r.hset('IoC_domains', domain, description)
+
     def add_malicious_ip(self, ip, profileid_twid):
         """
-        Save in DB malicious IP met in the traffic and Threat Intelligence with its profileid and twid
+        Save in DB malicious IP found in the traffic
+        with its profileid and twid
         """
         self.r.hset('MaliciousIPs', ip, profileid_twid)
 
+    def add_malicious_domain(self, domain, profileid_twid):
+        """
+        Save in DB a malicious domain found in the traffic
+        with its profileid and twid
+        """
+        self.r.hset('MaliciousDomains', domain, profileid_twid)
+
     def get_malicious_ip(self, ip):
         """
-        Return malicious IP and its list of presence in the traffic (profileid, twid)
+        Return malicious IP and its list of presence in
+        the traffic (profileid, twid)
         """
         data = self.r.hget('MaliciousIPs', ip)
+        if data:
+            data = json.loads(data)
+        else:
+            data = {}
+        return data
+
+    def get_malicious_domain(self, domain):
+        """
+        Return malicious domain and its list of presence in
+        the traffic (profileid, twid)
+        """
+        data = self.r.hget('MaliciousDomains', domain)
         if data:
             data = json.loads(data)
         else:
@@ -1270,14 +1398,27 @@ class Database(object):
         data = self.r.hget('DNSresolution', ip)
         return data
 
-
     def search_IP_in_IoC(self, ip: str) -> str:
-        """ Search in the dB of malicious IPs and return a description if we found a match """
+        """
+        Search in the dB of malicious IPs and return a
+        description if we found a match
+        """
         ip_description = self.r.hget('IoC_ips', ip)
         if ip_description == None:
             return False
         else:
             return ip_description
+
+    def search_Domain_in_IoC(self, domain: str) -> str:
+        """
+        Search in the dB of malicious domainss and return a
+        description if we found a match
+        """
+        domain_description = self.r.hget('IoC_domains', domain)
+        if domain_description == None:
+            return False
+        else:
+            return domain_description
 
     def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
         """
@@ -1292,8 +1433,8 @@ class Database(object):
         try:
             self.print('Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(profileid, twid, direction, state, protocol, role, type_data), 0, 4)
             key = direction + type_data + role + protocol + state
-            #self.print('Asked Key: {}'.format(key))
-            data = self.r.hget( profileid + self.separator + twid, key)
+            # self.print('Asked Key: {}'.format(key))
+            data = self.r.hget(profileid + self.separator + twid, key)
             value = {}
             if data:
                 self.print('Key: {}. Getting info for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
@@ -1324,9 +1465,10 @@ class Database(object):
         """ Store the IP address of the host in a db"""
         self.r.set('hostIP', ip)
 
-
     def is_ip_in_virustotal_cache(self, ip):
-        """ Check if the IP was cached by VT module. If yes, return list of 4 floats (the score). If not, return None.
+        """
+        Check if the IP was cached by VT module. If yes, return
+        list of 4 floats (the score). If not, return None.
         :param ip: the IP address to check
         :return: list of 4 floats or None
         """
@@ -1376,5 +1518,6 @@ class Database(object):
     def is_profile_malicious(self, profileid: str) -> str:
         data = self.r.hget(profileid, 'labeled_as_malicious')
         return data
+
 
 __database__ = Database()
