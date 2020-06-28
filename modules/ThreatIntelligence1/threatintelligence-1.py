@@ -306,10 +306,8 @@ class Module(Module, multiprocessing.Process):
                     except ValueError:
                         # This is not an IP, then should be a domain
                         new_domain = new_data
-                        self.print(f'We received a domain to check: {new_domain}')
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(new_domain)
-                        self.print(f'We found data {domain_description}')
                         if domain_description != False: # Dont change this condition. This is the only way it works
                             # If the domain is in the blacklist of IoC. Add it as Malicious
                             domain_data = {}
