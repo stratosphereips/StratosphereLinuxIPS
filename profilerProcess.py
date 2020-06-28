@@ -1393,6 +1393,7 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                    # No dns check going in. Probably ok.
 
             ##########################################
             # 5th. Store the data according to the paremeters
