@@ -219,8 +219,17 @@ The core of the Slips program is not only the machine learning algorithm, but mo
 
 ### Changelog
 [rewrite]
-- 0.6.7
-	- New lstm module to detect C&C channels in the network
+- 0.6.7 (published 2020/06/30)
+	- Add a test file for nfdump.
+	- In the threat intelligence configuration add by default the file https://raw.githubusercontent.com/Te-k/stalkerware-indicators/master/network.csv with domains used for stalkerware
+	- In the threat intelligence module configuration, add a static version of the IPs of the NSO group from Amnesty from https://raw.githubusercontent.com/AmnestyTech/investigations/master/2018-08-01_nso/indicators.csv
+	- Change the old test-flows folder for the dataset folder
+	- New section in the configuration file with the threat intelligence data
+	- Ignore warnings
+	- Update the template module
+	- Read as input a zeek folder full of logs with -f
+	- Fixed bugs in the timeline of Kalipso
+	- New lstm module to detect C&C channels in the network. It detects channels by running a machine learning LSTM network on the behavioral letters.
 	- Several bug fixed
 	- New DNS blacklist management in the threat intelligence module
 	- Better store of IPs in the database
