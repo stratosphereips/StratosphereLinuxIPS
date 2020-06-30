@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # This file is part of the Stratosphere Linux IPS
 # See the file 'LICENSE' for copying permission.
-# Author: Sebastian Garcia. eldraco@gmail.com , sebastian.garcia@agents.fel.cvut.cz
+# Original Author: Sebastian Garcia. eldraco@gmail.com , sebastian.garcia@agents.fel.cvut.cz,
 
 import configparser
 import argparse
@@ -14,9 +14,9 @@ from datetime import datetime
 import socket
 import warnings
 
-version = '0.6.6'
+version = '0.6.7'
 
-# Ignore warnings on CPU from tenorflow
+# Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # Ignore warnings in general
 warnings.filterwarnings('ignore')
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-b', '--nfdump', help='A binary file from NFDUMP to read. NFDUMP is used to send data to slips.', required=False)
-    parser.add_argument('-G', '--gui', help='Use the nodejs gui interface.', required=False, default=False, action='store_true')
+    parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     args = parser.parse_args()
@@ -134,7 +134,7 @@ if __name__ == '__main__':
     from guiProcess import GuiProcess
     from logsProcess import LogsProcess
     from evidenceProcess import EvidenceProcess
-    # This plugins import will automatially load the modules and put them in the __modules__ variable
+    # This plugins import will automatically load the modules and put them in the __modules__ variable
     from slips.core.plugins import __modules__
 
     # Any verbosity passed as parameter overrides the configuration. Only check its value
@@ -164,7 +164,6 @@ if __name__ == '__main__':
     # Limit any debuggisity to > 0
     if args.debug < 0:
         args.debug = 0
-
 
 
     # Check the type of input
@@ -281,8 +280,6 @@ if __name__ == '__main__':
             profilesLen = str(__database__.getProfilesLen())
             outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
 
-            # outputProcessQueue.put('11|Main|[Main] Counter to stop Slips. Amount of modified timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
-
             # If there were no modified TW in the last timewindow time,
             # then start counting down
             # Dont try to stop slips if its catpurting from an interface
@@ -305,7 +302,6 @@ if __name__ == '__main__':
                     outputProcessQueue.put('stop_process')
                     profilerProcessQueue.put('stop_process')
                     break
-                # outputProcessQueue.put('11|Main|[Main] Decreasing one')
                 minimum_intervals_to_wait -= 1
             else:
                 # If there are still modified TWs, just mark them as
@@ -315,7 +311,6 @@ if __name__ == '__main__':
                     twid = profileTW.split(fieldseparator)[2]
                     __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
 
-                # outputProcessQueue.put('11|Main|[Main] Back to 0')
                 minimum_intervals_to_wait = 5
     except KeyboardInterrupt:
         print('Stopping Slips')
