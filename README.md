@@ -1,4 +1,4 @@
-# Stratosphere Linux IPS (Slips) Version 0.6.6
+# Stratosphere Linux IPS (Slips) Version 0.6.7
 
 Slips is a behavioral-based Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels to provide good visualisation for the analyst.
 Slips is a modular software 
@@ -11,15 +11,15 @@ Now Slips can be run inside a docker if you want to analyze flow or pcap files. 
 
 ## From the Docker Hub
 
-	docker run -it --rm --net=host stratosphereips/slips:v0.6.6
-	./slips.py -c slips.conf -f test-flows/test3.binetflow
+	docker run -it --rm --net=host stratosphereips/slips:v0.6.7
+	./slips.py -c slips.conf -f dataset/test3.binetflow
 
 
 ### If you want to share files between your host and the docker, you can do:
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
-	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:v0.6.6
+	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:v0.6.7
 	./slips.py -c slips.conf -f dataset/myfile.pcap
 
 
@@ -31,7 +31,7 @@ If you cloned StratosphereLinuxIPS in '~/code/StratosphereLinuxIPS', then you ca
 	cd docker
 	docker build --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
-	./slips.py -c slips.conf -f test-flows/test3.binetflow
+	./slips.py -c slips.conf -f dataset/test3.binetflow
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
 
@@ -167,7 +167,7 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
 
 Example of specific usage: Slips can be used by passing input files:
 
-    ./slips.py -c slips.conf -f test-flows/test3.binetflow, where -c is the configuration file, -f is the binetflow input file
+    ./slips.py -c slips.conf -f dataset/test3.binetflow, where -c is the configuration file, -f is the binetflow input file
 
 Other parameters for different input types:
 	-r is for pcap
@@ -219,13 +219,19 @@ The core of the Slips program is not only the machine learning algorithm, but mo
 
 ### Changelog
 [rewrite]
+- 0.6.7
+	- New lstm module to detect C&C channels in the network
+	- Several bug fixed
+	- New DNS blacklist management in the threat intelligence module
+	- Better store of IPs in the database
+	- Fix an error in how the behavioural letters where created
 - 0.6.6 
 	- Added DNS resolution for IPs in timeline
-	- Added inTuple key to the timeline for inbound flows when abalysis_direction = 'all'
+	- Added inTuple key to the timeline for inbound flows when analysis_direction = 'all'
 	- Changed the timeline format in Slips and Kalipso
 	- Defined host IP in Slips and Kalipso if Slips is run on interface
 - 0.6.5 
-	- Fixed ThreatIntellignce module to be fully functional.
+	- Fixed Threat Intelligence module to be fully functional.
 	- Added new feature to stop Slips automatically when input files ends.
 	- Fixed the storing and display of inbound flows in analysis direction 'all'.
 	- Fixed Kalipso to display inbound flows and h hotkey to display out tuples
