@@ -221,6 +221,8 @@ The core of the Slips program is not only the machine learning algorithm, but mo
 [rewrite]
 - 0.6.7 (published 2020/06/30)
 	- Add a test file for nfdump.
+	- In the threat intelligence configuration add by default the file https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv. It has a blacklist of IP addresses that are attacking the Internet. Coming from the stratosphere laboratory and the aposemat project. The AIP program.
+	- In the threat intelligence configuration add by default the file https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_historical_blacklist_prioritized_by_newest_attackers.csv. It has a blacklist of IP addresses that are attacking the Internet. Coming from the stratosphere laboratory and the aposemat project. The AIP program.
 	- In the threat intelligence configuration add by default the file https://raw.githubusercontent.com/Te-k/stalkerware-indicators/master/network.csv with domains used for stalkerware
 	- In the threat intelligence module configuration, add a static version of the IPs of the NSO group from Amnesty from https://raw.githubusercontent.com/AmnestyTech/investigations/master/2018-08-01_nso/indicators.csv
 	- Change the old test-flows folder for the dataset folder
