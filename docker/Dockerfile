@@ -37,6 +37,7 @@ RUN pip3 install --upgrade pip
 RUN pip3 install wheel
 RUN pip3 install redis
 RUN pip3 install setuptools
+RUN pip3 install validators
 RUN pip3 install --upgrade tensorflow==2.1.0
 
 # Download and unpack Slips.
