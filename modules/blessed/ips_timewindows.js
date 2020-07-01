@@ -730,7 +730,7 @@ function tcp_udp_connections(key, key2,reply){
     callback()
     }, function(err) {
       if( err ) {
-        console.log('unable to create user');
+        console.log(err);
       }
     });
   }
