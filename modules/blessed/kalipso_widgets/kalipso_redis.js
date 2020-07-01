@@ -19,6 +19,7 @@
       this.udp_data_est = this.redis.createClient()
       this.tcp_data_notest = this.redis.createClient()
       this.udp_data_notest = this.redis.createClient()
+      this.redis_resolved_dns = this.redis.createClient()
   	}
 
   	getAllKeys(){
@@ -71,6 +72,25 @@
       });})
     }
 
+    getDNSResolution(ip){
+      /*
+      Get DNS resolution of the IP
+      */
+      return new Promise((resolve,reject)=>{
+        var resolved_dns = '';
+        this.redis_resolved_dns.hget('DNSresolution',ip,(err,value)=> {
+          if(err){reject(resolved_dns)}
+          else{
+            if(value == null){
+              value = ''
+            }
+            resolved_dns = value
+            resolve(resolved_dns)
+          }
+        })
+      })
+    }
+    
     getIpInfo(ip){
       /*
       Get IP information - asn, geocountry, VT - for specific IP

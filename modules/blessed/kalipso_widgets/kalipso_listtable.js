@@ -100,7 +100,7 @@ class ListTable{
     try{
       this.redis_database.getOutTuples(ip, timewindow)
       .then(redis_outTuples=>{
-        var data = [['key','string','asn','geocountry','url','down','ref','com']]
+        var data = [['key','string','dns_resolution','asn','geocountry','url','down','ref','com']]
         if(redis_outTuples==null){this.setData(data);this.screen.render(); return;}
         else{
           var json_outTuples = JSON.parse(redis_outTuples)
@@ -112,12 +112,13 @@ class ListTable{
             var letters_string = tuple_info[0]
             this.getIPInfo_dict(outTuple_ip)
             .then(ip_info_dict=>{
+            this.redis_database.getDNSResolution(outTuple_ip).then(dns_resolution=>{
               if(letters_string.trim().length > 40){
                     var letter_string_chunks = this.chunkString(tuple_info[0].trim(),40);
                     async.forEachOf(letter_string_chunks, (chunk,ind,callback)=>{
                       var row2 = [];
                       if(ind == 0){
-                        row2.push(key,chunk,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                        row2.push(key,chunk,dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
                       }
                       else{row2.push('',chunk, '', '' , '');}
                         data.push(row2);
@@ -126,11 +127,11 @@ class ListTable{
                       if(err){console.log(err);}
                     })}
               else{     
-                row.push(key,letters_string, Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                row.push(key,letters_string, dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
                 data.push(row)
               }
                 callback(null);
-            })
+            })})
           },(err)=>{
             if(err) {console.log(err)} 
             else {
@@ -153,7 +154,7 @@ class ListTable{
     try{
       this.redis_database.getInTuples(ip, timewindow)
       .then(redis_outTuples=>{
-        var data = [['key','string','asn','geocountry','url','down','ref','com']]
+        var data = [['key','string','dns_resolution','asn','geocountry','url','down','ref','com']]
         if(redis_outTuples==null){this.setData(data);this.screen.render(); return;}
         else{
           var json_outTuples = JSON.parse(redis_outTuples)
@@ -165,12 +166,13 @@ class ListTable{
             var letters_string = tuple_info[0]
             this.getIPInfo_dict(outTuple_ip)
             .then(ip_info_dict=>{
+              this.redis_database.getDNSResolution(outTuple_ip).then(dns_resolution=>{
               if(letters_string.trim().length > 40){
                     var letter_string_chunks = this.chunkString(tuple_info[0].trim(),40);
                     async.forEachOf(letter_string_chunks, (chunk,ind,callback)=>{
                       var row2 = [];
                       if(ind == 0){
-                        row2.push(key,chunk,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                        row2.push(key,chunk,dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
                       }
                       else{row2.push('',chunk, '', '' , '');}
                         data.push(row2);
@@ -179,11 +181,11 @@ class ListTable{
                       if(err){console.log(err);}
                     })}
               else{     
-                row.push(key,letters_string, Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                row.push(key,letters_string,dns_resolution, Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
                 data.push(row)
               }
                 callback(null);
-            })
+            })})
           },(err)=>{
             if(err) {console.log(err)} 
             else {
