@@ -31,7 +31,6 @@ class Box{
           ch: ' ',
           inverse: true
         }
-
     })
   }
   setData(data){
@@ -46,8 +45,6 @@ class Box{
   focus(){
     this.widget.focus()
       }
-
-
   setEvidence(ip, timewindow){
     try{
       var evidence_data = ''
@@ -55,7 +52,6 @@ class Box{
         if (redis_evidence_data==null){
           return this.setData(evidence_data)
         }
-
         var evidence_json = JSON.parse(redis_evidence_data);
         var evidence_keys = Object.keys(evidence_json); 
         async.each(evidence_keys, (key,callback)=>{
