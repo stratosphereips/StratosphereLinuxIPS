@@ -76,10 +76,10 @@ class ListTable{
             var ip_keys = Object.keys(ipInfo_json);
 
             if (ipInfo_json.hasOwnProperty('VirusTotal')){
-              ip_info_dict['VirusTotal']['URL'] = this.round(ipInfo_json['URL'],5)
-              ip_info_dict['VirusTotal']['down'] = this.round(ipInfo_json['down'],5)
-              ip_info_dict['VirusTotal']['ref'] = this.round(ipInfo_json['ref'],5)
-              ip_info_dict['VirusTotal']['com'] = this.round(ipInfo_json['com'],5)
+              ip_info_dict['URL'] = String(this.round(ipInfo_json['VirusTotal']['URL'],5))
+              ip_info_dict['down'] = String(this.round(ipInfo_json['VirusTotal']['down'],5))
+              ip_info_dict['ref'] = String(this.round(ipInfo_json['VirusTotal']['ref'],5))
+              ip_info_dict['com'] = String(this.round(ipInfo_json['VirusTotal']['com'],5))
             }
             if(ipInfo_json.hasOwnProperty('asn')){
               ip_info_dict['asn'] = ipInfo_json['asn']
@@ -118,9 +118,10 @@ class ListTable{
                     async.forEachOf(letter_string_chunks, (chunk,ind,callback)=>{
                       var row2 = [];
                       if(ind == 0){
+                        console.log(Object.values(ip_info_dict))
                         row2.push(key,chunk,dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
                       }
-                      else{row2.push('',chunk, '', '' , '');}
+                      else{row2.push('',chunk,'','','','' ,'', '' , '');}
                         data.push(row2);
                         callback(null);
                     }, (err)=>{
@@ -174,7 +175,7 @@ class ListTable{
                       if(ind == 0){
                         row2.push(key,chunk,dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
                       }
-                      else{row2.push('',chunk, '', '' , '');}
+                      else{row2.push('',chunk,'','','','' ,'', '' , '');}
                         data.push(row2);
                         callback(null);
                     }, (err)=>{

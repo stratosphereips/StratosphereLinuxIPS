@@ -79,7 +79,15 @@ class ListBar{
            
                 'reload':{
                   keys : ['o']
-                         },                   
+                         },    
+
+                'quit hotkey':{
+                  keys : ['q']
+                         },  
+
+                'quit kalipso':{
+                  keys : ['ESC']
+                         },                 
             }
     })
   }
