@@ -244,7 +244,7 @@ class combine_Listtable_Gauge{
 
     this.screen.render()
 
-    this.screen.key('down', (ch,key)=>{
+    this.screen.key(['down','j'], (ch,key)=>{
       if(this.gauge1.widget.focused == true){
         if(gauge1_counter >= (total_data1-1)*gauge_number);
         else{
@@ -271,7 +271,7 @@ class combine_Listtable_Gauge{
       }
     })
      
-    this.screen.key('up',(ch,key)=>{
+    this.screen.key(['up','k'],(ch,key)=>{
       if(this.gauge1.widget.focused==true){
         listtable1_counter -= gauge_number*2
         gauge1_counter -= gauge_number

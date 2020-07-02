@@ -11,8 +11,24 @@ class ListTable{
 }
   initListTable(characteristics){
     return this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], this.blessed.listtable, {
-      border: 'line'
-    , style: {border: {fg:'blue'}}})
+      keys: true,
+      mouse: true,
+      vi:true,
+      tags: true,
+      border: 'line',
+      style: {
+        header: {
+          fg: 'blue',
+          bold: true
+        },
+        cell: {
+          selected: {
+            bg: 'magenta'
+          }
+        }
+      },
+      align: 'left'
+     })
   }
 
   setData(data){
@@ -118,7 +134,6 @@ class ListTable{
                     async.forEachOf(letter_string_chunks, (chunk,ind,callback)=>{
                       var row2 = [];
                       if(ind == 0){
-                        console.log(Object.values(ip_info_dict))
                         row2.push(key,chunk,dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
                       }
                       else{row2.push('',chunk,'','','','' ,'', '' , '');}
