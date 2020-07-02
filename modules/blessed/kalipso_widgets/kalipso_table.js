@@ -91,9 +91,9 @@
 
         if (ipInfo_json.hasOwnProperty('VirusTotal')){
           ip_info_dict['VirusTotal']['URL'] = this.round(ipInfo_json['VirusTotal']['URL'],5)
-          ip_info_dict['VirusTotal']['down'] = this.round(ipInfo_json['VirusTotal']['down'],5)
-          ip_info_dict['VirusTotal']['ref'] = this.round(ipInfo_json['VirusTotal']['ref'],5)
-          ip_info_dict['VirusTotal']['com'] = this.round(ipInfo_json['VirusTotal']['com'],5)
+          ip_info_dict['VirusTotal']['down'] = this.round(ipInfo_json['VirusTotal']['down_file'],5)
+          ip_info_dict['VirusTotal']['ref'] = this.round(ipInfo_json['VirusTotal']['ref_file'],5)
+          ip_info_dict['VirusTotal']['com'] = this.round(ipInfo_json['VirusTotal']['com_file'],5)
         }
         if(ipInfo_json.hasOwnProperty('asn')){
           ip_info_dict['asn'] = ipInfo_json['asn']

@@ -17,6 +17,7 @@ class screen {
       this.evidence_box_widget = undefined
       this.ipinfo_widget = undefined
       this.focus_widget = undefined
+      this.focus_hotkey = false
       this.current_shown_widgets = undefined
       this.tuple_widget = undefined
       this.listtable1 = undefined
@@ -158,6 +159,7 @@ class screen {
         'SrcPortsClientTCPEstablished','SrcPortsClientUDPEstablished', 'SrcPortsClientTCPNotEstablished', 'SrcPortsClientUDPNotEstablished',
         ['estSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],['NotEstSrcPortClient', 'totalflows', 'totalpkts','totalbytes'])
       this.render()
+      return;
     }
 
     c_hotkey_routine(){
@@ -203,6 +205,7 @@ class screen {
       this.tree_widget.current_tw, 
       'dstPortsServerTCPEstablished','dstPortsServerUDPEstablished', 'dstPortsServerTCPNotEstablished', 'dstPortsServerUDPNotEstablished',
       ['estDstPortServer', 'totalflows', 'totalpkts','totalbytes'],['NotEstDstPortServer', 'totalflows', 'totalpkts','totalbytes'])
+
     }
 
     p_hotkey_routine(){
@@ -293,7 +296,17 @@ class screen {
       Function to monitor all keypresses happening on the screen
       */
       this.screen.on('keypress', (ch, key)=>{
-        if(key.name == 'tab'){
+        if(key.name == 'down' || key.name == 'j'){
+          if(this.focus_hotkey){
+            this.combine_listtable_gauge.down()
+          }
+        }
+        else if(key.name == 'up' || key.name == 'k'){
+          if(this.focus_hotkey){
+            this.combine_listtable_gauge.up()
+          }
+        }
+        else if(key.name == 'tab'){
           if(this.gauge1.widget.focused == true){
             this.gauge2.focus()
           }
@@ -322,39 +335,51 @@ class screen {
         else if(key.name == 'q'){
           this.helpbar.selectTab(0)
           this.main_page_routine()
+          this.focus_hotkey = false
         }
         else if(key.name == 'p'){
           this.helpbar.selectTab(4)
           this.p_hotkey_routine()
+          this.focus_hotkey = true
         }
         else if(key.name == 'b'){
           this.helpbar.selectTab(3)
           this.b_hotkey_routine()
+          this.focus_hotkey = true
         }
         else if(key.name == 'c'){
           this.helpbar.selectTab(2)
           this.c_hotkey_routine()
+          this.focus_hotkey = true
         }
         else if(key.name == 'n'){
           this.helpbar.selectTab(5)
           this.n_hotkey_routine()
+          this.focus_hotkey = true
         }
         else if(key.name == 'e'){
           this.helpbar.selectTab(1)
           this.e_hotkey_routine()
+          this.focus_hotkey = true
         }
         else if(key.name == 'h'){
           this.helpbar.selectTab(6)
           this.h_hotkey_routine() 
+          this.focus_hotkey = false
         }
         else if(key.name == 'i'){
           this.helpbar.selectTab(7)
-          this.i_hotkey_routine() 
+          this.i_hotkey_routine()
+          this.focus_hotkey = false
         }
         else if(key.name == 'o'){
           this.helpbar.selectTab(0)
           this.o_hotkey_routine() 
+          this.focus_hotkey = false
         }
+
+        
+
       })
     }
 
