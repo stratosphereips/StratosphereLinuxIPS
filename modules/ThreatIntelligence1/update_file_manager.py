@@ -73,7 +73,8 @@ class UpdateFileManager:
     def __get_e_tag_from_web(self, file_to_download) -> str:
         try:
             # We use a command in os because if we use urllib or requests the process complains!:w
-            command = "curl --insecure -s -I " + file_to_download + " | grep -i etag"
+            # If the webpage does not answer in 10 seconds, continue
+            command = "curl -m 10 --insecure -s -I " + file_to_download + " | grep -i etag"
             temp = os.popen(command).read()
             try:
                 new_e_tag = temp.split()[1].split('\n')[0].replace("\"",'')
