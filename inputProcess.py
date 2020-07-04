@@ -173,7 +173,12 @@ class InputProcess(multiprocessing.Process):
                         line = json.loads(zeek_line)
                         # All bro files have a field 'ts' with the timestamp.
                         # So we are safe here not checking the type of line
-                        timestamp = line['ts']
+                        try:
+                            timestamp = line['ts']
+                        except KeyError:
+                            # In some Zeek files there may not be a ts field
+                            # Like in some weird smb files
+                            timestamp = 0
                         # Add the type of file to the dict so later we know how to parse it
                         line['type'] = filename
                     except json.decoder.JSONDecodeError:
