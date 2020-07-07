@@ -1,16 +1,44 @@
-# Tue Apr 21 17:41:00 CET 2020. Up to commit cb680e
-- Added DNS resolution for IPs in timeline
-- Added inTuple key to the timeline for inbound flows when abalysis_direction = 'all'
-- Changed the timeline format in Slips and Kalipso
-- Defined host IP in Slips and Kalipso if Slips is run on interface
-# Sun Mar 31 13:52:00 CET 2020. Up to commit b8d89a
-- Fixed the display of inbound flows in Kalipso and h hotkey to display out tuples
-# Fri Mar 27 11:55:00 CET 2020. Up to commit 2407d6
-- Changed format to store and display inbound flows for analysis direction all
-# Thu Mar 26 15:37:00 CET 2020. Up to commit ca46de
-- Added lsmt-cc-detection module with the correctly seen and reported evidence
-# Sun Mar 22 12:37:09 CET 2020. Up to commit c810ab4
-- Fixed the ThreatIntelligence module to be fully functional, now the evidence of the blacklists is seen and reported correctly in slips.
-- Bumped version to 0.6.5
-# Sat Mar 21 13:30:22 CET 2020. Up to Commit a96cfef
-- Fix some bugs on the ThreatIntelligence module.
+- 0.6.8 (published 2020/07/07)
+	- New version of Kalipso
+		- Widgets are splitted in classes
+		- Added comments
+		- Fixed screen way for hotkeys
+		- 'Esc' to exit Kalipso
+		- 'q' to exit hotkey
+- 0.6.7 (published 2020/06/30)
+	- Add a test file for nfdump.
+	- In the threat intelligence configuration add by default the file https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv. It has a blacklist of IP addresses that are attacking the Internet. Coming from the stratosphere laboratory and the aposemat project. The AIP program.
+	- In the threat intelligence configuration add by default the file https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_historical_blacklist_prioritized_by_newest_attackers.csv. It has a blacklist of IP addresses that are attacking the Internet. Coming from the stratosphere laboratory and the aposemat project. The AIP program.
+	- In the threat intelligence configuration add by default the file https://raw.githubusercontent.com/Te-k/stalkerware-indicators/master/network.csv with domains used for stalkerware
+	- In the threat intelligence module configuration, add a static version of the IPs of the NSO group from Amnesty from https://raw.githubusercontent.com/AmnestyTech/investigations/master/2018-08-01_nso/indicators.csv
+	- Change the old test-flows folder for the dataset folder
+	- New section in the configuration file with the threat intelligence data
+	- Ignore warnings
+	- Update the template module
+	- Read as input a zeek folder full of logs with -f
+	- Fixed bugs in the timeline of Kalipso
+	- New lstm module to detect C&C channels in the network. It detects channels by running a machine learning LSTM network on the behavioral letters.
+	- Several bug fixed
+	- New DNS blacklist management in the threat intelligence module
+	- Better store of IPs in the database
+	- Fix an error in how the behavioural letters where created
+- 0.6.6 
+	- Added DNS resolution for IPs in timeline
+	- Added inTuple key to the timeline for inbound flows when analysis_direction = 'all'
+	- Changed the timeline format in Slips and Kalipso
+	- Defined host IP in Slips and Kalipso if Slips is run on interface
+- 0.6.5 
+	- Fixed Threat Intelligence module to be fully functional.
+	- Added new feature to stop Slips automatically when input files ends.
+	- Fixed the storing and display of inbound flows in analysis direction 'all'.
+	- Fixed Kalipso to display inbound flows and h hotkey to display out tuples
+- 0.5 Completely renewed architecture and code.
+- 0.4 was never reached
+- 0.3.5
+- 0.3.4
+	- This is a mayor version change. Implementing new algorithms for analyzing the results, management of IPs, connections, whois database and more features.
+	- A new parameter to specify the file (-r). This is as fast as reading the file from stdin.
+	- Now we have a configuration file slips.conf. In there you can specify from fixed parameters, the time formats, to the columns in the flow file.
+- 0.3.3alpha
+	- First stable version with a minimal algorithm for detecting behavioral threats.
+
