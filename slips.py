@@ -14,7 +14,7 @@ from datetime import datetime
 import socket
 import warnings
 
-version = '0.6.7'
+version = '0.6.8'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
