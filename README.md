@@ -220,6 +220,12 @@ The core of the Slips program is not only the machine learning algorithm, but mo
 ### Changelog
 [rewrite]
 - 0.6.7 (published 2020/06/30)
+	- New version of Kalipso
+		- Widgets are splitted in classes
+		- Added comments
+		- Fixed screen way for hotkeys
+		- 'Esc' to exit Kalipso
+		- 'q' to exit hotkey
 	- Add a test file for nfdump.
 	- In the threat intelligence configuration add by default the file https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv. It has a blacklist of IP addresses that are attacking the Internet. Coming from the stratosphere laboratory and the aposemat project. The AIP program.
 	- In the threat intelligence configuration add by default the file https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_historical_blacklist_prioritized_by_newest_attackers.csv. It has a blacklist of IP addresses that are attacking the Internet. Coming from the stratosphere laboratory and the aposemat project. The AIP program.
