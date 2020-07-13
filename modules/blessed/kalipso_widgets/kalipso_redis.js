@@ -46,7 +46,7 @@
       /*
       Get an IP of host machine
       */
-	    return new Promise((resolve,reject)=>{this.client.get('hostIP',(err,value)=>{
+	    return new Promise((resolve,reject)=>{this.client.smembers('hostIP',(err,value)=>{
 	      if(err){ console.log(err); reject(err);}
 	      else{resolve(value) ;}
 	  	});})
