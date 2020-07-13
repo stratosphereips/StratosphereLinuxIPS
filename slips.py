@@ -117,6 +117,7 @@ if __name__ == '__main__':
         zeek_bro = check_zeek_or_bro()
         if zeek_bro is False:
             # If we do not have bro or zeek, terminate Slips.
+            print('no zeek nor bro')
             terminate_slips()
 
     # See if we have the nfdump, if we need it according to the input type
@@ -302,6 +303,14 @@ if __name__ == '__main__':
                     outputProcessQueue.put('stop_process')
                     profilerProcessQueue.put('stop_process')
                     break
+                minimum_intervals_to_wait -= 1
+            # If there were no modifierd TW in the last timewindow time
+            # then start counting down
+            # After count own we try to update the host IP, if the network was changed
+            elif amount_of_modified == 0 and args.interface:
+                if minimum_intervals_to_wait == 0:
+                    __database__.set_host_ip(recognize_host_ip())
+                    minimum_intervals_to_wait = 6
                 minimum_intervals_to_wait -= 1
             else:
                 # If there are still modified TWs, just mark them as
