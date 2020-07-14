@@ -257,8 +257,9 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
 
     # Store the host IP address if input type is interface
+    hostIP = recognize_host_ip()
     if input_type == 'interface':
-        __database__.set_host_ip(recognize_host_ip())
+        __database__.set_host_ip(hostIP)
 
 
     # As the main program, keep checking if we should stop slips or not
@@ -304,23 +305,31 @@ if __name__ == '__main__':
                     profilerProcessQueue.put('stop_process')
                     break
                 minimum_intervals_to_wait -= 1
-            # If there were no modifierd TW in the last timewindow time
-            # then start counting down
-            # After count own we try to update the host IP, if the network was changed
-            elif amount_of_modified == 0 and args.interface:
-                if minimum_intervals_to_wait == 0:
-                    __database__.set_host_ip(recognize_host_ip())
-                    minimum_intervals_to_wait = 6
-                minimum_intervals_to_wait -= 1
             else:
+                # To check of there was a modifoed TW in the host IP. If not, count down.
+                modifiedTW_hostIP = False
                 # If there are still modified TWs, just mark them as
                 # notmodified since we alredy 'waited' on them
                 for profileTW in TWModifiedforProfile:
                     profileid = profileTW.split(fieldseparator)[0] + fieldseparator + profileTW.split(fieldseparator)[1]
+                    profileIP = profileTW.split(fieldseparator)[1]
                     twid = profileTW.split(fieldseparator)[2]
                     __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
+                    # if there was a modified TW in the host IP
+                    if hostIP == profileIP:
+                        modifiedTW_hostIP = True
 
-                minimum_intervals_to_wait = 5
+                # If there was no modified TW in the host IP
+                # then start counting down
+                # After count down we update the host IP, to check if the network was changed
+                if not modifiedTW_hostIP and args.interface:
+                    if minimum_intervals_to_wait == 0:
+                        hostIP = recognize_host_ip()
+                        __database__.set_host_ip(hostIP)
+                        minimum_intervals_to_wait = 6
+                    minimum_intervals_to_wait -= 1
+                else:
+                    minimum_intervals_to_wait = 6
     except KeyboardInterrupt:
         print('Stopping Slips')
         # Stop the modules that are subscribed to channels
