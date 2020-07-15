@@ -5,6 +5,7 @@ import sys
 from typing import Tuple, Dict, Set, Callable
 import configparser
 import traceback
+from datetime import datetime
 
 
 def timing(f):
@@ -52,7 +53,7 @@ class Database(object):
         self.r.delete('zeekfiles')
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -60,7 +61,7 @@ class Database(object):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
@@ -72,7 +73,7 @@ class Database(object):
         self.outputqueue = outputqueue
 
     def addProfile(self, profileid, starttime, duration):
-        """ 
+        """
         Add a new profile to the DB. Both the list of profiles and the hasmap of profile data
         Profiles are stored in two structures. A list of profiles (index) and individual hashmaps for each profile (like a table)
         Duration is only needed for registration purposes in the profile. Nothing operational
@@ -82,7 +83,8 @@ class Database(object):
                 # Add the profile to the index. The index is called 'profiles'
                 self.r.sadd('profiles', str(profileid))
                 # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
-                self.r.hset(profileid, 'Starttime', starttime)
+                # Add the start time of profile
+                self.r.hset(profileid, 'starttime', starttime)
                 # For now duration of the TW is fixed
                 self.r.hset(profileid, 'duration', duration)
                 # The IP of the profile should also be added as a new IP we know about.
@@ -95,7 +97,6 @@ class Database(object):
 
                 # The IP of the profile should also be checked in case is malicious, but we only have the profileid, not the tw.
                 self.publish('give_threat_intelligence', str(ip) + '-' + str(profileid) + '-None')
-
 
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put('00|database|Error in addProfile in database.py')
@@ -127,7 +128,6 @@ class Database(object):
         """ Get all the data for this particular profile.
         Returns:
         A json formated representation of the hashmap with all the data of the profile
-            
         """
         profile = self.r.hgetall(profileid)
         if profile != set():
@@ -192,8 +192,8 @@ class Database(object):
 
     def getProfilesLen(self):
         """ Return the amount of profiles. Redis should be faster than python to do this count """
-        return self.r.scard('profiles') 
-   
+        return self.r.scard('profiles')
+
     def getLastTWforProfile(self, profileid):
         """ Return the last TW id and the time for the given profile id """
         data = self.r.zrange('tws' + profileid, -1, -1, withscores=True)
@@ -207,7 +207,7 @@ class Database(object):
     def getTWforScore(self, profileid, time):
         """
         Return the TW id and the time for the TW that includes the given time.
-        The score in the DB is the start of the timewindow, so we should search a TW that includes 
+        The score in the DB is the start of the timewindow, so we should search a TW that includes
         the given time by making sure the start of the TW is < time, and the end of the TW is > time.
         """
         # [-1] so we bring the last TW that matched this time.
@@ -220,7 +220,7 @@ class Database(object):
 
     def addNewOlderTW(self, profileid, startoftw):
         try:
-            """ 
+            """
             Creates or adds a new timewindow that is OLDER than the first we have
             Return the id of the timewindow just created
             """
@@ -292,27 +292,33 @@ class Database(object):
         """ Retrieve from the db if this TW of this profile was modified """
         data = self.r.sismember('ModifiedTWForLogs', profileid + self.separator + twid)
         if not data:
-            # If for some reason we don't have the modified bit set, then it was not modified.
+            # If for some reason we don't have the modified bit set,
+            # then it was not modified.
             data = 0
         return bool(data)
 
     def markProfileTWAsNotModifiedLogs(self, profileid, twid):
-        """ 
-        Mark a TW in a profile as not modified after the log file is outputed
+        """
+        Mark a TW in a profile as not modified
+        Technically we remove the tw from the list of modified TW
+        The tw are removed after some process 'checks' them, which
+        now it is happening in the main slips.py every X seconds
+        when the line is printed with the amount of modified TW
         """
         self.r.srem('ModifiedTWForLogs', profileid + self.separator + twid)
 
-    def markProfileTWAsModified(self, profileid, twid):
-        """ 
-        Mark a TW in a profile as not modified 
-        (As a side effect, it can create it if its not there (What does this meas?))
-
-        The TW are marked for different processes because some of them 'wake up' 
-        every X amount of time and need to check what was modified from their
-        points of view. This is why we are putting mark for different modules
+    def markProfileTWAsModified(self, profileid, twid, timestamp):
+        """
+        Mark a TW in a profile as modified
+        This means:
+        1- To add it to the list of ModifiedTWForLogs
+        2- Add the timestamp received to the time_of_last_modification
+           in the TW itself
         """
         self.r.sadd('ModifiedTWForLogs', profileid + self.separator + twid)
         self.publish('tw_modified', profileid + ':' + twid)
+        hash_id = profileid + self.separator + twid
+        self.r.hset(hash_id, 'Modified', str(timestamp))
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
@@ -340,6 +346,7 @@ class Database(object):
             proto = columns['proto'].upper()
             daddr = columns['daddr']
             saddr = columns['saddr']
+            starttime = columns['starttime']
 
             # Depending if the traffic is going out or not, we are Client or Server
             # Set the type of ip as Dst if we are a client, or Src if we are a server
@@ -376,7 +383,6 @@ class Database(object):
                 # So check the src ip
                 pass
 
-
             #############
             # 1- Count the dstips, and store the dstip in the db of this profile+tw
             self.print('add_ips(): As a {}, add the {} IP {} to profile {}, twid {}'.format(role, type_host_key, str(ip_as_obj), profileid, twid), 0, 5)
@@ -404,9 +410,8 @@ class Database(object):
             # Store the dstips in the dB
             self.r.hset(hash_id, type_host_key + 'IPs', str(data))
 
-
             #############
-            # 2- Store, for each ip: 
+            # 2- Store, for each ip:
             # - Update how many times each individual DstPort was contacted
             # - Update the total flows sent by this ip
             # - Update the total packets sent by this ip
@@ -445,7 +450,6 @@ class Database(object):
                 self.print('add_ips() First time for dst port {}. Data: {}'.format(dport, innerdata), 0, 3)
                 prev_data[str(ip_as_obj)] = innerdata
 
-
             ###########
             # After processing all the features of the ip, store all the info in the database
             # Convert the dictionary to json
@@ -455,7 +459,7 @@ class Database(object):
             # Store this data in the profile hash
             self.r.hset( profileid + self.separator + twid, key_name, str(data))
             # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid)
+            self.markProfileTWAsModified(profileid, twid, starttime)
         except Exception as inst:
             self.outputqueue.put('01|database|[DB] Error in add_ips in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
@@ -464,13 +468,12 @@ class Database(object):
     def refresh_data_tuples(self):
         """
         Go through all the tuples and refresh the data about the ipsinfo
+        TODO
         """
         outtuples = self.getOutTuplesfromProfileTW()
         intuples = self.getInTuplesfromProfileTW()
 
-
-
-    def add_tuple(self, profileid, twid, tupleid, data_tuple, role):
+    def add_tuple(self, profileid, twid, tupleid, data_tuple, role, starttime):
         """
         Add the tuple going in or out for this profile
         role: 'Client' or 'Server'
@@ -521,7 +524,7 @@ class Database(object):
             # Store the new data on the db
             self.r.hset(hash_id, tuple_key, str(data))
             # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid)
+            self.markProfileTWAsModified(profileid, twid, starttime)
         except Exception as inst:
             self.outputqueue.put('01|database|[DB] Error in add_tuple in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
@@ -547,6 +550,7 @@ class Database(object):
             proto = columns['proto'].upper()
             daddr = columns['daddr']
             saddr = columns['saddr']
+            starttime = columns['starttime']
 
             # Choose which port to use based if we were asked Dst or Src
             if port_type == 'Dst':
@@ -604,7 +608,7 @@ class Database(object):
             hash_key = profileid + self.separator + twid
             self.r.hset(hash_key, key_name, str(data))
             # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid)
+            self.markProfileTWAsModified(profileid, twid, starttime)
         except Exception as inst:
             self.outputqueue.put('01|database|[DB] Error in add_port in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
@@ -830,8 +834,6 @@ class Database(object):
         self.r.hset(profileid + self.separator + twid, 'BlockRequest', 'True')
         # Add this profile and tw to the list of blocked
         self.markProfileTWAsBlocked(profileid, twid)
-        # Mark the tw as modified
-        self.markProfileTWAsModified(profileid, twid)
 
     def getBlockingRequest(self, profileid, twid):
         """ Get the request to block this profile. found in this time window """
@@ -1260,10 +1262,11 @@ class Database(object):
         """ Add a line to the time line of this profileid and twid """
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        timestamp = time.mktime(datetime.strptime(data['timestamp'], '%Y/%m/%d %H:%M:%S.%f').timetuple())
         data = json.dumps(data)
         self.r.rpush(key, data)
         # Mark the tw as modified since the timeline line is new data in the TW
-        self.markProfileTWAsModified(profileid, twid)
+        self.markProfileTWAsModified(profileid, twid, timestamp)
 
     def add_http_timeline_line(self, profileid, twid, data):
         """ Add a http line to the time line of this profileid and twid """
@@ -1271,8 +1274,9 @@ class Database(object):
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = json.dumps(data)
         self.r.rpush(key, data)
+        timestamp = time.mktime(datetime.strptime(data['timestamp'], '%Y/%m/%d %H:%M:%S.%f').timetuple())
         # Mark the tw as modified since the timeline line is new data in the TW
-        self.markProfileTWAsModified(profileid, twid)
+        self.markProfileTWAsModified(profileid, twid, timestamp)
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
