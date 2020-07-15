@@ -56,7 +56,8 @@ RUN cd StratosphereLinuxIPS/modules/blessed && npm install \
     clipboardy \
     chalk \
     strip-ansi \
-    redis
+    redis \
+    sorted-array-async
 
 # Change the backed of keras to tensorflow
 #RUN sed -i 's/theano/tensorflow/' $HOME/.keras/keras.json
