@@ -309,7 +309,7 @@ if __name__ == '__main__':
                 else:
                     minimum_intervals_to_wait = 6
 
-            # When running Slips not in the file.
+            # When running Slips in the file.
             # If there were no modified TW in the last timewindow time,
             # then start counting down
             # Dont try to stop slips if its catpurting from an interface
