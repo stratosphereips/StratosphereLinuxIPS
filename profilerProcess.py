@@ -1336,7 +1336,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             ##############
             # 4th Define help functions for storing data
-            def store_features_going_out(profileid, twid):
+            def store_features_going_out(profileid, twid, starttime):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
@@ -1349,7 +1349,7 @@ class ProfilerProcess(multiprocessing.Process):
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
                     # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
                     # Add the out tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role)
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
                     # Add the dstip
                     __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, role)
                     # Add the dstport
@@ -1370,7 +1370,7 @@ class ProfilerProcess(multiprocessing.Process):
                 elif flow_type == 'ssl':
                     __database__.add_out_ssl(profileid, twid, flow_type, uid, self.column_values['sslversion'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
 
-            def store_features_going_in(profileid, twid):
+            def store_features_going_in(profileid, twid, starttime):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
@@ -1382,7 +1382,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # Compute symbols.
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
                     # Add the src tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role)
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
                     # Add the srcip
                     __database__.add_ips(profileid, twid, saddr_as_obj, self.column_values, role)
                     # Add the dstport
@@ -1406,7 +1406,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # Only take care of the stuff going out. Here we don't keep track of the stuff going in
                 # If we have a home net and the flow comes from it, or if we don't have a home net and we are in out out.
                 if (self.home_net and saddr_as_obj in self.home_net) or not self.home_net:
-                    store_features_going_out(profileid, twid)
+                    store_features_going_out(profileid, twid, starttime)
 
             # Mode 'all'
             elif self.analysis_direction == 'all':
@@ -1414,24 +1414,24 @@ class ProfilerProcess(multiprocessing.Process):
                 if not self.home_net:
                     # If we don't have a home net, just try to store everything coming OUT and IN to the IP
                     # Out features
-                    store_features_going_out(profileid, twid)
+                    store_features_going_out(profileid, twid, starttime)
                     # IN features
-                    store_features_going_in(rev_profileid, rev_twid)
+                    store_features_going_in(rev_profileid, rev_twid, starttime)
                 else:
                     """
                     The flow is going TO homenet or FROM homenet or BOTH together.
                     """
                     # If we have a home net and the flow comes from it. Only the features going out of the IP
                     if saddr_as_obj in self.home_net:
-                        store_features_going_out(profileid, twid)
+                        store_features_going_out(profileid, twid, starttime)
                     # If we have a home net and the flow comes to it. Only the features going in of the IP
                     elif daddr_as_obj in self.home_net:
                         # The dstip was in the homenet. Add the src info to the dst profile
-                        store_features_going_in(rev_profileid, rev_twid)
+                        store_features_going_in(rev_profileid, rev_twid, starttime)
                     # If the flow is going from homenet to homenet.
                     elif daddr_as_obj in self.home_net and saddr_as_obj in self.home_net:
-                        store_features_going_out(profileid, twid)
-                        store_features_going_in(rev_profileid, rev_twid)
+                        store_features_going_out(profileid, twid, starttime)
+                        store_features_going_in(rev_profileid, rev_twid, starttime)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print("Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
@@ -1722,7 +1722,7 @@ class ProfilerProcess(multiprocessing.Process):
         - The Dtp ips are stored in the first time win
         """
         try:
-            # First check of we are not in the last TW. Since this will be the majority of cases
+            # First check if we are not in the last TW. Since this will be the majority of cases
             try:
                 [(lasttwid, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
