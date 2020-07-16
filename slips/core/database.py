@@ -318,7 +318,9 @@ class Database(object):
         self.r.sadd('ModifiedTWForLogs', profileid + self.separator + twid)
         self.publish('tw_modified', profileid + ':' + twid)
         hash_id = profileid + self.separator + twid
-        self.r.hset(hash_id, 'Modified', str(timestamp))
+        # If we dont receive a timestmp, do not update it
+        if timestamp:
+            self.r.hset(hash_id, 'Modified', str(timestamp))
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
@@ -1262,21 +1264,19 @@ class Database(object):
         """ Add a line to the time line of this profileid and twid """
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
-        timestamp = time.mktime(datetime.strptime(data['timestamp'], '%Y/%m/%d %H:%M:%S.%f').timetuple())
         data = json.dumps(data)
         self.r.rpush(key, data)
         # Mark the tw as modified since the timeline line is new data in the TW
-        self.markProfileTWAsModified(profileid, twid, timestamp)
+        self.markProfileTWAsModified(profileid, twid, timestamp='')
 
     def add_http_timeline_line(self, profileid, twid, data):
         """ Add a http line to the time line of this profileid and twid """
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
-        timestamp = time.mktime(datetime.strptime(data['timestamp'], '%Y/%m/%d %H:%M:%S.%f').timetuple())
         data = json.dumps(data)
         self.r.rpush(key, data)
         # Mark the tw as modified since the timeline line is new data in the TW
-        self.markProfileTWAsModified(profileid, twid, timestamp)
+        self.markProfileTWAsModified(profileid, twid, timestamp='')
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
