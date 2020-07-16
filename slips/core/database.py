@@ -1272,9 +1272,9 @@ class Database(object):
         """ Add a http line to the time line of this profileid and twid """
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
+        timestamp = time.mktime(datetime.strptime(data['timestamp'], '%Y/%m/%d %H:%M:%S.%f').timetuple())
         data = json.dumps(data)
         self.r.rpush(key, data)
-        timestamp = time.mktime(datetime.strptime(data['timestamp'], '%Y/%m/%d %H:%M:%S.%f').timetuple())
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid, timestamp)
 
