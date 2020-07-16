@@ -1,4 +1,6 @@
 var async = require('async')
+var SortedArray = require('sorted-array-async');
+
 
 class combine_Listtable_Gauge{
 
@@ -84,15 +86,17 @@ class combine_Listtable_Gauge{
     Format of data for listtable: [[column1,column2,column3],[column1,column2,column3],[column1,column2,column3]]
     Format of data for stack: [{stack:[percent%,percent2%,percent3%]},{stack:[percent%,percent2%,percent3%]},{stack:[percent%,percent2%,percent3%]}]
     */
-    return new Promise((resolve, reject)=>{
+       return new Promise((resolve, reject)=>{
       let data_listtable = [];
       let data_gaugeList = [];
       if(redis_data == null){resolve([data_listtable, data_gaugeList])}
-      else{ 
+      else{
       try{
         let obj= JSON.parse(redis_data);
-        let keys = Object.keys(obj);
-      async.each(keys, (key, callback)=>{
+        var instance  = new SortedArray(Object.keys(obj), function(a, b){
+    return obj[b]['totalbytes'] - obj[a]['totalbytes'];
+});
+      instance.getArray().then(keys=>{async.each(keys, (key, callback)=>{
         let key_info = obj[key];
         data_listtable.push([tcp_or_udp+'/'+key,String(key_info['totalflows']), String(key_info['totalpkt']), String(key_info['totalbytes'])])
         data_listtable.push([])
@@ -105,7 +109,7 @@ class combine_Listtable_Gauge{
         else{
           resolve([data_listtable,data_gaugeList])
           }
-        })}
+        })})}
       catch(err){if(err){console.log(err)}}
     }})
   }

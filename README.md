@@ -73,7 +73,7 @@ With npm you should install the following libraries
     - nom install strip-ansi
     - npm install clipboardy 
     - npm install fs
-
+    - npm install sorted-array-async
 ##### Installation of Zeek (Bro)
 Slips uses Zeek to generate files for most input types.
 

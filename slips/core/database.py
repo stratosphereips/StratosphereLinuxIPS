@@ -1462,12 +1462,12 @@ class Database(object):
         self.r.set('last_update_malicious_file', time)
 
     def get_host_ip(self):
-        """ Get the IP address of the host from a db"""
-        return self.r.get('hostIP')
+        """ Get the IP addresses of the host from a db. There can be more than one"""
+        return self.r.smembers('hostIP')
 
     def set_host_ip(self, ip):
-        """ Store the IP address of the host in a db"""
-        self.r.set('hostIP', ip)
+        """ Store the IP address of the host in a db. There can be more than one"""
+        self.r.sadd('hostIP', ip)
 
     def is_ip_in_virustotal_cache(self, ip):
         """

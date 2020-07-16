@@ -117,6 +117,7 @@ if __name__ == '__main__':
         zeek_bro = check_zeek_or_bro()
         if zeek_bro is False:
             # If we do not have bro or zeek, terminate Slips.
+            print('no zeek nor bro')
             terminate_slips()
 
     # See if we have the nfdump, if we need it according to the input type
@@ -256,8 +257,9 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
 
     # Store the host IP address if input type is interface
+    hostIP = recognize_host_ip()
     if input_type == 'interface':
-        __database__.set_host_ip(recognize_host_ip())
+        __database__.set_host_ip(hostIP)
 
 
     # As the main program, keep checking if we should stop slips or not
@@ -280,38 +282,69 @@ if __name__ == '__main__':
             profilesLen = str(__database__.getProfilesLen())
             outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
 
-            # If there were no modified TW in the last timewindow time,
-            # then start counting down
-            # Dont try to stop slips if its catpurting from an interface
-            if amount_of_modified == 0 and not args.interface:
-                # print('Counter to stop Slips. Amount of modified
-                # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
-                if minimum_intervals_to_wait == 0:
-                    # Stop the output Process
-                    print('Stopping Slips')
-                    # Stop the modules that are subscribed to channels
-                    __database__.publish_stop()
-                    # Here we should Wait for any channel if it has still
-                    # data to receive in its channel
-                    # Send manual stops to the process not using channels
-                    try:
-                        logsProcessQueue.put('stop_process')
-                    except NameError:
-                        # The logsProcessQueue is not there because we didnt started the logs files (used -l)
-                        pass
-                    outputProcessQueue.put('stop_process')
-                    profilerProcessQueue.put('stop_process')
-                    break
-                minimum_intervals_to_wait -= 1
-            else:
+            # In interface we keep track of the host IP. If there was no modified TWs in the host IP, we check if the network was changed.
+            if args.interface:
+                # To check of there was a modified TW in the host IP. If not, count down.
+                modifiedTW_hostIP = False
                 # If there are still modified TWs, just mark them as
                 # notmodified since we alredy 'waited' on them
                 for profileTW in TWModifiedforProfile:
                     profileid = profileTW.split(fieldseparator)[0] + fieldseparator + profileTW.split(fieldseparator)[1]
+                    profileIP = profileTW.split(fieldseparator)[1]
                     twid = profileTW.split(fieldseparator)[2]
                     __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
+                    # True if there was a modified TW in the host IP
+                    if hostIP == profileIP:
+                        modifiedTW_hostIP = True
 
-                minimum_intervals_to_wait = 5
+                # If there was no modified TW in the host IP
+                # then start counting down
+                # After count down we update the host IP, to check if the network was changed
+                if not modifiedTW_hostIP and args.interface:
+                    if minimum_intervals_to_wait == 0:
+                        hostIP = recognize_host_ip()
+                        __database__.set_host_ip(hostIP)
+                        minimum_intervals_to_wait = 6
+                    minimum_intervals_to_wait -= 1
+                else:
+                    minimum_intervals_to_wait = 6
+
+            # When running Slips in the file.
+            # If there were no modified TW in the last timewindow time,
+            # then start counting down
+            # Dont try to stop slips if its catpurting from an interface
+            else:
+                if amount_of_modified == 0:
+                    # print('Counter to stop Slips. Amount of modified
+                    # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
+                    if minimum_intervals_to_wait == 0:
+                        # Stop the output Process
+                        print('Stopping Slips')
+                        # Stop the modules that are subscribed to channels
+                        __database__.publish_stop()
+                        # Here we should Wait for any channel if it has still
+                        # data to receive in its channel
+                        # Send manual stops to the process not using channels
+                        try:
+                            logsProcessQueue.put('stop_process')
+                        except NameError:
+                            # The logsProcessQueue is not there because we didnt started the logs files (used -l)
+                            pass
+                        outputProcessQueue.put('stop_process')
+                        profilerProcessQueue.put('stop_process')
+                        break
+                    minimum_intervals_to_wait -= 1
+                else:
+                    # If there are still modified TWs, just mark them as
+                    # notmodified since we alredy 'waited' on them
+                    for profileTW in TWModifiedforProfile:
+                        profileid = profileTW.split(fieldseparator)[0] + fieldseparator + profileTW.split(fieldseparator)[1]
+                        twid = profileTW.split(fieldseparator)[2]
+                        __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
+                    minimum_intervals_to_wait = 6
+
+
+
     except KeyboardInterrupt:
         print('Stopping Slips')
         # Stop the modules that are subscribed to channels
