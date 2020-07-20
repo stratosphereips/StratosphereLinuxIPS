@@ -3,6 +3,7 @@ from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
 import platform
+import traceback
 
 # Your imports
 import time
@@ -155,7 +156,6 @@ class Module(Module, multiprocessing.Process):
             time.sleep(0.05)
             alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
 
-
             # Now that we have the flow processed. Try to interpret it and create the activity line
             # Record Activity
             activity = {}
@@ -228,7 +228,7 @@ class Module(Module, multiprocessing.Process):
                     if not dport_name:
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
-                    dns_resolution =__database__.get_dns_resolution(daddr)
+                    dns_resolution = __database__.get_dns_resolution(daddr)
                     if not dns_resolution:
                         dns_resolution = '????'
                     activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to','dns_resolution':dns_resolution, 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
@@ -271,6 +271,7 @@ class Module(Module, multiprocessing.Process):
                 elif 'IGMP' in proto:
                     dport_name = 'IGMP'
                     activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+
             #################################
             # Now process the alternative flows
             alt_activity ={}
@@ -309,7 +310,6 @@ class Module(Module, multiprocessing.Process):
                         subject = '????'
                     alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"]}
 
-
             elif activity:
                 alt_activity = {'info': 'No extra data from Zeek.'}
 
@@ -319,7 +319,7 @@ class Module(Module, multiprocessing.Process):
                 __database__.add_timeline_line(profileid, twid, activity)
             # http data should be parsed in multiple lines
             if http_data:
-                __database__.add_http_timeline_line(profileid,twid,http_data)
+                __database__.add_http_timeline_line(profileid, twid, http_data)
 
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
@@ -331,6 +331,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            self.print(traceback.format_exc())
             return True
 
     def run(self):
