@@ -34,10 +34,14 @@ def recognize_host_ip():
     """
     Recognize the IP address of the machine
     """
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("1.1.1.1", 80))
-    ipaddr_check = s.getsockname()[0]
-    s.close()
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("1.1.1.1", 80))
+        ipaddr_check = s.getsockname()[0]
+        s.close()
+    except Exception as ex:
+        print('Network is unreachable')
+        return None
     return ipaddr_check
 
 def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
@@ -257,8 +261,8 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
 
     # Store the host IP address if input type is interface
-    hostIP = recognize_host_ip()
     if input_type == 'interface':
+        hostIP = recognize_host_ip()
         __database__.set_host_ip(hostIP)
 
 
