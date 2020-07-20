@@ -99,13 +99,15 @@ class Module(Module, multiprocessing.Process):
             # human readable time
             d = datetime.fromtimestamp(timestamp)
             timestamp = '{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:06d}'.format(d.year, d.month, d.day, d.hour, d.minute, d.second, d.microsecond)
-        return str(timestamp)
+            timestamp_concatenated = int('{0:02d}{1:02d}{2:02d}{3:02d}{4:02d}{5:06d}'.format(d.month, d.day, d.hour, d.minute, d.second, d.microsecond))
+        return str(timestamp), timestamp_concatenated
 
     def process_flow(self, profileid, twid, flow, timestamp: float):
         """
         Receives a flow and it process it for this profileid and twid so its printed by the logprocess later
         """
-        timestamp = self.process_timestamp(timestamp)
+        timestamp, timestamp_concatenated = self.process_timestamp(timestamp)
+
         try:
             # Convert the common fields to something that can be interpreted
             uid = next(iter(flow))
@@ -316,10 +318,10 @@ class Module(Module, multiprocessing.Process):
             # Combine the activity of normal flows and activity of alternative flows and store in the DB for this profileid and twid
             activity.update(alt_activity)
             if activity:
-                __database__.add_timeline_line(profileid, twid, activity)
+                __database__.add_timeline_line(profileid, twid, activity, timestamp_concatenated)
             # http data should be parsed in multiple lines
             if http_data:
-                __database__.add_http_timeline_line(profileid, twid, http_data)
+                __database__.add_http_timeline_line(profileid, twid, http_data,timestamp_concatenated)
 
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
