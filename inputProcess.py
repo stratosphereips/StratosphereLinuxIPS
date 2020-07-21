@@ -312,7 +312,7 @@ class InputProcess(multiprocessing.Process):
             # Process the binary nfdump file.
             elif self.input_type == 'nfdump':
                 # Its not good to read the nfdump file to disk.
-                command = 'nfdump -b -N -o csv -r ' + self.input_information + ' >  ' + self.nfdump_output_file
+                command = 'nfdump -b -N -o csv -q -r ' + self.input_information + ' >  ' + self.nfdump_output_file
                 os.system(command)
                 self.nfdump_timeout = 10
                 lines = self.read_nfdump_file()
