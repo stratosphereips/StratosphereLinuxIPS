@@ -56,7 +56,7 @@
       /*
       Get timeline data for specific profile and timewindow
       */
-      return new Promise((resolve, reject)=>{ this.timeline_data.lrange("profile_"+ip+"_"+timewindow+'_timeline',0,-1, (err,reply)=>{
+      return new Promise((resolve, reject)=>{ this.timeline_data.zrange("profile_"+ip+"_"+timewindow+'_timeline',0,-1, (err,reply)=>{
           if(err){console.log(err); reject(err);}
           else{resolve(reply);}
       });})

@@ -1260,43 +1260,47 @@ class Database(object):
         """ Given a uid, get the alternative flow realted to it """
         return self.r.hget(profileid + self.separator + twid + self.separator + 'altflows', uid)
 
-    def add_timeline_line(self, profileid, twid, data):
+    def add_timeline_line(self, profileid, twid, data, timestamp):
         """ Add a line to the time line of this profileid and twid """
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = json.dumps(data)
-        self.r.rpush(key, data)
+        mapping = {}
+        mapping[data] = timestamp
+        self.r.zadd(key, mapping)
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid, timestamp='')
 
-    def add_http_timeline_line(self, profileid, twid, data):
+    def add_http_timeline_line(self, profileid, twid, data, timestamp):
         """ Add a http line to the time line of this profileid and twid """
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = json.dumps(data)
-        self.r.rpush(key, data)
+        mapping={}
+        mapping[data] = timestamp
+        self.r.zadd(key,mapping)
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid, timestamp='')
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
-        data = self.r.lrange(key, -1, -1)
+        data = self.r.zrange(key, -1, -1)
         return data
 
     def get_timeline_last_lines(self, profileid, twid, first_index: int) -> Tuple[str, int]:
         """ Get only the new items in the timeline."""
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         # The the amount of lines in this list
-        last_index = self.r.llen(key)
+        last_index = self.r.zcard(key)
         # Get the data in the list from the index asked (first_index) until the last
-        data = self.r.lrange(key, first_index, last_index - 1)
+        data = self.r.zrange(key, first_index, last_index - 1)
         return data, last_index
 
     def get_timeline_all_lines(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline') 
-        data = self.r.lrange(key, 0, -1)
+        data = self.r.zrange(key, 0, -1)
         return data
 
     def set_port_info(self, portproto, name):
