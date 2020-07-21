@@ -99,14 +99,13 @@ class Module(Module, multiprocessing.Process):
             # human readable time
             d = datetime.fromtimestamp(timestamp)
             timestamp = '{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:06d}'.format(d.year, d.month, d.day, d.hour, d.minute, d.second, d.microsecond)
-            timestamp_concatenated = int('{0:02d}{1:02d}{2:02d}{3:02d}{4:02d}{5:06d}'.format(d.month, d.day, d.hour, d.minute, d.second, d.microsecond))
-        return str(timestamp), timestamp_concatenated
+        return str(timestamp)
 
     def process_flow(self, profileid, twid, flow, timestamp: float):
         """
         Receives a flow and it process it for this profileid and twid so its printed by the logprocess later
         """
-        timestamp, timestamp_concatenated = self.process_timestamp(timestamp)
+        timestamp_human = self.process_timestamp(timestamp)
 
         try:
             # Convert the common fields to something that can be interpreted
@@ -177,45 +176,45 @@ class Module(Module, multiprocessing.Process):
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
 
-                    activity = { 'timestamp': timestamp, 'dport_name/proto': dport_name+'/'+str(proto), 'preposition': 'from', 'saddr': saddr,'state': state.lower(), 'warning': warning_empty, 'Sent': allbytes-sbytes, 'Recv': sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
+                    activity = { 'timestamp': timestamp_human, 'dport_name/proto': dport_name+'/'+str(proto), 'preposition': 'from', 'saddr': saddr,'state': state.lower(), 'warning': warning_empty, 'Sent': allbytes-sbytes, 'Recv': sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
 
                 elif 'ICMP' in proto:
                     if type(sport) == int:
                         # zeek puts the number
                         if sport == 8:
                             dport_name = 'PING echo'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                         elif sport == 11:
                             dport_name = 'ICMP Time Excedded in Transit'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                         elif sport == 3:
                             dport_name = 'ICMP Destination Net Unreachable'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                         else:
                             dport_name = 'ICMP Unknown type'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Type':'0x'+str(sport), 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Type':'0x'+str(sport), 'Size': allbytes_human}
                     elif type(sport) == str:
                         # Argus puts in hex the values of the ICMP
                         if '0x0008' in sport:
                             dport_name = 'PING echo'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                         elif '0x0103' in sport:
                             dport_name = 'ICMP Host Unreachable'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                         elif '0x0303' in sport:
                             dport_name = 'ICMP Port Unreachable'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'warning': 'unreachable port is'+ str(int(dport,16)), 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'warning': 'unreachable port is'+ str(int(dport,16)), 'Size': allbytes_human}
                         elif '0x000b' in sport:
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                         elif '0x0003' in sport:
                             dport_name = 'ICMP Destination Net Unreachable'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                         else:
                             dport_name = 'ICMP Unknown type'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                 elif 'IGMP' in proto:
                     dport_name = 'IGMP'
-                    activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                    activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
             else:
                 if 'TCP' in proto or 'UDP' in proto:
                     warning_empty = ''
@@ -233,46 +232,46 @@ class Module(Module, multiprocessing.Process):
                     dns_resolution = __database__.get_dns_resolution(daddr)
                     if not dns_resolution:
                         dns_resolution = '????'
-                    activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to','dns_resolution':dns_resolution, 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
+                    activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to','dns_resolution':dns_resolution, 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
 
                 elif 'ICMP' in proto:
                     if type(sport) == int:
                         # zeek puts the number
                         if sport == 8:
                             dport_name = 'PING echo'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
                         elif sport == 11:
                             dport_name = 'ICMP Time Excedded in Transit'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
                         elif sport == 3:
                             dport_name = 'ICMP Destination Net Unreachable'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
                         else:
                             dport_name = 'ICMP Unknown type'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Type': '0x' + str(sport), 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Type': '0x' + str(sport), 'Size': allbytes_human}
 
                     elif type(sport) == str:
                         # Argus puts in hex the values of the ICMP
                         if '0x0008' in sport:
                             dport_name = 'PING echo'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
                         elif '0x0103' in sport:
                             dport_name = 'ICMP Host Unreachable'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
                         elif '0x0303' in sport:
                             dport_name = 'ICMP Port Unreachable'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'warning':', unreachable port is'+ str(int(dport,16)),'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'warning':', unreachable port is'+ str(int(dport,16)),'Size': allbytes_human}
                         elif '0x000b' in sport:
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
                         elif '0x0003' in sport:
                             dport_name = 'ICMP Destination Net Unreachable'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
                         else:
                             dport_name = 'ICMP Unknown type'
-                            activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
                 elif 'IGMP' in proto:
                     dport_name = 'IGMP'
-                    activity = {'timestamp': timestamp,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                    activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
 
             #################################
             # Now process the alternative flows
@@ -318,10 +317,10 @@ class Module(Module, multiprocessing.Process):
             # Combine the activity of normal flows and activity of alternative flows and store in the DB for this profileid and twid
             activity.update(alt_activity)
             if activity:
-                __database__.add_timeline_line(profileid, twid, activity, timestamp_concatenated)
+                __database__.add_timeline_line(profileid, twid, activity, timestamp)
             # http data should be parsed in multiple lines
             if http_data:
-                __database__.add_http_timeline_line(profileid, twid, http_data,timestamp_concatenated)
+                __database__.add_http_timeline_line(profileid, twid, http_data, timestamp)
 
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
