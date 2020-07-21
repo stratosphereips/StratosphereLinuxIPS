@@ -1117,7 +1117,7 @@ class Database(object):
 
         """
         data = {}
-        #data['uid'] = uid
+        # data['uid'] = uid
         data['ts'] = stime
         data['dur'] = dur
         data['saddr'] = saddr
