@@ -1178,21 +1178,18 @@ class ProfilerProcess(multiprocessing.Process):
                 except KeyError:
                     self.column_values['filesize'] = ''
 
-
-
     def add_flow_to_profile(self):
-        """ 
+        """
         This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
         It includes checking if the profile exists and how to put the flow correctly.
-        It interprets each colum 
-        
+        It interprets each colum
         A flow has two IP addresses, so treat both of them correctly.
         """
         try:
             # For now we only process the argus flows and the zeek conn logs
             if not self.column_values:
                 return True
-            elif not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type']:
+            elif not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type'] and not 'nfdump' in self.column_values['type']:
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
@@ -1230,12 +1227,13 @@ class ProfilerProcess(multiprocessing.Process):
                 # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
                 # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
+
             flow_type = self.column_values['type']
             saddr = self.column_values['saddr']
             daddr = self.column_values['daddr']
             profileid = 'profile' + separator + str(saddr)
 
-            if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
+            if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                 dur = self.column_values['dur']
                 sport = self.column_values['sport']
                 dport = self.column_values['dport']
@@ -1342,7 +1340,7 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 role = 'Client'
                 # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
-                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
+                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                     # Tuple
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
@@ -1376,7 +1374,7 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 role = 'Server'
                 # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
-                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
+                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                     # Tuple
                     tupleid = str(saddr_as_obj) + ':' + str(sport) + ':' + proto
                     # Compute symbols.
