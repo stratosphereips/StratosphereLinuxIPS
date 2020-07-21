@@ -1260,24 +1260,24 @@ class Database(object):
         """ Given a uid, get the alternative flow realted to it """
         return self.r.hget(profileid + self.separator + twid + self.separator + 'altflows', uid)
 
-    def add_timeline_line(self, profileid, twid, data, timestamp_concatenated):
+    def add_timeline_line(self, profileid, twid, data, timestamp):
         """ Add a line to the time line of this profileid and twid """
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = json.dumps(data)
         mapping = {}
-        mapping[data] = timestamp_concatenated
+        mapping[data] = timestamp
         self.r.zadd(key, mapping)
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid, timestamp='')
 
-    def add_http_timeline_line(self, profileid, twid, data, timestamp_concatenated):
+    def add_http_timeline_line(self, profileid, twid, data, timestamp):
         """ Add a http line to the time line of this profileid and twid """
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = json.dumps(data)
         mapping={}
-        mapping[data] = timestamp_concatenated
+        mapping[data] = timestamp
         self.r.zadd(key,mapping)
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid, timestamp='')
