@@ -288,7 +288,7 @@ class Database(object):
         """ Return all the list of modified tw """
         return self.r.smembers('ModifiedTW')
 
-    def wasProfileTWModifiedLogs(self, profileid, twid):
+    def wasProfileTWModified(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
         data = self.r.sismember('ModifiedTW', profileid + self.separator + twid)
         if not data:
@@ -297,7 +297,7 @@ class Database(object):
             data = 0
         return bool(data)
 
-    def markProfileTWAsNotModifiedLogs(self, profileid, twid):
+    def markProfileTWAsNotModified(self, profileid, twid):
         """
         Mark a TW in a profile as not modified
         Technically we remove the tw from the list of modified TW
