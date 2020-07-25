@@ -286,11 +286,11 @@ class Database(object):
 
     def getModifiedTWLogs(self):
         """ Return all the list of modified tw """
-        return self.r.smembers('ModifiedTWForLogs')
+        return self.r.smembers('ModifiedTW')
 
     def wasProfileTWModifiedLogs(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
-        data = self.r.sismember('ModifiedTWForLogs', profileid + self.separator + twid)
+        data = self.r.sismember('ModifiedTW', profileid + self.separator + twid)
         if not data:
             # If for some reason we don't have the modified bit set,
             # then it was not modified.
@@ -305,17 +305,17 @@ class Database(object):
         now it is happening in the main slips.py every X seconds
         when the line is printed with the amount of modified TW
         """
-        self.r.srem('ModifiedTWForLogs', profileid + self.separator + twid)
+        self.r.srem('ModifiedTW', profileid + self.separator + twid)
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
         """
         Mark a TW in a profile as modified
         This means:
-        1- To add it to the list of ModifiedTWForLogs
+        1- To add it to the list of ModifiedTW
         2- Add the timestamp received to the time_of_last_modification
            in the TW itself
         """
-        self.r.sadd('ModifiedTWForLogs', profileid + self.separator + twid)
+        self.r.sadd('ModifiedTW', profileid + self.separator + twid)
         self.publish('tw_modified', profileid + ':' + twid)
         hash_id = profileid + self.separator + twid
         # If we dont receive a timestmp, do not update it
