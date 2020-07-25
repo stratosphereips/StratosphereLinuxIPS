@@ -296,7 +296,7 @@ if __name__ == '__main__':
                     profileid = profileTW.split(fieldseparator)[0] + fieldseparator + profileTW.split(fieldseparator)[1]
                     profileIP = profileTW.split(fieldseparator)[1]
                     twid = profileTW.split(fieldseparator)[2]
-                    __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
+                    __database__.markProfileTWAsNotModified(profileid, twid)
                     # True if there was a modified TW in the host IP
                     if hostIP == profileIP:
                         modifiedTW_hostIP = True
@@ -344,7 +344,7 @@ if __name__ == '__main__':
                     for profileTW in TWModifiedforProfile:
                         profileid = profileTW.split(fieldseparator)[0] + fieldseparator + profileTW.split(fieldseparator)[1]
                         twid = profileTW.split(fieldseparator)[2]
-                        __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
+                        __database__.markProfileTWAsNotModified(profileid, twid)
                     minimum_intervals_to_wait = 6
 
 
