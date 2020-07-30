@@ -129,7 +129,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                         elif data and 'VirusTotal' in data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - data["VirusTotal"]['timestamp']) / 60 > 2:
-                                print('updatevt')
+                                # print('updatevt')
                                 vt_scores = self.get_ip_vt_scores(ip)
                                 vtdata = {"URL": vt_scores[0],
                                           "down_file": vt_scores[1],
