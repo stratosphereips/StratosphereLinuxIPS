@@ -43,6 +43,7 @@ class Database(object):
         if not hasattr(self, 'r'):
             try:
                 self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+                self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True) #password='password')
                 if self.deletePrevdb:
                     print('Deleting the previous stored DB in Redis.')
                     self.r.flushdb()
@@ -883,7 +884,7 @@ class Database(object):
         2- IP is in the DB with data. Return dict.
         3- IP is not in the DB. Return False
         """
-        data = self.r.hget('IPsInfo', ip)
+        data = self.rcache.hget('IPsInfo', ip)
         if data or data == {}:
             # This means the IP was in the database, with or without data
             # Case 1 and 2
@@ -899,7 +900,7 @@ class Database(object):
 
     def getallIPs(self):
         """ Return list of all IPs in the DB """
-        data = self.r.hgetall('IPsInfo')
+        data = self.rcache.hgetall('IPsInfo')
         # data = json.loads(data)
         return data
 
@@ -936,13 +937,13 @@ class Database(object):
             # Its VERY important that the data of the first time we see an IP
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an IP exists or not
-            self.r.hset('IPsInfo', ip, '{}')
+            self.rcache.hset('IPsInfo', ip, '{}')
             # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
 
     def getIP(self, ip):
         """ Check if this ip is the hash of the profiles! """
-        data = self.r.hget('IPsInfo', ip)
+        data = self.rcache.hget('IPsInfo', ip)
         if data:
             return True
         else:
@@ -1000,38 +1001,28 @@ class Database(object):
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
-
         if not data:
             # This IP is not in the dictionary, add it first:
             self.setNewIP(ip)
             # Now get the data, which should be empty, but just in case
             data = self.getIPData(ip)
-
-        for key in iter(ipdata):
-            # print(f'Trying key {key}, for ip {ip}, with data {ipdata}')
-            # ipdata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
-            # ipdata can be {'VirusTotal': [1,2,3,4]}
             # I think we dont need this anymore of the conversion
             if type(data) == str:
                 # Convert the str to a dict
                 data = json.loads(data)
-
+        for key in iter(ipdata):
             data_to_store = ipdata[key]
-
-            # If there is data previously stored, check if we have
-            # this key already
+            # If there is data previously stored, check if we have this key already
             try:
-                # If the key is already stored, do not modify it
-                # Check if this decision is ok! or we should modify
-                # the data
+                # We modify value in any case, because there might be new info
                 _ = data[key]
             except KeyError:
-                # There is no data for they key so far. Add it
-                data[key] = data_to_store
-                newdata_str = json.dumps(data)
-                self.r.hset('IPsInfo', ip, newdata_str)
+                # There is no data for they key so far.
                 # Publish the changes
                 self.r.publish('ip_info_change', ip)
+            data[key] = data_to_store
+            newdata_str = json.dumps(data)
+            self.rcache.hset('IPsInfo', ip, newdata_str)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
