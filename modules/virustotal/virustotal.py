@@ -36,7 +36,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # - new_ip
         # - tw_modified
         # - evidence_added
-        self.c1 = __database__.subscribe('new_ip')
+        self.c1 = __database__.subscribe('new_flow')
 
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
@@ -103,23 +103,42 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time we will stop slips automatically. 
                 if message['data'] == 'stop_process':
                     return True
-                elif message['channel'] == 'new_ip' and message["type"] == "message":
-                    ip = message["data"]
+                elif message['channel'] == 'new_flow' and message["type"] == "message":
+                    data = message["data"]
+                    data= json.loads(data)
+                    data_flow = json.loads(data['flow'])
+                    data_flow_dict = json.loads(list(data_flow.values())[0])
+                    ip = data_flow_dict['daddr']
+                    #ip = data_flow_dict['saddr']
                     # The first message comes with data=1
                     if type(ip) == str:
                         data = __database__.getIPData(ip)
-                        # If we alredy have the VT for this ip, do not ask VT
+                        # If we already have the VT for this ip, do not ask VT
                         # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
                         if (data or data == {}) and 'VirusTotal' not in data:
-
                             vt_scores = self.get_ip_vt_scores(ip)
                             vtdata = {"URL": vt_scores[0],
-                                  "down_file": vt_scores[1],
-                                  "ref_file": vt_scores[2],
-                                  "com_file": vt_scores[3]}
+                                      "down_file": vt_scores[1],
+                                      "ref_file": vt_scores[2],
+                                      "com_file": vt_scores[3],
+                                      "timestamp": time.time()}
                             data = {}
                             data["VirusTotal"] = vtdata
                             __database__.setInfoForIPs(ip, data)
+
+                        elif data and 'VirusTotal' in data:
+                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                            if (time.time() - data["VirusTotal"]['timestamp']) / 60 > 2:
+                                print('updatevt')
+                                vt_scores = self.get_ip_vt_scores(ip)
+                                vtdata = {"URL": vt_scores[0],
+                                          "down_file": vt_scores[1],
+                                          "ref_file": vt_scores[2],
+                                          "com_file": vt_scores[3],
+                                          "timestamp": time.time()}
+                                data = {}
+                                data["VirusTotal"] = vtdata
+                                __database__.setInfoForIPs(ip, data)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
