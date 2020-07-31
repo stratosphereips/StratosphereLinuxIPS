@@ -105,9 +105,21 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     return True
                 elif message['channel'] == 'new_ip' and message["type"] == "message":
                     ip = message["data"]
-                    ip_score = self.check_ip(ip)
-                    __database__.set_virustotal_score(ip, ip_score)
-                    self.print("[" + ip + "] has score " + str(ip_score),3,3)
+                    # The first message comes with data=1
+                    if type(ip) == str:
+                        data = __database__.getIPData(ip)
+                        # If we alredy have the VT for this ip, do not ask VT
+                        # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
+                        if (data or data == {}) and 'VirusTotal' not in data:
+
+                            vt_scores = self.get_ip_vt_scores(ip)
+                            vtdata = {"URL": vt_scores[0],
+                                  "down_file": vt_scores[1],
+                                  "ref_file": vt_scores[2],
+                                  "com_file": vt_scores[3]}
+                            data = {}
+                            data["VirusTotal"] = vtdata
+                            __database__.setInfoForIPs(ip, data)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -117,7 +129,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
             self.print(str(inst), 0, 1)
             return True
 
-    def check_ip(self, ip: str):
+    def get_ip_vt_scores(self, ip: str):
         """
         Look if this IP was already processed. If not, perform API call to VirusTotal and return scores for each of
         the four processed categories. Response is cached in a dictionary. Private IPs always return (0, 0, 0, 0).
@@ -131,16 +143,9 @@ class VirusTotalModule(Module, multiprocessing.Process):
                 self.print("[" + ip + "] is private, skipping", 5, 3)
                 return 0, 0, 0, 0
 
-            # check if the address is in the cache (probably not, since all IPs are unique)
-            cached_data = __database__.is_ip_in_virustotal_cache(ip)
-            if cached_data:
-                return cached_data
-
             # for unknown address, do the query
             response = self.api_query_(ip)
-
             scores = interpret_response(response)
-            __database__.put_ip_to_virustotal_cache(ip, scores)
             self.counter += 1
             return scores
         except Exception as inst:
