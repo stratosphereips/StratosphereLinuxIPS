@@ -12,7 +12,7 @@
   		this.client = this.redis.createClient()
       this.timeline_data = this.redis.createClient()
       this.evidence_data = this.redis.createClient()
-      this.ipInfo_data = this.redis.createClient()
+      this.ipInfo_data = this.redis.createClient({'db':1})
       this.outTuples_data = this.redis.createClient()
       this.inTuples_data = this.redis.createClient()
       this.tcp_data_est = this.redis.createClient()
