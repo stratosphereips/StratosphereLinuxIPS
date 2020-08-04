@@ -70,6 +70,16 @@ class UpdateFileManager:
             return True
         return False
 
+    def __get_e_tag_from_downloaded_file(self, file_name_to_download) -> str:
+        # Take last e-tag of our malicious file.
+        try:
+            with open(self.path_to_thret_intelligence_data + file_name_to_download + '.etag', 'r') as f:
+                old_e_tag = f.readlines()[0]
+        except FileNotFoundError:
+            # The file is not there
+            old_e_tag = ''
+        return old_e_tag
+
     def __get_e_tag_from_web(self, file_to_download) -> str:
         try:
             # We use a command in os because if we use urllib or requests the process complains!:w
@@ -110,14 +120,8 @@ class UpdateFileManager:
     def __download_malicious_file(self, file_to_download: str) -> bool:
         try:
             file_name_to_download = file_to_download.split('/')[-1]
-            # Take last e-tag of our malicious file.
-            try:
-                with open(self.path_to_thret_intelligence_data + file_name_to_download + '.etag', 'r') as f:
-                    old_e_tag = f.readlines()[0]
-            except FileNotFoundError:
-                # The file is not there
-                old_e_tag = ''
-
+            # Get last E-TAG of our downloaded file
+            old_e_tag = self.__get_e_tag_from_downloaded_file(file_name_to_download)
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
             new_e_tag = self.__get_e_tag_from_web(file_to_download)
