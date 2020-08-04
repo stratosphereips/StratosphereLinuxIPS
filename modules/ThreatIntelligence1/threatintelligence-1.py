@@ -25,10 +25,6 @@ class Module(Module, multiprocessing.Process):
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
-        # This dictionary will hold each malicious ip to store in the db
-        self.malicious_ips_dict = {}
-        # This dictionary will hold each malicious domain to store in the db
-        self.malicious_domains_dict = {}
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         self.separator = __database__.getFieldSeparator()
@@ -71,6 +67,7 @@ class Module(Module, multiprocessing.Process):
         # Run the update manager
         self.update_manager.update()
 
+
     def __load_malicious_datafiles(self) -> None:
         """
         Load the content of malicious datafiles in a folder and ask to read
@@ -79,6 +76,7 @@ class Module(Module, multiprocessing.Process):
 
         This is not going to the internet. Only from files to DB
         """
+
         # First look if a variable "malicious_data_file_path" in slips.conf is set. If not, we have the default ready
         self.path_to_malicious_data_folder = self.__read_configuration('threatintelligence', 'malicious_data_file_path')
 
@@ -99,11 +97,6 @@ class Module(Module, multiprocessing.Process):
                 except FileNotFoundError as e:
                     self.print(e, 1, 0)
 
-        # Add all loaded malicious ips to the database
-        __database__.add_ips_to_IoC(self.malicious_ips_dict)
-        # Add all loaded malicious domains to the database
-        __database__.add_domains_to_IoC(self.malicious_domains_dict)
-
     def __load_malicious_datafile(self, malicious_data_path: str) -> None:
         """
         Read all the files holding IP addresses and a description and put the
@@ -112,7 +105,8 @@ class Module(Module, multiprocessing.Process):
         Returns nothing, but the dictionary should be filled
         """
         try:
-            lines_read = 0
+            malicious_ips_dict = {}
+            malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
 
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
@@ -150,26 +144,29 @@ class Module(Module, multiprocessing.Process):
                         ip_address = ipaddress.IPv4Address(data)
                         # Is IPv4!
                         # Store the ip in our local dict
-                        self.malicious_ips_dict[str(ip_address)] = description
+                        malicious_ips_dict[str(ip_address)] = description
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
                         try:
                             ip_address = ipaddress.IPv6Address(data)
                             # Is IPv6!
                             # Store the ip in our local dict
-                            self.malicious_ips_dict[str(ip_address)] = description
+                            malicious_ips_dict[str(ip_address)] = description
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
                             if validators.domain(data):
                                 domain = data
                                 # Store the ip in our local dict
-                                self.malicious_domains_dict[str(domain)] = description
+                                malicious_domains_dict[str(domain)] = description
                             else:
                                 self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 1, 1)
                                 continue
+            # Add all loaded malicious ips to the database
+            __database__.add_ips_to_IoC(malicious_ips_dict)
+            # Add all loaded malicious domains to the database
+            __database__.add_domains_to_IoC(malicious_domains_dict)
 
-                    lines_read += 1
         except Exception as inst:
             self.print('Problem on the __load_malicious_datafile()', 0, 1)
             self.print(str(type(inst)), 0, 1)
