@@ -1325,6 +1325,18 @@ class Database(object):
         """ Delete an entry from the list of zeek files """
         self.r.srem('zeekfiles', filename)
 
+    def delete_ips_from_IoC_ips(self, ips):
+        """
+        Delete old IPs from IoC
+        """
+        self.rcache.hdel('IoC_ips', *ips)
+
+    def delete_domains_from_IoC_ips(self, domains):
+        """
+        Delete old Domains from IoC
+        """
+        self.rcache.hdel('IoC_domains', *domains)
+
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
         """
         Store a group of IPs in the db as they were obtained from an IoC source
@@ -1407,12 +1419,26 @@ class Database(object):
         data = self.r.hget('DNSresolution', ip)
         return data
 
+    def get_IPs_in_IoC(self):
+        """
+        Get all IPs and their description from IoC_ips
+        """
+        data = self.rcache.hgetall('IoC_ips')
+        return data
+
+    def get_Domains_in_IoC(self):
+        """
+        Get all Domains and their description from IoC_domains
+        """
+        data = self.rcache.hgetall('IoC_domains')
+        return data
+
     def search_IP_in_IoC(self, ip: str) -> str:
         """
         Search in the dB of malicious IPs and return a
         description if we found a match
         """
-        ip_description = self.r.hget('IoC_ips', ip)
+        ip_description = self.rcache.hget('IoC_ips', ip)
         if ip_description == None:
             return False
         else:
@@ -1423,7 +1449,7 @@ class Database(object):
         Search in the dB of malicious domainss and return a
         description if we found a match
         """
-        domain_description = self.r.hget('IoC_domains', domain)
+        domain_description = self.rcache.hget('IoC_domains', domain)
         if domain_description == None:
             return False
         else:
@@ -1511,5 +1537,6 @@ class Database(object):
         Set malicious file and its e-tag
         """
         self.rcache.hset('malicious_files_e_tags', file, e_tag)
+
 
 __database__ = Database()
