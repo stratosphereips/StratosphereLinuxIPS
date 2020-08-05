@@ -14,6 +14,7 @@ from modules.ThreatIntelligence1.update_file_manager import UpdateFileManager
 import traceback
 import validators
 import traceback
+import copy
 
 
 class Module(Module, multiprocessing.Process):
@@ -59,6 +60,34 @@ class Module(Module, multiprocessing.Process):
             # or no section or no configuration file specified
             conf_variable = None
         return conf_variable
+
+    def __clean_old_IPs(self, file):
+        """
+        When file is updated, delete the old IPs in the cache
+        """
+        all_data = __database__.get_IPs_in_IoC()
+        old_data = []
+        for ip_data in all_data.items():
+            ip = ip_data[0]
+            data = json.loads(ip_data[1])
+            if data["source"] == file:
+                old_data.append(ip)
+        if old_data:
+            __database__.delete_ips_from_IoC_ips(old_data)
+
+    def __clean_old_Domains(self, file):
+        """
+        When file is updated, delete the old Domains in the cache
+        """
+        all_data = __database__.get_Domains_in_IoC()
+        old_data = []
+        for ip_data in all_data.items():
+            ip = ip_data[0]
+            data = json.loads(ip_data[1])
+            if data["source"] == file:
+                old_data.append(ip)
+        if old_data:
+            __database__.delete_domains_from_IoC_ips(old_data)
 
     def __update_remote_malicious_file(self) -> None:
         """
@@ -106,12 +135,15 @@ class Module(Module, multiprocessing.Process):
                         try:
                             if cache_files_e_tags[data_file] == file_e_tag:
                                 continue
+                            else:
+                                self.__clean_old_IPs(data_file)
+                                self.__clean_old_Domains(data_file)
+                                self.__load_malicious_datafile(self.path_to_malicious_data_folder + '/' + data_file,
+                                                               data_file, file_e_tag)
                         except KeyError as ex:
-                            pass
-                        self.print('\tLoading malicious data from file {}.'.format(data_file), 3, 0)
-                        self.__load_malicious_datafile(self.path_to_malicious_data_folder + '/' + data_file,
+                            self.__load_malicious_datafile(self.path_to_malicious_data_folder + '/' + data_file,
                                                        data_file, file_e_tag)
-                        self.print('Finished loading the data from {}'.format(data_file), 3, 0)
+
                 except FileNotFoundError as e:
                     self.print(e, 1, 0)
 
@@ -163,21 +195,21 @@ class Module(Module, multiprocessing.Process):
                         ip_address = ipaddress.IPv4Address(data)
                         # Is IPv4!
                         # Store the ip in our local dict
-                        malicious_ips_dict[str(ip_address)] = description
+                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name})
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
                         try:
                             ip_address = ipaddress.IPv6Address(data)
                             # Is IPv6!
                             # Store the ip in our local dict
-                            malicious_ips_dict[str(ip_address)] = description
+                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name})
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
                             if validators.domain(data):
                                 domain = data
                                 # Store the ip in our local dict
-                                malicious_domains_dict[str(domain)] = description
+                                malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name})
                             else:
                                 self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 1, 1)
                                 continue
