@@ -67,6 +67,15 @@ class Module(Module, multiprocessing.Process):
         # Run the update manager
         self.update_manager.update()
 
+    def __get_e_tag_from_downloaded_file(self, file_name_to_download) -> str:
+        # Take last e-tag of our malicious file.
+        try:
+            with open(self.path_to_malicious_data_folder +'/' + file_name_to_download + '.etag', 'r') as f:
+                old_e_tag = f.readlines()[0]
+        except FileNotFoundError:
+            # The file is not there
+            old_e_tag = ''
+        return old_e_tag
 
     def __load_malicious_datafiles(self) -> None:
         """
@@ -77,6 +86,8 @@ class Module(Module, multiprocessing.Process):
         This is not going to the internet. Only from files to DB
         """
 
+        # Get what files are stored in cache db and their E-TAG to comapre with current files
+        cache_files_e_tags = __database__.get_malicious_files_e_tags()
         # First look if a variable "malicious_data_file_path" in slips.conf is set. If not, we have the default ready
         self.path_to_malicious_data_folder = self.__read_configuration('threatintelligence', 'malicious_data_file_path')
 
@@ -91,13 +102,21 @@ class Module(Module, multiprocessing.Process):
                 try:
                     # Only read the files with .txt or .csv
                     if '.txt' in data_file[-4:] or '.csv' in data_file[-4:]:
+                        file_e_tag = self.__get_e_tag_from_downloaded_file(data_file)
+                        try:
+                            if cache_files_e_tags[data_file] == file_e_tag:
+                                continue
+                        except KeyError as ex:
+                            pass
                         self.print('\tLoading malicious data from file {}.'.format(data_file), 3, 0)
-                        self.__load_malicious_datafile(self.path_to_malicious_data_folder + '/' + data_file)
+                        self.__load_malicious_datafile(self.path_to_malicious_data_folder + '/' + data_file,
+                                                       data_file, file_e_tag)
                         self.print('Finished loading the data from {}'.format(data_file), 3, 0)
                 except FileNotFoundError as e:
                     self.print(e, 1, 0)
 
-    def __load_malicious_datafile(self, malicious_data_path: str) -> None:
+
+    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name,file_e_tag) -> None:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
@@ -166,6 +185,8 @@ class Module(Module, multiprocessing.Process):
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
+            # Add e_tag of file in db
+            __database__.set_malicious_file_e_tag(data_file_name, file_e_tag)
 
         except Exception as inst:
             self.print('Problem on the __load_malicious_datafile()', 0, 1)
