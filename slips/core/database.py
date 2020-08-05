@@ -43,6 +43,7 @@ class Database(object):
         if not hasattr(self, 'r'):
             try:
                 self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+                self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True)
                 if self.deletePrevdb:
                     print('Deleting the previous stored DB in Redis.')
                     self.r.flushdb()
@@ -1330,7 +1331,7 @@ class Database(object):
         What is the format of ips_and_description?
         """
         if ips_and_description:
-            self.r.hmset('IoC_ips', ips_and_description)
+            self.rcache.hmset('IoC_ips', ips_and_description)
 
     def add_domains_to_IoC(self, domains_and_description: dict) -> None:
         """
@@ -1339,20 +1340,20 @@ class Database(object):
         What is the format of domains_and_description?
         """
         if domains_and_description:
-            self.r.hmset('IoC_domains', domains_and_description)
+            self.rcache.hmset('IoC_domains', domains_and_description)
 
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
         """
         Store in the DB 1 IP we read from an IoC source  with its description
         """
-        self.r.hset('IoC_ips', ip, description)
+        self.rcache.hset('IoC_ips', ip, description)
 
     def add_domain_to_IoC(self, domain: str, description: str) -> None:
         """
         Store in the DB 1 domain we read from an IoC source
         with its description
         """
-        self.r.hset('IoC_domains', domain, description)
+        self.rcache.hset('IoC_domains', domain, description)
 
     def add_malicious_ip(self, ip, profileid_twid):
         """
@@ -1491,5 +1492,24 @@ class Database(object):
         data = self.r.hget(profileid, 'labeled_as_malicious')
         return data
 
+    def get_malicious_files_e_tags(self):
+        """
+        Return malicious files and their e_tags
+        """
+        data = self.rcache.hgetall('malicious_files_e_tags')
+        return data
+
+    def get_malicious_file_e_tag(self, file):
+        """
+        Return malicious files and their e_tags
+        """
+        data = self.rcache.hget('malicious_files_e_tags', file)
+        return data
+
+    def set_malicious_file_e_tag(self, file, e_tag):
+        """
+        Set malicious file and its e-tag
+        """
+        self.rcache.hset('malicious_files_e_tags', file, e_tag)
 
 __database__ = Database()
