@@ -123,7 +123,6 @@ class Module(Module, multiprocessing.Process):
         This also helps in having unique ioc accross files
         Returns nothing, but the dictionary should be filled
         """
-        print(data_file_name, 'Should be updated')
         try:
             malicious_ips_dict = {}
             malicious_domains_dict = {}
