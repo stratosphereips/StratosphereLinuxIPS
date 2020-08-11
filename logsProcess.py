@@ -218,14 +218,14 @@ class LogsProcess(multiprocessing.Process):
         """
         try:
             # Get the list of all the modifed TW for all the profiles
-            TWModifiedforProfile = __database__.getModifiedTWLogs()
+            TWModifiedforProfile = __database__.getModifiedTW()
             last_profile_id = None
             description_of_malicious_ip_profile = None
             for profileTW in TWModifiedforProfile:
 
                 # Get the profileid and twid
-                profileid = profileTW.split(self.fieldseparator)[0] + self.fieldseparator + profileTW.split(self.fieldseparator)[1]
-                twid = profileTW.split(self.fieldseparator)[2]
+                profileid = profileTW[0].split(self.fieldseparator)[0] + self.fieldseparator + profileTW[0].split(self.fieldseparator)[1]
+                twid = profileTW[0].split(self.fieldseparator)[2]
                 # Get the time of this TW. For the file name
                 twtime = __database__.getTimeTW(profileid, twid)
                 twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))

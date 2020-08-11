@@ -67,7 +67,8 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             self.home_net = ipaddress.ip_network(self.config.get('parameters', 'home_network'))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
+            # There is a conf, but there is no option, or no section or no
+            # configuration file specified
             self.home_net = False
 
         # Get the time window width, if it was not specified as a parameter
@@ -81,19 +82,20 @@ class ProfilerProcess(multiprocessing.Process):
                     # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
                     self.width = 9999999999
             except configparser.NoOptionError:
-                # By default we use 300 seconds, 5minutes
-                self.width = 300.0
+                # By default we use 3600 seconds, 1hs
+                self.width = 3600
             except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-                # There is a conf, but there is no option, or no section or no configuration file specified
-                self.width = 300.0
+                # There is a conf, but there is no option, or no section or no
+                # configuration file specified
+                self.width = 3600
         # Limit any width to be > 0. By default we use 300 seconds, 5minutes
         elif self.width < 0:
-            self.width = 300.0
+            self.width = 3600
         else:
-            self.width = 300.0
+            self.width = 3600
         # Report the time window width
         if self.width == 9999999999:
-            self.outputqueue.put("10|profiler|Time Windows Width used: Only 1 time windows. Dates in the names of files are 100 years in the past.".format(self.width))
+            self.outputqueue.put("10|profiler|Time Windows Width used: {} seconds. Only 1 time windows. Dates in the names of files are 100 years in the past.".format(self.width))
         else:
             self.outputqueue.put("10|profiler|Time Windows Width used: {} seconds.".format(self.width))
 
