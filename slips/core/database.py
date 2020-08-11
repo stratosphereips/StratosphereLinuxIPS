@@ -1,7 +1,6 @@
 import redis
 import time
 import json
-import sys
 from typing import Tuple, Dict, Set, Callable
 import configparser
 import traceback
@@ -14,7 +13,7 @@ def timing(f):
         time1 = time.time()
         ret = f(*args)
         time2 = time.time()
-        self.outputqueue.put('01|database|Function took {:.3f} ms'.format((time2-time1)*1000.0))
+        print('[DB] Function took {:.3f} ms'.format((time2-time1)*1000.0))
         return ret
     return wrap
 
