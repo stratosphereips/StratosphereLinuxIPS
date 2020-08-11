@@ -170,7 +170,6 @@ if __name__ == '__main__':
     if args.debug < 0:
         args.debug = 0
 
-
     # Check the type of input
     if args.interface:
         input_information = args.interface
@@ -273,7 +272,7 @@ if __name__ == '__main__':
     # In each interval we check if there has been any modifications to the database by any module.
     # If not, wait this amount of intervals and then stop slips.
     # We choose 6 to wait 30 seconds.
-    minimum_intervals_to_wait = 6
+    minimum_intervals_to_wait = 5
     fieldseparator = __database__.getFieldSeparator()
     try:
         while True:
