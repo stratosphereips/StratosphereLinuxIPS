@@ -306,7 +306,6 @@ class Database(object):
 
     def getModifiedTWLogs(self):
         """ Return all the list of modified tw """
-        # return self.r.smembers('ModifiedTW')
         data = self.r.zrange('ModifiedTW', 0, -1, withscores=True)
         if not data:
             return []
@@ -314,7 +313,6 @@ class Database(object):
 
     def wasProfileTWModified(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
-        # data = self.r.sismember('ModifiedTW', profileid + self.separator + twid)
         data = self.r.zrank('ModifiedTW', profileid + self.separator + twid)
         if not data:
             # If for some reason we don't have the modified bit set,
@@ -326,7 +324,6 @@ class Database(object):
         """
         Get the time when this TW was modified
         """
-        # data = self.r.smembers('ModifiedTW')
         data = self.r.zrange('ModifiedTW', 0, -1, withscores=True)
         if not data:
             data = -1
@@ -340,7 +337,6 @@ class Database(object):
         now it is happening in the main slips.py every X seconds
         when the line is printed with the amount of modified TW
         """
-        # self.r.srem('ModifiedTW', profileid + self.separator + twid)
         self.r.zrem('ModifiedTW', profileid + self.separator + twid)
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
@@ -356,12 +352,9 @@ class Database(object):
         # Add this tw to the list of modified TW, so others can
         # check only these later
 
-
-        hash_id = profileid + self.separator + twid
         # If we dont receive a timestmp, do not update the timestamp
         if timestamp and type(timestamp) is not float:
             # We received a datetime object, get the epoch time
-            self.r.hset(hash_id, 'Modified', timestamp.timestamp())
             # Update the slips internal time (sit)
             self.r.set('slips_internal_time', timestamp.timestamp())
             # Store the modifed TW with the time
@@ -370,7 +363,6 @@ class Database(object):
             self.r.zadd('ModifiedTW', data)
         elif timestamp and type(timestamp) is float:
             # We recevied an epoch time
-            self.r.hset(hash_id, 'Modified', timestamp)
             # Update the slips internal time (sit)
             self.r.set('slips_internal_time', timestamp)
             # Store the modifed TW with the time
