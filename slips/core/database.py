@@ -70,6 +70,9 @@ class Database(object):
         # Zeek_files
         self.r.delete('zeekfiles')
 
+        # By default the slips internal time is 0 until we receive something
+        self.r.set('slips_internal_time', 0)
+
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
