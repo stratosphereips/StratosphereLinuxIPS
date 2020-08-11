@@ -272,7 +272,8 @@ if __name__ == '__main__':
     # In each interval we check if there has been any modifications to the database by any module.
     # If not, wait this amount of intervals and then stop slips.
     # We choose 6 to wait 30 seconds.
-    minimum_intervals_to_wait = 5
+    limit_minimum_intervals_to_wait = 4
+    minimum_intervals_to_wait = limit_minimum_intervals_to_wait
     fieldseparator = __database__.getFieldSeparator()
     try:
         while True:
@@ -311,10 +312,10 @@ if __name__ == '__main__':
                     if minimum_intervals_to_wait == 0:
                         hostIP = recognize_host_ip()
                         __database__.set_host_ip(hostIP)
-                        minimum_intervals_to_wait = 6
+                        minimum_intervals_to_wait = limit_minimum_intervals_to_wait
                     minimum_intervals_to_wait -= 1
                 else:
-                    minimum_intervals_to_wait = 6
+                    minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
             # When running Slips in the file.
             # If there were no modified TW in the last timewindow time,
@@ -348,7 +349,7 @@ if __name__ == '__main__':
                         profileid = profileTW[0].split(fieldseparator)[0] + fieldseparator + profileTW[0].split(fieldseparator)[1]
                         twid = profileTW[0].split(fieldseparator)[2]
                         __database__.markProfileTWAsNotModified(profileid, twid)
-                    minimum_intervals_to_wait = 6
+                    minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
     except KeyboardInterrupt:
         print('Stopping Slips')
