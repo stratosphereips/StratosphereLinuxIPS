@@ -315,17 +315,24 @@ class Database(object):
         2- Add the timestamp received to the time_of_last_modification
            in the TW itself
         """
+        # Add this tw to the list of modified TW, so others can only
+        # check these later
         self.r.sadd('ModifiedTW', profileid + self.separator + twid)
         self.publish('tw_modified', profileid + ':' + twid)
 
         hash_id = profileid + self.separator + twid
-        # If we dont receive a timestmp, do not update it
+        # If we dont receive a timestmp, do not update the timestamp
         if timestamp and type(timestamp) is not float:
             # We received a datetime object, get the epoch time
             self.r.hset(hash_id, 'Modified', timestamp.timestamp())
+            # Update the slips internal time (sit)
+            self.r.set('slips_internal_time', timestamp.timestamp())
         elif timestamp and type(timestamp) is float:
             # We recevied an epoch time
             self.r.hset(hash_id, 'Modified', timestamp)
+            # Update the slips internal time (sit)
+            self.r.set('slips_internal_time', timestamp)
+
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
