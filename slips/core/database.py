@@ -303,7 +303,14 @@ class Database(object):
         """ Return the amount of tw for this profile id """
         return self.r.zcard('tws' + profileid)
 
-    def getModifiedTWLogs(self):
+    def getModifiedTWSinceTime(self, time):
+        """ Return all the list of modified tw since a certain time"""
+        data = self.r.zrangebyscore('ModifiedTW', time, float('+inf'), withscores=True)
+        if not data:
+            return []
+        return data
+
+    def getModifiedTW(self):
         """ Return all the list of modified tw """
         data = self.r.zrange('ModifiedTW', 0, -1, withscores=True)
         if not data:
@@ -328,16 +335,15 @@ class Database(object):
             data = -1
         return data
 
-    def markProfileTWAsNotModified(self, profileid, twid):
+    def getSlipsInternalTime(self):
+        return self.r.get('slips_internal_time')
+
+    def markProfileTWAsClosed(self, profileid):
         """
-        Mark a TW in a profile as not modified
-        Technically we remove the tw from the list of modified TW
-        The tw are removed after some process 'checks' them, which
-        now it is happening in the main slips.py every X seconds
-        when the line is printed with the amount of modified TW
+        Mark the TW as closed so tools can work on its data
         """
-        self.r.zrem('ModifiedTW', profileid + self.separator + twid)
-        # FIX THIS since we should not delete tw from this list
+        self.r.sadd('ClosedTW', profileid)
+        self.publish('tw_closed', profileid)
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
         """
@@ -371,7 +377,6 @@ class Database(object):
             self.r.zadd('ModifiedTW', data)
 
         self.publish('tw_modified', profileid + ':' + twid)
-        # self.r.sadd('ModifiedTW', profileid + self.separator + twid)
 
         # Check if we should close some TW
         self.check_TW_to_close()
@@ -393,6 +398,7 @@ class Database(object):
             profile_to_close_id = profile_to_close[0]
             profile_to_close_time = profile_to_close[1]
             self.print(f'The profile id {profile_to_close_id} has to be closed because it was last modifed on {profile_to_close_time} and we are closing everything older than {modification_time}. Current time {sit}. Difference: {modification_time - profile_to_close_time}', 7, 0)
+            self.markProfileTWAsClosed(profile_to_close_id)
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
@@ -1137,6 +1143,8 @@ class Database(object):
         elif 'ip_info_change' in channel:
             pubsub.subscribe(channel)
         elif 'dns_info_change' in channel:
+            pubsub.subscribe(channel)
+        elif 'tw_closed' in channel:
             pubsub.subscribe(channel)
         return pubsub
 
