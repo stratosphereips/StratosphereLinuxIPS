@@ -30,6 +30,8 @@ class Database(object):
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
         self.config = config
+
+        # Read values from the configuration file
         try:
             deletePrevdbText = self.config.get('parameters', 'deletePrevdb')
             if deletePrevdbText == 'True':
@@ -39,6 +41,23 @@ class Database(object):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError, KeyError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.deletePrevdb = True
+
+        try:
+            data = self.config.get('parameters', 'time_window_width')
+            self.width = float(data)
+        except ValueError:
+            # Its not a float
+            if 'only_one_tw' in data:
+                # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
+                self.width = 9999999999
+        except configparser.NoOptionError:
+            # By default we use 3600 seconds, 1hs
+            self.width = 3600
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no
+            # configuration file specified
+            self.width = 3600
+
         # Create the connection to redis
         if not hasattr(self, 'r'):
             try:
