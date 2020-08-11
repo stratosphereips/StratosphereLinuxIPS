@@ -296,9 +296,9 @@ if __name__ == '__main__':
                 # If there are still modified TWs, just mark them as
                 # notmodified since we alredy 'waited' on them
                 for profileTW in TWModifiedforProfile:
-                    profileid = profileTW.split(fieldseparator)[0] + fieldseparator + profileTW.split(fieldseparator)[1]
-                    profileIP = profileTW.split(fieldseparator)[1]
-                    twid = profileTW.split(fieldseparator)[2]
+                    profileid = profileTW[0].split(fieldseparator)[0] + fieldseparator + profileTW[0].split(fieldseparator)[1]
+                    profileIP = profileTW[0].split(fieldseparator)[1]
+                    twid = profileTW[0].split(fieldseparator)[2]
                     __database__.markProfileTWAsNotModified(profileid, twid)
                     # True if there was a modified TW in the host IP
                     if hostIP == profileIP:
@@ -346,8 +346,8 @@ if __name__ == '__main__':
                     # If there are still modified TWs, just mark them as
                     # notmodified since we alredy 'waited' on them
                     for profileTW in TWModifiedforProfile:
-                        profileid = profileTW.split(fieldseparator)[0] + fieldseparator + profileTW.split(fieldseparator)[1]
-                        twid = profileTW.split(fieldseparator)[2]
+                        profileid = profileTW[0].split(fieldseparator)[0] + fieldseparator + profileTW[0].split(fieldseparator)[1]
+                        twid = profileTW[0].split(fieldseparator)[2]
                         __database__.markProfileTWAsNotModified(profileid, twid)
                     minimum_intervals_to_wait = 6
 
