@@ -277,7 +277,7 @@ if __name__ == '__main__':
     fieldseparator = __database__.getFieldSeparator()
     try:
         while True:
-            # Sleep 
+            # Sleep some time to do rutine checks
             time.sleep(check_time_sleep)
             # Get the amount of modified time windows in the last interval
             TWModifiedforProfile = __database__.getModifiedTWLogs()
@@ -286,9 +286,12 @@ if __name__ == '__main__':
             profilesLen = str(__database__.getProfilesLen())
             outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
 
-            # In interface we keep track of the host IP. If there was no modified TWs in the host IP, we check if the network was changed.
+            # In interface we keep track of the host IP. If there was no
+            # modified TWs in the host IP, we check if the network was changed.
+            # Dont try to stop slips if its catpurting from an interface
             if args.interface:
-                # To check of there was a modified TW in the host IP. If not, count down.
+                # To check of there was a modified TW in the host IP. If not,
+                # count down.
                 modifiedTW_hostIP = False
                 # If there are still modified TWs, just mark them as
                 # notmodified since we alredy 'waited' on them
@@ -303,7 +306,8 @@ if __name__ == '__main__':
 
                 # If there was no modified TW in the host IP
                 # then start counting down
-                # After count down we update the host IP, to check if the network was changed
+                # After count down we update the host IP, to check if the
+                # network was changed
                 if not modifiedTW_hostIP and args.interface:
                     if minimum_intervals_to_wait == 0:
                         hostIP = recognize_host_ip()
@@ -316,7 +320,6 @@ if __name__ == '__main__':
             # When running Slips in the file.
             # If there were no modified TW in the last timewindow time,
             # then start counting down
-            # Dont try to stop slips if its catpurting from an interface
             else:
                 if amount_of_modified == 0:
                     # print('Counter to stop Slips. Amount of modified
@@ -332,7 +335,8 @@ if __name__ == '__main__':
                         try:
                             logsProcessQueue.put('stop_process')
                         except NameError:
-                            # The logsProcessQueue is not there because we didnt started the logs files (used -l)
+                            # The logsProcessQueue is not there because we
+                            # didnt started the logs files (used -l)
                             pass
                         outputProcessQueue.put('stop_process')
                         profilerProcessQueue.put('stop_process')
@@ -347,18 +351,18 @@ if __name__ == '__main__':
                         __database__.markProfileTWAsNotModified(profileid, twid)
                     minimum_intervals_to_wait = 6
 
-
-
     except KeyboardInterrupt:
         print('Stopping Slips')
         # Stop the modules that are subscribed to channels
         __database__.publish_stop()
-        # Here we should Wait for any channel if it has still data to receive in its channel
+        # Here we should Wait for any channel if it has still data to receive
+        # in its channel
         # Send manual stops to the process not using channels
         try:
             logsProcessQueue.put('stop_process')
         except NameError:
-            # The logsProcessQueue is not there because we didnt started the logs files (used -l)
+            # The logsProcessQueue is not there because we didnt started the
+            # logs files (used -l)
             pass
         outputProcessQueue.put('stop_process')
         profilerProcessQueue.put('stop_process')
