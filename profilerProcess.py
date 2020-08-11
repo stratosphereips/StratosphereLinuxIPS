@@ -95,7 +95,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.width = 3600
         # Report the time window width
         if self.width == 9999999999:
-            self.outputqueue.put("10|profiler|Time Windows Width used: Only 1 time windows. Dates in the names of files are 100 years in the past.".format(self.width))
+            self.outputqueue.put("10|profiler|Time Windows Width used: {} seconds. Only 1 time windows. Dates in the names of files are 100 years in the past.".format(self.width))
         else:
             self.outputqueue.put("10|profiler|Time Windows Width used: {} seconds.".format(self.width))
 
