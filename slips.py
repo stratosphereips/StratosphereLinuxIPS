@@ -264,7 +264,6 @@ if __name__ == '__main__':
         hostIP = recognize_host_ip()
         __database__.set_host_ip(hostIP)
 
-
     # As the main program, keep checking if we should stop slips or not
     # This is not easy since we need to be sure all the modules are stopped
     # Each interval of checking is every 5 seconds
@@ -275,12 +274,15 @@ if __name__ == '__main__':
     limit_minimum_intervals_to_wait = 4
     minimum_intervals_to_wait = limit_minimum_intervals_to_wait
     fieldseparator = __database__.getFieldSeparator()
+    slips_internal_time = 0
     try:
         while True:
             # Sleep some time to do rutine checks
             time.sleep(check_time_sleep)
-            # Get the amount of modified time windows in the last interval
-            TWModifiedforProfile = __database__.getModifiedTWLogs()
+            # Get the amount of modified time windows since we last checked
+            TWModifiedforProfile = __database__.getModifiedTWSinceTime(float(slips_internal_time) + 1)
+            slips_internal_time = __database__.getSlipsInternalTime()
+            # TWModifiedforProfile = __database__.getModifiedTW()
             amount_of_modified = len(TWModifiedforProfile)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
@@ -296,13 +298,8 @@ if __name__ == '__main__':
                 # To check of there was a modified TW in the host IP. If not,
                 # count down.
                 modifiedTW_hostIP = False
-                # If there are still modified TWs, just mark them as
-                # notmodified since we alredy 'waited' on them
                 for profileTW in TWModifiedforProfile:
-                    profileid = profileTW[0].split(fieldseparator)[0] + fieldseparator + profileTW[0].split(fieldseparator)[1]
                     profileIP = profileTW[0].split(fieldseparator)[1]
-                    twid = profileTW[0].split(fieldseparator)[2]
-                    __database__.markProfileTWAsNotModified(profileid, twid)
                     # True if there was a modified TW in the host IP
                     if hostIP == profileIP:
                         modifiedTW_hostIP = True
@@ -346,12 +343,6 @@ if __name__ == '__main__':
                         break
                     minimum_intervals_to_wait -= 1
                 else:
-                    # If there are still modified TWs, just mark them as
-                    # notmodified since we alredy 'waited' on them
-                    for profileTW in TWModifiedforProfile:
-                        profileid = profileTW[0].split(fieldseparator)[0] + fieldseparator + profileTW[0].split(fieldseparator)[1]
-                        twid = profileTW[0].split(fieldseparator)[2]
-                        __database__.markProfileTWAsNotModified(profileid, twid)
                     minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
     except KeyboardInterrupt:
