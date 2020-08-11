@@ -286,6 +286,9 @@ if __name__ == '__main__':
             profilesLen = str(__database__.getProfilesLen())
             outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
 
+            # Check if we need to close some TW
+            __database__.check_TW_to_close()
+
             # In interface we keep track of the host IP. If there was no
             # modified TWs in the host IP, we check if the network was changed.
             # Dont try to stop slips if its catpurting from an interface
