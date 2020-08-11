@@ -218,7 +218,7 @@ class LogsProcess(multiprocessing.Process):
         """
         try:
             # Get the list of all the modifed TW for all the profiles
-            TWModifiedforProfile = __database__.getModifiedTWLogs()
+            TWModifiedforProfile = __database__.getModifiedTW()
             last_profile_id = None
             description_of_malicious_ip_profile = None
             for profileTW in TWModifiedforProfile:
