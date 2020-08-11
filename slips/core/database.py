@@ -226,8 +226,9 @@ class Database(object):
     def getTWforScore(self, profileid, time):
         """
         Return the TW id and the time for the TW that includes the given time.
-        The score in the DB is the start of the timewindow, so we should search a TW that includes
-        the given time by making sure the start of the TW is < time, and the end of the TW is > time.
+        The score in the DB is the start of the timewindow, so we should search
+        a TW that includes the given time by making sure the start of the TW
+        is < time, and the end of the TW is > time.
         """
         # [-1] so we bring the last TW that matched this time.
         try:
@@ -301,20 +302,35 @@ class Database(object):
 
     def getAmountTW(self, profileid):
         """ Return the amount of tw for this profile id """
-        return self.r.zcard('tws'+profileid)
+        return self.r.zcard('tws' + profileid)
 
     def getModifiedTWLogs(self):
         """ Return all the list of modified tw """
-        return self.r.smembers('ModifiedTW')
+        # return self.r.smembers('ModifiedTW')
+        data = self.r.zrange('ModifiedTW', 0, -1, withscores=True)
+        if not data:
+            return []
+        return data
 
     def wasProfileTWModified(self, profileid, twid):
         """ Retrieve from the db if this TW of this profile was modified """
-        data = self.r.sismember('ModifiedTW', profileid + self.separator + twid)
+        # data = self.r.sismember('ModifiedTW', profileid + self.separator + twid)
+        data = self.r.zrank('ModifiedTW', profileid + self.separator + twid)
         if not data:
             # If for some reason we don't have the modified bit set,
             # then it was not modified.
-            data = 0
-        return bool(data)
+            return False
+        return True
+
+    def getModifiedTWTime(self, profileid, twid):
+        """
+        Get the time when this TW was modified
+        """
+        # data = self.r.smembers('ModifiedTW')
+        data = self.r.zrange('ModifiedTW', 0, -1, withscores=True)
+        if not data:
+            data = -1
+        return data
 
     def markProfileTWAsNotModified(self, profileid, twid):
         """
@@ -324,7 +340,8 @@ class Database(object):
         now it is happening in the main slips.py every X seconds
         when the line is printed with the amount of modified TW
         """
-        self.r.srem('ModifiedTW', profileid + self.separator + twid)
+        # self.r.srem('ModifiedTW', profileid + self.separator + twid)
+        self.r.zrem('ModifiedTW', profileid + self.separator + twid)
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
         """
@@ -333,11 +350,12 @@ class Database(object):
         1- To add it to the list of ModifiedTW
         2- Add the timestamp received to the time_of_last_modification
            in the TW itself
+        3- To update the internal time of slips
+        4- To check if we should 'close' some TW
         """
-        # Add this tw to the list of modified TW, so others can only
-        # check these later
-        self.r.sadd('ModifiedTW', profileid + self.separator + twid)
-        self.publish('tw_modified', profileid + ':' + twid)
+        # Add this tw to the list of modified TW, so others can
+        # check only these later
+
 
         hash_id = profileid + self.separator + twid
         # If we dont receive a timestmp, do not update the timestamp
@@ -346,12 +364,46 @@ class Database(object):
             self.r.hset(hash_id, 'Modified', timestamp.timestamp())
             # Update the slips internal time (sit)
             self.r.set('slips_internal_time', timestamp.timestamp())
+            # Store the modifed TW with the time
+            data = {}
+            data[profileid + self.separator + twid] = float(timestamp.timestamp())
+            self.r.zadd('ModifiedTW', data)
         elif timestamp and type(timestamp) is float:
             # We recevied an epoch time
             self.r.hset(hash_id, 'Modified', timestamp)
             # Update the slips internal time (sit)
             self.r.set('slips_internal_time', timestamp)
+            # Store the modifed TW with the time
+            data = {}
+            data[profileid + self.separator + twid] = float(timestamp)
+            self.r.zadd('ModifiedTW', data)
 
+        self.publish('tw_modified', profileid + ':' + twid)
+        # self.r.sadd('ModifiedTW', profileid + self.separator + twid)
+
+        # Check if we should close some TW
+        self.check_TW_to_close()
+
+    def check_TW_to_close(self):
+        """
+        Check if we should close some TW
+        """
+        # Get internal time
+        sip = self.r.get('slips_internal_time')
+        # for each profile
+        profiles = self.getProfiles()
+        """
+        for profileid in profiles:
+            # Get the last TW on in profile
+            lastTWid = self.r.zrange('tws' + profileid, -1, -1, withscores=True)
+            lastTWid = lastTWid[0][0]
+            # Get time of last modification of this tW
+            modification_time = self.getTWModificationTime()
+            # Check if the time difference between the sip and the modification time
+            # is more than the width of a TW. If it is, close the TW.
+            if sip - modification_time <= self.width:
+                pass
+        """
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
