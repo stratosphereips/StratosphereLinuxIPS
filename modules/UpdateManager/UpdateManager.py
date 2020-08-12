@@ -16,15 +16,16 @@ from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
 import platform
+# Your imports
+import configparser
 from modules.UpdateManager.timer_manager import InfiniteTimer
 from modules.UpdateManager.update_file_manager import UpdateFileManager
-# Your imports
 
 
-class TI_manager(Module, multiprocessing.Process):
+class UpdateManager(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'TI_manager'
-    description = 'Threat Intelligence cleaner'
+    name = 'UpdateManager'
+    description = 'Update malicious files from Threat Intelligence'
     authors = ['Kamila Babayeva']
 
     def __init__(self, outputqueue, config):
@@ -35,13 +36,15 @@ class TI_manager(Module, multiprocessing.Process):
         # In case you need to read the slips.conf configuration file for
         # your own configurations
         self.config = config
+        # Read the conf
+        self.read_configuration()
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('core_messages')
         # Update file manager
         self.update_manager = UpdateFileManager(self.outputqueue, config)
         # Timer to update the ThreatIntelligence files
-        self.timer_manager = InfiniteTimer(30, self.update_malicious_files)
+        self.timer_manager = InfiniteTimer(self.update_period, self.update_malicious_files)
 
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
@@ -56,11 +59,14 @@ class TI_manager(Module, multiprocessing.Process):
             # Other systems
             self.timeout = None
 
-    def update_malicious_files(self):
-        '''
-        Update malicious files
-        '''
-        self.update_manager.update()
+    def read_configuration(self):
+        """ Read the configuration file for what we need """
+        try:
+            # update period
+            self.update_period = self.config.get('threatintelligence', 'malicious_data_update_period')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.update_period = 86400
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -81,6 +87,12 @@ class TI_manager(Module, multiprocessing.Process):
 
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+
+    def update_malicious_files(self):
+        '''
+        Update malicious files
+        '''
+        self.update_manager.update()
 
     def run(self):
         try:
