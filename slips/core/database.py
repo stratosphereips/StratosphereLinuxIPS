@@ -1062,6 +1062,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'dns_info_change' in channel:
             pubsub.subscribe(channel)
+        elif 'core_messages' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -1333,7 +1335,7 @@ class Database(object):
 
     def delete_domains_from_IoC_ips(self, domains):
         """
-        Delete old Domains from IoC
+        Delete old domains from IoC
         """
         self.rcache.hdel('IoC_domains', *domains)
 
@@ -1518,25 +1520,26 @@ class Database(object):
         data = self.r.hget(profileid, 'labeled_as_malicious')
         return data
 
-    def get_malicious_files_e_tags(self):
-        """
-        Return malicious files and their e_tags
-        """
-        data = self.rcache.hgetall('malicious_files_e_tags')
-        return data
+    def set_malicious_file_info(self, file, data):
+        '''
+        Set/update time and/or e-tag for malicious file
+        '''
+        # data = self.get_malicious_file_info(file)
+        # for key in file_data:
+        #     data[key] = file_data[key]
+        data = json.dumps(data)
+        self.rcache.hset('malicious_files_info', file, data)
 
-    def get_malicious_file_e_tag(self, file):
-        """
-        Return malicious files and their e_tags
-        """
-        data = self.rcache.hget('malicious_files_e_tags', file)
+    def get_malicious_file_info(self, file):
+        '''
+        Get malicious file info
+        '''
+        data = self.rcache.hget('malicious_files_info', file)
+        if data:
+            data = json.loads(data)
+        else:
+            data = ''
         return data
-
-    def set_malicious_file_e_tag(self, file, e_tag):
-        """
-        Set malicious file and its e-tag
-        """
-        self.rcache.hset('malicious_files_e_tags', file, e_tag)
 
 
 __database__ = Database()
