@@ -13,6 +13,7 @@ import shutil
 from datetime import datetime
 import socket
 import warnings
+from modules.UpdateManager.update_file_manager import UpdateFileManager
 
 version = '0.6.8'
 
@@ -43,6 +44,13 @@ def recognize_host_ip():
         print('Network is unreachable')
         return None
     return ipaddr_check
+
+def update_malicious_file(outputqueue, config):
+    '''
+    Update malicious files and store them in database before slips start
+    '''
+    update_manager = UpdateFileManager(outputqueue, config)
+    update_manager.update()
 
 def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
     """
@@ -199,6 +207,9 @@ if __name__ == '__main__':
     # Create the output thread and start it
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
+
+    #Before starting update malicious file
+    update_malicious_file(outputProcessQueue,config)
     # Print the PID of the main slips process. We do it here because we needed the queue to the output process
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid

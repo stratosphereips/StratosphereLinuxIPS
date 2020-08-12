@@ -61,6 +61,7 @@ class Database(object):
         if not hasattr(self, 'r'):
             try:
                 self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+                self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True)
                 if self.deletePrevdb:
                     print('Deleting the previous stored DB in Redis.')
                     self.r.flushdb()
@@ -1149,6 +1150,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'tw_closed' in channel:
             pubsub.subscribe(channel)
+        elif 'core_messages' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -1412,13 +1415,25 @@ class Database(object):
         """ Delete an entry from the list of zeek files """
         self.r.srem('zeekfiles', filename)
 
+    def delete_ips_from_IoC_ips(self, ips):
+        """
+        Delete old IPs from IoC
+        """
+        self.rcache.hdel('IoC_ips', *ips)
+
+    def delete_domains_from_IoC_ips(self, domains):
+        """
+        Delete old domains from IoC
+        """
+        self.rcache.hdel('IoC_domains', *domains)
+
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
         """
         Store a group of IPs in the db as they were obtained from an IoC source
         What is the format of ips_and_description?
         """
         if ips_and_description:
-            self.r.hmset('IoC_ips', ips_and_description)
+            self.rcache.hmset('IoC_ips', ips_and_description)
 
     def add_domains_to_IoC(self, domains_and_description: dict) -> None:
         """
@@ -1427,20 +1442,20 @@ class Database(object):
         What is the format of domains_and_description?
         """
         if domains_and_description:
-            self.r.hmset('IoC_domains', domains_and_description)
+            self.rcache.hmset('IoC_domains', domains_and_description)
 
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
         """
         Store in the DB 1 IP we read from an IoC source  with its description
         """
-        self.r.hset('IoC_ips', ip, description)
+        self.rcache.hset('IoC_ips', ip, description)
 
     def add_domain_to_IoC(self, domain: str, description: str) -> None:
         """
         Store in the DB 1 domain we read from an IoC source
         with its description
         """
-        self.r.hset('IoC_domains', domain, description)
+        self.rcache.hset('IoC_domains', domain, description)
 
     def add_malicious_ip(self, ip, profileid_twid):
         """
@@ -1494,12 +1509,26 @@ class Database(object):
         data = self.r.hget('DNSresolution', ip)
         return data
 
+    def get_IPs_in_IoC(self):
+        """
+        Get all IPs and their description from IoC_ips
+        """
+        data = self.rcache.hgetall('IoC_ips')
+        return data
+
+    def get_Domains_in_IoC(self):
+        """
+        Get all Domains and their description from IoC_domains
+        """
+        data = self.rcache.hgetall('IoC_domains')
+        return data
+
     def search_IP_in_IoC(self, ip: str) -> str:
         """
         Search in the dB of malicious IPs and return a
         description if we found a match
         """
-        ip_description = self.r.hget('IoC_ips', ip)
+        ip_description = self.rcache.hget('IoC_ips', ip)
         if ip_description == None:
             return False
         else:
@@ -1510,7 +1539,7 @@ class Database(object):
         Search in the dB of malicious domainss and return a
         description if we found a match
         """
-        domain_description = self.r.hget('IoC_domains', domain)
+        domain_description = self.rcache.hget('IoC_domains', domain)
         if domain_description == None:
             return False
         else:
@@ -1577,6 +1606,27 @@ class Database(object):
 
     def is_profile_malicious(self, profileid: str) -> str:
         data = self.r.hget(profileid, 'labeled_as_malicious')
+        return data
+
+    def set_malicious_file_info(self, file, data):
+        '''
+        Set/update time and/or e-tag for malicious file
+        '''
+        # data = self.get_malicious_file_info(file)
+        # for key in file_data:
+        #     data[key] = file_data[key]
+        data = json.dumps(data)
+        self.rcache.hset('malicious_files_info', file, data)
+
+    def get_malicious_file_info(self, file):
+        '''
+        Get malicious file info
+        '''
+        data = self.rcache.hget('malicious_files_info', file)
+        if data:
+            data = json.loads(data)
+        else:
+            data = ''
         return data
 
 
