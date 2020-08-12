@@ -10,6 +10,7 @@
 		- Flows in the timeline are sorted
 		- Added architecture to close timewindow of a profile
 		- Fixed the reading of nfdump file
+		- Added parameter '-cc' to clear cache database
 	- Kalipso
 		- Hotkeys 'c' and 'p' are sorted by the size of totalbytes
 - 0.6.8 (published 2020/07/07)
