@@ -41,13 +41,13 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
         # Read the conf file
-        key_file = self.__read_configuration("virustotal", "api_key_file")
+        self.__read_configuration()
         self.key = None
         try:
-            with open(key_file, "r") as f:
+            with open(self.key_file, "r") as f:
                 self.key = f.read(64)
         except FileNotFoundError:
-            self.print("The file with API key (" + key_file + ") could not be loaded. VT module is stopping.")
+            self.print("The file with API key (" + self.key_file + ") could not be loaded. VT module is stopping.")
 
         # query counter for debugging purposes
         self.counter = 0
@@ -66,15 +66,22 @@ class VirusTotalModule(Module, multiprocessing.Process):
             #??
             self.timeout = None
 
-    def __read_configuration(self, section: str, name: str) -> str:
+    def __read_configuration(self) -> str:
         """ Read the configuration file for what we need """
         # Get the time of log report
         try:
-            conf_variable = self.config.get(section, name)
+            self.key_file = self.config.get("virustotal", "api_key_file")
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            conf_variable = None
-        return conf_variable
+            self.key_file = None
+        try:
+            # update period
+            self.update_period = self.config.get('virustotal', 'virustotal_update_period')
+            self.update_period = float(self.update_period)
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.update_period = 259200
+
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -128,7 +135,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
                         elif data and 'VirusTotal' in data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                            if (time.time() - data["VirusTotal"]['timestamp']) / 60 > 2:
+                            if (time.time() - data["VirusTotal"]['timestamp'])  > self.update_period:
                                 vt_scores = self.get_ip_vt_scores(ip)
                                 vtdata = {"URL": vt_scores[0],
                                           "down_file": vt_scores[1],
