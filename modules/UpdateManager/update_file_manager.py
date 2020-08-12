@@ -64,15 +64,15 @@ class UpdateFileManager:
         Check if user wants to update.
         """
         file_name_to_download = file_to_download.split('/')[-1]
+        # Get last timeupdate of the file
+        data = __database__.get_malicious_file_info(file_name_to_download)
         try:
-            with open(self.path_to_threat_intelligence_data + file_name_to_download + '.time', 'r') as f:
-                last_update = f.readlines()[0]
+            last_update = data['time']
             last_update = float(last_update)
-        except (ValueError, TypeError, FileNotFoundError, IndexError):
+        except TypeError:
             last_update = float('-inf')
 
         now = time.time()
-
         if last_update + self.update_period < now:
             # Update
             return True
@@ -86,6 +86,7 @@ class UpdateFileManager:
             temp = os.popen(command).read()
             try:
                 new_e_tag = temp.split()[1].split('\n')[0].replace("\"",'')
+                return new_e_tag
             except IndexError:
                 return False
         except Exception as inst:
@@ -118,48 +119,45 @@ class UpdateFileManager:
         try:
             file_name_to_download = file_to_download.split('/')[-1]
             # Get what files are stored in cache db and their E-TAG to comapre with current files
-            old_e_tag = __database__.get_malicious_file_e_tag(file_to_download)
+            data = __database__.get_malicious_file_info(file_name_to_download)
+            try:
+                old_e_tag = data['e-tag']
+            except TypeError:
+                old_e_tag = ''
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
             new_e_tag = self.__get_e_tag_from_web(file_to_download)
-
-            if new_e_tag and old_e_tag and old_e_tag != new_e_tag:
+            if new_e_tag and old_e_tag != new_e_tag:
                 # Our malicious file is old. Download new one.
                 self.print(f'Trying to download the file {file_name_to_download}', 3, 0)
                 self.__download_file(file_to_download, self.path_to_threat_intelligence_data + file_name_to_download)
-                # Store the new etag in the database
-                __database__.set_malicious_file_e_tag(file_name_to_download, new_e_tag)
-                # Take last e-tag of our maliciou ips file.
-                # Maybe not needed anymore since we take all the etags from the database
-                with open(self.path_to_threat_intelligence_data + file_name_to_download + '.etag', 'w+') as f:
-                    f.write(new_e_tag)
-                # Write the last we checked the update time
-                with open(self.path_to_threat_intelligence_data + file_name_to_download + '.time', 'w+') as f:
-                    f.write(str(self.new_update_time))
-                # File is updated and was in database. Delete previous IPs of this file.
-                self.__delete_old_source_data_from_database(file_name_to_download)
+
+                if old_e_tag:
+                    # File is updated and was in database. Delete previous IPs of this file.
+                    self.__delete_old_source_data_from_database(file_name_to_download)
                 # Load updated IPs to the database
                 self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download, file_name_to_download)
-                print('[TI_manager] TAG is OLD, updating')
+                # Store the new etag and time of file in the database
+                malicious_file_info = {}
+                malicious_file_info['e-tag'] = new_e_tag
+                malicious_file_info['time'] = self.new_update_time
+                __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
+
                 return True
-            elif new_e_tag and old_e_tag and old_e_tag == new_e_tag:
+            elif new_e_tag and old_e_tag == new_e_tag:
                 self.print(f'File {file_to_download} is still the same. Not downloading the file', 3, 0)
                 # Store the update time like we downloaded it anyway
                 self.new_update_time = time.time()
-                # Write the last we checked the update time
-                with open(self.path_to_threat_intelligence_data + file_name_to_download + '.time', 'w+') as f:
-                    f.write(str(self.new_update_time))
-                print('[TI_manager] TAG is SAME, not updating')
+                # Store the new etag and time of file in the database
+                malicious_file_info = {}
+                malicious_file_info['e-tag'] = new_e_tag
+                malicious_file_info['time'] = self.new_update_time
+                __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
                 return False
             elif not new_e_tag:
                 # Something failed. Do not download
                 self.print(f'Some error ocurred. Not downloading the file {file_to_download}', 0, 1)
                 return False
-            elif not old_e_tag:
-                # File is completely load updated IPs to the database
-                self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download,
-                                               file_name_to_download)
-                print('[TI_manager] NO TAG, NEW FILE, updating')
 
         except Exception as inst:
             self.print('Problem on __download_malicious_file()', 0, 0)
