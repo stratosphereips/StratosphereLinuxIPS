@@ -15,7 +15,7 @@ import socket
 import warnings
 from modules.UpdateManager.update_file_manager import UpdateFileManager
 
-version = '0.6.8'
+version = '0.6.9'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
