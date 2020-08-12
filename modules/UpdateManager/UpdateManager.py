@@ -22,7 +22,7 @@ from modules.UpdateManager.timer_manager import InfiniteTimer
 from modules.UpdateManager.update_file_manager import UpdateFileManager
 
 
-class UpdateManager(Module, multiprocessing.Process):
+class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'UpdateManager'
     description = 'Update malicious files from Threat Intelligence'
@@ -64,6 +64,7 @@ class UpdateManager(Module, multiprocessing.Process):
         try:
             # update period
             self.update_period = self.config.get('threatintelligence', 'malicious_data_update_period')
+            self.update_period = float(self.update_period)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.update_period = 86400
