@@ -65,6 +65,16 @@ def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
         return False
     return True
 
+def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> str:
+    """
+    Clear cache database
+    """
+    rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=1, charset="utf-8",
+                               decode_responses=True)
+    rcache.flushdb()
+
+
+
 
 def check_zeek_or_bro():
     """
@@ -104,6 +114,7 @@ if __name__ == '__main__':
     parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
+    parser.add_argument('-cc', '--clearcache', help='Clear cache.', required=False, default=False, action='store_true')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
@@ -136,6 +147,10 @@ if __name__ == '__main__':
     if args.nfdump and shutil.which('nfdump') is None:
         # If we do not have nfdump, terminate Slips.
         terminate_slips()
+
+    # Clear cache if the parameter was included
+    if args.clearcache:
+        clear_redis_cache_database()
 
     """
     Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
