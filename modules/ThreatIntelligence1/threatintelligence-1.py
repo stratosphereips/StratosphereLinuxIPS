@@ -10,9 +10,6 @@ import os
 import configparser
 import json
 import ast
-from modules.ThreatIntelligence1.update_file_manager import UpdateFileManager
-import traceback
-import validators
 import traceback
 
 
@@ -27,18 +24,11 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
-        self.separator = __database__.getFieldSeparator()
-        # This default path is only used in case there is no path in the configuration file
-        self.path_to_malicious_data_folder = 'modules/ThreatIntelligence1/malicious_data_files/'
         # Subscribe to the channel
         __database__.start(self.config)
+        # Get a separator from the database
+        self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
-
-        # Create the update manager. This manager takes care of the re-downloading of the list of IoC when needed.
-        self.update_manager = UpdateFileManager(self.outputqueue, config)
-
-        # First step is to Update the remote file containing malicious IPs.
-        self.__update_remote_malicious_file()
 
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
@@ -60,120 +50,6 @@ class Module(Module, multiprocessing.Process):
             conf_variable = None
         return conf_variable
 
-    def __update_remote_malicious_file(self) -> None:
-        """
-        Prepare to download a remote file with malicious ips. This file is remotely updated
-        """
-        # Run the update manager
-        self.update_manager.update()
-
-
-    def __load_malicious_datafiles(self) -> None:
-        """
-        Load the content of malicious datafiles in a folder and ask to read
-        them into a dictionary.
-        Then load the dictionary into our DB
-
-        This is not going to the internet. Only from files to DB
-        """
-
-        # First look if a variable "malicious_data_file_path" in slips.conf is set. If not, we have the default ready
-        self.path_to_malicious_data_folder = self.__read_configuration('threatintelligence', 'malicious_data_file_path')
-
-        # Read all files in "modules/ThreatIntelligence/malicious_data_files/" folder.
-        self.print('Loading malicious data from files in folder {}.'.format(self.path_to_malicious_data_folder), 0, 3)
-        if len(os.listdir(self.path_to_malicious_data_folder)) == 0:
-            # No files to read.
-            self.print('There are no files in {}.'.format(self.path_to_malicious_data_folder), 1, 0)
-        else:
-            # For each file in the folder with malicious files
-            for data_file in os.listdir(self.path_to_malicious_data_folder):
-                try:
-                    # Only read the files with .txt or .csv
-                    if '.txt' in data_file[-4:] or '.csv' in data_file[-4:]:
-                        self.print('\tLoading malicious data from file {}.'.format(data_file), 3, 0)
-                        self.__load_malicious_datafile(self.path_to_malicious_data_folder + '/' + data_file)
-                        self.print('Finished loading the data from {}'.format(data_file), 3, 0)
-                except FileNotFoundError as e:
-                    self.print(e, 1, 0)
-
-    def __load_malicious_datafile(self, malicious_data_path: str) -> None:
-        """
-        Read all the files holding IP addresses and a description and put the
-        info in a large dict.
-        This also helps in having unique ioc accross files
-        Returns nothing, but the dictionary should be filled
-        """
-        try:
-            malicious_ips_dict = {}
-            malicious_domains_dict = {}
-            with open(malicious_data_path) as malicious_file:
-
-                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
-
-                # Remove comments
-                while True:
-                    line = malicious_file.readline()
-                    # break while statement if it is not a comment line
-                    # i.e. does not startwith #
-                    if not line.startswith('#'):
-                        break
-
-                for line in malicious_file:
-                    # The format of the file should be
-                    # "0", "103.15.53.231","90", "Karel from our village. He is bad guy."
-                    # So the second column will be used as important data with
-                    # an IP or domain
-                    # In the case of domains can be
-                    # domain,www.netspy.net,NetSpy
-
-                    # Separate the lines like CSV
-                    # In the new format the ip is in the second position.
-                    # And surronded by "
-                    data = line.replace("\n","").replace("\"","").split(",")[1].strip()
-
-                    try:
-                        # In the new format the description is position 4
-                        description = line.replace("\n","").replace("\"","").split(",")[3].strip()
-                    except IndexError:
-                        description = ''
-                    self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
-
-                    # Check if ip is valid.
-                    try:
-                        ip_address = ipaddress.IPv4Address(data)
-                        # Is IPv4!
-                        # Store the ip in our local dict
-                        malicious_ips_dict[str(ip_address)] = description
-                    except ipaddress.AddressValueError:
-                        # Is it ipv6?
-                        try:
-                            ip_address = ipaddress.IPv6Address(data)
-                            # Is IPv6!
-                            # Store the ip in our local dict
-                            malicious_ips_dict[str(ip_address)] = description
-                        except ipaddress.AddressValueError:
-                            # It does not look as IP address.
-                            # So it should be a domain
-                            if validators.domain(data):
-                                domain = data
-                                # Store the ip in our local dict
-                                malicious_domains_dict[str(domain)] = description
-                            else:
-                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 1, 1)
-                                continue
-            # Add all loaded malicious ips to the database
-            __database__.add_ips_to_IoC(malicious_ips_dict)
-            # Add all loaded malicious domains to the database
-            __database__.add_domains_to_IoC(malicious_domains_dict)
-
-        except Exception as inst:
-            self.print('Problem on the __load_malicious_datafile()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            print(traceback.format_exc())
-            return True
 
     def add_maliciousIP(self, ip='', profileid='', twid=''):
         '''
@@ -265,8 +141,6 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # Main loop function
-            # First load the malicious data from the files to the DB
-            self.__load_malicious_datafiles()
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time

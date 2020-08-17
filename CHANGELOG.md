@@ -1,3 +1,18 @@
+- 0.6.9 (published 2020/08/12)
+	- Slips
+		- Added cache for IPs from Threat Inelligence files
+		- Added cache for IPs Info
+		- Added new module UpdateManager to update Threat Intelligence files
+		- Changed the structure of VirusTotal Module
+		- Added parameters in slips.conf for updating VirusTotal and Threat Intelligence
+		- Added new channel 'core_messages', UpdateManager is subscribed to that
+		- Added manager to search host IP, if Slips is running on interface and networks are changing
+		- Flows in the timeline are sorted
+		- Added architecture to close timewindow of a profile
+		- Fixed the reading of nfdump file
+		- Added parameter '-cc' to clear cache database
+	- Kalipso
+		- Hotkeys 'c' and 'p' are sorted by the size of totalbytes
 - 0.6.8 (published 2020/07/07)
 	- New version of Kalipso
 		- Widgets are splitted in classes

@@ -13,8 +13,9 @@ import shutil
 from datetime import datetime
 import socket
 import warnings
+from modules.UpdateManager.update_file_manager import UpdateFileManager
 
-version = '0.6.8'
+version = '0.6.9'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -44,6 +45,13 @@ def recognize_host_ip():
         return None
     return ipaddr_check
 
+def update_malicious_file(outputqueue, config):
+    '''
+    Update malicious files and store them in database before slips start
+    '''
+    update_manager = UpdateFileManager(outputqueue, config)
+    update_manager.update()
+
 def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
     """
     Check if we have redis-server running
@@ -56,6 +64,16 @@ def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
         print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
         return False
     return True
+
+def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> str:
+    """
+    Clear cache database
+    """
+    rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=1, charset="utf-8",
+                               decode_responses=True)
+    rcache.flushdb()
+
+
 
 
 def check_zeek_or_bro():
@@ -96,6 +114,7 @@ if __name__ == '__main__':
     parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
+    parser.add_argument('-cc', '--clearcache', help='Clear cache.', required=False, default=False, action='store_true')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
@@ -128,6 +147,10 @@ if __name__ == '__main__':
     if args.nfdump and shutil.which('nfdump') is None:
         # If we do not have nfdump, terminate Slips.
         terminate_slips()
+
+    # Clear cache if the parameter was included
+    if args.clearcache:
+        clear_redis_cache_database()
 
     """
     Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
@@ -199,6 +222,9 @@ if __name__ == '__main__':
     # Create the output thread and start it
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
+
+    #Before starting update malicious file
+    update_malicious_file(outputProcessQueue,config)
     # Print the PID of the main slips process. We do it here because we needed the queue to the output process
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid
@@ -311,7 +337,8 @@ if __name__ == '__main__':
                 if not modifiedTW_hostIP and args.interface:
                     if minimum_intervals_to_wait == 0:
                         hostIP = recognize_host_ip()
-                        __database__.set_host_ip(hostIP)
+                        if hostIP:
+                            __database__.set_host_ip(hostIP)
                         minimum_intervals_to_wait = limit_minimum_intervals_to_wait
                     minimum_intervals_to_wait -= 1
                 else:

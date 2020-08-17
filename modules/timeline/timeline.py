@@ -281,7 +281,6 @@ class Module(Module, multiprocessing.Process):
                 alt_flow = json.loads(alt_flow_json)
                 self.print('Received an altflow of type {}: {}'.format(alt_flow['type'], alt_flow), 5,0)
                 if 'dns' in alt_flow['type']:
-                    # alt_activity = '	- Query: {}, Query Class: {}, Type: {}, Response Code: {}, Answers: {}'.format(alt_flow['query'], alt_flow['qclass_name'], alt_flow['qtype_name'], alt_flow['rcode_name'], alt_flow['answers'])
                     answer = alt_flow["answers"]
                     if 'NXDOMAIN' in alt_flow['rcode_name']:
                         answer = 'NXDOMAIN'
@@ -290,6 +289,7 @@ class Module(Module, multiprocessing.Process):
                     http_data_all = {'Request': alt_flow["method"] + ' http://'+alt_flow["host"]+alt_flow["uri"], 'Status Code': str(alt_flow["status_code"])+ '/' + alt_flow["status_msg"],'MIME':str(alt_flow["resp_mime_types"] ),'UA':alt_flow["user_agent"]}
                     # if any of fields are empty, do not include them
                     http_data = {k: v for k, v in http_data_all.items() if v is not '' and v is not '/'}
+                    alt_activity = {'http_data': http_data}
                 elif alt_flow['type'] == 'ssl':
                     # {"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
                     # version":"TLSv12","resumed":false,"established":true,"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
@@ -318,10 +318,6 @@ class Module(Module, multiprocessing.Process):
             activity.update(alt_activity)
             if activity:
                 __database__.add_timeline_line(profileid, twid, activity, timestamp)
-            # http data should be parsed in multiple lines
-            if http_data:
-                __database__.add_http_timeline_line(profileid, twid, http_data, timestamp)
-
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
 

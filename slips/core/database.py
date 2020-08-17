@@ -61,6 +61,7 @@ class Database(object):
         if not hasattr(self, 'r'):
             try:
                 self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+                self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True) #password='password')
                 if self.deletePrevdb:
                     print('Deleting the previous stored DB in Redis.')
                     self.r.flushdb()
@@ -969,7 +970,7 @@ class Database(object):
         2- IP is in the DB with data. Return dict.
         3- IP is not in the DB. Return False
         """
-        data = self.r.hget('IPsInfo', ip)
+        data = self.rcache.hget('IPsInfo', ip)
         if data or data == {}:
             # This means the IP was in the database, with or without data
             # Case 1 and 2
@@ -985,7 +986,7 @@ class Database(object):
 
     def getallIPs(self):
         """ Return list of all IPs in the DB """
-        data = self.r.hgetall('IPsInfo')
+        data = self.rcache.hgetall('IPsInfo')
         # data = json.loads(data)
         return data
 
@@ -1022,13 +1023,13 @@ class Database(object):
             # Its VERY important that the data of the first time we see an IP
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an IP exists or not
-            self.r.hset('IPsInfo', ip, '{}')
+            self.rcache.hset('IPsInfo', ip, '{}')
             # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
 
     def getIP(self, ip):
         """ Check if this ip is the hash of the profiles! """
-        data = self.r.hget('IPsInfo', ip)
+        data = self.rcache.hget('IPsInfo', ip)
         if data:
             return True
         else:
@@ -1086,38 +1087,28 @@ class Database(object):
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
-
         if not data:
             # This IP is not in the dictionary, add it first:
             self.setNewIP(ip)
             # Now get the data, which should be empty, but just in case
             data = self.getIPData(ip)
-
-        for key in iter(ipdata):
-            # print(f'Trying key {key}, for ip {ip}, with data {ipdata}')
-            # ipdata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
-            # ipdata can be {'VirusTotal': [1,2,3,4]}
             # I think we dont need this anymore of the conversion
             if type(data) == str:
                 # Convert the str to a dict
                 data = json.loads(data)
-
+        for key in iter(ipdata):
             data_to_store = ipdata[key]
-
-            # If there is data previously stored, check if we have
-            # this key already
+            # If there is data previously stored, check if we have this key already
             try:
-                # If the key is already stored, do not modify it
-                # Check if this decision is ok! or we should modify
-                # the data
+                # We modify value in any case, because there might be new info
                 _ = data[key]
             except KeyError:
-                # There is no data for they key so far. Add it
-                data[key] = data_to_store
-                newdata_str = json.dumps(data)
-                self.r.hset('IPsInfo', ip, newdata_str)
+                # There is no data for they key so far.
                 # Publish the changes
                 self.r.publish('ip_info_change', ip)
+            data[key] = data_to_store
+            newdata_str = json.dumps(data)
+            self.rcache.hset('IPsInfo', ip, newdata_str)
 
     def subscribe(self, channel):
         """ Subscribe to channel """
@@ -1148,6 +1139,8 @@ class Database(object):
         elif 'dns_info_change' in channel:
             pubsub.subscribe(channel)
         elif 'tw_closed' in channel:
+            pubsub.subscribe(channel)
+        elif 'core_messages' in channel:
             pubsub.subscribe(channel)
         return pubsub
 
@@ -1359,17 +1352,6 @@ class Database(object):
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid, timestamp='')
 
-    def add_http_timeline_line(self, profileid, twid, data, timestamp):
-        """ Add a http line to the time line of this profileid and twid """
-        self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
-        key = str(profileid + self.separator + twid + self.separator + 'timeline')
-        data = json.dumps(data)
-        mapping={}
-        mapping[data] = timestamp
-        self.r.zadd(key,mapping)
-        # Mark the tw as modified since the timeline line is new data in the TW
-        self.markProfileTWAsModified(profileid, twid, timestamp='')
-
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
@@ -1412,13 +1394,25 @@ class Database(object):
         """ Delete an entry from the list of zeek files """
         self.r.srem('zeekfiles', filename)
 
+    def delete_ips_from_IoC_ips(self, ips):
+        """
+        Delete old IPs from IoC
+        """
+        self.rcache.hdel('IoC_ips', *ips)
+
+    def delete_domains_from_IoC_ips(self, domains):
+        """
+        Delete old domains from IoC
+        """
+        self.rcache.hdel('IoC_domains', *domains)
+
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
         """
         Store a group of IPs in the db as they were obtained from an IoC source
         What is the format of ips_and_description?
         """
         if ips_and_description:
-            self.r.hmset('IoC_ips', ips_and_description)
+            self.rcache.hmset('IoC_ips', ips_and_description)
 
     def add_domains_to_IoC(self, domains_and_description: dict) -> None:
         """
@@ -1427,20 +1421,20 @@ class Database(object):
         What is the format of domains_and_description?
         """
         if domains_and_description:
-            self.r.hmset('IoC_domains', domains_and_description)
+            self.rcache.hmset('IoC_domains', domains_and_description)
 
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
         """
         Store in the DB 1 IP we read from an IoC source  with its description
         """
-        self.r.hset('IoC_ips', ip, description)
+        self.rcache.hset('IoC_ips', ip, description)
 
     def add_domain_to_IoC(self, domain: str, description: str) -> None:
         """
         Store in the DB 1 domain we read from an IoC source
         with its description
         """
-        self.r.hset('IoC_domains', domain, description)
+        self.rcache.hset('IoC_domains', domain, description)
 
     def add_malicious_ip(self, ip, profileid_twid):
         """
@@ -1494,12 +1488,26 @@ class Database(object):
         data = self.r.hget('DNSresolution', ip)
         return data
 
+    def get_IPs_in_IoC(self):
+        """
+        Get all IPs and their description from IoC_ips
+        """
+        data = self.rcache.hgetall('IoC_ips')
+        return data
+
+    def get_Domains_in_IoC(self):
+        """
+        Get all Domains and their description from IoC_domains
+        """
+        data = self.rcache.hgetall('IoC_domains')
+        return data
+
     def search_IP_in_IoC(self, ip: str) -> str:
         """
         Search in the dB of malicious IPs and return a
         description if we found a match
         """
-        ip_description = self.r.hget('IoC_ips', ip)
+        ip_description = self.rcache.hget('IoC_ips', ip)
         if ip_description == None:
             return False
         else:
@@ -1510,7 +1518,7 @@ class Database(object):
         Search in the dB of malicious domainss and return a
         description if we found a match
         """
-        domain_description = self.r.hget('IoC_domains', domain)
+        domain_description = self.rcache.hget('IoC_domains', domain)
         if domain_description == None:
             return False
         else:
@@ -1577,6 +1585,27 @@ class Database(object):
 
     def is_profile_malicious(self, profileid: str) -> str:
         data = self.r.hget(profileid, 'labeled_as_malicious')
+        return data
+
+    def set_malicious_file_info(self, file, data):
+        '''
+        Set/update time and/or e-tag for malicious file
+        '''
+        # data = self.get_malicious_file_info(file)
+        # for key in file_data:
+        #     data[key] = file_data[key]
+        data = json.dumps(data)
+        self.rcache.hset('malicious_files_info', file, data)
+
+    def get_malicious_file_info(self, file):
+        '''
+        Get malicious file info
+        '''
+        data = self.rcache.hget('malicious_files_info', file)
+        if data:
+            data = json.loads(data)
+        else:
+            data = ''
         return data
 
 
