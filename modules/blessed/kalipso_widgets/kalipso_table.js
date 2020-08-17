@@ -132,6 +132,7 @@
 
             if(timeline_json['timestamp']){
               var final_timeline = ''
+              var http_data = ''
 
               for (let [key, value] of Object.entries(timeline_json)) {
                 if(key.includes('critical warning')){
@@ -167,21 +168,25 @@
                 else if (pink_keywords .some(element => key.includes(element))){
                   value = key + ':'+color.rgb(219,112,147)(value);
                 }
-                if(value){
+                else if(key.includes('http_data')){
+                  http_data = value;
+                }
+                if(value && !http_data){
                   final_timeline += value +' ';}}
-                  row.push(final_timeline);
-                  timeline_data.push(row);
-            }
-            else{
-              var final_timeline = ''
+              row.push(final_timeline);
+              timeline_data.push(row);
+              if(http_data){
+                var http_timeline = ''
 
-              for (let [key, value] of Object.entries(timeline_json)) {
-                row = []
-                final_timeline = key.padStart(21+key.length) +': ' +color.rgb(51, 153, 255)(value);
-                row.push(final_timeline);
-                timeline_data.push(row);
-              }
-            }
+                for (let [key, value] of Object.entries(http_data)) {
+                    row = []
+                    http_timeline = key.padStart(21+key.length) +': ' +color.rgb(51, 153, 255)(value);
+                    row.push(http_timeline);
+                    timeline_data.push(row);
+                }
+            }}
+
+
           callback();
           },(err)=>{
             if(err) {console.log(err);} 
