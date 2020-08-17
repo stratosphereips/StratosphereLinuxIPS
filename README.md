@@ -130,6 +130,14 @@ Slips works at a flow level, instead of a packet level, gaining a high level vie
 #Slips processes
 When Slips is run, it spawns several child processes to manage the I/O, to profile attackers and to run the detection modules. It also connects to the Redis database to store all the information. In order to detect attacks, Slips runs its Kalipso interface.
 
+# The concept of time in slips
+
+- Every time we receive something, we update the TW modification time in a new redis ordered set (zset) (the old is not used). This set has the TW id and the time of last modification. The TW in this zset are never deleted.
+- We update the slips_internal_time, every time we receive anything
+- Every 5 seconds, slips.py, retrieves the sublist of TW from the zset that were modified in the last “time window width” (default 1hs).
+- This list of TW that were modified is used to print the statistics and as part of the set_host_ip check in slips.py.
+- In theory if a TW was not modifed in the last hs, then it should not appear in the list, which decreases until no TW was modified for some rounds, and we stop slips.
+
  
 ## Input Data 
 The input process reads flows of different types:
