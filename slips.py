@@ -337,7 +337,8 @@ if __name__ == '__main__':
                 if not modifiedTW_hostIP and args.interface:
                     if minimum_intervals_to_wait == 0:
                         hostIP = recognize_host_ip()
-                        __database__.set_host_ip(hostIP)
+                        if hostIP:
+                            __database__.set_host_ip(hostIP)
                         minimum_intervals_to_wait = limit_minimum_intervals_to_wait
                     minimum_intervals_to_wait -= 1
                 else:
