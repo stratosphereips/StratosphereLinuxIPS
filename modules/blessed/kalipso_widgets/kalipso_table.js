@@ -66,12 +66,16 @@
     Function to set ip info of the ip in the timeline to the ip info table
     */
     this.widget.rows.on('select', (item, index) => {
+    try{
       var timeline_line = stripAnsi(item.content)
       var ip = timeline_line.substring(
       timeline_line.lastIndexOf("[") + 1,
       timeline_line.lastIndexOf("]")
       )
-      ip_info_widget.setIPInfo(ip)
+      if(ip && !ip.includes("'")){
+      ip_info_widget.setIPInfo(ip)}
+    }
+    catch(err){}
     })
   }
 
