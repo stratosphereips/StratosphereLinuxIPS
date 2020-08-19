@@ -1474,7 +1474,7 @@ class Database(object):
             data = {}
         return data
 
-    def add_dns_resolution(self, query, answers):
+    def set_dns_resolution(self, query, answers):
         """
         Save in DB DNS name for each IP
         """
