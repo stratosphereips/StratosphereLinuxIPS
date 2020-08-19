@@ -1479,15 +1479,22 @@ class Database(object):
         Save in DB DNS name for each IP
         """
         for ans in answers:
-            self.r.hset('DNSresolution', ans, query)
+            data = self.get_dns_resolution(ans)
+            if query not in data:
+                data.append(query)
+            data = json.dumps(data)
+            self.r.hset('DNSresolution', ans, data)
 
     def get_dns_resolution(self, ip):
         """
-        Get DNS name of the IP
+        Get DNS name of the IP, a list
         """
         data = self.r.hget('DNSresolution', ip)
-        return data
-
+        if data:
+            data = json.loads(data)
+            return data
+        else:
+            return []
     def get_IPs_in_IoC(self):
         """
         Get all IPs and their description from IoC_ips
