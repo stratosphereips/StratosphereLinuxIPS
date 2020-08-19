@@ -123,7 +123,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                         # If we already have the VT for this ip, do not ask VT
                         # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
                         if (data or data == {}) and 'VirusTotal' not in data:
-                            vt_scores = self.get_ip_vt_scores(ip)
+                            vt_scores, passive_dns = self.get_ip_vt_data(ip)
                             vtdata = {"URL": vt_scores[0],
                                       "down_file": vt_scores[1],
                                       "ref_file": vt_scores[2],
@@ -132,11 +132,12 @@ class VirusTotalModule(Module, multiprocessing.Process):
                             data = {}
                             data["VirusTotal"] = vtdata
                             __database__.setInfoForIPs(ip, data)
+                            __database__.set_passive_dns(ip, passive_dns)
 
                         elif data and 'VirusTotal' in data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                            if (time.time() - data["VirusTotal"]['timestamp'])  > self.update_period:
-                                vt_scores = self.get_ip_vt_scores(ip)
+                            if (time.time() - data["VirusTotal"]['timestamp']) > self.update_period:
+                                vt_scores,passive_dns = self.get_ip_vt_data(ip)
                                 vtdata = {"URL": vt_scores[0],
                                           "down_file": vt_scores[1],
                                           "ref_file": vt_scores[2],
@@ -145,6 +146,8 @@ class VirusTotalModule(Module, multiprocessing.Process):
                                 data = {}
                                 data["VirusTotal"] = vtdata
                                 __database__.setInfoForIPs(ip, data)
+                                __database__.set_passive_dns(ip, passive_dns)
+
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -154,7 +157,18 @@ class VirusTotalModule(Module, multiprocessing.Process):
             self.print(str(inst), 0, 1)
             return True
 
-    def get_ip_vt_scores(self, ip: str):
+    def get_passive_dns(self,response):
+        """
+        Get passive dns from virustotal response
+        :param response: json dictionary with response data
+        """
+        response_key = 'resolutions'
+        if response_key in response:
+            return response[response_key]
+        else:
+            return ''
+
+    def get_ip_vt_data(self, ip: str):
         """
         Look if this IP was already processed. If not, perform API call to VirusTotal and return scores for each of
         the four processed categories. Response is cached in a dictionary. Private IPs always return (0, 0, 0, 0).
