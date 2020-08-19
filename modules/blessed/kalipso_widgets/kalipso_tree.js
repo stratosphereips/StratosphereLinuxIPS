@@ -36,6 +36,7 @@ class Tree{
         this.widget.on('select',node=>{
 		  	if(!node.name.includes('timewindow')){
 	    	  	var ip = node.name.replace(' (me)','')
+	    	    ip = ip.replace(' (old me)','')
 	    	  	ip = stripAnsi(ip)
 		      	this.current_ip = ip
 		      	this.ipinfo.setIPInfo(ip)
@@ -43,6 +44,7 @@ class Tree{
 	      	else{	
 		      	var ip  = stripAnsi(node.parent.name);
 		      	ip = ip.replace(' (me)','')
+		        ip = ip.replace(' (old me)','')
 		    	var timewindow = stripAnsi(node.name);
 		    	this.current_tw = timewindow
 		    	this.evidence.setEvidence(ip, timewindow)
@@ -84,11 +86,15 @@ class Tree{
           		var child = ips_with_profiles[i];
                 var sorted_tws = this.sortTWs(blockedIPsTWs,tw[0], child)
                 var new_child = child
-                async.each(hostIP,(ip, callback)=>{
-	            if(child.includes(ip))
+                var length_hostIP = hostIP.length
+                async.forEachOf(hostIP,(ip,ind, callback)=>{
+	            if(child.includes(ip) && ind == length_hostIP - 1 )
 	            	{
-	            	new_child = child+ ' (me)'
+	            	new_child = child + ' (me)'
 	             	}
+	             else if(child.includes(ip)){
+                    new_child = child+ ' (old me)'
+	                }
 
 	            callback();
 	            }, (err)=>{

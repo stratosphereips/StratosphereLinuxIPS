@@ -129,20 +129,57 @@ class ListTable{
             this.getIPInfo_dict(outTuple_ip)
             .then(ip_info_dict=>{
             this.redis_database.getDNSResolution(outTuple_ip).then(dns_resolution=>{
-              if(letters_string.trim().length > 40){
-                    var letter_string_chunks = this.chunkString(tuple_info[0].trim(),40);
+              var letter_string_chunks = this.chunkString(letters_string.trim(),40);
+              var length_dns_resolution = dns_resolution.length
+              var length_letter = letter_string_chunks.length
+              if(dns_resolution){
+              dns_resolution = JSON.parse(dns_resolution)}
+              if(length_dns_resolution >1 || length_letter >1){
+                  if(length_dns_resolution > length_letter){
+                      async.forEachOf(dns_resolution, (dns,ind,callback)=>{
+                          var row2 = [];
+                          if(ind == 0){
+                            row2.push(key,letter_string_chunks[ind],dns,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                          }
+                          else{
+                            if(typeof letter_string_chunks[ind] == 'undefined'){
+                               row2.push('','',dns_resolution[ind],'','','' ,'', '' , '');}
+                            else{
+                               row2.push('',letter_string_chunks[ind],dns,'','','' ,'', '' , '');}
+                               }
+
+                           data.push(row2);
+                           callback(null);
+                        }, (err)=>{
+                          if(err){console.log(err);}
+                        })
+                    }
+                  else if(length_letter > length_dns_resolution){
                     async.forEachOf(letter_string_chunks, (chunk,ind,callback)=>{
                       var row2 = [];
                       if(ind == 0){
-                        row2.push(key,chunk,dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                        if(typeof dns_resolution[ind] == 'undefined'){
+                            row2.push(key,chunk,'',Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                        }
+                        else{
+                            row2.push(key,chunk,dns_resolution[ind],Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                        }
                       }
-                      else{row2.push('',chunk,'','','','' ,'', '' , '');}
-                        data.push(row2);
-                        callback(null);
+                      else{
+                        if(typeof dns_resolution[ind]  == 'undefined'){
+                         row2.push('',chunk,'','','','' ,'', '' , '');
+                        }
+                        else{
+                        row2.push('',chunk,dns_resolution[ind],'','','' ,'', '' , '');}
+                      }
+                      data.push(row2);
+                      callback(null);
                     }, (err)=>{
                       if(err){console.log(err);}
                     })}
-              else{     
+                }
+              else{
+//              if( typeof dns_resolution === 'undefined'){dns_resolution = ''}
                 row.push(key,letters_string, dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
                 data.push(row)
               }
