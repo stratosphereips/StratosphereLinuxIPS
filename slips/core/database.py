@@ -1474,7 +1474,7 @@ class Database(object):
             data = {}
         return data
 
-    def add_dns_resolution(self, query, answers):
+    def set_dns_resolution(self, query, answers):
         """
         Save in DB DNS name for each IP
         """
@@ -1495,6 +1495,27 @@ class Database(object):
             return data
         else:
             return []
+
+    def set_passive_dns(self, ip, data):
+        """
+        Save in DB passive DNS from virus total
+        """
+        data = json.dumps(data)
+        self.r.hset('passiveDNS', ip, data)
+
+    def get_passive_dns(self, ip):
+        """
+        Get passive DNS from virus total
+        """
+        data = self.r.hget('passiveDNS', ip)
+        if data:
+            data = json.loads(data)
+            return data
+        else:
+            return ''
+
+
+
     def get_IPs_in_IoC(self):
         """
         Get all IPs and their description from IoC_ips
