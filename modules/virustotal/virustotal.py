@@ -166,13 +166,16 @@ class VirusTotalModule(Module, multiprocessing.Process):
             addr = ipaddress.ip_address(ip)
             if addr.is_private:
                 self.print("[" + ip + "] is private, skipping", 5, 3)
-                return 0, 0, 0, 0
+                scores = 0,0,0,0
+                return scores, ''
 
             # for unknown address, do the query
             response = self.api_query_(ip)
+            passive_dns = self.get_passive_dns(response)
+
             scores = interpret_response(response)
             self.counter += 1
-            return scores
+            return scores, passive_dns
         except Exception as inst:
             self.print('Problem in the check_ip()', 0, 1)
             self.print(str(type(inst)), 0, 1)
