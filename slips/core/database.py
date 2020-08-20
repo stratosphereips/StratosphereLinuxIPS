@@ -1486,8 +1486,11 @@ class Database(object):
         Get DNS name of the IP
         """
         data = self.r.hget('DNSresolution', ip)
-        return data
-
+        if data:
+            return data
+        else:
+            return ''
+        
     def get_IPs_in_IoC(self):
         """
         Get all IPs and their description from IoC_ips
