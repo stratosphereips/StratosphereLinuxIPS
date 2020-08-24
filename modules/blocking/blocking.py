@@ -43,7 +43,7 @@ class Module(Module, multiprocessing.Process):
         # - new_ip
         # - tw_modified
         # - evidence_added
-        self.c1 = __database__.subscribe('new_ip')
+        self.c1 = __database__.subscribe('new_blocking')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -84,13 +84,16 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
+                    # Delete rules in slipsloking chain
+                    os.system('sudo iptables -F slipsBlocking')
+                    # Delete slipsBlocking chain from iptables
+                    os.system('sudo iptables -X slipsBlocking')
                     return True
                 if message['channel'] == 'new_blocking':
                     # Example of printing the number of profiles in the
-                    # Database every second
-                    os.system('sudo iptables -A slipsBlock -s 12.12.21.12 -j DROP')
-                    data = len(__database__.getProfiles())
-                    self.print('Amount of profiles: {}'.format(data))
+                    ip_to_block = message['data']
+                    # Block this ip in iptables
+                    os.system('sudo iptables -A slipsBlocking -s ' + ip_to_block +' -j DROP')
 
         except KeyboardInterrupt:
             return True
