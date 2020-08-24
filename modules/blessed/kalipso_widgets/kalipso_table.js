@@ -29,12 +29,8 @@
     */
     this.widget.setData({headers:ip_tw, data:timeline_data})
   }
-  setDataIPInfo(data){
-    /*
-    To set IP info data in the widget
-    */
-    this.widget.setData({headers:['asn','geocountry','url','down','ref','com'],data:data})
-  }
+
+
   hide(){
     /*
     To hide the widget
@@ -78,41 +74,6 @@
     catch(err){}
     })
   }
-
-  setIPInfo(ip){
-    /*
-    Function to create dictionary with approptiate IP information
-    */
-    try{ 
-      this.redis_database.getIpInfo(ip).then(redis_IpInfo_data=>{
-        var ipInfo_data  = []
-        var ip_info_str = "";
-        var ip_info_dict = {'asn':'', 'geocountry':'', 'VirusTotal':{'URL':'', 'down':'','ref':'','com':''}}
-
-        var ipInfo_json = JSON.parse(redis_IpInfo_data);
-        var ip_values =  Object.values(ipInfo_json);
-        var ip_keys = Object.keys(ipInfo_json);
-
-        if (ipInfo_json.hasOwnProperty('VirusTotal')){
-          ip_info_dict['VirusTotal']['URL'] = this.round(ipInfo_json['VirusTotal']['URL'],5)
-          ip_info_dict['VirusTotal']['down'] = this.round(ipInfo_json['VirusTotal']['down_file'],5)
-          ip_info_dict['VirusTotal']['ref'] = this.round(ipInfo_json['VirusTotal']['ref_file'],5)
-          ip_info_dict['VirusTotal']['com'] = this.round(ipInfo_json['VirusTotal']['com_file'],5)
-        }
-        if(ipInfo_json.hasOwnProperty('asn')){
-          ip_info_dict['asn'] = ipInfo_json['asn']
-        }
-        if(ipInfo_json.hasOwnProperty('geocountry')){
-          ip_info_dict['geocountry'] = ipInfo_json['geocountry']
-        }
-        ipInfo_data.push([ip_info_dict['asn'], ip_info_dict['geocountry'], ip_info_dict['VirusTotal']['URL'], ip_info_dict['VirusTotal']['down'],ip_info_dict['VirusTotal']['ref'],ip_info_dict['VirusTotal']['com']])
-        this.setDataIPInfo(ipInfo_data)
-        this.screen.render()
-      })
-    }
-    catch (err){console.log(err)}
-  }
-
 
   setTimeline(ip, timewindow){
     /*
