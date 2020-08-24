@@ -1142,6 +1142,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'core_messages' in channel:
             pubsub.subscribe(channel)
+        elif 'new_blocking' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -1513,8 +1515,6 @@ class Database(object):
             return data
         else:
             return ''
-
-
 
     def get_IPs_in_IoC(self):
         """
