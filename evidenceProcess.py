@@ -140,6 +140,7 @@ class EvidenceProcess(multiprocessing.Process):
                             # if this profile was not already blocked in this TW
                             if not __database__.getBlockingRequest(profileid, twid):
                                 self.print('\tDETECTED IP: {} due to {}. Accumulated evidence: {}'.format(ip, description, accumulated_threat_level), 1,0)
+                                __database__.publish('new_blocking', ip)
                                 __database__.setBlockingRequest(profileid, twid)
                             
         except KeyboardInterrupt:
