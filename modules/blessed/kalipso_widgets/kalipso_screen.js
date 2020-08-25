@@ -96,7 +96,7 @@ class screen {
       /*
       Initialize ipinfo widget on screen and fill in data
       */
-      this.ipinfo_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 1, 0.6, 5,'IPInfo',[30,30,10,10,10,10], false])
+      this.ipinfo_widget = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 1, 0.6, 5,'IPInfo',[30,30,10,10,10,10], false])
     }
     initListtableGauge(){
       /*
