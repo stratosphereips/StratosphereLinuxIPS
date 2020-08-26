@@ -1237,6 +1237,8 @@ class Database(object):
         data['sbytes'] = sbytes
         data['appproto'] = appproto
         data['label'] = label
+        # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
+        data['modules_labels'] = {}
 
         # Convert to json string
         data = json.dumps(data)
