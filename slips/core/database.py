@@ -917,23 +917,42 @@ class Database(object):
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
         return data
 
-    def setBlockingRequest(self, profileid, twid):
-        """ Set the request to block this profile. found in this time window """
-        # Store the blockrequest in the TW itself
-        self.r.hset(profileid + self.separator + twid, 'BlockRequest', 'True')
-        # Add this profile and tw to the list of blocked
-        self.markProfileTWAsBlocked(profileid, twid)
+    def checkBlockedProfTW(self, profileid, twid):
+        """
+        Check if profile and timewindow is blocked
+        """
+        res = self.r.sismember('BlockedProfTW', profileid + self.separator + twid)
+        return res
 
-    def getBlockingRequest(self, profileid, twid):
-        """ Get the request to block this profile. found in this time window """
-        data = self.r.hget(profileid + self.separator + twid, 'BlockRequest')
-        return data
+    def add_module_label_to_flow(self, profileid, twid, uid, module_name, module_label):
+        """
+        Add a module label to the flow
+        """
+        flow = self.get_flow(profileid, twid, uid)
+        if flow:
+            data = json.loads(flow[uid])
+            # here we dont care if add new module lablel or changing existing one
+            data['modules_labels'][module_name] = module_label
+            data = json.dumps(data)
+            self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
+
+    def get_modules_labels_from_flow(self, profileid, twid, uid):
+        """
+        Get the label from the flow
+        """
+        flow = self.get_flow(profileid, twid, uid)
+        if flow:
+            data = json.loads(flow[uid])
+            labels = data['modules_labels']
+            return labels
+        else:
+            return {}
 
     def markProfileTWAsBlocked(self, profileid, twid):
         """ Add this profile and tw to the list of blocked """
         self.r.sadd('BlockedProfTW', profileid + self.separator + twid)
 
-    def getBlockedTW(self):
+    def getBlockedProfTW(self):
         """ Return all the list of blocked tws """
         data = self.r.smembers('BlockedProfTW')
         return data
