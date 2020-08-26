@@ -138,9 +138,10 @@ class EvidenceProcess(multiprocessing.Process):
                         detection_threshold_in_this_width = self.detection_threshold * self.width / 60
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
-                            if not __database__.getBlockingRequest(profileid, twid):
+                            if not __database__.checkBlockedProfTW(profileid, twid):
                                 self.print('\tDETECTED IP: {} due to {}. Accumulated evidence: {}'.format(ip, description, accumulated_threat_level), 1,0)
-                                __database__.setBlockingRequest(profileid, twid)
+                                __database__.publish('new_blocking', ip)
+                                __database__.markProfileTWAsBlocked(profileid, twid)
                             
         except KeyboardInterrupt:
             self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')

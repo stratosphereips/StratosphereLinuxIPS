@@ -112,10 +112,16 @@ class VirusTotalModule(Module, multiprocessing.Process):
                     return True
                 elif message['channel'] == 'new_flow' and message["type"] == "message":
                     data = message["data"]
-                    data= json.loads(data)
-                    data_flow = json.loads(data['flow'])
-                    data_flow_dict = json.loads(list(data_flow.values())[0])
-                    ip = data_flow_dict['daddr']
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    stime = data['stime']
+                    flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                    # there is only one pair key-value in the dictionary
+                    for key, value in flow.items():
+                        uid = key
+                        flow_data = json.loads(value)
+                    ip = flow_data['daddr']
                     #ip = data_flow_dict['saddr']
                     # The first message comes with data=1
                     if type(ip) == str:
