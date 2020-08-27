@@ -14,6 +14,7 @@ from datetime import datetime
 import socket
 import warnings
 from modules.UpdateManager.update_file_manager import UpdateFileManager
+import json
 
 version = '0.6.9'
 
@@ -115,6 +116,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     parser.add_argument('-cc', '--clearcache', help='Clear cache.', required=False, default=False, action='store_true')
+    parser.add_argument('-p', '--blocking', help='Block IPs that connect to the computer',required=False, default=False, action='store_true')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
@@ -151,6 +153,11 @@ if __name__ == '__main__':
     # Clear cache if the parameter was included
     if args.clearcache:
         clear_redis_cache_database()
+
+    # If the user wants to blocks, the user needs to give a permission to modify iptables
+    if args.blocking:
+        print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
+        os.system('sudo iptables -N slipsBlocking')
 
     """
     Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
@@ -233,6 +240,11 @@ if __name__ == '__main__':
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
+    # Convert string to list
+    to_ignore = eval(to_ignore)
+    # Disable blocking if was not asked
+    if not args.blocking:
+        to_ignore.append('blocking')
     try:
         for module_name in __modules__:
             if not module_name in to_ignore:

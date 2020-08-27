@@ -120,7 +120,7 @@ class ProfilerProcess(multiprocessing.Process):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default
-            self.label = 'normal'
+            self.label = 'unknown'
 
     def define_type(self, line):
         """ 

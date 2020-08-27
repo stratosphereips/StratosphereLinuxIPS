@@ -255,7 +255,7 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
 
                 # 1. Detections to block. The getBlockingRequest function return {True, False}
-                blocking = __database__.getBlockingRequest(profileid, twid)
+                blocking = __database__.checkBlockedProfTW(profileid, twid)
                 if blocking:
                     text_data = 'Was requested to block in this time window: ' + str(blocking)
                     self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='json')
@@ -380,7 +380,7 @@ class LogsProcess(multiprocessing.Process):
 
 
                 # 9. This should be last. Detections to block
-                blocking = __database__.getBlockingRequest(profileid, twid)
+                blocking = __database__.checkBlockedProfTW(profileid, twid)
                 if blocking:
                     self.addDataToFile(profilefolder + '/' + twlog, 'Was requested to block in this time window: ' + str(blocking), file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
@@ -412,7 +412,7 @@ class LogsProcess(multiprocessing.Process):
                 last_profile_id = profileid
 
             # Create the file of the blocked profiles and TW
-            TWforProfileBlocked = __database__.getBlockedTW()
+            TWforProfileBlocked = __database__.getBlockedProfTW()
             # Create the file of blocked data
             if TWforProfileBlocked:
                 self.addDataToFile('Blocked.txt', 'Detections:\n', file_mode='w+', data_type='text')
