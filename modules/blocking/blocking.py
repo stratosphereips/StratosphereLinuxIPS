@@ -48,9 +48,11 @@ class Module(Module, multiprocessing.Process):
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
+            self.platform_system = 'Darwin'
             # macos
             self.timeout = None
         elif platform.system() == 'Linux':
+            self.platform_system = 'Linux'
             # linux
             self.timeout = None
         else:
@@ -84,16 +86,23 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
-                    # Delete rules in slipsloking chain
-                    os.system('sudo iptables -F slipsBlocking')
-                    # Delete slipsBlocking chain from iptables
-                    os.system('sudo iptables -X slipsBlocking')
+                    if self.platform_system == 'Linux':
+                        # Delete rules in slipsloking chain
+                        os.system('sudo iptables -F slipsBlocking')
+                        # Delete slipsBlocking chain from iptables
+                        os.system('sudo iptables -X slipsBlocking')
+                    elif self.platform_system == 'Darwin':
+                        self.print('Mac OS blocking is not supported yet.')
                     return True
                 if message['channel'] == 'new_blocking':
-                    # Example of printing the number of profiles in the
                     ip_to_block = message['data']
                     # Block this ip in iptables
-                    os.system('sudo iptables -A slipsBlocking -s ' + ip_to_block +' -j DROP')
+                    if self.platform_system == 'Linux':
+                        # Blocking in Linux
+                        os.system('sudo iptables -A slipsBlocking -s ' + ip_to_block +' -j DROP')
+                    elif self.platform_system == 'Darwin':
+                        # Blocking in MacOS
+                        self.print('Mac OS blocking is not supported yet.')
 
         except KeyboardInterrupt:
             return True
