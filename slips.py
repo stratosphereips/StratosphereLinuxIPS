@@ -243,8 +243,8 @@ if __name__ == '__main__':
     to_ignore = read_configuration(config, 'modules', 'disable')
     # Convert string to list
     to_ignore = eval(to_ignore)
-    # Disable blocking if was not asked
-    if not args.blocking:
+    # Disable blocking if was not asked and if it is not interface
+    if not args.blocking or not args.interface:
         to_ignore.append('blocking')
     try:
         for module_name in __modules__:
