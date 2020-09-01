@@ -86,16 +86,23 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
-                    # Delete rules in slipsloking chain
-                    os.system('sudo iptables -F slipsBlocking')
-                    # Delete slipsBlocking chain from iptables
-                    os.system('sudo iptables -X slipsBlocking')
+                    if self.platform_system == 'Linux':
+                        # Delete rules in slipsloking chain
+                        os.system('sudo iptables -F slipsBlocking')
+                        # Delete slipsBlocking chain from iptables
+                        os.system('sudo iptables -X slipsBlocking')
+                    elif self.platform_system == 'Darwin':
+                        self.print('Mac OS blocking is not supported yet.')
                     return True
                 if message['channel'] == 'new_blocking':
-                    # Example of printing the number of profiles in the
                     ip_to_block = message['data']
                     # Block this ip in iptables
-                    os.system('sudo iptables -A slipsBlocking -s ' + ip_to_block +' -j DROP')
+                    if self.platform_system == 'Linux':
+                        # Blocking in Linux
+                        os.system('sudo iptables -A slipsBlocking -s ' + ip_to_block +' -j DROP')
+                    elif self.platform_system == 'Darwin':
+                        # Blocking in MacOS
+                        self.print('Mac OS blocking is not supported yet.')
 
         except KeyboardInterrupt:
             return True
