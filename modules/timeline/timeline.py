@@ -309,7 +309,8 @@ class Module(Module, multiprocessing.Process):
                         subject = alt_flow["subject"].split(",")[0]
                     else:
                         subject = '????'
-                    alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"]}
+                    # We put server_name instead of dns resolution
+                    alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"], 'dns_resolution': alt_flow['server_name']}
 
             elif activity:
                 alt_activity = {'info': 'No extra data from Zeek.'}
