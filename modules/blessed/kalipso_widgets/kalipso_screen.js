@@ -291,6 +291,12 @@ class screen {
       this.render()
     }
 
+    update_interface(){
+        /*
+        Function to update interface every two minutes
+        */
+        setInterval(this.o_hotkey_routine.bind(this), 120000)
+    }
     registerEvents(){
       /*
       Function to monitor all keypresses happening on the screen
