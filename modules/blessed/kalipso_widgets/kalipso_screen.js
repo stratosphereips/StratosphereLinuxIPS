@@ -263,17 +263,21 @@ class screen {
       for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
         this.hotkeys[widget_idx].hide()
       }
-      for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){              
+      for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
         this.mainPage[widget_idx].show()
       }
-      this.timeline_widget.setData([''],[['']])
+//      this.timeline_widget.setData([''],[['']])
       this.ipinfo_widget.setDataIPInfo([['','','','','','']])
       this.evidence_box_widget.setData('')
       this.tree_widget.getTreeDataFromDatabase() 
-      this.tree_widget.focus()
-      this.tree_widget.on()
-      this.tree_widget.widget.style.border.fg = 'magenta'
-      this.focus_widget = this.tree_widget
+      this.focus_widget.focus()
+      this.focus_widget.on()
+//      this.tree_widget.widget.style.border.fg = 'magenta'
+//      this.focus_widget = this.tree_widget
+      if(this.tree_widget.current_ip && this.tree_widget.current_tw){
+            this.evidence_box_widget.setEvidence(this.tree_widget.current_ip, this.tree_widget.current_tw)
+//            this.timeline_widget.setTimeline(this.tree_widget.current_ip, this.tree_widget.current_tw)
+      }
       this.render()
     }
 
