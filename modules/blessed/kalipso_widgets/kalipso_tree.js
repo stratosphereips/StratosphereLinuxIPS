@@ -101,11 +101,18 @@ class Tree{
 	            if(err)console.log(err)
 		        if(Object.keys(blockedIPsTWs).includes(child))
 		        	{
-		          	result[child] = { name:color.red(new_child), extended:false, children: sorted_tws};
+		        	if(this.current_ip.includes(child)){
+		          	    result[child] = { name:color.red(new_child), extended:true, children: sorted_tws};}
+		          	else{
+		          	result[child] = { name:color.red(new_child), extended:false, children: sorted_tws}}
 		        	}	
 		        else
 		        	{
-		          	result[child] = { name:new_child, extended:false, children: tw[0]};
+		        	if(this.current_ip.includes(child)){
+		          	    result[child] = { name:new_child, extended:true, children: tw[0]};}
+		          	else{
+		          	    result[child] = { name:new_child, extended:false, children: tw[0]};
+		          	}
 		        	}
 		        resolve (result)	})
 		      	}
