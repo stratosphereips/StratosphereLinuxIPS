@@ -116,7 +116,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     parser.add_argument('-cc', '--clearcache', help='Clear cache.', required=False, default=False, action='store_true')
-    parser.add_argument('-p', '--blocking', help='Block IPs that connect to the computer',required=False, default=False, action='store_true')
+    parser.add_argument('-p', '--blocking', help='Block IPs that connect to the computer. Supported only on Linux.',required=False, default=False, action='store_true')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
@@ -155,7 +155,8 @@ if __name__ == '__main__':
         clear_redis_cache_database()
 
     # If the user wants to blocks, the user needs to give a permission to modify iptables
-    if args.blocking:
+    # Also check if the user blocks on interface, does not make sense to block on files
+    if args.interface and args.blocking:
         print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
         os.system('sudo iptables -N slipsBlocking')
 
@@ -242,8 +243,8 @@ if __name__ == '__main__':
     to_ignore = read_configuration(config, 'modules', 'disable')
     # Convert string to list
     to_ignore = eval(to_ignore)
-    # Disable blocking if was not asked
-    if not args.blocking:
+    # Disable blocking if was not asked and if it is not interface
+    if not args.blocking or not args.interface:
         to_ignore.append('blocking')
     try:
         for module_name in __modules__:

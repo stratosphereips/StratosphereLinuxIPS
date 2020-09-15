@@ -1,3 +1,20 @@
+- 0.7.0 (published ?????)
+	- Slips
+		- Fixed portscan to eliminate detecction with IPs that were resolved with DNS
+		- VirusTotal module retrieves passive DNS information
+		- VirusTotal module retrieves asn information and stores it for IP if missing
+		- Storing multiple DNS resolutions per one IP
+		- Cleaned some function for blocking profile and timewindow
+		- Added function to put labels from modules to the flow
+		- Fixed the display of DNS resolutions up to 3 for the IP in the timeline
+		- Added functions to mark timewindow as finished
+		- Default label of the flow in the slips.conf is changed to 'unknown'
+		- Added a module to block IPs when running Slips on interface in Linux machine
+		- Added a parameter '-b' to enable blocking module on the interface in Linux machine
+	- Kalipso
+		- Automatic reload of the interface
+		- Changed the description of the previous host IP to 'old me' before was 'me'
+		- Chane the type of widget for IP info to listtable from blessed-contrib lib
 - 0.6.9 (published 2020/08/12)
 	- Slips
 		- Added cache for IPs from Threat Inelligence files

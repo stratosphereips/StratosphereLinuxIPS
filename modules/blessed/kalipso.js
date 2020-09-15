@@ -23,4 +23,5 @@ screen.init()
 screen.render()
 //Register all keypresses in the screen
 screen.registerEvents()
+screen.update_interface()
 

@@ -230,6 +230,10 @@ class Module(Module, multiprocessing.Process):
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
                     dns_resolution = __database__.get_dns_resolution(daddr)
+                    # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
+                    if len(dns_resolution) > 3:
+                        dns_resolution = dns_resolution[-1]
+
                     if not dns_resolution:
                         dns_resolution = '????'
                     activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to','dns_resolution':dns_resolution, 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
@@ -309,7 +313,8 @@ class Module(Module, multiprocessing.Process):
                         subject = alt_flow["subject"].split(",")[0]
                     else:
                         subject = '????'
-                    alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"]}
+                    # We put server_name instead of dns resolution
+                    alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"], 'dns_resolution': alt_flow['server_name']}
 
             elif activity:
                 alt_activity = {'info': 'No extra data from Zeek.'}
