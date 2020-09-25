@@ -106,25 +106,26 @@ class VirusTotalModule(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                message = self.c1.get_message(timeout=self.timeout)
-                # if timewindows are not updated for a long time we will stop slips automatically. 
-                if message['data'] == 'stop_process':
+                message_c1 = self.c1.get_message(timeout=self.timeout)
+                message_c2 = self.c2.get_message(timeout=self.timeout)
+                # if timewindows are not updated for a long time we will stop slips automatically.
+                if message_c1['data'] == 'stop_process' or message_c2['data'] == 'stop_process' :
                     return True
-                elif message['channel'] == 'new_flow' and message["type"] == "message":
-                    data = message["data"]
-                    data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    stime = data['stime']
-                    flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-                    # there is only one pair key-value in the dictionary
-                    for key, value in flow.items():
-                        uid = key
-                        flow_data = json.loads(value)
-                    ip = flow_data['daddr']
-                    #ip = data_flow_dict['saddr']
-                    # The first message comes with data=1
-                    if type(ip) == str:
+                if message_c1['channel'] == 'new_flow' and message_c1["type"] == "message":
+                    data = message_c1["data"]
+                    if type(data) == str:
+                        data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        stime = data['stime']
+                        flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                        # there is only one pair key-value in the dictionary
+                        for key, value in flow.items():
+                            uid = key
+                            flow_data = json.loads(value)
+                        ip = flow_data['daddr']
+                        #ip = data_flow_dict['saddr']
+                        # The first message comes with data=1
                         data = __database__.getIPData(ip)
                         # If we already have the VT for this ip, do not ask VT
                         # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
