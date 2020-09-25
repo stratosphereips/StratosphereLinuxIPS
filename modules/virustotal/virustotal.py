@@ -37,7 +37,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
-
+        self.c2 = __database__.subscribe('new_dns_flow')
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
         # Read the conf file
