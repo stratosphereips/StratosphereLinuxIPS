@@ -1356,9 +1356,10 @@ class Database(object):
         to_send['twid'] = twid
         to_send['flow'] = data
         to_send = json.dumps(to_send)
-        self.publish('new_dns', to_send)
-        self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
+        #publish a dns with its flow
+        self.publish('new_dns_flow', to_send)
 
+        self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
         # Check if the dns is detected by the threat intelligence
         self.publish('give_threat_intelligence', str(query) + '-' + str(profileid) + '-' + str(twid))
 
