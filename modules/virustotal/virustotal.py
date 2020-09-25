@@ -160,6 +160,47 @@ class VirusTotalModule(Module, multiprocessing.Process):
                                 __database__.setInfoForIPs(ip, data)
                                 __database__.set_passive_dns(ip, passive_dns)
 
+                if message_c2['channel'] == 'new_dns_flow' and message_c2["type"] == "message":
+                    data = message_c2["data"]
+                    # The first message comes with data=1
+                    if type(data) == str:
+                        data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                        domain = flow_data['query']
+                        data = __database__.getDomainData(domain)
+                        # If we already have the VT for this ip, do not ask VT
+                        # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
+                        if (data or data == {}) and 'VirusTotal' not in data:
+                            vt_scores, as_owner = self.get_domain_vt_data(domain)
+                            vtdata = {"URL": vt_scores[0],
+                                      "down_file": vt_scores[1],
+                                      "ref_file": vt_scores[2],
+                                      "com_file": vt_scores[3],
+                                      "timestamp": time.time()}
+                            data = {}
+                            data["VirusTotal"] = vtdata
+
+                            # Add asn if it is unknown or not in the IP info
+                            if 'asn' not in data or data['asn'] == 'Unknown':
+                                data['asn'] = as_owner
+
+                            __database__.setInfoForDomains(domain, data)
+
+                        elif data and 'VirusTotal' in data:
+                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                            if (time.time() - data["VirusTotal"]['timestamp']) > self.update_period:
+                                vt_scores, _ = self.get_domain_vt_data(domain)
+                                vtdata = {"URL": vt_scores[0],
+                                          "down_file": vt_scores[1],
+                                          "ref_file": vt_scores[2],
+                                          "com_file": vt_scores[3],
+                                          "timestamp": time.time()}
+                                data = {}
+                                data["VirusTotal"] = vtdata
+                                __database__.setInfoForDomains(domain, data)
+
         except KeyboardInterrupt:
             return True
         except Exception as inst:
