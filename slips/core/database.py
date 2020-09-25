@@ -966,7 +966,7 @@ class Database(object):
         2- Domain is in the DB with data. Return dict.
         3- Domain is not in the DB. Return False
         """
-        data = self.r.hget('DomainsInfo', domain)
+        data = self.rcache.hget('DomainsInfo', domain)
         if data or data == {}:
             # This means the domain was in the database, with or without data
             # Case 1 and 2
