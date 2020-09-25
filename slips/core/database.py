@@ -1143,6 +1143,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_dns' in channel:
             pubsub.subscribe(channel)
+        elif 'new_dns_flow' in channel:
+            pubsub.subscribe(channel)
         elif 'new_http' in channel:
             pubsub.subscribe(channel)
         elif 'new_ssl' in channel:
