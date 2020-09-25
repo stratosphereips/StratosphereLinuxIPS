@@ -255,7 +255,28 @@ class VirusTotalModule(Module, multiprocessing.Process):
             self.counter += 1
             return scores, passive_dns, as_owner
         except Exception as inst:
-            self.print('Problem in the check_ip()', 0, 1)
+            self.print('Problem in the get_ip_vt_data()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+
+    def get_domain_vt_data(self, domain: str):
+        """
+        Look if this domain was already processed. If not, perform API call to VirusTotal and return scores for each of
+        the four processed categories. Response is cached in a dictionary.
+        :param domain: Domain address to check
+        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
+        """
+
+        try:
+            # for unknown address, do the query
+            response = self.api_query_(domain)
+            as_owner = self.get_as_owner(response)
+            scores = interpret_response(response)
+            self.counter += 1
+            return scores, as_owner
+        except Exception as inst:
+            self.print('Problem in the get_domain_vt_data()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
