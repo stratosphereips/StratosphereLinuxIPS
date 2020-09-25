@@ -1022,7 +1022,7 @@ class Database(object):
             # Its VERY important that the data of the first time we see a domain
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
-            self.r.hset('DomainsInfo', domain, '{}')
+            self.rcache.hset('DomainsInfo', domain, '{}')
             # Publish that there is a new IP ready in the channel
             self.publish('new_dns', domain)
 
@@ -1092,7 +1092,7 @@ class Database(object):
                 # There is no data for they key so far. Add it
                 data[key] = data_to_store
                 newdata_str = json.dumps(data)
-                self.r.hset('DomainsInfo', domain, newdata_str)
+                self.rcache.hset('DomainsInfo', domain, newdata_str)
                 # Publish the changes
                 self.r.publish('dns_info_change', domain)
 
