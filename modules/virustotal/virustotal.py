@@ -37,7 +37,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
-
+        self.c2 = __database__.subscribe('new_dns_flow')
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
         # Read the conf file
@@ -106,25 +106,26 @@ class VirusTotalModule(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                message = self.c1.get_message(timeout=self.timeout)
-                # if timewindows are not updated for a long time we will stop slips automatically. 
-                if message['data'] == 'stop_process':
+                message_c1 = self.c1.get_message(timeout=self.timeout)
+                message_c2 = self.c2.get_message(timeout=self.timeout)
+                # if timewindows are not updated for a long time we will stop slips automatically.
+                if message_c1['data'] == 'stop_process' or message_c2['data'] == 'stop_process' :
                     return True
-                elif message['channel'] == 'new_flow' and message["type"] == "message":
-                    data = message["data"]
-                    data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    stime = data['stime']
-                    flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-                    # there is only one pair key-value in the dictionary
-                    for key, value in flow.items():
-                        uid = key
-                        flow_data = json.loads(value)
-                    ip = flow_data['daddr']
-                    #ip = data_flow_dict['saddr']
-                    # The first message comes with data=1
-                    if type(ip) == str:
+                if message_c1['channel'] == 'new_flow' and message_c1["type"] == "message":
+                    data = message_c1["data"]
+                    if type(data) == str:
+                        data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        stime = data['stime']
+                        flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                        # there is only one pair key-value in the dictionary
+                        for key, value in flow.items():
+                            uid = key
+                            flow_data = json.loads(value)
+                        ip = flow_data['daddr']
+                        #ip = data_flow_dict['saddr']
+                        # The first message comes with data=1
                         data = __database__.getIPData(ip)
                         # If we already have the VT for this ip, do not ask VT
                         # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
@@ -158,6 +159,47 @@ class VirusTotalModule(Module, multiprocessing.Process):
                                 data["VirusTotal"] = vtdata
                                 __database__.setInfoForIPs(ip, data)
                                 __database__.set_passive_dns(ip, passive_dns)
+
+                if message_c2['channel'] == 'new_dns_flow' and message_c2["type"] == "message":
+                    data = message_c2["data"]
+                    # The first message comes with data=1
+                    if type(data) == str:
+                        data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                        domain = flow_data['query']
+                        data = __database__.getDomainData(domain)
+                        # If we already have the VT for this ip, do not ask VT
+                        # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
+                        if (data or data == {}) and 'VirusTotal' not in data:
+                            vt_scores, as_owner = self.get_domain_vt_data(domain)
+                            vtdata = {"URL": vt_scores[0],
+                                      "down_file": vt_scores[1],
+                                      "ref_file": vt_scores[2],
+                                      "com_file": vt_scores[3],
+                                      "timestamp": time.time()}
+                            data = {}
+                            data["VirusTotal"] = vtdata
+
+                            # Add asn if it is unknown or not in the IP info
+                            if 'asn' not in data or data['asn'] == 'Unknown':
+                                data['asn'] = as_owner
+
+                            __database__.setInfoForDomains(domain, data)
+
+                        elif data and 'VirusTotal' in data:
+                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                            if (time.time() - data["VirusTotal"]['timestamp']) > self.update_period:
+                                vt_scores, _ = self.get_domain_vt_data(domain)
+                                vtdata = {"URL": vt_scores[0],
+                                          "down_file": vt_scores[1],
+                                          "ref_file": vt_scores[2],
+                                          "com_file": vt_scores[3],
+                                          "timestamp": time.time()}
+                                data = {}
+                                data["VirusTotal"] = vtdata
+                                __database__.setInfoForDomains(domain, data)
 
         except KeyboardInterrupt:
             return True
@@ -213,7 +255,28 @@ class VirusTotalModule(Module, multiprocessing.Process):
             self.counter += 1
             return scores, passive_dns, as_owner
         except Exception as inst:
-            self.print('Problem in the check_ip()', 0, 1)
+            self.print('Problem in the get_ip_vt_data()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+
+    def get_domain_vt_data(self, domain: str):
+        """
+        Look if this domain was already processed. If not, perform API call to VirusTotal and return scores for each of
+        the four processed categories. Response is cached in a dictionary.
+        :param domain: Domain address to check
+        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
+        """
+
+        try:
+            # for unknown address, do the query
+            response = self.api_query_(domain)
+            as_owner = self.get_as_owner(response)
+            scores = interpret_response(response)
+            self.counter += 1
+            return scores, as_owner
+        except Exception as inst:
+            self.print('Problem in the get_domain_vt_data()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)

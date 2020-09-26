@@ -966,7 +966,7 @@ class Database(object):
         2- Domain is in the DB with data. Return dict.
         3- Domain is not in the DB. Return False
         """
-        data = self.r.hget('DomainsInfo', domain)
+        data = self.rcache.hget('DomainsInfo', domain)
         if data or data == {}:
             # This means the domain was in the database, with or without data
             # Case 1 and 2
@@ -1022,7 +1022,7 @@ class Database(object):
             # Its VERY important that the data of the first time we see a domain
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
-            self.r.hset('DomainsInfo', domain, '{}')
+            self.rcache.hset('DomainsInfo', domain, '{}')
             # Publish that there is a new IP ready in the channel
             self.publish('new_dns', domain)
 
@@ -1092,7 +1092,7 @@ class Database(object):
                 # There is no data for they key so far. Add it
                 data[key] = data_to_store
                 newdata_str = json.dumps(data)
-                self.r.hset('DomainsInfo', domain, newdata_str)
+                self.rcache.hset('DomainsInfo', domain, newdata_str)
                 # Publish the changes
                 self.r.publish('dns_info_change', domain)
 
@@ -1142,6 +1142,8 @@ class Database(object):
         elif 'new_flow' in channel:
             pubsub.subscribe(channel)
         elif 'new_dns' in channel:
+            pubsub.subscribe(channel)
+        elif 'new_dns_flow' in channel:
             pubsub.subscribe(channel)
         elif 'new_http' in channel:
             pubsub.subscribe(channel)
@@ -1354,9 +1356,10 @@ class Database(object):
         to_send['twid'] = twid
         to_send['flow'] = data
         to_send = json.dumps(to_send)
-        self.publish('new_dns', to_send)
-        self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
+        #publish a dns with its flow
+        self.publish('new_dns_flow', to_send)
 
+        self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
         # Check if the dns is detected by the threat intelligence
         self.publish('give_threat_intelligence', str(query) + '-' + str(profileid) + '-' + str(twid))
 
