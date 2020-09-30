@@ -177,7 +177,7 @@ class screen {
       ['estDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],['NotEstDstIPsClient', 'totalflows', 'totalpkts','totalbytes'])
     }
 
-    n_hotkey_routine(){
+    f_hotkey_routine(){
       /*
       Display data for dstPortsClient established and not established
       */
@@ -353,9 +353,9 @@ class screen {
           this.c_hotkey_routine()
           this.focus_hotkey = true
         }
-        else if(key.name == 'n'){
+        else if(key.name == 'f'){
           this.helpbar.selectTab(5)
-          this.n_hotkey_routine()
+          this.f_hotkey_routine()
           this.focus_hotkey = true
         }
         else if(key.name == 'e'){
