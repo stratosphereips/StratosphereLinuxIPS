@@ -66,7 +66,7 @@ class ListBar{
                             },
 
                 'dstPortsClientIPs': {
-                  keys: ['n']
+                  keys: ['f']
                             },
                 
                 'OutTuples': {
