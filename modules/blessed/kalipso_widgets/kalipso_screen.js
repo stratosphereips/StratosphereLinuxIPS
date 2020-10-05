@@ -43,8 +43,9 @@ class screen {
       this.initCombine()
       this.initTuple()
       this.initListBar()
+      this.initHelpTable()
       this.initHotkeys()
-    	this.render()
+      this.render()
     }
     
     initScreen(){
@@ -64,6 +65,14 @@ class screen {
 		  screen: this.screen
 		});
 		
+    }
+    initHelpTable(){
+        /*
+        Initialize help bar on screen
+        */
+        this.helptable = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 1, 2, 5,'help',[10,30], false])
+        this.helptable.setHelp()
+        this.helptable.hide()
     }
 
     initListBar(){
@@ -142,7 +151,7 @@ class screen {
       /*
       Keep track of all hotkeys widgets
       */
-      this.hotkeys = [this.listtable1, this.listtable2, this.gauge1, this.gauge2, this.tuple_widget]
+      this.hotkeys = [this.listtable1, this.listtable2, this.gauge1, this.gauge2, this.tuple_widget, this.helptable]
     }
 
     e_hotkey_routine(){
@@ -378,8 +387,10 @@ class screen {
           this.o_hotkey_routine() 
           this.focus_hotkey = false
         }
-
-        
+        else if(key.name == 'r'){
+          this.helptable.show()
+          this.screen.render()
+        }
 
       })
     }

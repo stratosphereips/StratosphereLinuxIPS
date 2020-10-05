@@ -330,6 +330,11 @@ class ListTable{
       console.log(err)
     }
   }
+  setHelp(){
+    var data = [['hotkey', 'description'], ['-e',''],['-c',''],['-b',''],['-p',''],['-f',''],['-h',''],['-i',''],['-o',''],['-q',''],['-ESC','']]
+    this.setData(data)
+    this.screen.render()
+  }
 
 }
 module.exports = ListTable
