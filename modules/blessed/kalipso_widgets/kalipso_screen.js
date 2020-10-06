@@ -70,7 +70,7 @@ class screen {
         /*
         Initialize help bar on screen
         */
-        this.helptable = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 1, 2, 5,'help',[10,30], false])
+        this.helptable = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 0, 5.7, 6,'help'])
         this.helptable.setHelp()
         this.helptable.hide()
     }
@@ -186,7 +186,7 @@ class screen {
       ['estDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],['NotEstDstIPsClient', 'totalflows', 'totalpkts','totalbytes'])
     }
 
-    f_hotkey_routine(){
+    t_hotkey_routine(){
       /*
       Display data for dstPortsClient established and not established
       */
@@ -217,7 +217,7 @@ class screen {
 
     }
 
-    t_hotkey_routine(){
+    f_hotkey_routine(){
       /*
       Display data for DstPortsClient established and not established
       */
@@ -279,6 +279,13 @@ class screen {
       this.focus_widget.focus()
       this.focus_widget.on()
       this.render()
+    }
+    h_hotkey_routine(){
+        for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
+        this.mainPage[widget_idx].hide()
+      }
+        this.helptable.show()
+        this.render()
     }
 
     main_page_routine(){
@@ -347,9 +354,9 @@ class screen {
           this.main_page_routine()
           this.focus_hotkey = false
         }
-        else if(key.name == 't'){
+        else if(key.name == 'f'){
           this.helpbar.selectTab(4)
-          this.t_hotkey_routine()
+          this.f_hotkey_routine()
           this.focus_hotkey = true
         }
         else if(key.name == 'r'){
@@ -362,9 +369,9 @@ class screen {
           this.d_hotkey_routine()
           this.focus_hotkey = true
         }
-        else if(key.name == 'f'){
+        else if(key.name == 't'){
           this.helpbar.selectTab(5)
-          this.f_hotkey_routine()
+          this.t_hotkey_routine()
           this.focus_hotkey = true
         }
         else if(key.name == 'e'){
@@ -388,8 +395,9 @@ class screen {
           this.focus_hotkey = false
         }
         else if(key.name == 'h'){
-          this.helptable.show()
-          this.screen.render()
+          this.helpbar.selectTab(11)
+          this.h_hotkey_routine()
+          this.focus_hotkey = false
         }
 
       })

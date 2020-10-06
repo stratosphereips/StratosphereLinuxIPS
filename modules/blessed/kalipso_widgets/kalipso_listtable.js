@@ -332,7 +332,7 @@ class ListTable{
   }
   setHelp(){
     var data = [['hotkey', 'description'],
-                ['-h','help for hotkeys.']
+                ['-h','help for hotkeys.'],
                 ['-e','src ports when the IP of the profile acts as clien. Total flows, packets and bytes going IN a specific source port.'],
                 ['-d','dst IPs when the IP of the profile acts as client. Total flows, packets and bytes going TO a specific dst IP.'],
                 ['-r','dst ports when the IP of the profile as server. Total flows, packets and bytes going TO a specific dst IP.'],
@@ -342,9 +342,8 @@ class ListTable{
                 ['-y','inTuples ‘IP-port-protocol’combined together with inTuples Behavioral letters, DNS resolution  of the IP, ASN, geo country and Virus Total summary.'],
                 ['-o','manually update the tree with profiles and timewindows. Default is 2 minutes. '],
                 ['-q','exit the hotkey'],
-                ['-ESC',' exit Kalipso']]
+                ['-ESC','exit Kalipso']]
     this.setData(data)
-    this.screen.render()
   }
 
 }
