@@ -54,27 +54,27 @@ class ListBar{
                             },
 
                 'dstIPsClient': {
-                  keys: ['c']
+                  keys: ['d']
                             },
 
                 'dstPortServer': {
-                  keys: ['b']
+                  keys: ['r']
                             },
 
                 'dstPortsClient': {
-                  keys: ['p']
+                  keys: ['f']
                             },
 
                 'dstPortsClientIPs': {
-                  keys: ['n']
+                  keys: ['t']
                             },
                 
                 'OutTuples': {
-                  keys: ['h']
+                  keys: ['g']
                             },
 
                 'InTuples': {
-                  keys: ['i']
+                  keys: ['y']
                             },
            
                 'reload':{
@@ -87,7 +87,11 @@ class ListBar{
 
                 'quit kalipso':{
                   keys : ['ESC']
-                         },                 
+                         },
+
+                 'help':{
+                  keys: ['h']
+                 }
             }
     })
   }

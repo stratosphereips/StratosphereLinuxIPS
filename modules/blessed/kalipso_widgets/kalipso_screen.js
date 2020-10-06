@@ -43,8 +43,9 @@ class screen {
       this.initCombine()
       this.initTuple()
       this.initListBar()
+      this.initHelpTable()
       this.initHotkeys()
-    	this.render()
+      this.render()
     }
     
     initScreen(){
@@ -64,6 +65,14 @@ class screen {
 		  screen: this.screen
 		});
 		
+    }
+    initHelpTable(){
+        /*
+        Initialize help bar on screen
+        */
+        this.helptable = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 0, 5.7, 6,'help'])
+        this.helptable.setHelp()
+        this.helptable.hide()
     }
 
     initListBar(){
@@ -142,13 +151,16 @@ class screen {
       /*
       Keep track of all hotkeys widgets
       */
-      this.hotkeys = [this.listtable1, this.listtable2, this.gauge1, this.gauge2, this.tuple_widget]
+      this.hotkeys = [this.listtable1, this.listtable2, this.gauge1, this.gauge2, this.tuple_widget, this.helptable]
     }
 
     e_hotkey_routine(){
       /*
       Display data for SrcPortsClient established and not established
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
             this.mainPage[widget_idx].hide()
         }
@@ -162,10 +174,13 @@ class screen {
       return;
     }
 
-    c_hotkey_routine(){
+    d_hotkey_routine(){
       /*
       Display data for dstIPsClient established and not established
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
             this.mainPage[widget_idx].hide()
         }
@@ -177,10 +192,13 @@ class screen {
       ['estDstIPsClient', 'totalflows', 'totalpkts','totalbytes'],['NotEstDstIPsClient', 'totalflows', 'totalpkts','totalbytes'])
     }
 
-    n_hotkey_routine(){
+    t_hotkey_routine(){
       /*
       Display data for dstPortsClient established and not established
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
             this.mainPage[widget_idx].hide()
         }
@@ -192,10 +210,13 @@ class screen {
       ['estDstPortClient',  'IP','Number of connections'],['NotEstDstPortClient',  'IP','Number of packets'])
     }
 
-    b_hotkey_routine(){
+    r_hotkey_routine(){
       /*
       Display data for dstPortsServer established and not established
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
             this.mainPage[widget_idx].hide()
         }
@@ -208,10 +229,13 @@ class screen {
 
     }
 
-    p_hotkey_routine(){
+    f_hotkey_routine(){
       /*
       Display data for DstPortsClient established and not established
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
             this.mainPage[widget_idx].hide()
         }
@@ -223,10 +247,13 @@ class screen {
       ['estDstPortClient',  'totalflows','totalpkts','totalbytes'],['NotEstDstPortClient',  'totalflows','totalpkts','totalbytes'])
     }
 
-    h_hotkey_routine(){
+    g_hotkey_routine(){
       /*
       Function to fill and prepare the widget with out tuples  
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
           this.mainPage[widget_idx].hide()
       }
@@ -239,10 +266,13 @@ class screen {
       this.tuple_widget.focus()
       this.render()
     }
-    i_hotkey_routine(){
+    y_hotkey_routine(){
       /*
       Function to fill and prepare the widget with in tuples  
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
         this.mainPage[widget_idx].hide()
       }
@@ -270,6 +300,16 @@ class screen {
       this.focus_widget.focus()
       this.focus_widget.on()
       this.render()
+    }
+    h_hotkey_routine(){
+    for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
+        for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
+        this.mainPage[widget_idx].hide()
+      }
+        this.helptable.show()
+        this.render()
     }
 
     main_page_routine(){
@@ -338,24 +378,24 @@ class screen {
           this.main_page_routine()
           this.focus_hotkey = false
         }
-        else if(key.name == 'p'){
+        else if(key.name == 'f'){
           this.helpbar.selectTab(4)
-          this.p_hotkey_routine()
+          this.f_hotkey_routine()
           this.focus_hotkey = true
         }
-        else if(key.name == 'b'){
+        else if(key.name == 'r'){
           this.helpbar.selectTab(3)
-          this.b_hotkey_routine()
+          this.r_hotkey_routine()
           this.focus_hotkey = true
         }
-        else if(key.name == 'c'){
+        else if(key.name == 'd'){
           this.helpbar.selectTab(2)
-          this.c_hotkey_routine()
+          this.d_hotkey_routine()
           this.focus_hotkey = true
         }
-        else if(key.name == 'n'){
+        else if(key.name == 't'){
           this.helpbar.selectTab(5)
-          this.n_hotkey_routine()
+          this.t_hotkey_routine()
           this.focus_hotkey = true
         }
         else if(key.name == 'e'){
@@ -363,14 +403,14 @@ class screen {
           this.e_hotkey_routine()
           this.focus_hotkey = true
         }
-        else if(key.name == 'h'){
+        else if(key.name == 'g'){
           this.helpbar.selectTab(6)
-          this.h_hotkey_routine() 
+          this.g_hotkey_routine()
           this.focus_hotkey = false
         }
-        else if(key.name == 'i'){
+        else if(key.name == 'y'){
           this.helpbar.selectTab(7)
-          this.i_hotkey_routine()
+          this.y_hotkey_routine()
           this.focus_hotkey = false
         }
         else if(key.name == 'o'){
@@ -378,8 +418,11 @@ class screen {
           this.o_hotkey_routine() 
           this.focus_hotkey = false
         }
-
-        
+        else if(key.name == 'h'){
+          this.helpbar.selectTab(11)
+          this.h_hotkey_routine()
+          this.focus_hotkey = false
+        }
 
       })
     }
