@@ -62,19 +62,19 @@ class ListBar{
                             },
 
                 'dstPortsClient': {
-                  keys: ['p']
+                  keys: ['f']
                             },
 
                 'dstPortsClientIPs': {
-                  keys: ['f']
+                  keys: ['t']
                             },
                 
                 'OutTuples': {
-                  keys: ['h']
+                  keys: ['g']
                             },
 
                 'InTuples': {
-                  keys: ['i']
+                  keys: ['y']
                             },
            
                 'reload':{
