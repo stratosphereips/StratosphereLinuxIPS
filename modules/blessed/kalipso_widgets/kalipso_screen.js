@@ -158,6 +158,9 @@ class screen {
       /*
       Display data for SrcPortsClient established and not established
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
             this.mainPage[widget_idx].hide()
         }
@@ -175,6 +178,9 @@ class screen {
       /*
       Display data for dstIPsClient established and not established
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
             this.mainPage[widget_idx].hide()
         }
@@ -190,6 +196,9 @@ class screen {
       /*
       Display data for dstPortsClient established and not established
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
             this.mainPage[widget_idx].hide()
         }
@@ -205,6 +214,9 @@ class screen {
       /*
       Display data for dstPortsServer established and not established
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
             this.mainPage[widget_idx].hide()
         }
@@ -221,6 +233,9 @@ class screen {
       /*
       Display data for DstPortsClient established and not established
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
             this.mainPage[widget_idx].hide()
         }
@@ -236,6 +251,9 @@ class screen {
       /*
       Function to fill and prepare the widget with out tuples  
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
           this.mainPage[widget_idx].hide()
       }
@@ -252,6 +270,9 @@ class screen {
       /*
       Function to fill and prepare the widget with in tuples  
       */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
       for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
         this.mainPage[widget_idx].hide()
       }
@@ -281,6 +302,9 @@ class screen {
       this.render()
     }
     h_hotkey_routine(){
+    for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
         for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
         this.mainPage[widget_idx].hide()
       }
