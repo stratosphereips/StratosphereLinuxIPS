@@ -87,7 +87,11 @@ class ListBar{
 
                 'quit kalipso':{
                   keys : ['ESC']
-                         },                 
+                         },
+
+                 'help':{
+                  keys: ['h']
+                 }
             }
     })
   }
