@@ -203,6 +203,7 @@ class InputProcess(multiprocessing.Process):
                     # self.print('Adding cache and time of {}'.format(filename))
                     cache_lines[filename] = line
 
+            ################
             # Out of the for that check each Zeek file one by one
             # self.print('Out of the for.')
             # self.print('Cached lines: {}'.format(str(cache_lines)))
@@ -215,7 +216,7 @@ class InputProcess(multiprocessing.Process):
                 diff = diff.seconds
                 if diff >= self.bro_timeout:
                     # It has been 10 seconds without any file being updated. So stop the while
-                    # Get out and sto Zeek
+                    # Get out of the while and stop Zeek
                     break
 
             # Now read lines in order. The line with the smallest timestamp first
@@ -248,6 +249,9 @@ class InputProcess(multiprocessing.Process):
 
             # Get the new list of files. Since new files may have been created by Zeek while we were processing them.
             zeek_files = __database__.get_all_zeek_file()
+
+        ################
+        # Out of the while
 
         # We reach here after the break produced if no zeek files are being updated.
         # No more files to read. Close the files
