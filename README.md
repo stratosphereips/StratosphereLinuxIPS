@@ -138,7 +138,9 @@ When Slips is run, it spawns several child processes to manage the I/O, to profi
 - This list of TW that were modified is used to print the statistics and as part of the set_host_ip check in slips.py.
 - In theory if a TW was not modifed in the last hs, then it should not appear in the list, which decreases until no TW was modified for some rounds, and we stop slips.
 
- 
+## Timeout of traffic
+Zeek has a parameter called "tcp_inactivity_timeout". By default is 5 minutes, like in TCP. However, it may happen that due to different circonstances there is more than 5 minutes delay between packets (even in normal connections from Google). Since Slips usually has a time window width of 1hs, it can wait more until having the complete flow. For this reason Slips modifies the "tcp_inactivity_timeout" to be 1hs. 
+
 ## Input Data 
 The input process reads flows of different types:
 	-Pcap files (internally using Zeek) 
@@ -281,3 +283,7 @@ redis               3.2.1
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
 [Zeek]: https://www.zeek.org/download/index.html 
+
+
+
+
