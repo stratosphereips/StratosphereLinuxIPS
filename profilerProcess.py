@@ -46,9 +46,11 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.start(self.config)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
+        # 1st. Get the data from the interpreted columns
+        self.id_separator = __database__.getFieldSeparator()
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -56,7 +58,7 @@ class ProfilerProcess(multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
@@ -182,7 +184,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_idx['dpkts'] = False
         self.column_idx['bytes'] = False
         self.column_idx['sbytes'] = False
-        self.column_idx['dbytes'] = False  
+        self.column_idx['dbytes'] = False
 
         try:
             nline = line.strip().split(self.separator)
@@ -1190,7 +1192,7 @@ class ProfilerProcess(multiprocessing.Process):
         A flow has two IP addresses, so treat both of them correctly.
         """
         try:
-            # For now we only process the argus flows and the zeek conn logs
+            # Define which type of flows we are going to preocess
             if not self.column_values:
                 return True
             elif not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type'] and not 'nfdump' in self.column_values['type']:
@@ -1199,14 +1201,6 @@ class ProfilerProcess(multiprocessing.Process):
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
 
-            # The first change we should do is to take into account different types of flows. A normal netflow is what we have now, but we need all
-            # the zeek type of flows. So we need to adapt all the database?
-
-            #########
-            # 1st. Get the data from the interpreted columns
-            separator = __database__.getFieldSeparator()
-            # These are common to all types of flows
-            # No, older zeek has seconds instead of date.
             try:
                 # seconds.
                 starttime = self.column_values['starttime'].timestamp()
@@ -1235,7 +1229,7 @@ class ProfilerProcess(multiprocessing.Process):
             flow_type = self.column_values['type']
             saddr = self.column_values['saddr']
             daddr = self.column_values['daddr']
-            profileid = 'profile' + separator + str(saddr)
+            profileid = 'profile' + self.id_separator + str(saddr)
 
             if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                 dur = self.column_values['dur']
@@ -1304,7 +1298,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.print("The dstip profile was not here... create", 0, 7)
                         # Create a reverse profileid for managing the data going to the dstip.
                         # With the rev_profileid we can now work with data in relation to the dst ip
-                        rev_profileid = 'profile' + separator + str(daddr_as_obj)
+                        rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
                         __database__.addProfile(rev_profileid, starttime, self.width)
                         # Try again
                         rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
@@ -1325,7 +1319,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # Add the profile for the srcip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
                 __database__.addProfile(profileid, starttime, self.width)
                 # Add the profile for the dstip to the DB. If it already exists, nothing happens. So now rev_profileid is the id of the profile to work with. 
-                rev_profileid = 'profile' + separator + str(daddr_as_obj)
+                rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
                 __database__.addProfile(rev_profileid, starttime, self.width)
 
                 # For the profile from the srcip , find the id in the database of the tw where the flow belongs.
