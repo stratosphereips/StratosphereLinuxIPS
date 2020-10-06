@@ -331,7 +331,18 @@ class ListTable{
     }
   }
   setHelp(){
-    var data = [['hotkey', 'description'], ['-e',''],['-c',''],['-b',''],['-p',''],['-f',''],['-h',''],['-i',''],['-o',''],['-q',''],['-ESC','']]
+    var data = [['hotkey', 'description'],
+                ['-h','help for hotkeys.']
+                ['-e','src ports when the IP of the profile acts as clien. Total flows, packets and bytes going IN a specific source port.'],
+                ['-d','dst IPs when the IP of the profile acts as client. Total flows, packets bytes going TO a specific dst IP.'],
+                ['-r','dst ports when the IP of the profile as server. Total flows, packets bytes going TO a specific dst IP.'],
+                ['-p',''],
+                ['-f',''],
+                ['-h',''],
+                ['-i',''],
+                ['-o','manually update the tree with profiles and timewindows. Default is 2 minutes. '],
+                ['-q','exit the hotkey'],
+                ['-ESC',' exit Kalipso']]
     this.setData(data)
     this.screen.render()
   }
