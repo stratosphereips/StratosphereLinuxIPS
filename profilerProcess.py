@@ -3,27 +3,29 @@ import json
 from datetime import datetime
 from datetime import timedelta
 import sys
-from collections import OrderedDict
 import configparser
 from slips.core.database import __database__
 import time
 import ipaddress
 import traceback
-from typing import Tuple, Dict, Set, Callable
 import os
 import binascii
 import base64
 
 
-def timing(f):
-    """ Function to measure the time another function takes."""
-    def wrap(*args):
-        time1 = time.time()
-        ret = f(*args)
-        time2 = time.time()
-        print('Function took {:.3f} ms'.format((time2-time1)*1000.0))
-        return ret
-    return wrap
+def timeit(method):
+    def timed(*args, **kw):
+        ts = time.time()
+        result = method(*args, **kw)
+        te = time.time()
+        if 'log_time' in kw:
+            name = kw.get('log_name', method.__name__.upper())
+            kw['log_time'][name] = int((te - ts) * 1000)
+        else:
+            print(f'\t\033[1;32;40mFunction {method.__name__}() took {(te - ts) * 1000:2.2f}ms\033[00m')
+        return result
+    return timed
+
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -1273,9 +1275,6 @@ class ProfilerProcess(multiprocessing.Process):
                 except ipaddress.AddressValueError:
                     # Its a mac
                     return False
-
-            ##############
-            # For Adding the profile only now
 
             # 2nd. Check home network
             # Check if the ip received (src_ip) is part of our home network. We only crate profiles for our home network
