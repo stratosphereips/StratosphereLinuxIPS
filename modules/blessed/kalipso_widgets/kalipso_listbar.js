@@ -54,11 +54,11 @@ class ListBar{
                             },
 
                 'dstIPsClient': {
-                  keys: ['c']
+                  keys: ['d']
                             },
 
                 'dstPortServer': {
-                  keys: ['b']
+                  keys: ['r']
                             },
 
                 'dstPortsClient': {
