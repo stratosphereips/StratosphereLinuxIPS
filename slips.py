@@ -218,20 +218,19 @@ if __name__ == '__main__':
         print('You need to define an input source.')
         sys.exit(-1)
 
-
-
     ##########################
     # Creation of the threads
     ##########################
     from slips.core.database import __database__
-    # Output thread. This thread should be created first because it handles the output of the rest of the threads.
+    # Output thread. This thread should be created first because it handles
+    # the output of the rest of the threads.
     # Create the queue
     outputProcessQueue = Queue()
     # Create the output thread and start it
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
 
-    #Before starting update malicious file
+    # Before starting update malicious file
     update_malicious_file(outputProcessQueue,config)
     # Print the PID of the main slips process. We do it here because we needed the queue to the output process
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
