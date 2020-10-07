@@ -1848,7 +1848,6 @@ class ProfilerProcess(multiprocessing.Process):
                     elif self.input_type == 'nfdump':
                         self.process_nfdump_input(line)
                         self.add_flow_to_profile()
-                    return True
         except KeyboardInterrupt:
             self.print("Received {} lines.".format(rec_lines), 0, 1)
             return True
