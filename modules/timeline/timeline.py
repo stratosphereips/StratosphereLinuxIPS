@@ -166,6 +166,14 @@ class Module(Module, multiprocessing.Process):
                 if 'TCP' in proto or 'UDP' in proto:
                     warning_empty = ''
                     critical_warning_dport_name = ''
+                    dns_resolution = ''
+                    dns_resolution = __database__.get_dns_resolution(daddr)
+                    # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
+                    if len(dns_resolution) > 3:
+                        dns_resolution = dns_resolution[-1]
+
+                    if not dns_resolution:
+                        dns_resolution = '????'
 
                     # Check if the connection sent anything!
                     if not allbytes:
@@ -176,7 +184,9 @@ class Module(Module, multiprocessing.Process):
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
 
-                    activity = { 'timestamp': timestamp_human, 'dport_name/proto': dport_name+'/'+str(proto), 'preposition': 'from', 'saddr': saddr,'state': state.lower(), 'warning': warning_empty, 'Sent': allbytes-sbytes, 'Recv': sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
+                    #activity = { 'timestamp': timestamp_human, 'dport_name/proto': dport_name+'/'+str(proto), 'preposition': 'from', 'saddr': saddr,'state': state.lower(), 'warning': warning_empty, 'Sent': allbytes-sbytes, 'Recv': sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
+
+                    activity = { 'timestamp': timestamp_human, 'dport_name': dport_name, 'preposition': 'from','dns_resolution':dns_resolution, 'saddr': saddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
 
                 elif 'ICMP' in proto:
                     if type(sport) == int:
