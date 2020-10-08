@@ -1270,6 +1270,118 @@ class ProfilerProcess(multiprocessing.Process):
                     # Its a mac
                     return False
 
+            ##############
+            # 4th Define help functions for storing data
+            def store_features_going_out(profileid, twid, starttime):
+                """
+                This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
+                """
+                role = 'Client'
+                # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
+                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
+                    # Tuple
+                    tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
+                    # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
+                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
+                    # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
+                    # Add the out tuple
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
+                    # Add the dstip
+                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, role)
+                    # Add the dstport
+                    port_type = 'Dst'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    # Add the srcport
+                    port_type = 'Src'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    # Add the flow with all the fields interpreted
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                elif 'dns' in flow_type:
+                    __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
+                    # Add DNS resolution if there are answers for the query
+                    if answers:
+                        __database__.set_dns_resolution(query, answers)
+                elif flow_type == 'http':
+                    __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['httpversion'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
+                elif flow_type == 'ssl':
+                    __database__.add_out_ssl(profileid, twid, flow_type, uid, self.column_values['sslversion'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
+
+            def store_features_going_in(profileid, twid, starttime):
+                """
+                This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
+                """
+                role = 'Server'
+                # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
+                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
+                    # Tuple. We use the src ip, but the dst port still!
+                    tupleid = str(saddr_as_obj) + ':' + str(dport) + ':' + proto
+                    # Compute symbols.
+                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
+                    # Add the src tuple
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
+                    # Add the srcip
+                    __database__.add_ips(profileid, twid, saddr_as_obj, self.column_values, role)
+                    # Add the dstport
+                    port_type = 'Dst'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    # Add the srcport
+                    port_type = 'Src'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    # Add the flow with all the fields interpreted
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                    # No dns check going in. Probably ok.
+
+            def get_rev_profile(starttime, daddr_as_obj):
+                # Compute the rev_profileid
+                rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                if not rev_profileid:
+                    self.print("The dstip profile was not here... create", 0, 7)
+                    # Create a reverse profileid for managing the data going to the dstip.
+                    rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
+                    __database__.addProfile(rev_profileid, starttime, self.width)
+                    # Try again
+                    rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                    # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
+                rev_twid = self.get_timewindow(starttime, rev_profileid)
+                return rev_profileid, rev_twid
+
+            ##########################################
+            # 5th. Store the data according to the paremeters
+            # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
+            self.print("Storing data in the profile: {}".format(profileid), 0, 7)
+
+            # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
+            twid = self.get_timewindow(starttime, profileid)
+
+            if self.home_net:
+                # Home. Create profiles for home IPs only
+                if self.analysis_direction == 'out':
+                    # Home and only out. Check if the src IP is in the home. If yes, store only out
+                    if saddr_as_obj in self.home_net:
+                        __database__.addProfile(profileid, starttime, self.width)
+                        store_features_going_out(profileid, twid, starttime)
+                elif self.analysis_direction == 'all':
+                    # Home and all. Check if src IP or dst IP are in home. Store all
+                    if saddr_as_obj in self.home_net:
+                        __database__.addProfile(profileid, starttime, self.width)
+                        store_features_going_out(profileid, twid, starttime)
+                    if daddr_as_obj in self.home_net:
+                        rev_profileid, rev_twid = get_rev_profile(starttime, daddr_as_obj)
+                        store_features_going_in(rev_profileid, rev_twid, starttime)
+            elif not self.home_net:
+                # No home. Create profiles for everybody
+                if self.analysis_direction == 'out':
+                    # No home. Only store out
+                    __database__.addProfile(profileid, starttime, self.width)
+                    store_features_going_out(profileid, twid, starttime)
+                elif self.analysis_direction == 'all':
+                    # No home. Store all
+                    __database__.addProfile(profileid, starttime, self.width)
+                    rev_profileid, rev_twid = get_rev_profile(starttime, daddr_as_obj)
+                    store_features_going_out(profileid, twid, starttime)
+                    store_features_going_in(rev_profileid, rev_twid, starttime)
+
+            """
             # 2nd. Check home network
             # Check if the ip received (src_ip) is part of our home network. We only crate profiles for our home network
             if self.home_net and saddr_as_obj in self.home_net:
@@ -1327,72 +1439,6 @@ class ProfilerProcess(multiprocessing.Process):
                 # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
                 rev_twid = self.get_timewindow(starttime, rev_profileid)
 
-            ##############
-            # 4th Define help functions for storing data
-            def store_features_going_out(profileid, twid, starttime):
-                """
-                This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
-                """
-                role = 'Client'
-                # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
-                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
-                    # Tuple
-                    tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
-                    # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
-                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
-                    # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
-                    # Add the out tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
-                    # Add the dstip
-                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, role)
-                    # Add the dstport
-                    port_type = 'Dst'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
-                    # Add the srcport
-                    port_type = 'Src'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
-                    # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
-                elif 'dns' in flow_type:
-                    __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
-                    # Add DNS resolution if there are answers for the query
-                    if answers:
-                        __database__.set_dns_resolution(query, answers)
-                elif flow_type == 'http':
-                    __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['httpversion'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
-                elif flow_type == 'ssl':
-                    __database__.add_out_ssl(profileid, twid, flow_type, uid, self.column_values['sslversion'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
-
-            def store_features_going_in(profileid, twid, starttime):
-                """
-                This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
-                """
-                role = 'Server'
-                # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
-                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
-                    # Tuple
-                    tupleid = str(saddr_as_obj) + ':' + str(sport) + ':' + proto
-                    # Compute symbols.
-                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
-                    # Add the src tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
-                    # Add the srcip
-                    __database__.add_ips(profileid, twid, saddr_as_obj, self.column_values, role)
-                    # Add the dstport
-                    port_type = 'Dst'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
-                    # Add the srcport
-                    port_type = 'Src'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
-                    # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
-                    # No dns check going in. Probably ok.
-
-            ##########################################
-            # 5th. Store the data according to the paremeters
-            # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
-            self.print("Storing data in the profile: {}".format(profileid), 0, 7)
-
             # In which analysis mode are we?
             # Mode 'out'
             if self.analysis_direction == 'out':
@@ -1411,20 +1457,21 @@ class ProfilerProcess(multiprocessing.Process):
                     # IN features
                     store_features_going_in(rev_profileid, rev_twid, starttime)
                 else:
-                    """
-                    The flow is going TO homenet or FROM homenet or BOTH together.
-                    """
+                    # The flow is going TO homenet or FROM homenet or BOTH together.
                     # If we have a home net and the flow comes from it. Only the features going out of the IP
                     if saddr_as_obj in self.home_net:
                         store_features_going_out(profileid, twid, starttime)
                     # If we have a home net and the flow comes to it. Only the features going in of the IP
                     elif daddr_as_obj in self.home_net:
                         # The dstip was in the homenet. Add the src info to the dst profile
+                        self.print('Features going in')
                         store_features_going_in(rev_profileid, rev_twid, starttime)
                     # If the flow is going from homenet to homenet.
                     elif daddr_as_obj in self.home_net and saddr_as_obj in self.home_net:
                         store_features_going_out(profileid, twid, starttime)
+                        self.print('Features going in')
                         store_features_going_in(rev_profileid, rev_twid, starttime)
+            """
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print("Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
