@@ -213,7 +213,7 @@ class Module(Module, multiprocessing.Process):
                             activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                         elif '0x0303' in sport:
                             dport_name = 'ICMP Port Unreachable'
-                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'warning': 'unreachable port is'+ str(int(dport,16)), 'Size': allbytes_human}
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'warning': 'unreachable port is '+ str(int(dport,16)), 'Size': allbytes_human}
                         elif '0x000b' in sport:
                             activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
                         elif '0x0003' in sport:
