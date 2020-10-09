@@ -99,7 +99,7 @@ class Module(Module, multiprocessing.Process):
         Returns nothing
         '''
         type_evidence = 'ThreatIntelligenceBlacklist'
-        key = 'dstip' + ':' + ip + ':' + type_evidence
+        key = 'ip' + ':' + ip + ':' + type_evidence
         threat_level = 50
         confidence = 1
         description = 'Threat Intelligence. ' + ip_description
