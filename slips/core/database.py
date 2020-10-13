@@ -117,9 +117,6 @@ class Database(object):
                 # Publish that we have a new profile
                 self.publish('new_profile', ip)
 
-                # The IP of the profile should also be checked in case is malicious, but we only have the profileid, not the tw.
-                self.publish('give_threat_intelligence', str(ip) + '-' + str(profileid) + '-None')
-
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put('00|database|Error in addProfile in database.py')
             self.outputqueue.put('00|database|{}'.format(type(inst)))
@@ -456,9 +453,9 @@ class Database(object):
 
             # Ask the threat intelligence modules, using a channel, that we need info about this IP
             # The threat intelligence module will process it and store the info back in IPsInfo
-            # It doesn't matter if we are client or server, since the ip_as_obj changes accordingly from being the dstip for client to being the srcip for server. 
             # Therefore both ips will be checked for each flow
-            self.publish('give_threat_intelligence', str(ip_as_obj) + '-' + str(profileid) + '-' + str(twid))
+            self.publish('give_threat_intelligence', str(daddr) + '-' + str(profileid) + '-' + str(twid) + '-' + 'dstip')
+            self.publish('give_threat_intelligence', str(saddr) + '-' + str(profileid) + '-' + str(twid) + '-' + 'srcip')
 
             if role == 'Client':
                 # The profile corresponds to the src ip that received this flow
@@ -1360,8 +1357,8 @@ class Database(object):
         self.publish('new_dns_flow', to_send)
 
         self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
-        # Check if the dns is detected by the threat intelligence
-        self.publish('give_threat_intelligence', str(query) + '-' + str(profileid) + '-' + str(twid))
+        # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        self.publish('give_threat_intelligence', str(query) + '-' + str(profileid) + '-' + str(twid) + '-'+ ' ')
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
