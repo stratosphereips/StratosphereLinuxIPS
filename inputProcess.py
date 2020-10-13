@@ -43,6 +43,12 @@ class InputProcess(multiprocessing.Process):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.packet_filter = 'ip or not ip'
+        # Get tcp inactivity timeout
+        try:
+            self.tcp_inactivity_timeout = self.config.get('parameters', 'tcp_inactivity_timeout')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.tcp_inactivity_timeout = ''
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -371,7 +377,7 @@ class InputProcess(multiprocessing.Process):
 
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                command = "cd " + self.zeek_folder + "; "+self.zeek_or_bro +" -C " + bro_parameter + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                command = "cd " + self.zeek_folder + "; "+self.zeek_or_bro +" -C " +bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
                 # Run zeek.
                 os.system(command)
 
