@@ -92,17 +92,17 @@ class Module(Module, multiprocessing.Process):
         data = json.dumps(domain_location)
         __database__.add_malicious_domain(domain, data)
 
-    def set_evidence_ip(self, ip, ip_description='', profileid='', twid=''):
+    def set_evidence_ip(self, ip, ip_description='', profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
         If profileid is None, do not set an Evidence
         Returns nothing
         '''
-        type_evidence = 'ThreatIntelligenceBlacklist'
-        key = 'ip' + ':' + ip + ':' + type_evidence
+        type_evidence = 'ThreatIntelligenceBlacklistIP'
+        key = ip_state + ':' + ip + ':' + type_evidence
         threat_level = 50
         confidence = 1
-        description = 'Threat Intelligence. ' + ip_description
+        description = 'TI ' + ip_description
         if not twid:
             twid = ''
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
@@ -113,11 +113,11 @@ class Module(Module, multiprocessing.Process):
         If profileid is None, do not set an Evidence
         Returns nothing
         '''
-        type_evidence = 'ThreatIntelligenceBlacklist'
+        type_evidence = 'ThreatIntelligenceBlacklistDomain'
         key = 'dstdomain' + ':' + domain + ':' + type_evidence
         threat_level = 50
         confidence = 1
-        description = 'Threat Intelligence. ' + domain_description
+        description = 'TI ' + domain_description
         if not twid:
             twid = ''
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
@@ -156,6 +156,7 @@ class Module(Module, multiprocessing.Process):
                     new_data = data[0]
                     profileid = data[1]
                     twid = data[2]
+                    ip_state = data[3]
                     # Check if the new data is an ip or a domain
                     try:
                         # Just try to see if it has the format of an ipv4 or ipv6
@@ -171,9 +172,12 @@ class Module(Module, multiprocessing.Process):
                             ip_data = {}
                             # Maybe we should change the key to 'status' or something like that.
                             ip_data['Malicious'] = ip_description
+                            ip_description = json.loads(ip_description)
+                            ip_info = ip_description['description']
+                            ip_source = ip_description['source']
                             __database__.setInfoForIPs(new_ip, ip_data)
                             self.add_maliciousIP(new_ip, profileid, twid)
-                            self.set_evidence_ip(new_ip, ip_description, profileid, twid)
+                            self.set_evidence_ip(new_ip, ip_source, profileid, twid, ip_state)
                     except ValueError:
                         # This is not an IP, then should be a domain
                         new_domain = new_data
