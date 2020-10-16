@@ -3,27 +3,29 @@ import json
 from datetime import datetime
 from datetime import timedelta
 import sys
-from collections import OrderedDict
 import configparser
 from slips.core.database import __database__
 import time
 import ipaddress
 import traceback
-from typing import Tuple, Dict, Set, Callable
 import os
 import binascii
 import base64
 
 
-def timing(f):
-    """ Function to measure the time another function takes."""
-    def wrap(*args):
-        time1 = time.time()
-        ret = f(*args)
-        time2 = time.time()
-        print('Function took {:.3f} ms'.format((time2-time1)*1000.0))
-        return ret
-    return wrap
+def timeit(method):
+    def timed(*args, **kw):
+        ts = time.time()
+        result = method(*args, **kw)
+        te = time.time()
+        if 'log_time' in kw:
+            name = kw.get('log_name', method.__name__.upper())
+            kw['log_time'][name] = int((te - ts) * 1000)
+        else:
+            print(f'\t\033[1;32;40mFunction {method.__name__}() took {(te - ts) * 1000:2.2f}ms\033[00m')
+        return result
+    return timed
+
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -44,9 +46,11 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.start(self.config)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
+        # 1st. Get the data from the interpreted columns
+        self.id_separator = __database__.getFieldSeparator()
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -54,7 +58,7 @@ class ProfilerProcess(multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
@@ -67,7 +71,8 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             self.home_net = ipaddress.ip_network(self.config.get('parameters', 'home_network'))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
+            # There is a conf, but there is no option, or no section or no
+            # configuration file specified
             self.home_net = False
 
         # Get the time window width, if it was not specified as a parameter
@@ -81,19 +86,20 @@ class ProfilerProcess(multiprocessing.Process):
                     # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
                     self.width = 9999999999
             except configparser.NoOptionError:
-                # By default we use 300 seconds, 5minutes
-                self.width = 300.0
+                # By default we use 3600 seconds, 1hs
+                self.width = 3600
             except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-                # There is a conf, but there is no option, or no section or no configuration file specified
-                self.width = 300.0
+                # There is a conf, but there is no option, or no section or no
+                # configuration file specified
+                self.width = 3600
         # Limit any width to be > 0. By default we use 300 seconds, 5minutes
         elif self.width < 0:
-            self.width = 300.0
+            self.width = 3600
         else:
-            self.width = 300.0
+            self.width = 3600
         # Report the time window width
         if self.width == 9999999999:
-            self.outputqueue.put("10|profiler|Time Windows Width used: Only 1 time windows. Dates in the names of files are 100 years in the past.".format(self.width))
+            self.outputqueue.put("10|profiler|Time Windows Width used: {} seconds. Only 1 time windows. Dates in the names of files are 100 years in the past.".format(self.width))
         else:
             self.outputqueue.put("10|profiler|Time Windows Width used: {} seconds.".format(self.width))
 
@@ -118,7 +124,7 @@ class ProfilerProcess(multiprocessing.Process):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default
-            self.label = 'normal'
+            self.label = 'unknown'
 
     def define_type(self, line):
         """ 
@@ -178,7 +184,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_idx['dpkts'] = False
         self.column_idx['bytes'] = False
         self.column_idx['sbytes'] = False
-        self.column_idx['dbytes'] = False  
+        self.column_idx['dbytes'] = False
 
         try:
             nline = line.strip().split(self.separator)
@@ -205,6 +211,10 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_idx['pkts'] = nline.index(field)
                 elif 'totbytes' in field.lower():
                     self.column_idx['bytes'] = nline.index(field)
+                elif 'srcbytes' in field.lower():
+                    self.column_idx['sbytes'] = nline.index(field)
+
+
             # Some of the fields were not found probably, 
             # so just delete them from the index if their value is False. 
             # If not we will believe that we have data on them
@@ -899,33 +909,33 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             pass
         try:
-            self.column_values['pkts'] = nline[self.column_idx['pkts']]
+            self.column_values['pkts'] = int(nline[self.column_idx['pkts']])
         except KeyError:
             pass
         try:
-            self.column_values['spkts'] = nline[self.column_idx['spkts']]
+            self.column_values['spkts'] = int(nline[self.column_idx['spkts']])
         except KeyError:
             pass
         try:
-            self.column_values['dpkts'] = nline[self.column_idx['dpkts']]
+            self.column_values['dpkts'] = int(nline[self.column_idx['dpkts']])
         except KeyError:
             pass
         try:
-            self.column_values['bytes'] = nline[self.column_idx['bytes']]
+            self.column_values['bytes'] = int(nline[self.column_idx['bytes']])
         except KeyError:
             pass
         try:
-            self.column_values['sbytes'] = nline[self.column_idx['sbytes']]
+            self.column_values['sbytes'] = int(nline[self.column_idx['sbytes']])
         except KeyError:
             pass
         try:
-            self.column_values['dbytes'] = nline[self.column_idx['dbytes']]
+            self.column_values['dbytes'] = int(nline[self.column_idx['dbytes']])
         except KeyError:
             pass
 
     def process_nfdump_input(self, line):
         """
-        Process the line and extract columns for argus
+        Process the line and extract columns for nfdump
         """
         self.column_values = {}
         self.column_values['starttime'] = False
@@ -945,7 +955,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values['bytes'] = False
         self.column_values['sbytes'] = False
         self.column_values['dbytes'] = False
-        self.column_values['type'] = 'argus'
+        self.column_values['type'] = 'nfdump'
 
         # Read the lines fast
         nline = line.strip().split(self.separator)
@@ -1238,34 +1248,23 @@ class ProfilerProcess(multiprocessing.Process):
                 except KeyError:
                     self.column_values['filesize'] = ''
 
-
-
     def add_flow_to_profile(self):
-        """ 
+        """
         This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
         It includes checking if the profile exists and how to put the flow correctly.
-        It interprets each colum 
-        
+        It interprets each colum
         A flow has two IP addresses, so treat both of them correctly.
         """
         try:
-            # For now we only process the argus flows and the zeek conn logs
+            # Define which type of flows we are going to preocess
             if not self.column_values:
                 return True
-            elif not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type'] and not 'irc_features' in self.column_values['type']:
+            elif not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type'] and not 'nfdump' in self.column_values['type'] and not 'irc_features' in self.column_values['type']:
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
 
-            # The first change we should do is to take into account different types of flows. A normal netflow is what we have now, but we need all
-            # the zeek type of flows. So we need to adapt all the database?
-
-            #########
-            # 1st. Get the data from the interpreted columns
-            separator = __database__.getFieldSeparator()
-            # These are common to all types of flows
-            # No, older zeek has seconds instead of date.
             try:
                 # seconds.
                 starttime = self.column_values['starttime'].timestamp()
@@ -1292,12 +1291,13 @@ class ProfilerProcess(multiprocessing.Process):
                 # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
                 # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
+
             flow_type = self.column_values['type']
             saddr = self.column_values['saddr']
             daddr = self.column_values['daddr']
-            profileid = 'profile' + separator + str(saddr)
+            profileid = 'profile' + self.id_separator + str(saddr)
 
-            if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
+            if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                 dur = self.column_values['dur']
                 sport = self.column_values['sport']
                 dport = self.column_values['dport']
@@ -1337,81 +1337,21 @@ class ProfilerProcess(multiprocessing.Process):
                     return False
 
             ##############
-            # For Adding the profile only now
-
-            # 2nd. Check home network
-            # Check if the ip received (src_ip) is part of our home network. We only crate profiles for our home network
-            if self.home_net and saddr_as_obj in self.home_net:
-                # Its in our Home network
-
-                # The steps for adding a flow in a profile should be
-                # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
-                # The width is unique for all the timewindow in this profile.
-                # Also we only need to pass the width for registration in the DB. Nothing operational
-                __database__.addProfile(profileid, starttime, self.width)
-
-                # 3. For this profile, find the id in the database of the tw where the flow belongs.
-                twid = self.get_timewindow(starttime, profileid)
-
-            elif self.home_net and saddr_as_obj not in self.home_net:
-                # The src ip is not in our home net
-
-                # Check that the dst IP is in our home net. Like the flow is 'going' to it.
-                if daddr_as_obj in self.home_net:
-                    self.print("Flow with dstip in homenet: srcip {}, dstip {}".format(saddr_as_obj, daddr_as_obj), 0, 7)
-                    # The dst ip is in the home net. So register this as going to it
-                    # 1. Get the profile of the dst ip.
-                    rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
-                    if not rev_profileid:
-                        # We do not have yet the profile of the dst ip that is in our home net
-                        self.print("The dstip profile was not here... create", 0, 7)
-                        # Create a reverse profileid for managing the data going to the dstip.
-                        # With the rev_profileid we can now work with data in relation to the dst ip
-                        rev_profileid = 'profile' + separator + str(daddr_as_obj)
-                        __database__.addProfile(rev_profileid, starttime, self.width)
-                        # Try again
-                        rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
-                        # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
-                        rev_twid = self.get_timewindow(starttime, rev_profileid)
-                        if not rev_profileid:
-                            # Too many errors. We should not be here
-                            return False
-                    self.print("Profile for dstip {} : {}".format(daddr_as_obj, profileid), 0, 7)
-                    # 2. For this profile, find the id in the databse of the tw where the flow belongs.
-                    rev_twid = self.get_timewindow(starttime, profileid)
-                elif daddr_as_obj not in self.home_net:
-                    # The dst ip is also not part of our home net. So ignore completely
-                    return False
-            elif not self.home_net:
-                # We don't have a home net, so create profiles for everyone. 
-
-                # Add the profile for the srcip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
-                __database__.addProfile(profileid, starttime, self.width)
-                # Add the profile for the dstip to the DB. If it already exists, nothing happens. So now rev_profileid is the id of the profile to work with. 
-                rev_profileid = 'profile' + separator + str(daddr_as_obj)
-                __database__.addProfile(rev_profileid, starttime, self.width)
-
-                # For the profile from the srcip , find the id in the database of the tw where the flow belongs.
-                twid = self.get_timewindow(starttime, profileid)
-                # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
-                rev_twid = self.get_timewindow(starttime, rev_profileid)
-
-            ##############
             # 4th Define help functions for storing data
-            def store_features_going_out(profileid, twid):
+            def store_features_going_out(profileid, twid, starttime):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
                 """
                 role = 'Client'
-                #self.print(f'Storing features going out for profile {profileid} and tw {twid}')
-                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
+                # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
+                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                     # Tuple
                     tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
                     # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
                     # Add the out tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role)
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
                     # Add the dstip
                     __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, role)
                     # Add the dstport
@@ -1428,25 +1368,25 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                     # Add DNS resolution if there are answers for the query
                     if answers:
-                        __database__.add_dns_resolution(query, answers)
+                        __database__.set_dns_resolution(query, answers)
                 elif flow_type == 'http':
                     __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['httpversion'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
                 elif flow_type == 'ssl':
                     __database__.add_out_ssl(profileid, twid, flow_type, uid, self.column_values['sslversion'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
 
-            def store_features_going_in(profileid, twid):
+            def store_features_going_in(profileid, twid, starttime):
                 """
                 This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
                 """
                 role = 'Server'
-                #self.print(f'Storing features going in for profile {profileid} and tw {twid}')
-                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
-                    # Tuple
-                    tupleid = str(saddr_as_obj) + ':' + str(sport) + ':' + proto
+                # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
+                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
+                    # Tuple. We use the src ip, but the dst port still!
+                    tupleid = str(saddr_as_obj) + ':' + str(dport) + ':' + proto
                     # Compute symbols.
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
                     # Add the src tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role)
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
                     # Add the srcip
                     __database__.add_ips(profileid, twid, saddr_as_obj, self.column_values, role)
                     # Add the dstport
@@ -1457,44 +1397,57 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                    # No dns check going in. Probably ok.
+
+            def get_rev_profile(starttime, daddr_as_obj):
+                # Compute the rev_profileid
+                rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                if not rev_profileid:
+                    self.print("The dstip profile was not here... create", 0, 7)
+                    # Create a reverse profileid for managing the data going to the dstip.
+                    rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
+                    __database__.addProfile(rev_profileid, starttime, self.width)
+                    # Try again
+                    rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                    # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
+                rev_twid = self.get_timewindow(starttime, rev_profileid)
+                return rev_profileid, rev_twid
 
             ##########################################
             # 5th. Store the data according to the paremeters
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
             self.print("Storing data in the profile: {}".format(profileid), 0, 7)
 
-            # In which analysis mode are we?
-            # Mode 'out'
-            if self.analysis_direction == 'out':
-                # Only take care of the stuff going out. Here we don't keep track of the stuff going in
-                # If we have a home net and the flow comes from it, or if we don't have a home net and we are in out out.
-                if (self.home_net and saddr_as_obj in self.home_net) or not self.home_net:
-                    store_features_going_out(profileid, twid)
+            # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
+            twid = self.get_timewindow(starttime, profileid)
 
-            # Mode 'all'
-            elif self.analysis_direction == 'all':
-                # Take care of both the stuff going out and in. In case the profile is for the srcip and for the dstip
-                if not self.home_net:
-                    # If we don't have a home net, just try to store everything coming OUT and IN to the IP
-                    # Out features
-                    store_features_going_out(profileid, twid)
-                    # IN features
-                    store_features_going_in(rev_profileid, rev_twid)
-                else:
-                    """
-                    The flow is going TO homenet or FROM homenet or BOTH together.
-                    """
-                    # If we have a home net and the flow comes from it. Only the features going out of the IP
+            if self.home_net:
+                # Home. Create profiles for home IPs only
+                if self.analysis_direction == 'out':
+                    # Home and only out. Check if the src IP is in the home. If yes, store only out
                     if saddr_as_obj in self.home_net:
-                        store_features_going_out(profileid, twid)
-                    # If we have a home net and the flow comes to it. Only the features going in of the IP
-                    elif daddr_as_obj in self.home_net:
-                        # The dstip was in the homenet. Add the src info to the dst profile
-                        store_features_going_in(rev_profileid, rev_twid)
-                    # If the flow is going from homenet to homenet.
-                    elif daddr_as_obj in self.home_net and saddr_as_obj in self.home_net:
-                        store_features_going_out(profileid, twid)
-                        store_features_going_in(rev_profileid, rev_twid)
+                        __database__.addProfile(profileid, starttime, self.width)
+                        store_features_going_out(profileid, twid, starttime)
+                elif self.analysis_direction == 'all':
+                    # Home and all. Check if src IP or dst IP are in home. Store all
+                    if saddr_as_obj in self.home_net:
+                        __database__.addProfile(profileid, starttime, self.width)
+                        store_features_going_out(profileid, twid, starttime)
+                    if daddr_as_obj in self.home_net:
+                        rev_profileid, rev_twid = get_rev_profile(starttime, daddr_as_obj)
+                        store_features_going_in(rev_profileid, rev_twid, starttime)
+            elif not self.home_net:
+                # No home. Create profiles for everybody
+                if self.analysis_direction == 'out':
+                    # No home. Only store out
+                    __database__.addProfile(profileid, starttime, self.width)
+                    store_features_going_out(profileid, twid, starttime)
+                elif self.analysis_direction == 'all':
+                    # No home. Store all
+                    __database__.addProfile(profileid, starttime, self.width)
+                    rev_profileid, rev_twid = get_rev_profile(starttime, daddr_as_obj)
+                    store_features_going_out(profileid, twid, starttime)
+                    store_features_going_in(rev_profileid, rev_twid, starttime)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print("Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
@@ -1503,19 +1456,20 @@ class ProfilerProcess(multiprocessing.Process):
 
     def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size, tuple_key: str):
         """
-        This function computes the new symbol for the tuple according to the original stratosphere ips model of letters
-        Here we do not apply any detection model, we just create the letters as one more feature
-        current_time is the starttime of the flow
+        This function computes the new symbol for the tuple according to the
+        original stratosphere ips model of letters
+        Here we do not apply any detection model, we just create the letters
+        as one more feature current_time is the starttime of the flow
         """
         try:
             current_duration = float(current_duration)
             current_size = int(current_size)
             now_ts = float(current_time)
-            self.print("Starting compute symbol. Tupleid {}, time:{} ({}), dur:{}, size:{}".format(tupleid, current_time, type(current_time), current_duration, current_size), 0, 8)
+            self.print("Starting compute symbol. Profileid: {}, Tupleid {}, time:{} ({}), dur:{}, size:{}".format(profileid, tupleid, current_time, type(current_time), current_duration, current_size), 0, 8)
             # Variables for computing the symbol of each tuple
             T2 = False
             TD = False
-            # Thresholds learng from Stratosphere ips first version
+            # Thresholds learnt from Stratosphere ips first version
             # Timeout time, after 1hs
             tto = timedelta(seconds=3600)
             tt1 = float(1.05)
@@ -1532,17 +1486,15 @@ class ProfilerProcess(multiprocessing.Process):
             # Get the time of the last flow in this tuple, and the last last
             # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
             (last_last_ts, last_ts) = __database__.getT2ForProfileTW(profileid, twid, tupleid, tuple_key)
-
-
-            ## BE SURE THAT HERE WE RECEIVE THE PROPER DATA
-            #T1 = timedelta(seconds=10)
-            #previous_time = datetime.now() - timedelta(seconds=3600)
+            # self.print(f'Profileid: {profileid}. Data extracted from DB. last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
 
             def compute_periodicity(now_ts: float, last_ts: float, last_last_ts: float):
                 """ Function to compute the periodicity """
                 zeros = ''
                 if last_last_ts is False or last_ts is False:
                     TD = -1
+                    T1 = None
+                    T2 = None
                 else:
                     # Time diff between the past flow and the past-past flow.
                     T1 = last_ts - last_last_ts
@@ -1583,7 +1535,7 @@ class ProfilerProcess(multiprocessing.Process):
                     elif TD > tt3:
                         # Strongly not periodicity
                         TD = 4
-
+                self.print("Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, T2={}, TD={}".format(profileid, tupleid, T1, T2, TD), 0, 5)
                 return TD, zeros
 
             def compute_duration():
@@ -1719,6 +1671,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             def compute_timechar():
                 """ Function to compute the timechar """
+                # self.print(f'Compute timechar. Profileid: {profileid} T2: {T2}', 0, 5)
                 if not isinstance(T2, bool):
                     if T2 <= timedelta(seconds=5).total_seconds():
                         return '.'
@@ -1731,17 +1684,22 @@ class ProfilerProcess(multiprocessing.Process):
                     else:
                         # Changed from 0 to ''
                         return ''
+                else:
+                    return ''
 
             # Here begins the function's code
             try:
                 # Update value of T2
-                T2 = now_ts - last_ts
+                if now_ts and last_ts:
+                    T2 = now_ts - last_ts
+                else:
+                    T2 = False
                 # Are flows sorted?
                 if T2 < 0:
                     # Flows are not sorted!
                     # What is going on here when the flows are not ordered?? Are we losing flows?
                     # Put a warning
-                    # self.print("Warning: Coming flows are not sorted -> Some time diff are less than zero.", 0, 1)
+                    self.print("Warning: Coming flows are not sorted -> Some time diff are less than zero.", 0, 2)
                     pass
             except TypeError:
                 T2 = False
@@ -1757,7 +1715,7 @@ class ProfilerProcess(multiprocessing.Process):
             # self.print("Letter: {}".format(letter), 0, 1)
             timechar = compute_timechar()
             # self.print("TimeChar: {}".format(timechar), 0, 1)
-            self.print("Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(periodicity, duration, size, letter, timechar), 0, 5)
+            self.print("Profileid: {}, Tuple: {}, Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(profileid, tupleid, periodicity, duration, size, letter, timechar), 0, 5)
 
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
@@ -1780,7 +1738,7 @@ class ProfilerProcess(multiprocessing.Process):
         - The Dtp ips are stored in the first time win
         """
         try:
-            # First check of we are not in the last TW. Since this will be the majority of cases
+            # First check if we are not in the last TW. Since this will be the majority of cases
             try:
                 [(lasttwid, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
@@ -1857,11 +1815,11 @@ class ProfilerProcess(multiprocessing.Process):
             while True:
                 line = self.inputqueue.get()
                 if 'stop' == line:
-                    self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 1)
+                    self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 2)
                     return True
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
-                    self.print("Stopping Profiler Process. Received {} lines ({})")
+                    self.print("Stopping Profiler Process. Received {} lines ({})", 0, 2)
                     return True
                 else:
                     # Received new input data
@@ -1876,19 +1834,17 @@ class ProfilerProcess(multiprocessing.Process):
 
                     # What type of input do we have?
                     if self.input_type == 'zeek':
-                        #self.print('Zeek line')
+                        # self.print('Zeek line')
                         self.process_zeek_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
-
                     elif self.input_type == 'argus':
-                        #self.print('Argus line')
+                        # self.print('Argus line')
                         # Argus puts the definition of the columns on the first line only
                         # So read the first line and define the columns
-
                         try:
                             # Are the columns defined? Just try to access them
-                            temp = self.column_idx['starttime']
+                            _ = self.column_idx['starttime']
                             # Yes
                             # Quickly process all lines
                             self.process_argus_input(line)
@@ -1897,15 +1853,18 @@ class ProfilerProcess(multiprocessing.Process):
                         except AttributeError:
                             # No. Define columns. Do not add this line to profile, its only headers
                             self.define_columns(line)
+                        except KeyError:
+                            # When the columns are not there. Not sure if it works
+                            self.define_columns(line)
 
                     elif self.input_type == 'suricata':
-                        #self.print('Suricata line')
+                        # self.print('Suricata line')
                         self.process_suricata_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
 
                     elif self.input_type == 'zeek-tabs':
-                        #self.print('Zeek-tabs line')
+                        # self.print('Zeek-tabs line')
                         self.process_zeek_tabs_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()

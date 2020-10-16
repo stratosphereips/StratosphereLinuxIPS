@@ -1,4 +1,4 @@
-# Stratosphere Linux IPS (Slips) Version 0.6.6
+# Stratosphere Linux IPS (Slips) Version 0.7.0
 
 Slips is a behavioral-based Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels to provide good visualisation for the analyst.
 Slips is a modular software 
@@ -11,15 +11,15 @@ Now Slips can be run inside a docker if you want to analyze flow or pcap files. 
 
 ## From the Docker Hub
 
-	docker run -it --rm --net=host stratosphereips/slips:v0.6.6
-	./slips.py -c slips.conf -f test-flows/test3.binetflow
+	docker run -it --rm --net=host stratosphereips/slips:v0.7.0
+	./slips.py -c slips.conf -f dataset/test3.binetflow
 
 
 ### If you want to share files between your host and the docker, you can do:
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
-	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:v0.6.6
+	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:v0.7.0
 	./slips.py -c slips.conf -f dataset/myfile.pcap
 
 
@@ -31,7 +31,7 @@ If you cloned StratosphereLinuxIPS in '~/code/StratosphereLinuxIPS', then you ca
 	cd docker
 	docker build --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
-	./slips.py -c slips.conf -f test-flows/test3.binetflow
+	./slips.py -c slips.conf -f dataset/test3.binetflow
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
 
@@ -47,12 +47,14 @@ The minimum Slips requirements are:
 
 - Redis database running (see http://redis.org)
     - In debian/ubuntu: ```apt-get install redis```
-- py37-redis 
-    - In debian/ubuntu: ```apt-get install python3-redis```
+- py37-redis 3.4.1+ 
+    - In debian/ubuntu: ```pip3 install redis```
 - maxminddb libraries for python (pip3 install maxminddb). Or ignore the geoip module in the conf.
 - Zeek (Bro) https://docs.zeek.org/en/stable/install/install.html
 - python-watchdog
     - In debian/ubuntu: ```apt-get install python3-watchdog```
+- validators (For threatintellingence module)
+	- ```pythong -m pip install validators```
   
 To run redis you can:
     - In Linux, as a daemon: redis-server --daemonize yes
@@ -71,7 +73,7 @@ With npm you should install the following libraries
     - nom install strip-ansi
     - npm install clipboardy 
     - npm install fs
-
+    - npm install sorted-array-async
 ##### Installation of Zeek (Bro)
 Slips uses Zeek to generate files for most input types.
 
@@ -115,7 +117,11 @@ Slips uses Zeek to generate files for most input types.
 3. Check the folder called with the date of today. All files are updated every 5 seconds.
 4. Use Kalipso to see the results (option -G in Slips to start Kalipso automatically, or go to StratosphereLinuxIPS/modules/blessed and execute `node ips_timewindows.js` to start Kalipso when needed)
 
-
+Requirements to capture your own traffic:
+- curl
+    - In debian/ubuntu: ```apt-get install curl```
+- get authorization to zeek to capture the traffic in the linux interface:
+    - ```setcap cap_net_raw,cap_net_admin=eip /usr/local/zeek/bin/zeek```
 -------
 
 # Architecture of operation
@@ -124,6 +130,16 @@ Slips works at a flow level, instead of a packet level, gaining a high level vie
 #Slips processes
 When Slips is run, it spawns several child processes to manage the I/O, to profile attackers and to run the detection modules. It also connects to the Redis database to store all the information. In order to detect attacks, Slips runs its Kalipso interface.
 
+# The concept of time in slips
+
+- Every time we receive something, we update the TW modification time in a new redis ordered set (zset) (the old is not used). This set has the TW id and the time of last modification. The TW in this zset are never deleted.
+- We update the slips_internal_time, every time we receive anything
+- Every 5 seconds, slips.py, retrieves the sublist of TW from the zset that were modified in the last “time window width” (default 1hs).
+- This list of TW that were modified is used to print the statistics and as part of the set_host_ip check in slips.py.
+- In theory if a TW was not modifed in the last hs, then it should not appear in the list, which decreases until no TW was modified for some rounds, and we stop slips.
+
+## Timeout of traffic
+Zeek has a parameter called "tcp_inactivity_timeout". By default is 5 minutes, like in TCP. However, it may happen that due to different circonstances there is more than 5 minutes delay between packets (even in normal connections from Google). Since Slips usually has a time window width of 1hs, it can wait more until having the complete flow. For this reason Slips modifies the "tcp_inactivity_timeout" to be 1hs. 
 
 ## Input Data 
 The input process reads flows of different types:
@@ -161,11 +177,12 @@ This is the new version of the Stratosphere IPS, a behavioral-based intrusion de
 
 Example of specific usage: Slips can be used by passing input files:
 
-    ./slips.py -c slips.conf -f test-flows/test3.binetflow, where -c is the configuration file, -f is the binetflow input file
+    ./slips.py -c slips.conf -f dataset/test3.binetflow, where -c is the configuration file, -f is the binetflow input file
 
 Other parameters for different input types:
 	-r is for pcap
-	-f is for binetflow
+	-f <filename: is for binetflow files 
+	-f <folder name: for zeek folders with log files 
 	-b is for nfdump 
 	-i interface
 
@@ -211,28 +228,6 @@ If you want to add your own zeek modules to use in your own slips modules, you c
 ### Roadmap
 [rewrite]
 
-
-### Changelog
-[rewrite]
-- 0.6.6 
-	- Added DNS resolution for IPs in timeline
-	- Added inTuple key to the timeline for inbound flows when abalysis_direction = 'all'
-	- Changed the timeline format in Slips and Kalipso
-	- Defined host IP in Slips and Kalipso if Slips is run on interface
-- 0.6.5 
-	- Fixed ThreatIntellignce module to be fully functional.
-	- Added new feature to stop Slips automatically when input files ends.
-	- Fixed the storing and display of inbound flows in analysis direction 'all'.
-	- Fixed Kalipso to display inbound flows and h hotkey to display out tuples
-- 0.5 Completely renewed architecture and code.
-- 0.4 was never reached
-- 0.3.5
-- 0.3.4
-	- This is a mayor version change. Implementing new algorithms for analyzing the results, management of IPs, connections, whois database and more features.
-	- A new parameter to specify the file (-r). This is as fast as reading the file from stdin.
-	- Now we have a configuration file slips.conf. In there you can specify from fixed parameters, the time formats, to the columns in the flow file.
-- 0.3.3alpha
-	- First stable version with a minimal algorithm for detecting behavioral threats.
 
 ### Current status
 We are developing a new module _lstm-cc-detection_. This is a module to detect command and control channels using LSTM neural network and the stratosphere behavioral letters
@@ -290,3 +285,7 @@ redis               3.2.1
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
 [Stratosphere Windows IPS]: https://github.com/stratosphereips/StratosphereIps
 [Zeek]: https://www.zeek.org/download/index.html 
+
+
+
+

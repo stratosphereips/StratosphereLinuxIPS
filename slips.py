@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # This file is part of the Stratosphere Linux IPS
 # See the file 'LICENSE' for copying permission.
-# Author: Sebastian Garcia. eldraco@gmail.com , sebastian.garcia@agents.fel.cvut.cz
+# Original Author: Sebastian Garcia. eldraco@gmail.com , sebastian.garcia@agents.fel.cvut.cz,
 
 import configparser
 import argparse
@@ -12,8 +12,17 @@ import time
 import shutil
 from datetime import datetime
 import socket
+import warnings
+from modules.UpdateManager.update_file_manager import UpdateFileManager
+import json
 
-version = '0.6.6'
+version = '0.7.0'
+
+# Ignore warnings on CPU from tensorflow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# Ignore warnings in general
+warnings.filterwarnings('ignore')
+
 
 def read_configuration(config, section, name):
     """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
@@ -27,11 +36,22 @@ def recognize_host_ip():
     """
     Recognize the IP address of the machine
     """
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("1.1.1.1", 80))
-    ipaddr_check = s.getsockname()[0]
-    s.close()
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("1.1.1.1", 80))
+        ipaddr_check = s.getsockname()[0]
+        s.close()
+    except Exception as ex:
+        print('Network is unreachable')
+        return None
     return ipaddr_check
+
+def update_malicious_file(outputqueue, config):
+    '''
+    Update malicious files and store them in database before slips start
+    '''
+    update_manager = UpdateFileManager(outputqueue, config)
+    update_manager.update()
 
 def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
     """
@@ -45,6 +65,16 @@ def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
         print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
         return False
     return True
+
+def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> str:
+    """
+    Clear cache database
+    """
+    rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=1, charset="utf-8",
+                               decode_responses=True)
+    rcache.flushdb()
+
+
 
 
 def check_zeek_or_bro():
@@ -78,13 +108,15 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
-    parser.add_argument('-f', '--filepath', help='Path to the flow input file to read. It can be a Argus binetflow flow, a Zeek conn.log file, or a Zeek folder with all the log files.', required=False)
+    parser.add_argument('-f', '--filepath', help='If a filename is specified, then it is a path to the flow file to read (usually Argus binetflow files or conn.log file). If a folder is specified then a Zeek folder.', required=False)
     parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
     parser.add_argument('-b', '--nfdump', help='A binary file from NFDUMP to read. NFDUMP is used to send data to slips.', required=False)
-    parser.add_argument('-G', '--gui', help='Use the nodejs gui interface.', required=False, default=False, action='store_true')
+    parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
+    parser.add_argument('-cc', '--clearcache', help='Clear cache.', required=False, default=False, action='store_true')
+    parser.add_argument('-p', '--blocking', help='Block IPs that connect to the computer. Supported only on Linux.',required=False, default=False, action='store_true')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
@@ -110,12 +142,23 @@ if __name__ == '__main__':
         zeek_bro = check_zeek_or_bro()
         if zeek_bro is False:
             # If we do not have bro or zeek, terminate Slips.
+            print('no zeek nor bro')
             terminate_slips()
 
     # See if we have the nfdump, if we need it according to the input type
     if args.nfdump and shutil.which('nfdump') is None:
         # If we do not have nfdump, terminate Slips.
         terminate_slips()
+
+    # Clear cache if the parameter was included
+    if args.clearcache:
+        clear_redis_cache_database()
+
+    # If the user wants to blocks, the user needs to give a permission to modify iptables
+    # Also check if the user blocks on interface, does not make sense to block on files
+    if args.interface and args.blocking:
+        print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
+        os.system('sudo iptables -N slipsBlocking')
 
     """
     Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
@@ -127,7 +170,7 @@ if __name__ == '__main__':
     from guiProcess import GuiProcess
     from logsProcess import LogsProcess
     from evidenceProcess import EvidenceProcess
-    # This plugins import will automatially load the modules and put them in the __modules__ variable
+    # This plugins import will automatically load the modules and put them in the __modules__ variable
     from slips.core.plugins import __modules__
 
     # Any verbosity passed as parameter overrides the configuration. Only check its value
@@ -158,8 +201,6 @@ if __name__ == '__main__':
     if args.debug < 0:
         args.debug = 0
 
-
-
     # Check the type of input
     if args.interface:
         input_information = args.interface
@@ -177,18 +218,20 @@ if __name__ == '__main__':
         print('You need to define an input source.')
         sys.exit(-1)
 
-
-
     ##########################
     # Creation of the threads
     ##########################
     from slips.core.database import __database__
-    # Output thread. This thread should be created first because it handles the output of the rest of the threads.
+    # Output thread. This thread should be created first because it handles
+    # the output of the rest of the threads.
     # Create the queue
     outputProcessQueue = Queue()
     # Create the output thread and start it
     outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
     outputProcessThread.start()
+
+    # Before starting update malicious file
+    update_malicious_file(outputProcessQueue,config)
     # Print the PID of the main slips process. We do it here because we needed the queue to the output process
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid
@@ -197,6 +240,11 @@ if __name__ == '__main__':
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
+    # Convert string to list
+    to_ignore = eval(to_ignore)
+    # Disable blocking if was not asked and if it is not interface
+    if not args.blocking or not args.interface:
+        to_ignore.append('blocking')
     try:
         for module_name in __modules__:
             if not module_name in to_ignore:
@@ -251,57 +299,103 @@ if __name__ == '__main__':
 
     # Store the host IP address if input type is interface
     if input_type == 'interface':
-        __database__.set_host_ip(recognize_host_ip())
-
+        hostIP = recognize_host_ip()
+        __database__.set_host_ip(hostIP)
 
     # As the main program, keep checking if we should stop slips or not
     # This is not easy since we need to be sure all the modules are stopped
     # Each interval of checking is every 5 seconds
     check_time_sleep = 5
-    # In each interval we check if there has been any modifications to the database by any module. 
-    # If not, wait this amount of intervals and then stop slips. 
+    # In each interval we check if there has been any modifications to the database by any module.
+    # If not, wait this amount of intervals and then stop slips.
     # We choose 6 to wait 30 seconds.
-    minimum_intervals_to_wait = 6
+    limit_minimum_intervals_to_wait = 4
+    minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+    fieldseparator = __database__.getFieldSeparator()
+    slips_internal_time = 0
     try:
         while True:
-            # Sleep 
+            # Sleep some time to do rutine checks
             time.sleep(check_time_sleep)
-            # Get the amount of modified time windows in the last interval
-            TWModifiedforProfile = __database__.getModifiedTWLogs()
+            # Get the amount of modified time windows since we last checked
+            TWModifiedforProfile = __database__.getModifiedTWSinceTime(float(slips_internal_time) + 1)
+            slips_internal_time = __database__.getSlipsInternalTime()
+            # TWModifiedforProfile = __database__.getModifiedTW()
             amount_of_modified = len(TWModifiedforProfile)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
-            outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified , datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+            outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
 
-            #outputProcessQueue.put('11|Main|[Main] Counter to stop Slips. Amount of modified timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
+            # Check if we need to close some TW
+            __database__.check_TW_to_close()
 
-            # If there were no modified TW in the last timewindow time, then start counting down
-            # Dont try to stop slips if its catpurting from an interface 
-            if amount_of_modified == 0 and not args.interface:
-                #print('Counter to stop Slips. Amount of modified timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
-                if minimum_intervals_to_wait == 0:
-                    # Stop the output Process
-                    print('Stopping Slips')
-                    # Stop the modules that are subscribed to channels
-                    __database__.publish_stop()
-                    # Here we should Wait for any channel if it has still data to receive in its channel
-                    # Send manual stops to the process not using channels
-                    logsProcessQueue.put('stop_process')
-                    outputProcessQueue.put('stop_process')
-                    profilerProcessQueue.put('stop_process')
-                    break
-                #outputProcessQueue.put('11|Main|[Main] Decreasing one')
-                minimum_intervals_to_wait -= 1
+            # In interface we keep track of the host IP. If there was no
+            # modified TWs in the host IP, we check if the network was changed.
+            # Dont try to stop slips if its catpurting from an interface
+            if args.interface:
+                # To check of there was a modified TW in the host IP. If not,
+                # count down.
+                modifiedTW_hostIP = False
+                for profileTW in TWModifiedforProfile:
+                    profileIP = profileTW[0].split(fieldseparator)[1]
+                    # True if there was a modified TW in the host IP
+                    if hostIP == profileIP:
+                        modifiedTW_hostIP = True
+
+                # If there was no modified TW in the host IP
+                # then start counting down
+                # After count down we update the host IP, to check if the
+                # network was changed
+                if not modifiedTW_hostIP and args.interface:
+                    if minimum_intervals_to_wait == 0:
+                        hostIP = recognize_host_ip()
+                        if hostIP:
+                            __database__.set_host_ip(hostIP)
+                        minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+                    minimum_intervals_to_wait -= 1
+                else:
+                    minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+
+            # When running Slips in the file.
+            # If there were no modified TW in the last timewindow time,
+            # then start counting down
             else:
-                #outputProcessQueue.put('11|Main|[Main] Back to 0')
-                minimum_intervals_to_wait = 6
+                if amount_of_modified == 0:
+                    # print('Counter to stop Slips. Amount of modified
+                    # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
+                    if minimum_intervals_to_wait == 0:
+                        # Stop the output Process
+                        print('Stopping Slips')
+                        # Stop the modules that are subscribed to channels
+                        __database__.publish_stop()
+                        # Here we should Wait for any channel if it has still
+                        # data to receive in its channel
+                        # Send manual stops to the process not using channels
+                        try:
+                            logsProcessQueue.put('stop_process')
+                        except NameError:
+                            # The logsProcessQueue is not there because we
+                            # didnt started the logs files (used -l)
+                            pass
+                        outputProcessQueue.put('stop_process')
+                        profilerProcessQueue.put('stop_process')
+                        break
+                    minimum_intervals_to_wait -= 1
+                else:
+                    minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+
     except KeyboardInterrupt:
         print('Stopping Slips')
         # Stop the modules that are subscribed to channels
         __database__.publish_stop()
-        # Here we should Wait for any channel if it has still data to receive in its channel
+        # Here we should Wait for any channel if it has still data to receive
+        # in its channel
         # Send manual stops to the process not using channels
-        logsProcessQueue.put('stop_process')
+        try:
+            logsProcessQueue.put('stop_process')
+        except NameError:
+            # The logsProcessQueue is not there because we didnt started the
+            # logs files (used -l)
+            pass
         outputProcessQueue.put('stop_process')
         profilerProcessQueue.put('stop_process')
-

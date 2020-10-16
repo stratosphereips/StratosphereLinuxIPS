@@ -2,7 +2,7 @@
 # Instructions
 # 1. Create a new folder on ./modules with the name of your template. Example:
 #    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder. 
+# 2. Copy this template file in that folder.
 #    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
 # 3. Make it a module
 #    touch modules/template/__init__.py
@@ -18,7 +18,7 @@ from slips.core.database import __database__
 import platform
 
 # Your imports
-import time
+
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -28,40 +28,50 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
+        # All the printing output should be sent to the outputqueue.
+        # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for your own configurations
+        # In case you need to read the slips.conf configuration file for
+        # your own configurations
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        # The options change, so the last list is on the slips/core/database.py file. However common options are:
+        # To which channels do you wnat to subscribe? When a message
+        # arrives on the channel the module will wakeup
+        # The options change, so the last list is on the
+        # slips/core/database.py file. However common options are:
         # - new_ip
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_ip')
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
+        # Set the timeout based on the platform. This is because the
+        # pyredis lib does not have officially recognized the
+        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
             self.timeout = None
         elif platform.system() == 'Linux':
             # linux
-            self.timeout = -1
+            self.timeout = None
         else:
-            #??
+            # Other systems
             self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the prcocesses into account
+        Slips then decides how, when and where to print this text by
+        taking all the prcocesses into account
 
         Input
-         verbose: is the minimum verbosity level required for this text to be printed
-         debug: is the minimum debugging level required for this text to be printed
+         verbose: is the minimum verbosity level required for this text to
+         be printed
+         debug: is the minimum debugging level required for this text to be
+         printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
-        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+
+        If not specified, the minimum verbosity level required is 1, and the
+        minimum debugging level is 0
         """
 
         vd_text = str(int(verbose) * 10 + int(debug))
@@ -76,7 +86,8 @@ class Module(Module, multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     return True
                 if message['channel'] == 'new_ip':
-                    # Example of printing the number of profiles in the Database every second
+                    # Example of printing the number of profiles in the
+                    # Database every second
                     data = len(__database__.getProfiles())
                     self.print('Amount of profiles: {}'.format(data))
 

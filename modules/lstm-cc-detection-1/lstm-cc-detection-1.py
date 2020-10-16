@@ -17,15 +17,15 @@ import multiprocessing
 from slips.core.database import __database__
 import platform
 import warnings
-warnings.filterwarnings('ignore',category=FutureWarning)
+# Your imports
+import numpy as np
+from tensorflow.python.keras.preprocessing.sequence import pad_sequences
+from tensorflow.python.keras.models import load_model
+from keras.utils import to_categorical
+
+warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
-
-# Your imports
-import time
-import numpy as np
-from keras.preprocessing.sequence import pad_sequences
-from keras.models import load_model
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -35,19 +35,25 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
+        # All the printing output should be sent to the outputqueue. The
+        # outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for your own configurations
+        # In case you need to read the slips.conf configuration file for your
+        # own configurations
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        # The options change, so the last list is on the slips/core/database.py file. However common options are:
+        # To which channels do you wnat to subscribe? When a message arrives
+        # on the channel the module will wakeup
+        # The options change, so the last list is on the slips/core/database.py
+        # file. However common options are:
         # - new_ip
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_letters')
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
+        # Set the timeout based on the platform. This is because the pyredis
+        # lib does not have officially recognized the timeout=None as it works
+        # in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
             self.timeout = None
@@ -85,12 +91,50 @@ class Module(Module, multiprocessing.Process):
         threat_level = 50
         confidence = 1
         description = 'LSTM C&C channels detection, score: ' + str(score)
+        self.print(f'Setting evidence of {description} with threat level {threat_level} and confidence {confidence}. For {profileid}, tuple: {tupleid} on {twid}', 3, 0)
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
+    def convert_input_for_module(self, pre_behavioral_model):
+        """
+        Takes the input from the letters and converts them
+        to whatever is needed by the model
+        The pre_behavioral_model is a 1D array of letters in an array
+        """
+
+        # Length of behavioral model with which we trained our module
+        max_length = 500
+
+        # Convert each of the stratosphere letters to an integer. There are 50
+        vocabulary = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', ',', '.', '+', '*']
+        int_of_letters = {}
+        for i, letter in enumerate(vocabulary):
+            int_of_letters[letter] = float(i)
+
+        # String to test
+        # pre_behavioral_model = "88*y*y*h*h*h*h*h*h*h*y*y*h*h*h*y*y*"
+
+        # Be sure only max_length chars come. Not sure why we receive more
+        pre_behavioral_model = pre_behavioral_model[:max_length]
+
+        # Add padding to the letters passed
+        # self.print(f'Seq sent: {pre_behavioral_model}')
+        pre_behavioral_model += '0' * (max_length - len(pre_behavioral_model))
+        # self.print(f'Padded Seq sent: {pre_behavioral_model}')
+
+        # Convert to ndarray
+        pre_behavioral_model = np.array([[int_of_letters[i]] for i in pre_behavioral_model])
+        # self.print(f'The sequence has shape {pre_behavioral_model.shape}')
+
+        # Reshape into (1, 500, 1) We need the first 1, because this is one sample only, but keras expects a 3d vector
+        pre_behavioral_model = np.reshape(pre_behavioral_model, (1, max_length, 1))
+
+        # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
+        return pre_behavioral_model
 
     def run(self):
         try:
             # Download lstm model
-            model = load_model('modules/lstm-cc-detection-1/detection_model.h5')
+            model = load_model('modules/lstm-cc-detection-1/detection_model-9.h5')
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
@@ -98,27 +142,24 @@ class Module(Module, multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     return True
                 if message['channel'] == 'new_letters' and type(message['data']) is not int:
-                    threshold = 0.8
+                    # Define why this threshold
+                    threshold = 0.7
                     data = message['data']
                     data = data.split('-')
-                    behavioral_model = data[0]
+                    pre_behavioral_model = data[0]
                     profileid = data[1]
                     twid = data[2]
                     tupleid = data[3]
-                    # Length of behavioral model with which we trained our module
-                    max_length = 500
                     # Function to convert each letter of behavioral model to ascii
-                    str_to_ascii = lambda i: [ord(x) for x in i]
-                    behavioral_model = str_to_ascii(behavioral_model)
-                    # Pad with zeros. If it is one string - needed to be in square brackets. Otherwise, not iterable.
-                    behavioral_model = pad_sequences([behavioral_model], maxlen=max_length, padding='post')
+                    behavioral_model = self.convert_input_for_module(pre_behavioral_model)
                     # Predict the score of behavioral model being C&C channel
-                    score = model.predict(behavioral_model, verbose=2)
+                    self.print(f'Predicting the sequence: {pre_behavioral_model}', 4, 0)
+                    score = model.predict(behavioral_model)
+                    self.print(f' >> Sequence: {pre_behavioral_model}. Final prediction score: {score[0][0]:.20f}', 3, 0)
                     # get a float instead of numpy array
-                    score = score.item()
+                    score = score[0][0]
                     if score > threshold:
                         self.set_evidence(score, tupleid, profileid, twid)
-
         except KeyboardInterrupt:
             return True
         except Exception as inst:
