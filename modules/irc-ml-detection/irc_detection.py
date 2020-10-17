@@ -38,10 +38,9 @@ class IRCDetector(Module, multiprocessing.Process):
             # macos
             self.timeout = None
         elif platform.system() == 'Linux':
-            # linux
-            self.timeout = -1
+            self.timeout = None
         else:
-            # ??
+            #??
             self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
@@ -83,6 +82,7 @@ class IRCDetector(Module, multiprocessing.Process):
         X_in = [features['size_total'], features['msg_count'], features['src_ports_count'],
             features['dport'], features['duration'], features['periodicity'], 
             features['spec_chars_username_mean'], features['spec_chars_msg_mean'], features['msg_word_entropy']]
+        X_in = [x if isinstance(x, int) else 0 for x in X_in]
         X_in = np.array(X_in).reshape(1, -1)
         return self.detection_model.predict(X_in)
 
@@ -103,13 +103,16 @@ class IRCDetector(Module, multiprocessing.Process):
             __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def run(self):
+        self.print('init run')
         try:
             while True:
+                self.print('iteration')
                 message = self.c1.get_message(timeout=self.timeout)
+                self.print('iteration-message: {}'.format(message))
                 if message['data'] == 'stop_process':
                     return True
                 elif message['channel'] == 'new_irc_features':
-                    
+                    self.print('channel: new irc features')
                     # ignore first message that contains only '1' instead of json
                     if message['data'] == 1:
                         continue
@@ -130,6 +133,7 @@ class IRCDetector(Module, multiprocessing.Process):
                     self.print('IRC Detection of {} \n output: {}'.format(message['data'], out))
 
         except KeyboardInterrupt:
+            self.print('Keyboard interrupt')
             return True
         except Exception as inst:
             self.print('Problem on the run()', 0, 1)

@@ -65,6 +65,8 @@ event zeek_init()
     if (VERBOSE) {
         print "zeek init";
     }
+    Log::disable_stream(Conn::LOG);
+    Log::disable_stream(IRC::LOG);
     Log::create_stream(IRC_Feature_Extractor::LOG, [$columns=IRC_Session, $path="irc_features"]);
 }
 

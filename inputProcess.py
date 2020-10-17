@@ -396,9 +396,8 @@ class InputProcess(multiprocessing.Process):
 
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-
-                #irc_pkg_command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + " ../zeek_modules/irc_feature_extractor.zeek"
                 command = "cd " + self.zeek_folder + "; "+self.zeek_or_bro +" -C " +bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                irc_pkg_command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + " ../zeek_modules/irc_feature_extractor.zeek"
                 # Run zeek.
                 os.system(command)
                 os.system(irc_pkg_command)
