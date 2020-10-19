@@ -19,12 +19,14 @@ import platform
 
 # Your imports
 import json
+import configparser
+
 
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'long connections'
-    description = 'alert when the connections is long (above the threshold)'
+    name = 'flowalerts'
+    description = 'Alerts about flows: long connection'
     authors = ['Kamila Babayeva']
 
     def __init__(self, outputqueue, config):
@@ -37,6 +39,8 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
+        # Read the configuration
+        self.read_configuration()
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
@@ -58,6 +62,15 @@ class Module(Module, multiprocessing.Process):
             # Other systems
             self.timeout = None
 
+    def read_configuration(self):
+        """ Read the configuration file for what we need """
+        # Get the pcap filter
+        try:
+            self.long_connection_threshold = self.config.get('parameters', 'long_connection_threshold')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.long_connection_threshold = 1500
+
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -77,6 +90,35 @@ class Module(Module, multiprocessing.Process):
 
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+
+    def set_evidence_long_connection(self, ip, duration, profileid, twid):
+        '''
+        Set an evidence for long connection in the tw
+        If profileid is None, do not set an Evidence
+        Returns nothing
+        '''
+        type_evidence = 'LongConnection'
+        key = 'ip' + ':' + ip + ':' + type_evidence
+        threat_level = 50
+        confidence = 1
+        description = 'Long Connection ' + str(duration)
+        if not twid:
+            twid = ''
+        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
+    def check_long_connection(self, dur, daddr, saddr, profileid, twid):
+        """
+        Function to generate alert if the new connection's duration if above the threshold (more than 25mins by default).
+        """
+        # If duration is above threshold, we should set Evidence
+        if dur > self.long_connection_threshold:
+            # If the flow is 'in' feature, then we set source address in the evidence
+            if daddr == profileid.split('_')[-1]:
+                self.set_evidence_long_connection(saddr, dur, profileid, twid)
+            # If the flow is as 'out' feature, then we set dst address as evidence
+            else:
+                self.set_evidence_long_connection(daddr, dur, profileid, twid)
+
 
     def run(self):
         try:
@@ -98,11 +140,9 @@ class Module(Module, multiprocessing.Process):
                         timestamp = data['stime']
                         # Convert flow to a dict
                         flow = json.loads(flow)
-
                         # Convert the common fields to something that can be interpreted
                         uid = next(iter(flow))
-                        flow_dict = json.loads(flow[uid])
-                        profile_ip = profileid.split('_')[1]
+                        flow_dict = json.loads(flow[uid]) #dur, stime, saddr, sport, daddr, dport, proto, state, pkts, allbytes
                         dur = flow_dict['dur']
                         stime = flow_dict['ts']
                         saddr = flow_dict['saddr']
@@ -113,6 +153,11 @@ class Module(Module, multiprocessing.Process):
                         state = flow_dict['state']
                         pkts = flow_dict['pkts']
                         allbytes = flow_dict['allbytes']
+
+                        self.check_long_connection(dur, daddr, saddr,profileid, twid)
+
+
+
 
         except KeyboardInterrupt:
             return True
