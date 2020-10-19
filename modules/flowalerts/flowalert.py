@@ -91,14 +91,14 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def set_evidence_long_connection(self, ip, duration, profileid, twid):
+    def set_evidence_long_connection(self, ip, duration, profileid, twid, ip_state = 'ip'):
         '''
         Set an evidence for long connection in the tw
         If profileid is None, do not set an Evidence
         Returns nothing
         '''
         type_evidence = 'LongConnection'
-        key = 'ip' + ':' + ip + ':' + type_evidence
+        key = ip_state + ':' + ip + ':' + type_evidence
         threat_level = 50
         confidence = 1
         description = 'Long Connection ' + str(duration)
@@ -114,10 +114,10 @@ class Module(Module, multiprocessing.Process):
         if dur > self.long_connection_threshold:
             # If the flow is 'in' feature, then we set source address in the evidence
             if daddr == profileid.split('_')[-1]:
-                self.set_evidence_long_connection(saddr, dur, profileid, twid)
+                self.set_evidence_long_connection(saddr, dur, profileid, twid, ip_state = 'srcip')
             # If the flow is as 'out' feature, then we set dst address as evidence
             else:
-                self.set_evidence_long_connection(daddr, dur, profileid, twid)
+                self.set_evidence_long_connection(daddr, dur, profileid, twid, ip_state = 'dstip')
 
 
     def run(self):
