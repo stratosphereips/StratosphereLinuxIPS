@@ -143,13 +143,14 @@ class EvidenceProcess(multiprocessing.Process):
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
-
                                 # Differentiate the type of evidence for different detections
                                 if detection_module == 'ThreatIntelligenceBlacklistIP':
                                     if detection_type == 'dstip':
                                         self.print('\tInfected IP {} connected to blacklisted IP {} due to {}. Accumulated evidence: {}'.format(ip, detection_info, description, accumulated_threat_level), 1, 0)
                                     elif detection_type == 'srcip':
                                         self.print('\tDetected blacklisted IP {} due to {}. Accumulated evidence: {}'.format(detection_info, description, accumulated_threat_level), 1, 0)
+                                elif detection_module == 'LongConnection':
+                                    self.print('\tDETECTED IP {} due to {}. Accumulated evidence: {}'.format(detection_info, description, accumulated_threat_level), 1, 0)
                                 else:
                                     self.print('\tDETECTED IP: {} due to {}. Accumulated evidence: {}'.format(ip, description,accumulated_threat_level), 1, 0)
 
