@@ -54,7 +54,8 @@ The minimum Slips requirements are:
 - python-watchdog
     - In debian/ubuntu: ```apt-get install python3-watchdog```
 - validators (For threatintellingence module)
-	- ```pythong -m pip install validators```
+	- ```python -m pip install validators```, or
+	- ```pip3 install validators```
   
 To run redis you can:
     - In Linux, as a daemon: redis-server --daemonize yes
@@ -63,6 +64,8 @@ To run redis you can:
 
 For using Kalipso interface you need to have:
 - Node.js -https://nodejs.org
+	- ```apt-get install node.js```
+	- ```apt-get install npm```
 - npm (should be automatically installed with Node.js)
 With npm you should install the following libraries
     - npm install blessed
@@ -74,6 +77,7 @@ With npm you should install the following libraries
     - npm install clipboardy 
     - npm install fs
     - npm install sorted-array-async
+
 ##### Installation of Zeek (Bro)
 Slips uses Zeek to generate files for most input types.
 
@@ -83,11 +87,10 @@ Slips uses Zeek to generate files for most input types.
 
         - For Ubuntu, for example, you can do:
             ```
-            sudo sh -c "echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_19.04/ /' > /etc/apt/sources.list.d/security:zeek.list"
-            wget -nv https://download.opensuse.org/repositories/security:zeek/xUbuntu_19.04/Release.key -O Release.key
-            sudo apt-key add - < Release.key
-            sudo apt-get update
-            sudo apt-get install zeek
+            echo 'deb http://download.opensuse.org/repositories/security:/zeek/Debian_Testing/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
+            curl -fsSL https://download.opensuse.org/repositories/security:zeek/Debian_Testing/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security:zeek.gpg > /dev/null
+            sudo apt update
+            sudo apt install zeek
             ```
  
     - Make Zeek visible for Slips. Some ideas:
