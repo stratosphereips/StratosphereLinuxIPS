@@ -305,8 +305,8 @@ class UpdateFileManager:
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
-
-
+        except KeyboardInterrupt:
+            return True
         except Exception as inst:
             self.print('Problem on the __load_malicious_datafile()', 0, 1)
             self.print(str(type(inst)), 0, 1)
