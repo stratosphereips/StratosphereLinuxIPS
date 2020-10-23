@@ -111,6 +111,8 @@ class Module(Module, multiprocessing.Process):
         Function to generate alert if the new connection's duration if above the threshold (more than 25mins by default).
         """
         # If duration is above threshold, we should set Evidence
+        if type(dur) == str:
+            dur = float(dur)
         if dur > self.long_connection_threshold:
             # If the flow is 'in' feature, then we set source address in the evidence
             if daddr == profileid.split('_')[-1]:

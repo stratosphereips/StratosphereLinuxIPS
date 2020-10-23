@@ -15,14 +15,14 @@
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
-import platform
+import platform,os
 # Your imports
 import configparser
 from modules.UpdateManager.timer_manager import InfiniteTimer
 from modules.UpdateManager.update_file_manager import UpdateFileManager
 
 
-class Module(Module, multiprocessing.Process):
+class UpdateManager(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'UpdateManager'
     description = 'Update malicious files from Threat Intelligence'
@@ -109,6 +109,8 @@ class Module(Module, multiprocessing.Process):
                 continue
 
         except KeyboardInterrupt:
+            # terminating the timer for the process to be killed
+            self.timer_manager.cancel()
             return True
         except Exception as inst:
             self.print('Problem on the run()', 0, 1)
