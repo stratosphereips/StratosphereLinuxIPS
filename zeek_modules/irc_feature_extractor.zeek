@@ -67,6 +67,9 @@ event zeek_init()
     }
     Log::disable_stream(Conn::LOG);
     Log::disable_stream(IRC::LOG);
+    Log::disable_stream(X509::LOG);
+    Log::disable_stream(Weird::LOG);
+    Log::disable_stream(PacketFilter::LOG);
     Log::create_stream(IRC_Feature_Extractor::LOG, [$columns=IRC_Session, $path="irc_features"]);
 }
 
