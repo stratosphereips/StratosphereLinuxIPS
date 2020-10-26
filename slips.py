@@ -397,5 +397,8 @@ if __name__ == '__main__':
             # The logsProcessQueue is not there because we didnt started the
             # logs files (used -l)
             pass
+
         outputProcessQueue.put('stop_process')
         profilerProcessQueue.put('stop_process')
+        inputProcess.terminate()
+        os._exit(1)

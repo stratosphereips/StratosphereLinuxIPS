@@ -15,17 +15,18 @@
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
-import platform,os
+import platform
+
 # Your imports
+import json
 import configparser
-from modules.UpdateManager.timer_manager import InfiniteTimer
-from modules.UpdateManager.update_file_manager import UpdateFileManager
 
 
-class UpdateManager(Module, multiprocessing.Process):
+
+class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'UpdateManager'
-    description = 'Update malicious files from Threat Intelligence'
+    name = 'flowalerts'
+    description = 'Alerts about flows: long connection'
     authors = ['Kamila Babayeva']
 
     def __init__(self, outputqueue, config):
@@ -36,16 +37,18 @@ class UpdateManager(Module, multiprocessing.Process):
         # In case you need to read the slips.conf configuration file for
         # your own configurations
         self.config = config
-        # Read the conf
-        self.read_configuration()
         # Start the DB
         __database__.start(self.config)
-        self.c1 = __database__.subscribe('core_messages')
-        # Update file manager
-        self.update_manager = UpdateFileManager(self.outputqueue, config)
-        # Timer to update the ThreatIntelligence files
-        self.timer_manager = InfiniteTimer(self.update_period, self.update_malicious_files)
-
+        # Read the configuration
+        self.read_configuration()
+        # To which channels do you wnat to subscribe? When a message
+        # arrives on the channel the module will wakeup
+        # The options change, so the last list is on the
+        # slips/core/database.py file. However common options are:
+        # - new_ip
+        # - tw_modified
+        # - evidence_added
+        self.c1 = __database__.subscribe('new_flow')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -61,13 +64,12 @@ class UpdateManager(Module, multiprocessing.Process):
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
+        # Get the pcap filter
         try:
-            # update period
-            self.update_period = self.config.get('threatintelligence', 'malicious_data_update_period')
-            self.update_period = float(self.update_period)
+            self.long_connection_threshold = self.config.get('parameters', 'long_connection_threshold')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.update_period = 86400
+            self.long_connection_threshold = 1500
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -89,28 +91,77 @@ class UpdateManager(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def update_malicious_files(self):
+    def set_evidence_long_connection(self, ip, duration, profileid, twid, ip_state = 'ip'):
         '''
-        Update malicious files
+        Set an evidence for long connection in the tw
+        If profileid is None, do not set an Evidence
+        Returns nothing
         '''
-        self.update_manager.update()
+        type_evidence = 'LongConnection'
+        key = ip_state + ':' + ip + ':' + type_evidence
+        threat_level = 50
+        confidence = 1
+        description = 'Long Connection ' + str(duration)
+        if not twid:
+            twid = ''
+        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
+    def check_long_connection(self, dur, daddr, saddr, profileid, twid):
+        """
+        Function to generate alert if the new connection's duration if above the threshold (more than 25mins by default).
+        """
+        # If duration is above threshold, we should set Evidence
+        if type(dur) == str:
+            dur = float(dur)
+        if dur > self.long_connection_threshold:
+            # If the flow is 'in' feature, then we set source address in the evidence
+            if daddr == profileid.split('_')[-1]:
+                self.set_evidence_long_connection(saddr, dur, profileid, twid, ip_state = 'srcip')
+            # If the flow is as 'out' feature, then we set dst address as evidence
+            else:
+                self.set_evidence_long_connection(daddr, dur, profileid, twid, ip_state = 'dstip')
+
 
     def run(self):
         try:
             # Main loop function
-            # Starting timer to update files
-            self.timer_manager.start()
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
-                    self.timer_manager.cancel()
                     return True
-                continue
+                if message['channel'] == 'new_flow':
+                    data = message['data']
+                    if type(data) == str:
+                        # Convert from json to dict
+                        data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        # Get flow as a json
+                        flow = data['flow']
+                        timestamp = data['stime']
+                        # Convert flow to a dict
+                        flow = json.loads(flow)
+                        # Convert the common fields to something that can be interpreted
+                        uid = next(iter(flow))
+                        flow_dict = json.loads(flow[uid]) #dur, stime, saddr, sport, daddr, dport, proto, state, pkts, allbytes
+                        dur = flow_dict['dur']
+                        stime = flow_dict['ts']
+                        saddr = flow_dict['saddr']
+                        sport = flow_dict['sport']
+                        daddr = flow_dict['daddr']
+                        dport = flow_dict['dport']
+                        proto = flow_dict['proto']
+                        state = flow_dict['state']
+                        pkts = flow_dict['pkts']
+                        allbytes = flow_dict['allbytes']
+
+                        self.check_long_connection(dur, daddr, saddr,profileid, twid)
+
+
+
 
         except KeyboardInterrupt:
-            # terminating the timer for the process to be killed
-            self.timer_manager.cancel()
             return True
         except Exception as inst:
             self.print('Problem on the run()', 0, 1)

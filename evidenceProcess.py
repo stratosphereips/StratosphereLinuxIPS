@@ -120,6 +120,9 @@ class EvidenceProcess(multiprocessing.Process):
                         # CONTINUE HERE
                         ip = profileid.split(self.separator)[1]
                         for key in evidence:
+                            detection_type = key.split(':')[0]
+                            detection_info = key.split(':')[1]
+                            detection_module = key.split(':')[-1]
                             data = evidence[key]
                             self.print('\tEvidence for key {}'.format(key), 5, 0)
                             confidence = float(data[0])
@@ -131,6 +134,7 @@ class EvidenceProcess(multiprocessing.Process):
                             accumulated_threat_level += new_threat_level
                             self.print('\t\tAccumulated Threat Level: {}'.format(accumulated_threat_level), 5, 0)
 
+
                         # This is the part to detect if the accumulated evidence was enough for generating a detection
                         # The detection should be done in attacks per minute. The parameter in the configuration is attacks per minute
                         # So find out how many attacks corresponds to the width we are using
@@ -139,7 +143,17 @@ class EvidenceProcess(multiprocessing.Process):
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
-                                self.print('\tDETECTED IP: {} due to {}. Accumulated evidence: {}'.format(ip, description, accumulated_threat_level), 1,0)
+                                # Differentiate the type of evidence for different detections
+                                if detection_module == 'ThreatIntelligenceBlacklistIP':
+                                    if detection_type == 'dstip':
+                                        self.print('\tInfected IP {} connected to blacklisted IP {} due to {}. Accumulated evidence: {}'.format(ip, detection_info, description, accumulated_threat_level), 1, 0)
+                                    elif detection_type == 'srcip':
+                                        self.print('\tDetected blacklisted IP {} due to {}. Accumulated evidence: {}'.format(detection_info, description, accumulated_threat_level), 1, 0)
+                                elif detection_module == 'LongConnection':
+                                    self.print('\tDETECTED IP {} due to {}. Accumulated evidence: {}'.format(detection_info, description, accumulated_threat_level), 1, 0)
+                                else:
+                                    self.print('\tDETECTED IP: {} due to {}. Accumulated evidence: {}'.format(ip, description,accumulated_threat_level), 1, 0)
+
                                 __database__.publish('new_blocking', ip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
                             
