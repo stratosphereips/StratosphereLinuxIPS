@@ -96,13 +96,14 @@ class Module(Module, multiprocessing.Process):
                     return True
                 if message['channel'] == 'new_blocking':
                     ip_to_block = message['data']
-                    # Block this ip in iptables
-                    if self.platform_system == 'Linux':
-                        # Blocking in Linux
-                        os.system('sudo iptables -A slipsBlocking -s ' + ip_to_block +' -j DROP')
-                    elif self.platform_system == 'Darwin':
-                        # Blocking in MacOS
-                        self.print('Mac OS blocking is not supported yet.')
+                    if type(ip_to_block) == str:
+                        # Block this ip in iptables
+                        if self.platform_system == 'Linux':
+                            # Blocking in Linux
+                            os.system('sudo iptables -A slipsBlocking -s ' + ip_to_block +' -j DROP')
+                        elif self.platform_system == 'Darwin':
+                            # Blocking in MacOS
+                            self.print('Mac OS blocking is not supported yet.')
 
         except KeyboardInterrupt:
             return True
