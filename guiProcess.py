@@ -50,7 +50,7 @@ class GuiProcess(multiprocessing.Process):
 
     def run(self):
         try:
-            os.system('cd modules/kalipso;node ips_timewindows.js')
+            os.system('cd modules/kalipso;node kalipso.js')
         except KeyboardInterrupt:
             self.print('Stoppting the Gui Process')
             return True
