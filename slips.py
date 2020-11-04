@@ -152,6 +152,7 @@ if __name__ == '__main__':
 
     # Clear cache if the parameter was included
     if args.clearcache:
+        print('Deleting Cache DB in Redis.')
         clear_redis_cache_database()
 
     # If the user wants to blocks, the user needs to give a permission to modify iptables
