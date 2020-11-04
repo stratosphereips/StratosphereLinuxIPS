@@ -126,14 +126,9 @@ class Module(Module, multiprocessing.Process):
 
                         if ip_description != False: # Dont change this condition. This is the only way it works
                             # If the IP is in the blacklist of IoC. Add it as Malicious
-                            ip_data = {}
-                            # Maybe we should change the key to 'status' or something like that.
-                            ip_data['Malicious'] = ip_description
                             ip_description = json.loads(ip_description)
                             ip_info = ip_description['description']
                             ip_source = ip_description['source']
-                            __database__.setInfoForIPs(new_ip, ip_data)
-                            self.add_maliciousIP(new_ip, profileid, twid)
                             self.set_evidence_ip(new_ip, ip_source, profileid, twid, ip_state)
                     except ValueError:
                         # This is not an IP, then should be a domain
@@ -141,12 +136,7 @@ class Module(Module, multiprocessing.Process):
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(new_domain)
                         if domain_description != False: # Dont change this condition. This is the only way it works
-                            # If the domain is in the blacklist of IoC. Add it as Malicious
-                            domain_data = {}
-                            # Maybe we should change the key to 'status' or something like that.
-                            domain_data['Malicious'] = domain_description
-                            __database__.setInfoForDomains(new_domain, domain_data)
-                            self.add_maliciousDomain(new_domain, profileid, twid)
+                            # If the domain is in the blacklist of IoC. Set an evidence
                             self.set_evidence_domain(new_domain, domain_description, profileid, twid)
         except KeyboardInterrupt:
             return True
