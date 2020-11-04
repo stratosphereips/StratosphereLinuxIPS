@@ -1,3 +1,3 @@
 #!/bin/sh
-cd modules/blessed
+cd modules/kalipso
 node kalipso
