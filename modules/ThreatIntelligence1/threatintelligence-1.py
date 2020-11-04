@@ -9,7 +9,6 @@ import ipaddress
 import os
 import configparser
 import json
-import ast
 import traceback
 
 
@@ -49,48 +48,6 @@ class Module(Module, multiprocessing.Process):
             # or no section or no configuration file specified
             conf_variable = None
         return conf_variable
-
-
-    def add_maliciousIP(self, ip='', profileid='', twid=''):
-        '''
-        Add malicious IP to DB 'MaliciousIPs' with a profileid and twid where it was met
-        Returns nothing
-        '''
-
-        ip_location = __database__.get_malicious_ip(ip)
-        # if profileid or twid is None, do not put any value in a dictionary
-        if profileid != 'None':
-            try:
-                profile_tws = ip_location[profileid]
-                profile_tws = ast.literal_eval(profile_tws)
-                profile_tws.add(twid)
-                ip_location[profileid] = str(profile_tws)
-            except KeyError:
-                ip_location[profileid] = str({twid})
-        elif not ip_location:
-            ip_location = {}
-        data = json.dumps(ip_location)
-        __database__.add_malicious_ip(ip, data)
-
-    def add_maliciousDomain(self, domain='', profileid='', twid=''):
-        '''
-        Add malicious domain to DB 'MaliciousDomainss' with a profileid and twid where domain was met
-        Returns nothing
-        '''
-        domain_location = __database__.get_malicious_domain(domain)
-        # if profileid or twid is None, do not put any value in a dictionary
-        if profileid != 'None':
-            try:
-                profile_tws = domain_location[profileid]
-                profile_tws = ast.literal_eval(profile_tws)
-                profile_tws.add(twid)
-                domain_location[profileid] = str(profile_tws)
-            except KeyError:
-                domain_location[profileid] = str({twid})
-        elif not domain_location:
-            domain_location = {}
-        data = json.dumps(domain_location)
-        __database__.add_malicious_domain(domain, data)
 
     def set_evidence_ip(self, ip, ip_description='', profileid='', twid='', ip_state='ip'):
         '''
@@ -169,14 +126,9 @@ class Module(Module, multiprocessing.Process):
 
                         if ip_description != False: # Dont change this condition. This is the only way it works
                             # If the IP is in the blacklist of IoC. Add it as Malicious
-                            ip_data = {}
-                            # Maybe we should change the key to 'status' or something like that.
-                            ip_data['Malicious'] = ip_description
                             ip_description = json.loads(ip_description)
                             ip_info = ip_description['description']
                             ip_source = ip_description['source']
-                            __database__.setInfoForIPs(new_ip, ip_data)
-                            self.add_maliciousIP(new_ip, profileid, twid)
                             self.set_evidence_ip(new_ip, ip_source, profileid, twid, ip_state)
                     except ValueError:
                         # This is not an IP, then should be a domain
@@ -184,12 +136,7 @@ class Module(Module, multiprocessing.Process):
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(new_domain)
                         if domain_description != False: # Dont change this condition. This is the only way it works
-                            # If the domain is in the blacklist of IoC. Add it as Malicious
-                            domain_data = {}
-                            # Maybe we should change the key to 'status' or something like that.
-                            domain_data['Malicious'] = domain_description
-                            __database__.setInfoForDomains(new_domain, domain_data)
-                            self.add_maliciousDomain(new_domain, profileid, twid)
+                            # If the domain is in the blacklist of IoC. Set an evidence
                             self.set_evidence_domain(new_domain, domain_description, profileid, twid)
         except KeyboardInterrupt:
             return True
