@@ -49,48 +49,6 @@ class Module(Module, multiprocessing.Process):
             conf_variable = None
         return conf_variable
 
-
-    def add_maliciousIP(self, ip='', profileid='', twid=''):
-        '''
-        Add malicious IP to DB 'MaliciousIPs' with a profileid and twid where it was met
-        Returns nothing
-        '''
-
-        ip_location = __database__.get_malicious_ip(ip)
-        # if profileid or twid is None, do not put any value in a dictionary
-        if profileid != 'None':
-            try:
-                profile_tws = ip_location[profileid]
-                profile_tws = ast.literal_eval(profile_tws)
-                profile_tws.add(twid)
-                ip_location[profileid] = str(profile_tws)
-            except KeyError:
-                ip_location[profileid] = str({twid})
-        elif not ip_location:
-            ip_location = {}
-        data = json.dumps(ip_location)
-        __database__.add_malicious_ip(ip, data)
-
-    def add_maliciousDomain(self, domain='', profileid='', twid=''):
-        '''
-        Add malicious domain to DB 'MaliciousDomainss' with a profileid and twid where domain was met
-        Returns nothing
-        '''
-        domain_location = __database__.get_malicious_domain(domain)
-        # if profileid or twid is None, do not put any value in a dictionary
-        if profileid != 'None':
-            try:
-                profile_tws = domain_location[profileid]
-                profile_tws = ast.literal_eval(profile_tws)
-                profile_tws.add(twid)
-                domain_location[profileid] = str(profile_tws)
-            except KeyError:
-                domain_location[profileid] = str({twid})
-        elif not domain_location:
-            domain_location = {}
-        data = json.dumps(domain_location)
-        __database__.add_malicious_domain(domain, data)
-
     def set_evidence_ip(self, ip, ip_description='', profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
