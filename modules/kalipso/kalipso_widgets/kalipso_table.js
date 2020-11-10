@@ -88,7 +88,8 @@
             var row = [];
             var timeline_json = JSON.parse(timeline)
 
-            var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version','dns_resolution']
+			var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
+			var pink_keywords_parameter = ['dns_resolution']
             var red_keywords = ['critical warning' ]
             var orange_keywords = ['Sent','Recv','Tot','Size','Type']
             var blue_keywords = ['dport_name', 'dport_name/proto']
@@ -125,6 +126,9 @@
                 }
                 else if (red_keywords .some(element => key.includes(element))){
                   value = color.red(value);
+                }
+                else if (pink_keywords_parameter .some(element => key.includes(element))){
+                  value = color.rgb(219,112,147)(value);
                 }
                 else if (pink_keywords .some(element => key.includes(element))){
                   value = key + ':'+color.rgb(219,112,147)(value);
