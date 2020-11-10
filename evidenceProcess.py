@@ -4,6 +4,7 @@ from slips.core.database import __database__
 import json
 from datetime import datetime
 from datetime import timedelta
+import ast
 import configparser
 import platform
 
@@ -90,6 +91,76 @@ class EvidenceProcess(multiprocessing.Process):
             self.detection_threshold = 2
         self.outputqueue.put('10|evidence|Detection Threshold: {} attacks per minute ({} in the current time window width)'.format(self.detection_threshold, self.detection_threshold * self.width / 60 ))
 
+    def add_maliciousIP(self, ip='', profileid='', twid=''):
+        '''
+        Add malicious IP to DB 'MaliciousIPs' with a profileid and twid where it was met
+        Returns nothing
+        '''
+
+        ip_location = __database__.get_malicious_ip(ip)
+        # if profileid or twid is None, do not put any value in a dictionary
+        if profileid != 'None':
+            try:
+                profile_tws = ip_location[profileid]
+                profile_tws = ast.literal_eval(profile_tws)
+                profile_tws.add(twid)
+                ip_location[profileid] = str(profile_tws)
+            except KeyError:
+                ip_location[profileid] = str({twid})
+        elif not ip_location:
+            ip_location = {}
+        data = json.dumps(ip_location)
+        __database__.add_malicious_ip(ip, data)
+
+    def add_maliciousDomain(self, domain='', profileid='', twid=''):
+        '''
+        Add malicious domain to DB 'MaliciousDomainss' with a profileid and twid where domain was met
+        Returns nothing
+        '''
+        domain_location = __database__.get_malicious_domain(domain)
+        # if profileid or twid is None, do not put any value in a dictionary
+        if profileid != 'None':
+            try:
+                profile_tws = domain_location[profileid]
+                profile_tws = ast.literal_eval(profile_tws)
+                profile_tws.add(twid)
+                domain_location[profileid] = str(profile_tws)
+            except KeyError:
+                domain_location[profileid] = str({twid})
+        elif not domain_location:
+            domain_location = {}
+        data = json.dumps(domain_location)
+        __database__.add_malicious_domain(domain, data)
+
+    def set_TI_IP_detection(self, ip, ip_description, profileid, twid):
+        '''
+        Funciton to set malicious IPs in IPsInfo and other db keys.
+        :ip: detected IP
+        :ip_description: source file of detected IP
+        :profileid: profile where IP was detected
+        :twid: timewindow where IP was detected
+        '''
+
+        ip_data = {}
+        # Maybe we should change the key to 'status' or something like that.
+        ip_data['Malicious'] = ip_description
+        self.add_maliciousIP(ip, profileid, twid)
+        __database__.setInfoForIPs(ip, ip_data)  # Set in the IP info that IP is blacklisted
+
+    def set_TI_Domain_detection(self, domain, domain_description, profileid, twid):
+        '''
+        Funciton to set malicious domains in DomainsInfo and other db keys.
+        :domain: detected domain
+        :domain_description: source file of detected domain
+        :profileid: profile where domain was detected
+        :twid: timewindow where domain was detected
+        '''
+
+        domain_data = {}
+        # Maybe we should change the key to 'status' or something like that.
+        domain_data['Malicious'] = domain_description
+        self.add_maliciousDomain(domain, profileid, twid)
+        __database__.setInfoForDomains(domain, domain_data)  # Set in the DomainsInfo info that Domain is blacklisted
 
     def run(self):
         try:
@@ -120,9 +191,10 @@ class EvidenceProcess(multiprocessing.Process):
                         # CONTINUE HERE
                         ip = profileid.split(self.separator)[1]
                         for key in evidence:
-                            detection_type = key.split(':')[0]
-                            detection_info = key.split(':')[1]
-                            detection_module = key.split(':')[-1]
+                            key_split = key.split(':')
+                            detection_type = key_split[0]
+                            detection_module = key_split[-1]
+                            detection_info = key[len(detection_type)+1:-len(detection_module)-1] # In case of TI, this info is IP, in case of LSTM this is a tuple
                             data = evidence[key]
                             self.print('\tEvidence for key {}'.format(key), 5, 0)
                             confidence = float(data[0])
@@ -144,11 +216,18 @@ class EvidenceProcess(multiprocessing.Process):
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
+
                                 if detection_module == 'ThreatIntelligenceBlacklistIP':
                                     if detection_type == 'dstip':
                                         self.print('\tInfected IP {} connected to blacklisted IP {} due to {}. Accumulated evidence: {}'.format(ip, detection_info, description, accumulated_threat_level), 1, 0)
                                     elif detection_type == 'srcip':
                                         self.print('\tDetected blacklisted IP {} due to {}. Accumulated evidence: {}'.format(detection_info, description, accumulated_threat_level), 1, 0)
+                                    self.set_TI_IP_detection(detection_info, description, profileid, twid)
+
+                                elif detection_module == 'ThreatIntelligenceBlacklistDomain':
+                                    self.print('\tDETECTED DOMAIN: {} due to {}. Accumulated evidence: {}'.format(detection_info, description,accumulated_threat_level), 1, 0)
+                                    self.set_TI_Domain_detection(detection_info, description, profileid, twid)
+
                                 elif detection_module == 'LongConnection':
                                     self.print('\tDETECTED IP {} due to {}. Accumulated evidence: {}'.format(detection_info, description, accumulated_threat_level), 1, 0)
                                 else:
