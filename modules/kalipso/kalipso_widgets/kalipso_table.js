@@ -88,12 +88,11 @@
             var row = [];
             var timeline_json = JSON.parse(timeline)
 
-            var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
+            var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version','dns_resolution']
             var red_keywords = ['critical warning' ]
             var orange_keywords = ['Sent','Recv','Tot','Size','Type']
             var blue_keywords = ['dport_name', 'dport_name/proto']
             var cyan_keywords = ['daddr', 'saddr']
-            var light_pink_keywords = ['dns_resolution']
 
             if(timeline_json['timestamp']){
               var final_timeline = ''
@@ -126,9 +125,6 @@
                 }
                 else if (red_keywords .some(element => key.includes(element))){
                   value = color.red(value);
-                }
-                else if (light_pink_keywords.some(element => key.includes(element))){
-                  value = color.rgb(255,182,193)(value) ;
                 }
                 else if (pink_keywords .some(element => key.includes(element))){
                   value = key + ':'+color.rgb(219,112,147)(value);
