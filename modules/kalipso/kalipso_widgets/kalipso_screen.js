@@ -290,15 +290,15 @@ class screen {
       /*
       function to update tree widget and return to main page
       */
-      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
-        this.hotkeys[widget_idx].hide()
-      }
-      for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
-        this.mainPage[widget_idx].show()
-      }
-      this.tree_widget.getTreeDataFromDatabase() 
-      this.focus_widget.focus()
-      this.focus_widget.on()
+//      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+//        this.hotkeys[widget_idx].hide()
+//      }
+//      for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
+//        this.mainPage[widget_idx].show()
+//      }
+      this.tree_widget.getTreeDataFromDatabase()
+//      this.focus_widget.focus()
+//      this.focus_widget.on()
       this.render()
     }
     h_hotkey_routine(){
