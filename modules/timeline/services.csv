@@ -44,6 +44,8 @@ nntp,119,tcp,Network News Transfer Protocol
 nntp,119,udp,Network News Transfer Protocol
 ntp,123,tcp,Network Time Protocol
 ntp,123,udp,Network Time Protocol
+rpc,135,tcp,Microsoft RPC
+rpc,135,udp,Microsoft RPC
 netbios-ns,137,tcp,NETBIOS Name Service
 netbios-ns,137,udp,NETBIOS Name Service
 netbios-dgm,138,tcp,NETBIOS Datagram Service
@@ -86,6 +88,8 @@ kshell,544,tcp,krcmd
 kshell,544,udp,krcmd
 dhcpv6-client,546,tcp,DHCPv6 Client
 dhcpv6-client,546,udp,DHCPv6 Client
+rtsp,554,tcp,Real Time Streaming Protocol
+rtsp,554,udp,Real Time Streaming Protocol
 dhcpv6-server,547,tcp,DHCPv6 Server
 dhcpv6-server,547,udp,DHCPv6 Server
 afpovertcp,548,tcp,AFP over TCP
@@ -106,6 +110,8 @@ pop3s,995,tcp,POP3 over TLS protocol
 pop3s,995,udp,pop3 protocol over TLS/SSL (was spop3)
 nessus,1241,tcp,nessus
 nessus,1241,udp,nessus
+h.323,1720,udp,H.323 Voice-over IP
+h.323,1720,tcp,H.323 Voice-over IP
 pptp,1723,tcp,pptp
 pptp,1723,udp,pptp
 cisco-net-mgmt,1741,tcp,cisco-net-mgmt
@@ -117,6 +123,8 @@ ssdp,1900,udp,Simple Service Discovery Protocol
 gnunet,2086,tcp,GNUnet
 gnunet,2086,udp,GNUnet
 telnet-alt,2323,tcp,Telnet Alternative
+rdp,3389,udp,Microsoft Terminal Server (RDP) 
+rdp,3389,tcp,Microsoft Terminal Server (RDP) 
 Web Services Discovery (WSD) UPNP,3702,tcp,Web Services Discovery (WSD)
 Web Services Discovery (WSD) UPNP,3702,udp,Web Services Discovery (WSD)
 XMPP Chat. Google Talk. Telegram or Whatsapp,5222,tcp,XMPP Chat. Google Talk, Telegram or Whatsapp
