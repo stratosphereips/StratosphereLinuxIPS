@@ -1292,7 +1292,9 @@ class Database(object):
         to_send['flow'] = data
         to_send = json.dumps(to_send)
         self.publish('new_ssl', to_send)
-        self.print('Adding SSL flow to DB: {}'.format(data), 5,0)
+        self.print('Adding SSL flow to DB: {}'.format(data), 5, 0)
+        # Check if the server_name (SNI) is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        self.publish('give_threat_intelligence', server_name + '-' + str(profileid) + '-' + str(twid) + '-' + ' ')
 
     def add_out_http(self, profileid, twid, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
         """
@@ -1324,6 +1326,8 @@ class Database(object):
         to_send = json.dumps(to_send)
         self.publish('new_http', to_send)
         self.print('Adding HTTP flow to DB: {}'.format(data), 5,0)
+        # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        self.publish('give_threat_intelligence', host + '-' + str(profileid) + '-' + str(twid) + '-'+ ' ')
 
     def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """
