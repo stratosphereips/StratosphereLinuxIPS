@@ -155,7 +155,7 @@ class Module(Module, multiprocessing.Process):
                     # Predict the score of behavioral model being C&C channel
                     self.print(f'Predicting the sequence: {pre_behavioral_model}', 4, 0)
                     score = model.predict(behavioral_model)
-                    self.print(f' >> Sequence: {pre_behavioral_model}. Final prediction score: {score[0][0]:.20f}', 3, 0)
+                    self.print(f' >> Sequence: {pre_behavioral_model}. Final prediction score: {score[0][0]:.20f}', 5, 0)
                     # get a float instead of numpy array
                     score = score[0][0]
                     if score > threshold:
