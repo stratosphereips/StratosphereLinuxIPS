@@ -109,11 +109,14 @@ class Module(Module, multiprocessing.Process):
                 # The channel now can receive an IP address or a domain name
                 elif message['channel'] == 'give_threat_intelligence' and type(message['data']) is not int:
                     data = message['data']
+                    new_data = data[:data.find('-profile')]
                     data = data.split('-')
-                    new_data = data[0]
-                    profileid = data[1]
-                    twid = data[2]
-                    ip_state = data[3]
+                    # Some data may contain '-', so this split by '-' is
+                    # dangerous. To hack it now we access the data
+                    # from the end first
+                    profileid = data[-3]
+                    twid = data[-2]
+                    ip_state = data[-1]
                     # Check if the new data is an ip or a domain
                     try:
                         # Just try to see if it has the format of an ipv4 or ipv6
@@ -135,6 +138,7 @@ class Module(Module, multiprocessing.Process):
                         new_domain = new_data
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(new_domain)
+                        print(f'Asked domain {new_domain}: desc {domain_description}')
                         if domain_description != False: # Dont change this condition. This is the only way it works
                             # If the domain is in the blacklist of IoC. Set an evidence
                             self.set_evidence_domain(new_domain, domain_description, profileid, twid)
