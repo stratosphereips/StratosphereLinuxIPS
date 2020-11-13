@@ -138,7 +138,6 @@ class Module(Module, multiprocessing.Process):
                         new_domain = new_data
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(new_domain)
-                        print(f'Asked domain {new_domain}: desc {domain_description}')
                         if domain_description != False: # Dont change this condition. This is the only way it works
                             # If the domain is in the blacklist of IoC. Set an evidence
                             self.set_evidence_domain(new_domain, domain_description, profileid, twid)
