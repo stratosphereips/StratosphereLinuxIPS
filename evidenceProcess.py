@@ -185,7 +185,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # profiles for attackers
                     if evidence:
                         evidence = json.loads(evidence)
-                        #self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
+                        # self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
                         # CONTINUE HERE
@@ -196,7 +196,7 @@ class EvidenceProcess(multiprocessing.Process):
                             detection_module = key_split[-1]
                             detection_info = key[len(detection_type)+1:-len(detection_module)-1] # In case of TI, this info is IP, in case of LSTM this is a tuple
                             data = evidence[key]
-                            self.print('\tEvidence for key {}'.format(key), 5, 0)
+                            self.print('\tEvidence for key {}'.format(key), 3, 0)
                             confidence = float(data[0])
                             threat_level = float(data[1])
                             description = data[2]
