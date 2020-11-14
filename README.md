@@ -46,26 +46,28 @@ You can now put pcap files or other flow files in the ./dataset/ folder and anal
 
 ## Install Dependencies
 	- python 3.7+
-	- Redis database (In debian/ubuntu: apt-get install redis
-	- python3 -m pip install --upgrade pip(Be sure your pip3 is the latest!)
-	- python3 -m pip install redis(>3.4.x)
+	- Redis database (In debian/ubuntu: apt-get install redis)
+	- python3 -m pip install --upgrade pip (Be sure your pip3 is the latest)
+	- python3 -m pip install redis (>3.4.x)
 	- python3 -m pip install maxminddb
 	- python3 -m pip install watchdog
 	- python3 -m pip install validators
 	- python3 -m pip install urllib3
-	- python3 -m pip install sklearn(for the ML modules, ignore if you ignore the package)
-	- python3 -m pip install numpy(for the ML modules, ignore if you ignore the package)
-	- python3 -m pip install tensorflow(for the ML modules, ignore if you ignore the package)
-	- python3 -m pip install keras(for the ML modules, ignore if you ignore the package)
-	- python3 -m pip install pandas(for the ML modules, ignore if you ignore the package)
-	- python3 -m pip install certifi(for the VirusTotal module)
+	- python3 -m pip install sklearn (for the ML modules, ignore if you ignore the package)
+	- python3 -m pip install numpy (for the ML modules, ignore if you ignore the package)
+	- python3 -m pip install tensorflow (for the ML modules, ignore if you ignore the package)
+	- python3 -m pip install keras (for the ML modules, ignore if you ignore the package)
+	- python3 -m pip install pandas (for the ML modules, ignore if you ignore the package)
+	- python3 -m pip install certifi (for the VirusTotal module)
 	- python3 -m pip install colorama
-	- Zeek (Bro) (https://zeek.org/get-zeek/)
+	- Zeek (https://zeek.org/get-zeek/)
   
 For using Kalipso interface you need to have:
+
 	- apt-get install node.js
 	- apt-get install npm
 With npm you should install the following libraries
+
 	- npm install blessed
 	- npm install blessed-contrib
 	- npm install redis
