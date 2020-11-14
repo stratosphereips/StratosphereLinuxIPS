@@ -344,6 +344,7 @@ class Database(object):
         Mark the TW as closed so tools can work on its data
         """
         self.r.sadd('ClosedTW', profileid)
+        self.r.zrem('ModifiedTW', profileid)
         self.publish('tw_closed', profileid)
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
