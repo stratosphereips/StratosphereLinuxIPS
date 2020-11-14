@@ -18,7 +18,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'VirusTotal'
     description = 'IP address lookup on VirusTotal'
-    authors = ['Dita']
+    authors = ['Dita Hollmannova']
 
     def __init__(self, outputqueue, config, testing=False):
         multiprocessing.Process.__init__(self)
@@ -82,9 +82,8 @@ class VirusTotalModule(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.update_period = 259200
 
-
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the processes into account
 
