@@ -89,37 +89,18 @@ Slips uses Zeek to generate files for most input types.
 
 - How to install and set Zeek (Bro) properly?
 
-    - Download a binary package ready for your system. Complete up to date instructions here: https://software.opensuse.org//download.html?project=security%3Azeek&package=zeek
+    - Download a binary package ready for your system. Complete up to date instructions here https://zeek.org/get-zeek/
 
-        - For Ubuntu, for example, you can do:
-            ```
-            echo 'deb http://download.opensuse.org/repositories/security:/zeek/Debian_Testing/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
-            curl -fsSL https://download.opensuse.org/repositories/security:zeek/Debian_Testing/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security:zeek.gpg > /dev/null
-            sudo apt update
-            sudo apt install zeek
-            ```
- 
     - Make Zeek visible for Slips. Some ideas:
-        - Create a link to "/bin" folder from compiled Zeek (Bro) folder like 
+        - Create a link to "/bin" folder from compiled Zeek folder like 
             ```
-            "sudo ln -s PATH_TO_COMPILED_BRO_FOLDER/bin/bro /usr/local/bin"
+            "sudo ln -s /opt/zeek/bin/zeek /usr/local/bin"
+            ```
+
+            ```
+            "sudo ln -s PATH_TO_COMPILED_ZEEK_FOLDER/bin/zeek /usr/local/bin"
             ```
         
-            This is usually in /opt/bro
-            ```
-            "sudo ln -s /opt/bro/bin/bro /usr/local/bin"
-            ```
-
-            In case you installed Zeek 3.0, the binaries and folders are now called zeek
-            ```
-            "sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro"
-            ```
-
-            Notice how we still call the binary bro, until we update slips.
-
-        - or add path from your compiled zeek (bro) folder to ~/.bashrc file.
-
-
 # Fast usage in your own traffic
 1. Start Redis: `redis-server --daemonize yes`
 2. Run Slips: `./slips.py -c slips.conf -i <interface>` (be sure you use python3)
