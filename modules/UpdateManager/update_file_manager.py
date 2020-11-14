@@ -33,10 +33,10 @@ class UpdateFileManager:
             self.update_period = 86400
         try:
             # Read the path to where to store and read the malicious files
-            self.path_to_threat_intelligence_data = self.config.get('threatintelligence', 'malicious_ip_file_path')
+            self.path_to_threat_intelligence_data = self.config.get('threatintelligence', 'download_path_for_remote_threat_intelligence')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.path_to_threat_intelligence_data = 'modules/ThreatIntelligence1/malicious_data_files/'
+            self.path_to_threat_intelligence_data = 'modules/ThreatIntelligence1/remote_data_files/'
         try:
             # Read the list of URLs to download. Convert to list
             self.list_of_urls = self.config.get('threatintelligence', 'ti_files').split(',')
@@ -197,7 +197,6 @@ class UpdateFileManager:
             else:
                 self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
                 continue
-
 
     def __delete_old_source_IPs(self, file):
         """
