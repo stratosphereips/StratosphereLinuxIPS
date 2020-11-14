@@ -10,6 +10,8 @@ import os
 import configparser
 import json
 import traceback
+import hashlib
+import validators
 
 
 class Module(Module, multiprocessing.Process):
@@ -37,17 +39,17 @@ class Module(Module, multiprocessing.Process):
             self.timeout = None
         else:
             self.timeout = None
+        self.__read_configuration()
 
-    def __read_configuration(self, section: str, name: str) -> str:
+    def __read_configuration(self):
         """ Read the configuration file for what we need """
         # Get the time of log report
         try:
-            conf_variable = self.config.get(section, name)
+            # Read the path to where to store and read the malicious files
+            self.path_to_local_threat_intelligence_data = self.config.get('threatintelligence', 'download_path_for_local_threat_intelligence')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option,
-            # or no section or no configuration file specified
-            conf_variable = None
-        return conf_variable
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.path_to_local_threat_intelligence_data = 'modules/ThreatIntelligence1/local_data_files/'
 
     def set_evidence_ip(self, ip, ip_description='', profileid='', twid='', ip_state='ip'):
         '''
@@ -95,8 +97,161 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def __get_hash_from_file(self, filename):
+        """
+        Compute the hash of a local file
+        """
+        try:
+            # The size of each read from the file
+            BLOCK_SIZE = 65536
+
+            # Create the hash object, can use something other
+            # than `.sha256()` if you wish
+            file_hash = hashlib.sha256()
+            # Open the file to read it's bytes
+            with open(filename, 'rb') as f:
+                # Read from the file. Take in the amount declared above
+                fb = f.read(BLOCK_SIZE)
+                # While there is still data being read from the file
+                while len(fb) > 0:
+                    # Update the hash
+                    file_hash.update(fb)
+                    # Read the next block from the file
+                    fb = f.read(BLOCK_SIZE)
+
+            return file_hash.hexdigest()
+        except Exception as inst:
+            self.print('Problem on __get_hash_from_file()', 0, 0)
+            self.print(str(type(inst)), 0, 0)
+            self.print(str(inst.args), 0, 0)
+            self.print(str(inst), 0, 0)
+
+    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> None:
+        """
+        Read all the files holding IP addresses and a description and put the
+        info in a large dict.
+        This also helps in having unique ioc accross files
+        Returns nothing, but the dictionary should be filled
+        """
+        try:
+            malicious_ips_dict = {}
+            malicious_domains_dict = {}
+            with open(malicious_data_path) as malicious_file:
+
+                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
+
+                # Remove comments
+                while True:
+                    line = malicious_file.readline()
+                    # break while statement if it is not a comment line
+                    # i.e. does not startwith #
+                    if not line.startswith('#'):
+                        break
+
+                for line in malicious_file:
+                    # The format of the file should be
+                    # "0", "103.15.53.231","90", "Karel from our village. He is bad guy."
+                    # So the second column will be used as important data with
+                    # an IP or domain
+                    # In the case of domains can be
+                    # domain,www.netspy.net,NetSpy
+
+                    # Separate the lines like CSV
+                    # In the new format the ip is in the second position.
+                    # And surronded by "
+                    data = line.replace("\n","").replace("\"","").split(",")[1].strip()
+
+                    try:
+                        # In the new format the description is position 4
+                        description = line.replace("\n","").replace("\"","").split(",")[3].strip()
+                    except IndexError:
+                        description = ''
+                    self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
+
+                    # Check if ip is valid.
+                    try:
+                        ip_address = ipaddress.IPv4Address(data)
+                        # Is IPv4!
+                        # Store the ip in our local dict
+                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name})
+                    except ipaddress.AddressValueError:
+                        # Is it ipv6?
+                        try:
+                            ip_address = ipaddress.IPv6Address(data)
+                            # Is IPv6!
+                            # Store the ip in our local dict
+                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name})
+                        except ipaddress.AddressValueError:
+                            # It does not look as IP address.
+                            # So it should be a domain
+                            if validators.domain(data):
+                                domain = data
+                                # Store the ip in our local dict
+                                malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name})
+                            else:
+                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 1, 1)
+                                continue
+            # Add all loaded malicious ips to the database
+            __database__.add_ips_to_IoC(malicious_ips_dict)
+            # Add all loaded malicious domains to the database
+            __database__.add_domains_to_IoC(malicious_domains_dict)
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            self.print('Problem on the __load_malicious_datafile()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            print(traceback.format_exc())
+            return True
+
+    def load_malicious_local_files(self, path_to_files: str) -> bool:
+        try:
+            local_ti_files = os.listdir(path_to_files)
+            for localfile in local_ti_files:
+                self.print(f'Loading local TI file {localfile}', 5, 0)
+                # Get what files are stored in cache db and their E-TAG to comapre with current files
+                data = __database__.get_malicious_file_info(localfile)
+                try:
+                    old_hash = data['e-tag']
+                except TypeError:
+                    old_hash = ''
+                # In the case of the local file, we dont store the e-tag but
+                # the hash
+                new_hash = self.__get_hash_from_file(path_to_files + '/' + localfile)
+                if new_hash and old_hash != new_hash:
+                    # Our malicious file was changed. Load the new one
+                    if old_hash:
+                        # File is updated and was in database.
+                        # Delete previous data of this file.
+                        self.__delete_old_source_data_from_database(localfile)
+                    # Load updated data to the database
+                    self.__load_malicious_datafile(path_to_files + '/' + localfile, localfile)
+
+                    # self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download, file_name_to_download)
+                    # Store the new etag and time of file in the database
+                    malicious_file_info = {}
+                    malicious_file_info['e-tag'] = new_hash
+                    malicious_file_info['time'] = ''
+                    __database__.set_malicious_file_info(localfile, malicious_file_info)
+                    return True
+                elif not new_hash:
+                    # Something failed. Do not download
+                    self.print(f'Some error ocurred. Not loading  the file {localfile}', 0, 1)
+                    return False
+
+        except Exception as inst:
+            self.print('Problem on __load_malicious_local_files()', 0, 0)
+            self.print(str(type(inst)), 0, 0)
+            self.print(str(inst.args), 0, 0)
+            self.print(str(inst), 0, 0)
+
     def run(self):
         try:
+            # Load the local Threat Intelligence files that are stored in the local folder
+            # The remote files are being loaded by the UpdateManager
+            self.load_malicious_local_files(self.path_to_local_threat_intelligence_data)
+
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
@@ -130,7 +285,7 @@ class Module(Module, multiprocessing.Process):
                         if ip_description != False: # Dont change this condition. This is the only way it works
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_description = json.loads(ip_description)
-                            ip_info = ip_description['description']
+                            # ip_info = ip_description['description']
                             ip_source = ip_description['source']
                             self.set_evidence_ip(new_ip, ip_source, profileid, twid, ip_state)
                     except ValueError:
