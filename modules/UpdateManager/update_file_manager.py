@@ -218,13 +218,13 @@ class UpdateFileManager:
         """
         all_data = __database__.get_Domains_in_IoC()
         old_data = []
-        for ip_data in all_data.items():
-            ip = ip_data[0]
-            data = json.loads(ip_data[1])
+        for domain_data in all_data.items():
+            domain = domain_data[0]
+            data = json.loads(domain_data[1])
             if data["source"] == file:
-                old_data.append(ip)
+                old_data.append(domain)
         if old_data:
-            __database__.delete_domains_from_IoC_ips(old_data)
+            __database__.delete_domains_from_IoC_domains(old_data)
 
     def __delete_old_source_data_from_database(self, data_file):
         '''
@@ -247,7 +247,7 @@ class UpdateFileManager:
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
 
-                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
+                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
 
                 # Remove comments
                 while True:
