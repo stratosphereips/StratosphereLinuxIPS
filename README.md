@@ -9,7 +9,7 @@ Slips is a modular software
 
 Now Slips can be run inside a docker if you want to analyze flow or pcap files. If you need to analyze the traffic of your computer (access to the network card) then, for now, you need to install Slips in your own computer.
 
-## From the Docker Hub
+### From the Docker Hub
 
 	docker run -it --rm --net=host stratosphereips/slips:v0.7.0
 	./slips.py -c slips.conf -f dataset/test3.binetflow
@@ -39,44 +39,47 @@ You can now put pcap files or other flow files in the ./dataset/ folder and anal
 	docker run -it --rm --net=host -v ../dataset/:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f dataset/some-pcap-file.pcap
 
+## Install in your computer completely
+## Clone the repo
 
-## Dependencies
-The minimum Slips requirements are:
+	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 
-- python 3.7+
+## Install Dependencies
+		- python 3.7+
+		- Redis database (In debian/ubuntu: ```apt-get install redis```)
+		- ```python3 -m pip install --upgrade pip``` (Be sure your pip3 is the latest!)
+		- ```python3 -m pip install redis```
+		- ```python3 -m pip install maxminddb```
+		- ```python3 -m pip install watchdog```
+		- ```python3 -m pip install validators```
+		- ```python3 -m pip install urllib3```
+		- ```python3 -m pip install sklearn``` (for the ML modules, ignore if you ignore the package)
+		- ```python3 -m pip install numpy``` (for the ML modules, ignore if you ignore the package)
+		- ```python3 -m pip install tensorflow``` (for the ML modules, ignore if you ignore the package)
+		- ```python3 -m pip install keras``` (for the ML modules, ignore if you ignore the package)
+		- ```python3 -m pip install pandas``` (for the ML modules, ignore if you ignore the package)
+		- ```python3 -m pip install certifi``` (for the VirusTotal module)
+		- Zeek (Bro) (https://zeek.org/get-zeek/)
+		  
+		For using Kalipso interface you need to have:
+			- ```apt-get install node.js```
+			- ```apt-get install npm```
+		With npm you should install the following libraries
+			- npm install blessed
+			- npm install blessed-contrib
+			- npm install redis
+			- npm install async
+			- npm install chalk
+			- npm install strip-ansi
+			- npm install clipboardy 
+			- npm install fs
+			- npm install sorted-array-async
 
-- Redis database running (see http://redis.org)
-    - In debian/ubuntu: ```apt-get install redis```
-- py37-redis 3.4.1+ 
-    - In debian/ubuntu: ```pip3 install redis```
-- maxminddb libraries for python (pip3 install maxminddb). Or ignore the geoip module in the conf.
-- Zeek (Bro) https://docs.zeek.org/en/stable/install/install.html
-- python-watchdog
-    - In debian/ubuntu: ```apt-get install python3-watchdog```
-- validators (For threatintellingence module)
-	- ```python -m pip install validators```, or
-	- ```pip3 install validators```
-  
-To run redis you can:
+#### To run redis
+
     - In Linux, as a daemon: redis-server --daemonize yes
     - In macOS, as a daemon: sudo port load redis
     - By hand and leaving redis running on the console in the foreground: redis-server /opt/local/etc/redis.conf
-
-For using Kalipso interface you need to have:
-- Node.js -https://nodejs.org
-	- ```apt-get install node.js```
-	- ```apt-get install npm```
-- npm (should be automatically installed with Node.js)
-With npm you should install the following libraries
-    - npm install blessed
-    - npm install blessed-contrib
-    - npm install redis
-    - npm install async
-    - npm install chalk
-    - nom install strip-ansi
-    - npm install clipboardy 
-    - npm install fs
-    - npm install sorted-array-async
 
 ##### Installation of Zeek (Bro)
 Slips uses Zeek to generate files for most input types.
@@ -117,8 +120,10 @@ Slips uses Zeek to generate files for most input types.
 # Fast usage in your own traffic
 1. Start Redis: `redis-server --daemonize yes`
 2. Run Slips: `./slips.py -c slips.conf -i <interface>` (be sure you use python3)
-3. Check the folder called with the date of today. All files are updated every 5 seconds.
-4. Use Kalipso to see the results (option -G in Slips to start Kalipso automatically, or go to StratosphereLinuxIPS/modules/blessed and execute `node ips_timewindows.js` to start Kalipso when needed)
+3. Use Kalipso to see the results 
+ a. ./kalipso.sh
+ b. Optionally run slips with -G to start Kalipso automatically
+4. Local logs are stored in the folder called with the date of today. All files are updated every 5 seconds.
 
 Requirements to capture your own traffic:
 - curl
