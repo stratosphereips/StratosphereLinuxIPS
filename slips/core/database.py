@@ -1427,7 +1427,7 @@ class Database(object):
         """
         self.rcache.hdel('IoC_ips', *ips)
 
-    def delete_domains_from_IoC_ips(self, domains):
+    def delete_domains_from_IoC_domains(self, domains):
         """
         Delete old domains from IoC
         """
