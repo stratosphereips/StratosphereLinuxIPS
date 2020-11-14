@@ -208,7 +208,6 @@ class EvidenceProcess(multiprocessing.Process):
                             accumulated_threat_level += new_threat_level
                             self.print('\t\tAccumulated Threat Level: {}'.format(accumulated_threat_level), 5, 0)
 
-
                         # This is the part to detect if the accumulated evidence was enough for generating a detection
                         # The detection should be done in attacks per minute. The parameter in the configuration is attacks per minute
                         # So find out how many attacks corresponds to the width we are using
@@ -231,7 +230,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     self.set_TI_Domain_detection(detection_info, description, profileid, twid)
 
                                 elif detection_module == 'LongConnection':
-                                    self.print(f'{Fore.RED}\tDetected IP {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
+                                    self.print(f'{Fore.RED}\tDetected IP {detection_info} due to a {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
                                 else:
                                     self.print(f'{Fore.RED}\tDetected IP: {ip} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
 
