@@ -134,7 +134,8 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # Download lstm model
-            model = load_model('modules/lstm-cc-detection-1/detection_model-9.h5')
+            tcpmodel = load_model('modules/lstm-cc-detection-1/detection_tcpmodel-9.h5')
+            # udpmodel = load_model('modules/lstm-cc-detection-1/detection_udpmodel-9.h5')
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
@@ -142,24 +143,40 @@ class Module(Module, multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     return True
                 if message['channel'] == 'new_letters' and type(message['data']) is not int:
-                    # Define why this threshold
-                    threshold = 0.7
                     data = message['data']
                     data = data.split('-')
                     pre_behavioral_model = data[0]
                     profileid = data[1]
                     twid = data[2]
                     tupleid = data[3]
-                    # Function to convert each letter of behavioral model to ascii
-                    behavioral_model = self.convert_input_for_module(pre_behavioral_model)
-                    # Predict the score of behavioral model being C&C channel
-                    self.print(f'Predicting the sequence: {pre_behavioral_model}', 4, 0)
-                    score = model.predict(behavioral_model)
-                    self.print(f' >> Sequence: {pre_behavioral_model}. Final prediction score: {score[0][0]:.20f}', 5, 0)
-                    # get a float instead of numpy array
-                    score = score[0][0]
-                    if score > threshold:
-                        self.set_evidence(score, tupleid, profileid, twid)
+                    if 'tcp' in tupleid.lower():
+                        # Define why this threshold
+                        threshold = 0.7
+                        # function to convert each letter of behavioral model to ascii
+                        behavioral_model = self.convert_input_for_module(pre_behavioral_model)
+                        # predict the score of behavioral model being c&c channel
+                        self.print(f'predicting the sequence: {pre_behavioral_model}', 4, 0)
+                        score = tcpmodel.predict(behavioral_model)
+                        self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 5, 0)
+                        # get a float instead of numpy array
+                        score = score[0][0]
+                        if score > threshold:
+                            self.set_evidence(score, tupleid, profileid, twid)
+                    """
+                    elif 'udp' in tupleid.lower():
+                        # Define why this threshold
+                        threshold = 0.7
+                        # function to convert each letter of behavioral model to ascii
+                        behavioral_model = self.convert_input_for_module(pre_behavioral_model)
+                        # predict the score of behavioral model being c&c channel
+                        self.print(f'predicting the sequence: {pre_behavioral_model}', 4, 0)
+                        score = udpmodel.predict(behavioral_model)
+                        self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 5, 0)
+                        # get a float instead of numpy array
+                        score = score[0][0]
+                        if score > threshold:
+                            self.set_evidence(score, tupleid, profileid, twid)
+                    """
         except KeyboardInterrupt:
             return True
         except Exception as inst:
