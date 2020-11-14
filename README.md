@@ -48,7 +48,7 @@ You can now put pcap files or other flow files in the ./dataset/ folder and anal
 		- python 3.7+
 		- Redis database (In debian/ubuntu: ```apt-get install redis```)
 		- ```python3 -m pip install --upgrade pip``` (Be sure your pip3 is the latest!)
-		- ```python3 -m pip install redis```
+		- ```python3 -m pip install redis``` (>3.4.x)
 		- ```python3 -m pip install maxminddb```
 		- ```python3 -m pip install watchdog```
 		- ```python3 -m pip install validators```
