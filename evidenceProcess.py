@@ -7,13 +7,16 @@ from datetime import timedelta
 import ast
 import configparser
 import platform
+from colorama import init
+from colorama import Fore, Back, Style
+
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
-    """ 
-    A class to process the evidence from the alerts and update the threat level 
+    """
+    A class to process the evidence from the alerts and update the threat level
     It only work on evidence for IPs that were profiled
-    This should be converted into a module 
+    This should be converted into a module
     """
     def __init__(self, inputqueue, outputqueue, config):
         self.myname = 'Evidence'
@@ -36,11 +39,10 @@ class EvidenceProcess(multiprocessing.Process):
             # now linux also needs to be non-negative
             self.timeout = None
         else:
-            #??
             self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -48,7 +50,7 @@ class EvidenceProcess(multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
@@ -89,7 +91,7 @@ class EvidenceProcess(multiprocessing.Process):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified, by default...
             self.detection_threshold = 2
-        self.outputqueue.put('10|evidence|Detection Threshold: {} attacks per minute ({} in the current time window width)'.format(self.detection_threshold, self.detection_threshold * self.width / 60 ))
+        self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)')
 
     def add_maliciousIP(self, ip='', profileid='', twid=''):
         '''
@@ -219,23 +221,22 @@ class EvidenceProcess(multiprocessing.Process):
 
                                 if detection_module == 'ThreatIntelligenceBlacklistIP':
                                     if detection_type == 'dstip':
-                                        self.print('\tInfected IP {} connected to blacklisted IP {} due to {}. Accumulated evidence: {}'.format(ip, detection_info, description, accumulated_threat_level), 1, 0)
+                                        self.print(f'{Fore.RED}\tInfected IP {ip} connected to blacklisted IP {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
                                     elif detection_type == 'srcip':
-                                        self.print('\tDetected blacklisted IP {} due to {}. Accumulated evidence: {}'.format(detection_info, description, accumulated_threat_level), 1, 0)
+                                        self.print(f'{Fore.RED}\tDetected blacklisted IP {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
                                     self.set_TI_IP_detection(detection_info, description, profileid, twid)
 
                                 elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-                                    self.print('\tDETECTED DOMAIN: {} due to {}. Accumulated evidence: {}'.format(detection_info, description,accumulated_threat_level), 1, 0)
+                                    self.print(f'{Fore.RED}\tDetected domain: {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
                                     self.set_TI_Domain_detection(detection_info, description, profileid, twid)
 
                                 elif detection_module == 'LongConnection':
-                                    self.print('\tDETECTED IP {} due to {}. Accumulated evidence: {}'.format(detection_info, description, accumulated_threat_level), 1, 0)
+                                    self.print(f'{Fore.RED}\tDetected IP {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
                                 else:
-                                    self.print('\tDETECTED IP: {} due to {}. Accumulated evidence: {}'.format(ip, description,accumulated_threat_level), 1, 0)
+                                    self.print(f'{Fore.RED}\tDetected IP: {ip} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
 
                                 __database__.publish('new_blocking', ip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
-                            
         except KeyboardInterrupt:
             self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
             return True
