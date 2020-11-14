@@ -8,7 +8,6 @@ __pycache__/
 # Do not store in git the files from the IoCs that we downloaded
 *.etag
 *.time
-*.txt
 *.csv
 # Ignore the secret api key of virustotal
 api_key_secret
