@@ -106,6 +106,9 @@ class UpdateFileManager:
             path = path.replace('\`', '')
             url = url.replace(';', '')
             url = url.replace('\`', '')
+            # Check that the folder exist
+            if not os.path.isdir(path):
+                os.mkdir(path)
             command = 'curl --insecure -s ' + url + ' -o ' + path
             os.system(command)
             # Get the time of update
