@@ -138,7 +138,7 @@ class Module(Module, multiprocessing.Process):
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
 
-                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
+                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
 
                 # Remove comments
                 while True:
@@ -205,11 +205,49 @@ class Module(Module, multiprocessing.Process):
             print(traceback.format_exc())
             return True
 
+    def __delete_old_source_IPs(self, file):
+        """
+        When file is updated, delete the old IPs in the cache
+        """
+        all_data = __database__.get_IPs_in_IoC()
+        old_data = []
+        for ip_data in all_data.items():
+            ip = ip_data[0]
+            data = json.loads(ip_data[1])
+            if data["source"] == file:
+                old_data.append(ip)
+        if old_data:
+            __database__.delete_ips_from_IoC_ips(old_data)
+
+    def __delete_old_source_Domains(self, file):
+        """
+        When file is updated, delete the old Domains in the cache
+        """
+        all_data = __database__.get_Domains_in_IoC()
+        old_data = []
+        for domain_data in all_data.items():
+            domain = domain_data[0]
+            data = json.loads(domain_data[1])
+            if data["source"] == file:
+                old_data.append(domain)
+        if old_data:
+            self.print(f'deleting {old_data}')
+            __database__.delete_domains_from_IoC_domains(old_data)
+
+    def __delete_old_source_data_from_database(self, data_file):
+        '''
+        Delete old IPs of the source from the database.
+        :param data_file: the name of source to delete old IPs from.
+        '''
+        # Only read the files with .txt or .csv
+        self.__delete_old_source_IPs(data_file)
+        self.__delete_old_source_Domains(data_file)
+
     def load_malicious_local_files(self, path_to_files: str) -> bool:
         try:
             local_ti_files = os.listdir(path_to_files)
             for localfile in local_ti_files:
-                self.print(f'Loading local TI file {localfile}', 5, 0)
+                self.print(f'Loading local TI file {localfile}', 3, 0)
                 # Get what files are stored in cache db and their E-TAG to comapre with current files
                 data = __database__.get_malicious_file_info(localfile)
                 try:
@@ -221,6 +259,7 @@ class Module(Module, multiprocessing.Process):
                 new_hash = self.__get_hash_from_file(path_to_files + '/' + localfile)
                 if new_hash and old_hash != new_hash:
                     # Our malicious file was changed. Load the new one
+                    self.print(f'Updating the local TI file {localfile}', 3, 0)
                     if old_hash:
                         # File is updated and was in database.
                         # Delete previous data of this file.
@@ -228,7 +267,6 @@ class Module(Module, multiprocessing.Process):
                     # Load updated data to the database
                     self.__load_malicious_datafile(path_to_files + '/' + localfile, localfile)
 
-                    # self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download, file_name_to_download)
                     # Store the new etag and time of file in the database
                     malicious_file_info = {}
                     malicious_file_info['e-tag'] = new_hash
