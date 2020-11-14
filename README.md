@@ -59,6 +59,7 @@ You can now put pcap files or other flow files in the ./dataset/ folder and anal
 		- ```python3 -m pip install keras``` (for the ML modules, ignore if you ignore the package)
 		- ```python3 -m pip install pandas``` (for the ML modules, ignore if you ignore the package)
 		- ```python3 -m pip install certifi``` (for the VirusTotal module)
+		- ```python3 -m pip install colorama``` 
 		- Zeek (Bro) (https://zeek.org/get-zeek/)
 		  
 		For using Kalipso interface you need to have:
