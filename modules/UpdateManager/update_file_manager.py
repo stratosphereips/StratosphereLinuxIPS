@@ -96,20 +96,17 @@ class UpdateFileManager:
             self.print('{}'.format(inst), 0, 1)
             return False
 
-    def __download_file(self, url: str, path: str) -> bool:
+    def __download_file(self, url: str, filepath: str) -> bool:
         """
         Download file from the location specified in the url
         """
         try:
             # This replaces are to be sure that a user can not inject commands in curl
-            path = path.replace(';', '')
-            path = path.replace('\`', '')
+            filepath = filepath.replace(';', '')
+            filepath = filepath.replace('\`', '')
             url = url.replace(';', '')
             url = url.replace('\`', '')
-            # Check that the folder exist
-            if not os.path.isdir(path):
-                os.mkdir(path)
-            command = 'curl --insecure -s ' + url + ' -o ' + path
+            command = 'curl --insecure -s ' + url + ' -o ' + filepath
             os.system(command)
             # Get the time of update
             self.new_update_time = time.time()
@@ -121,6 +118,10 @@ class UpdateFileManager:
 
     def __download_malicious_file(self, file_to_download: str) -> bool:
         try:
+            # Check that the folder exist
+            if not os.path.isdir(self.path_to_threat_intelligence_data):
+                os.mkdir(self.path_to_threat_intelligence_data)
+
             file_name_to_download = file_to_download.split('/')[-1]
             # Get what files are stored in cache db and their E-TAG to comapre with current files
             data = __database__.get_malicious_file_info(file_name_to_download)
@@ -134,7 +135,7 @@ class UpdateFileManager:
             if new_e_tag and old_e_tag != new_e_tag:
                 # Our malicious file is old. Download new one.
                 self.print(f'Trying to download the file {file_name_to_download}', 3, 0)
-                self.__download_file(file_to_download, self.path_to_threat_intelligence_data + file_name_to_download)
+                self.__download_file(file_to_download, self.path_to_threat_intelligence_data + '/' + file_name_to_download)
 
                 if old_e_tag:
                     # File is updated and was in database. Delete previous IPs of this file.
