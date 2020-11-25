@@ -9,6 +9,8 @@ class ListTable{
       this.grid = grid
       this.redis_database = redis_database
       this.widget = this.initListTable(characteristics);
+      this.country_code = {}
+      this.read_file().then(data=>{this.country_code = data})
 }
   initListTable(characteristics){
     return this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], this.blessed.listtable, {
@@ -86,9 +88,9 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
     */
     try{
       this.redis_database.getIpInfo(ip).then(redis_IpInfo_data=>{
-        var ipInfo_data  = [['asn','geocountry','url','down','ref','com']]
+        var ipInfo_data  = [['asn','geo','url','down','ref','com']]
         var ip_info_str = "";
-        var ip_info_dict = {'asn':'', 'geocountry':'', 'VirusTotal':{'URL':'', 'down':'','ref':'','com':''}}
+        var ip_info_dict = {'asn':'', 'geo':'', 'VirusTotal':{'URL':'', 'down':'','ref':'','com':''}}
 
         var ipInfo_json = JSON.parse(redis_IpInfo_data);
         var ip_values =  Object.values(ipInfo_json);
@@ -104,9 +106,14 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
           ip_info_dict['asn'] = ipInfo_json['asn']
         }
         if(ipInfo_json.hasOwnProperty('geocountry')){
-          ip_info_dict['geocountry'] = ipInfo_json['geocountry']
-        }
-        ipInfo_data.push([ip_info_dict['asn'], ip_info_dict['geocountry'], ip_info_dict['VirusTotal']['URL'], ip_info_dict['VirusTotal']['down'],ip_info_dict['VirusTotal']['ref'],ip_info_dict['VirusTotal']['com']])
+         ip_info_dict['geo'] = this.country_code[ipInfo_json['geocountry']]}
+        if(typeof ip_info_dict['geo']  == 'undefined'){
+               ip_info_dict['geo'] = '-'
+         }
+
+
+
+        ipInfo_data.push([ip_info_dict['asn'], ip_info_dict['geo'], ip_info_dict['VirusTotal']['URL'], ip_info_dict['VirusTotal']['down'],ip_info_dict['VirusTotal']['ref'],ip_info_dict['VirusTotal']['com']])
         this.setDataIPInfo(ipInfo_data)
         this.screen.render()
       })
@@ -136,7 +143,7 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
     */
     return new Promise ((resolve, reject)=>{this.redis_database.getIpInfo(ip)
       .then(redis_IpInfo_data=>{
-          var ip_info_dict = {'asn':'', 'geocountry':'', 'URL':'', 'down':'','ref':'','com':''}
+          var ip_info_dict = {'asn':'', 'geo':'','SNI':'', 'URL':'', 'down':'','ref':'','com':''}
           if(redis_IpInfo_data==null)resolve(ip_info_dict)
           else{
             var ipInfo_json = JSON.parse(redis_IpInfo_data);
@@ -153,7 +160,15 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
               ip_info_dict['asn'] = ipInfo_json['asn']
             }
             if(ipInfo_json.hasOwnProperty('geocountry')){
-              ip_info_dict['geocountry'] = ipInfo_json['geocountry']
+
+              ip_info_dict['geo'] = this.country_code[ipInfo_json['geocountry']]}
+            if(typeof ip_info_dict['geo']  == 'undefined'){
+                ip_info_dict['geo'] = '-'
+            }
+
+
+            if(ipInfo_json.hasOwnProperty('SNI')){
+              ip_info_dict['SNI'] = ipInfo_json['SNI']
             }
             resolve( ip_info_dict)
           }
@@ -163,12 +178,12 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
 
   setOutTuples(ip, timewindow){
     /*
-    Function to combine data for outtuple hotkey - key, behavioral letters, asn, geocountry, VT
+    Function to combine data for outtuple hotkey - key, behavioral letters, asn, geo, VT
     */
     try{
       this.redis_database.getOutTuples(ip, timewindow)
       .then(redis_outTuples=>{
-        var data = [['key','string','dns_resolution','asn','geocountry','url','down','ref','com']]
+        var data = [['key','string','dns_resolution','asn','geo','SNI','url','down','ref','com']]
         if(redis_outTuples==null){this.setData(data);this.screen.render(); return;}
         else{
           var json_outTuples = JSON.parse(redis_outTuples)
@@ -191,13 +206,13 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                       async.forEachOf(dns_resolution, (dns,ind,callback)=>{
                           var row2 = [];
                           if(ind == 0){
-                            row2.push(key,letter_string_chunks[ind],dns,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                            row2.push(key,letter_string_chunks[ind],dns,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5], Object.values(ip_info_dict)[6]);
                           }
                           else{
                             if(typeof letter_string_chunks[ind] == 'undefined'){
-                               row2.push('','',dns_resolution[ind],'','','' ,'', '' , '');}
+                               row2.push('','',dns_resolution[ind],'','','','' ,'', '' , '');}
                             else{
-                               row2.push('',letter_string_chunks[ind],dns,'','','' ,'', '' , '');}
+                               row2.push('',letter_string_chunks[ind],dns,'','','','' ,'', '' , '');}
                                }
 
                            data.push(row2);
@@ -211,18 +226,18 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                       var row2 = [];
                       if(ind == 0){
                         if(typeof dns_resolution[ind] == 'undefined'){
-                            row2.push(key,chunk,'',Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                            row2.push(key,chunk,'',Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5],Object.values(ip_info_dict)[6]);
                         }
                         else{
-                            row2.push(key,chunk,dns_resolution[ind],Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                            row2.push(key,chunk,dns_resolution[ind],Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5],Object.values(ip_info_dict)[6]);
                         }
                       }
                       else{
                         if(typeof dns_resolution[ind]  == 'undefined'){
-                         row2.push('',chunk,'','','','' ,'', '' , '');
+                         row2.push('',chunk,'','','','' ,'', '' ,'', '');
                         }
                         else{
-                        row2.push('',chunk,dns_resolution[ind],'','','' ,'', '' , '');}
+                        row2.push('',chunk,dns_resolution[ind],'','','' ,'', '' , '','');}
                       }
                       data.push(row2);
                       callback(null);
@@ -232,7 +247,7 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                 }
               else{
 //              if( typeof dns_resolution === 'undefined'){dns_resolution = ''}
-                row.push(key,letters_string, dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                row.push(key,letters_string, dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5],Object.values(ip_info_dict)[6]);
                 data.push(row)
               }
                 callback(null);
@@ -254,12 +269,12 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
 
   setInTuples(ip, timewindow){
     /*
-    Function to combine data for outtuple hotkey - key, behavioral letters, asn, geocountry, VT
+    Function to combine data for outtuple hotkey - key, behavioral letters, asn, geo, VT
     */
     try{
       this.redis_database.getInTuples(ip, timewindow)
       .then(redis_outTuples=>{
-        var data = [['key','string','dns_resolution','asn','geocountry','url','down','ref','com']]
+        var data = [['key','string','dns_resolution','asn','geo','SNI','url','down','ref','com']]
         if(redis_outTuples==null){this.setData(data);this.screen.render(); return;}
         else{
           var json_outTuples = JSON.parse(redis_outTuples)
@@ -282,13 +297,13 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                       async.forEachOf(dns_resolution, (dns,ind,callback)=>{
                           var row2 = [];
                           if(ind == 0){
-                            row2.push(key,letter_string_chunks[ind],dns,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                            row2.push(key,letter_string_chunks[ind],dns,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5],Object.values(ip_info_dict)[6]);
                           }
                           else{
                             if(typeof letter_string_chunks[ind] == 'undefined'){
-                               row2.push('','',dns_resolution[ind],'','','' ,'', '' , '');}
+                               row2.push('','',dns_resolution[ind],'','','','' ,'', '' , '');}
                             else{
-                               row2.push('',letter_string_chunks[ind],dns,'','','' ,'', '' , '');}
+                               row2.push('',letter_string_chunks[ind],dns,'','','','' ,'', '' , '');}
                                }
 
                            data.push(row2);
@@ -302,18 +317,18 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                       var row2 = [];
                       if(ind == 0){
                         if(typeof dns_resolution[ind] == 'undefined'){
-                            row2.push(key,chunk,'',Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                            row2.push(key,chunk,'',Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5],Object.values(ip_info_dict)[6]);
                         }
                         else{
-                            row2.push(key,chunk,dns_resolution[ind],Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                            row2.push(key,chunk,dns_resolution[ind],Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5],Object.values(ip_info_dict)[6]);
                         }
                       }
                       else{
                         if(typeof dns_resolution[ind]  == 'undefined'){
-                         row2.push('',chunk,'','','','' ,'', '' , '');
+                         row2.push('',chunk,'','','','' ,'', '' , '','');
                         }
                         else{
-                        row2.push('',chunk,dns_resolution[ind],'','','' ,'', '' , '');}
+                        row2.push('',chunk,dns_resolution[ind],'','','' ,'', '' , '','');}
                       }
                       data.push(row2);
                       callback(null);
@@ -323,7 +338,7 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                 }
               else{
 //              if( typeof dns_resolution === 'undefined'){dns_resolution = ''}
-                row.push(key,letters_string, dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5]);
+                row.push(key,letters_string, dns_resolution,Object.values(ip_info_dict)[0].slice(0,20), Object.values(ip_info_dict)[1], Object.values(ip_info_dict)[2], Object.values(ip_info_dict)[3],Object.values(ip_info_dict)[4], Object.values(ip_info_dict)[5],Object.values(ip_info_dict)[6]);
                 data.push(row)
               }
                 callback(null);
