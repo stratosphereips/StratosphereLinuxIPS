@@ -1,4 +1,5 @@
 var async = require('async')
+var fs = require('fs')
 
 class ListTable{
   constructor(grid, blessed, contrib, redis_database,screen, characteristics){
@@ -37,6 +38,17 @@ class ListTable{
     */
     this.widget.setData(data)
   }
+
+  read_file(){
+  let code = {}
+return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (err,data)=>{
+    if(err) reject( err);
+    resolve(JSON.parse(data))
+    })
+
+  })}
+
+
   hide(){
     /*
     To hide the widget
