@@ -1262,7 +1262,7 @@ class Database(object):
             self.publish('new_flow', to_send)
             self.print('Adding complete flow to DB: {}'.format(data), 5, 0)
 
-    def add_out_ssl(self, profileid, twid, flowtype, uid, version, cipher, resumed, established, cert_chain_fuids, client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
+    def add_out_ssl(self, profileid, twid, daddr_as_obj, flowtype, uid, version, cipher, resumed, established, cert_chain_fuids, client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
         """
         Store in the DB an ssl request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
@@ -1292,9 +1292,14 @@ class Database(object):
         to_send['flow'] = data
         to_send = json.dumps(to_send)
         self.publish('new_ssl', to_send)
+
+
         self.print('Adding SSL flow to DB: {}'.format(data), 5, 0)
         # Check if the server_name (SNI) is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
-        self.publish('give_threat_intelligence', server_name + '-' + str(profileid) + '-' + str(twid) + '-' + ' ')
+        # If server_name is not empty, set in the IPsInfo and send to TI
+        if server_name:
+            self.setInfoForIPs(str(daddr_as_obj), {'SNI':server_name})
+            self.publish('give_threat_intelligence', server_name + '-' + str(profileid) + '-' + str(twid) + '-' + ' ')
 
     def add_out_http(self, profileid, twid, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
         """
