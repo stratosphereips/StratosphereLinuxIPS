@@ -135,13 +135,15 @@ class UpdateFileManager:
             if new_e_tag and old_e_tag != new_e_tag:
                 # Our malicious file is old. Download new one.
                 self.print(f'Trying to download the file {file_name_to_download}', 3, 0)
-                self.__download_file(file_to_download, self.path_to_threat_intelligence_data + '/' + file_name_to_download)
+                if not self.__download_file(file_to_download, self.path_to_threat_intelligence_data + '/' + file_name_to_download):
+                    return False
 
                 if old_e_tag:
                     # File is updated and was in database. Delete previous IPs of this file.
                     self.__delete_old_source_data_from_database(file_name_to_download)
                 # Load updated IPs to the database
-                self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download, file_name_to_download)
+                if not self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download, file_name_to_download):
+                    return False
                 # Store the new etag and time of file in the database
                 malicious_file_info = {}
                 malicious_file_info['e-tag'] = new_e_tag
@@ -253,13 +255,69 @@ class UpdateFileManager:
 
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
 
-                # Remove comments
+                # Remove comments and find the description column if possible
+                description_column = None
                 while True:
                     line = malicious_file.readline()
                     # break while statement if it is not a comment line
                     # i.e. does not startwith #
-                    if not line.startswith('#'):
+                    if line.startswith('#"type"'):
+                        # looks like the colums names, search where is the
+                        # description column
+                        for name_column in line.split(','):
+                            if name_column.lower().startswith('desc'):
+                                description_column = line.split(',').index(name_column)
+                    if not line.startswith('#') and not line.startswith('"type"'):
                         break
+
+                #
+                # Find in which column is the imporant info in this
+                # TI file (domain or ip)
+                #
+
+                # Store the current position of the TI file
+                current_file_position = malicious_file.tell()
+
+                # temp_line = malicious_file.readline()
+                data = line.replace("\n","").replace("\"","").split(",")
+                amount_of_columns = len(line.split(","))
+                if description_column is None:
+                    description_column = amount_of_columns - 1
+                # Search the first column that is an IPv4, IPv6 or domain
+                for column in range(amount_of_columns):
+                    # Check if ip is valid.
+                    try:
+                        ip_address = ipaddress.IPv4Address(data[column].strip())
+                        # Is IPv4! let go
+                        data_column = column
+                        self.print(f'The data is on column {column} and is ipv4: {ip_address}', 0, 6)
+                        break
+                    except ipaddress.AddressValueError:
+                        # Is it ipv6?
+                        try:
+                            ip_address = ipaddress.IPv6Address(data[column].strip())
+                            # Is IPv6! let go
+                            data_column = column
+                            self.print(f'The data is on column {column} and is ipv6: {ip_address}', 0, 6)
+                            break
+                        except ipaddress.AddressValueError:
+                            # It does not look as IP address.
+                            # So it should be a domain
+                            if validators.domain(data[column].strip()):
+                                data_column = column
+                                self.print(f'The data is on column {column} and is domain: {data[column]}', 0, 6)
+                                break
+                            else:
+                                # Some string that is not a domain
+                                data_column = None
+                                pass
+                if data_column is None:
+                    self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 1, 1)
+                    return False
+
+                # Now that we read the first line, go back so we
+                # can process it
+                malicious_file.seek(current_file_position)
 
                 for line in malicious_file:
                     # The format of the file should be
@@ -272,13 +330,9 @@ class UpdateFileManager:
                     # Separate the lines like CSV
                     # In the new format the ip is in the second position.
                     # And surronded by "
-                    data = line.replace("\n","").replace("\"","").split(",")[1].strip()
+                    data = line.replace("\n","").replace("\"","").split(",")[data_column].strip()
 
-                    try:
-                        # In the new format the description is position 4
-                        description = line.replace("\n","").replace("\"","").split(",")[3].strip()
-                    except IndexError:
-                        description = ''
+                    description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
                     self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
 
                     # Check if ip is valid.
@@ -308,6 +362,7 @@ class UpdateFileManager:
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
+            return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:
