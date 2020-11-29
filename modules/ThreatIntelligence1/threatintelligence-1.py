@@ -343,7 +343,8 @@ class Module(Module, multiprocessing.Process):
         try:
             # Load the local Threat Intelligence files that are stored in the local folder
             # The remote files are being loaded by the UpdateManager
-            self.load_malicious_local_files(self.path_to_local_threat_intelligence_data)
+            if not self.load_malicious_local_files(self.path_to_local_threat_intelligence_data):
+                self.print(f'Could not load the local file of TI data {self.path_to_local_threat_intelligence_data}')
 
             # Main loop function
             while True:
