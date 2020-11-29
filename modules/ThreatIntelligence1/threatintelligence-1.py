@@ -140,13 +140,72 @@ class Module(Module, multiprocessing.Process):
 
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
 
-                # Remove comments
+                # Remove comments and find the description column if possible
+                description_column = None
                 while True:
                     line = malicious_file.readline()
                     # break while statement if it is not a comment line
                     # i.e. does not startwith #
-                    if not line.startswith('#'):
+                    self.print(f'Line: {line}')
+                    if line.startswith('#"type"'):
+                        # looks like the colums names, search where is the
+                        # description column
+                        for name_column in line.split(','):
+                            if name_column.lower().startswith('desc'):
+                                description_column = line.split(',').index(name_column)
+                    if not line.startswith('#') and not line.startswith('"type"'):
                         break
+
+                #
+                # Find in which column is the imporant info in this
+                # TI file (domain or ip)
+                #
+
+                # Store the current position of the TI file
+                current_file_position = malicious_file.tell()
+
+                # temp_line = malicious_file.readline()
+                self.print(f'later Line: {line}')
+                data = line.replace("\n","").replace("\"","").split(",")
+                amount_of_columns = len(line.split(","))
+                if description_column is None:
+                    description_column = amount_of_columns - 1
+                # Search the first column that is an IPv4, IPv6 or domain
+                for column in range(amount_of_columns):
+                    # Check if ip is valid.
+                    self.print(f'Check column {column} with data {data[column]}')
+                    try:
+                        ip_address = ipaddress.IPv4Address(data[column].strip())
+                        # Is IPv4! let go
+                        data_column = column
+                        self.print(f'The data is on column {column} and is ipv4: {ip_address}', 0, 6)
+                        break
+                    except ipaddress.AddressValueError:
+                        # Is it ipv6?
+                        try:
+                            ip_address = ipaddress.IPv6Address(data[column].strip())
+                            # Is IPv6! let go
+                            data_column = column
+                            self.print(f'The data is on column {column} and is ipv6: {ip_address}', 0, 6)
+                            break
+                        except ipaddress.AddressValueError:
+                            # It does not look as IP address.
+                            # So it should be a domain
+                            if validators.domain(data[column].strip()):
+                                data_column = column
+                                self.print(f'The data is on column {column} and is domain: {data[column]}', 0, 6)
+                                break
+                            else:
+                                # Some string that is not a domain
+                                data_column = None
+                                pass
+                if data_column is None:
+                    self.print(f'Error while reading the TI file {malicious_file}. Could not find a column with an IP or domain', 1, 1)
+                    return False
+
+                # Now that we read the first line, go back so we
+                # can process it
+                malicious_file.seek(current_file_position)
 
                 for line in malicious_file:
                     # The format of the file should be
@@ -159,13 +218,9 @@ class Module(Module, multiprocessing.Process):
                     # Separate the lines like CSV
                     # In the new format the ip is in the second position.
                     # And surronded by "
-                    data = line.replace("\n","").replace("\"","").split(",")[1].strip()
+                    data = line.replace("\n","").replace("\"","").split(",")[data_column].strip()
 
-                    try:
-                        # In the new format the description is position 4
-                        description = line.replace("\n","").replace("\"","").split(",")[3].strip()
-                    except IndexError:
-                        description = ''
+                    description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
                     self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
 
                     # Check if ip is valid.
