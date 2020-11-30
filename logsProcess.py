@@ -268,7 +268,7 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] Evidence of detections in this TW:')
                     for data in evidence:
-                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence: {}'.format(data[0]), file_mode='a+', data_type='text')
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence: {}'.format(data), file_mode='a+', data_type='text')
                         self.outputqueue.put('03|logs|\t\t\t Evidence: {}'.format(data[0]))
 
                 # 3. DstIPs
