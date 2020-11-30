@@ -113,7 +113,7 @@ class UpdateFileManager:
             return True
         except Exception as e:
             self.print(f'An error occurred while downloading the file {url}.', 0, 1)
-            self.print(f'Error: {e}')
+            self.print(f'Error: {e}', 0, 1)
             return False
 
     def __download_malicious_file(self, file_to_download: str) -> bool:
