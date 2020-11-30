@@ -370,10 +370,10 @@ class screen {
             this.tree_widget.focus();}
         		this.render()
         }	
-      	else if(key.name == 'escape' || key.name == "C-c"){
+      	else if(key.name == 'q' || key.name == "C-c"){
       		return process.exit(0);
       	}
-        else if(key.name == 'q'){
+        else if(key.name == 'escape'){
           this.helpbar.selectTab(0)
           this.main_page_routine()
           this.focus_hotkey = false
