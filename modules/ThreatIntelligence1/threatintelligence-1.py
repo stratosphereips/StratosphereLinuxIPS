@@ -146,7 +146,6 @@ class Module(Module, multiprocessing.Process):
                     line = malicious_file.readline()
                     # break while statement if it is not a comment line
                     # i.e. does not startwith #
-                    self.print(f'Line: {line}')
                     if line.startswith('#"type"'):
                         # looks like the colums names, search where is the
                         # description column
@@ -165,7 +164,6 @@ class Module(Module, multiprocessing.Process):
                 current_file_position = malicious_file.tell()
 
                 # temp_line = malicious_file.readline()
-                self.print(f'later Line: {line}')
                 data = line.replace("\n","").replace("\"","").split(",")
                 amount_of_columns = len(line.split(","))
                 if description_column is None:
@@ -173,7 +171,6 @@ class Module(Module, multiprocessing.Process):
                 # Search the first column that is an IPv4, IPv6 or domain
                 for column in range(amount_of_columns):
                     # Check if ip is valid.
-                    self.print(f'Check column {column} with data {data[column]}')
                     try:
                         ip_address = ipaddress.IPv4Address(data[column].strip())
                         # Is IPv4! let go
