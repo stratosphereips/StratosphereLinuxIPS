@@ -20,6 +20,7 @@ import platform
 # Your imports
 import json
 import configparser
+from ipaddress import ip_address
 
 
 
@@ -156,7 +157,9 @@ class Module(Module, multiprocessing.Process):
                         pkts = flow_dict['pkts']
                         allbytes = flow_dict['allbytes']
 
-                        self.check_long_connection(dur, daddr, saddr,profileid, twid)
+                        # Do not check the duration of the flow if the daddr or saddr is multicast
+                        if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
+                            self.check_long_connection(dur, daddr, saddr, profileid, twid)
 
 
 
