@@ -96,6 +96,7 @@ afpovertcp,548,tcp,AFP over TCP
 afpovertcp,548,udp,AFP over TCP
 syslog-conn,601,tcp,Reliable Syslog Service
 syslog-conn,601,udp,Reliable Syslog Service
+DoT,853,tcp,DNS over TLS
 rsync,873,tcp,rsync
 rsync,873,udp,rsync
 ftps-data,989,tcp,ftp protocol
