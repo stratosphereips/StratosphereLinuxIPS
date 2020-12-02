@@ -187,24 +187,27 @@ class InputProcess(multiprocessing.Process):
                         line['type'] = filename
                     except json.decoder.JSONDecodeError:
                         # It is not JSON format. It is tab format line.
-                        line = zeek_line
+                        nline = zeek_line
                         # Ignore comments at the beginning of the file.
                         try:
-                            if line[0] == '#':
+                            if nline[0] == '#':
                                 continue
                         except IndexError:
                             continue
+                        line = {}
+                        line['type'] = filename
+                        line['data'] = nline
                         # Slow approach.
-                        timestamp = line.split('\t')[0]
+                        timestamp = nline.split('\t')[0]
                         # Faster approach, but we do not know if
                         # line = line.rstrip()
                         # line = line + '\t' + str(filename)
 
                     time_last_lines[filename] = timestamp
 
-                    # self.print('File {}. TS: {}'.format(filename, timestamp))
+                    # self.print(f'File {filename}. TS: {timestamp}')
                     # Store the line in the cache
-                    # self.print('Adding cache and time of {}'.format(filename))
+                    # self.print(f'Adding cache and time of {filename}')
                     cache_lines[filename] = line
 
             ################
