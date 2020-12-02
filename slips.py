@@ -134,7 +134,6 @@ if __name__ == '__main__':
     if check_redis_database() is False:
         terminate_slips()
 
-
     # If we need zeek (bro), test if we can run it.
     # Need to be assign to something because we pass it to inputProcess later
     zeek_bro = None
