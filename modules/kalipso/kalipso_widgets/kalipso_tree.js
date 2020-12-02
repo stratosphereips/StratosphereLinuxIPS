@@ -13,7 +13,7 @@ class Tree{
 		  this.evidence = evidence_widget
 		  this.ipinfo = ipinfo_widget
 		  this.widget =this.grid.set(0,0,5.7,1,this.contrib.tree,
-			  { vi:true 
+			  { vi:false
 			  , style: {fg:'green',border: {fg:'blue'}}
 			  , template: { lines: true }
 			  , label: 'IPs'})
