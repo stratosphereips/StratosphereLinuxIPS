@@ -127,10 +127,10 @@ class ProfilerProcess(multiprocessing.Process):
             self.label = 'unknown'
 
     def define_type(self, line):
-        """ 
-        Try to define very fast the type of input 
+        """
+        Try to define very fast the type of input
         Heuristic detection: dict (zeek from pcap of int), json (suricata), or csv (argus), or TAB separated (conn.log only from zeek)?
-        Bro actually gives us json, but it was already coverted into a dict 
+        Bro actually gives us json, but it was already coverted into a dict
         in inputProcess
         Outputs can be: zeek, suricata, argus, zeek-tabs
         """
@@ -214,9 +214,8 @@ class ProfilerProcess(multiprocessing.Process):
                 elif 'srcbytes' in field.lower():
                     self.column_idx['sbytes'] = nline.index(field)
 
-
-            # Some of the fields were not found probably, 
-            # so just delete them from the index if their value is False. 
+            # Some of the fields were not found probably,
+            # so just delete them from the index if their value is False.
             # If not we will believe that we have data on them
             # We need a temp dict because we can not change the size of dict while analyzing it
             temp_dict = {}
@@ -301,7 +300,8 @@ class ProfilerProcess(multiprocessing.Process):
 
         # Generic fields in Zeek
         self.column_values: dict = {}
-        # We need to set it to empty at the beginning so any new flow has the key 'type'
+        # We need to set it to empty at the beginning so any new flow has
+        # the key 'type'
         self.column_values['type'] = ''
         try:
             self.column_values['starttime'] = self.get_time(line[0])
@@ -1852,7 +1852,7 @@ class ProfilerProcess(multiprocessing.Process):
                     rec_lines += 1
                     if not self.input_type:
                         # Find the type of input received
-                        # This line will be discarded because 
+                        # This line will be discarded because
                         self.define_type(line)
                         # We should do this before checking the type of input so we don't lose the first line of input
 
