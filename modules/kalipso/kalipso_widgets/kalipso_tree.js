@@ -46,6 +46,7 @@ class Tree{
 		      	ip = ip.replace(' (me)','')
 		        ip = ip.replace(' (old me)','')
 		    	var timewindow = stripAnsi(node.name);
+		    	this.current_ip = ip
 		    	this.current_tw = timewindow
 		    	this.evidence.setEvidence(ip, timewindow)
 		    	this.timeline.setTimeline(ip, timewindow)
