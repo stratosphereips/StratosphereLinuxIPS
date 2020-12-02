@@ -13,7 +13,7 @@ class Tree{
 		  this.evidence = evidence_widget
 		  this.ipinfo = ipinfo_widget
 		  this.widget =this.grid.set(0,0,5.7,1,this.contrib.tree,
-			  { vi:true 
+			  { vi:true
 			  , style: {fg:'green',border: {fg:'blue'}}
 			  , template: { lines: true }
 			  , label: 'IPs'})
@@ -46,6 +46,7 @@ class Tree{
 		      	ip = ip.replace(' (me)','')
 		        ip = ip.replace(' (old me)','')
 		    	var timewindow = stripAnsi(node.name);
+		    	this.current_ip = ip
 		    	this.current_tw = timewindow
 		    	this.evidence.setEvidence(ip, timewindow)
 		    	this.timeline.setTimeline(ip, timewindow)

@@ -70,7 +70,7 @@ class ListBar{
                             },
                 
                 'OutTuples': {
-                  keys: ['g']
+                  keys: ['i']
                             },
 
                 'InTuples': {
