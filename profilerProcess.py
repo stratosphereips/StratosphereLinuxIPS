@@ -135,8 +135,15 @@ class ProfilerProcess(multiprocessing.Process):
         Outputs can be: zeek, suricata, argus, zeek-tabs
         """
         try:
+            # In the case of Zeek from an interface or pcap, the structure is a JSON
+            # So try to convert into a dict
             if type(line) == dict:
-                self.input_type = 'zeek'
+                try:
+                    _ = line['data']
+                    self.separator = '	'
+                    self.input_type = 'zeek-tabs'
+                except KeyError:
+                    self.input_type = 'zeek'
             else:
                 try:
                     data = json.loads(line)
@@ -291,12 +298,13 @@ class ProfilerProcess(multiprocessing.Process):
             # pass
         return defined_datetime
 
-    def process_zeek_tabs_input(self, line: str) -> None:
+    def process_zeek_tabs_input(self, new_line: str) -> None:
         """
         Process the tab line from zeek.
         """
-        line: str = line.rstrip()
-        line: list = line.split('\t')
+        line = new_line['data']
+        line = line.rstrip()
+        line = line.split('\t')
 
         # Generic fields in Zeek
         self.column_values: dict = {}
@@ -320,7 +328,7 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             self.column_values['daddr'] = ''
 
-        if 'conn' in line[-1]:
+        if 'conn' in new_line['type']:
             self.column_values['type'] = 'conn'
             try:
                 self.column_values['dur'] = float(line[8])
@@ -372,7 +380,7 @@ class ProfilerProcess(multiprocessing.Process):
             # We do not know the indexes of MACs.
             self.column_values['smac'] = ''
             self.column_values['dmac'] = ''
-        elif 'dns' in line[-1]:
+        elif 'dns' in new_line['type']:
             self.column_values['type'] = 'dns'
             try:
                 self.column_values['query'] = line[9]
@@ -398,7 +406,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['TTLs'] = line[22]
             except IndexError:
                 self.column_values['TTLs'] = ''
-        elif 'http' in line[-1]:
+        elif 'http' in new_line['type']:
             self.column_values['type'] = 'http'
             try:
                 self.column_values['method'] = line[7]
@@ -444,7 +452,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['resp_fuids'] = line[26]
             except IndexError:
                 self.column_values['resp_fuids'] = ''
-        elif 'ssl' in line[-1]:
+        elif 'ssl' in new_line['type']:
             self.column_values['type'] = 'ssl'
             try:
                 self.column_values['sslversion'] = line[6]
@@ -487,45 +495,45 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['server_name'] = line[9]
             except IndexError:
                 self.column_values['server_name'] = ''
-        elif 'ssh' in line[-1]:
+        elif 'ssh' in new_line['type']:
             self.column_values['type'] = 'ssh'
-        elif 'irc' in line[-1]:
+        elif 'irc' in new_line['type']:
             self.column_values['type'] = 'irc'
-        elif 'long' in line[-1]:
+        elif 'long' in new_line['type']:
             self.column_values['type'] = 'long'
-        elif 'dhcp' in line[-1]:
+        elif 'dhcp' in new_line['type']:
             self.column_values['type'] = 'dhcp'
-        elif 'dce_rpc' in line[-1]:
+        elif 'dce_rpc' in new_line['type']:
             self.column_values['type'] = 'dce_rpc'
-        elif 'dnp3' in line[-1]:
+        elif 'dnp3' in new_line['type']:
             self.column_values['type'] = 'dnp3'
-        elif 'ftp' in line[-1]:
+        elif 'ftp' in new_line['type']:
             self.column_values['type'] = 'ftp'
-        elif 'kerberos' in line[-1]:
+        elif 'kerberos' in new_line['type']:
             self.column_values['type'] = 'kerberos'
-        elif 'mysql' in line[-1]:
+        elif 'mysql' in new_line['type']:
             self.column_values['type'] = 'mysql'
-        elif 'modbus' in line[-1]:
+        elif 'modbus' in new_line['type']:
             self.column_values['type'] = 'modbus'
-        elif 'ntlm' in line[-1]:
+        elif 'ntlm' in new_line['type']:
             self.column_values['type'] = 'ntlm'
-        elif 'rdp' in line[-1]:
+        elif 'rdp' in new_line['type']:
             self.column_values['type'] = 'rdp'
-        elif 'sip' in line[-1]:
+        elif 'sip' in new_line['type']:
             self.column_values['type'] = 'sip'
-        elif 'smb_cmd' in line[-1]:
+        elif 'smb_cmd' in new_line['type']:
             self.column_values['type'] = 'smb_cmd'
-        elif 'smb_files' in line[-1]:
+        elif 'smb_files' in new_line['type']:
             self.column_values['type'] = 'smb_files'
-        elif 'smb_mapping' in line[-1]:
+        elif 'smb_mapping' in new_line['type']:
             self.column_values['type'] = 'smb_mapping'
-        elif 'smtp' in line[-1]:
+        elif 'smtp' in new_line['type']:
             self.column_values['type'] = 'smtp'
-        elif 'socks' in line[-1]:
+        elif 'socks' in new_line['type']:
             self.column_values['type'] = 'socks'
-        elif 'syslog' in line[-1]:
+        elif 'syslog' in new_line['type']:
             self.column_values['type'] = 'syslog'
-        elif 'tunnel' in line[-1]:
+        elif 'tunnel' in new_line['type']:
             self.column_values['type'] = 'tunnel'
 
     def process_zeek_input(self, line):
