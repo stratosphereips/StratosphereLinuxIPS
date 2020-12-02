@@ -247,7 +247,7 @@ class screen {
       ['estDstPortClient',  'totalflows','totalpkts','totalbytes'],['NotEstDstPortClient',  'totalflows','totalpkts','totalbytes'])
     }
 
-    g_hotkey_routine(){
+    i_hotkey_routine(){
       /*
       Function to fill and prepare the widget with out tuples  
       */
@@ -403,9 +403,9 @@ class screen {
           this.e_hotkey_routine()
           this.focus_hotkey = true
         }
-        else if(key.name == 'g'){
+        else if(key.name == 'i'){
           this.helpbar.selectTab(6)
-          this.g_hotkey_routine()
+          this.i_hotkey_routine()
           this.focus_hotkey = false
         }
         else if(key.name == 'y'){
