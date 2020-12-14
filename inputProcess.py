@@ -287,12 +287,16 @@ class InputProcess(multiprocessing.Process):
 
                 # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
                 if not self.input_information or self.input_information == '-':
+                    self.print('Receiving flows from the stdin.', 3, 0)
                     # By default read the stdin
                     sys.stdin.close()
                     sys.stdin = os.fdopen(0, 'r')
                     file_stream = sys.stdin
-                    for line in file_stream:
-                        self.print('	> Sent Line: {}'.format(line.replace('\n', '')), 0, 3)
+                    line = {}
+                    line['type'] = 'conn.log'
+                    for t_line in file_stream:
+                        line['data'] = t_line
+                        self.print(f'	> Sent Line: {t_line}', 0, 3)
                         self.profilerqueue.put(line)
                         lines += 1
 
@@ -301,8 +305,13 @@ class InputProcess(multiprocessing.Process):
                     try:
                         # Try read a unique Zeek file
                         file_stream = open(self.input_information)
-                        for line in file_stream:
-                            self.print('	> Sent Line: {}'.format(line.replace('\n', '')), 0, 3)
+
+                        self.print(f'Receiving flows from the single file {self.input_information}', 3, 0)
+                        line = {}
+                        line['type'] = self.input_information.split('/')[-1]
+                        for t_line in file_stream:
+                            line['data'] = t_line
+                            self.print(f'	> Sent Line: {t_line}', 0, 3)
                             self.profilerqueue.put(line)
                             lines += 1
                     except IsADirectoryError:
