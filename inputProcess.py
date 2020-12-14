@@ -139,7 +139,6 @@ class InputProcess(multiprocessing.Process):
     def read_zeek_files(self) -> int:
         # Get the zeek files in the folder now
         zeek_files = __database__.get_all_zeek_file()
-        self.print(f'Working with the following Zeek files: {zeek_files}', 2, 0)
         open_file_handlers = {}
         time_last_lines = {}
         cache_lines = {}
