@@ -283,7 +283,6 @@ class Module(Module, multiprocessing.Process):
             if data["source"] == file:
                 old_data.append(domain)
         if old_data:
-            self.print(f'deleting {old_data}')
             __database__.delete_domains_from_IoC_domains(old_data)
 
     def __delete_old_source_data_from_database(self, data_file):
