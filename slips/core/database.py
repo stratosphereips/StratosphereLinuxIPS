@@ -330,7 +330,7 @@ class Database(object):
         """
         Get the time when this TW was modified
         """
-        data = self.r.zrange('ModifiedTW', 0, -1, withscores=True)
+        data = self.r.zcore('ModifiedTW', profileid + self.separator + twid)
         if not data:
             data = -1
         return data
