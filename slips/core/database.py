@@ -387,7 +387,7 @@ class Database(object):
         for profile_tw_to_close in profiles_tws_to_close:
             profile_tw_to_close_id = profile_tw_to_close[0]
             profile_tw_to_close_time = profile_tw_to_close[1]
-            self.print(f'The profile id {profile_tw_to_close_id} has to be closed because it was last modifed on {profile_tw_to_close_time} and we are closing everything older than {modification_time}. Current time {sit}. Difference: {modification_time - profile_to_close_time}', 7, 0)
+            self.print(f'The profile id {profile_tw_to_close_id} has to be closed because it was last modifed on {profile_tw_to_close_time} and we are closing everything older than {modification_time}. Current time {sit}. Difference: {modification_time - profile_tw_to_close_time}', 7, 0)
             self.markProfileTWAsClosed(profile_tw_to_close_id)
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
