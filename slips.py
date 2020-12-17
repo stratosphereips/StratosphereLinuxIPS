@@ -318,11 +318,15 @@ if __name__ == '__main__':
         while True:
             # Sleep some time to do rutine checks
             time.sleep(check_time_sleep)
+            slips_internal_time = __database__.getSlipsInternalTime()
             # Get the amount of modified time windows since we last checked
             TWModifiedforProfile = __database__.getModifiedTWSinceTime(float(slips_internal_time) + 1)
-            slips_internal_time = __database__.getSlipsInternalTime()
             # TWModifiedforProfile = __database__.getModifiedTW()
             amount_of_modified = len(TWModifiedforProfile)
+            # Get th time of last modified timewindow and set it as a new
+            if amount_of_modified != 0:
+                time_last_modified_tw = TWModifiedforProfile[-1][-1]
+                __database__.setSlipsInternalTime(time_last_modified_tw)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))

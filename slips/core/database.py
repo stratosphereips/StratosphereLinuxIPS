@@ -330,7 +330,7 @@ class Database(object):
         """
         Get the time when this TW was modified
         """
-        data = self.r.zrange('ModifiedTW', 0, -1, withscores=True)
+        data = self.r.zcore('ModifiedTW', profileid + self.separator + twid)
         if not data:
             data = -1
         return data
@@ -339,16 +339,15 @@ class Database(object):
         return self.r.get('slips_internal_time')
 
     def setSlipsInternalTime(self, timestamp):
-        current_time = self.getSlipsInternalTime()
         self.r.set('slips_internal_time', timestamp)
 
-    def markProfileTWAsClosed(self, profileid):
+    def markProfileTWAsClosed(self, profileid_tw):
         """
         Mark the TW as closed so tools can work on its data
         """
-        self.r.sadd('ClosedTW', profileid)
-        self.r.zrem('ModifiedTW', profileid)
-        self.publish('tw_closed', profileid)
+        self.r.sadd('ClosedTW', profileid_tw)
+        self.r.zrem('ModifiedTW', profileid_tw)
+        self.publish('tw_closed', profileid_tw)
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
         """
@@ -362,24 +361,10 @@ class Database(object):
         """
         # Add this tw to the list of modified TW, so others can
         # check only these later
-
-        # If we dont receive a timestmp, do not update the timestamp
-        if timestamp and type(timestamp) is not float:
-            # We received a datetime object, get the epoch time
-            # Update the slips internal time (sit)
-            self.setSlipsInternalTime(timestamp.timestamp())
-            # Store the modifed TW with the time
-            data = {}
-            data[profileid + self.separator + twid] = float(timestamp.timestamp())
-            self.r.zadd('ModifiedTW', data)
-        elif timestamp and type(timestamp) is float:
-            # We recevied an epoch time
-            # Update the slips internal time (sit)
-            self.setSlipsInternalTime(timestamp)
-            # Store the modifed TW with the time
-            data = {}
-            data[profileid + self.separator + twid] = float(timestamp)
-            self.r.zadd('ModifiedTW', data)
+        data = {}
+        timestamp = time.time()
+        data[profileid + self.separator + twid] = float(timestamp)
+        self.r.zadd('ModifiedTW', data)
 
         self.publish('tw_modified', profileid + ':' + twid)
 
@@ -398,12 +383,12 @@ class Database(object):
         modification_time = float(sit) - self.width
         # To test the time
         modification_time = float(sit) - 20
-        profiles_to_close = self.r.zrangebyscore('ModifiedTW', 0, modification_time, withscores=True)
-        for profile_to_close in profiles_to_close:
-            profile_to_close_id = profile_to_close[0]
-            profile_to_close_time = profile_to_close[1]
-            self.print(f'The profile id {profile_to_close_id} has to be closed because it was last modifed on {profile_to_close_time} and we are closing everything older than {modification_time}. Current time {sit}. Difference: {modification_time - profile_to_close_time}', 7, 0)
-            self.markProfileTWAsClosed(profile_to_close_id)
+        profiles_tws_to_close = self.r.zrangebyscore('ModifiedTW', 0, modification_time, withscores=True)
+        for profile_tw_to_close in profiles_tws_to_close:
+            profile_tw_to_close_id = profile_tw_to_close[0]
+            profile_tw_to_close_time = profile_tw_to_close[1]
+            self.print(f'The profile id {profile_tw_to_close_id} has to be closed because it was last modifed on {profile_tw_to_close_time} and we are closing everything older than {modification_time}. Current time {sit}. Difference: {modification_time - profile_tw_to_close_time}', 7, 0)
+            self.markProfileTWAsClosed(profile_tw_to_close_id)
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
