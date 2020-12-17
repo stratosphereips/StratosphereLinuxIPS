@@ -9,11 +9,15 @@ import configparser
 import time
 import json
 import traceback
+from colorama import init
+from colorama import Fore, Back, Style
+
 
 # Input Process
 class InputProcess(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, outputqueue, profilerqueue, input_type, input_information, config, packet_filter, zeek_or_bro):
+    def __init__(self, outputqueue, profilerqueue, input_type,
+                 input_information, config, packet_filter, zeek_or_bro):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
@@ -29,7 +33,8 @@ class InputProcess(multiprocessing.Process):
         self.zeek_or_bro = zeek_or_bro
         # Read the configuration
         self.read_configuration()
-        # If we were given something from command line, has preference over the configuration file
+        # If we were given something from command line, has preference
+        # over the configuration file
         if packet_filter:
             self.packet_filter = "'" + packet_filter + "'"
         self.event_handler = None
@@ -51,7 +56,7 @@ class InputProcess(multiprocessing.Process):
             self.tcp_inactivity_timeout = ''
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -59,10 +64,11 @@ class InputProcess(multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
+        # self.name = f'{Fore.YELLOW}{self.name}{Style.RESET_ALL}'
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
@@ -280,12 +286,16 @@ class InputProcess(multiprocessing.Process):
 
                 # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
                 if not self.input_information or self.input_information == '-':
+                    self.print('Receiving flows from the stdin.', 3, 0)
                     # By default read the stdin
                     sys.stdin.close()
                     sys.stdin = os.fdopen(0, 'r')
                     file_stream = sys.stdin
-                    for line in file_stream:
-                        self.print('	> Sent Line: {}'.format(line.replace('\n', '')), 0, 3)
+                    line = {}
+                    line['type'] = 'conn.log'
+                    for t_line in file_stream:
+                        line['data'] = t_line
+                        self.print(f'	> Sent Line: {t_line}', 0, 3)
                         self.profilerqueue.put(line)
                         lines += 1
 
@@ -294,8 +304,13 @@ class InputProcess(multiprocessing.Process):
                     try:
                         # Try read a unique Zeek file
                         file_stream = open(self.input_information)
-                        for line in file_stream:
-                            self.print('	> Sent Line: {}'.format(line.replace('\n', '')), 0, 3)
+
+                        self.print(f'Receiving flows from the single file {self.input_information}', 3, 0)
+                        line = {}
+                        line['type'] = self.input_information.split('/')[-1]
+                        for t_line in file_stream:
+                            line['data'] = t_line
+                            self.print(f'	> Sent Line: {t_line}', 0, 3)
                             self.profilerqueue.put(line)
                             lines += 1
                     except IsADirectoryError:
@@ -349,7 +364,6 @@ class InputProcess(multiprocessing.Process):
                 self.event_observer.schedule(self.event_handler, self.zeek_folder, recursive=True)
                 # Start the observer
                 self.event_observer.start()
-                # Start the observer
 
                 # This double if is horrible but we just need to change a string
                 if self.input_type == 'interface':
@@ -379,6 +393,7 @@ class InputProcess(multiprocessing.Process):
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
                 command = "cd " + self.zeek_folder + "; "+self.zeek_or_bro +" -C " +bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                self.print(f'Zeek command: {command}', 3, 0)
                 # Run zeek.
                 os.system(command)
 

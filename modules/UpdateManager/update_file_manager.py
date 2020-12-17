@@ -107,6 +107,7 @@ class UpdateFileManager:
             url = url.replace(';', '')
             url = url.replace('\`', '')
             command = 'curl --insecure -s ' + url + ' -o ' + filepath
+            self.print(f'Downloading with curl command: {command}', 0, 6)
             os.system(command)
             # Get the time of update
             self.new_update_time = time.time()
@@ -267,7 +268,7 @@ class UpdateFileManager:
                         for name_column in line.split(','):
                             if name_column.lower().startswith('desc'):
                                 description_column = line.split(',').index(name_column)
-                    if not line.startswith('#') and not line.startswith('"type"'):
+                    if not line.startswith('#') and not line.lower().strip().startswith('"type"') and not line.lower().strip().startswith('type'):
                         break
 
                 #

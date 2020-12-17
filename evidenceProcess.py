@@ -1,5 +1,4 @@
 import multiprocessing
-import time
 from slips.core.database import __database__
 import json
 from datetime import datetime
@@ -19,7 +18,7 @@ class EvidenceProcess(multiprocessing.Process):
     This should be converted into a module
     """
     def __init__(self, inputqueue, outputqueue, config):
-        self.myname = 'Evidence'
+        self.name = 'Evidence'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -54,8 +53,9 @@ class EvidenceProcess(multiprocessing.Process):
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
+        # self.name = f'{Style.DIM}{Fore.RED}{self.name}{Style.RESET_ALL}'
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.myname + '|[' + self.myname + '] ' + str(text))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
