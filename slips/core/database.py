@@ -361,24 +361,10 @@ class Database(object):
         """
         # Add this tw to the list of modified TW, so others can
         # check only these later
-
-        # If we dont receive a timestmp, do not update the timestamp
-        if timestamp and type(timestamp) is not float:
-            # We received a datetime object, get the epoch time
-            # Update the slips internal time (sit)
-            self.setSlipsInternalTime(timestamp.timestamp())
-            # Store the modifed TW with the time
-            data = {}
-            data[profileid + self.separator + twid] = float(timestamp.timestamp())
-            self.r.zadd('ModifiedTW', data)
-        elif timestamp and type(timestamp) is float:
-            # We recevied an epoch time
-            # Update the slips internal time (sit)
-            self.setSlipsInternalTime(timestamp)
-            # Store the modifed TW with the time
-            data = {}
-            data[profileid + self.separator + twid] = float(timestamp)
-            self.r.zadd('ModifiedTW', data)
+        data = {}
+        timestamp = time.time()
+        data[profileid + self.separator + twid] = float(timestamp)
+        self.r.zadd('ModifiedTW', data)
 
         self.publish('tw_modified', profileid + ':' + twid)
 
