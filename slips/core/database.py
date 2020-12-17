@@ -339,7 +339,6 @@ class Database(object):
         return self.r.get('slips_internal_time')
 
     def setSlipsInternalTime(self, timestamp):
-        current_time = self.getSlipsInternalTime()
         self.r.set('slips_internal_time', timestamp)
 
     def markProfileTWAsClosed(self, profileid_tw):
