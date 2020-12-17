@@ -71,7 +71,7 @@ class Database(object):
         self.r.delete('zeekfiles')
 
         # By default the slips internal time is 0 until we receive something
-        self.r.set('slips_internal_time', 0)
+        self.setSlipsInternalTime(0)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -338,6 +338,10 @@ class Database(object):
     def getSlipsInternalTime(self):
         return self.r.get('slips_internal_time')
 
+    def setSlipsInternalTime(self, timestamp):
+        current_time = self.getSlipsInternalTime()
+        self.r.set('slips_internal_time', timestamp)
+
     def markProfileTWAsClosed(self, profileid):
         """
         Mark the TW as closed so tools can work on its data
@@ -363,7 +367,7 @@ class Database(object):
         if timestamp and type(timestamp) is not float:
             # We received a datetime object, get the epoch time
             # Update the slips internal time (sit)
-            self.r.set('slips_internal_time', timestamp.timestamp())
+            self.setSlipsInternalTime(timestamp.timestamp())
             # Store the modifed TW with the time
             data = {}
             data[profileid + self.separator + twid] = float(timestamp.timestamp())
@@ -371,7 +375,7 @@ class Database(object):
         elif timestamp and type(timestamp) is float:
             # We recevied an epoch time
             # Update the slips internal time (sit)
-            self.r.set('slips_internal_time', timestamp)
+            self.setSlipsInternalTime(timestamp)
             # Store the modifed TW with the time
             data = {}
             data[profileid + self.separator + twid] = float(timestamp)
@@ -389,7 +393,7 @@ class Database(object):
         were modified with the slips internal time
         """
         # Get internal time
-        sit = self.r.get('slips_internal_time')
+        sit = self.getSlipsInternalTime()
         # for each modified profile
         modification_time = float(sit) - self.width
         # To test the time
