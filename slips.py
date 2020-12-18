@@ -16,7 +16,7 @@ import warnings
 from modules.UpdateManager.update_file_manager import UpdateFileManager
 import json
 
-version = '0.7.0'
+version = '0.7.1'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
