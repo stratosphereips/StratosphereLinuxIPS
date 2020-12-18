@@ -3,6 +3,7 @@ from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
 import platform
+import traceback
 
 # Your imports
 import time
@@ -35,6 +36,7 @@ class Module(Module, multiprocessing.Process):
         self.alerted_malicous_ips_dict = {}
         # Read information how we should print timestamp.
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
+        self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         # Wait a little so we give time to have something to print 
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
@@ -103,42 +105,25 @@ class Module(Module, multiprocessing.Process):
         """
         Receives a flow and it process it for this profileid and twid so its printed by the logprocess later
         """
-        timestamp = self.process_timestamp(timestamp)
+        timestamp_human = self.process_timestamp(timestamp)
+
         try:
             # Convert the common fields to something that can be interpreted
             uid = next(iter(flow))
             flow_dict = json.loads(flow[uid])
-            
+            profile_ip = profileid.split('_')[1]
             dur = flow_dict['dur']
             stime = flow_dict['ts']
             saddr = flow_dict['saddr']
             sport = flow_dict['sport']
             daddr = flow_dict['daddr']
-            # Get data from the dst IP address
-            daddr_data = __database__.getIPData(daddr)
-            try:
-                daddr_country = daddr_data['geocountry']
-            except KeyError:
-                daddr_country = 'Unknown'
-            try:
-                daddr_asn = daddr_data['asn']
-            except KeyError:
-                daddr_asn = 'Unknown'
-            try:
-                if daddr_data['Malicious']:
-                    daddr_malicious = 'Malicious'
-                daddr_malicious_info = daddr_data['description']
-            except KeyError:
-                daddr_malicious = ''
-                daddr_malicious_info = ''
-
-            daddr_data_str = ', '.join("{!s}={!r}".format(key,val) for (key,val) in daddr_data.items())
-
             dport = flow_dict['dport']
-            proto = flow_dict['proto'].lower()
+            proto = flow_dict['proto'].upper()
 
             # Here is where we see if we know this dport
-            dport_name = __database__.get_port_info(str(dport)+'/'+proto)
+            dport_name = __database__.get_port_info(str(dport)+'/'+proto.lower())
+            if dport_name:
+                dport_name = dport_name.upper()
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
@@ -172,120 +157,184 @@ class Module(Module, multiprocessing.Process):
             time.sleep(0.05)
             alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
 
-
             # Now that we have the flow processed. Try to interpret it and create the activity line
             # Record Activity
-            activity = ''
-            if 'tcp' in proto or 'udp' in proto:
-                if dport_name and state.lower() == 'established':
-                    # Check if appart from being established the connection sent anything!
-                    if allbytes:
-                        activity = '- {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {} | {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
-                    else:
-                        activity = '- {} asked to {} {}/{}, Be careful! Established but empty! Sent: {}, Recv: {}, Tot: {} | {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
-                # In here we try to capture the situation when only 1 udp packet is sent. Looks like not established, but is actually maybe ok
-                elif dport_name and 'notest' in state.lower() and proto == 'udp' and allbytes == sbytes:
-                    activity = '- Not answered {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {} | {} \n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
-                elif dport_name and 'notest' in state.lower():
-                    activity = '- NOT Established {} asked to {} {}/{}, Sent: {}, Recv: {}, Tot: {} | {}\n'.format(dport_name, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
-                else:
-                    # This is not recognized. Do our best
-                    activity = '[!] - Not recognized {} flow from {} to {} dport {}/{}, Sent: {}, Recv: {}, Tot: {} | {}\n'.format(state.lower(), saddr, daddr, dport, proto, sbytes, allbytes - sbytes, allbytes_human, daddr_data_str)
-            elif 'icmp' in proto:
-                if type(sport) == int:
-                    # zeek puts the number
-                    if sport == 8:
-                        dport_name = 'PING echo'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    # SEARCH FOR ZEEK for 0x0103
-                    # dport_name = 'ICMP Host Unreachable'
-                    # activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
-                    #elif '0x0303' in sport: # SEARCH FOR ZEEK
-                    #    dport_name = 'ICMP Port Unreachable'
-                    #    activity = '- {} sent to {}, unreachable port is {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_country, daddr_asn)
-                    elif sport == 11:
-                        dport_name = 'ICMP Time Excedded in Transit'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    elif sport == 3:
-                        dport_name = 'ICMP Destination Net Unreachable'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    else:
-                        dport_name = 'ICMP Unknown type'
-                        activity = '- {} sent to {}, Type: 0x{}, Size: {} | {}\n'.format(dport_name, daddr, sport, allbytes_human, daddr_data_str)
-                elif type(sport) == str:
-                    # Argus puts in hex the values of the ICMP
-                    if '0x0008' in sport:
-                        dport_name = 'PING echo'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    elif '0x0103' in sport:
-                        dport_name = 'ICMP Host Unreachable'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    elif '0x0303' in sport:
-                        dport_name = 'ICMP Port Unreachable'
-                        activity = '- {} sent to {}, unreachable port is {}, Size: {} | {}\n'.format(dport_name, daddr, int(dport,16), allbytes_human, daddr_data_str)
-                    elif '0x000b' in sport:
-                        #activity = '- {} sent to {}, Size: {}, Country: {}, ASN Org: {}\n'.format(dport_name, daddr, allbytes_human, daddr_country, daddr_asn)
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    elif '0x0003' in sport:
-                        dport_name = 'ICMP Destination Net Unreachable'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-                    else:
-                        dport_name = 'ICMP Unknown type'
-                        activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
-            elif 'igmp' in proto:
-                dport_name = 'IGMP'
-                activity = '- {} sent to {}, Size: {} | {}\n'.format(dport_name, daddr, allbytes_human, daddr_data_str)
+            activity = {}
+            # Change the format of timeline in the case of inbound flows for external IP, i.e direction 'all' and destination IP == profile IP.
+            # If not changed, it would have printed  'IP1 https asked to IP1'.
+            if self.analysis_direction == 'all' and str(daddr) == str(profile_ip):
+                if 'TCP' in proto or 'UDP' in proto:
+                    warning_empty = ''
+                    critical_warning_dport_name = ''
+                    dns_resolution = ''
+                    dns_resolution = __database__.get_dns_resolution(daddr)
+                    # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
+                    if len(dns_resolution) > 3:
+                        dns_resolution = dns_resolution[-1]
 
-            # Store the activity of normal flows in the DB for this profileid and twid
-            if activity:
-                __database__.add_timeline_line(profileid, twid, activity, timestamp)
-            self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+                    if not dns_resolution:
+                        dns_resolution = '????'
+
+                    # Check if the connection sent anything!
+                    if not allbytes:
+                        warning_empty = ', Empty!'
+
+                    # Check if slips and zeek know dport_name!
+                    if not dport_name:
+                        dport_name = '????'
+                        critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
+
+                    #activity = { 'timestamp': timestamp_human, 'dport_name/proto': dport_name+'/'+str(proto), 'preposition': 'from', 'saddr': saddr,'state': state.lower(), 'warning': warning_empty, 'Sent': allbytes-sbytes, 'Recv': sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
+
+                    activity = { 'timestamp': timestamp_human, 'dport_name': dport_name, 'preposition': 'from','dns_resolution':dns_resolution, 'saddr': saddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
+
+                elif 'ICMP' in proto:
+                    if type(sport) == int:
+                        # zeek puts the number
+                        if sport == 8:
+                            dport_name = 'PING echo'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                        elif sport == 11:
+                            dport_name = 'ICMP Time Excedded in Transit'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                        elif sport == 3:
+                            dport_name = 'ICMP Destination Net Unreachable'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                        else:
+                            dport_name = 'ICMP Unknown type'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Type':'0x'+str(sport), 'Size': allbytes_human}
+                    elif type(sport) == str:
+                        # Argus puts in hex the values of the ICMP
+                        if '0x0008' in sport:
+                            dport_name = 'PING echo'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                        elif '0x0103' in sport:
+                            dport_name = 'ICMP Host Unreachable'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                        elif '0x0303' in sport:
+                            dport_name = 'ICMP Port Unreachable'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'warning': 'unreachable port is '+ str(int(dport,16)), 'Size': allbytes_human}
+                        elif '0x000b' in sport:
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                        elif '0x0003' in sport:
+                            dport_name = 'ICMP Destination Net Unreachable'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                        else:
+                            dport_name = 'ICMP Unknown type'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+                elif 'IGMP' in proto:
+                    dport_name = 'IGMP'
+                    activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'from', 'saddr': saddr, 'Size': allbytes_human}
+            else:
+                if 'TCP' in proto or 'UDP' in proto:
+                    warning_empty = ''
+                    critical_warning_dport_name = ''
+                    dns_resolution = ''
+
+                    # Check if the connection sent anything!
+                    if not allbytes:
+                        warning_empty = 'Empty!'
+
+                    # Check if slips and zeek know dport_name!
+                    if not dport_name:
+                        dport_name = '????'
+                        critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
+                    dns_resolution = __database__.get_dns_resolution(daddr)
+                    # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
+                    if len(dns_resolution) > 3:
+                        dns_resolution = dns_resolution[-1]
+
+                    if not dns_resolution:
+                        dns_resolution = '????'
+                    activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to','dns_resolution':dns_resolution, 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
+
+                elif 'ICMP' in proto:
+                    if type(sport) == int:
+                        # zeek puts the number
+                        if sport == 8:
+                            dport_name = 'PING echo'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                        elif sport == 11:
+                            dport_name = 'ICMP Time Excedded in Transit'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                        elif sport == 3:
+                            dport_name = 'ICMP Destination Net Unreachable'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                        else:
+                            dport_name = 'ICMP Unknown type'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Type': '0x' + str(sport), 'Size': allbytes_human}
+
+                    elif type(sport) == str:
+                        # Argus puts in hex the values of the ICMP
+                        if '0x0008' in sport:
+                            dport_name = 'PING echo'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                        elif '0x0103' in sport:
+                            dport_name = 'ICMP Host Unreachable'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                        elif '0x0303' in sport:
+                            dport_name = 'ICMP Port Unreachable'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'warning':', unreachable port is'+ str(int(dport,16)),'Size': allbytes_human}
+                        elif '0x000b' in sport:
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                        elif '0x0003' in sport:
+                            dport_name = 'ICMP Destination Net Unreachable'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                        else:
+                            dport_name = 'ICMP Unknown type'
+                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
+                elif 'IGMP' in proto:
+                    dport_name = 'IGMP'
+                    activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human}
 
             #################################
             # Now process the alternative flows
-            alt_activity = ''
+            alt_activity ={}
+            http_data = {}
             if alt_flow_json:
                 alt_flow = json.loads(alt_flow_json)
                 self.print('Received an altflow of type {}: {}'.format(alt_flow['type'], alt_flow), 5,0)
                 if 'dns' in alt_flow['type']:
-                    alt_activity = '	- Query: {}, Query Class: {}, Type: {}, Response Code: {}, Answers: {}\n'.format(alt_flow['query'], alt_flow['qclass_name'], alt_flow['qtype_name'], alt_flow['rcode_name'], alt_flow['answers'])
+                    answer = alt_flow["answers"]
+                    if 'NXDOMAIN' in alt_flow['rcode_name']:
+                        answer = 'NXDOMAIN'
+                    alt_activity = {'Query': alt_flow["query"], 'Answers': answer}
                 elif alt_flow['type'] == 'http':
-                    alt_activity = '	- {} http://{}{} HTTP/{} {}/{}  MIME:{} Sent:{}b, Recv:{}b UA:{} \n'.format(alt_flow['method'], alt_flow['host'], alt_flow['uri'], alt_flow['version'],alt_flow['status_code'], alt_flow['status_msg'], alt_flow['resp_mime_types'], alt_flow['request_body_len'], alt_flow['response_body_len'], alt_flow['user_agent'])
+                    http_data_all = {'Request': alt_flow["method"] + ' http://'+alt_flow["host"]+alt_flow["uri"], 'Status Code': str(alt_flow["status_code"])+ '/' + alt_flow["status_msg"],'MIME':str(alt_flow["resp_mime_types"] ),'UA':alt_flow["user_agent"]}
+                    # if any of fields are empty, do not include them
+                    http_data = {k: v for k, v in http_data_all.items() if v is not '' and v is not '/'}
+                    alt_activity = {'http_data': http_data}
                 elif alt_flow['type'] == 'ssl':
                     # {"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
                     # version":"TLSv12","resumed":false,"established":true,"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
                     if alt_flow['validation_status'] == 'ok':
                         validation = 'Yes'
+                        resumed = 'False'
                     elif not alt_flow['validation_status'] and alt_flow['resumed'] == True:
                         # If there is no validation and it is a resumed ssl. It means that there was a previous connection with the validation data. We can not say Say it
-                        validation = '?? (Resumed)'
+                        validation = '??'
+                        resumed = 'True'
                     else:
                         # If the validation is not ok and not empty
                         validation = 'No'
-                    alt_activity = '	- {}. Issuer: {}. Trust Cert: {}. Subject: {}. Version: {}. Resumed: {} \n'.format(alt_flow['server_name'], alt_flow['issuer'], validation, alt_flow['subject'], alt_flow['version'], alt_flow['resumed'])
+                        resumed = 'False'
+                    # if there is no CN
+                    if alt_flow["subject"]:
+                        subject = alt_flow["subject"].split(",")[0]
+                    else:
+                        subject = '????'
+                    # We put server_name instead of dns resolution
+                    alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"], 'dns_resolution': alt_flow['server_name']}
 
-                ## Store the activity in the DB for this profileid and twid
-                #if activity:
-                    #__database__.add_timeline_line(profileid, twid, activity, timestamp)
-                #self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+            elif activity:
+                alt_activity = {'info': 'No extra data.'}
 
-            elif not alt_flow_json and ('tcp' in proto or 'udp' in proto) and state.lower() == 'established' and dport_name:
-                # We have an established tcp or udp connection that we know the usual name of the port, but we don't know the type of connection!!!
+            # Combine the activity of normal flows and activity of alternative flows and store in the DB for this profileid and twid
+            activity.update(alt_activity)
+            if activity:
+                __database__.add_timeline_line(profileid, twid, activity, timestamp)
+            self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
-                if (proto == 'udp' and dport == 67) or (proto == 'udp' and dport == 123) or (proto == 'tcp' and dport == 23) or (proto == 'tcp' and dport == 5222):
-                    # Some protocols we ignore in this warning because Zeek does not process them
-                    # bootps, ntp, telnet, xmpp
-                    pass
-                elif not allbytes:
-                    # If it is established but no bytes were sent, then we will never have an alt_flow, so do not report that is missing.
-                    pass
-                else:
-                    alt_activity = '	[!] Attention. We know this port number, but we couldn\'t identify the protocol. Check UID {}\n'.format(uid)
-
-            # Store the activity of alternative flows in the DB for this profileid and twid
-            if alt_activity:
-                __database__.add_timeline_line(profileid, twid, alt_activity, timestamp)
-            self.print('Alternative Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, alt_activity), 4, 0)
 
         except KeyboardInterrupt:
             return True
@@ -294,6 +343,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            self.print(traceback.format_exc())
             return True
 
     def run(self):

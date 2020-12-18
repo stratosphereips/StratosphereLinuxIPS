@@ -1,6 +1,0 @@
-# This file is for you to add your own IPs to the list to detect
-# Format of this file: 
-#    "Number","IP address","Rating", "Description"
-"0", "103.15.53.231","90", "Karel from our village. He is bad guy."
-"1", "66.249.65.50","88","Hacked server in my town."
-"2", "23.253.126.58","80","Simda CC"

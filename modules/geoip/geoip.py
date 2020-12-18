@@ -80,8 +80,8 @@ class Module(Module, multiprocessing.Process):
                     # The first message comes with data=1
                     if type(ip) == str:
                         data = __database__.getIPData(ip)
-                        # If we alredy have the country for this ip, do not ask the file
-                        if 'geocountry' not in data:
+                        # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
+                        if (data or data == {}) and 'geocountry' not in data:
                             geoinfo = self.reader.get(ip)
                             if geoinfo:
                                 try:

@@ -6,16 +6,18 @@ var redis = require('redis')
   , redis_get_timeline = redis.createClient()
   , redis_outtuples_timewindow = redis.createClient()
   , redis_timeline_ip = redis.createClient()
-  ,redis_blocked_tws = redis.createClient()
+  , redis_blocked_tws = redis.createClient()
+  , client = redis.createClient()
   , async = require('async')
   , blessed = require('blessed')
   , contrib = require('blessed-contrib')
   , fs = require('fs')
   , screen = blessed.screen()
-  , color = require('ansi-colors');
+  , color = require('chalk')
+  , stripAnsi = require('strip-ansi')
+  , clipboardy = require('clipboardy');
 
 
-const clipboardy = require('clipboardy');
 screen.dockBorders=true;
 let country_loc = {};
 fs.readFile('country.txt', 'utf8', function(err,data) {
@@ -35,6 +37,7 @@ fs.readFile('country.txt', 'utf8', function(err,data) {
 
 
 var ip_timewindow_outTuple = {};
+var ip_timewindow_inTuple = {}
 
 
 function blockedTW(){ 
@@ -60,7 +63,6 @@ function blockedTW(){
   })
 })}
 
-// set up elements of the interface.
 
 var grid = new contrib.grid({
   rows: 6,
@@ -123,6 +125,31 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
       },
       align: 'left'
     })
+    ,table_inTuples = grid.set(0,0,5.7,6, blessed.listtable, {
+      keys: true,
+      mouse: true,
+  
+      tags: true,
+      // interactive: false,
+      border: 'line',
+      style: {
+        bg: 'blue'
+      },
+      style: {
+        header: {
+          fg: 'blue',
+          bold: true
+        },
+        cell: {
+          fg: 'magenta',
+          selected: {
+            bg: 'blue'
+          }
+        }
+      },
+      align: 'left'
+    })
+
 
 ,listtable_est_srcPort = grid.set(0,0,2.8,2, blessed.listtable, {
       border: 'line'
@@ -177,7 +204,6 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
       width: '50%',
       height: '50%',
       content: "SELECT IP TO SEE IPS INFO!",
-
       tags: true,
        style:{
          focus: {
@@ -231,9 +257,7 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
             'main':{
               keys : ' '
             },
-            // 'help':{
-            //   keys : ['g']
-            // },
+            
             'srcPortClient': {
               keys: ['e']
                         },
@@ -256,6 +280,11 @@ var table_timeline =  grid.set(0.5, 1, 4.3, 5, contrib.table,
               'map': {
               keys: ['m']
                         },
+              'InTuples': {
+              keys: ['i']},
+              'reload':{
+              keys : ['o']
+            },
                         
 
           }
@@ -428,6 +457,7 @@ listtable_est_dstIPs.hide()
 table_outTuples_listtable.hide()
 gaugeList_est_srcPort.hide()
 listtable_est_srcPort.hide()
+table_inTuples.hide()
 
 
 map.hide()
@@ -435,13 +465,14 @@ box_generic_dashboard.setContent('\n\n Welcome to Kalipso v0.1, Stratosphere Lin
 var focus_widget = tree;
 var bar_state_four_two = true;
 var bar_state_one = true;
-var bar_state_two = true; 
+var bar_state_two = true; table_inTuples
 var bar_state_three = true;
 var bar_state_four = true;
 var box_hotkeys_state = true;
 var map_state = true;
 var box_hotkeys_state = true;
 var box_generic_dashboard_status = false;
+var tablle_for_inTuples = true
 
 function clean_widgets(){
   box_evidence.setContent('');
@@ -477,6 +508,7 @@ function hide_widgets(){
   table_timeline.hide()
   box_ip.hide()
   table_outTuples_listtable.hide()  
+  table_inTuples.hide()
 
   map.hide()
 }
@@ -698,7 +730,7 @@ function tcp_udp_connections(key, key2,reply){
     callback()
     }, function(err) {
       if( err ) {
-        console.log('unable to create user');
+        console.log(err);
       }
     });
   }
@@ -767,12 +799,14 @@ function getIpInfo_box_ip(ip,mode){
         else{ip_info_dict['geocountry'] = ' '.repeat(33);}
           ip_info_str = Object.values(ip_info_dict).join("|");
         if(mode == 1)box_ip.setContent(ip_info_str);
+          box_ip.setLabel(ip)
           screen.render();
           resolve(ip_info_dict_outtuple);
         }
     catch (err){
         ip_info_str = " ".repeat(33) + "|"+" ".repeat(33) + "|"+" ".repeat(33)
         box_ip.setContent(ip_info_str);
+        box_ip.setLabel(ip)
         screen.render();
         resolve(ip_info_dict)}
     })
@@ -781,10 +815,10 @@ function getIpInfo_box_ip(ip,mode){
 
 
 
- function setDataOuttuples(data){
-  table_outTuples_listtable.setData(data);
-   table_outTuples_listtable.show()
-            table_outTuples_listtable.focus()
+ function setDataTuples(table, data){
+  table.setData(data);
+  table.show()
+  table.focus()
  }
 function getEvidence(reply){
   /*
@@ -808,13 +842,14 @@ function getEvidence(reply){
 };
 var ips_with_timewindows = {}
 
-function set_tree_data(timewindows_list, blockedTW){
+function set_tree_data(timewindows_list, blockedTW,ip){
   /*
   sets ips and their tws for the tree.
 
   */
   // console.log(timewindows_list)
   var ips_with_profiles = Object.keys(timewindows_list);
+
   var explorer = { extended: true
   , children: function(self){
       var result = {};
@@ -826,12 +861,22 @@ function set_tree_data(timewindows_list, blockedTW){
               var tw = timewindows_list[ips_with_profiles[i]];
               child = ips_with_profiles[i];
               var sorted_tws = sortTWs(blockedTW,tw[0], child)
+              if(child.includes(ip)){
+
+
+                new_child = child+ '(host)'}
+
+              // }
+              else{
+                new_child = child
+              }
             if(Object.keys(blockedTW).includes(child)){
-              result[child] = { name:color.red(child), extended:false, children: sorted_tws};
+              result[child] = { name:color.red(new_child), extended:false, children: sorted_tws};
             }
             else{
-              result[child] = { name:child, extended:false, children: sorted_tws};
+              result[child] = { name:new_child, extended:false, children: sorted_tws};
             }
+
            
             }
             }else
@@ -874,10 +919,25 @@ function getTreeData(key){
         }
     }
 }
+
+ function get_host_ip(){
+  return new Promise(function(resolve,reject){
+    var hostIP = '';
+    client.get('hostIP',function(err,value) {
+      if(err){
+        reject(hostIP)
+      }
+      else{
+      hostIP = value
+ resolve(hostIP)}
+    })
+  })
+}
+
+
+
 function timewindows_promises(reply) {
-    return Promise.all(reply.map( key_redis => getTreeData(key_redis)))
-      .then(blockedTW()
-      .then(function(blocked_dict){tree.setData(set_tree_data(ips_with_timewindows,blocked_dict)); screen.render();return;}))
+    return Promise.all([reply.map( key_redis => getTreeData(key_redis)),blockedTW(), get_host_ip()]).then(values => {tree.setData(set_tree_data(ips_with_timewindows,values[1], values[2])); screen.render();return;})
 }
 
 redis_tree.keys('*', (err,reply)=>{
@@ -900,25 +960,34 @@ var timewindow;
 tree.on('select',function(node){
   
   screen.key('w',function(ch,key){
-    clipboardy.writeSync(color.unstyle(node.name));
+    clipboardy.writeSync(stripAnsi(node.name));
     clipboardy.readSync();
   })
     clean_widgets()
 
     if(!node.name.includes('timewindow')){
-      getIpInfo_box_ip(color.unstyle(node.name), 1);}
+      ip = node.name.replace('(host)','')
+      getIpInfo_box_ip(stripAnsi(ip), 1);}
       
     else{
-      ip  = color.unstyle(node.parent.name);
-      timewindow = color.unstyle(node.name);
-  
+
+      ip  = stripAnsi(node.parent.name);
+      ip = ip.replace('(host)','')
+      timewindow = stripAnsi(node.name);
+
+      box_ip.setLabel('')
+
       redis_outtuples_timewindow.hgetall("profile_"+ip+"_"+timewindow, (err,reply)=>{
         var ips = [];
         timeline_reply_global = reply;
         map.innerMap.draw(null);
         getEvidence(reply['Evidence']);
-        
-        var obj_outTuples = JSON.parse(reply["OutTuples"]);
+        try {
+  		var obj_outTuples = JSON.parse(reply["OutTuples"]);
+	}
+	     catch(error) {
+  		var obj_outTuples = JSON.parse(reply["InTuples"]);
+		}
         var keys = Object.keys(obj_outTuples);
         async.each(keys, function(key,callback){        
           var outTuple_ip = key.split(':')[0];
@@ -926,6 +995,7 @@ tree.on('select',function(node){
           callback(null);  
         },function(err) {
       if( err ) {
+	console.log(ip)
         console.log('unable to create user');
       } else {
         setMap(ips)
@@ -944,40 +1014,79 @@ tree.on('select',function(node){
           screen.render();
       }
       else{
-      async.each(reply, function(line, callback){
+      async.each(reply, function(timeline, callback){
         var row = [];
-        var line_arr = line.split(" ")
-        var index_to = line_arr.indexOf('to')
-        var index_asked = line_arr.indexOf('asked');
-        var index_careful = line_arr.indexOf('careful!');
-        var index_recognized = line_arr.indexOf('recognized');
-        var index_attention  = line_arr.indexOf('Attention.');
-        var index_ip = index_to +1;
-        if(index_attention>=0){line_arr[index_attention] =color.red(line_arr[index_attention]);
-          line_arr[index_attention-1]=color.red(line_arr[index_attention-1])}
-        if(index_to>= 0 && line_arr[index_ip].length>6)line_arr[index_ip]= "{bold}"+line_arr[index_ip]+"{/bold}"
-        if(index_recognized >= 0){
-          for(var i =index_recognized - 1; i < index_recognized+3;i++){
-          line_arr[i] = color.red(line_arr[i]);}
+        var timeline_json = JSON.parse(timeline)
+
+        var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
+        var red_attention_keywords = ['critical warning' ]
+        var orange_number_of_bytes = ['Sent','Recv','Tot','Size','Type']
+        var blue_keywords = ['dport_name', 'dport_name/proto']
+        var cyan_keywords = ['daddr', 'saddr']
+        var light_pink_keywords = ['dns_resolution']
+
+        // split the timeline on parts
+        if(timeline_json['timestamp']){
+
+        var final_timeline = ''
+
+        for (let [key, value] of Object.entries(timeline_json)) {
+          if(key.includes('critical warning')){
+            value = color.red(value)
           }
-        if(index_careful > 0){
-          line_arr[index_careful] = color.red(line_arr[index_careful]);
-          line_arr[index_careful - 1] = color.red(line_arr[index_careful - 1])
+          else if(key.includes('warning')){
+            value = color.rgb(255,165,0)(value)
+          }
+          else if(key.includes('timestamp')){
+            value = value.substring(0, value.indexOf('.'));
+          }
+          else if(key.includes('dport/proto')){
+            value = color.bold.yellow(value)
+          }
+          else if(key.includes('info')){
+            value = color.rgb(105,105,105)(value)
+          }
+          else if (blue_keywords.some(element => key.includes(element))){
+            value = color.rgb(51, 153, 255)(value);
+          }
+          else if(cyan_keywords.some(element => key.includes(element))){
+            value = color.rgb(112, 168, 154)('[' + value+']')
+          }
+          else if (orange_number_of_bytes.some(element => key.includes(element))){
+            value =key + ':' + color.rgb(255, 153, 51)(value);
+          }
+          else if (red_attention_keywords .some(element => key.includes(element))){
+            value = color.red(value);
+          }
+          else if (light_pink_keywords.some(element => key.includes(element))){
+            value = color.rgb(255,182,193)(value) ;
+          }
+          else if (pink_keywords .some(element => key.includes(element))){
+            value = key + ':'+color.rgb(219,112,147)(value);
+          }
+          if(value){
+            final_timeline += value +' ';}}
+            row.push(final_timeline);
+            data.push(row);
+}
+        else{
+          var final_timeline = ''
+
+          for (let [key, value] of Object.entries(timeline_json)) {
+            row = []
+            final_timeline = key.padStart(21+key.length) +': ' +color.rgb(51, 153, 255)(value);
+            row.push(final_timeline);
+            data.push(row);
+}
+
         }
-        for(var i =3; i < index_asked;i++){
-          line_arr[i] = color.bold.cyan(line_arr[i]) }     
-        if(line_arr[index_to+2].includes('/'))line_arr[index_to+2]=color.bold.yellow(line_arr[index_to+2].slice(0,-1))+','
-          line_arr[1]= line_arr[1].substring(0, line_arr[1].lastIndexOf('.'));
-          timeline_line = line_arr.join(" ");
-          row.push(timeline_line.replace(/\|.*/,''));
-          data.push(row);
+
         callback();
       },function(err) {
         if( err ) {
           console.log('unable to create user');
         } else {
           table_timeline.setData({headers:[node.parent.name+" "+node.name], data: data});
-          // console.log(data.length)
           timeline_length = data.length;
           screen.render();
         }
@@ -985,7 +1094,99 @@ tree.on('select',function(node){
   })
 
     }})
-  
+ screen.key('i', function(ch, key) {
+          hide_widgets();
+          help_list_bar.selectTab(8)
+          bar_state_one = true;
+          bar_state_two = true; 
+          bar_state_three = true;
+          bar_state_four = true;
+          bar_state_four_two = true;
+          box_hotkeys_state = true;
+          //tablle_for_inTuples = true;
+          map_state = true;
+          if(tablle_for_inTuples){
+         
+              if(timeline_reply_global == null){
+                table_inTuples.setItems('');} 
+              else if(Object.keys(ip_timewindow_inTuple).includes(ip+timewindow)){
+                setDataTuples(table_inTuples,ip_timewindow_inTuple[ip+timewindow]);
+
+              }
+              else{
+              try {
+            var obj_inTuples = JSON.parse(timeline_reply_global["InTuples"]);
+            var keys = Object.keys(obj_inTuples);
+              var data = [];
+              async.each(keys, function(key,callback){
+                var ip_dict = {'asn':'', 'geocountry':'', 'URL':'','down':'','ref':'', 'com':''}
+                var row = [];
+                var tuple_info = obj_inTuples[key];
+                var inTuple_ip = key.split(':')[0];
+                getIpInfo_box_ip(inTuple_ip,0).then(function(result_dict){
+                  var ipInfo_dict_keys = Object.keys(result_dict)
+                  if(ipInfo_dict_keys.includes('asn')){
+                    ip_dict['asn'] = result_dict['asn']
+                  }
+                  if(ipInfo_dict_keys.includes('geocountry')){
+                    ip_dict['geocountry'] = result_dict['geocountry']
+                  }
+                  if(ipInfo_dict_keys.includes('VirusTotal')){
+                    ip_dict['URL'] = String(round(result_dict['VirusTotal']['URL'],3));
+                    ip_dict['down'] = String(round(result_dict['VirusTotal']['down_file'],3));
+                    ip_dict['ref'] = String(round(result_dict['VirusTotal']['ref_file'],3));
+                    ip_dict['com'] = String(round(result_dict['VirusTotal']['com_file'],3));
+                  }
+                if(tuple_info[0].trim().length>40){
+                  var k = chunkString(tuple_info[0].trim(),40);
+                
+                  async.forEachOf(k, function(ctr,ind, callback){
+                    var row2 = [];
+                    if(ind == 0){
+                      row2.push(key,ctr,Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
+                    }
+                    else{row2.push('',ctr, '', '' , '');}
+                      data.push(row2);
+                      callback(null);
+                  }, function(err){
+                    if(err){
+                      console.log('kamila',err);}
+                  })
+
+                }  
+          else{     
+            row.push(key,tuple_info[0], Object.values(ip_dict)[0].slice(0,20), Object.values(ip_dict)[1], Object.values(ip_dict)[2], Object.values(ip_dict)[3],Object.values(ip_dict)[4], Object.values(ip_dict)[5]);
+            data.push(row)}
+            callback(null);
+          })  
+        },function(err) {
+      if( err ) {
+        console.log('unable to create user');
+      } else {
+        table_inTuples.setLabel('InTuples')
+
+        data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
+        ip_timewindow_inTuple[ip+timewindow] = data;
+        setDataTuples(table_inTuples,data);
+        screen.render();  
+        }
+      });
+      }  
+    catch(error) {
+              table_inTuples.setLabel('InTuples')
+
+      setDataTuples(table_inTuples,[['info'],['no data']]);
+                screen.render();  
+        }
+          }}
+      else{
+        table_inTuples.setItems('');
+        table_inTuples.hide()
+        help_list_bar.selectTab(0)
+        show_widgets()}
+        tablle_for_inTuples =! tablle_for_inTuples
+        screen.render();
+        }    )
 
  screen.key('h', function(ch, key) {
           hide_widgets();
@@ -995,6 +1196,7 @@ tree.on('select',function(node){
           bar_state_three = true;
           bar_state_four = true;
           bar_state_four_two = true;
+          tablle_for_inTuples = true;
           // box_hotkeys_state = true;
           map_state = true;
           if(box_hotkeys_state){
@@ -1002,11 +1204,14 @@ tree.on('select',function(node){
               if(timeline_reply_global == null){
                 table_outTuples_listtable.setItems('');} 
               else if(Object.keys(ip_timewindow_outTuple).includes(ip+timewindow)){
-                setDataOuttuples(ip_timewindow_outTuple[ip+timewindow]);
+                setDataTuples(table_outTuples_listtable,ip_timewindow_outTuple[ip+timewindow]);
 
               }
               else{
-              var obj_outTuples = JSON.parse(timeline_reply_global["OutTuples"]);
+              
+  		try{var obj_outTuples = JSON.parse(timeline_reply_global["OutTuples"]);
+		
+
               var keys = Object.keys(obj_outTuples);
               var data = [];
               async.each(keys, function(key,callback){
@@ -1054,13 +1259,20 @@ tree.on('select',function(node){
       if( err ) {
         console.log('unable to create user');
       } else {
+        table_outTuples_listtable.setLabel('OutTuples')
         data.unshift(['key','string','asn','geocountry','url','down','ref','com'])
         ip_timewindow_outTuple[ip+timewindow] = data;
-        setDataOuttuples(data);
+        setDataTuples(table_outTuples_listtable,data);
         screen.render();  
         }
       });
-      }}
+      } catch(err){
+      table_outTuples_listtable.setLabel('OutTuples')
+      setDataTuples(table_outTuples_listtable,[['info'],['no data']]);
+      screen.render();  
+
+
+      }}}
       else{
         table_outTuples_listtable.setItems('');
         table_outTuples_listtable.hide()
@@ -1081,6 +1293,7 @@ tree.on('select',function(node){
     // bar_state_two = true; 
     bar_state_three = true;
     box_hotkeys_state = true;
+    tablle_for_inTuples = true;
     bar_state_four = true;
     bar_state_four_two = true;
     map_state = true;
@@ -1176,7 +1389,7 @@ tree.on('select',function(node){
   screen.key('n', function(ch, key) {
     help_list_bar.selectTab(5)
     hide_widgets()
-
+    tablle_for_inTuples = true;
     bar_state_one = true;
     bar_state_two = true; 
     bar_state_three = true;
@@ -1280,7 +1493,7 @@ tree.on('select',function(node){
   help_list_bar.selectTab(4)
 
     hide_widgets()
-
+    tablle_for_inTuples = true;
     bar_state_one = true;
     bar_state_two = true; 
     bar_state_three = true;
@@ -1385,6 +1598,7 @@ tree.on('select',function(node){
 
     hide_widgets()
     // bar_state_one = true;
+    tablle_for_inTuples = true;
     bar_state_two = true; 
     bar_state_three = true;
     box_hotkeys_state = true;
@@ -1489,6 +1703,7 @@ screen.key('c', function(ch, key) {
     bar_state_one = true;
     bar_state_two = true; 
     // bar_state_three = true;
+    tablle_for_inTuples = true;
     bar_state_four = true;
     bar_state_four_two = true;
     box_hotkeys_state = true;
@@ -1588,6 +1803,7 @@ screen.key('m', function(ch, key) {
   bar_state_one = true;
   bar_state_two = true; 
   bar_state_three = true;
+  tablle_for_inTuples = true;
   bar_state_four = true;
   bar_state_four_two = true;
   box_hotkeys_state = true;
@@ -1617,10 +1833,12 @@ screen.key('m', function(ch, key) {
 // });
 
 table_timeline.rows.on('select', (item, index) => {
-  var timeline_line = item.content.split(" ");
-  var index_to = timeline_line.indexOf('to')
-  var timeline_ip = timeline_line[index_to +1].slice(6,-7)
-  getIpInfo_box_ip(timeline_ip,1)
+  var timeline_line = stripAnsi(item.content)
+  var ip = timeline_line.substring(
+    timeline_line.lastIndexOf("[") + 1,
+    timeline_line.lastIndexOf("]")
+);
+  getIpInfo_box_ip(ip,1)
 
 });
 // screen.key("g", function(ch,key){

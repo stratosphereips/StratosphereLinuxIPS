@@ -218,14 +218,14 @@ class LogsProcess(multiprocessing.Process):
         """
         try:
             # Get the list of all the modifed TW for all the profiles
-            TWModifiedforProfile = __database__.getModifiedTWLogs()
+            TWModifiedforProfile = __database__.getModifiedTW()
             last_profile_id = None
             description_of_malicious_ip_profile = None
             for profileTW in TWModifiedforProfile:
 
                 # Get the profileid and twid
-                profileid = profileTW.split(self.fieldseparator)[0] + self.fieldseparator + profileTW.split(self.fieldseparator)[1]
-                twid = profileTW.split(self.fieldseparator)[2]
+                profileid = profileTW[0].split(self.fieldseparator)[0] + self.fieldseparator + profileTW[0].split(self.fieldseparator)[1]
+                twid = profileTW[0].split(self.fieldseparator)[2]
                 # Get the time of this TW. For the file name
                 twtime = __database__.getTimeTW(profileid, twid)
                 twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
@@ -255,7 +255,7 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
 
                 # 1. Detections to block. The getBlockingRequest function return {True, False}
-                blocking = __database__.getBlockingRequest(profileid, twid)
+                blocking = __database__.checkBlockedProfTW(profileid, twid)
                 if blocking:
                     text_data = 'Was requested to block in this time window: ' + str(blocking)
                     self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='json')
@@ -268,7 +268,7 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] Evidence of detections in this TW:')
                     for data in evidence:
-                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence: {}'.format(data[0]), file_mode='a+', data_type='text')
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence: {}'.format(data), file_mode='a+', data_type='text')
                         self.outputqueue.put('03|logs|\t\t\t Evidence: {}'.format(data[0]))
 
                 # 3. DstIPs
@@ -380,14 +380,10 @@ class LogsProcess(multiprocessing.Process):
 
 
                 # 9. This should be last. Detections to block
-                blocking = __database__.getBlockingRequest(profileid, twid)
+                blocking = __database__.checkBlockedProfTW(profileid, twid)
                 if blocking:
                     self.addDataToFile(profilefolder + '/' + twlog, 'Was requested to block in this time window: ' + str(blocking), file_mode='a+', data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
-
-                # Mark it as not modified anymore
-                __database__.markProfileTWAsNotModifiedLogs(profileid, twid)
-
 
                 ###########
                 # Create Timeline for each profile
@@ -416,7 +412,7 @@ class LogsProcess(multiprocessing.Process):
                 last_profile_id = profileid
 
             # Create the file of the blocked profiles and TW
-            TWforProfileBlocked = __database__.getBlockedTW()
+            TWforProfileBlocked = __database__.getBlockedProfTW()
             # Create the file of blocked data
             if TWforProfileBlocked:
                 self.addDataToFile('Blocked.txt', 'Detections:\n', file_mode='w+', data_type='text')
