@@ -1,3 +1,23 @@
+- 0.7.1 (published 2020/12/18)
+	- Slips
+		- fix the function of Slips to stop after pressing CTRL-C
+		- fix Slips stopping automatically
+		- add zeek tcp-inactivity-timeout=1hs
+		- add module flowalert and alert when a long connection happens (more than 20 minutes)
+		- add colors to the detection shown in the console
+		- add 3 new TI feeds to slips conf by default
+		- make longconnection feature in flowalert to ignore multicast
+		- fix some TI files not being updated
+		- check TI data in the host field of HTTP
+		- check TI data in the SNI field of TLS requests
+		- rename blessed module folder to kalipso
+	- Kalipso
+		- ESC - exit the hotkey, q - exit Kalipso
+		- execution of Kalipso from Slips folder: $./kalipso.sh
+		- added hotkey 'h' for help
+		- changed hotkey 'g'(out tuples) on hotkey 'i'
+		- added SNI of TLS/SSL column in 'i' and 'y' hotkeys
+		- fix Kalipso being reshred when being in hotkeys
 - 0.7.0 (published 2020/09/25)
 	- Slips
 		- VirusTotal module retrieves information for domains from DNS flows
