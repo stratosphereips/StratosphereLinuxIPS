@@ -48,7 +48,7 @@ RUN cd StratosphereLinuxIPS && git checkout develop && chmod 774 slips.py
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_10.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
-RUN cd StratosphereLinuxIPS/modules/blessed && npm install \
+RUN cd StratosphereLinuxIPS/modules/kalipso && npm install \
     async \
     fs \
     blessed \
