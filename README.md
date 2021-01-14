@@ -2,7 +2,7 @@
 
 Slips is a behavioral-based Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels to provide good visualisation for the analyst.
 Slips is a modular software 
-
+[![asciicast](https://asciinema.org/a/z8GXxhEdRaraoxBR01mOsT5VN.png)](https://asciinema.org/a/z8GXxhEdRaraoxBR01mOsT5VN)
 # Installation
 
 ## Running in a Docker
