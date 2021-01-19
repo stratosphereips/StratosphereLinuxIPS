@@ -331,12 +331,15 @@ class UpdateFileManager:
                     # Separate the lines like CSV
                     # In the new format the ip is in the second position.
                     # And surronded by "
-                    data = line.replace("\n","").replace("\"","").split(",")[data_column].strip()
+                    data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
 
-                    description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
+                    try:
+                        description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
+                    except IndexError:
+                        self.print(f'IndexError Description column: {description_column}. Line: {line}')
                     self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
 
-                    # Check if ip is valid.
+                    # Check if the data is a valid IPv4, IPv6 or domain
                     try:
                         ip_address = ipaddress.IPv4Address(data)
                         # Is IPv4!
