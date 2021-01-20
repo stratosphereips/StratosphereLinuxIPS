@@ -59,7 +59,7 @@ class Module(Module, multiprocessing.Process):
         '''
         type_evidence = 'ThreatIntelligenceBlacklistIP'
         key = ip_state + ':' + ip + ':' + type_evidence
-        threat_level = 50
+        threat_level = 80
         confidence = 1
         description = 'TI ' + ip_description
         if not twid:
