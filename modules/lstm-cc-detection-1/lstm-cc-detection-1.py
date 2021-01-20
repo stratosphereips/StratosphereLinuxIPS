@@ -80,7 +80,7 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def set_evidence(self, score, tupleid='', profileid='', twid=''):
+    def set_evidence(self, score, confidence, tupleid='', profileid='', twid=''):
         '''
         Set an evidence for malicious IP met in the timewindow
         If profileid is None, do not set an Evidence
@@ -88,8 +88,7 @@ class Module(Module, multiprocessing.Process):
         '''
         type_evidence = 'C&C channels detection'
         key = 'outTuple' + ':' + tupleid + ':' + type_evidence
-        threat_level = 50
-        confidence = 1
+        threat_level = 100
         description = 'LSTM C&C channels detection, score: ' + str(score)
         self.print(f'Setting evidence of {description} with threat level {threat_level} and confidence {confidence}. For {profileid}, tuple: {tupleid} on {twid}', 3, 0)
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
@@ -161,7 +160,12 @@ class Module(Module, multiprocessing.Process):
                         # get a float instead of numpy array
                         score = score[0][0]
                         if score > threshold:
-                            self.set_evidence(score, tupleid, profileid, twid)
+                            threshold_confidence = 100
+                            if len(behavioral_model) >= threshold_confidence:
+                                confidence = 1
+                            else:
+                                confidence = len(behavioral_model)/threshold_confidence
+                            self.set_evidence(score,confidence, tupleid, profileid, twid)
                     """
                     elif 'udp' in tupleid.lower():
                         # Define why this threshold
