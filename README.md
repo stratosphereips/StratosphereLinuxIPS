@@ -4,6 +4,7 @@ Slips is a behavioral-based Python intrusion prevention system that uses machine
 Slips is a modular software 
 ## Example
 ![](slips-kalipso.gif)
+![](slips-kalipso2.gif)
 # Installation
 
 ## Running in a Docker
