@@ -136,7 +136,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             # Key
                             key = 'dport' + ':' + dport + ':' + type_evidence
                             # Threat level
-                            threat_level = 50
+                            threat_level = 25
                             # Compute the confidence
                             pkts_sent = 0
                             # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dips per port.
@@ -184,7 +184,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             # Key
                             key = 'dstip' + ':' + dstip + ':' + type_evidence
                             # Threat level
-                            threat_level = 50
+                            threat_level = 25
                             # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dports per dip.
                             # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more. 
                             cache_key = profileid + ':' + twid + ':' + key
