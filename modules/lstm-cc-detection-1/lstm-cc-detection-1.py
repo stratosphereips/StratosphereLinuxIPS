@@ -161,10 +161,10 @@ class Module(Module, multiprocessing.Process):
                         score = score[0][0]
                         if score > threshold:
                             threshold_confidence = 100
-                            if len(behavioral_model) >= threshold_confidence:
+                            if len(pre_behavioral_model) >= threshold_confidence:
                                 confidence = 1
                             else:
-                                confidence = len(behavioral_model)/threshold_confidence
+                                confidence = len(pre_behavioral_model)/threshold_confidence
                             self.set_evidence(score,confidence, tupleid, profileid, twid)
                     """
                     elif 'udp' in tupleid.lower():
