@@ -145,7 +145,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         ip_data = {}
         # Maybe we should change the key to 'status' or something like that.
-        ip_data['Malicious'] = ip_description
+        ip_data['threatintelligence'] = ip_description
         self.add_maliciousIP(ip, profileid, twid)
         __database__.setInfoForIPs(ip, ip_data)  # Set in the IP info that IP is blacklisted
 
@@ -160,7 +160,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         domain_data = {}
         # Maybe we should change the key to 'status' or something like that.
-        domain_data['Malicious'] = domain_description
+        domain_data['threatintelligence'] = domain_description
         self.add_maliciousDomain(domain, profileid, twid)
         __database__.setInfoForDomains(domain, domain_data)  # Set in the DomainsInfo info that Domain is blacklisted
 
