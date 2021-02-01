@@ -107,7 +107,7 @@ class Module(Module, multiprocessing.Process):
             twid = ''
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
 
-    def check_long_connection(self, dur, daddr, saddr, profileid, twid):
+    def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
         """
         Function to generate alert if the new connection's duration if above the threshold (more than 25mins by default).
         """
@@ -121,6 +121,10 @@ class Module(Module, multiprocessing.Process):
             # If the flow is as 'out' feature, then we set dst address as evidence
             else:
                 self.set_evidence_long_connection(daddr, dur, profileid, twid, ip_state = 'dstip')
+                # add flowalert detection in the flow
+                module_name = 'flowalert'
+                module_label = 'long connection'
+                __database__.add_module_label_to_flow(profileid, twid, uid, module_name, module_label)
 
 
     def run(self):
@@ -159,7 +163,7 @@ class Module(Module, multiprocessing.Process):
 
                         # Do not check the duration of the flow if the daddr or saddr is multicast
                         if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
-                            self.check_long_connection(dur, daddr, saddr, profileid, twid)
+                            self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
 
 
