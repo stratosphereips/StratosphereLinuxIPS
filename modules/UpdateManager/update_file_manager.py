@@ -161,7 +161,7 @@ class UpdateFileManager:
                 malicious_file_info['e-tag'] = new_e_tag
                 malicious_file_info['time'] = self.new_update_time
                 __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
-                return False
+                return True
             elif not new_e_tag:
                 # Something failed. Do not download
                 self.print(f'Some error ocurred. Not downloading the file {file_to_download}', 0, 1)
@@ -337,7 +337,7 @@ class UpdateFileManager:
                         description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
                     except IndexError:
                         self.print(f'IndexError Description column: {description_column}. Line: {line}')
-                    self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
+                    self.print('\tRead Data {}: {}'.format(data, description), 10, 0)
 
                     # Check if the data is a valid IPv4, IPv6 or domain
                     try:
