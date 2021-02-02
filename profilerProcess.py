@@ -116,7 +116,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            # By default 
+            # By default
             self.analysis_direction = 'all'
         # Get the default label for all this flow. Used during training usually
         try:
@@ -135,23 +135,39 @@ class ProfilerProcess(multiprocessing.Process):
         Outputs can be: zeek, suricata, argus, zeek-tabs
         """
         try:
-            # In the case of Zeek from an interface or pcap, the structure is a JSON
+            # All lines come as a dict, specifying the name of file and data.
+            # Take the data
+            try:
+                # Did data came with the json format?
+                data = line['data']
+                # For now we dont use the file type, but is handy for the future
+                file_type = line['type']
+                # Yes
+            except KeyError:
+                # No
+                data = line
+                self.print('\tData did not arrived in json format from the input', 0, 1)
+                self.print('\tProblem in define_type()', 0, 1)
+                return False
+
+            # In the case of Zeek from an interface or pcap,
+            # the structure is a JSON
             # So try to convert into a dict
-            if type(line) == dict:
+            if type(data) == dict:
                 try:
-                    _ = line['data']
+                    _ = data['data']
                     self.separator = '	'
                     self.input_type = 'zeek-tabs'
                 except KeyError:
                     self.input_type = 'zeek'
             else:
                 try:
-                    data = json.loads(line)
+                    data = json.loads(data)
                     if data['event_type'] == 'flow':
                         self.input_type = 'suricata'
                 except ValueError:
-                    nr_commas = len(line.split(','))
-                    nr_tabs = len(line.split('	'))
+                    nr_commas = len(data.split(','))
+                    nr_tabs = len(data.split('	'))
                     if nr_commas > nr_tabs:
                         # Commas is the separator
                         self.separator = ','
