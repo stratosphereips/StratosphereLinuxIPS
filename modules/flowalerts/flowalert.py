@@ -100,8 +100,8 @@ class Module(Module, multiprocessing.Process):
         '''
         type_evidence = 'LongConnection'
         key = ip_state + ':' + ip + ':' + type_evidence
-        threat_level = 50
-        confidence = 1
+        threat_level = 10
+        confidence = 0.5
         description = 'Long Connection ' + str(duration)
         if not twid:
             twid = ''

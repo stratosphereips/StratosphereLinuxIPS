@@ -59,9 +59,9 @@ class Module(Module, multiprocessing.Process):
         '''
         type_evidence = 'ThreatIntelligenceBlacklistIP'
         key = ip_state + ':' + ip + ':' + type_evidence
-        threat_level = 50
+        threat_level = 80
         confidence = 1
-        description = 'TI ' + ip_description
+        description = ip_description
         if not twid:
             twid = ''
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
@@ -76,7 +76,7 @@ class Module(Module, multiprocessing.Process):
         key = 'dstdomain' + ':' + domain + ':' + type_evidence
         threat_level = 50
         confidence = 1
-        description = 'TI ' + domain_description
+        description = domain_description
         if not twid:
             twid = ''
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
