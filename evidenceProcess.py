@@ -325,6 +325,8 @@ class EvidenceProcess(multiprocessing.Process):
                                 __database__.publish('new_blocking', ip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
+            self.logfile.close()
+            self.jsonfile.close()
             self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
             return True
         except Exception as inst:
