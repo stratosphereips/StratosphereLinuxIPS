@@ -31,6 +31,7 @@ class EvidenceProcess(multiprocessing.Process):
         # Subscribe to channel 'tw_modified'
         self.c1 = __database__.subscribe('evidence_added')
         self.logfile = self.clean_evidence_log_file()
+        self.jsonfile = self.clean_evidence_json_file()
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -126,6 +127,14 @@ class EvidenceProcess(multiprocessing.Process):
         if path.exists('alerts.log'):
             open('alerts.log', 'w').close()
         return open('alerts.log', 'a')
+
+    def clean_evidence_json_file(self):
+        '''
+        Clear the file if exists for evidence log
+        '''
+        if path.exists('alerts.json'):
+            open('alerts.json', 'w').close()
+        return open('alerts.json', 'a')
 
     def add_maliciousIP(self, ip='', profileid='', twid=''):
         '''
