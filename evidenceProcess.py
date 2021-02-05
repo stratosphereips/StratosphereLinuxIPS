@@ -148,6 +148,24 @@ class EvidenceProcess(multiprocessing.Process):
         data = json.dumps(ip_location)
         __database__.add_malicious_ip(ip, data)
 
+    def addDataToFile(self, data):
+        """
+        Add a new evidence line to the file.
+        """
+        try:
+
+            now = datetime.now()
+            current_time = now.strftime('%Y-%m-%d %H:%M:%S')
+            self.logfile.write(current_time + ' '+data)
+            self.logfile.write('\n')
+            self.logfile.flush()
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            self.print('Error in addDataToFile()')
+            self.print(type(inst))
+            self.print(inst)
+
     def add_maliciousDomain(self, domain='', profileid='', twid=''):
         '''
         Add malicious domain to DB 'MaliciousDomainss' with a profileid and twid where domain was met
