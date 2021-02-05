@@ -94,6 +94,39 @@ class EvidenceProcess(multiprocessing.Process):
             self.detection_threshold = 2
         self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)')
 
+    def print_evidence(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
+        '''
+        Function to display evidence according to the detection module.
+        :return : string with a correct evidence displacement
+        '''
+        evidence_string = ''
+        if detection_module == 'ThreatIntelligenceBlacklistIP':
+            if detection_type == 'dstip':
+                evidence_string = f'Infected IP {ip} connected to blacklisted IP {detection_info} due to {description}.'
+
+            elif detection_type == 'srcip':
+                evidence_string = f'Detected blacklisted IP {detection_info} due to {description}. '
+
+
+        elif detection_module == 'ThreatIntelligenceBlacklistDomain':
+            evidence_string = f'Detected domain: {detection_info} due to {description}.'
+            self.set_TI_Domain_detection(detection_info, description, profileid, twid)
+
+        elif detection_module == 'LongConnection':
+            evidence_string = f'Detected IP {detection_info} due to a {description}.'
+        else:
+            evidence_string = f'Detected IP: {ip} due to {description}.'
+
+        return evidence_string
+
+    def clean_evidence_log_file(self):
+        '''
+        Clear the file if exists for evidence log
+        '''
+        if path.exists('alerts.log'):
+            open('alerts.log', 'w').close()
+        return open('alerts.log', 'a')
+
     def add_maliciousIP(self, ip='', profileid='', twid=''):
         '''
         Add malicious IP to DB 'MaliciousIPs' with a profileid and twid where it was met
