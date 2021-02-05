@@ -81,6 +81,8 @@ class InputProcess(multiprocessing.Process):
         next_line = None
         last_updated_file_time = datetime.now()
         lines = 0
+        line = {}
+        line['type'] = 'nfdump'
         while True:
             if not file_handler:
                 # We will open here because we do not know when nfdump will open the file.
@@ -126,9 +128,9 @@ class InputProcess(multiprocessing.Process):
 
                     # No new line. Continue.
                     continue
-
-            self.print("	> Sent Line: {}".format(next_line), 0, 3)
-            self.profilerqueue.put(next_line)
+            line['data'] = next_line
+            self.print("	> Sent Line: {}".format(line), 0, 3)
+            self.profilerqueue.put(line)
             # print('sending new line: {}'.format(next_line))
             next_line = None
             lines += 1
@@ -180,17 +182,19 @@ class InputProcess(multiprocessing.Process):
                     last_updated_file_time = datetime.now()
                     try:
                         # Convert from json to dict
-                        line = json.loads(zeek_line)
+                        nline = json.loads(zeek_line)
+                        line = {}
                         # All bro files have a field 'ts' with the timestamp.
                         # So we are safe here not checking the type of line
                         try:
-                            timestamp = line['ts']
+                            timestamp = nline['ts']
                         except KeyError:
                             # In some Zeek files there may not be a ts field
                             # Like in some weird smb files
                             timestamp = 0
                         # Add the type of file to the dict so later we know how to parse it
                         line['type'] = filename
+                        line['data'] = nline
                     except json.decoder.JSONDecodeError:
                         # It is not JSON format. It is tab format line.
                         nline = zeek_line
@@ -203,11 +207,8 @@ class InputProcess(multiprocessing.Process):
                         line = {}
                         line['type'] = filename
                         line['data'] = nline
-                        # Slow approach.
+                        # Get timestamp
                         timestamp = nline.split('\t')[0]
-                        # Faster approach, but we do not know if
-                        # line = line.rstrip()
-                        # line = line + '\t' + str(filename)
 
                     time_last_lines[filename] = timestamp
 
@@ -292,34 +293,22 @@ class InputProcess(multiprocessing.Process):
                     sys.stdin = os.fdopen(0, 'r')
                     file_stream = sys.stdin
                     line = {}
-                    line['type'] = 'conn.log'
+                    line['type'] = 'stdin'
                     for t_line in file_stream:
                         line['data'] = t_line
                         self.print(f'	> Sent Line: {t_line}', 0, 3)
                         self.profilerqueue.put(line)
                         lines += 1
 
-                # If we were given a filename, manage the input from a file instead
                 elif self.input_information:
-                    try:
-                        # Try read a unique Zeek file
-                        file_stream = open(self.input_information)
-
-                        self.print(f'Receiving flows from the single file {self.input_information}', 3, 0)
-                        line = {}
-                        line['type'] = self.input_information.split('/')[-1]
-                        for t_line in file_stream:
-                            line['data'] = t_line
-                            self.print(f'	> Sent Line: {t_line}', 0, 3)
-                            self.profilerqueue.put(line)
-                            lines += 1
-                    except IsADirectoryError:
+                    # Are we given a file or a folder?
+                    if os.path.isdir(self.input_information):
                         # This is the case that a folder full of zeek files is passed with -f. Read them all
-                        # Add all log files to database.
                         for file in os.listdir(self.input_information):
                             # Remove .log extension and add file name to database.
                             extension = file[-4:]
                             if extension == '.log':
+                                # Add log file to database
                                 file_name_without_extension = file[:-4]
                                 __database__.add_zeek_file(self.input_information + '/' + file_name_without_extension)
 
@@ -327,6 +316,27 @@ class InputProcess(multiprocessing.Process):
                         self.bro_timeout = 1
                         lines = self.read_zeek_files()
                         self.print("We read everything from the folder. No more input. Stopping input process. Sent {} lines".format(lines))
+                    else:
+                        # Is a file. Read and send independently of the type
+                        # of input
+                        self.print(f'Receiving flows from the single file {self.input_information}', 3, 0)
+
+                        # Try read a unique Zeek file
+                        file_stream = open(self.input_information)
+                        line = {}
+                        headers_line = self.input_information.split('/')[-1]
+                        if 'binetflow' in headers_line or 'argus' in headers_line:
+                            line['type'] = 'argus'
+                            fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
+                            self.profilerqueue.put(fake)
+                        elif 'log' in headers_line:
+                            line['type'] = 'zeek'
+                        for t_line in file_stream:
+                            line['data'] = t_line
+                            self.print(f'	> Sent Line: {line}', 0, 3)
+                            self.profilerqueue.put(line)
+                            lines += 1
+                        file_stream.close()
 
                 self.profilerqueue.put("stop")
                 self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
@@ -387,12 +397,12 @@ class InputProcess(multiprocessing.Process):
                 if len(os.listdir(self.zeek_folder)) > 0:
                     # First clear the zeek folder of old .log files
                     # The rm should not be in background because we must wait until the folder is empty
-                    command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null &"
+                    command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null"
                     os.system(command)
 
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                command = "cd " + self.zeek_folder + "; "+self.zeek_or_bro +" -C " +bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                command = "cd " + self.zeek_folder + "; "+self.zeek_or_bro + " -C " + bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
                 self.print(f'Zeek command: {command}', 3, 0)
                 # Run zeek.
                 os.system(command)
@@ -426,9 +436,9 @@ class InputProcess(multiprocessing.Process):
         except Exception as inst:
             self.print("Problem with Input Process.", 0, 1)
             self.print("Stopping input process. Sent {} lines".format(lines), 0, 1)
-            self.print(type(inst),0,1)
-            self.print(inst.args,0,1)
-            self.print(inst,0,1)
+            self.print(type(inst), 0, 1)
+            self.print(inst.args, 0, 1)
+            self.print(inst, 0, 1)
             try:
                 self.event_observer.stop()
                 self.event_observer.join()

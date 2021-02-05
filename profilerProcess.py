@@ -116,7 +116,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            # By default 
+            # By default
             self.analysis_direction = 'all'
         # Get the default label for all this flow. Used during training usually
         try:
@@ -135,23 +135,39 @@ class ProfilerProcess(multiprocessing.Process):
         Outputs can be: zeek, suricata, argus, zeek-tabs
         """
         try:
-            # In the case of Zeek from an interface or pcap, the structure is a JSON
+            # All lines come as a dict, specifying the name of file and data.
+            # Take the data
+            try:
+                # Did data came with the json format?
+                data = line['data']
+                # For now we dont use the file type, but is handy for the future
+                file_type = line['type']
+                # Yes
+            except KeyError:
+                # No
+                data = line
+                self.print('\tData did not arrived in json format from the input', 0, 1)
+                self.print('\tProblem in define_type()', 0, 1)
+                return False
+
+            # In the case of Zeek from an interface or pcap,
+            # the structure is a JSON
             # So try to convert into a dict
-            if type(line) == dict:
+            if type(data) == dict:
                 try:
-                    _ = line['data']
+                    _ = data['data']
                     self.separator = '	'
                     self.input_type = 'zeek-tabs'
                 except KeyError:
                     self.input_type = 'zeek'
             else:
                 try:
-                    data = json.loads(line)
+                    data = json.loads(data)
                     if data['event_type'] == 'flow':
                         self.input_type = 'suricata'
                 except ValueError:
-                    nr_commas = len(line.split(','))
-                    nr_tabs = len(line.split('	'))
+                    nr_commas = len(data.split(','))
+                    nr_tabs = len(data.split('	'))
                     if nr_commas > nr_tabs:
                         # Commas is the separator
                         self.separator = ','
@@ -171,9 +187,10 @@ class ProfilerProcess(multiprocessing.Process):
             self.print(str(inst), 0, 1)
             sys.exit(1)
 
-    def define_columns(self, line):
+    def define_columns(self, new_line):
         """ Define the columns for Argus and Zeek-tabs from the line received """
         # These are the indexes for later fast processing
+        line = new_line['data']
         self.column_idx = {}
         self.column_idx['starttime'] = False
         self.column_idx['endtime'] = False
@@ -536,11 +553,13 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'tunnel' in new_line['type']:
             self.column_values['type'] = 'tunnel'
 
-    def process_zeek_input(self, line):
+    def process_zeek_input(self, new_line):
         """
         Process the line and extract columns for zeek
         Its a dictionary
         """
+        line = new_line['data']
+        file_type = new_line['type']
         # Generic fields in Zeek
         self.column_values = {}
         # We need to set it to empty at the beggining so any new flow has the key 'type'
@@ -562,7 +581,7 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             self.column_values['daddr'] = ''
 
-        if 'conn' in line['type']:
+        if 'conn' in file_type:
             # {'ts': 1538080852.403669, 'uid': 'Cewh6D2USNVtfcLxZe', 'id.orig_h': '192.168.2.12', 'id.orig_p': 56343, 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364, 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1, 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8', 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
             self.column_values['type'] = 'conn'
             try:
@@ -619,7 +638,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dmac'] = line['resp_l2_addr']
             except KeyError:
                 self.column_values['dmac'] = ''
-        elif 'dns' in line['type']:
+        elif 'dns' in file_type:
             #{"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
             self.column_values['type'] = 'dns'
             try:
@@ -646,7 +665,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['TTLs'] = line['TTLs']
             except KeyError:
                 self.column_values['TTLs'] = ''
-        elif 'http' in line['type']:
+        elif 'http' in  file_type:
             # {"ts":158.957403,"uid":"CnNLbE2dyfy5KyqEhh","id.orig_h":"10.0.2.105","id.orig_p":49158,"id.resp_h":"64.182.208.181","id.resp_p":80,"trans_depth":1,"method":"GET","host":"icanhazip.com","uri":"/","version":"1.1","user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.38 (KHTML, like Gecko) Chrome/45.0.2456.99 Safari/537.38","request_body_len":0,"response_body_len":13,"status_code":200,"status_msg":"OK","tags":[],"resp_fuids":["FwraVxIOACcjkaGi3"],"resp_mime_types":["text/plain"]}
             self.column_values['type'] = 'http'
             try:
@@ -693,7 +712,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['resp_fuids'] = line['resp_fuids']
             except KeyError:
                 self.column_values['resp_fuids'] = ''
-        elif 'ssl' in line['type']:
+        elif 'ssl' in file_type:
             # {"ts":12087.045499,"uid":"CdoFDp4iW79I5ZmsT7","id.orig_h":"10.0.2.105","id.orig_p":49704,"id.resp_h":"195.211.240.166","id.resp_p":443,"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
             # {"ts":1382354909.915615,"uid":"C7W6ZA4vI8FxJ9J0bh","id.orig_h":"147.32.83.53","id.orig_p":36567,"id.resp_h":"195.113.214.241","id.resp_p":443,"version":"TLSv12","cipher":"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA","curve":"secp256r1","server_name":"id.google.com.ar","resumed":false,"established":true,"cert_chain_fuids":["FnomJz1vghKIOHtytf","FSvQff1KsaDkRtKXo4","Fif2PF48bytqq6xMDb"],"client_cert_chain_fuids":[],"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
             self.column_values['type'] = 'ssl'
@@ -741,51 +760,52 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['server_name'] = line['server_name']
             except KeyError:
                 self.column_values['server_name'] = ''
-        elif 'ssh' in line['type']:
+        elif 'ssh' in file_type:
             self.column_values['type'] = 'ssh'
-        elif 'irc' in line['type']:
+        elif 'irc' in file_type:
             self.column_values['type'] = 'irc'
-        elif 'long' in line['type']:
+        elif 'long' in file_type:
             self.column_values['type'] = 'long'
-        elif 'dhcp' in line['type']:
+        elif 'dhcp' in file_type:
             self.column_values['type'] = 'dhcp'
-        elif 'dce_rpc' in line['type']:
+        elif 'dce_rpc' in file_type:
             self.column_values['type'] = 'dce_rpc'
-        elif 'dnp3' in line['type']:
+        elif 'dnp3' in file_type:
             self.column_values['type'] = 'dnp3'
-        elif 'ftp' in line['type']:
+        elif 'ftp' in file_type:
             self.column_values['type'] = 'ftp'
-        elif 'kerberos' in line['type']:
+        elif 'kerberos' in file_type:
             self.column_values['type'] = 'kerberos'
-        elif 'mysql' in line['type']:
+        elif 'mysql' in file_type:
             self.column_values['type'] = 'mysql'
-        elif 'modbus' in line['type']:
+        elif 'modbus' in file_type:
             self.column_values['type'] = 'modbus'
-        elif 'ntlm' in line['type']:
+        elif 'ntlm' in file_type:
             self.column_values['type'] = 'ntlm'
-        elif 'rdp' in line['type']:
+        elif 'rdp' in file_type:
             self.column_values['type'] = 'rdp'
-        elif 'sip' in line['type']:
+        elif 'sip' in file_type:
             self.column_values['type'] = 'sip'
-        elif 'smb_cmd' in line['type']:
+        elif 'smb_cmd' in file_type:
             self.column_values['type'] = 'smb_cmd'
-        elif 'smb_files' in line['type']:
+        elif 'smb_files' in file_type:
             self.column_values['type'] = 'smb_files'
-        elif 'smb_mapping' in line['type']:
+        elif 'smb_mapping' in file_type:
             self.column_values['type'] = 'smb_mapping'
-        elif 'smtp' in line['type']:
+        elif 'smtp' in file_type:
             self.column_values['type'] = 'smtp'
-        elif 'socks' in line['type']:
+        elif 'socks' in file_type:
             self.column_values['type'] = 'socks'
-        elif 'syslog' in line['type']:
+        elif 'syslog' in file_type:
             self.column_values['type'] = 'syslog'
-        elif 'tunnel' in line['type']:
+        elif 'tunnel' in file_type:
             self.column_values['type'] = 'tunnel'
 
-    def process_argus_input(self, line):
+    def process_argus_input(self, new_line):
         """
         Process the line and extract columns for argus
         """
+        line = new_line['data']
         self.column_values = {}
         self.column_values['starttime'] = False
         self.column_values['endtime'] = False
@@ -877,7 +897,7 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             pass
 
-    def process_nfdump_input(self, line):
+    def process_nfdump_input(self, new_line):
         """
         Process the line and extract columns for nfdump
         """
@@ -902,6 +922,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values['type'] = 'nfdump'
 
         # Read the lines fast
+        line = new_line['data']
         nline = line.strip().split(self.separator)
         try:
             self.column_values['starttime'] = self.get_time(nline[0])
