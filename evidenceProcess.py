@@ -228,11 +228,31 @@ class EvidenceProcess(multiprocessing.Process):
                 elif message['channel'] == 'evidence_added':
                     # Get the profileid and twid
                     try:
-                        profileid = message['data'].split(':')[0]
-                        twid = message['data'].split(':')[1]
+                        profileid = message['data'].split('-')[0]
+                        twid = message['data'].split('-')[1]
+
+                        # Separate new evidence, so it can be logged in alerts.log
+                        new_evidence_key = message['data'].split('-')[2]
+                        new_evidence_description = message['data'].split('-')[3]
+                        new_evidence_key_split = new_evidence_key.split(':')
+                        new_evidence_detection_type = new_evidence_key_split[0]
+                        new_evidence_detection_module = new_evidence_key_split[-1]
+                        new_evidence_detection_info = new_evidence_key[len(new_evidence_detection_type) + 1:-len(new_evidence_detection_module) - 1]  # In case of TI, this info is IP, in case of LSTM this is a tuple
+                        ip = profileid.split(self.separator)[1]
+                        evidence_to_log = self.print_evidence( profileid, twid, ip, new_evidence_detection_module, new_evidence_detection_type, new_evidence_detection_info,
+                                             new_evidence_description)
+                        self.addDataToFile(evidence_to_log)
+
+                        # add detection info threat  intelligence in the IP and Domain info
+                        if new_evidence_detection_module == 'ThreatIntelligenceBlacklistIP':
+                            self.set_TI_IP_detection(new_evidence_detection_info, new_evidence_description, profileid, twid)
+                        elif new_evidence_detection_module == 'ThreatIntelligenceBlacklistDomain':
+                            self.set_TI_Domain_detection(new_evidence_detection_info, new_evidence_description, profileid, twid)
+
                     except AttributeError:
                         # When the channel is created the data '1' is sent
                         continue
+
                     evidence = __database__.getEvidenceForTW(profileid, twid)
                     # Important! It may happen that the evidence is not related to a profileid and twid.
                     # For example when the evidence is on some src IP attacking our home net, and we are not creating
