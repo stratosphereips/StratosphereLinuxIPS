@@ -157,21 +157,34 @@ class EvidenceProcess(multiprocessing.Process):
         data = json.dumps(ip_location)
         __database__.add_malicious_ip(ip, data)
 
-    def addDataToFile(self, data):
+    def addDataToJSONFile(self, data):
         """
         Add a new evidence line to the file.
         """
         try:
+            data_json = json.dumps(data)
+            self.jsonfile.write(data_json)
+            self.jsonfile.write('\n')
+            self.jsonfile.flush()
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            self.print('Error in addDataToJSONFile()')
+            self.print(type(inst))
+            self.print(inst)
 
-            now = datetime.now()
-            current_time = now.strftime('%Y-%m-%d %H:%M:%S')
-            self.logfile.write(current_time + ' '+data)
+    def addDataToLogFile(self, data):
+        """
+        Add a new evidence line to the file.
+        """
+        try:
+            self.logfile.write(data)
             self.logfile.write('\n')
             self.logfile.flush()
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            self.print('Error in addDataToFile()')
+            self.print('Error in addDataToLogFile()')
             self.print(type(inst))
             self.print(inst)
 
