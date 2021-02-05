@@ -228,12 +228,13 @@ class EvidenceProcess(multiprocessing.Process):
                 elif message['channel'] == 'evidence_added':
                     # Get the profileid and twid
                     try:
-                        profileid = message['data'].split('-')[0]
-                        twid = message['data'].split('-')[1]
+                        message_data = message['data']
+                        profileid = message_data.split('-')[0]
+                        twid = message_data.split('-')[1]
 
                         # Separate new evidence, so it can be logged in alerts.log
-                        new_evidence_key = message['data'].split('-')[2]
-                        new_evidence_description = message['data'].split('-')[3]
+                        new_evidence_key = message_data.split('-')[2]
+                        new_evidence_description = message_data.split('-')[3]
                         new_evidence_key_split = new_evidence_key.split(':')
                         new_evidence_detection_type = new_evidence_key_split[0]
                         new_evidence_detection_module = new_evidence_key_split[-1]
