@@ -262,9 +262,17 @@ class EvidenceProcess(multiprocessing.Process):
                         new_evidence_detection_module = new_evidence_key_split[-1]
                         new_evidence_detection_info = new_evidence_key[len(new_evidence_detection_type) + 1:-len(new_evidence_detection_module) - 1]  # In case of TI, this info is IP, in case of LSTM this is a tuple
                         ip = profileid.split(self.separator)[1]
-                        evidence_to_log = self.print_evidence( profileid, twid, ip, new_evidence_detection_module, new_evidence_detection_type, new_evidence_detection_info,
+
+                        now = datetime.now()
+                        current_time = now.strftime('%Y-%m-%d %H:%M:%S')
+
+                        evidence_to_log = self.print_evidence(profileid, twid, ip, new_evidence_detection_module, new_evidence_detection_type, new_evidence_detection_info,
                                              new_evidence_description)
-                        self.addDataToFile(evidence_to_log)
+                        evidence_dict = {'timestamp': current_time, 'detected_ip': ip, 'detection_module':new_evidence_detection_module,  'detection_info':new_evidence_detection_type + ' ' + new_evidence_detection_info, "description":new_evidence_description}
+
+                        self.addDataToLogFile(current_time + ' ' +evidence_to_log)
+                        self.addDataToJSONFile(evidence_dict)
+
 
                         # add detection info threat  intelligence in the IP and Domain info
                         if new_evidence_detection_module == 'ThreatIntelligenceBlacklistIP':
