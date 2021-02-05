@@ -289,23 +289,8 @@ class EvidenceProcess(multiprocessing.Process):
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
-
-                                if detection_module == 'ThreatIntelligenceBlacklistIP':
-                                    if detection_type == 'dstip':
-                                        self.print(f'{Fore.RED}\tInfected IP {ip} connected to blacklisted IP {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
-                                    elif detection_type == 'srcip':
-                                        self.print(f'{Fore.RED}\tDetected blacklisted IP {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
-                                    self.set_TI_IP_detection(detection_info, description, profileid, twid)
-
-                                elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-                                    self.print(f'{Fore.RED}\tDetected domain: {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
-                                    self.set_TI_Domain_detection(detection_info, description, profileid, twid)
-
-                                elif detection_module == 'LongConnection':
-                                    self.print(f'{Fore.RED}\tDetected IP {detection_info} due to a {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
-                                else:
-                                    self.print(f'{Fore.RED}\tDetected IP: {ip} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
-
+                                evidence_to_print = self.print_evidence(profileid, twid, ip, detection_module, detection_type,detection_info, description)
+                                self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 __database__.publish('new_blocking', ip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
