@@ -1,19 +1,32 @@
-# This file takes care of creating the log files with information
-# Every X amount of time it goes to the database and reports
+# Stratosphere Linux IPS. A machine-learning Intrusion Detection System
+# Copyright (C) 2021 Sebastian Garcia
+
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import multiprocessing
 import sys
 from datetime import datetime
 from datetime import timedelta
-
 import os
-import signal
 import threading
 import time
 from slips.core.database import __database__
 import configparser
-import pprint
 import json
+
 
 def timing(f):
     """ Function to measure the time another function takes. It should be used as decorator: @timing"""
@@ -24,6 +37,7 @@ def timing(f):
         print('function took {:.3f} ms'.format((time2-time1)*1000.0))
         return ret
     return wrap
+
 
 # Logs output Process
 class LogsProcess(multiprocessing.Process):
