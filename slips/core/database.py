@@ -858,22 +858,22 @@ class Database(object):
         return self.separator
 
     def setEvidence(self, key, threat_level, confidence, description, profileid='', twid='',):
-        """ 
-        Get the evidence for this TW for this Profile 
+        """
+        Get the evidence for this TW for this Profile
 
         Input:
-        - key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans, then this would be the port used. 
-               the idea is that you can later update this specific detection when it evolves. 
+        - key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans, then this would be the port used.
+               the idea is that you can later update this specific detection when it evolves.
                Examples of keys are: 'dport:1234' for all the evidences regarding this dport, or 'dip:1.1.1.1' for all the evidences regarding that dst ip
         - type_evidence: The type of evidence you can send. For example PortScanType1
         - threat_level: How important this evidence is. Portscan? C&C channel? Exploit?
         - confidence: How sure you are that this is what you say it is. Basically: the more data the more sure you are.
-        
+
         The evidence is stored as a dict.
         {
-            'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'], 
-            'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1'] 
-            'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow'] 
+            'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'],
+            'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1']
+            'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
         }
 
         Adapt to set the evidence of ips without profile and tw
@@ -1319,7 +1319,7 @@ class Database(object):
         to_send['flow'] = data
         to_send = json.dumps(to_send)
         self.publish('new_http', to_send)
-        self.print('Adding HTTP flow to DB: {}'.format(data), 5,0)
+        self.print('Adding HTTP flow to DB: {}'.format(data), 5, 0)
         # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         self.publish('give_threat_intelligence', host + '-' + str(profileid) + '-' + str(twid) + '-'+ ' ')
 
@@ -1341,7 +1341,7 @@ class Database(object):
         data['ttls'] = ttls
         # Convert to json string
         data = json.dumps(data)
-        
+
         # Set the dns as alternative flow
         self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
 
