@@ -531,6 +531,92 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['server_name'] = ''
         elif 'ssh' in new_line['type']:
             self.column_values['type'] = 'ssh'
+            try:
+                self.column_values['version'] = line[6]
+            except IndexError:
+                self.column_values['version'] = ''
+            # Zeek can put in column 7 the auth success if it has one
+            # or the auth attempts only. However if the auth
+            # success is there, the auth attempts are too.
+            if 'success' in line[7]:
+                try:
+                    self.column_values['auth_success'] = line[7]
+                except IndexError:
+                    self.column_values['auth_success'] = ''
+                try:
+                    self.column_values['auth_attempts'] = line[8]
+                except IndexError:
+                    self.column_values['auth_attempts'] = ''
+                try:
+                    self.column_values['client'] = line[10]
+                except IndexError:
+                    self.column_values['client'] = ''
+                try:
+                    self.column_values['server'] = line[11]
+                except IndexError:
+                    self.column_values['server'] = ''
+                try:
+                    self.column_values['cipher_alg'] = line[12]
+                except IndexError:
+                    self.column_values['cipher_alg'] = ''
+                try:
+                    self.column_values['mac_alg'] = line[13]
+                except IndexError:
+                    self.column_values['mac_alg'] = ''
+                try:
+                    self.column_values['compression_alg'] = line[14]
+                except IndexError:
+                    self.column_values['compression_alg'] = ''
+                try:
+                    self.column_values['kex_alg'] = line[15]
+                except IndexError:
+                    self.column_values['kex_alg'] = ''
+                try:
+                    self.column_values['host_key_alg'] = line[16]
+                except IndexError:
+                    self.column_values['host_key_alg'] = ''
+                try:
+                    self.column_values['host_key'] = line[17]
+                except IndexError:
+                    self.column_values['host_key'] = ''
+            elif 'success' not in line[7]:
+                self.column_values['auth_success'] = ''
+                try:
+                    self.column_values['auth_attempts'] = line[7]
+                except IndexError:
+                    self.column_values['auth_attempts'] = ''
+                try:
+                    self.column_values['client'] = line[9]
+                except IndexError:
+                    self.column_values['client'] = ''
+                try:
+                    self.column_values['server'] = line[10]
+                except IndexError:
+                    self.column_values['server'] = ''
+                try:
+                    self.column_values['cipher_alg'] = line[11]
+                except IndexError:
+                    self.column_values['cipher_alg'] = ''
+                try:
+                    self.column_values['mac_alg'] = line[12]
+                except IndexError:
+                    self.column_values['mac_alg'] = ''
+                try:
+                    self.column_values['compression_alg'] = line[13]
+                except IndexError:
+                    self.column_values['compression_alg'] = ''
+                try:
+                    self.column_values['kex_alg'] = line[14]
+                except IndexError:
+                    self.column_values['kex_alg'] = ''
+                try:
+                    self.column_values['host_key_alg'] = line[15]
+                except IndexError:
+                    self.column_values['host_key_alg'] = ''
+                try:
+                    self.column_values['host_key'] = line[16]
+                except IndexError:
+                    self.column_values['host_key'] = ''
         elif 'irc' in new_line['type']:
             self.column_values['type'] = 'irc'
         elif 'long' in new_line['type']:
@@ -779,6 +865,52 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['server_name'] = ''
         elif 'ssh' in file_type:
             self.column_values['type'] = 'ssh'
+            try:
+                self.column_values['version'] = line['version']
+            except IndexError:
+                self.column_values['version'] = ''
+            try:
+                self.column_values['auth_success'] = line['auth_success']
+            except IndexError:
+                self.column_values['auth_success'] = ''
+            except KeyError:
+                self.column_values['auth_success'] = ''
+            try:
+                self.column_values['auth_attempts'] = line['auth_attempts']
+            except IndexError:
+                self.column_values['auth_attempts'] = ''
+            try:
+                self.column_values['client'] = line['client']
+            except IndexError:
+                self.column_values['client'] = ''
+            try:
+                self.column_values['server'] = line['server']
+            except IndexError:
+                self.column_values['server'] = ''
+            try:
+                self.column_values['cipher_alg'] = line['cipher_alg']
+            except IndexError:
+                self.column_values['cipher_alg'] = ''
+            try:
+                self.column_values['mac_alg'] = line['mac_alg']
+            except IndexError:
+                self.column_values['mac_alg'] = ''
+            try:
+                self.column_values['compression_alg'] = line['compression_alg']
+            except IndexError:
+                self.column_values['compression_alg'] = ''
+            try:
+                self.column_values['kex_alg'] = line['kex_alg']
+            except IndexError:
+                self.column_values['kex_alg'] = ''
+            try:
+                self.column_values['host_key_alg'] = line['host_key_alg']
+            except IndexError:
+                self.column_values['host_key_alg'] = ''
+            try:
+                self.column_values['host_key'] = line['host_key']
+            except IndexError:
+                self.column_values['host_key'] = ''
         elif 'irc' in file_type:
             self.column_values['type'] = 'irc'
         elif 'long' in file_type:
@@ -1241,7 +1373,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Define which type of flows we are going to preocess
             if not self.column_values:
                 return True
-            elif not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type'] and not 'nfdump' in self.column_values['type']:
+            elif not 'ssh' in self.column_values['type'] and not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type'] and not 'nfdump' in self.column_values['type']:
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
@@ -1351,6 +1483,8 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['httpversion'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
                 elif flow_type == 'ssl':
                     __database__.add_out_ssl(profileid, twid, daddr_as_obj, flow_type, uid, self.column_values['sslversion'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
+                elif flow_type == 'ssh':
+                    __database__.add_out_ssh(profileid, twid, flow_type, uid, self.column_values['version'], self.column_values['auth_attempts'], self.column_values['auth_success'], self.column_values['client'], self.column_values['server'], self.column_values['cipher_alg'], self.column_values['mac_alg'], self.column_values['compression_alg'], self.column_values['kex_alg'], self.column_values['host_key_alg'], self.column_values['host_key'])
 
             def store_features_going_in(profileid, twid, starttime):
                 """
