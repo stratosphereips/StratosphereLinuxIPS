@@ -867,49 +867,47 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'ssh'
             try:
                 self.column_values['version'] = line['version']
-            except IndexError:
+            except KeyError:
                 self.column_values['version'] = ''
             try:
                 self.column_values['auth_success'] = line['auth_success']
-            except IndexError:
-                self.column_values['auth_success'] = ''
             except KeyError:
                 self.column_values['auth_success'] = ''
             try:
                 self.column_values['auth_attempts'] = line['auth_attempts']
-            except IndexError:
+            except KeyError:
                 self.column_values['auth_attempts'] = ''
             try:
                 self.column_values['client'] = line['client']
-            except IndexError:
+            except KeyError:
                 self.column_values['client'] = ''
             try:
                 self.column_values['server'] = line['server']
-            except IndexError:
+            except KeyError:
                 self.column_values['server'] = ''
             try:
                 self.column_values['cipher_alg'] = line['cipher_alg']
-            except IndexError:
+            except KeyError:
                 self.column_values['cipher_alg'] = ''
             try:
                 self.column_values['mac_alg'] = line['mac_alg']
-            except IndexError:
+            except KeyError:
                 self.column_values['mac_alg'] = ''
             try:
                 self.column_values['compression_alg'] = line['compression_alg']
-            except IndexError:
+            except KeyError:
                 self.column_values['compression_alg'] = ''
             try:
                 self.column_values['kex_alg'] = line['kex_alg']
-            except IndexError:
+            except KeyError:
                 self.column_values['kex_alg'] = ''
             try:
                 self.column_values['host_key_alg'] = line['host_key_alg']
-            except IndexError:
+            except KeyError:
                 self.column_values['host_key_alg'] = ''
             try:
                 self.column_values['host_key'] = line['host_key']
-            except IndexError:
+            except KeyError:
                 self.column_values['host_key'] = ''
         elif 'irc' in file_type:
             self.column_values['type'] = 'irc'
