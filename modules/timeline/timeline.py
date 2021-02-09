@@ -37,7 +37,7 @@ class Module(Module, multiprocessing.Process):
         # Read information how we should print timestamp.
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
         self.analysis_direction = self.config.get('parameters', 'analysis_direction')
-        # Wait a little so we give time to have something to print 
+        # Wait a little so we give time to have something to print
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -46,7 +46,6 @@ class Module(Module, multiprocessing.Process):
             # linux
             self.timeout = None
         else:
-            #??
             self.timeout = None
 
     def read_configuration(self, section: str, name: str) -> str:
@@ -60,7 +59,7 @@ class Module(Module, multiprocessing.Process):
         return conf_variable
 
     def load_ports(self):
-        """ 
+        """
         Funciton to read our special file called 'services.csv' and load the known ports from it into the database
         """
         try:
@@ -69,7 +68,7 @@ class Module(Module, multiprocessing.Process):
                 name = line.split(',')[0]
                 port = line.split(',')[1]
                 proto = line.split(',')[2]
-                descr = line.split(',')[3]
+                # descr = line.split(',')[3]
                 __database__.set_port_info(str(port)+'/'+proto, name)
         except Exception as inst:
             self.print('Problem on load_ports()', 0, 1)
@@ -79,7 +78,7 @@ class Module(Module, multiprocessing.Process):
             return True
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -87,7 +86,7 @@ class Module(Module, multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
@@ -305,8 +304,6 @@ class Module(Module, multiprocessing.Process):
                     http_data = {k: v for k, v in http_data_all.items() if v is not '' and v is not '/'}
                     alt_activity = {'http_data': http_data}
                 elif alt_flow['type'] == 'ssl':
-                    # {"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
-                    # version":"TLSv12","resumed":false,"established":true,"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
                     if alt_flow['validation_status'] == 'ok':
                         validation = 'Yes'
                         resumed = 'False'
@@ -334,7 +331,6 @@ class Module(Module, multiprocessing.Process):
             if activity:
                 __database__.add_timeline_line(profileid, twid, activity, timestamp)
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
-
 
         except KeyboardInterrupt:
             return True
