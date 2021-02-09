@@ -125,15 +125,16 @@ class EvidenceProcess(multiprocessing.Process):
             elif detection_type == 'srcip':
                 evidence_string = f'Detected blacklisted IP {detection_info} due to {description}. '
 
-
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
             evidence_string = f'Detected domain: {detection_info} due to {description}.'
             self.set_TI_Domain_detection(detection_info, description, profileid, twid)
 
         elif detection_module == 'LongConnection':
             evidence_string = f'Detected IP {detection_info} due to a {description}.'
+        elif detection_module == 'SSHSuccessful':
+            evidence_string = f'IP: {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'Detected IP: {ip} due to {description}.'
+            evidence_string = f'Detected IP: {ip} due  to {description}.'
 
         return evidence_string
 
@@ -285,13 +286,17 @@ class EvidenceProcess(multiprocessing.Process):
                         now = datetime.now()
                         current_time = now.strftime('%Y-%m-%d %H:%M:%S')
 
-                        evidence_to_log = self.print_evidence(profileid, twid, ip, new_evidence_detection_module, new_evidence_detection_type, new_evidence_detection_info,
-                                             new_evidence_description)
+                        evidence_to_log = self.print_evidence(profileid,
+                                                              twid,
+                                                              ip,
+                                                              new_evidence_detection_module,
+                                                              new_evidence_detection_type,
+                                                              new_evidence_detection_info,
+                                                              new_evidence_description)
                         evidence_dict = {'timestamp': current_time, 'detected_ip': ip, 'detection_module':new_evidence_detection_module,  'detection_info':new_evidence_detection_type + ' ' + new_evidence_detection_info, "description":new_evidence_description}
 
-                        self.addDataToLogFile(current_time + ' ' +evidence_to_log)
+                        self.addDataToLogFile(current_time + ' ' + evidence_to_log)
                         self.addDataToJSONFile(evidence_dict)
-
 
                         # add detection info threat  intelligence in the IP and Domain info
                         if new_evidence_detection_module == 'ThreatIntelligenceBlacklistIP':

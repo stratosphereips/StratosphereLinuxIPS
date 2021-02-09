@@ -198,6 +198,8 @@ Modules are Python-based files that allow any developer to extend the functional
 	_timeline_ - module to create a timeline of what happened in the network based on all the 	  flows and type of data available
 	_VirusTotal_ - module to lookup IP address on VirusTotal
 	_Kalipso_ - graphical user interface to display analyzed traffic by Slips
+	_Long Flows - In the module that analyzes individual flows. It check if a flow is too long
+	_SSH Success - In the  module that analyzes individual flows. It checks if the SSH connections were successful. Uses Zeek method and Slips method.
 The behavioral models are stored in the __models__ folder and will be updated regularly. In this version you should pull the git repository by hand to update the models.
 
 The core of the Slips program is not only the machine learning algorithm, but more importantly the __behavioral models__ that are used to describe flows based on flows' duration, size, and periodicty. This is very important because the models are _curated_ to maximize the detection. More about behavioral models is in [Stratosphere Testing Framework].

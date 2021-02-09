@@ -37,7 +37,7 @@ class Module(Module, multiprocessing.Process):
         # Read information how we should print timestamp.
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
         self.analysis_direction = self.config.get('parameters', 'analysis_direction')
-        # Wait a little so we give time to have something to print 
+        # Wait a little so we give time to have something to print
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -46,7 +46,6 @@ class Module(Module, multiprocessing.Process):
             # linux
             self.timeout = None
         else:
-            #??
             self.timeout = None
 
     def read_configuration(self, section: str, name: str) -> str:
@@ -60,7 +59,7 @@ class Module(Module, multiprocessing.Process):
         return conf_variable
 
     def load_ports(self):
-        """ 
+        """
         Funciton to read our special file called 'services.csv' and load the known ports from it into the database
         """
         try:
@@ -69,7 +68,7 @@ class Module(Module, multiprocessing.Process):
                 name = line.split(',')[0]
                 port = line.split(',')[1]
                 proto = line.split(',')[2]
-                descr = line.split(',')[3]
+                # descr = line.split(',')[3]
                 __database__.set_port_info(str(port)+'/'+proto, name)
         except Exception as inst:
             self.print('Problem on load_ports()', 0, 1)
@@ -79,7 +78,7 @@ class Module(Module, multiprocessing.Process):
             return True
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -87,7 +86,7 @@ class Module(Module, multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
@@ -119,11 +118,16 @@ class Module(Module, multiprocessing.Process):
             daddr = flow_dict['daddr']
             dport = flow_dict['dport']
             proto = flow_dict['proto'].upper()
+            try:
+                dport_name = flow_dict['appproto'].upper()
+            except KeyError:
+                dport_name = ''
 
             # Here is where we see if we know this dport
-            dport_name = __database__.get_port_info(str(dport)+'/'+proto.lower())
-            if dport_name:
-                dport_name = dport_name.upper()
+            if not dport_name:
+                dport_name = __database__.get_port_info(str(dport)+'/'+proto.lower())
+                if dport_name:
+                    dport_name = dport_name.upper()
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
@@ -148,14 +152,6 @@ class Module(Module, multiprocessing.Process):
             sbytes = flow_dict['sbytes']
             if type(sbytes) != int:
                 sbytes = 0
-            appproto = flow_dict['appproto']
-
-            # Check if we have an alternative flow related to this one. Like DNS or HTTP from Zeek
-            alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
-            # Sometimes we need to wait a little to give time to Zeek to find the related flow since they are read very fast together.
-            # This should be improved algorithmically probably
-            time.sleep(0.05)
-            alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
 
             # Now that we have the flow processed. Try to interpret it and create the activity line
             # Record Activity
@@ -184,9 +180,7 @@ class Module(Module, multiprocessing.Process):
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
 
-                    #activity = { 'timestamp': timestamp_human, 'dport_name/proto': dport_name+'/'+str(proto), 'preposition': 'from', 'saddr': saddr,'state': state.lower(), 'warning': warning_empty, 'Sent': allbytes-sbytes, 'Recv': sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
-
-                    activity = { 'timestamp': timestamp_human, 'dport_name': dport_name, 'preposition': 'from','dns_resolution':dns_resolution, 'saddr': saddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
+                    activity = {'timestamp': timestamp_human, 'dport_name': dport_name, 'preposition': 'from','dns_resolution':dns_resolution, 'saddr': saddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
 
                 elif 'ICMP' in proto:
                     if type(sport) == int:
@@ -289,6 +283,11 @@ class Module(Module, multiprocessing.Process):
 
             #################################
             # Now process the alternative flows
+            # Sometimes we need to wait a little to give time to Zeek to find the related flow since they are read very fast together.
+            # This should be improved algorithmically probably
+            time.sleep(0.05)
+            alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
+
             alt_activity ={}
             http_data = {}
             if alt_flow_json:
@@ -305,8 +304,6 @@ class Module(Module, multiprocessing.Process):
                     http_data = {k: v for k, v in http_data_all.items() if v is not '' and v is not '/'}
                     alt_activity = {'http_data': http_data}
                 elif alt_flow['type'] == 'ssl':
-                    # {"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
-                    # version":"TLSv12","resumed":false,"established":true,"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
                     if alt_flow['validation_status'] == 'ok':
                         validation = 'Yes'
                         resumed = 'False'
@@ -325,6 +322,12 @@ class Module(Module, multiprocessing.Process):
                         subject = '????'
                     # We put server_name instead of dns resolution
                     alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"], 'dns_resolution': alt_flow['server_name']}
+                elif alt_flow['type'] == 'ssh':
+                    if alt_flow['auth_success']:
+                        success = 'Successful'
+                    else:
+                        success = 'Not Successful'
+                    alt_activity = {'Login ': success, 'Auth attempts': alt_flow['auth_attempts'], 'Client:': alt_flow['client'], 'Server': alt_flow['client']}
 
             elif activity:
                 alt_activity = {'info': 'No extra data.'}
@@ -334,7 +337,6 @@ class Module(Module, multiprocessing.Process):
             if activity:
                 __database__.add_timeline_line(profileid, twid, activity, timestamp)
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
-
 
         except KeyboardInterrupt:
             return True
