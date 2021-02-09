@@ -118,11 +118,16 @@ class Module(Module, multiprocessing.Process):
             daddr = flow_dict['daddr']
             dport = flow_dict['dport']
             proto = flow_dict['proto'].upper()
+            try:
+                dport_name = flow_dict['appproto'].upper()
+            except KeyError:
+                dport_name = ''
 
             # Here is where we see if we know this dport
-            dport_name = __database__.get_port_info(str(dport)+'/'+proto.lower())
-            if dport_name:
-                dport_name = dport_name.upper()
+            if not dport_name:
+                dport_name = __database__.get_port_info(str(dport)+'/'+proto.lower())
+                if dport_name:
+                    dport_name = dport_name.upper()
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
@@ -147,14 +152,6 @@ class Module(Module, multiprocessing.Process):
             sbytes = flow_dict['sbytes']
             if type(sbytes) != int:
                 sbytes = 0
-            appproto = flow_dict['appproto']
-
-            # Check if we have an alternative flow related to this one. Like DNS or HTTP from Zeek
-            alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
-            # Sometimes we need to wait a little to give time to Zeek to find the related flow since they are read very fast together.
-            # This should be improved algorithmically probably
-            time.sleep(0.05)
-            alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
 
             # Now that we have the flow processed. Try to interpret it and create the activity line
             # Record Activity
@@ -183,9 +180,7 @@ class Module(Module, multiprocessing.Process):
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
 
-                    #activity = { 'timestamp': timestamp_human, 'dport_name/proto': dport_name+'/'+str(proto), 'preposition': 'from', 'saddr': saddr,'state': state.lower(), 'warning': warning_empty, 'Sent': allbytes-sbytes, 'Recv': sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
-
-                    activity = { 'timestamp': timestamp_human, 'dport_name': dport_name, 'preposition': 'from','dns_resolution':dns_resolution, 'saddr': saddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
+                    activity = {'timestamp': timestamp_human, 'dport_name': dport_name, 'preposition': 'from','dns_resolution':dns_resolution, 'saddr': saddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name}
 
                 elif 'ICMP' in proto:
                     if type(sport) == int:
@@ -288,6 +283,11 @@ class Module(Module, multiprocessing.Process):
 
             #################################
             # Now process the alternative flows
+            # Sometimes we need to wait a little to give time to Zeek to find the related flow since they are read very fast together.
+            # This should be improved algorithmically probably
+            time.sleep(0.05)
+            alt_flow_json = __database__.get_altflow_from_uid(profileid, twid, uid)
+
             alt_activity ={}
             http_data = {}
             if alt_flow_json:
@@ -322,6 +322,12 @@ class Module(Module, multiprocessing.Process):
                         subject = '????'
                     # We put server_name instead of dns resolution
                     alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"], 'dns_resolution': alt_flow['server_name']}
+                elif alt_flow['type'] == 'ssh':
+                    if alt_flow['auth_success']:
+                        success = 'Successful'
+                    else:
+                        success = 'Not Successful'
+                    alt_activity = {'Login ': success, 'Auth attempts': alt_flow['auth_attempts'], 'Client:': alt_flow['client'], 'Server': alt_flow['client']}
 
             elif activity:
                 alt_activity = {'info': 'No extra data.'}
