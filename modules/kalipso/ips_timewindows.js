@@ -461,7 +461,7 @@ table_inTuples.hide()
 
 
 map.hide()
-box_generic_dashboard.setContent('\n\n Welcome to Kalipso v0.1, Stratosphere Linux IPS v0.6.1\n\n https://stratosphereips.org\n\n Press TAB to exit this widget')
+box_generic_dashboard.setContent('\n\n Welcome to Kalipso v0.1, Stratosphere Linux IPS v0.7.1\n\n https://stratosphereips.org\n\n Press q to exit this widget')
 var focus_widget = tree;
 var bar_state_four_two = true;
 var bar_state_one = true;
