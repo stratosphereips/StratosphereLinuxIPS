@@ -1,3 +1,20 @@
+# Stratosphere Linux IPS. A machine-learning Intrusion Detection System
+# Copyright (C) 2021 Sebastian Garcia
+
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 import multiprocessing
 from slips.core.database import __database__
 import json
@@ -108,15 +125,16 @@ class EvidenceProcess(multiprocessing.Process):
             elif detection_type == 'srcip':
                 evidence_string = f'Detected blacklisted IP {detection_info} due to {description}. '
 
-
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
             evidence_string = f'Detected domain: {detection_info} due to {description}.'
             self.set_TI_Domain_detection(detection_info, description, profileid, twid)
 
         elif detection_module == 'LongConnection':
             evidence_string = f'Detected IP {detection_info} due to a {description}.'
+        elif detection_module == 'SSHSuccessful':
+            evidence_string = f'IP: {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'Detected IP: {ip} due to {description}.'
+            evidence_string = f'Detected IP: {ip} due  to {description}.'
 
         return evidence_string
 
@@ -268,13 +286,17 @@ class EvidenceProcess(multiprocessing.Process):
                         now = datetime.now()
                         current_time = now.strftime('%Y-%m-%d %H:%M:%S')
 
-                        evidence_to_log = self.print_evidence(profileid, twid, ip, new_evidence_detection_module, new_evidence_detection_type, new_evidence_detection_info,
-                                             new_evidence_description)
+                        evidence_to_log = self.print_evidence(profileid,
+                                                              twid,
+                                                              ip,
+                                                              new_evidence_detection_module,
+                                                              new_evidence_detection_type,
+                                                              new_evidence_detection_info,
+                                                              new_evidence_description)
                         evidence_dict = {'timestamp': current_time, 'detected_ip': ip, 'detection_module':new_evidence_detection_module,  'detection_info':new_evidence_detection_type + ' ' + new_evidence_detection_info, "description":new_evidence_description}
 
-                        self.addDataToLogFile(current_time + ' ' +evidence_to_log)
+                        self.addDataToLogFile(current_time + ' ' + evidence_to_log)
                         self.addDataToJSONFile(evidence_dict)
-
 
                         # add detection info threat  intelligence in the IP and Domain info
                         if new_evidence_detection_module == 'ThreatIntelligenceBlacklistIP':
