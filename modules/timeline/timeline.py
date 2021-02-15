@@ -327,7 +327,7 @@ class Module(Module, multiprocessing.Process):
                         success = 'Successful'
                     else:
                         success = 'Not Successful'
-                    alt_activity = {'Login ': success, 'Auth attempts': alt_flow['auth_attempts'], 'Client:': alt_flow['client'], 'Server': alt_flow['client']}
+                    alt_activity = {'Login': success, 'Auth attempts': alt_flow['auth_attempts'], 'Client': alt_flow['client'], 'Server': alt_flow['client']}
 
             elif activity:
                 alt_activity = {'info': 'No extra data.'}
