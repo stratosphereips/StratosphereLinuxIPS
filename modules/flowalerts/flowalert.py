@@ -105,7 +105,7 @@ class Module(Module, multiprocessing.Process):
         a better way to show it.
         The threat_level is 0.01 to show that this is not a detection
         """
-        type_evidence = 'SSHSuccessful'
+        type_evidence = 'SSHSuccessful-by-' + by
         key = 'ip:' + saddr + ':' + type_evidence
         threat_level = 0.01
         confidence = 0.5
