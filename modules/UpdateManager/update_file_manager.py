@@ -195,14 +195,14 @@ class UpdateFileManager:
         for file_to_download in self.list_of_urls:
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
-                self.print(f'We should update the remote file {file_to_download}', 3, 0)
+                self.print(f'We should update the remote file {file_to_download}', 1, 0)
                 if self.__download_malicious_file(file_to_download):
-                    self.print(f'Successfully updated remote file {file_to_download}.', 3, 0)
+                    self.print(f'Successfully updated remote file {file_to_download}.', 1, 0)
                 else:
                     self.print(f'An error occured during downloading file {file_to_download}. Updating was aborted.', 0, 1)
                     continue
             else:
-                self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
+                self.print(f'File {file_to_download} is up to date. No download.', 1, 0)
                 continue
 
     def __delete_old_source_IPs(self, file):
