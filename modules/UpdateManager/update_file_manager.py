@@ -190,7 +190,7 @@ class UpdateFileManager:
             self.print('Not Updating the remote file of maliciuos IPs and domains because the update period is <= 0.', 0, 1)
             return False
 
-        self.print('Checkingif we need to download TI files.')
+        self.print('Checking if we need to download TI files.')
         # Check if the remote file is newer than our own
         # For each file that we should update
         for file_to_download in self.list_of_urls:
