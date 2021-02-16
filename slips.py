@@ -72,23 +72,29 @@ def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
     Check if we have redis-server running
     """
     try:
-        r = redis.StrictRedis(host=redis_host, port=redis_port, db=0, charset="utf-8",
-                                   decode_responses=True)
+        r = redis.StrictRedis(host=redis_host,
+                              port=redis_port,
+                              db=0,
+                              charset="utf-8",
+                              decode_responses=True)
         r.ping()
-    except Exception as ex:
-        print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
+    except Exception:
+        print('[DB] Error: Is redis database running? \
+                You can run it as: "redis-server --daemonize yes"')
         return False
     return True
 
-def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> str:
+
+def clear_redis_cache_database(redis_host='localhost', redis_port=6379) -> str:
     """
     Clear cache database
     """
-    rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=1, charset="utf-8",
+    rcache = redis.StrictRedis(host=redis_host,
+                               port=redis_port,
+                               db=1,
+                               charset="utf-8",
                                decode_responses=True)
     rcache.flushdb()
-
-
 
 
 def check_zeek_or_bro():
@@ -112,7 +118,7 @@ def terminate_slips():
 ####################
 # Main
 ####################
-if __name__ == '__main__':  
+if __name__ == '__main__':
     print('Stratosphere Linux IPS. Version {}'.format(version))
     print('https://stratosphereips.org\n')
 
