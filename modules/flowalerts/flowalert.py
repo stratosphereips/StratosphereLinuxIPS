@@ -200,6 +200,8 @@ class Module(Module, multiprocessing.Process):
                             self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
                 message = self.c2.get_message(timeout=0.5)
+                if message and message['data'] == 'stop_process':
+                    return True
                 if message and message['channel'] == 'new_ssh':
                     data = message['data']
                     if type(data) == str:
