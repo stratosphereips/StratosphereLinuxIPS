@@ -190,6 +190,7 @@ class UpdateFileManager:
             self.print('Not Updating the remote file of maliciuos IPs and domains because the update period is <= 0.', 0, 1)
             return False
 
+        self.print('Checkingif we need to download TI files.')
         # Check if the remote file is newer than our own
         # For each file that we should update
         for file_to_download in self.list_of_urls:
@@ -202,7 +203,7 @@ class UpdateFileManager:
                     self.print(f'An error occured during downloading file {file_to_download}. Updating was aborted.', 0, 1)
                     continue
             else:
-                self.print(f'File {file_to_download} is up to date. No download.', 1, 0)
+                self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
                 continue
 
     def __delete_old_source_IPs(self, file):
