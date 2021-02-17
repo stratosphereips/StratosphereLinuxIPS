@@ -119,15 +119,15 @@ class Module(Module, multiprocessing.Process):
             dport = flow_dict['dport']
             proto = flow_dict['proto'].upper()
             try:
-                dport_name = flow_dict['appproto'].upper()
+                dport_name = flow_dict['appproto']
             except KeyError:
                 dport_name = ''
 
             # Here is where we see if we know this dport
             if not dport_name:
                 dport_name = __database__.get_port_info(str(dport)+'/'+proto.lower())
-                if dport_name:
-                    dport_name = dport_name.upper()
+            if dport_name:
+                dport_name = dport_name.upper()
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
