@@ -120,7 +120,7 @@ class Module(Module, multiprocessing.Process):
             proto = flow_dict['proto'].upper()
             try:
                 dport_name = flow_dict['appproto'].upper()
-            except KeyError:
+            except (KeyError, AttributeError):
                 dport_name = ''
 
             # Here is where we see if we know this dport

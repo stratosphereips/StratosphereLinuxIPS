@@ -105,7 +105,7 @@ class Module(Module, multiprocessing.Process):
         a better way to show it.
         The threat_level is 0.01 to show that this is not a detection
         """
-        type_evidence = 'SSHSuccessful'
+        type_evidence = 'SSHSuccessful-by-' + by
         key = 'ip:' + saddr + ':' + type_evidence
         threat_level = 0.01
         confidence = 0.5
@@ -200,6 +200,8 @@ class Module(Module, multiprocessing.Process):
                             self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
                 message = self.c2.get_message(timeout=0.5)
+                if message and message['data'] == 'stop_process':
+                    return True
                 if message and message['channel'] == 'new_ssh':
                     data = message['data']
                     if type(data) == str:
