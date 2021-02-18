@@ -130,11 +130,12 @@ class EvidenceProcess(multiprocessing.Process):
             self.set_TI_Domain_detection(detection_info, description, profileid, twid)
 
         elif detection_module == 'LongConnection':
-            evidence_string = f'Detected IP {detection_info} due to a {description}.'
+            domain_resolution = __database__.get_dns_resolution(detection_info)
+            evidence_string = f'Detected IP {detection_info} {domain_resolution[0:3]} due to a {description}.'
         elif detection_module == 'SSHSuccessful':
             evidence_string = f'IP: {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'Detected IP: {ip} due  to {description}.'
+            evidence_string = f'Detected IP: {ip} due to {description}.'
 
         return evidence_string
 
