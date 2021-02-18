@@ -14,7 +14,7 @@ Now Slips can be run inside a docker if you want to analyze flow or pcap files. 
 
 ### From the Docker Hub
 
-	docker run -it --rm --net=host stratosphereips/slips:v0.7.1
+    docker run -it --rm --net=host stratosphereips/slips:v0.7.1_2
 	./slips.py -c slips.conf -f dataset/test3.binetflow
 
 
@@ -22,7 +22,7 @@ Now Slips can be run inside a docker if you want to analyze flow or pcap files. 
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
-	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:v0.7.1
+	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:v0.7.1_2
 	./slips.py -c slips.conf -f dataset/myfile.pcap
 
 
