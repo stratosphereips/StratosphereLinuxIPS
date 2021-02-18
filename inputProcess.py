@@ -344,10 +344,11 @@ class InputProcess(multiprocessing.Process):
                         if 'binetflow' in headers_line or 'argus' in headers_line:
                             line['type'] = 'argus'
                             fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
-                            self.profilerqueue.put(fake)
+                            # self.profilerqueue.put(fake)
                         elif 'log' in headers_line:
                             line['type'] = 'zeek'
                         for t_line in file_stream:
+                            time.sleep(0.02)
                             line['data'] = t_line
                             self.print(f'	> Sent Line: {line}', 0, 3)
                             self.profilerqueue.put(line)
