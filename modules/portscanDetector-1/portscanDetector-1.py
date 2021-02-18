@@ -122,6 +122,11 @@ class PortScanProcess(Module, multiprocessing.Process):
                             """
                             ### PortScan Type 2. Direction OUT
                             dstips = data[dport]['dstips']
+                            # Remove dstips that have DNS resolution already
+                            for dip in dstips:
+                                dns_resolution = __database__.get_dns_resolution(dip)
+                                if dns_resolution:
+                                    dstips.remove(dip)
                             amount_of_dips = len(dstips)
                             # If we contacted more than 3 dst IPs on this port with not established connections.. we have evidence
                             #self.print('Horizontal Portscan check. Amount of dips: {}. Threshold=3'.format(amount_of_dips), 3, 0)
@@ -131,7 +136,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             # Key
                             key = 'dport' + ':' + dport + ':' + type_evidence
                             # Threat level
-                            threat_level = 50
+                            threat_level = 25
                             # Compute the confidence
                             pkts_sent = 0
                             # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dips per port.
@@ -179,7 +184,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             # Key
                             key = 'dstip' + ':' + dstip + ':' + type_evidence
                             # Threat level
-                            threat_level = 50
+                            threat_level = 25
                             # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dports per dip.
                             # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more. 
                             cache_key = profileid + ':' + twid + ':' + key

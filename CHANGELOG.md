@@ -1,0 +1,99 @@
+- 0.7.1 (published 2020/12/18)
+	- Slips
+		- fix the function of Slips to stop after pressing CTRL-C
+		- fix Slips stopping automatically
+		- add zeek tcp-inactivity-timeout=1hs
+		- add module flowalert and alert when a long connection happens (more than 20 minutes)
+		- add colors to the detection shown in the console
+		- add 3 new TI feeds to slips conf by default
+		- make longconnection feature in flowalert to ignore multicast
+		- fix some TI files not being updated
+		- check TI data in the host field of HTTP
+		- check TI data in the SNI field of TLS requests
+		- rename blessed module folder to kalipso
+	- Kalipso
+		- ESC - exit the hotkey, q - exit Kalipso
+		- execution of Kalipso from Slips folder: $./kalipso.sh
+		- added hotkey 'h' for help
+		- changed hotkey 'g'(out tuples) on hotkey 'i'
+		- added SNI of TLS/SSL column in 'i' and 'y' hotkeys
+		- fix Kalipso being reshred when being in hotkeys
+- 0.7.0 (published 2020/09/25)
+	- Slips
+		- VirusTotal module retrieves information for domains from DNS flows
+		- Added new channel 'new_dns_flow'
+		- Fixed portscan to eliminate detection for IPs that were resolved with DNS
+		- VirusTotal module retrieves passive DNS information
+		- VirusTotal module retrieves asn information and stores it for IP if missing
+		- Storing in database multiple DNS resolutions per one IP
+		- Fixed the function for blocking profile and timewindow in Evedince module
+		- Added a field to the flow to put labels from modules 
+		- Fixed the display of DNS resolutions up to 3 for the IP in the timeline
+		- Added functions to mark timewindow as finished
+		- Default label of the flow in the slips.conf is changed to 'unknown'
+		- Added a module to block IPs when running Slips on interface in Linux machine
+		- Added a parameter '-b' to enable blocking module on the interface in Linux machine
+		- Store DomainsInfo in cache database
+	- Kalipso
+		- Automatic reload of the interface. Interface is reloaded every 2 minutes. Opened timeline for ip and tw will not be updated, but the list of tws for current IP will be updated.
+		- Changed the description of the old host IPs to 'old me' (before was 'me')
+		- Changed the type of widget for IP info to listtable from blessed-contrib lib
+- 0.6.9 (published 2020/08/12)
+	- Slips
+		- Added cache for IPs from Threat Inelligence files
+		- Added cache for IPs Info
+		- Added new module UpdateManager to update Threat Intelligence files
+		- Changed the structure of VirusTotal Module
+		- Added parameters in slips.conf for updating VirusTotal and Threat Intelligence
+		- Added new channel 'core_messages', UpdateManager is subscribed to that
+		- Added manager to search host IP, if Slips is running on interface and networks are changing
+		- Flows in the timeline are sorted
+		- Added architecture to close timewindow of a profile
+		- Fixed the reading of nfdump file
+		- Added parameter '-cc' to clear cache database
+	- Kalipso
+		- Hotkeys 'c' and 'p' are sorted by the size of totalbytes
+- 0.6.8 (published 2020/07/07)
+	- New version of Kalipso
+		- Widgets are splitted in classes
+		- Added comments
+		- Fixed screen way for hotkeys
+		- 'Esc' to exit Kalipso
+		- 'q' to exit hotkey
+- 0.6.7 (published 2020/06/30)
+	- Add a test file for nfdump.
+	- In the threat intelligence configuration add by default the file https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv. It has a blacklist of IP addresses that are attacking the Internet. Coming from the stratosphere laboratory and the aposemat project. The AIP program.
+	- In the threat intelligence configuration add by default the file https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_historical_blacklist_prioritized_by_newest_attackers.csv. It has a blacklist of IP addresses that are attacking the Internet. Coming from the stratosphere laboratory and the aposemat project. The AIP program.
+	- In the threat intelligence configuration add by default the file https://raw.githubusercontent.com/Te-k/stalkerware-indicators/master/network.csv with domains used for stalkerware
+	- In the threat intelligence module configuration, add a static version of the IPs of the NSO group from Amnesty from https://raw.githubusercontent.com/AmnestyTech/investigations/master/2018-08-01_nso/indicators.csv
+	- Change the old test-flows folder for the dataset folder
+	- New section in the configuration file with the threat intelligence data
+	- Ignore warnings
+	- Update the template module
+	- Read as input a zeek folder full of logs with -f
+	- Fixed bugs in the timeline of Kalipso
+	- New lstm module to detect C&C channels in the network. It detects channels by running a machine learning LSTM network on the behavioral letters.
+	- Several bug fixed
+	- New DNS blacklist management in the threat intelligence module
+	- Better store of IPs in the database
+	- Fix an error in how the behavioural letters where created
+- 0.6.6 
+	- Added DNS resolution for IPs in timeline
+	- Added inTuple key to the timeline for inbound flows when analysis_direction = 'all'
+	- Changed the timeline format in Slips and Kalipso
+	- Defined host IP in Slips and Kalipso if Slips is run on interface
+- 0.6.5 
+	- Fixed Threat Intelligence module to be fully functional.
+	- Added new feature to stop Slips automatically when input files ends.
+	- Fixed the storing and display of inbound flows in analysis direction 'all'.
+	- Fixed Kalipso to display inbound flows and h hotkey to display out tuples
+- 0.5 Completely renewed architecture and code.
+- 0.4 was never reached
+- 0.3.5
+- 0.3.4
+	- This is a mayor version change. Implementing new algorithms for analyzing the results, management of IPs, connections, whois database and more features.
+	- A new parameter to specify the file (-r). This is as fast as reading the file from stdin.
+	- Now we have a configuration file slips.conf. In there you can specify from fixed parameters, the time formats, to the columns in the flow file.
+- 0.3.3alpha
+	- First stable version with a minimal algorithm for detecting behavioral threats.
+

@@ -1,29 +1,48 @@
+# Stratosphere Linux IPS. A machine-learning Intrusion Detection System
+# Copyright (C) 2021 Sebastian Garcia
+
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 import multiprocessing
 import json
 from datetime import datetime
 from datetime import timedelta
 import sys
-from collections import OrderedDict
 import configparser
 from slips.core.database import __database__
 import time
 import ipaddress
 import traceback
-from typing import Tuple, Dict, Set, Callable
 import os
 import binascii
 import base64
 
 
-def timing(f):
-    """ Function to measure the time another function takes."""
-    def wrap(*args):
-        time1 = time.time()
-        ret = f(*args)
-        time2 = time.time()
-        print('Function took {:.3f} ms'.format((time2-time1)*1000.0))
-        return ret
-    return wrap
+def timeit(method):
+    def timed(*args, **kw):
+        ts = time.time()
+        result = method(*args, **kw)
+        te = time.time()
+        if 'log_time' in kw:
+            name = kw.get('log_name', method.__name__.upper())
+            kw['log_time'][name] = int((te - ts) * 1000)
+        else:
+            print(f'\t\033[1;32;40mFunction {method.__name__}() took {(te - ts) * 1000:2.2f}ms\033[00m')
+        return result
+    return timed
+
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -44,9 +63,11 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.start(self.config)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
+        # 1st. Get the data from the interpreted columns
+        self.id_separator = __database__.getFieldSeparator()
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the prcocesses into account
 
@@ -54,7 +75,7 @@ class ProfilerProcess(multiprocessing.Process):
          verbose: is the minimum verbosity level required for this text to be printed
          debug: is the minimum debugging level required for this text to be printed
          text: text to print. Can include format like 'Test {}'.format('here')
-        
+
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
@@ -67,7 +88,8 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             self.home_net = ipaddress.ip_network(self.config.get('parameters', 'home_network'))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
+            # There is a conf, but there is no option, or no section or no
+            # configuration file specified
             self.home_net = False
 
         # Get the time window width, if it was not specified as a parameter
@@ -81,21 +103,22 @@ class ProfilerProcess(multiprocessing.Process):
                     # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
                     self.width = 9999999999
             except configparser.NoOptionError:
-                # By default we use 300 seconds, 5minutes
-                self.width = 300.0
+                # By default we use 3600 seconds, 1hs
+                self.width = 3600
             except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-                # There is a conf, but there is no option, or no section or no configuration file specified
-                self.width = 300.0
+                # There is a conf, but there is no option, or no section or no
+                # configuration file specified
+                self.width = 3600
         # Limit any width to be > 0. By default we use 300 seconds, 5minutes
         elif self.width < 0:
-            self.width = 300.0
+            self.width = 3600
         else:
-            self.width = 300.0
+            self.width = 3600
         # Report the time window width
         if self.width == 9999999999:
-            self.outputqueue.put("10|profiler|Time Windows Width used: Only 1 time windows. Dates in the names of files are 100 years in the past.".format(self.width))
+            self.print(f'Time Windows Width used: {self.width} seconds. Only 1 time windows. Dates in the names of files are 100 years in the past.', 4, 0)
         else:
-            self.outputqueue.put("10|profiler|Time Windows Width used: {} seconds.".format(self.width))
+            self.print(f'Time Windows Width used: {self.width} seconds.', 4, 0)
 
         # Get the format of the time in the flows
         try:
@@ -110,7 +133,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            # By default 
+            # By default
             self.analysis_direction = 'all'
         # Get the default label for all this flow. Used during training usually
         try:
@@ -118,27 +141,50 @@ class ProfilerProcess(multiprocessing.Process):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default
-            self.label = 'normal'
+            self.label = 'unknown'
 
     def define_type(self, line):
-        """ 
-        Try to define very fast the type of input 
+        """
+        Try to define very fast the type of input
         Heuristic detection: dict (zeek from pcap of int), json (suricata), or csv (argus), or TAB separated (conn.log only from zeek)?
-        Bro actually gives us json, but it was already coverted into a dict 
+        Bro actually gives us json, but it was already coverted into a dict
         in inputProcess
         Outputs can be: zeek, suricata, argus, zeek-tabs
         """
         try:
-            if type(line) == dict:
-                self.input_type = 'zeek'
+            # All lines come as a dict, specifying the name of file and data.
+            # Take the data
+            try:
+                # Did data came with the json format?
+                data = line['data']
+                # For now we dont use the file type, but is handy for the future
+                file_type = line['type']
+                # Yes
+            except KeyError:
+                # No
+                data = line
+                self.print('\tData did not arrived in json format from the input', 0, 1)
+                self.print('\tProblem in define_type()', 0, 1)
+                return False
+
+            # In the case of Zeek from an interface or pcap,
+            # the structure is a JSON
+            # So try to convert into a dict
+            if type(data) == dict:
+                try:
+                    _ = data['data']
+                    self.separator = '	'
+                    self.input_type = 'zeek-tabs'
+                except KeyError:
+                    self.input_type = 'zeek'
             else:
                 try:
-                    data = json.loads(line)
+                    data = json.loads(data)
                     if data['event_type'] == 'flow':
                         self.input_type = 'suricata'
                 except ValueError:
-                    nr_commas = len(line.split(','))
-                    nr_tabs = len(line.split('	'))
+                    nr_commas = len(data.split(','))
+                    nr_tabs = len(data.split('	'))
                     if nr_commas > nr_tabs:
                         # Commas is the separator
                         self.separator = ','
@@ -158,9 +204,10 @@ class ProfilerProcess(multiprocessing.Process):
             self.print(str(inst), 0, 1)
             sys.exit(1)
 
-    def define_columns(self, line):
+    def define_columns(self, new_line):
         """ Define the columns for Argus and Zeek-tabs from the line received """
         # These are the indexes for later fast processing
+        line = new_line['data']
         self.column_idx = {}
         self.column_idx['starttime'] = False
         self.column_idx['endtime'] = False
@@ -178,7 +225,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_idx['dpkts'] = False
         self.column_idx['bytes'] = False
         self.column_idx['sbytes'] = False
-        self.column_idx['dbytes'] = False  
+        self.column_idx['dbytes'] = False
 
         try:
             nline = line.strip().split(self.separator)
@@ -205,8 +252,11 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_idx['pkts'] = nline.index(field)
                 elif 'totbytes' in field.lower():
                     self.column_idx['bytes'] = nline.index(field)
-            # Some of the fields were not found probably, 
-            # so just delete them from the index if their value is False. 
+                elif 'srcbytes' in field.lower():
+                    self.column_idx['sbytes'] = nline.index(field)
+
+            # Some of the fields were not found probably,
+            # so just delete them from the index if their value is False.
             # If not we will believe that we have data on them
             # We need a temp dict because we can not change the size of dict while analyzing it
             temp_dict = {}
@@ -282,16 +332,18 @@ class ProfilerProcess(multiprocessing.Process):
             # pass
         return defined_datetime
 
-    def process_zeek_tabs_input(self, line: str) -> None:
+    def process_zeek_tabs_input(self, new_line: str) -> None:
         """
         Process the tab line from zeek.
         """
-        line: str = line.rstrip()
-        line: list = line.split('\t')
+        line = new_line['data']
+        line = line.rstrip()
+        line = line.split('\t')
 
         # Generic fields in Zeek
         self.column_values: dict = {}
-        # We need to set it to empty at the beginning so any new flow has the key 'type'
+        # We need to set it to empty at the beginning so any new flow has
+        # the key 'type'
         self.column_values['type'] = ''
         try:
             self.column_values['starttime'] = self.get_time(line[0])
@@ -310,7 +362,7 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             self.column_values['daddr'] = ''
 
-        if 'conn' in line[-1]:
+        if 'conn' in new_line['type']:
             self.column_values['type'] = 'conn'
             try:
                 self.column_values['dur'] = float(line[8])
@@ -362,7 +414,7 @@ class ProfilerProcess(multiprocessing.Process):
             # We do not know the indexes of MACs.
             self.column_values['smac'] = ''
             self.column_values['dmac'] = ''
-        elif 'dns' in line[-1]:
+        elif 'dns' in new_line['type']:
             self.column_values['type'] = 'dns'
             try:
                 self.column_values['query'] = line[9]
@@ -388,7 +440,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['TTLs'] = line[22]
             except IndexError:
                 self.column_values['TTLs'] = ''
-        elif 'http' in line[-1]:
+        elif 'http' in new_line['type']:
             self.column_values['type'] = 'http'
             try:
                 self.column_values['method'] = line[7]
@@ -434,7 +486,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['resp_fuids'] = line[26]
             except IndexError:
                 self.column_values['resp_fuids'] = ''
-        elif 'ssl' in line[-1]:
+        elif 'ssl' in new_line['type']:
             self.column_values['type'] = 'ssl'
             try:
                 self.column_values['sslversion'] = line[6]
@@ -477,52 +529,140 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['server_name'] = line[9]
             except IndexError:
                 self.column_values['server_name'] = ''
-        elif 'ssh' in line[-1]:
+        elif 'ssh' in new_line['type']:
             self.column_values['type'] = 'ssh'
-        elif 'irc' in line[-1]:
+            try:
+                self.column_values['version'] = line[6]
+            except IndexError:
+                self.column_values['version'] = ''
+            # Zeek can put in column 7 the auth success if it has one
+            # or the auth attempts only. However if the auth
+            # success is there, the auth attempts are too.
+            if 'success' in line[7]:
+                try:
+                    self.column_values['auth_success'] = line[7]
+                except IndexError:
+                    self.column_values['auth_success'] = ''
+                try:
+                    self.column_values['auth_attempts'] = line[8]
+                except IndexError:
+                    self.column_values['auth_attempts'] = ''
+                try:
+                    self.column_values['client'] = line[10]
+                except IndexError:
+                    self.column_values['client'] = ''
+                try:
+                    self.column_values['server'] = line[11]
+                except IndexError:
+                    self.column_values['server'] = ''
+                try:
+                    self.column_values['cipher_alg'] = line[12]
+                except IndexError:
+                    self.column_values['cipher_alg'] = ''
+                try:
+                    self.column_values['mac_alg'] = line[13]
+                except IndexError:
+                    self.column_values['mac_alg'] = ''
+                try:
+                    self.column_values['compression_alg'] = line[14]
+                except IndexError:
+                    self.column_values['compression_alg'] = ''
+                try:
+                    self.column_values['kex_alg'] = line[15]
+                except IndexError:
+                    self.column_values['kex_alg'] = ''
+                try:
+                    self.column_values['host_key_alg'] = line[16]
+                except IndexError:
+                    self.column_values['host_key_alg'] = ''
+                try:
+                    self.column_values['host_key'] = line[17]
+                except IndexError:
+                    self.column_values['host_key'] = ''
+            elif 'success' not in line[7]:
+                self.column_values['auth_success'] = ''
+                try:
+                    self.column_values['auth_attempts'] = line[7]
+                except IndexError:
+                    self.column_values['auth_attempts'] = ''
+                try:
+                    self.column_values['client'] = line[9]
+                except IndexError:
+                    self.column_values['client'] = ''
+                try:
+                    self.column_values['server'] = line[10]
+                except IndexError:
+                    self.column_values['server'] = ''
+                try:
+                    self.column_values['cipher_alg'] = line[11]
+                except IndexError:
+                    self.column_values['cipher_alg'] = ''
+                try:
+                    self.column_values['mac_alg'] = line[12]
+                except IndexError:
+                    self.column_values['mac_alg'] = ''
+                try:
+                    self.column_values['compression_alg'] = line[13]
+                except IndexError:
+                    self.column_values['compression_alg'] = ''
+                try:
+                    self.column_values['kex_alg'] = line[14]
+                except IndexError:
+                    self.column_values['kex_alg'] = ''
+                try:
+                    self.column_values['host_key_alg'] = line[15]
+                except IndexError:
+                    self.column_values['host_key_alg'] = ''
+                try:
+                    self.column_values['host_key'] = line[16]
+                except IndexError:
+                    self.column_values['host_key'] = ''
+        elif 'irc' in new_line['type']:
             self.column_values['type'] = 'irc'
-        elif 'long' in line[-1]:
+        elif 'long' in new_line['type']:
             self.column_values['type'] = 'long'
-        elif 'dhcp' in line[-1]:
+        elif 'dhcp' in new_line['type']:
             self.column_values['type'] = 'dhcp'
-        elif 'dce_rpc' in line[-1]:
+        elif 'dce_rpc' in new_line['type']:
             self.column_values['type'] = 'dce_rpc'
-        elif 'dnp3' in line[-1]:
+        elif 'dnp3' in new_line['type']:
             self.column_values['type'] = 'dnp3'
-        elif 'ftp' in line[-1]:
+        elif 'ftp' in new_line['type']:
             self.column_values['type'] = 'ftp'
-        elif 'kerberos' in line[-1]:
+        elif 'kerberos' in new_line['type']:
             self.column_values['type'] = 'kerberos'
-        elif 'mysql' in line[-1]:
+        elif 'mysql' in new_line['type']:
             self.column_values['type'] = 'mysql'
-        elif 'modbus' in line[-1]:
+        elif 'modbus' in new_line['type']:
             self.column_values['type'] = 'modbus'
-        elif 'ntlm' in line[-1]:
+        elif 'ntlm' in new_line['type']:
             self.column_values['type'] = 'ntlm'
-        elif 'rdp' in line[-1]:
+        elif 'rdp' in new_line['type']:
             self.column_values['type'] = 'rdp'
-        elif 'sip' in line[-1]:
+        elif 'sip' in new_line['type']:
             self.column_values['type'] = 'sip'
-        elif 'smb_cmd' in line[-1]:
+        elif 'smb_cmd' in new_line['type']:
             self.column_values['type'] = 'smb_cmd'
-        elif 'smb_files' in line[-1]:
+        elif 'smb_files' in new_line['type']:
             self.column_values['type'] = 'smb_files'
-        elif 'smb_mapping' in line[-1]:
+        elif 'smb_mapping' in new_line['type']:
             self.column_values['type'] = 'smb_mapping'
-        elif 'smtp' in line[-1]:
+        elif 'smtp' in new_line['type']:
             self.column_values['type'] = 'smtp'
-        elif 'socks' in line[-1]:
+        elif 'socks' in new_line['type']:
             self.column_values['type'] = 'socks'
-        elif 'syslog' in line[-1]:
+        elif 'syslog' in new_line['type']:
             self.column_values['type'] = 'syslog'
-        elif 'tunnel' in line[-1]:
+        elif 'tunnel' in new_line['type']:
             self.column_values['type'] = 'tunnel'
 
-    def process_zeek_input(self, line):
+    def process_zeek_input(self, new_line):
         """
         Process the line and extract columns for zeek
         Its a dictionary
         """
+        line = new_line['data']
+        file_type = new_line['type']
         # Generic fields in Zeek
         self.column_values = {}
         # We need to set it to empty at the beggining so any new flow has the key 'type'
@@ -544,7 +684,7 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             self.column_values['daddr'] = ''
 
-        if 'conn' in line['type']:
+        if 'conn' in file_type:
             # {'ts': 1538080852.403669, 'uid': 'Cewh6D2USNVtfcLxZe', 'id.orig_h': '192.168.2.12', 'id.orig_p': 56343, 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364, 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1, 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8', 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
             self.column_values['type'] = 'conn'
             try:
@@ -601,7 +741,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dmac'] = line['resp_l2_addr']
             except KeyError:
                 self.column_values['dmac'] = ''
-        elif 'dns' in line['type']:
+        elif 'dns' in file_type:
             #{"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
             self.column_values['type'] = 'dns'
             try:
@@ -628,7 +768,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['TTLs'] = line['TTLs']
             except KeyError:
                 self.column_values['TTLs'] = ''
-        elif 'http' in line['type']:
+        elif 'http' in  file_type:
             # {"ts":158.957403,"uid":"CnNLbE2dyfy5KyqEhh","id.orig_h":"10.0.2.105","id.orig_p":49158,"id.resp_h":"64.182.208.181","id.resp_p":80,"trans_depth":1,"method":"GET","host":"icanhazip.com","uri":"/","version":"1.1","user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.38 (KHTML, like Gecko) Chrome/45.0.2456.99 Safari/537.38","request_body_len":0,"response_body_len":13,"status_code":200,"status_msg":"OK","tags":[],"resp_fuids":["FwraVxIOACcjkaGi3"],"resp_mime_types":["text/plain"]}
             self.column_values['type'] = 'http'
             try:
@@ -675,7 +815,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['resp_fuids'] = line['resp_fuids']
             except KeyError:
                 self.column_values['resp_fuids'] = ''
-        elif 'ssl' in line['type']:
+        elif 'ssl' in file_type:
             # {"ts":12087.045499,"uid":"CdoFDp4iW79I5ZmsT7","id.orig_h":"10.0.2.105","id.orig_p":49704,"id.resp_h":"195.211.240.166","id.resp_p":443,"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
             # {"ts":1382354909.915615,"uid":"C7W6ZA4vI8FxJ9J0bh","id.orig_h":"147.32.83.53","id.orig_p":36567,"id.resp_h":"195.113.214.241","id.resp_p":443,"version":"TLSv12","cipher":"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA","curve":"secp256r1","server_name":"id.google.com.ar","resumed":false,"established":true,"cert_chain_fuids":["FnomJz1vghKIOHtytf","FSvQff1KsaDkRtKXo4","Fif2PF48bytqq6xMDb"],"client_cert_chain_fuids":[],"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
             self.column_values['type'] = 'ssl'
@@ -723,51 +863,96 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['server_name'] = line['server_name']
             except KeyError:
                 self.column_values['server_name'] = ''
-        elif 'ssh' in line['type']:
+        elif 'ssh' in file_type:
             self.column_values['type'] = 'ssh'
-        elif 'irc' in line['type']:
+            try:
+                self.column_values['version'] = line['version']
+            except KeyError:
+                self.column_values['version'] = ''
+            try:
+                self.column_values['auth_success'] = line['auth_success']
+            except KeyError:
+                self.column_values['auth_success'] = ''
+            try:
+                self.column_values['auth_attempts'] = line['auth_attempts']
+            except KeyError:
+                self.column_values['auth_attempts'] = ''
+            try:
+                self.column_values['client'] = line['client']
+            except KeyError:
+                self.column_values['client'] = ''
+            try:
+                self.column_values['server'] = line['server']
+            except KeyError:
+                self.column_values['server'] = ''
+            try:
+                self.column_values['cipher_alg'] = line['cipher_alg']
+            except KeyError:
+                self.column_values['cipher_alg'] = ''
+            try:
+                self.column_values['mac_alg'] = line['mac_alg']
+            except KeyError:
+                self.column_values['mac_alg'] = ''
+            try:
+                self.column_values['compression_alg'] = line['compression_alg']
+            except KeyError:
+                self.column_values['compression_alg'] = ''
+            try:
+                self.column_values['kex_alg'] = line['kex_alg']
+            except KeyError:
+                self.column_values['kex_alg'] = ''
+            try:
+                self.column_values['host_key_alg'] = line['host_key_alg']
+            except KeyError:
+                self.column_values['host_key_alg'] = ''
+            try:
+                self.column_values['host_key'] = line['host_key']
+            except KeyError:
+                self.column_values['host_key'] = ''
+        elif 'irc' in file_type:
             self.column_values['type'] = 'irc'
-        elif 'long' in line['type']:
+        elif 'long' in file_type:
             self.column_values['type'] = 'long'
-        elif 'dhcp' in line['type']:
+        elif 'dhcp' in file_type:
             self.column_values['type'] = 'dhcp'
-        elif 'dce_rpc' in line['type']:
+        elif 'dce_rpc' in file_type:
             self.column_values['type'] = 'dce_rpc'
-        elif 'dnp3' in line['type']:
+        elif 'dnp3' in file_type:
             self.column_values['type'] = 'dnp3'
-        elif 'ftp' in line['type']:
+        elif 'ftp' in file_type:
             self.column_values['type'] = 'ftp'
-        elif 'kerberos' in line['type']:
+        elif 'kerberos' in file_type:
             self.column_values['type'] = 'kerberos'
-        elif 'mysql' in line['type']:
+        elif 'mysql' in file_type:
             self.column_values['type'] = 'mysql'
-        elif 'modbus' in line['type']:
+        elif 'modbus' in file_type:
             self.column_values['type'] = 'modbus'
-        elif 'ntlm' in line['type']:
+        elif 'ntlm' in file_type:
             self.column_values['type'] = 'ntlm'
-        elif 'rdp' in line['type']:
+        elif 'rdp' in file_type:
             self.column_values['type'] = 'rdp'
-        elif 'sip' in line['type']:
+        elif 'sip' in file_type:
             self.column_values['type'] = 'sip'
-        elif 'smb_cmd' in line['type']:
+        elif 'smb_cmd' in file_type:
             self.column_values['type'] = 'smb_cmd'
-        elif 'smb_files' in line['type']:
+        elif 'smb_files' in file_type:
             self.column_values['type'] = 'smb_files'
-        elif 'smb_mapping' in line['type']:
+        elif 'smb_mapping' in file_type:
             self.column_values['type'] = 'smb_mapping'
-        elif 'smtp' in line['type']:
+        elif 'smtp' in file_type:
             self.column_values['type'] = 'smtp'
-        elif 'socks' in line['type']:
+        elif 'socks' in file_type:
             self.column_values['type'] = 'socks'
-        elif 'syslog' in line['type']:
+        elif 'syslog' in file_type:
             self.column_values['type'] = 'syslog'
-        elif 'tunnel' in line['type']:
+        elif 'tunnel' in file_type:
             self.column_values['type'] = 'tunnel'
 
-    def process_argus_input(self, line):
+    def process_argus_input(self, new_line):
         """
         Process the line and extract columns for argus
         """
+        line = new_line['data']
         self.column_values = {}
         self.column_values['starttime'] = False
         self.column_values['endtime'] = False
@@ -835,33 +1020,33 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             pass
         try:
-            self.column_values['pkts'] = nline[self.column_idx['pkts']]
+            self.column_values['pkts'] = int(nline[self.column_idx['pkts']])
         except KeyError:
             pass
         try:
-            self.column_values['spkts'] = nline[self.column_idx['spkts']]
+            self.column_values['spkts'] = int(nline[self.column_idx['spkts']])
         except KeyError:
             pass
         try:
-            self.column_values['dpkts'] = nline[self.column_idx['dpkts']]
+            self.column_values['dpkts'] = int(nline[self.column_idx['dpkts']])
         except KeyError:
             pass
         try:
-            self.column_values['bytes'] = nline[self.column_idx['bytes']]
+            self.column_values['bytes'] = int(nline[self.column_idx['bytes']])
         except KeyError:
             pass
         try:
-            self.column_values['sbytes'] = nline[self.column_idx['sbytes']]
+            self.column_values['sbytes'] = int(nline[self.column_idx['sbytes']])
         except KeyError:
             pass
         try:
-            self.column_values['dbytes'] = nline[self.column_idx['dbytes']]
+            self.column_values['dbytes'] = int(nline[self.column_idx['dbytes']])
         except KeyError:
             pass
 
-    def process_nfdump_input(self, line):
+    def process_nfdump_input(self, new_line):
         """
-        Process the line and extract columns for argus
+        Process the line and extract columns for nfdump
         """
         self.column_values = {}
         self.column_values['starttime'] = False
@@ -881,9 +1066,10 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values['bytes'] = False
         self.column_values['sbytes'] = False
         self.column_values['dbytes'] = False
-        self.column_values['type'] = 'argus'
+        self.column_values['type'] = 'nfdump'
 
         # Read the lines fast
+        line = new_line['data']
         nline = line.strip().split(self.separator)
         try:
             self.column_values['starttime'] = self.get_time(nline[0])
@@ -1174,32 +1360,23 @@ class ProfilerProcess(multiprocessing.Process):
                 except KeyError:
                     self.column_values['filesize'] = ''
 
-
-
     def add_flow_to_profile(self):
-        """ 
+        """
         This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
         It includes checking if the profile exists and how to put the flow correctly.
-        It interprets each colum 
+        It interprets each colum
+        A flow has two IP addresses, so treat both of them correctly.
         """
         try:
-            # For now we only process the argus flows and the zeek conn logs
+            # Define which type of flows we are going to preocess
             if not self.column_values:
                 return True
-            elif not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type']:
+            elif not 'ssh' in self.column_values['type'] and not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type'] and not 'nfdump' in self.column_values['type']:
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
 
-            # The first change we should do is to take into account different types of flows. A normal netflow is what we have now, but we need all
-            # the zeek type of flows. So we need to adapt all the database?
-
-            #########
-            # 1st. Get the data from the interpreted columns
-            separator = __database__.getFieldSeparator()
-            # These are common to all types of flows
-            # No, older zeek has seconds instead of date.
             try:
                 # seconds.
                 starttime = self.column_values['starttime'].timestamp()
@@ -1224,12 +1401,13 @@ class ProfilerProcess(multiprocessing.Process):
                 # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
                 # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
+
             flow_type = self.column_values['type']
             saddr = self.column_values['saddr']
             daddr = self.column_values['daddr']
-            profileid = 'profile' + separator + str(saddr)
+            profileid = 'profile' + self.id_separator + str(saddr)
 
-            if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
+            if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                 dur = self.column_values['dur']
                 sport = self.column_values['sport']
                 dport = self.column_values['dport']
@@ -1269,8 +1447,119 @@ class ProfilerProcess(multiprocessing.Process):
                     return False
 
             ##############
-            # For Adding the profile only now
+            # 4th Define help functions for storing data
+            def store_features_going_out(profileid, twid, starttime):
+                """
+                This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
+                """
+                role = 'Client'
+                # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
+                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
+                    # Tuple
+                    tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
+                    # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
+                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
+                    # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
+                    # Add the out tuple
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
+                    # Add the dstip
+                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, role)
+                    # Add the dstport
+                    port_type = 'Dst'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    # Add the srcport
+                    port_type = 'Src'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    # Add the flow with all the fields interpreted
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                elif 'dns' in flow_type:
+                    __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
+                    # Add DNS resolution if there are answers for the query
+                    if answers:
+                        __database__.set_dns_resolution(query, answers)
+                elif flow_type == 'http':
+                    __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['httpversion'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
+                elif flow_type == 'ssl':
+                    __database__.add_out_ssl(profileid, twid, daddr_as_obj, flow_type, uid, self.column_values['sslversion'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
+                elif flow_type == 'ssh':
+                    __database__.add_out_ssh(profileid, twid, flow_type, uid, self.column_values['version'], self.column_values['auth_attempts'], self.column_values['auth_success'], self.column_values['client'], self.column_values['server'], self.column_values['cipher_alg'], self.column_values['mac_alg'], self.column_values['compression_alg'], self.column_values['kex_alg'], self.column_values['host_key_alg'], self.column_values['host_key'])
 
+            def store_features_going_in(profileid, twid, starttime):
+                """
+                This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
+                """
+                role = 'Server'
+                # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
+                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
+                    # Tuple. We use the src ip, but the dst port still!
+                    tupleid = str(saddr_as_obj) + ':' + str(dport) + ':' + proto
+                    # Compute symbols.
+                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
+                    # Add the src tuple
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
+                    # Add the srcip
+                    __database__.add_ips(profileid, twid, saddr_as_obj, self.column_values, role)
+                    # Add the dstport
+                    port_type = 'Dst'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    # Add the srcport
+                    port_type = 'Src'
+                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    # Add the flow with all the fields interpreted
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                    # No dns check going in. Probably ok.
+
+            def get_rev_profile(starttime, daddr_as_obj):
+                # Compute the rev_profileid
+                rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                if not rev_profileid:
+                    self.print("The dstip profile was not here... create", 0, 7)
+                    # Create a reverse profileid for managing the data going to the dstip.
+                    rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
+                    __database__.addProfile(rev_profileid, starttime, self.width)
+                    # Try again
+                    rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                    # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
+                rev_twid = self.get_timewindow(starttime, rev_profileid)
+                return rev_profileid, rev_twid
+
+            ##########################################
+            # 5th. Store the data according to the paremeters
+            # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
+            self.print("Storing data in the profile: {}".format(profileid), 0, 7)
+
+            # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
+            twid = self.get_timewindow(starttime, profileid)
+
+            if self.home_net:
+                # Home. Create profiles for home IPs only
+                if self.analysis_direction == 'out':
+                    # Home and only out. Check if the src IP is in the home. If yes, store only out
+                    if saddr_as_obj in self.home_net:
+                        __database__.addProfile(profileid, starttime, self.width)
+                        store_features_going_out(profileid, twid, starttime)
+                elif self.analysis_direction == 'all':
+                    # Home and all. Check if src IP or dst IP are in home. Store all
+                    if saddr_as_obj in self.home_net:
+                        __database__.addProfile(profileid, starttime, self.width)
+                        store_features_going_out(profileid, twid, starttime)
+                    if daddr_as_obj in self.home_net:
+                        rev_profileid, rev_twid = get_rev_profile(starttime, daddr_as_obj)
+                        store_features_going_in(rev_profileid, rev_twid, starttime)
+            elif not self.home_net:
+                # No home. Create profiles for everybody
+                if self.analysis_direction == 'out':
+                    # No home. Only store out
+                    __database__.addProfile(profileid, starttime, self.width)
+                    store_features_going_out(profileid, twid, starttime)
+                elif self.analysis_direction == 'all':
+                    # No home. Store all
+                    __database__.addProfile(profileid, starttime, self.width)
+                    rev_profileid, rev_twid = get_rev_profile(starttime, daddr_as_obj)
+                    store_features_going_out(profileid, twid, starttime)
+                    store_features_going_in(rev_profileid, rev_twid, starttime)
+
+            """
             # 2nd. Check home network
             # Check if the ip received (src_ip) is part of our home network. We only crate profiles for our home network
             if self.home_net and saddr_as_obj in self.home_net:
@@ -1299,7 +1588,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.print("The dstip profile was not here... create", 0, 7)
                         # Create a reverse profileid for managing the data going to the dstip.
                         # With the rev_profileid we can now work with data in relation to the dst ip
-                        rev_profileid = 'profile' + separator + str(daddr_as_obj)
+                        rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
                         __database__.addProfile(rev_profileid, starttime, self.width)
                         # Try again
                         rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
@@ -1315,12 +1604,12 @@ class ProfilerProcess(multiprocessing.Process):
                     # The dst ip is also not part of our home net. So ignore completely
                     return False
             elif not self.home_net:
-                # We don't have a home net, so create profiles for everyone
+                # We don't have a home net, so create profiles for everyone. 
 
                 # Add the profile for the srcip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
                 __database__.addProfile(profileid, starttime, self.width)
                 # Add the profile for the dstip to the DB. If it already exists, nothing happens. So now rev_profileid is the id of the profile to work with. 
-                rev_profileid = 'profile' + separator + str(daddr_as_obj)
+                rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
                 __database__.addProfile(rev_profileid, starttime, self.width)
 
                 # For the profile from the srcip , find the id in the database of the tw where the flow belongs.
@@ -1328,73 +1617,13 @@ class ProfilerProcess(multiprocessing.Process):
                 # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
                 rev_twid = self.get_timewindow(starttime, rev_profileid)
 
-            ##############
-            # 4th Define help functions for storing data
-            def store_features_going_out(profileid, twid):
-                """
-                This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
-                """
-                role = 'Client'
-                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
-                    # Tuple
-                    tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
-                    # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
-                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
-                    # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
-                    # Add the out tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role)
-                    # Add the dstip
-                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, role)
-                    # Add the dstport
-                    port_type = 'Dst'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
-                    # Add the srcport
-                    port_type = 'Src'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
-                    # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
-                elif 'dns' in flow_type:
-                    __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
-                elif flow_type == 'http':
-                    __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['httpversion'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
-                elif flow_type == 'ssl':
-                    __database__.add_out_ssl(profileid, twid, flow_type, uid, self.column_values['sslversion'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
-
-            def store_features_going_in(profileid, twid):
-                """
-                This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
-                """
-                role = 'Server'
-                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type:
-                    # Tuple
-                    tupleid = str(saddr_as_obj) + ':' + str(sport) + ':' + proto
-                    # Compute symbols.
-                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
-                    # Add the src tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role)
-                    # Add the srcip
-                    __database__.add_ips(profileid, twid, saddr_as_obj, self.column_values, role)
-                    # Add the dstport
-                    port_type = 'Dst'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
-                    # Add the srcport
-                    port_type = 'Src'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
-                    # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
-
-            ##########################################
-            # 5th. Store the data according to the paremeters
-            # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
-            self.print("Storing data in the profile: {}".format(profileid), 0, 7)
-
             # In which analysis mode are we?
             # Mode 'out'
             if self.analysis_direction == 'out':
                 # Only take care of the stuff going out. Here we don't keep track of the stuff going in
                 # If we have a home net and the flow comes from it, or if we don't have a home net and we are in out out.
                 if (self.home_net and saddr_as_obj in self.home_net) or not self.home_net:
-                    store_features_going_out(profileid, twid)
+                    store_features_going_out(profileid, twid, starttime)
 
             # Mode 'all'
             elif self.analysis_direction == 'all':
@@ -1402,24 +1631,25 @@ class ProfilerProcess(multiprocessing.Process):
                 if not self.home_net:
                     # If we don't have a home net, just try to store everything coming OUT and IN to the IP
                     # Out features
-                    store_features_going_out(profileid, twid)
+                    store_features_going_out(profileid, twid, starttime)
                     # IN features
-                    store_features_going_in(rev_profileid, rev_twid)
+                    store_features_going_in(rev_profileid, rev_twid, starttime)
                 else:
-                    """
-                    The flow is going TO homenet or FROM homenet or BOTH together.
-                    """
+                    # The flow is going TO homenet or FROM homenet or BOTH together.
                     # If we have a home net and the flow comes from it. Only the features going out of the IP
                     if saddr_as_obj in self.home_net:
-                        store_features_going_out(profileid, twid)
+                        store_features_going_out(profileid, twid, starttime)
                     # If we have a home net and the flow comes to it. Only the features going in of the IP
                     elif daddr_as_obj in self.home_net:
                         # The dstip was in the homenet. Add the src info to the dst profile
-                        store_features_going_in(rev_profileid, rev_twid)
+                        self.print('Features going in')
+                        store_features_going_in(rev_profileid, rev_twid, starttime)
                     # If the flow is going from homenet to homenet.
                     elif daddr_as_obj in self.home_net and saddr_as_obj in self.home_net:
-                        store_features_going_out(profileid, twid)
-                        store_features_going_in(rev_profileid, rev_twid)
+                        store_features_going_out(profileid, twid, starttime)
+                        self.print('Features going in')
+                        store_features_going_in(rev_profileid, rev_twid, starttime)
+            """
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print("Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
@@ -1428,19 +1658,20 @@ class ProfilerProcess(multiprocessing.Process):
 
     def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size, tuple_key: str):
         """
-        This function computes the new symbol for the tuple according to the original stratosphere ips model of letters
-        Here we do not apply any detection model, we just create the letters as one more feature
-        current_time is the starttime of the flow
+        This function computes the new symbol for the tuple according to the
+        original stratosphere ips model of letters
+        Here we do not apply any detection model, we just create the letters
+        as one more feature current_time is the starttime of the flow
         """
         try:
             current_duration = float(current_duration)
             current_size = int(current_size)
             now_ts = float(current_time)
-            self.print("Starting compute symbol. Tupleid {}, time:{} ({}), dur:{}, size:{}".format(tupleid, current_time, type(current_time), current_duration, current_size), 0, 8)
+            self.print("Starting compute symbol. Profileid: {}, Tupleid {}, time:{} ({}), dur:{}, size:{}".format(profileid, tupleid, current_time, type(current_time), current_duration, current_size), 0, 8)
             # Variables for computing the symbol of each tuple
             T2 = False
             TD = False
-            # Thresholds learng from Stratosphere ips first version
+            # Thresholds learnt from Stratosphere ips first version
             # Timeout time, after 1hs
             tto = timedelta(seconds=3600)
             tt1 = float(1.05)
@@ -1457,17 +1688,15 @@ class ProfilerProcess(multiprocessing.Process):
             # Get the time of the last flow in this tuple, and the last last
             # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
             (last_last_ts, last_ts) = __database__.getT2ForProfileTW(profileid, twid, tupleid, tuple_key)
-
-
-            ## BE SURE THAT HERE WE RECEIVE THE PROPER DATA
-            #T1 = timedelta(seconds=10)
-            #previous_time = datetime.now() - timedelta(seconds=3600)
+            # self.print(f'Profileid: {profileid}. Data extracted from DB. last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
 
             def compute_periodicity(now_ts: float, last_ts: float, last_last_ts: float):
                 """ Function to compute the periodicity """
                 zeros = ''
                 if last_last_ts is False or last_ts is False:
                     TD = -1
+                    T1 = None
+                    T2 = None
                 else:
                     # Time diff between the past flow and the past-past flow.
                     T1 = last_ts - last_last_ts
@@ -1508,7 +1737,7 @@ class ProfilerProcess(multiprocessing.Process):
                     elif TD > tt3:
                         # Strongly not periodicity
                         TD = 4
-
+                self.print("Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, T2={}, TD={}".format(profileid, tupleid, T1, T2, TD), 0, 5)
                 return TD, zeros
 
             def compute_duration():
@@ -1644,6 +1873,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             def compute_timechar():
                 """ Function to compute the timechar """
+                # self.print(f'Compute timechar. Profileid: {profileid} T2: {T2}', 0, 5)
                 if not isinstance(T2, bool):
                     if T2 <= timedelta(seconds=5).total_seconds():
                         return '.'
@@ -1656,17 +1886,22 @@ class ProfilerProcess(multiprocessing.Process):
                     else:
                         # Changed from 0 to ''
                         return ''
+                else:
+                    return ''
 
             # Here begins the function's code
             try:
                 # Update value of T2
-                T2 = now_ts - last_ts
+                if now_ts and last_ts:
+                    T2 = now_ts - last_ts
+                else:
+                    T2 = False
                 # Are flows sorted?
                 if T2 < 0:
                     # Flows are not sorted!
                     # What is going on here when the flows are not ordered?? Are we losing flows?
                     # Put a warning
-                    # self.print("Warning: Coming flows are not sorted -> Some time diff are less than zero.", 0, 1)
+                    self.print("Warning: Coming flows are not sorted -> Some time diff are less than zero.", 0, 2)
                     pass
             except TypeError:
                 T2 = False
@@ -1682,7 +1917,7 @@ class ProfilerProcess(multiprocessing.Process):
             # self.print("Letter: {}".format(letter), 0, 1)
             timechar = compute_timechar()
             # self.print("TimeChar: {}".format(timechar), 0, 1)
-            self.print("Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(periodicity, duration, size, letter, timechar), 0, 5)
+            self.print("Profileid: {}, Tuple: {}, Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(profileid, tupleid, periodicity, duration, size, letter, timechar), 0, 5)
 
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
@@ -1705,7 +1940,7 @@ class ProfilerProcess(multiprocessing.Process):
         - The Dtp ips are stored in the first time win
         """
         try:
-            # First check of we are not in the last TW. Since this will be the majority of cases
+            # First check if we are not in the last TW. Since this will be the majority of cases
             try:
                 [(lasttwid, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
@@ -1782,11 +2017,11 @@ class ProfilerProcess(multiprocessing.Process):
             while True:
                 line = self.inputqueue.get()
                 if 'stop' == line:
-                    self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 1)
+                    self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 2)
                     return True
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
-                    self.print("Stopping Profiler Process. Received {} lines ({})")
+                    self.print("Stopping Profiler Process. Received {} lines ({})", 0, 2)
                     return True
                 else:
                     # Received new input data
@@ -1795,25 +2030,23 @@ class ProfilerProcess(multiprocessing.Process):
                     rec_lines += 1
                     if not self.input_type:
                         # Find the type of input received
-                        # This line will be discarded because 
+                        # This line will be discarded because
                         self.define_type(line)
                         # We should do this before checking the type of input so we don't lose the first line of input
 
                     # What type of input do we have?
                     if self.input_type == 'zeek':
-                        #self.print('Zeek line')
+                        # self.print('Zeek line')
                         self.process_zeek_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
-
                     elif self.input_type == 'argus':
-                        #self.print('Argus line')
+                        # self.print('Argus line')
                         # Argus puts the definition of the columns on the first line only
                         # So read the first line and define the columns
-
                         try:
                             # Are the columns defined? Just try to access them
-                            temp = self.column_idx['starttime']
+                            _ = self.column_idx['starttime']
                             # Yes
                             # Quickly process all lines
                             self.process_argus_input(line)
@@ -1822,15 +2055,18 @@ class ProfilerProcess(multiprocessing.Process):
                         except AttributeError:
                             # No. Define columns. Do not add this line to profile, its only headers
                             self.define_columns(line)
+                        except KeyError:
+                            # When the columns are not there. Not sure if it works
+                            self.define_columns(line)
 
                     elif self.input_type == 'suricata':
-                        #self.print('Suricata line')
+                        # self.print('Suricata line')
                         self.process_suricata_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
 
                     elif self.input_type == 'zeek-tabs':
-                        #self.print('Zeek-tabs line')
+                        # self.print('Zeek-tabs line')
                         self.process_zeek_tabs_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()

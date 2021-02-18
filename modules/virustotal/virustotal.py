@@ -18,7 +18,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'VirusTotal'
     description = 'IP address lookup on VirusTotal'
-    authors = ['Dita']
+    authors = ['Dita Hollmannova']
 
     def __init__(self, outputqueue, config, testing=False):
         multiprocessing.Process.__init__(self)
@@ -36,18 +36,18 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # - new_ip
         # - tw_modified
         # - evidence_added
-        self.c1 = __database__.subscribe('new_ip')
-
+        self.c1 = __database__.subscribe('new_flow')
+        self.c2 = __database__.subscribe('new_dns_flow')
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
         # Read the conf file
-        key_file = self.__read_configuration("virustotal", "api_key_file")
+        self.__read_configuration()
         self.key = None
         try:
-            with open(key_file, "r") as f:
+            with open(self.key_file, "r") as f:
                 self.key = f.read(64)
         except FileNotFoundError:
-            self.print("The file with API key (" + key_file + ") could not be loaded. VT module is stopping.")
+            self.print("The file with API key (" + self.key_file + ") could not be loaded. VT module is stopping.")
 
         # query counter for debugging purposes
         self.counter = 0
@@ -66,18 +66,24 @@ class VirusTotalModule(Module, multiprocessing.Process):
             #??
             self.timeout = None
 
-    def __read_configuration(self, section: str, name: str) -> str:
+    def __read_configuration(self) -> str:
         """ Read the configuration file for what we need """
         # Get the time of log report
         try:
-            conf_variable = self.config.get(section, name)
+            self.key_file = self.config.get("virustotal", "api_key_file")
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            conf_variable = None
-        return conf_variable
+            self.key_file = None
+        try:
+            # update period
+            self.update_period = self.config.get('virustotal', 'virustotal_update_period')
+            self.update_period = float(self.update_period)
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.update_period = 259200
 
     def print(self, text, verbose=1, debug=0):
-        """ 
+        """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the processes into account
 
@@ -99,15 +105,101 @@ class VirusTotalModule(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                message = self.c1.get_message(timeout=self.timeout)
-                # if timewindows are not updated for a long time we will stop slips automatically. 
-                if message['data'] == 'stop_process':
+                message_c1 = self.c1.get_message(timeout=self.timeout)
+                message_c2 = self.c2.get_message(timeout=self.timeout)
+                # if timewindows are not updated for a long time we will stop slips automatically.
+                if message_c1['data'] == 'stop_process' or message_c2['data'] == 'stop_process' :
                     return True
-                elif message['channel'] == 'new_ip' and message["type"] == "message":
-                    ip = message["data"]
-                    ip_score = self.check_ip(ip)
-                    __database__.set_virustotal_score(ip, ip_score)
-                    self.print("[" + ip + "] has score " + str(ip_score),3,3)
+                if message_c1['channel'] == 'new_flow' and message_c1["type"] == "message":
+                    data = message_c1["data"]
+                    if type(data) == str:
+                        data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        stime = data['stime']
+                        flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                        # there is only one pair key-value in the dictionary
+                        for key, value in flow.items():
+                            uid = key
+                            flow_data = json.loads(value)
+                        ip = flow_data['daddr']
+                        #ip = data_flow_dict['saddr']
+                        # The first message comes with data=1
+                        data = __database__.getIPData(ip)
+                        # If we already have the VT for this ip, do not ask VT
+                        # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
+                        if (data or data == {}) and 'VirusTotal' not in data:
+                            vt_scores, passive_dns, as_owner = self.get_ip_vt_data(ip)
+                            vtdata = {"URL": vt_scores[0],
+                                      "down_file": vt_scores[1],
+                                      "ref_file": vt_scores[2],
+                                      "com_file": vt_scores[3],
+                                      "timestamp": time.time()}
+                            data = {}
+                            data["VirusTotal"] = vtdata
+
+                            # Add asn if it is unknown or not in the IP info
+                            if 'asn' not in data or data['asn'] == 'Unknown':
+                                data['asn'] = as_owner
+
+                            __database__.setInfoForIPs(ip, data)
+                            __database__.set_passive_dns(ip, passive_dns)
+
+                        elif data and 'VirusTotal' in data:
+                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                            if (time.time() - data["VirusTotal"]['timestamp']) > self.update_period:
+                                vt_scores, passive_dns, _ = self.get_ip_vt_data(ip)
+                                vtdata = {"URL": vt_scores[0],
+                                          "down_file": vt_scores[1],
+                                          "ref_file": vt_scores[2],
+                                          "com_file": vt_scores[3],
+                                          "timestamp": time.time()}
+                                data = {}
+                                data["VirusTotal"] = vtdata
+                                __database__.setInfoForIPs(ip, data)
+                                __database__.set_passive_dns(ip, passive_dns)
+
+                if message_c2['channel'] == 'new_dns_flow' and message_c2["type"] == "message":
+                    data = message_c2["data"]
+                    # The first message comes with data=1
+                    if type(data) == str:
+                        data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                        domain = flow_data['query']
+                        data = __database__.getDomainData(domain)
+                        # If we already have the VT for this ip, do not ask VT
+                        # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
+                        if (data or data == {}) and 'VirusTotal' not in data:
+                            vt_scores, as_owner = self.get_domain_vt_data(domain)
+                            vtdata = {"URL": vt_scores[0],
+                                      "down_file": vt_scores[1],
+                                      "ref_file": vt_scores[2],
+                                      "com_file": vt_scores[3],
+                                      "timestamp": time.time()}
+                            data = {}
+                            data["VirusTotal"] = vtdata
+
+                            # Add asn if it is unknown or not in the IP info
+                            if 'asn' not in data or data['asn'] == 'Unknown':
+                                data['asn'] = as_owner
+
+                            __database__.setInfoForDomains(domain, data)
+
+                        elif data and 'VirusTotal' in data:
+                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                            if (time.time() - data["VirusTotal"]['timestamp']) > self.update_period:
+                                vt_scores, _ = self.get_domain_vt_data(domain)
+                                vtdata = {"URL": vt_scores[0],
+                                          "down_file": vt_scores[1],
+                                          "ref_file": vt_scores[2],
+                                          "com_file": vt_scores[3],
+                                          "timestamp": time.time()}
+                                data = {}
+                                data["VirusTotal"] = vtdata
+                                __database__.setInfoForDomains(domain, data)
+
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -117,7 +209,29 @@ class VirusTotalModule(Module, multiprocessing.Process):
             self.print(str(inst), 0, 1)
             return True
 
-    def check_ip(self, ip: str):
+    def get_as_owner(self, response):
+        """
+        Get as owner of the IP
+        :param response: json dictionary with response data
+        """
+        response_key = 'as_owner'
+        if response_key in response:
+            return response[response_key]
+        else:
+            return ''
+
+    def get_passive_dns(self,response):
+        """
+        Get passive dns from virustotal response
+        :param response: json dictionary with response data
+        """
+        response_key = 'resolutions'
+        if response_key in response:
+            return response[response_key]
+        else:
+            return ''
+
+    def get_ip_vt_data(self, ip: str):
         """
         Look if this IP was already processed. If not, perform API call to VirusTotal and return scores for each of
         the four processed categories. Response is cached in a dictionary. Private IPs always return (0, 0, 0, 0).
@@ -125,23 +239,46 @@ class VirusTotalModule(Module, multiprocessing.Process):
         :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
         """
 
-        addr = ipaddress.ip_address(ip)
-        if addr.is_private:
-            self.print("[" + ip + "] is private, skipping", 5, 3)
-            return 0, 0, 0, 0
+        try:
+            addr = ipaddress.ip_address(ip)
+            if addr.is_private:
+                self.print("[" + ip + "] is private, skipping", 5, 3)
+                scores = 0,0,0,0
+                return scores, '', ''
 
-        # check if the address is in the cache (probably not, since all IPs are unique)
-        cached_data = __database__.is_ip_in_virustotal_cache(ip)
-        if cached_data:
-            return cached_data
+            # for unknown address, do the query
+            response = self.api_query_(ip)
+            as_owner = self.get_as_owner(response)
+            passive_dns = self.get_passive_dns(response)
+            scores = interpret_response(response)
+            self.counter += 1
+            return scores, passive_dns, as_owner
+        except Exception as inst:
+            self.print('Problem in the get_ip_vt_data()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
 
-        # for unknown address, do the query
-        response = self.api_query_(ip)
+    def get_domain_vt_data(self, domain: str):
+        """
+        Look if this domain was already processed. If not, perform API call to VirusTotal and return scores for each of
+        the four processed categories. Response is cached in a dictionary.
+        :param domain: Domain address to check
+        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
+        """
 
-        scores = interpret_response(response)
-        __database__.put_ip_to_virustotal_cache(ip, scores)
-        self.counter += 1
-        return scores
+        try:
+            # for unknown address, do the query
+            response = self.api_query_(domain)
+            as_owner = self.get_as_owner(response)
+            scores = interpret_response(response)
+            self.counter += 1
+            return scores, as_owner
+        except Exception as inst:
+            self.print('Problem in the get_domain_vt_data()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
 
     def api_query_(self, ip, save_data=False):
         """
