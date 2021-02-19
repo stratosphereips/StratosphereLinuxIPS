@@ -118,24 +118,28 @@ class EvidenceProcess(multiprocessing.Process):
         :return : string with a correct evidence displacement
         '''
         evidence_string = ''
+        dns_resolution_detection_info = __database__.get_dns_resolution(detection_info)
+        dns_resolution_detection_info_final = dns_resolution_detection_info[0:3] if dns_resolution_detection_info else ''
+        dns_resolution_ip = __database__.get_dns_resolution(ip)
+        dns_resolution_ip_final = dns_resolution_ip[0:3] if dns_resolution_detection_info else ''
+
         if detection_module == 'ThreatIntelligenceBlacklistIP':
             if detection_type == 'dstip':
-                evidence_string = f'Infected IP {ip} connected to blacklisted IP {detection_info} due to {description}.'
+                evidence_string = f'Infected IP {ip} connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
 
             elif detection_type == 'srcip':
-                evidence_string = f'Detected blacklisted IP {detection_info} due to {description}. '
+                evidence_string = f'Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}. '
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
             evidence_string = f'Detected domain: {detection_info} due to {description}.'
             self.set_TI_Domain_detection(detection_info, description, profileid, twid)
 
         elif detection_module == 'LongConnection':
-            domain_resolution = __database__.get_dns_resolution(detection_info)
-            evidence_string = f'Detected IP {detection_info} {domain_resolution[0:3]} due to a {description}.'
+            evidence_string = f'Detected IP {detection_info} {dns_resolution_detection_info_final} due to a {description}.'
         elif detection_module == 'SSHSuccessful':
             evidence_string = f'IP: {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'Detected IP: {ip} due to {description}.'
+            evidence_string = f'Detected IP: {ip} {dns_resolution_ip_final} due to {description}.'
 
         return evidence_string
 
