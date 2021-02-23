@@ -47,6 +47,7 @@ class InputProcess(multiprocessing.Process):
         self.nfdump_timeout = None
         self.name = 'input'
         self.zeek_or_bro = zeek_or_bro
+        self.read_lines_delay = 0
         # Read the configuration
         self.read_configuration()
         # If we were given something from command line, has preference
@@ -343,12 +344,13 @@ class InputProcess(multiprocessing.Process):
                         headers_line = self.input_information.split('/')[-1]
                         if 'binetflow' in headers_line or 'argus' in headers_line:
                             line['type'] = 'argus'
-                            fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
+                            # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
                             # self.profilerqueue.put(fake)
+                            self.read_lines_delay = 0.02
                         elif 'log' in headers_line:
                             line['type'] = 'zeek'
                         for t_line in file_stream:
-                            time.sleep(0.02)
+                            time.sleep(self.read_lines_delay)
                             line['data'] = t_line
                             self.print(f'	> Sent Line: {line}', 0, 3)
                             self.profilerqueue.put(line)
