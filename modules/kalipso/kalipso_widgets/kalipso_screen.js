@@ -1,5 +1,5 @@
 class screen {
-  constructor(blessed, contrib, redis_database,tree_class, timeline_class, box_class, listtable_class, gauge_class, combine_listtable_gauge_class, listbar_class) {
+  constructor(blessed, contrib, redis_database,tree_class, timeline_class, box_class, listtable_class, gauge_class, combine_listtable_gauge_class, listbar_class,limit_letter_outtuple) {
       this.blessed = blessed
       this.contrib = contrib
       this.tree_class = tree_class
