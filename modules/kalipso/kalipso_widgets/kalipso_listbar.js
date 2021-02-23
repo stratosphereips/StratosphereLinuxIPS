@@ -62,7 +62,7 @@ class ListBar{
                             },
 
                 'dstPortsClient': {
-                  keys: ['f']
+                  keys: ['p']
                             },
 
                 'dstPortsClientIPs': {
