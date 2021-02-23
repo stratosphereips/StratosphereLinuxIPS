@@ -10,6 +10,7 @@ class screen {
       this.gauge_class = gauge_class
       this.combine_listtable_gauge_class = combine_listtable_gauge_class
       this.listbar_class = listbar_class
+      this.limit_letter_outtuple = limit_letter_outtuple
       this.screen = undefined
       this.grid = undefined
       this.tree_widget = undefined
@@ -86,7 +87,7 @@ class screen {
       /*
       Initialize Tuple on screen and fill in data
       */
-      this.tuple_widget = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0,0,5.7,6])
+      this.tuple_widget = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0,0,5.7,6], this.limit_letter_outtuple)
       this.tuple_widget.hide()
     }
     initBoxEvidence(){
