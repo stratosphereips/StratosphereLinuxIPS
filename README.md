@@ -80,6 +80,7 @@ With npm you should install the following libraries
 	- npm install clipboardy 
 	- npm install fs
 	- npm install sorted-array-async
+    - npm install yargs
 
 #### To run redis
 
