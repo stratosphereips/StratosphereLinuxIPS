@@ -29,6 +29,11 @@ import socket
 import warnings
 from modules.UpdateManager.update_file_manager import UpdateFileManager
 import json
+import pkgutil
+import inspect
+import modules
+import importlib
+from slips.common.abstracts import Module
 
 version = '0.7.1'
 
@@ -72,29 +77,23 @@ def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
     Check if we have redis-server running
     """
     try:
-        r = redis.StrictRedis(host=redis_host,
-                              port=redis_port,
-                              db=0,
-                              charset="utf-8",
-                              decode_responses=True)
+        r = redis.StrictRedis(host=redis_host, port=redis_port, db=0, charset="utf-8",
+                                   decode_responses=True)
         r.ping()
-    except Exception:
-        print('[DB] Error: Is redis database running? \
-                You can run it as: "redis-server --daemonize yes"')
+    except Exception as ex:
+        print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
         return False
     return True
 
-
-def clear_redis_cache_database(redis_host='localhost', redis_port=6379) -> str:
+def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> str:
     """
     Clear cache database
     """
-    rcache = redis.StrictRedis(host=redis_host,
-                               port=redis_port,
-                               db=1,
-                               charset="utf-8",
+    rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=1, charset="utf-8",
                                decode_responses=True)
     rcache.flushdb()
+
+
 
 
 def check_zeek_or_bro():
@@ -115,10 +114,47 @@ def terminate_slips():
     sys.exit(-1)
 
 
+def load_modules(to_ignore):
+    """
+    Import modules and loads the modules from the 'modules' folder. Is very relative to the starting position of slips
+    """
+
+    plugins = dict()
+
+    # Walk recursively through all modules and packages found on the . folder.
+    # __path__ is the current path of this python program
+    for loader, module_name, ispkg in pkgutil.walk_packages(modules.__path__, modules.__name__ + '.'):
+        if any(module_name.__contains__(mod) for mod in to_ignore):
+            continue
+        # If current item is a package, skip.
+        if ispkg:
+            continue
+
+        # Try to import the module, otherwise skip.
+        try:
+            # "level specifies whether to use absolute or relative imports. The default is -1 which 
+            # indicates both absolute and relative imports will be attempted. 0 means only perform 
+            # absolute imports. Positive values for level indicate the number of parent 
+            # directories to search relative to the directory of the module calling __import__()."
+            module = importlib.import_module(module_name)
+        except ImportError as e:
+            print("Something wrong happened while importing the module {0}: {1}".format(module_name, e))
+            continue
+
+        # Walk through all members of currently imported modules.
+        for member_name, member_object in inspect.getmembers(module):
+            # Check if current member is a class.
+            if inspect.isclass(member_object):
+                if issubclass(member_object, Module) and member_object is not Module:
+                    plugins[member_object.name] = dict(obj=member_object, description=member_object.description)
+
+    return plugins
+
+
 ####################
 # Main
 ####################
-if __name__ == '__main__':
+if __name__ == '__main__':  
     print('Stratosphere Linux IPS. Version {}'.format(version))
     print('https://stratosphereips.org\n')
 
@@ -190,8 +226,6 @@ if __name__ == '__main__':
     from guiProcess import GuiProcess
     from logsProcess import LogsProcess
     from evidenceProcess import EvidenceProcess
-    # This plugins import will automatically load the modules and put them in the __modules__ variable
-    from slips.core.plugins import __modules__
 
     # Any verbosity passed as parameter overrides the configuration. Only check its value
     if args.verbose == None:
@@ -260,6 +294,7 @@ if __name__ == '__main__':
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
+    # This plugins import will automatically load the modules and put them in the __modules__ variable
     if to_ignore:
         # Convert string to list
         to_ignore = eval(to_ignore)
@@ -267,12 +302,14 @@ if __name__ == '__main__':
         if not args.blocking or not args.interface:
             to_ignore.append('blocking')
         try:
-            for module_name in __modules__:
+            # This 'imports' all the modules somehow, but then we ignore some
+            modules_to_call = load_modules(to_ignore)
+            for module_name in modules_to_call:
                 if not module_name in to_ignore:
-                    module_class = __modules__[module_name]['obj']
+                    module_class = modules_to_call[module_name]['obj']
                     ModuleProcess = module_class(outputProcessQueue, config)
                     ModuleProcess.start()
-                    outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, __modules__[module_name]['description'], ModuleProcess.pid))
+                    outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
