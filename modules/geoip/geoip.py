@@ -80,8 +80,10 @@ class Module(Module, multiprocessing.Process):
                     # The first message comes with data=1
                     if type(ip) == str:
                         data = __database__.getIPData(ip)
+                        ip_addr = ipaddress.ip_address(ip)
+
                         # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
-                        if (data or data == {}) and 'geocountry' not in data:
+                        if (data or data == {}) and 'geocountry' not in data and not ip_addr.is_multicast:
                             geoinfo = self.reader.get(ip)
                             if geoinfo:
                                 try:

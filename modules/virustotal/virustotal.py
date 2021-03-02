@@ -126,9 +126,12 @@ class VirusTotalModule(Module, multiprocessing.Process):
                         #ip = data_flow_dict['saddr']
                         # The first message comes with data=1
                         data = __database__.getIPData(ip)
+                        # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
+                        ip_addr = ipaddress.ip_address(ip)
                         # If we already have the VT for this ip, do not ask VT
                         # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
-                        if (data or data == {}) and 'VirusTotal' not in data:
+                        # Check if the ip is multicast, if yes, then fdo not process
+                        if (data or data == {}) and 'VirusTotal' not in data and not ip_addr.is_multicacst:
                             vt_scores, passive_dns, as_owner = self.get_ip_vt_data(ip)
                             vtdata = {"URL": vt_scores[0],
                                       "down_file": vt_scores[1],
