@@ -896,7 +896,7 @@ class Database(object):
         current_evidence_json = json.dumps(current_evidence)
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         # Tell everyone an evidence was added
-        self.publish('evidence_added', profileid + '-' + twid + '-' + key + '-'+str(data[2]))
+        self.publish('evidence_added', profileid + self.separator  + twid + self.separator  + key + self.separator +str(data[2]))
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
