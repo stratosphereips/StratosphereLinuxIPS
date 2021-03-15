@@ -153,7 +153,7 @@ class Module(Module, multiprocessing.Process):
                 # add flowalert detection in the flow
                 module_name = 'flowalert'
                 module_label = 'long connection'
-                __database__.add_module_label_to_flow(profileid,
+                __database__.set_module_label_to_flow(profileid,
                                                       twid,
                                                       uid,
                                                       module_name,
