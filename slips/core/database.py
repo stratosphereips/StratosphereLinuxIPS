@@ -929,18 +929,18 @@ class Database(object):
         if flow:
             data = json.loads(flow[uid])
             # here we dont care if add new module lablel or changing existing one
-            data['modules_labels'][module_name] = module_label
+            data['module_labels'][module_name] = module_label
             data = json.dumps(data)
             self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
 
-    def get_modules_labels_from_flow(self, profileid, twid, uid):
+    def get_module_labels_from_flow(self, profileid, twid, uid):
         """
         Get the label from the flow
         """
         flow = self.get_flow(profileid, twid, uid)
         if flow:
             data = json.loads(flow[uid])
-            labels = data['modules_labels']
+            labels = data['module_labels']
             return labels
         else:
             return {}
@@ -1239,7 +1239,7 @@ class Database(object):
         data['appproto'] = appproto
         data['label'] = label
         # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
-        data['modules_labels'] = {}
+        data['module_labels'] = {}
 
         # Convert to json string
         data = json.dumps(data)
