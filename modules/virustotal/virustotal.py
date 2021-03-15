@@ -131,7 +131,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
                         # If we already have the VT for this ip, do not ask VT
                         # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
                         # Check if the ip is multicast, if yes, then fdo not process
-                        if (data or data == {}) and 'VirusTotal' not in data and not ip_addr.is_multicacst:
+                        if (data or data == {}) and 'VirusTotal' not in data and not ip_addr.is_multicast:
                             vt_scores, passive_dns, as_owner = self.get_ip_vt_data(ip)
                             vtdata = {"URL": vt_scores[0],
                                       "down_file": vt_scores[1],
