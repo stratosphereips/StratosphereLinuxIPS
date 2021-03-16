@@ -27,8 +27,8 @@ import time
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'flowalerts'
-    description = 'Alerts about flows: long connection'
-    authors = ['Kamila Babayeva']
+    description = 'Alerts about flows: long connection, successful ssh'
+    authors = ['Kamila Babayeva', 'Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
