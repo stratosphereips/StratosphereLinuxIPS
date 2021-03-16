@@ -25,6 +25,8 @@ class Database(object):
         # The name is used to print in the outputprocess
         self.name = 'DB'
         self.separator = '_'
+        self.normal_label = 'normal'
+        self.malicious_label = 'malicious'
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
