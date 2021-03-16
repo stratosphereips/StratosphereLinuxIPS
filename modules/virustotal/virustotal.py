@@ -105,8 +105,8 @@ class VirusTotalModule(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                message_c1 = self.c1.get_message(timeout=self.timeout)
-                message_c2 = self.c2.get_message(timeout=self.timeout)
+                message_c1 = self.c1.get_message(timeout=0.01)
+                message_c2 = self.c2.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time we will stop slips automatically.
                 if message_c1['data'] == 'stop_process' or message_c2['data'] == 'stop_process' :
                     return True
