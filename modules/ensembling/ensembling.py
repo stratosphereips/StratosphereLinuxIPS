@@ -38,6 +38,9 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
+        # Retrieve the labels
+        self.normal_label = __database__.normal_label
+        self.malicious_label = __database__.malicious_label
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
