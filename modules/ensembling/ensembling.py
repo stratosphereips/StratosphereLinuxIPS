@@ -111,10 +111,13 @@ class Module(Module, multiprocessing.Process):
                         profileip = data.split(self.separator)[1]
                         twid = data.split(self.separator)[2]
                         profileid = 'profile' + self.separator + profileip
-                        # First stage -  define the final label for each flow in profileid and twid
 
-                        #self.put_final_label_all_flows(profileid, twid)
-                        #print(__database__.get_all_flows_in_profileid_twid(profileid, twid))
+                        # First stage -  define the final label for each flow in profileid and twid
+                        # by the majority vote of malicious and normal
+                        # Second stage - group the flows with same dstip and calculate the amount of
+                        # normal and malicious flows
+
+                        self.set_label_per_flow_dstip(profileid, twid)
 
         except KeyboardInterrupt:
             return True
