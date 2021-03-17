@@ -25,6 +25,8 @@ class Database(object):
         # The name is used to print in the outputprocess
         self.name = 'DB'
         self.separator = '_'
+        self.normal_label = 'normal'
+        self.malicious_label = 'malicious'
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -910,14 +912,14 @@ class Database(object):
         res = self.r.sismember('BlockedProfTW', profileid + self.separator + twid)
         return res
 
-    def set_ensembling_label_to_flow(self, profileid, twid, uid, ensembling_label):
+    def set_first_stage_ensembling_label_to_flow(self, profileid, twid, uid, ensembling_label):
         """
         Add a final label to the flow
         """
         flow = self.get_flow(profileid, twid, uid)
         if flow:
             data = json.loads(flow[uid])
-            data['ensembling_label'] = ensembling_label
+            data['1_ensembling_label'] = ensembling_label
             data = json.dumps(data)
             self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
 

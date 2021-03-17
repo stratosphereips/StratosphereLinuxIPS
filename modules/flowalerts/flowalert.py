@@ -27,8 +27,8 @@ import time
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'flowalerts'
-    description = 'Alerts about flows: long connection'
-    authors = ['Kamila Babayeva']
+    description = 'Alerts about flows: long connection, successful ssh'
+    authors = ['Kamila Babayeva', 'Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -42,6 +42,9 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         # Read the configuration
         self.read_configuration()
+        # Retrieve the labels
+        self.normal_label = __database__.normal_label
+        self.malicious_label = __database__.malicious_label
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
@@ -151,19 +154,28 @@ class Module(Module, multiprocessing.Process):
                                                   twid,
                                                   ip_state='dstip')
                 # add flowalert detection in the flow
-                module_name = 'flowalert'
-                module_label = 'long connection'
+                module_name = "flowalerts-long-connection"
+                module_label = self.malicious_label
                 __database__.set_module_label_to_flow(profileid,
                                                       twid,
                                                       uid,
                                                       module_name,
                                                       module_label)
+        else:
+            # if there is no long connection,put label malicous in the flow
+            module_name = "flowalerts-long-connection"
+            module_label = self.normal_label
+            __database__.set_module_label_to_flow(profileid,
+                                                  twid,
+                                                  uid,
+                                                  module_name,
+                                                  module_label)
 
     def run(self):
         try:
             # Main loop function
             while True:
-                message = self.c1.get_message(timeout=0.5)
+                message = self.c1.get_message(timeout=0.01)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     return True
@@ -199,7 +211,7 @@ class Module(Module, multiprocessing.Process):
                         if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
                             self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
-                message = self.c2.get_message(timeout=0.5)
+                message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
                     return True
                 if message and message['channel'] == 'new_ssh':

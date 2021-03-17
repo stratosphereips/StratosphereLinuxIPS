@@ -105,12 +105,11 @@ class VirusTotalModule(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                message_c1 = self.c1.get_message(timeout=self.timeout)
-                message_c2 = self.c2.get_message(timeout=self.timeout)
+                message_c1 = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time we will stop slips automatically.
-                if message_c1['data'] == 'stop_process' or message_c2['data'] == 'stop_process' :
+                if message_c1 and message_c1['data'] == 'stop_process':
                     return True
-                if message_c1['channel'] == 'new_flow' and message_c1["type"] == "message":
+                if message_c1 and message_c1['channel'] == 'new_flow' and message_c1["type"] == "message":
                     data = message_c1["data"]
                     if type(data) == str:
                         data = json.loads(data)
@@ -162,7 +161,10 @@ class VirusTotalModule(Module, multiprocessing.Process):
                                 __database__.setInfoForIPs(ip, data)
                                 __database__.set_passive_dns(ip, passive_dns)
 
-                if message_c2['channel'] == 'new_dns_flow' and message_c2["type"] == "message":
+                message_c2 = self.c2.get_message(timeout=0.01)
+                if message_c2 and message_c2['data'] == 'stop_process':
+                    return True
+                if message_c2 and message_c2['channel'] == 'new_dns_flow' and message_c2["type"] == "message":
                     data = message_c2["data"]
                     # The first message comes with data=1
                     if type(data) == str:

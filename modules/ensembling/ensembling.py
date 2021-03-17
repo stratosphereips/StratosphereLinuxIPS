@@ -38,6 +38,9 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
+        # Retrieve the labels
+        self.normal_label = __database__.normal_label
+        self.malicious_label = __database__.malicious_label
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
@@ -81,17 +84,40 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def put_final_label_all_flows(self, profileid, twid):
+    def set_label_per_flow_dstip(self, profileid, twid):
         '''
-        Put a final label per each flow in the twid and profile
+        Funciton to perform first and second stage of the ensembling.
+        Function assigns ensembling label per each flow in this profileid and twid,
+        groups the flows with same destination IP, and calculates the amount
+        of normal and malicious flows per each dstip in this profileid and twid.
+        : param: profileid, twid
+        : return: None
         '''
+
         flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
+        dstip_labels_total = dict()
         for flow_uid, flow_data in flows.items():
             flow_data = json.loads(flow_data)
             flow_module_labels = flow_data['module_labels']
-            # perform some calculations to define if the flow is normal or malicious and set the result in the db
-            # ensembling_label = 'normal'
-            # __database__.set_ensembling_label_to_flow(profileid, twid, flow_uid, ensembling_label)
+            # First stage - calculate the amount of malicious and normal labels per each flow.
+            # Set the final label per flow using majority voting
+            flow_labels = list(flow_module_labels.values())
+            normal_label_total = flow_labels.count(self.normal_label)
+            malicious_label_total = flow_labels.count(self.malicious_label)
+            # initialize the amount of normal and malicious flows per dstip.
+            try:
+                dstip_labels_total[flow_data['daddr']]
+            except KeyError as err:
+                dstip_labels_total[flow_data['daddr']] = {self.normal_label: 0, self.malicious_label:0}
+
+            if malicious_label_total == normal_label_total == 0 or normal_label_total > malicious_label_total:
+                __database__.set_first_stage_ensembling_label_to_flow(profileid, twid, flow_uid, self.normal_label)
+                # Second stage - calculate the amount of normal and malicious labels per daddr
+                dstip_labels_total[flow_data['daddr']][self.normal_label] = dstip_labels_total[flow_data['daddr']].get(self.normal_label, 0) + 1
+            elif malicious_label_total >= normal_label_total:
+                __database__.set_first_stage_ensembling_label_to_flow(profileid, twid, flow_uid, self.malicious_label)
+                # Second stage - calculate the amount of normal and malicious labels per daddr
+                dstip_labels_total[flow_data['daddr']][self.malicious_label] = dstip_labels_total[flow_data['daddr']].get(self.malicious_label, 0) + 1
 
     def run(self):
         try:
@@ -108,10 +134,13 @@ class Module(Module, multiprocessing.Process):
                         profileip = data.split(self.separator)[1]
                         twid = data.split(self.separator)[2]
                         profileid = 'profile' + self.separator + profileip
-                        # First stage -  define the final label for each flow in profileid and twid
 
-                        #self.put_final_label_all_flows(profileid, twid)
-                        #print(__database__.get_all_flows_in_profileid_twid(profileid, twid))
+                        # First stage -  define the final label for each flow in profileid and twid
+                        # by the majority vote of malicious and normal
+                        # Second stage - group the flows with same dstip and calculate the amount of
+                        # normal and malicious flows
+
+                        self.set_label_per_flow_dstip(profileid, twid)
 
         except KeyboardInterrupt:
             return True
