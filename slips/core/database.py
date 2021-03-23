@@ -25,6 +25,8 @@ class Database(object):
         # The name is used to print in the outputprocess
         self.name = 'DB'
         self.separator = '_'
+        self.normal_label = 'normal'
+        self.malicious_label = 'malicious'
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -896,7 +898,7 @@ class Database(object):
         current_evidence_json = json.dumps(current_evidence)
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         # Tell everyone an evidence was added
-        self.publish('evidence_added', profileid + '-' + twid + '-' + key + '-'+str(data[2]))
+        self.publish('evidence_added', profileid + self.separator  + twid + self.separator  + key + self.separator +str(data[2]))
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -910,7 +912,18 @@ class Database(object):
         res = self.r.sismember('BlockedProfTW', profileid + self.separator + twid)
         return res
 
-    def add_module_label_to_flow(self, profileid, twid, uid, module_name, module_label):
+    def set_first_stage_ensembling_label_to_flow(self, profileid, twid, uid, ensembling_label):
+        """
+        Add a final label to the flow
+        """
+        flow = self.get_flow(profileid, twid, uid)
+        if flow:
+            data = json.loads(flow[uid])
+            data['1_ensembling_label'] = ensembling_label
+            data = json.dumps(data)
+            self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
+
+    def set_module_label_to_flow(self, profileid, twid, uid, module_name, module_label):
         """
         Add a module label to the flow
         """
@@ -918,18 +931,18 @@ class Database(object):
         if flow:
             data = json.loads(flow[uid])
             # here we dont care if add new module lablel or changing existing one
-            data['modules_labels'][module_name] = module_label
+            data['module_labels'][module_name] = module_label
             data = json.dumps(data)
             self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
 
-    def get_modules_labels_from_flow(self, profileid, twid, uid):
+    def get_module_labels_from_flow(self, profileid, twid, uid):
         """
         Get the label from the flow
         """
         flow = self.get_flow(profileid, twid, uid)
         if flow:
             data = json.loads(flow[uid])
-            labels = data['modules_labels']
+            labels = data['module_labels']
             return labels
         else:
             return {}
@@ -1228,7 +1241,7 @@ class Database(object):
         data['appproto'] = appproto
         data['label'] = label
         # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
-        data['modules_labels'] = {}
+        data['module_labels'] = {}
 
         # Convert to json string
         data = json.dumps(data)

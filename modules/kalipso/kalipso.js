@@ -12,13 +12,24 @@ var gauge = require('./kalipso_widgets/kalipso_gauge')
 var combine_listtable_gauge = require('./kalipso_widgets/kalipso_connect_listtable_gauge')
 var listbar = require("./kalipso_widgets/kalipso_listbar")
 
+var {argv} = require('yargs').option('l',{
+
+            alias:     'limit_letter_outtuple',
+            default:   200,
+            describe:  'Include something',
+            type:      'number',
+            nargs: 1
+
+    });
+
+const {limit_letter_outtuple} = argv
 
 const redis_database = new redis_database_class(redis)
 //Initialize all channels in redis
 redis_database.createClient()
 
 //initialize screen with all necessary widget classes
-const screen = new screen_class(blessed, contrib, redis_database,tree, table, box,listtable, gauge, combine_listtable_gauge, listbar)
+const screen = new screen_class(blessed, contrib, redis_database,tree, table, box,listtable, gauge, combine_listtable_gauge, listbar,limit_letter_outtuple)
 screen.init()
 screen.render()
 //Register all keypresses in the screen

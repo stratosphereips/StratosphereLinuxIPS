@@ -132,10 +132,10 @@ class EvidenceProcess(multiprocessing.Process):
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
             evidence_string = f'Detected domain: {detection_info} due to {description}.'
-            self.set_TI_Domain_detection(detection_info, description, profileid, twid)
 
         elif detection_module == 'LongConnection':
             evidence_string = f'Detected IP {detection_info} {dns_resolution_detection_info_final} due to a {description}.'
+
         elif detection_module == 'SSHSuccessful':
             evidence_string = f'IP: {ip} did a successful SSH. {description}.'
         else:
@@ -275,13 +275,14 @@ class EvidenceProcess(multiprocessing.Process):
                 elif message['channel'] == 'evidence_added':
                     # Get the profileid and twid
                     try:
+
                         message_data = message['data']
-                        profileid = message_data.split('-')[0]
-                        twid = message_data.split('-')[1]
+                        profileid = message_data.split(self.separator)[0]+ self.separator + message_data.split(self.separator)[1]
+                        twid = message_data.split(self.separator)[2]
 
                         # Separate new evidence, so it can be logged in alerts.log
-                        new_evidence_key = message_data.split('-')[2]
-                        new_evidence_description = message_data.split('-')[3]
+                        new_evidence_key = message_data.split(self.separator)[3]
+                        new_evidence_description = message_data.split(self.separator)[4]
                         new_evidence_key_split = new_evidence_key.split(':')
                         new_evidence_detection_type = new_evidence_key_split[0]
                         new_evidence_detection_module = new_evidence_key_split[-1]

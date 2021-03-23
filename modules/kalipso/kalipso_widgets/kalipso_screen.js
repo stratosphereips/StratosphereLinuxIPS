@@ -1,5 +1,5 @@
 class screen {
-  constructor(blessed, contrib, redis_database,tree_class, timeline_class, box_class, listtable_class, gauge_class, combine_listtable_gauge_class, listbar_class) {
+  constructor(blessed, contrib, redis_database,tree_class, timeline_class, box_class, listtable_class, gauge_class, combine_listtable_gauge_class, listbar_class,limit_letter_outtuple) {
       this.blessed = blessed
       this.contrib = contrib
       this.tree_class = tree_class
@@ -10,6 +10,7 @@ class screen {
       this.gauge_class = gauge_class
       this.combine_listtable_gauge_class = combine_listtable_gauge_class
       this.listbar_class = listbar_class
+      this.limit_letter_outtuple = limit_letter_outtuple
       this.screen = undefined
       this.grid = undefined
       this.tree_widget = undefined
@@ -86,7 +87,7 @@ class screen {
       /*
       Initialize Tuple on screen and fill in data
       */
-      this.tuple_widget = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0,0,5.7,6])
+      this.tuple_widget = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0,0,5.7,6], this.limit_letter_outtuple)
       this.tuple_widget.hide()
     }
     initBoxEvidence(){
@@ -229,7 +230,7 @@ class screen {
 
     }
 
-    f_hotkey_routine(){
+    p_hotkey_routine(){
       /*
       Display data for DstPortsClient established and not established
       */
@@ -378,9 +379,9 @@ class screen {
           this.main_page_routine()
           this.focus_hotkey = false
         }
-        else if(key.name == 'f'){
+        else if(key.name == 'p'){
           this.helpbar.selectTab(4)
-          this.f_hotkey_routine()
+          this.p_hotkey_routine()
           this.focus_hotkey = true
         }
         else if(key.name == 'r'){

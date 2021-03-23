@@ -58,7 +58,8 @@ RUN cd StratosphereLinuxIPS/modules/kalipso && npm install \
     chalk \
     strip-ansi \
     redis \
-    sorted-array-async
+    sorted-array-async \
+    yargS
 
 # Change the backed of keras to tensorflow
 #RUN sed -i 's/theano/tensorflow/' $HOME/.keras/keras.json

@@ -80,6 +80,7 @@ With npm you should install the following libraries
 	- npm install clipboardy 
 	- npm install fs
 	- npm install sorted-array-async
+    - npm install yargs
 
 #### To run redis
 
@@ -261,6 +262,10 @@ pip
 redis               3.2.1
 
 
+# TroubleShooting
+In dockers running on CPU that dont support AVX, importing tensorflow may fail. In that case you need to uninstall tensoflow and install a wheel file without AVX, such as 
+    
+    https://tf.novaal.de/barcelona/tensorflow-2.4.1-cp37-cp37m-linux_x86_64.whl
 
 
 ### Author and Contributors
