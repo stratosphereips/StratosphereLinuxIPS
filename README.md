@@ -280,6 +280,7 @@ In dockers running on CPU that dont support AVX, importing tensorflow may fail. 
 - MariaRigaki 
 - kartik88363
 - arkamar
+- AlyaGomaa
 
 
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
