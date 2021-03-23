@@ -32,7 +32,7 @@ To build the docker locally from the Docker file, you can do as follows (we use 
 If you cloned StratosphereLinuxIPS in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
 
 	cd docker
-	docker build --no-cache -t slips -f Dockerfile .
+	docker build --network=host --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f dataset/test3.binetflow
 
