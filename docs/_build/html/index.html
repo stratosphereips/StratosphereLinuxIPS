@@ -1,22 +1,23 @@
 
-<!DOCTYPE html>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
-<html>
+<html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Stratosphere Linux IPS (Slips) Version 0.7.1 &#8212; Slips 0.7.1 documentation</title>
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
-    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
-    <script src="_static/jquery.js"></script>
-    <script src="_static/underscore.js"></script>
-    <script src="_static/doctools.js"></script>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
    
   <link rel="stylesheet" href="_static/custom.css" type="text/css" />
-  
   
   <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
 
@@ -26,8 +27,6 @@
     <div class="document">
       <div class="documentwrapper">
         <div class="bodywrapper">
-          
-
           <div class="body" role="main">
             
   <div class="section" id="stratosphere-linux-ips-slips-version-0-7-1">
@@ -36,7 +35,7 @@
 Slips is a modular software.</p>
 <div class="section" id="example">
 <h2>Example<a class="headerlink" href="#example" title="Permalink to this headline">¶</a></h2>
-<p><img alt="slips-kalipso.gif" src="slips-kalipso.gif" /></p>
+<p><img alt="_images/slips-kalipso.gif" src="_images/slips-kalipso.gif" /></p>
 </div>
 </div>
 <div class="section" id="installation">
@@ -136,12 +135,13 @@ If you cloned StratosphereLinuxIPS in ‘~/code/StratosphereLinuxIPS’, then yo
 <h4>Installation of Zeek (Bro)<a class="headerlink" href="#installation-of-zeek-bro" title="Permalink to this headline">¶</a></h4>
 <p>Slips uses Zeek to generate files for most input types.</p>
 <ul>
-<li><p>How to install and set Zeek (Bro) properly?</p>
+<li><p class="first">How to install and set Zeek (Bro) properly?</p>
 <ul>
-<li><p>Download a binary package ready for your system. Complete up to date instructions here https://zeek.org/get-zeek/</p></li>
-<li><p>Make Zeek visible for Slips. Some ideas:</p>
+<li><p class="first">Download a binary package ready for your system. Complete up to date instructions here https://zeek.org/get-zeek/</p>
+</li>
+<li><p class="first">Make Zeek visible for Slips. Some ideas:</p>
 <ul>
-<li><p>Create a link to “/bin” folder from compiled Zeek folder like</p>
+<li><p class="first">Create a link to “/bin” folder from compiled Zeek folder like</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="s2">&quot;sudo ln -s /opt/zeek/bin/zeek /usr/local/bin&quot;</span>
 </pre></div>
 </div>
@@ -161,23 +161,21 @@ If you cloned StratosphereLinuxIPS in ‘~/code/StratosphereLinuxIPS’, then yo
 <div class="section" id="fast-usage-in-your-own-traffic">
 <h1>Fast usage in your own traffic<a class="headerlink" href="#fast-usage-in-your-own-traffic" title="Permalink to this headline">¶</a></h1>
 <ol class="simple">
-<li><p>Start Redis: <code class="docutils literal notranslate"><span class="pre">redis-server</span> <span class="pre">--daemonize</span> <span class="pre">yes</span></code></p></li>
-<li><p>Run Slips: <code class="docutils literal notranslate"><span class="pre">./slips.py</span> <span class="pre">-c</span> <span class="pre">slips.conf</span> <span class="pre">-i</span> <span class="pre">&lt;interface&gt;</span></code> (be sure you use python3)</p></li>
-<li><p>Use Kalipso to see the results
+<li>Start Redis: <code class="docutils literal notranslate"><span class="pre">redis-server</span> <span class="pre">--daemonize</span> <span class="pre">yes</span></code></li>
+<li>Run Slips: <code class="docutils literal notranslate"><span class="pre">./slips.py</span> <span class="pre">-c</span> <span class="pre">slips.conf</span> <span class="pre">-i</span> <span class="pre">&lt;interface&gt;</span></code> (be sure you use python3)</li>
+<li>Use Kalipso to see the results
 a. ./kalipso.sh
-b. Optionally run slips with -G to start Kalipso automatically</p></li>
-<li><p>Local logs are stored in the folder called with the date of today. All files are updated every 5 seconds.</p></li>
+b. Optionally run slips with -G to start Kalipso automatically</li>
+<li>Local logs are stored in the folder called with the date of today. All files are updated every 5 seconds.</li>
 </ol>
 <p>Requirements to capture your own traffic:</p>
 <ul class="simple">
-<li><p>curl</p>
-<ul>
-<li><p>In debian/ubuntu: <code class="docutils literal notranslate"><span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">curl</span></code></p></li>
+<li>curl<ul>
+<li>In debian/ubuntu: <code class="docutils literal notranslate"><span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">curl</span></code></li>
 </ul>
 </li>
-<li><p>get authorization to zeek to capture the traffic in the linux interface:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">setcap</span> <span class="pre">cap_net_raw,cap_net_admin=eip</span> <span class="pre">/usr/local/zeek/bin/zeek</span></code></p></li>
+<li>get authorization to zeek to capture the traffic in the linux interface:<ul>
+<li><code class="docutils literal notranslate"><span class="pre">setcap</span> <span class="pre">cap_net_raw,cap_net_admin=eip</span> <span class="pre">/usr/local/zeek/bin/zeek</span></code></li>
 </ul>
 </li>
 </ul>
@@ -192,11 +190,11 @@ When Slips is run, it spawns several child processes to manage the I/O, to profi
 <div class="section" id="the-concept-of-time-in-slips">
 <h1>The concept of time in slips<a class="headerlink" href="#the-concept-of-time-in-slips" title="Permalink to this headline">¶</a></h1>
 <ul class="simple">
-<li><p>Every time we receive something, we update the TW modification time in a new redis ordered set (zset) (the old is not used). This set has the TW id and the time of last modification. The TW in this zset are never deleted.</p></li>
-<li><p>We update the slips_internal_time, every time we receive anything</p></li>
-<li><p>Every 5 seconds, slips.py, retrieves the sublist of TW from the zset that were modified in the last “time window width” (default 1hs).</p></li>
-<li><p>This list of TW that were modified is used to print the statistics and as part of the set_host_ip check in slips.py.</p></li>
-<li><p>In theory if a TW was not modifed in the last hs, then it should not appear in the list, which decreases until no TW was modified for some rounds, and we stop slips.</p></li>
+<li>Every time we receive something, we update the TW modification time in a new redis ordered set (zset) (the old is not used). This set has the TW id and the time of last modification. The TW in this zset are never deleted.</li>
+<li>We update the slips_internal_time, every time we receive anything</li>
+<li>Every 5 seconds, slips.py, retrieves the sublist of TW from the zset that were modified in the last “time window width” (default 1hs).</li>
+<li>This list of TW that were modified is used to print the statistics and as part of the set_host_ip check in slips.py.</li>
+<li>In theory if a TW was not modifed in the last hs, then it should not appear in the list, which decreases until no TW was modified for some rounds, and we stop slips.</li>
 </ul>
 <div class="section" id="timeout-of-traffic">
 <h2>Timeout of traffic<a class="headerlink" href="#timeout-of-traffic" title="Permalink to this headline">¶</a></h2>
@@ -280,17 +278,15 @@ The behavioral models are stored in the <strong>models</strong> folder and will 
 <h3>Where does it work<a class="headerlink" href="#where-does-it-work" title="Permalink to this headline">¶</a></h3>
 <p>[rewrite]</p>
 <ul class="simple">
-<li><p>Slips runs in</p>
-<ul>
-<li><p>Ubuntu 16.04+</p></li>
-<li><p>Debian stable/testing/unstable</p></li>
-<li><p>MacOS 10.9.5, 10.10.x to 10.12.x</p></li>
+<li>Slips runs in<ul>
+<li>Ubuntu 16.04+</li>
+<li>Debian stable/testing/unstable</li>
+<li>MacOS 10.9.5, 10.10.x to 10.12.x</li>
 </ul>
 </li>
-<li><p>To try:</p>
-<ul>
-<li><p>Android</p></li>
-<li><p>IOS</p></li>
+<li>To try:<ul>
+<li>Android</li>
+<li>IOS</li>
 </ul>
 </li>
 </ul>
@@ -308,7 +304,7 @@ The behavioral models are stored in the <strong>models</strong> folder and will 
 <div class="section" id="common-errors">
 <h1>Common errors<a class="headerlink" href="#common-errors" title="Permalink to this headline">¶</a></h1>
 <ul>
-<li><p>If you see the error</p>
+<li><p class="first">If you see the error</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Error in run() of timeout must be non-negative
 &lt;class &#39;ValueError&#39;&gt;
 timeout must be non-negative
@@ -344,22 +340,21 @@ redis               3.2.1</p>
 <h2>Author and Contributors<a class="headerlink" href="#author-and-contributors" title="Permalink to this headline">¶</a></h2>
 <p>[rewrite]</p>
 <ul class="simple">
-<li><p>Main author: Sebastian Garcia. sebastian.garcia&#64;agents.fel.cvut.cz, eldraco&#64;gmail.com.</p></li>
-<li><p>Ondrej Lukas: During the original slips code, he worked on the new detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classes, etc.</p></li>
-<li><p>Frantisek Strasak. Work on all the new version of slips, features, output, core and the https Machine Learning detection module. (https://github.com/frenky-strasak)</p></li>
-<li><p>Dita hollmannova: Worked in the VirusTotal module and the Whois modul. (dita.hollmannova&#64;gmail.com)</p></li>
-<li><p>Kamila Babayeva: Implemented the NodeJS interface (kamifai14&#64;gmail.com)</p></li>
-<li><p>Elaheh Biglar Beigi</p></li>
-<li><p>MariaRigaki</p></li>
-<li><p>kartik88363</p></li>
-<li><p>arkamar</p></li>
+<li>Main author: Sebastian Garcia. sebastian.garcia&#64;agents.fel.cvut.cz, eldraco&#64;gmail.com.</li>
+<li>Ondrej Lukas: During the original slips code, he worked on the new detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classes, etc.</li>
+<li>Frantisek Strasak. Work on all the new version of slips, features, output, core and the https Machine Learning detection module. (https://github.com/frenky-strasak)</li>
+<li>Dita hollmannova: Worked in the VirusTotal module and the Whois modul. (dita.hollmannova&#64;gmail.com)</li>
+<li>Kamila Babayeva: Implemented the NodeJS interface (kamifai14&#64;gmail.com)</li>
+<li>Elaheh Biglar Beigi</li>
+<li>MariaRigaki</li>
+<li>kartik88363</li>
+<li>arkamar</li>
 </ul>
 </div>
 </div>
 
 
           </div>
-          
         </div>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
@@ -383,23 +378,17 @@ redis               3.2.1</p>
 </ul>
 </div>
 <div id="searchbox" style="display: none" role="search">
-  <h3 id="searchlabel">Quick search</h3>
+  <h3>Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" />
       <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
-
-
-
-
-
-
-
-
+<script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -408,8 +397,8 @@ redis               3.2.1</p>
       &copy;2021, Stratosphere Laboratory.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.3</a>
-      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a>
       
       |
       <a href="_sources/index.md.txt"
