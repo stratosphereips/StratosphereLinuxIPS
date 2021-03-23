@@ -38,6 +38,7 @@ RUN pip3 install wheel
 RUN pip3 install redis
 RUN pip3 install setuptools
 RUN pip3 install validators
+RUN pip3 install colorama
 RUN pip3 install --upgrade tensorflow==2.1.0
 
 # Download and unpack Slips.
@@ -57,7 +58,8 @@ RUN cd StratosphereLinuxIPS/modules/kalipso && npm install \
     chalk \
     strip-ansi \
     redis \
-    sorted-array-async
+    sorted-array-async \
+    yargS
 
 # Change the backed of keras to tensorflow
 #RUN sed -i 's/theano/tensorflow/' $HOME/.keras/keras.json

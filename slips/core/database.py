@@ -25,6 +25,8 @@ class Database(object):
         # The name is used to print in the outputprocess
         self.name = 'DB'
         self.separator = '_'
+        self.normal_label = 'normal'
+        self.malicious_label = 'malicious'
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -858,22 +860,22 @@ class Database(object):
         return self.separator
 
     def setEvidence(self, key, threat_level, confidence, description, profileid='', twid='',):
-        """ 
-        Get the evidence for this TW for this Profile 
+        """
+        Get the evidence for this TW for this Profile
 
         Input:
-        - key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans, then this would be the port used. 
-               the idea is that you can later update this specific detection when it evolves. 
+        - key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans, then this would be the port used.
+               the idea is that you can later update this specific detection when it evolves.
                Examples of keys are: 'dport:1234' for all the evidences regarding this dport, or 'dip:1.1.1.1' for all the evidences regarding that dst ip
         - type_evidence: The type of evidence you can send. For example PortScanType1
         - threat_level: How important this evidence is. Portscan? C&C channel? Exploit?
         - confidence: How sure you are that this is what you say it is. Basically: the more data the more sure you are.
-        
+
         The evidence is stored as a dict.
         {
-            'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'], 
-            'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1'] 
-            'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow'] 
+            'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'],
+            'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1']
+            'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
         }
 
         Adapt to set the evidence of ips without profile and tw
@@ -896,7 +898,7 @@ class Database(object):
         current_evidence_json = json.dumps(current_evidence)
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         # Tell everyone an evidence was added
-        self.publish('evidence_added', profileid + ':' + twid)
+        self.publish('evidence_added', profileid + self.separator  + twid + self.separator  + key + self.separator +str(data[2]))
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -910,7 +912,18 @@ class Database(object):
         res = self.r.sismember('BlockedProfTW', profileid + self.separator + twid)
         return res
 
-    def add_module_label_to_flow(self, profileid, twid, uid, module_name, module_label):
+    def set_first_stage_ensembling_label_to_flow(self, profileid, twid, uid, ensembling_label):
+        """
+        Add a final label to the flow
+        """
+        flow = self.get_flow(profileid, twid, uid)
+        if flow:
+            data = json.loads(flow[uid])
+            data['1_ensembling_label'] = ensembling_label
+            data = json.dumps(data)
+            self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
+
+    def set_module_label_to_flow(self, profileid, twid, uid, module_name, module_label):
         """
         Add a module label to the flow
         """
@@ -918,18 +931,18 @@ class Database(object):
         if flow:
             data = json.loads(flow[uid])
             # here we dont care if add new module lablel or changing existing one
-            data['modules_labels'][module_name] = module_label
+            data['module_labels'][module_name] = module_label
             data = json.dumps(data)
             self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
 
-    def get_modules_labels_from_flow(self, profileid, twid, uid):
+    def get_module_labels_from_flow(self, profileid, twid, uid):
         """
         Get the label from the flow
         """
         flow = self.get_flow(profileid, twid, uid)
         if flow:
             data = json.loads(flow[uid])
-            labels = data['modules_labels']
+            labels = data['module_labels']
             return labels
         else:
             return {}
@@ -1151,6 +1164,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_blocking' in channel:
             pubsub.subscribe(channel)
+        elif 'new_ssh' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -1226,7 +1241,7 @@ class Database(object):
         data['appproto'] = appproto
         data['label'] = label
         # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
-        data['modules_labels'] = {}
+        data['module_labels'] = {}
 
         # Convert to json string
         data = json.dumps(data)
@@ -1319,9 +1334,51 @@ class Database(object):
         to_send['flow'] = data
         to_send = json.dumps(to_send)
         self.publish('new_http', to_send)
-        self.print('Adding HTTP flow to DB: {}'.format(data), 5,0)
+        self.print('Adding HTTP flow to DB: {}'.format(data), 5, 0)
         # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         self.publish('give_threat_intelligence', host + '-' + str(profileid) + '-' + str(twid) + '-'+ ' ')
+
+    def add_out_ssh(self, profileid, twid, flowtype, uid, ssh_version, auth_attempts, auth_success, client, server, cipher_alg, mac_alg, compression_alg, kex_alg, host_key_alg, host_key):
+        """
+        Store in the DB a SSH request
+
+        All the type of flows that are not netflows are stored in a
+        separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which
+        other type of info is related to that uid
+        """
+        #  {"client":"SSH-2.0-OpenSSH_8.1","server":"SSH-2.0-OpenSSH_7.5p1 Debian-5","cipher_alg":"chacha20-pol y1305@openssh.com","mac_alg":"umac-64-etm@openssh.com","compression_alg":"zlib@openssh.com","kex_alg":"curve25519-sha256","host_key_alg":"ecdsa-sha2-nistp256","host_key":"de:04:98:42:1e:2a:06:86:5b:f0:5b:e3:65:9f:9d:aa"}
+        data = {}
+        data['uid'] = uid
+        data['type'] = flowtype
+        data['version'] = ssh_version
+        data['auth_attempts'] = auth_attempts
+        data['auth_success'] = auth_success
+        data['client'] = client
+        data['server'] = server
+        data['cipher_alg'] = cipher_alg
+        data['mac_alg'] = mac_alg
+        data['compression_alg'] = compression_alg
+        data['kex_alg'] = kex_alg
+        data['host_key_alg'] = host_key_alg
+        data['host_key'] = host_key
+        # Convert to json string
+        data = json.dumps(data)
+
+        # Set the dns as alternative flow
+        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
+
+        # Publish the new dns received
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['flow'] = data
+        to_send = json.dumps(to_send)
+        # publish a dns with its flow
+        self.publish('new_ssh', to_send)
+
+        self.print('Adding SSH flow to DB: {}'.format(data), 5, 0)
+        # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
 
     def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """
@@ -1341,7 +1398,7 @@ class Database(object):
         data['ttls'] = ttls
         # Convert to json string
         data = json.dumps(data)
-        
+
         # Set the dns as alternative flow
         self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
 

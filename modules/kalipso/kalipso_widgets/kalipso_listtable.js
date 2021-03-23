@@ -2,15 +2,17 @@ var async = require('async')
 var fs = require('fs')
 
 class ListTable{
-  constructor(grid, blessed, contrib, redis_database,screen, characteristics){
+  constructor(grid, blessed, contrib, redis_database,screen, characteristics,limit_letter_outtuple=0){
       this.contrib = contrib
       this.screen = screen
       this.blessed = blessed
       this.grid = grid
       this.redis_database = redis_database
       this.widget = this.initListTable(characteristics);
+      this.limit_letter_outtuple = limit_letter_outtuple
       this.country_code = {}
       this.read_file().then(data=>{this.country_code = data})
+
 }
   initListTable(characteristics){
     return this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], this.blessed.listtable, {
@@ -192,7 +194,7 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
             var row = [];
             var tuple_info = json_outTuples[key];
             var outTuple_ip = key.split(':')[0];
-            var letters_string = tuple_info[0]
+            var letters_string = tuple_info[0].substr(0, this.limit_letter_outtuple)
             this.getIPInfo_dict(outTuple_ip)
             .then(ip_info_dict=>{
             this.redis_database.getDNSResolution(outTuple_ip).then(dns_resolution=>{
@@ -283,7 +285,7 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
             var row = [];
             var tuple_info = json_outTuples[key];
             var outTuple_ip = key.split(':')[0];
-            var letters_string = tuple_info[0]
+            var letters_string = tuple_info[0].substr(0, this.limit_letter_outtuple)
             this.getIPInfo_dict(outTuple_ip)
             .then(ip_info_dict=>{
               this.redis_database.getDNSResolution(outTuple_ip).then(dns_resolution=>{

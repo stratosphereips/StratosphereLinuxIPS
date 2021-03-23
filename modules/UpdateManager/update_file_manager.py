@@ -161,7 +161,7 @@ class UpdateFileManager:
                 malicious_file_info['e-tag'] = new_e_tag
                 malicious_file_info['time'] = self.new_update_time
                 __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
-                return False
+                return True
             elif not new_e_tag:
                 # Something failed. Do not download
                 self.print(f'Some error ocurred. Not downloading the file {file_to_download}', 0, 1)
@@ -190,14 +190,15 @@ class UpdateFileManager:
             self.print('Not Updating the remote file of maliciuos IPs and domains because the update period is <= 0.', 0, 1)
             return False
 
+        self.print('Checking if we need to download TI files.')
         # Check if the remote file is newer than our own
         # For each file that we should update
         for file_to_download in self.list_of_urls:
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
-                self.print(f'We should update the remote file {file_to_download}', 3, 0)
+                self.print(f'We should update the remote file {file_to_download}', 1, 0)
                 if self.__download_malicious_file(file_to_download):
-                    self.print(f'Successfully updated remote file {file_to_download}.', 3, 0)
+                    self.print(f'Successfully updated remote file {file_to_download}.', 1, 0)
                 else:
                     self.print(f'An error occured during downloading file {file_to_download}. Updating was aborted.', 0, 1)
                     continue
@@ -331,12 +332,15 @@ class UpdateFileManager:
                     # Separate the lines like CSV
                     # In the new format the ip is in the second position.
                     # And surronded by "
-                    data = line.replace("\n","").replace("\"","").split(",")[data_column].strip()
+                    data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
 
-                    description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
-                    self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
+                    try:
+                        description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
+                    except IndexError:
+                        self.print(f'IndexError Description column: {description_column}. Line: {line}')
+                    self.print('\tRead Data {}: {}'.format(data, description), 10, 0)
 
-                    # Check if ip is valid.
+                    # Check if the data is a valid IPv4, IPv6 or domain
                     try:
                         ip_address = ipaddress.IPv4Address(data)
                         # Is IPv4!

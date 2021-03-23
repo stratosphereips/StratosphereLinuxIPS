@@ -1,7 +1,10 @@
 # Stratosphere Linux IPS (Slips) Version 0.7.1
 
 Slips is a behavioral-based Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels to provide good visualisation for the analyst.
-Slips is a modular software 
+Slips is a modular software.
+
+## Example
+![](slips-kalipso.gif)
 
 # Installation
 
@@ -11,7 +14,7 @@ Now Slips can be run inside a docker if you want to analyze flow or pcap files. 
 
 ### From the Docker Hub
 
-	docker run -it --rm --net=host stratosphereips/slips:v0.7.1
+    docker run -it --rm --net=host stratosphereips/slips:latest
 	./slips.py -c slips.conf -f dataset/test3.binetflow
 
 
@@ -19,7 +22,7 @@ Now Slips can be run inside a docker if you want to analyze flow or pcap files. 
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
-	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:v0.7.1
+	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
 	./slips.py -c slips.conf -f dataset/myfile.pcap
 
 
@@ -77,6 +80,7 @@ With npm you should install the following libraries
 	- npm install clipboardy 
 	- npm install fs
 	- npm install sorted-array-async
+    - npm install yargs
 
 #### To run redis
 
@@ -195,6 +199,8 @@ Modules are Python-based files that allow any developer to extend the functional
 	_timeline_ - module to create a timeline of what happened in the network based on all the 	  flows and type of data available
 	_VirusTotal_ - module to lookup IP address on VirusTotal
 	_Kalipso_ - graphical user interface to display analyzed traffic by Slips
+	_Long Flows - In the module that analyzes individual flows. It check if a flow is too long
+	_SSH Success - In the  module that analyzes individual flows. It checks if the SSH connections were successful. Uses Zeek method and Slips method.
 The behavioral models are stored in the __models__ folder and will be updated regularly. In this version you should pull the git repository by hand to update the models.
 
 The core of the Slips program is not only the machine learning algorithm, but more importantly the __behavioral models__ that are used to describe flows based on flows' duration, size, and periodicty. This is very important because the models are _curated_ to maximize the detection. More about behavioral models is in [Stratosphere Testing Framework].
@@ -256,6 +262,10 @@ pip
 redis               3.2.1
 
 
+# TroubleShooting
+In dockers running on CPU that dont support AVX, importing tensorflow may fail. In that case you need to uninstall tensoflow and install a wheel file without AVX, such as 
+    
+    https://tf.novaal.de/barcelona/tensorflow-2.4.1-cp37-cp37m-linux_x86_64.whl
 
 
 ### Author and Contributors

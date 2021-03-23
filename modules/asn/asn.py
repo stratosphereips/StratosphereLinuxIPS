@@ -9,6 +9,7 @@ import platform
 # Your imports
 import time
 import maxminddb
+import ipaddress
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -74,9 +75,10 @@ class Module(Module, multiprocessing.Process):
                     # The first message comes with data=1
                     if type(ip) == str:
                         data = __database__.getIPData(ip)
+                        ip_addr = ipaddress.ip_address(ip)
                         # If we alredy have the country for this ip, do not ask the file
                         # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
-                        if (data or data == {}) and 'asn' not in data:
+                        if (data or data == {}) and 'asn' not in data and not ip_addr.is_multicast:
                             asninfo = self.reader.get(ip)
                             if asninfo:
                                 try:

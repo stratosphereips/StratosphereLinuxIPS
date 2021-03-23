@@ -1,0 +1,412 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Stratosphere Linux IPS (Slips) Version 0.7.1 &#8212; Slips 0.7.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="stratosphere-linux-ips-slips-version-0-7-1">
+<h1>Stratosphere Linux IPS (Slips) Version 0.7.1<a class="headerlink" href="#stratosphere-linux-ips-slips-version-0-7-1" title="Permalink to this headline">¶</a></h1>
+<p>Slips is a behavioral-based Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels to provide good visualisation for the analyst.
+Slips is a modular software.</p>
+<div class="section" id="example">
+<h2>Example<a class="headerlink" href="#example" title="Permalink to this headline">¶</a></h2>
+<p><img alt="slips-kalipso.gif" src="slips-kalipso.gif" /></p>
+</div>
+</div>
+<div class="section" id="installation">
+<h1>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="running-in-a-docker">
+<h2>Running in a Docker<a class="headerlink" href="#running-in-a-docker" title="Permalink to this headline">¶</a></h2>
+<p>Now Slips can be run inside a docker if you want to analyze flow or pcap files. If you need to analyze the traffic of your computer (access to the network card) then, for now, you need to install Slips in your own computer.</p>
+<div class="section" id="from-the-docker-hub">
+<h3>From the Docker Hub<a class="headerlink" href="#from-the-docker-hub" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">docker</span> <span class="n">run</span> <span class="o">-</span><span class="n">it</span> <span class="o">--</span><span class="n">rm</span> <span class="o">--</span><span class="n">net</span><span class="o">=</span><span class="n">host</span> <span class="n">stratosphereips</span><span class="o">/</span><span class="n">slips</span><span class="p">:</span><span class="n">latest</span>
+<span class="o">./</span><span class="n">slips</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">c</span> <span class="n">slips</span><span class="o">.</span><span class="n">conf</span> <span class="o">-</span><span class="n">f</span> <span class="n">dataset</span><span class="o">/</span><span class="n">test3</span><span class="o">.</span><span class="n">binetflow</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="if-you-want-to-share-files-between-your-host-and-the-docker-you-can-do">
+<h3>If you want to share files between your host and the docker, you can do:<a class="headerlink" href="#if-you-want-to-share-files-between-your-host-and-the-docker-you-can-do" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mkdir</span> <span class="o">~/</span><span class="n">dataset</span>
+<span class="n">cp</span> <span class="o">&lt;</span><span class="n">some</span><span class="o">-</span><span class="n">place</span><span class="o">&gt;/</span><span class="n">myfile</span><span class="o">.</span><span class="n">pcap</span> <span class="o">~/</span><span class="n">dataset</span>
+<span class="n">docker</span> <span class="n">run</span> <span class="o">-</span><span class="n">it</span> <span class="o">--</span><span class="n">rm</span> <span class="o">--</span><span class="n">net</span><span class="o">=</span><span class="n">host</span> <span class="o">-</span><span class="n">v</span> <span class="o">~/</span><span class="n">dataset</span><span class="p">:</span><span class="o">/</span><span class="n">StratosphereLinuxIPS</span><span class="o">/</span><span class="n">dataset</span> <span class="n">stratosphereips</span><span class="o">/</span><span class="n">slips</span><span class="p">:</span><span class="n">latest</span>
+<span class="o">./</span><span class="n">slips</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">c</span> <span class="n">slips</span><span class="o">.</span><span class="n">conf</span> <span class="o">-</span><span class="n">f</span> <span class="n">dataset</span><span class="o">/</span><span class="n">myfile</span><span class="o">.</span><span class="n">pcap</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="build-the-docker-from-the-dockerfile">
+<h2>Build the docker from the Dockerfile<a class="headerlink" href="#build-the-docker-from-the-dockerfile" title="Permalink to this headline">¶</a></h2>
+<p>To build the docker locally from the Docker file, you can do as follows (we use –no-cache so the git clone is done all the time).
+If you cloned StratosphereLinuxIPS in ‘~/code/StratosphereLinuxIPS’, then you can build the Docker image with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="n">docker</span>
+<span class="n">docker</span> <span class="n">build</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">cache</span> <span class="o">-</span><span class="n">t</span> <span class="n">slips</span> <span class="o">-</span><span class="n">f</span> <span class="n">Dockerfile</span> <span class="o">.</span>
+<span class="n">docker</span> <span class="n">run</span> <span class="o">-</span><span class="n">it</span> <span class="o">--</span><span class="n">rm</span> <span class="o">--</span><span class="n">net</span><span class="o">=</span><span class="n">host</span> <span class="o">-</span><span class="n">v</span> <span class="o">~/</span><span class="n">code</span><span class="o">/</span><span class="n">StratosphereLinuxIPS</span><span class="o">/</span><span class="n">dataset</span><span class="p">:</span><span class="o">/</span><span class="n">StratosphereLinuxIPS</span><span class="o">/</span><span class="n">dataset</span> <span class="n">slips</span>
+<span class="o">./</span><span class="n">slips</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">c</span> <span class="n">slips</span><span class="o">.</span><span class="n">conf</span> <span class="o">-</span><span class="n">f</span> <span class="n">dataset</span><span class="o">/</span><span class="n">test3</span><span class="o">.</span><span class="n">binetflow</span>
+</pre></div>
+</div>
+<p>You can now put pcap files or other flow files in the ./dataset/ folder and analyze them</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cp</span> <span class="n">some</span><span class="o">-</span><span class="n">pcap</span><span class="o">-</span><span class="n">file</span><span class="o">.</span><span class="n">pcap</span> <span class="o">~/</span><span class="n">code</span><span class="o">/</span><span class="n">StratosphereLinuxIPS</span><span class="o">/</span><span class="n">dataset</span>
+<span class="n">docker</span> <span class="n">run</span> <span class="o">-</span><span class="n">it</span> <span class="o">--</span><span class="n">rm</span> <span class="o">--</span><span class="n">net</span><span class="o">=</span><span class="n">host</span> <span class="o">-</span><span class="n">v</span> <span class="o">../</span><span class="n">dataset</span><span class="o">/</span><span class="p">:</span><span class="o">/</span><span class="n">StratosphereLinuxIPS</span><span class="o">/</span><span class="n">dataset</span> <span class="n">slips</span>
+<span class="o">./</span><span class="n">slips</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">c</span> <span class="n">slips</span><span class="o">.</span><span class="n">conf</span> <span class="o">-</span><span class="n">f</span> <span class="n">dataset</span><span class="o">/</span><span class="n">some</span><span class="o">-</span><span class="n">pcap</span><span class="o">-</span><span class="n">file</span><span class="o">.</span><span class="n">pcap</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="install-in-your-computer-completely">
+<h2>Install in your computer completely<a class="headerlink" href="#install-in-your-computer-completely" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="clone-the-repo">
+<h2>Clone the repo<a class="headerlink" href="#clone-the-repo" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">stratosphereips</span><span class="o">/</span><span class="n">StratosphereLinuxIPS</span><span class="o">.</span><span class="n">git</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="install-dependencies">
+<h2>Install Dependencies<a class="headerlink" href="#install-dependencies" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">-</span> <span class="n">python</span> <span class="mf">3.7</span><span class="o">+</span>
+<span class="o">-</span> <span class="n">Redis</span> <span class="n">database</span> <span class="p">(</span><span class="n">In</span> <span class="n">debian</span><span class="o">/</span><span class="n">ubuntu</span><span class="p">:</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="n">redis</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">upgrade</span> <span class="n">pip</span> <span class="p">(</span><span class="n">Be</span> <span class="n">sure</span> <span class="n">your</span> <span class="n">pip3</span> <span class="ow">is</span> <span class="n">the</span> <span class="n">latest</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">redis</span> <span class="p">(</span><span class="o">&gt;</span><span class="mf">3.4</span><span class="o">.</span><span class="n">x</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">maxminddb</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">watchdog</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">validators</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">urllib3</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">sklearn</span> <span class="p">(</span><span class="k">for</span> <span class="n">the</span> <span class="n">ML</span> <span class="n">modules</span><span class="p">,</span> <span class="n">ignore</span> <span class="k">if</span> <span class="n">you</span> <span class="n">ignore</span> <span class="n">the</span> <span class="n">package</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">numpy</span> <span class="p">(</span><span class="k">for</span> <span class="n">the</span> <span class="n">ML</span> <span class="n">modules</span><span class="p">,</span> <span class="n">ignore</span> <span class="k">if</span> <span class="n">you</span> <span class="n">ignore</span> <span class="n">the</span> <span class="n">package</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">tensorflow</span> <span class="p">(</span><span class="k">for</span> <span class="n">the</span> <span class="n">ML</span> <span class="n">modules</span><span class="p">,</span> <span class="n">ignore</span> <span class="k">if</span> <span class="n">you</span> <span class="n">ignore</span> <span class="n">the</span> <span class="n">package</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">keras</span> <span class="p">(</span><span class="k">for</span> <span class="n">the</span> <span class="n">ML</span> <span class="n">modules</span><span class="p">,</span> <span class="n">ignore</span> <span class="k">if</span> <span class="n">you</span> <span class="n">ignore</span> <span class="n">the</span> <span class="n">package</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">pandas</span> <span class="p">(</span><span class="k">for</span> <span class="n">the</span> <span class="n">ML</span> <span class="n">modules</span><span class="p">,</span> <span class="n">ignore</span> <span class="k">if</span> <span class="n">you</span> <span class="n">ignore</span> <span class="n">the</span> <span class="n">package</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">certifi</span> <span class="p">(</span><span class="k">for</span> <span class="n">the</span> <span class="n">VirusTotal</span> <span class="n">module</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">colorama</span>
+<span class="o">-</span> <span class="n">Zeek</span> <span class="p">(</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">zeek</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">get</span><span class="o">-</span><span class="n">zeek</span><span class="o">/</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For using Kalipso interface you need to have:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">-</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="n">node</span><span class="o">.</span><span class="n">js</span>
+<span class="o">-</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="n">npm</span>
+</pre></div>
+</div>
+<p>With npm you should install the following libraries</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">-</span> <span class="n">npm</span> <span class="n">install</span> <span class="n">blessed</span>
+<span class="o">-</span> <span class="n">npm</span> <span class="n">install</span> <span class="n">blessed</span><span class="o">-</span><span class="n">contrib</span>
+<span class="o">-</span> <span class="n">npm</span> <span class="n">install</span> <span class="n">redis</span>
+<span class="o">-</span> <span class="n">npm</span> <span class="n">install</span> <span class="k">async</span>
+<span class="o">-</span> <span class="n">npm</span> <span class="n">install</span> <span class="n">chalk</span>
+<span class="o">-</span> <span class="n">npm</span> <span class="n">install</span> <span class="n">strip</span><span class="o">-</span><span class="n">ansi</span>
+<span class="o">-</span> <span class="n">npm</span> <span class="n">install</span> <span class="n">clipboardy</span> 
+<span class="o">-</span> <span class="n">npm</span> <span class="n">install</span> <span class="n">fs</span>
+<span class="o">-</span> <span class="n">npm</span> <span class="n">install</span> <span class="nb">sorted</span><span class="o">-</span><span class="n">array</span><span class="o">-</span><span class="k">async</span>
+<span class="o">-</span> <span class="n">npm</span> <span class="n">install</span> <span class="n">yargs</span>
+</pre></div>
+</div>
+<div class="section" id="to-run-redis">
+<h3>To run redis<a class="headerlink" href="#to-run-redis" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">-</span> <span class="n">In</span> <span class="n">Linux</span><span class="p">,</span> <span class="k">as</span> <span class="n">a</span> <span class="n">daemon</span><span class="p">:</span> <span class="n">redis</span><span class="o">-</span><span class="n">server</span> <span class="o">--</span><span class="n">daemonize</span> <span class="n">yes</span>
+<span class="o">-</span> <span class="n">In</span> <span class="n">macOS</span><span class="p">,</span> <span class="k">as</span> <span class="n">a</span> <span class="n">daemon</span><span class="p">:</span> <span class="n">sudo</span> <span class="n">port</span> <span class="n">load</span> <span class="n">redis</span>
+<span class="o">-</span> <span class="n">By</span> <span class="n">hand</span> <span class="ow">and</span> <span class="n">leaving</span> <span class="n">redis</span> <span class="n">running</span> <span class="n">on</span> <span class="n">the</span> <span class="n">console</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">foreground</span><span class="p">:</span> <span class="n">redis</span><span class="o">-</span><span class="n">server</span> <span class="o">/</span><span class="n">opt</span><span class="o">/</span><span class="n">local</span><span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">redis</span><span class="o">.</span><span class="n">conf</span>
+</pre></div>
+</div>
+<div class="section" id="installation-of-zeek-bro">
+<h4>Installation of Zeek (Bro)<a class="headerlink" href="#installation-of-zeek-bro" title="Permalink to this headline">¶</a></h4>
+<p>Slips uses Zeek to generate files for most input types.</p>
+<ul>
+<li><p class="first">How to install and set Zeek (Bro) properly?</p>
+<ul>
+<li><p class="first">Download a binary package ready for your system. Complete up to date instructions here https://zeek.org/get-zeek/</p>
+</li>
+<li><p class="first">Make Zeek visible for Slips. Some ideas:</p>
+<ul>
+<li><p class="first">Create a link to “/bin” folder from compiled Zeek folder like</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="s2">&quot;sudo ln -s /opt/zeek/bin/zeek /usr/local/bin&quot;</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="s2">&quot;sudo ln -s PATH_TO_COMPILED_ZEEK_FOLDER/bin/zeek /usr/local/bin&quot;</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="section" id="fast-usage-in-your-own-traffic">
+<h1>Fast usage in your own traffic<a class="headerlink" href="#fast-usage-in-your-own-traffic" title="Permalink to this headline">¶</a></h1>
+<ol class="simple">
+<li>Start Redis: <code class="docutils literal notranslate"><span class="pre">redis-server</span> <span class="pre">--daemonize</span> <span class="pre">yes</span></code></li>
+<li>Run Slips: <code class="docutils literal notranslate"><span class="pre">./slips.py</span> <span class="pre">-c</span> <span class="pre">slips.conf</span> <span class="pre">-i</span> <span class="pre">&lt;interface&gt;</span></code> (be sure you use python3)</li>
+<li>Use Kalipso to see the results
+a. ./kalipso.sh
+b. Optionally run slips with -G to start Kalipso automatically</li>
+<li>Local logs are stored in the folder called with the date of today. All files are updated every 5 seconds.</li>
+</ol>
+<p>Requirements to capture your own traffic:</p>
+<ul class="simple">
+<li>curl<ul>
+<li>In debian/ubuntu: <code class="docutils literal notranslate"><span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">curl</span></code></li>
+</ul>
+</li>
+<li>get authorization to zeek to capture the traffic in the linux interface:<ul>
+<li><code class="docutils literal notranslate"><span class="pre">setcap</span> <span class="pre">cap_net_raw,cap_net_admin=eip</span> <span class="pre">/usr/local/zeek/bin/zeek</span></code></li>
+</ul>
+</li>
+</ul>
+</div>
+<hr class="docutils" />
+<div class="section" id="architecture-of-operation">
+<h1>Architecture of operation<a class="headerlink" href="#architecture-of-operation" title="Permalink to this headline">¶</a></h1>
+<p>Slips works at a flow level, instead of a packet level, gaining a high level view of behaviors. Slips creates traffic profiles for each IP address that appears in the traffic. A profile contains the complete behavior of an IP address. Each profile is divided into time windows. Each time window is 1 hour long by default and contains dozens of features computed for all connections that start in that time window. Detections are done in each time window, allowing the profile to be marked as uninfected in the next time window.</p>
+<p>#Slips processes
+When Slips is run, it spawns several child processes to manage the I/O, to profile attackers and to run the detection modules. It also connects to the Redis database to store all the information. In order to detect attacks, Slips runs its Kalipso interface.</p>
+</div>
+<div class="section" id="the-concept-of-time-in-slips">
+<h1>The concept of time in slips<a class="headerlink" href="#the-concept-of-time-in-slips" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li>Every time we receive something, we update the TW modification time in a new redis ordered set (zset) (the old is not used). This set has the TW id and the time of last modification. The TW in this zset are never deleted.</li>
+<li>We update the slips_internal_time, every time we receive anything</li>
+<li>Every 5 seconds, slips.py, retrieves the sublist of TW from the zset that were modified in the last “time window width” (default 1hs).</li>
+<li>This list of TW that were modified is used to print the statistics and as part of the set_host_ip check in slips.py.</li>
+<li>In theory if a TW was not modifed in the last hs, then it should not appear in the list, which decreases until no TW was modified for some rounds, and we stop slips.</li>
+</ul>
+<div class="section" id="timeout-of-traffic">
+<h2>Timeout of traffic<a class="headerlink" href="#timeout-of-traffic" title="Permalink to this headline">¶</a></h2>
+<p>Zeek has a parameter called “tcp_inactivity_timeout”. By default is 5 minutes, like in TCP. However, it may happen that due to different circonstances there is more than 5 minutes delay between packets (even in normal connections from Google). Since Slips usually has a time window width of 1hs, it can wait more until having the complete flow. For this reason Slips modifies the “tcp_inactivity_timeout” to be 1hs.</p>
+</div>
+<div class="section" id="input-data">
+<h2>Input Data<a class="headerlink" href="#input-data" title="Permalink to this headline">¶</a></h2>
+<p>The input process reads flows of different types:
+-Pcap files (internally using Zeek)
+-Packets directly from an interface (internally using Zeek)
+-Suricata flows (from JSON files created by Suricata, such as eve.json)
+-Argus flows (CSV file separated by commas or TABs)
+-Zeek/Bro flows from a Zeek folder with log files
+-Nfdump flows from a binary nfdump file
+All the input flows are converted to an internal format. So once read, Slips works the same with all of them.</p>
+</div>
+<div class="section" id="output">
+<h2>Output<a class="headerlink" href="#output" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="text-output">
+<h2>Text Output<a class="headerlink" href="#text-output" title="Permalink to this headline">¶</a></h2>
+<p>The output process collects output from the modules and handles collected data display. Currently Slips creates log files as an output and runs a graphical user interface Kalipso.</p>
+<p>The log files of Slips are stored in a folder called as the current date-time. So that multiple executions will not override the results. Inside this folder there is a folder per a IP address that is being profiled. See Section <em>Architecture of Operation</em> to understand which IP addresses are converted into profiles. Apart from the folders of the profiles, some files are created in this folder containing information about the complete capture, such as <em>Blocked.txt</em> that has information about all the IP addresses that were detected and blocked.</p>
+<p>Inside the folder of each profile there are three types of files: time window files, timeline file and profile file.</p>
+<div class="section" id="time-window-files">
+<h3>Time window files<a class="headerlink" href="#time-window-files" title="Permalink to this headline">¶</a></h3>
+<p>Each of these files contains all the features extracted for this time window and its name is the start-time of the time window.</p>
+</div>
+<div class="section" id="timeline-file">
+<h3>Timeline file<a class="headerlink" href="#timeline-file" title="Permalink to this headline">¶</a></h3>
+<p>The timeline file is created by the timeline module and is a unique file interpreting what this profile IP address did.</p>
+</div>
+<div class="section" id="profile-file">
+<h3>Profile file<a class="headerlink" href="#profile-file" title="Permalink to this headline">¶</a></h3>
+<p>This file contains generic features of the profile that are not part of any individual time-window, such as information about its Ethernet MAC address.</p>
+</div>
+</div>
+</div>
+<div class="section" id="history-of-slips">
+<h1>History of Slips<a class="headerlink" href="#history-of-slips" title="Permalink to this headline">¶</a></h1>
+<p>This is the new version of the Stratosphere IPS, a behavioral-based intrusion detection and prevention system that uses machine learning algorithms to detect malicious behaviors. It is part of a larger suite of programs that include the <a class="reference external" href="https://github.com/stratosphereips/StratosphereIps">Stratosphere Windows IPS</a> and the <a class="reference external" href="https://github.com/stratosphereips/StratosphereTestingFramework">Stratosphere Testing Framework</a>.</p>
+<div class="section" id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Permalink to this headline">¶</a></h2>
+<p>Example of specific usage: Slips can be used by passing input files:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">slips</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">c</span> <span class="n">slips</span><span class="o">.</span><span class="n">conf</span> <span class="o">-</span><span class="n">f</span> <span class="n">dataset</span><span class="o">/</span><span class="n">test3</span><span class="o">.</span><span class="n">binetflow</span><span class="p">,</span> <span class="n">where</span> <span class="o">-</span><span class="n">c</span> <span class="ow">is</span> <span class="n">the</span> <span class="n">configuration</span> <span class="n">file</span><span class="p">,</span> <span class="o">-</span><span class="n">f</span> <span class="ow">is</span> <span class="n">the</span> <span class="n">binetflow</span> <span class="nb">input</span> <span class="n">file</span>
+</pre></div>
+</div>
+<p>Other parameters for different input types:
+-r is for pcap
+-f &lt;filename: is for binetflow files
+-f &lt;folder name: for zeek folders with log files
+-b is for nfdump
+-i interface</p>
+<p>To read your own packets you can do:
+sudo ./slips.py -c slips.conf -i <interface></p>
+</div>
+<div class="section" id="kalipso">
+<h2>Kalipso<a class="headerlink" href="#kalipso" title="Permalink to this headline">¶</a></h2>
+<p>Kalipso is the Nodejs-based console interface of Slips. It works by reading the Redis datbase and showing you the results. You start it automatically by running Slips with -G option or manually by <code class="docutils literal notranslate"><span class="pre">node</span> <span class="pre">ips_timewindows.js</span></code> from StratosphereLinuxIPS/modules/blessed. You can exit Kalipso by pressing q or Control-C.</p>
+</div>
+<div class="section" id="detection-models">
+<h2>Detection Models<a class="headerlink" href="#detection-models" title="Permalink to this headline">¶</a></h2>
+<p>Modules are Python-based files that allow any developer to extend the functionality of Slips. They process and analyze data, perform additional detections and store data in Redis for other modules to consume. Currenty, Slips has the following modules:
+<em>asn</em> - module to load and find the ASN of each IP
+<em>geoip</em> - module to find the country and geolocation information of each IP
+<em>https</em> - module to train or test a RandomForest to detect malicious https flows
+<em>port scan detector</em> - module to detect Horizontal and Vertical port scans
+<em>threat Intelligence</em> - module to check if each IP is in a list of malicious IPs
+<em>timeline</em> - module to create a timeline of what happened in the network based on all the 	  flows and type of data available
+<em>VirusTotal</em> - module to lookup IP address on VirusTotal
+<em>Kalipso</em> - graphical user interface to display analyzed traffic by Slips
+_Long Flows - In the module that analyzes individual flows. It check if a flow is too long
+_SSH Success - In the  module that analyzes individual flows. It checks if the SSH connections were successful. Uses Zeek method and Slips method.
+The behavioral models are stored in the <strong>models</strong> folder and will be updated regularly. In this version you should pull the git repository by hand to update the models.</p>
+<p>The core of the Slips program is not only the machine learning algorithm, but more importantly the <strong>behavioral models</strong> that are used to describe flows based on flows’ duration, size, and periodicty. This is very important because the models are <em>curated</em> to maximize the detection. More about behavioral models is in <a class="reference external" href="https://github.com/stratosphereips/StratosphereTestingFramework">Stratosphere Testing Framework</a>.</p>
+</div>
+<div class="section" id="the-use-of-verbose-v">
+<h2>The use of verbose (-v)<a class="headerlink" href="#the-use-of-verbose-v" title="Permalink to this headline">¶</a></h2>
+<p>[rewrite]</p>
+<div class="section" id="where-does-it-work">
+<h3>Where does it work<a class="headerlink" href="#where-does-it-work" title="Permalink to this headline">¶</a></h3>
+<p>[rewrite]</p>
+<ul class="simple">
+<li>Slips runs in<ul>
+<li>Ubuntu 16.04+</li>
+<li>Debian stable/testing/unstable</li>
+<li>MacOS 10.9.5, 10.10.x to 10.12.x</li>
+</ul>
+</li>
+<li>To try:<ul>
+<li>Android</li>
+<li>IOS</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="roadmap">
+<h3>Roadmap<a class="headerlink" href="#roadmap" title="Permalink to this headline">¶</a></h3>
+<p>[rewrite]</p>
+</div>
+<div class="section" id="current-status">
+<h3>Current status<a class="headerlink" href="#current-status" title="Permalink to this headline">¶</a></h3>
+<p>We are developing a new module <em>lstm-cc-detection</em>. This is a module to detect command and control channels using LSTM neural network and the stratosphere behavioral letters</p>
+</div>
+</div>
+</div>
+<div class="section" id="common-errors">
+<h1>Common errors<a class="headerlink" href="#common-errors" title="Permalink to this headline">¶</a></h1>
+<ul>
+<li><p class="first">If you see the error</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Error in run() of timeout must be non-negative
+&lt;class &#39;ValueError&#39;&gt;
+timeout must be non-negative
+</pre></div>
+</div>
+</li>
+</ul>
+<p>It means that you have an older version of the xxx library. Please update to version &gt;</p>
+<p>Fails
+python3-redis 3.0.1
+python3-redis 3.3.11
+ii  redis-server                              5:5.0.2-1                                amd64        Persistent key-value database with network interface
+ii  redis-server                              5:5.0.6-1                                amd64        Persistent key-value database with network interface</p>
+<p>Works
+redis (2.10.5)</p>
+<p>VM
+apt
+python3-redis 3.3.11
+ii  redis-server                              5:5.0.6-1                            amd64        Persistent key-value database with network interface</p>
+<p>jin
+apt
+ii  redis-server                              4:4.0.1-7                            amd64        Persistent key-value database with network interface
+pip
+redis               3.2.1</p>
+</div>
+<div class="section" id="troubleshooting">
+<h1>TroubleShooting<a class="headerlink" href="#troubleshooting" title="Permalink to this headline">¶</a></h1>
+<p>In dockers running on CPU that dont support AVX, importing tensorflow may fail. In that case you need to uninstall tensoflow and install a wheel file without AVX, such as</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">tf</span><span class="o">.</span><span class="n">novaal</span><span class="o">.</span><span class="n">de</span><span class="o">/</span><span class="n">barcelona</span><span class="o">/</span><span class="n">tensorflow</span><span class="o">-</span><span class="mf">2.4</span><span class="o">.</span><span class="mi">1</span><span class="o">-</span><span class="n">cp37</span><span class="o">-</span><span class="n">cp37m</span><span class="o">-</span><span class="n">linux_x86_64</span><span class="o">.</span><span class="n">whl</span>
+</pre></div>
+</div>
+<div class="section" id="author-and-contributors">
+<h2>Author and Contributors<a class="headerlink" href="#author-and-contributors" title="Permalink to this headline">¶</a></h2>
+<p>[rewrite]</p>
+<ul class="simple">
+<li>Main author: Sebastian Garcia. sebastian.garcia&#64;agents.fel.cvut.cz, eldraco&#64;gmail.com.</li>
+<li>Ondrej Lukas: During the original slips code, he worked on the new detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classes, etc.</li>
+<li>Frantisek Strasak. Work on all the new version of slips, features, output, core and the https Machine Learning detection module. (https://github.com/frenky-strasak)</li>
+<li>Dita hollmannova: Worked in the VirusTotal module and the Whois modul. (dita.hollmannova&#64;gmail.com)</li>
+<li>Kamila Babayeva: Implemented the NodeJS interface (kamifai14&#64;gmail.com)</li>
+<li>Elaheh Biglar Beigi</li>
+<li>MariaRigaki</li>
+<li>kartik88363</li>
+<li>arkamar</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Slips</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Stratosphere Laboratory.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a>
+      
+      |
+      <a href="_sources/slips.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

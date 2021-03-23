@@ -88,7 +88,7 @@
             var row = [];
             var timeline_json = JSON.parse(timeline)
 
-			var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version']
+			var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version', 'Login', 'Auth attempts','Server','Client']
 			var pink_keywords_parameter = ['dns_resolution']
             var red_keywords = ['critical warning' ]
             var orange_keywords = ['Sent','Recv','Tot','Size','Type']

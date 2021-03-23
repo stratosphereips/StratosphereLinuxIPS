@@ -1,12 +1,29 @@
+# Stratosphere Linux IPS. A machine-learning Intrusion Detection System
+# Copyright (C) 2021 Sebastian Garcia
+
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 import multiprocessing
 from slips.core.database import __database__
 import json
 from datetime import datetime
-from datetime import timedelta
 import ast
 import configparser
 import platform
 from colorama import init
+from os import path
 from colorama import Fore, Back, Style
 
 
@@ -30,6 +47,8 @@ class EvidenceProcess(multiprocessing.Process):
         self.read_configuration()
         # Subscribe to channel 'tw_modified'
         self.c1 = __database__.subscribe('evidence_added')
+        self.logfile = self.clean_evidence_log_file()
+        self.jsonfile = self.clean_evidence_json_file()
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -93,6 +112,53 @@ class EvidenceProcess(multiprocessing.Process):
             self.detection_threshold = 2
         self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)')
 
+    def print_evidence(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
+        '''
+        Function to display evidence according to the detection module.
+        :return : string with a correct evidence displacement
+        '''
+        evidence_string = ''
+        dns_resolution_detection_info = __database__.get_dns_resolution(detection_info)
+        dns_resolution_detection_info_final = dns_resolution_detection_info[0:3] if dns_resolution_detection_info else ''
+        dns_resolution_ip = __database__.get_dns_resolution(ip)
+        dns_resolution_ip_final = dns_resolution_ip[0:3] if dns_resolution_detection_info else ''
+
+        if detection_module == 'ThreatIntelligenceBlacklistIP':
+            if detection_type == 'dstip':
+                evidence_string = f'Infected IP {ip} connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
+
+            elif detection_type == 'srcip':
+                evidence_string = f'Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}. '
+
+        elif detection_module == 'ThreatIntelligenceBlacklistDomain':
+            evidence_string = f'Detected domain: {detection_info} due to {description}.'
+
+        elif detection_module == 'LongConnection':
+            evidence_string = f'Detected IP {detection_info} {dns_resolution_detection_info_final} due to a {description}.'
+
+        elif detection_module == 'SSHSuccessful':
+            evidence_string = f'IP: {ip} did a successful SSH. {description}.'
+        else:
+            evidence_string = f'Detected IP: {ip} {dns_resolution_ip_final} due to {description}.'
+
+        return evidence_string
+
+    def clean_evidence_log_file(self):
+        '''
+        Clear the file if exists for evidence log
+        '''
+        if path.exists('alerts.log'):
+            open('alerts.log', 'w').close()
+        return open('alerts.log', 'a')
+
+    def clean_evidence_json_file(self):
+        '''
+        Clear the file if exists for evidence log
+        '''
+        if path.exists('alerts.json'):
+            open('alerts.json', 'w').close()
+        return open('alerts.json', 'a')
+
     def add_maliciousIP(self, ip='', profileid='', twid=''):
         '''
         Add malicious IP to DB 'MaliciousIPs' with a profileid and twid where it was met
@@ -113,6 +179,37 @@ class EvidenceProcess(multiprocessing.Process):
             ip_location = {}
         data = json.dumps(ip_location)
         __database__.add_malicious_ip(ip, data)
+
+    def addDataToJSONFile(self, data):
+        """
+        Add a new evidence line to the file.
+        """
+        try:
+            data_json = json.dumps(data)
+            self.jsonfile.write(data_json)
+            self.jsonfile.write('\n')
+            self.jsonfile.flush()
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            self.print('Error in addDataToJSONFile()')
+            self.print(type(inst))
+            self.print(inst)
+
+    def addDataToLogFile(self, data):
+        """
+        Add a new evidence line to the file.
+        """
+        try:
+            self.logfile.write(data)
+            self.logfile.write('\n')
+            self.logfile.flush()
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            self.print('Error in addDataToLogFile()')
+            self.print(type(inst))
+            self.print(inst)
 
     def add_maliciousDomain(self, domain='', profileid='', twid=''):
         '''
@@ -145,7 +242,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         ip_data = {}
         # Maybe we should change the key to 'status' or something like that.
-        ip_data['Malicious'] = ip_description
+        ip_data['threatintelligence'] = ip_description
         self.add_maliciousIP(ip, profileid, twid)
         __database__.setInfoForIPs(ip, ip_data)  # Set in the IP info that IP is blacklisted
 
@@ -160,7 +257,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         domain_data = {}
         # Maybe we should change the key to 'status' or something like that.
-        domain_data['Malicious'] = domain_description
+        domain_data['threatintelligence'] = domain_description
         self.add_maliciousDomain(domain, profileid, twid)
         __database__.setInfoForDomains(domain, domain_data)  # Set in the DomainsInfo info that Domain is blacklisted
 
@@ -172,15 +269,51 @@ class EvidenceProcess(multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
+                    self.logfile.close()
+                    self.jsonfile.close()
                     return True
                 elif message['channel'] == 'evidence_added':
                     # Get the profileid and twid
                     try:
-                        profileid = message['data'].split(':')[0]
-                        twid = message['data'].split(':')[1]
+
+                        message_data = message['data']
+                        profileid = message_data.split(self.separator)[0]+ self.separator + message_data.split(self.separator)[1]
+                        twid = message_data.split(self.separator)[2]
+
+                        # Separate new evidence, so it can be logged in alerts.log
+                        new_evidence_key = message_data.split(self.separator)[3]
+                        new_evidence_description = message_data.split(self.separator)[4]
+                        new_evidence_key_split = new_evidence_key.split(':')
+                        new_evidence_detection_type = new_evidence_key_split[0]
+                        new_evidence_detection_module = new_evidence_key_split[-1]
+                        new_evidence_detection_info = new_evidence_key[len(new_evidence_detection_type) + 1:-len(new_evidence_detection_module) - 1]  # In case of TI, this info is IP, in case of LSTM this is a tuple
+                        ip = profileid.split(self.separator)[1]
+
+                        now = datetime.now()
+                        current_time = now.strftime('%Y-%m-%d %H:%M:%S')
+
+                        evidence_to_log = self.print_evidence(profileid,
+                                                              twid,
+                                                              ip,
+                                                              new_evidence_detection_module,
+                                                              new_evidence_detection_type,
+                                                              new_evidence_detection_info,
+                                                              new_evidence_description)
+                        evidence_dict = {'timestamp': current_time, 'detected_ip': ip, 'detection_module':new_evidence_detection_module,  'detection_info':new_evidence_detection_type + ' ' + new_evidence_detection_info, "description":new_evidence_description}
+
+                        self.addDataToLogFile(current_time + ' ' + evidence_to_log)
+                        self.addDataToJSONFile(evidence_dict)
+
+                        # add detection info threat  intelligence in the IP and Domain info
+                        if new_evidence_detection_module == 'ThreatIntelligenceBlacklistIP':
+                            self.set_TI_IP_detection(new_evidence_detection_info, new_evidence_description, profileid, twid)
+                        elif new_evidence_detection_module == 'ThreatIntelligenceBlacklistDomain':
+                            self.set_TI_Domain_detection(new_evidence_detection_info, new_evidence_description, profileid, twid)
+
                     except AttributeError:
                         # When the channel is created the data '1' is sent
                         continue
+
                     evidence = __database__.getEvidenceForTW(profileid, twid)
                     # Important! It may happen that the evidence is not related to a profileid and twid.
                     # For example when the evidence is on some src IP attacking our home net, and we are not creating
@@ -217,26 +350,13 @@ class EvidenceProcess(multiprocessing.Process):
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
-
-                                if detection_module == 'ThreatIntelligenceBlacklistIP':
-                                    if detection_type == 'dstip':
-                                        self.print(f'{Fore.RED}\tInfected IP {ip} connected to blacklisted IP {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
-                                    elif detection_type == 'srcip':
-                                        self.print(f'{Fore.RED}\tDetected blacklisted IP {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
-                                    self.set_TI_IP_detection(detection_info, description, profileid, twid)
-
-                                elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-                                    self.print(f'{Fore.RED}\tDetected domain: {detection_info} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
-                                    self.set_TI_Domain_detection(detection_info, description, profileid, twid)
-
-                                elif detection_module == 'LongConnection':
-                                    self.print(f'{Fore.RED}\tDetected IP {detection_info} due to a {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
-                                else:
-                                    self.print(f'{Fore.RED}\tDetected IP: {ip} due to {description}. Accumulated evidence: {accumulated_threat_level}{Style.RESET_ALL}', 1, 0)
-
+                                evidence_to_print = self.print_evidence(profileid, twid, ip, detection_module, detection_type,detection_info, description)
+                                self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 __database__.publish('new_blocking', ip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
+            self.logfile.close()
+            self.jsonfile.close()
             self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
             return True
         except Exception as inst:
