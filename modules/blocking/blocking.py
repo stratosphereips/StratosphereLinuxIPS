@@ -61,6 +61,11 @@ class Module(Module, multiprocessing.Process):
             # Other systems
             self.timeout = None
 
+        # for debugging
+        #__database__.publish('new_blocking', "172.217.8.4")
+
+
+
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -118,11 +123,41 @@ class Module(Module, multiprocessing.Process):
         elif self.platform_system == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
 
-    def handle_stop_process_message(self, message):
-        pass
+    def block_ip_in_iptables(self,ip_to_block):
+        #TODO: determine wether to block traffic to or from the ip
+
+        # Blocking all traffic to and from ip_to_block
+        # -I to insert the rule at the top of the chain so it overrides any existing rule that may conflict
+        os.system('sudo iptables -I slipsBlocking -d' + ip_to_block + ' -j DROP')
+        os.system('sudo iptables -I slipsBlocking -s' + ip_to_block + ' -j DROP')
+        print("Blocked: " + ip_to_block)
 
     def block_ip(self,message):
+        """
+            This function determines the user's platform and firewall used and calls the appropriate function to add a rule to block the ip passed in message data
+        """
+
+        ip_to_block = message['data']
+        if type(ip_to_block) == str:
+            # Block this ip in iptables
+            if self.platform_system == 'Linux':
+                if self.firewall == 'iptables':
+                    # Blocking in iptables
+                    self.block_ip_in_iptables(ip_to_block)
+
+                elif self.firewall == 'nftables':
+                    # Blocking in nftables
+                    #TODO: create block_ip_in_nftables
+                    #TODO:create slipsBlocking table in nftables first. do that in  slips.py
+                    pass
+
+            elif self.platform_system == 'Darwin':
+                # Blocking in MacOS
+                self.print('Mac OS blocking is not supported yet.')
+
+    def handle_stop_process_message(self,message):
        pass
+
 
     def run(self):
         #TODO: handle MacOS
@@ -136,6 +171,7 @@ class Module(Module, multiprocessing.Process):
                     self.handle_stop_process_message(message)
                     return True
 
+                # There's an ip that needs to be blocked
                 if message['channel'] == 'new_blocking':
                    self.block_ip(message)
 
