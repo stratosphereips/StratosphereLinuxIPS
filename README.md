@@ -1,16 +1,19 @@
-<h2 align="center"> 
-![](slips_logo.png)<br>
+<h1 align="center"> 
+![Slips_logo](slips_logo.png)
+<br>
 Slips v0.7.1
-</h2>
+</h1>
 
 
-<h5 align="center"> 
+<h4 align="center"> 
 Behavioral based Intrusion Prevention System<br>
 
-[Introduction](#introduction) — [Slips in action](#slips-in-action) — [Running Slips in a Docker](#running-slips-in-a-docker) — [Authors and Contributors](#authors-and-contributors)
-</h5>
+Complete documentation of Slips is **[here](https://stratospherelinuxips.readthedocs.io/en/latest/) <br>
 
-## Introduciton
+[Introduction](#introduction) — [Slips in action](#slips-in-action) — [Running Slips in a Docker](#running-slips-in-a-docker) — [Authors and Contributors](#authors-and-contributors)
+</h4>
+
+## Introduction
 
 Stratosphere Linux IPS, shortly Slips, is a Python-based intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, to detect of command and control channels and to provide good visualisation for the analyst. Slips is able to analyze real live traffic from the device and the large network captures in the type of a pcap files, Suricata, Zeek/Bro and Argus flows. As a result, Slips highlights suspicious behaviour and connections that needs to be deeper analyzed. 
 
