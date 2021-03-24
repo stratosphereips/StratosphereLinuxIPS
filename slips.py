@@ -150,6 +150,17 @@ def load_modules(to_ignore):
 
     return plugins
 
+def determine_linux_firewall():
+    """ Returns the currently installed firewall and installs one if none was found """
+    if shutil.which('iptables'):
+        return 'iptables'
+    elif shutil.which('nftables'):
+        return 'nftables'
+    else:
+        # If no firewall is found download and use iptables
+        #TODO: maybe ask the user first?
+        os.sys("sudo apt install iptables")
+        return 'iptables'
 
 ####################
 # Main
@@ -213,8 +224,29 @@ if __name__ == '__main__':
     # If the user wants to blocks, the user needs to give a permission to modify iptables
     # Also check if the user blocks on interface, does not make sense to block on files
     if args.interface and args.blocking:
-        print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
-        os.system('sudo iptables -N slipsBlocking')
+        firewall = determine_linux_firewall()
+        #debug
+        firewall = 'nftables'
+        if firewall == 'iptables':
+            print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
+            # Add a new chain to iptables
+            os.system('sudo iptables -N slipsBlocking')
+
+            #TODO: determine which one to use OUTPUT INPUT or FORWARD
+
+            # Redirect the traffic from all other chains to slipsBlocking so rules in any pre-existing chains dont override it
+            # -I to insert slipsBlocking at the top of the INPUT, OUTPUT and FORWARD chains
+            os.system('sudo iptables -I INPUT -j slipsBlocking')
+            os.system('sudo iptables -I OUTPUT -j slipsBlocking')
+            os.system('sudo iptables -I FORWARD -j slipsBlocking')
+        elif firewall == 'nftables':
+            # Add a new nft table that uses the inet family (ipv4,ipv6)
+            print('Allow Slips to block malicious connections.\nExecuting "sudo nft add table inet slipsBlocking"')
+            os.system('sudo nft add table inet slipsBlocking')
+            pass
+            #TODO: HANDLE NFT TABLE
+
+
 
     """
     Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
