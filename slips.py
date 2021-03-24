@@ -452,9 +452,9 @@ if __name__ == '__main__':
 
     # If the user wants to blocks, the user needs to give a permission to modify iptables
     # Also check if the user blocks on interface, does not make sense to block on files
-    if args.interface and args.blocking and os.geteuid() != 0:
-        print('Run slips with sudo to enable the blocking module.')
-        shutdown_gracefully(input_information)
+    if args.interface and args.blocking:
+        print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
+        os.system('sudo iptables -N slipsBlocking')
 
     """
     Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
