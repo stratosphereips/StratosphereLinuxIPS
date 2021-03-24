@@ -20,6 +20,8 @@ import sys
 
 # Your imports
 import os
+import shutil
+
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -67,33 +69,66 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def determine_linux_firewall(self):
+        """ Returns the currently installed firewall and installs one if none was found """
+        if shutil.which('iptables'):
+            return 'iptables'
+        elif shutil.which('nftables'):
+            return 'nftables'
+        else:
+            # If no firewall is found download and use iptables
+            #TODO: maybe ask the user first?
+            os.sys("sudo apt install iptables")
+            return 'iptables'
+
+    def initialize_chains_in_firewall(self):
+        if self.platform_system == 'Linux':
+            # Get the user's currently installed firewall
+            self.firewall = self.determine_linux_firewall()
+            if self.firewall == 'iptables':
+                print('Executing "sudo iptables -N slipsBlocking"')
+                # Add a new chain to iptables
+                os.system('sudo iptables -N slipsBlocking')
+                #TODO: determine which one to use OUTPUT INPUT or FORWARD
+
+                # Redirect the traffic from all other chains to slipsBlocking so rules in any pre-existing chains dont override it
+                # -I to insert slipsBlocking at the top of the INPUT, OUTPUT and FORWARD chains
+                os.system('sudo iptables -I INPUT -j slipsBlocking')
+                os.system('sudo iptables -I OUTPUT -j slipsBlocking')
+                os.system('sudo iptables -I FORWARD -j slipsBlocking')
+
+            elif self.firewall == 'nftables':
+                print('Executing "sudo nft add table inet slipsBlocking"')
+                # Add a new nft table that uses the inet family (ipv4,ipv6)
+                os.system('sudo nft add table inet slipsBlocking')
+                #TODO: HANDLE NFT TABLE
+
+        elif self.platform_system == 'Darwin':
+            self.print('Mac OS blocking is not supported yet.')
+
+    def handle_stop_process_message(self, message):
+        pass
+
+    def block_ip(self,message):
+       pass
+
     def run(self):
+        #TODO: handle MacOS
+        self.initialize_chains_in_firewall()
         try:
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
-                    if self.platform_system == 'Linux':
-                        # Delete rules in slipsloking chain
-                        os.system('sudo iptables -F slipsBlocking')
-                        # Delete slipsBlocking chain from iptables
-                        os.system('sudo iptables -X slipsBlocking')
-                    elif self.platform_system == 'Darwin':
-                        self.print('Mac OS blocking is not supported yet.')
+                    self.handle_stop_process_message(message)
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
+
                     return True
+
                 if message['channel'] == 'new_blocking':
-                    ip_to_block = message['data']
-                    if type(ip_to_block) == str:
-                        # Block this ip in iptables
-                        if self.platform_system == 'Linux':
-                            # Blocking in Linux
-                            os.system('sudo iptables -A slipsBlocking -s ' + ip_to_block +' -j DROP')
-                        elif self.platform_system == 'Darwin':
-                            # Blocking in MacOS
-                            self.print('Mac OS blocking is not supported yet.')
+                   self.block_ip(message)
 
         except KeyboardInterrupt:
             return True
