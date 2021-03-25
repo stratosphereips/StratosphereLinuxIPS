@@ -21,9 +21,10 @@ import sys
 # Your imports
 import os
 import shutil
-
+import json
 
 class Module(Module, multiprocessing.Process):
+    # Data should be passed to this module as a json encoded python dict
     # Name: short name of the module. Do not use spaces
     name = 'blocking'
     description = 'Module to block IPs connecting to this device'
@@ -48,11 +49,6 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         self.c1 = __database__.subscribe('new_blocking')
         self.timeout = None
-
-        # for debugging
-        #__database__.publish('new_blocking', "172.217.8.4")
-
-
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -82,12 +78,13 @@ class Module(Module, multiprocessing.Process):
             return 'nftables'
         else:
             # If no firewall is found download and use iptables
-            #TODO: maybe ask the user first?
             os.sys("sudo apt install iptables")
             return 'iptables'
 
     def initialize_chains_in_firewall(self):
+
         """ For linux: Adds a chain to iptables or a table to nftables called slipsBlocking where all the rules will reside """
+
         if self.platform_system == 'Linux':
             # Get the user's currently installed firewall
             self.firewall = self.determine_linux_firewall()
@@ -113,33 +110,63 @@ class Module(Module, multiprocessing.Process):
         elif self.platform_system == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
 
-    def block_ip_in_iptables(self,ip_to_block):
-        """ Blocks the ip from iptables only """
-        #TODO: determine wether to block traffic to or from the ip
-
-        # Block traffic from destination ip_to_block (-d)
-        # -I to insert the rule at the top of the chain so it overrides any existing rule that may conflict
-        os.system('sudo iptables -I slipsBlocking -d' + ip_to_block + ' -j DROP')
-        # Block traffic from source ip_to_block (-s)
-        os.system('sudo iptables -I slipsBlocking -s' + ip_to_block + ' -j DROP')
-        print("Blocked: " + ip_to_block)
-
-    def block_ip(self,message):
+    def block_ip_in_iptables(self,ip_to_block=None,from_=True,to=True,dport=None,sport=None,protocol=None):
         """
-            This function determines the user's platform and firewall used and calls the appropriate function to add a rule to block the ip passed in message data
+        Blocks the ip from iptables only and adds rules according to the parameters passed
+        By default this function blocks all traffic from or to the given ip
         """
-        ip_to_block = message['data']
-        if type(ip_to_block) == str:
+
+        # Set the default behaviour to block all traffic from and to an ip
+        if from_ is None and to is None : from_, to = True , True
+        # This dictionary will be used to construct the rule
+        options = {
+            "protocol"  :   " -p " + protocol if protocol is not None else '' ,
+            "dport"     :   " --dport " + str(dport)  if dport is not None else '',
+            "sport"     :   " --sport " + str(sport)  if sport is not None else '',
+        }
+
+        if from_ :
+            # Add rule to block traffic from source ip_to_block (-s)
+            # -I to insert the rule at the top of the chain so it overrides any existing rule that may conflict
+            command = "sudo iptables -I slipsBlocking -s " + ip_to_block
+            # Add the options to the iptables command
+            for key in options.keys():
+                command += options[key]
+            command += " -j DROP"
+            # Execute
+            exit_status = os.system(command)
+            # 0 is the success value otherwise an error occured
+            if exit_status != 0:
+                self.print("Error blocking the ip", verbose=1, debug=1)
+
+        if to:
+            # Block traffic to destination ip_to_block (-d)
+            command = "sudo iptables -I slipsBlocking -d " + ip_to_block
+            # Add the options to the iptables command
+            for key in options.keys():
+                command += options[key]
+            command += " -j DROP"
+            #Execute
+            exit_status = os.system(command)
+            # 0 is the success value otherwise an error occured
+            if exit_status != 0:
+                self.print("Error while executing '" + command + "'", verbose=1, debug=1)
+
+        # Successfully blocked an ip
+        if exit_status == 0 :
+            print("Blocked: " + ip_to_block)
+        #todo: handle rules that may conflict
+
+    def block_ip(self,ip,from_,to,dport,sport,protocol):
+        """
+            This function determines the user's platform and firewall used and calls the appropriate function to add the rules to the used firewall
+        """
+        if type(ip) == str:
             # Block this ip in iptables
             if self.platform_system == 'Linux':
                 if self.firewall == 'iptables':
                     # Blocking in iptables
-                    self.block_ip_in_iptables(ip_to_block)
-                elif self.firewall == 'nftables':
-                    # Blocking in nftables
-                    #TODO: create block_ip_in_nftables
-                    #TODO:create slipsBlocking table in nftables first. do that in  slips.py
-                    pass
+                    self.block_ip_in_iptables(ip,from_,to,dport,sport,protocol)
             elif self.platform_system == 'Darwin':
                 # Blocking in MacOS
                 self.print('Mac OS blocking is not supported yet.')
@@ -166,6 +193,10 @@ class Module(Module, multiprocessing.Process):
         elif self.platform_system == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
 
+    def unblock_ip(self):
+        #TODO
+        pass
+
     def run(self):
         #TODO: handle MacOS
         self.initialize_chains_in_firewall()
@@ -181,9 +212,42 @@ class Module(Module, multiprocessing.Process):
 
                     return True
 
-                # There's an ip that needs to be blocked
-                if message['channel'] == 'new_blocking':
-                   self.block_ip(message)
+                # There's an IP that needs to be blocked
+                if message['channel'] == 'new_blocking' \
+                    and message['type'] == 'message':
+                    # message['data'] in the new_blocking channel is a dictionary that contains the ip and the blocking options
+                    # Example of the data dictionary is as follows
+                    # NOTE:
+                    # blocking_data = {
+                    #   "ip"       : "0.0.0.0"
+                    #   "block"    : True to block  - False to unblock
+                    #   "from"     : True to block traffic from ip (default) - False does nothing
+                    #   "to"       : True to block traffic to ip  (default)  - False does nothing
+                    #   "dport"    : Optional destination port number
+                    #   "sport"    : Optional source port number
+                    #   "protocol" : Optional protocol
+                    # }
+                    # Example of passing blocking_data to this module:
+                    # blocking_data = json.dumps(blocking_data)
+                    # Send a new message
+                    # __database__.publish('new_blocking', blocking_data )
+
+                    # Decode(deserialize) the python dict into JSON formatted string
+                    data = json.loads(message['data'])
+                    # Parse the data dictionary
+                    ip = data.get("ip")
+                    block = data.get("block")
+                    from_ = data.get("from")
+                    to = data.get("to")
+                    dport = data.get("dport")
+                    sport = data.get("sport")
+                    protocol = data.get("protocol")
+
+                    if block:
+                        self.block_ip(ip,from_,to,dport,sport,protocol)
+                    else:
+                        self.unblock_ip(ip,from_,to)
+
 
         except KeyboardInterrupt:
             return True
