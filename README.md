@@ -6,15 +6,15 @@ Slips v0.7.1
 </h1>
 
 
-<h4 align="center"> 
-Behavioral based Intrusion Prevention System<br>
+<h3 align="center"> 
+Behavioral based Intrusion Prevention System<br><br>
 
-Complete documentation of Slips is **[here](https://stratospherelinuxips.readthedocs.io/en/latest/) <br>
+Slips documentation is [here](https://stratospherelinuxips.readthedocs.io/en/latest/) <br>
 
-[Introduction](#introduction) — [Slips in action](#slips-in-action) — [Running Slips in a Docker](#running-slips-in-a-docker) — [Authors and Contributors](#authors-and-contributors)
-</h4>
+[Features](#features) — [Slips in action](#slips-in-action) — [Running Slips in a Docker](#running-slips-in-a-docker) — [Authors](#authors) - [How to contribute](#how-to-contribute)
+</h3>
 
-## Introduction
+## Features
 
 Stratosphere Linux IPS, shortly Slips, is a Python-based intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, to detect of command and control channels and to provide good visualisation for the analyst. Slips is able to analyze real live traffic from the device and the large network captures in the type of a pcap files, Suricata, Zeek/Bro and Argus flows. As a result, Slips highlights suspicious behaviour and connections that needs to be deeper analyzed. 
 
@@ -32,7 +32,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 
 Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.
 
-Complete documentation of Slips internal architecture and how to implement new modules ia available here: https://stratospherelinuxips.readthedocs.io/en/latest/
+Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/latest/
 
 ## Slips in action
 
@@ -41,7 +41,7 @@ Complete documentation of Slips internal architecture and how to implement new m
 
 ## Running Slips in a Docker
 
-The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but is not able to analyze real live traffic. How to use Slips docker from DockerHub:
+The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but it is not able to analyze real live traffic. How to use Slips docker from DockerHub:
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
@@ -50,14 +50,24 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
   	./kalipso.sh
 
 
-## Authors and Contributors
+## Authors
 
-- Main author: Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
-- Ondrej Lukas: During the original slips code, he worked on the new detection metric of infected IPs based on timewindows, detection windows, weighted scores and averages. Also all the ip_handler, alerts classes, etc.
-- Frantisek Strasak. Work on all the new version of slips, features, output, core and the https Machine Learning detection module. (https://github.com/frenky-strasak)
-- Dita hollmannova: Worked in the VirusTotal module and the Whois modul. (dita.hollmannova@gmail.com)
-- Kamila Babayeva: Implemented the NodeJS interface (kamifai14@gmail.com)
-- Elaheh Biglar Beigi
-- MariaRigaki 
-- kartik88363
-- arkamar
+Main author: Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
+
+Contributors:
+	- Kamila Babayeva
+	- Ondrej Lukas
+	- Alya Gomaa
+	- Veronica Valeros
+	- Frantisek Strasak
+	- Dita Hollmannova
+	- Elaheh Biglar Beigi
+	- Maria Rigaki 
+	- kartik88363
+	- arkamar
+
+## How to contribute
+All contributors are welcomed! How you can help?
+	- Run Slips and report bugs and needed features, and suggest ideas
+	- Pull requests with a solved GitHub issue and new feature
+	- Pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/latest/).
