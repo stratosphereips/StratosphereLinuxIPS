@@ -290,7 +290,7 @@ In dockers running on CPU that dont support AVX, importing tensorflow may fail. 
 
 ### Modules
 |   module  |   description | status |
-|---------- | ------------- | ------ |
+| ---| --- | :-: |
 | asn | loads and finds the ASN of each IP |⛔|
 | geoip | finds the country and geolocation information of each IP |✅|
 | https | training&test of RandomForest to detect malicious https flows |✅|
