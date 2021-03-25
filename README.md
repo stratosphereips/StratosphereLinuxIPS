@@ -288,4 +288,18 @@ In dockers running on CPU that dont support AVX, importing tensorflow may fail. 
 
 
 
+### Modules
+|   module  |   description | status |
+| ---| --- | :-: |
+| asn | loads and finds the ASN of each IP |⛔|
+| geoip | finds the country and geolocation information of each IP |✅|
+| https | training&test of RandomForest to detect malicious https flows |✅|
+| port scan detector | detects Horizontal and Vertical port scans |✅|
+| threat Intelligence | checks if each IP is in a list of malicious IPs  |✅|
+| timeline |  creates a timeline of what happened in the network based on all the flows and type of data available  |✅|
+| rnn-cc-detection | detects command and control channels using recurrent neural network and the stratosphere behavioral letters |✅|
+| VirusTotal | module to lookup IP address on VirusTotal |✅|
+| flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
+| blocking | module to block malicious IPs connecting to the device |⚠️|
+
 
