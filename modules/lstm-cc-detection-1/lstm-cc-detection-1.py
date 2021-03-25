@@ -89,7 +89,7 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'C&C channels detection'
         key = 'outTuple' + ':' + tupleid + ':' + type_evidence
         threat_level = 100
-        description = 'LSTM C&C channels detection, score: ' + str(score)
+        description = 'RNN C&C channels detection, score: ' + str(score)
         self.print(f'Setting evidence of {description} with threat level {threat_level} and confidence {confidence}. For {profileid}, tuple: {tupleid} on {twid}', 3, 0)
         __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
 
@@ -99,12 +99,14 @@ class Module(Module, multiprocessing.Process):
         to whatever is needed by the model
         The pre_behavioral_model is a 1D array of letters in an array
         """
+        # TODO: set the max_length in the function call
 
         # Length of behavioral model with which we trained our module
         max_length = 500
 
         # Convert each of the stratosphere letters to an integer. There are 50
-        vocabulary = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', ',', '.', '+', '*']
+        #vocabulary = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', ',', '.', '+', '*']
+        vocabulary = list("abcdefghiABCDEFGHIrstuvwxyzRSTUVWXYZ1234567890,.+*")
         int_of_letters = {}
         for i, letter in enumerate(vocabulary):
             int_of_letters[letter] = float(i)
@@ -130,10 +132,11 @@ class Module(Module, multiprocessing.Process):
         # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
         return pre_behavioral_model
 
-    def run(self):
+    def run(self, model_file="modules/lstm-cc-detection-1/detection_tcpmodel-9.h5"):
+        # TODO: set the decision threshold in the function call
         try:
             # Download lstm model
-            tcpmodel = load_model('modules/lstm-cc-detection-1/detection_tcpmodel-9.h5')
+            tcpmodel = load_model(model_file)
             # udpmodel = load_model('modules/lstm-cc-detection-1/detection_udpmodel-9.h5')
             # Main loop function
             while True:

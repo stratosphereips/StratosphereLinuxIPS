@@ -21,7 +21,7 @@ parser.add_argument("-m", "--min_letters", help="Min sequence length", type=int,
 parser.add_argument("-v", "--verbose", help="Level of verbosity", type=bool, required=False, default=False)
 parser.add_argument("-b", "--batch_size", help="Size of the minibatch", type=int, required=False, default=100)
 parser.add_argument("-e", "--epochs", help="Number of epochs in training", type=int, required=False, default=200)
-parser.add_argument("-S", "--model_file", help="Where to store the train model", type=str, required=False)
+parser.add_argument("-S", "--model_file", help="Where to store the train model", type=str, required=False, default="rnn_mmodel.h5")
 args = parser.parse_args()
 
 
