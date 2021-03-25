@@ -113,26 +113,34 @@ class Module(Module, multiprocessing.Process):
         elif self.platform_system == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
 
-    def block_ip_in_iptables(self, ip_to_block, flag, options):
-        """ Blocks the ip from iptables only and adds rules according to the parameters passed """
-        # -I to insert the rule at the top of the chain so it overrides any existing rule that may conflict
-        # flag is either -s to block traffic from source ip or -d to block to destination ip
-        command = "sudo iptables -I slipsBlocking " + flag + " " + ip_to_block
+    def exec_iptables_command(self,
+                              action, ip_to_block,
+                              flag, options):
+        """
+        Constructs the iptables rule/command based on the options sent in the message
+        flag options:
+          -s : to block traffic from source ip
+          -d : to block to destination ip
+        action options:
+          insert : to insert a new rule at the top of slipsBlocking list
+          delete : to delete an existing rule
+        """
 
-        # Add the options to the iptables command
+        command = "sudo iptables --"+ action +" slipsBlocking " + flag + " " + ip_to_block
+        # Add the options constructed in block_ip or unblock_ip to the iptables command
         for key in options.keys():
             command += options[key]
         command += " -j DROP"
+        print(command)
         # Execute
         exit_status = os.system(command)
-
         # 0 is the success value
         if exit_status != 0:
-            self.print("Error executing" + command, verbose=1, debug=1)
+            self.print("Error executing " + command, verbose=1, debug=1)
+            return 0 # success
         else:
-            # Successfully blocked an ip
-            print("Blocked: " + ip_to_block)
-        #todo: handle rules that may conflict
+            return 1 # failed to execute command
+
 
     def block_ip(self, ip_to_block=None, from_=True, to=True,
                  dport=None, sport=None, protocol=None):
@@ -158,16 +166,26 @@ class Module(Module, multiprocessing.Process):
 
                     if from_:
                         # Add rule to block traffic from source ip_to_block (-s)
-                        self.block_ip_in_iptables(ip_to_block, '-s', options)
+                        exit_status = self.exec_iptables_command(action='insert',
+                                                                 ip_to_block=ip_to_block,
+                                                                 flag='-s',
+                                                                 options=options)
                     if to:
                         # Add rule to block traffic to ip_to_block (-d)
-                        self.block_ip_in_iptables(ip_to_block, '-d', options)
+                        exit_status = self.exec_iptables_command(action='insert',
+                                                                 ip_to_block=ip_to_block,
+                                                                 flag='-d',
+                                                                 options=options)
+                    if exit_status:
+                            # Successfully blocked an ip
+                            print("Blocked: " + ip_to_block)
             elif self.platform_system == 'Darwin':
                 # Blocking in MacOS
                 self.print('Mac OS blocking is not supported yet.')
 
     def handle_stop_process_message(self, message):
         """ Deletes slipsBlocking chain and rules based on the user's platform and firewall """
+        # TODO: test this again
         if self.platform_system == 'Linux':
             if self.firewall == 'iptables':
                 # Delete rules in slipsBlocking chain
@@ -188,8 +206,12 @@ class Module(Module, multiprocessing.Process):
         elif self.platform_system == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
 
-    def unblock_ip(self):
-        #TODO
+    def unblock_ip(self,
+                   ip_to_unblock,
+                   from_, to,
+                   dport=None,
+                   sport=None,
+                   protocol=None):
         pass
 
     def run(self):
@@ -212,7 +234,8 @@ class Module(Module, multiprocessing.Process):
                     and message['type'] == 'message':
                     # message['data'] in the new_blocking channel is a dictionary that contains
                     # the ip and the blocking options
-                    # Example of the data dictionary:
+                    # Example of the data dictionary to block or unblock an ip:
+                    #   (notice you have to specify from,to,dport,sport,protocol or at least 2 of them when unblocking)
                     #   blocking_data = {
                     #       "ip"       : "0.0.0.0"
                     #       "block"    : True to block  - False to unblock
@@ -240,8 +263,7 @@ class Module(Module, multiprocessing.Process):
                     if block:
                         self.block_ip(ip, from_, to, dport, sport, protocol)
                     else:
-                        self.unblock_ip(ip, from_, to)
-
+                        self.unblock_ip(ip, from_, to, dport, sport, protocol)
 
         except KeyboardInterrupt:
             return True
