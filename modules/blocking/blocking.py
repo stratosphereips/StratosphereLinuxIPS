@@ -95,7 +95,6 @@ class Module(Module, multiprocessing.Process):
             return 'iptables'
 
     def initialize_chains_in_firewall(self):
-
         """ For linux: Adds a chain to iptables or a table to nftables called
             slipsBlocking where all the rules will reside """
 
@@ -138,7 +137,7 @@ class Module(Module, multiprocessing.Process):
           delete : to delete an existing rule
         """
 
-        command = "sudo iptables --"+ action +" slipsBlocking " + flag + " " + ip_to_block
+        command = "sudo iptables --" + action + " slipsBlocking " + flag + " " + ip_to_block
         # Add the options constructed in block_ip or unblock_ip to the iptables command
         for key in options.keys():
             command += options[key]
@@ -149,10 +148,9 @@ class Module(Module, multiprocessing.Process):
         # 0 is the success value
         if exit_status != 0:
             self.print("Error executing " + command, verbose=1, debug=1)
-            return 0 # success
+            return 0  # success
         else:
-            return 1 # failed to execute command
-
+            return 1  # failed to execute command
 
     def block_ip(self, ip_to_block=None, from_=True, to=True,
                  dport=None, sport=None, protocol=None):
@@ -224,7 +222,36 @@ class Module(Module, multiprocessing.Process):
                    dport=None,
                    sport=None,
                    protocol=None):
-        pass
+        """ Unblocks an ip based on the flags passed in the message """
+        # This dictionary will be used to construct the rule
+        options = {
+            "protocol" : " -p " + protocol if protocol is not None else '' ,
+            "dport"    : " --dport " + str(dport)  if dport is not None else '',
+            "sport"    : " --sport " + str(sport)  if sport is not None else '',
+        }
+        # Set the default behaviour to unblock all traffic from and to an ip
+        if from_ is None and to is None:
+            from_, to = True, True
+        # Set the appropriate iptables flag to use in the command
+        # The module sending the message HAS TO specify either 'from_' or 'to' or both
+        # so that this function knows which rule to delete
+        # if both or none were specified we'll be executing 2 commands/deleting 2 rules
+        if from_:
+            flag = '-s'
+            exit_status = self.exec_iptables_command(action='delete',
+                                                     ip_to_block=ip_to_unblock,
+                                                     flag=flag,
+                                                     options=options)
+        if to:
+            flag = '-d'
+            exit_status = self.exec_iptables_command(action='delete',
+                                                     ip_to_block=ip_to_unblock,
+                                                     flag=flag,
+                                                     options=options)
+
+        if exit_status:
+            # Successfully blocked an ip
+            print("Unblocked: " + ip_to_unblock)
 
     def run(self):
         #TODO: handle MacOS
