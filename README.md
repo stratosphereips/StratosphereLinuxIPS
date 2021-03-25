@@ -19,16 +19,20 @@ Slips documentation is [here](https://stratospherelinuxips.readthedocs.io/en/lat
 Stratosphere Linux IPS, shortly Slips, is a Python-based intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, to detect of command and control channels and to provide good visualisation for the analyst. Slips is able to analyze real live traffic from the device and the large network captures in the type of a pcap files, Suricata, Zeek/Bro and Argus flows. As a result, Slips highlights suspicious behaviour and connections that needs to be deeper analyzed. 
 
 Slips is a modular software. Each module is designed to perform a specific detection in the network traffic. Current version of Slips contains following modules:
-- asn - module to load and find the ASN of each IP
-- geoip - module to find the country and geolocation information of each IP
-- https - module to train or test a RandomForest to detect malicious https flows
-- port scan detector - module to detect Horizontal and Vertical port scans 
-- threat Intelligence - module to check if each IP is in a list of malicious IPs 
-- timeline - module to create a timeline of what happened in the network based on all the flows and type of data available
-- lstm-cc-detection -  module to detect command and control channels using LSTM neural network and the stratosphere behavioral letters
-- VirusTotal - module to lookup IP address on VirusTotal
-- flowalerts - module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh.
-- [in process] blocking - module to block malicious IPs connecting to the device
+
+|   module  |   description | status |
+| ---| --- | :-: |
+| asn | loads and finds the ASN of each IP |✅|
+| geoip | finds the country and geolocation information of each IP |✅|
+| https | training&test of RandomForest to detect malicious https flows |✅|
+| port scan detector | detects Horizontal and Vertical port scans |✅|
+| threat Intelligence | checks if each IP is in a list of malicious IPs  |✅|
+| timeline |  creates a timeline of what happened in the network based on all the flows and type of data available  |✅|
+| rnn-cc-detection | detects command and control channels using recurrent neural network and the stratosphere behavioral letters |✅|
+| VirusTotal | module to lookup IP address on VirusTotal |✅|
+| flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
+| blocking | module to block malicious IPs connecting to the device |⚠️|
+
 
 Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.
 
