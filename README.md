@@ -292,7 +292,7 @@ In dockers running on CPU that dont support AVX, importing tensorflow may fail. 
 |   module  |   description | status |
 |---------- | ------------- | ------ |
 | asn | loads and finds the ASN of each IP | <span style="color:green">working</span> |
-| geoip | finds the country and geolocation information of each IP | <span style="color:green">working</span> |
+| geoip | finds the country and geolocation information of each IP | <span style="background-color:green">working</span> |
 | https | training&test of RandomForest to detect malicious https flows | <span style="color:green">working</span> |
 | port scan detector | detects Horizontal and Vertical port scans | <span style="color:green">working</span> |
 | threat Intelligence | checks if each IP is in a list of malicious IPs  | <span style="color:green">working</span> |
