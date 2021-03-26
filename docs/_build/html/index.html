@@ -90,7 +90,6 @@
 <li class="toctree-l1"><a class="reference internal" href="features.html">Features</a></li>
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="authors.html">Authors and contributors</a></li>
 </ul>
 
             
@@ -158,7 +157,11 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="contents">
+  <h1 align="left"> <p><img alt="Slips_logo" src="_images/slips_logo.png" />
+<br>Slips v0.7.1</p>
+</h1><p>Stratosphere Linux IPS, shortly Slips, is a Python-based intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, to detect of command and control channels and to provide good visualisation for the analyst. Slips is able to analyze real live traffic from the device and the large network captures in the type of a pcap files, Suricata, Zeek/Bro and Argus flows. As a result, Slips highlights suspicious behaviour and connections that needs to be deeper analyzed.</p>
+<p>Slips is a behavioral-based IPS that uses machine learning to detect malicious behaviors in the network traffic. It is a modular software that can be extended. When Slips is run, it spawns several child processes to manage the I/O, to profile attackers and to run the detection modules. It also requires the Redis[3] database to store all the information. In order to detect attacks, Slips runs its Kalipso interface.</p>
+<div class="section" id="contents">
 <h1>Contents<a class="headerlink" href="#contents" title="Permalink to this headline">¶</a></h1>
 <div class="toctree-wrapper compound">
 <ul>
@@ -167,72 +170,8 @@
 <li class="toctree-l1"><a class="reference internal" href="features.html">Features</a></li>
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="authors.html">Authors and contributors</a></li>
 </ul>
 </div>
-<h1 align="center"> <p><img alt="Slips_logo" src="_images/slips_logo.png" />
-<br>
-Slips v0.7.1</p>
-</h1><h3 align="center"> 
-Behavioral based Intrusion Prevention System<br><br><p>Slips documentation is <a class="reference external" href="https://stratospherelinuxips.readthedocs.io/en/latest/">here</a> <br></p>
-<p><a class="reference external" href="#features">Features</a> — <a class="reference external" href="#slips-in-action">Slips in action</a> — <a class="reference external" href="#running-slips-in-a-docker">Running Slips in a Docker</a> — <a class="reference external" href="#authors">Authors</a> - <a class="reference external" href="#how-to-contribute">How to contribute</a>
-</h3></p>
-</div>
-<div class="section" id="features">
-<h1>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h1>
-<p>Stratosphere Linux IPS, shortly Slips, is a Python-based intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, to detect of command and control channels and to provide good visualisation for the analyst. Slips is able to analyze real live traffic from the device and the large network captures in the type of a pcap files, Suricata, Zeek/Bro and Argus flows. As a result, Slips highlights suspicious behaviour and connections that needs to be deeper analyzed.</p>
-<p>Slips is a modular software. Each module is designed to perform a specific detection in the network traffic. Current version of Slips contains following modules:</p>
-<p>|   module  |   description | status |
-| —| — | :-: |
-| asn | loads and finds the ASN of each IP |✅|
-| geoip | finds the country and geolocation information of each IP |✅|
-| https | training&amp;test of RandomForest to detect malicious https flows |✅|
-| port scan detector | detects Horizontal and Vertical port scans |✅|
-| threat Intelligence | checks if each IP is in a list of malicious IPs  |✅|
-| timeline |  creates a timeline of what happened in the network based on all the flows and type of data available  |✅|
-| rnn-cc-detection | detects command and control channels using recurrent neural network and the stratosphere behavioral letters |✅|
-| VirusTotal | module to lookup IP address on VirusTotal |✅|
-| flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
-| blocking | module to block malicious IPs connecting to the device |⚠️|</p>
-<p>Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.</p>
-<p>Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/latest/</p>
-</div>
-<div class="section" id="slips-in-action">
-<h1>Slips in action<a class="headerlink" href="#slips-in-action" title="Permalink to this headline">¶</a></h1>
-<p><img alt="_images/slips-kalipso.gif" src="_images/slips-kalipso.gif" /></p>
-</div>
-<div class="section" id="running-slips-in-a-docker">
-<h1>Running Slips in a Docker<a class="headerlink" href="#running-slips-in-a-docker" title="Permalink to this headline">¶</a></h1>
-<p>The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but it is not able to analyze real live traffic. How to use Slips docker from DockerHub:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mkdir</span> <span class="o">~/</span><span class="n">dataset</span>
-<span class="n">cp</span> <span class="o">&lt;</span><span class="n">some</span><span class="o">-</span><span class="n">place</span><span class="o">&gt;/</span><span class="n">myfile</span><span class="o">.</span><span class="n">pcap</span> <span class="o">~/</span><span class="n">dataset</span>
-<span class="n">docker</span> <span class="n">run</span> <span class="o">-</span><span class="n">it</span> <span class="o">--</span><span class="n">rm</span> <span class="o">--</span><span class="n">net</span><span class="o">=</span><span class="n">host</span> <span class="o">-</span><span class="n">v</span> <span class="o">~/</span><span class="n">dataset</span><span class="p">:</span><span class="o">/</span><span class="n">StratosphereLinuxIPS</span><span class="o">/</span><span class="n">dataset</span> <span class="n">stratosphereips</span><span class="o">/</span><span class="n">slips</span><span class="p">:</span><span class="n">latest</span>
-<span class="o">./</span><span class="n">slips</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">c</span> <span class="n">slips</span><span class="o">.</span><span class="n">conf</span> <span class="o">-</span><span class="n">f</span> <span class="n">dataset</span><span class="o">/</span><span class="n">myfile</span><span class="o">.</span><span class="n">pcap</span>
-<span class="o">./</span><span class="n">kalipso</span><span class="o">.</span><span class="n">sh</span>
-</pre></div>
-</div>
-</div>
-<div class="section" id="authors">
-<h1>Authors<a class="headerlink" href="#authors" title="Permalink to this headline">¶</a></h1>
-<p>Main author: Sebastian Garcia. sebastian.garcia&#64;agents.fel.cvut.cz, eldraco&#64;gmail.com.</p>
-<p>Contributors:
-- Kamila Babayeva
-- Ondrej Lukas
-- Alya Gomaa
-- Veronica Valeros
-- Frantisek Strasak
-- Dita Hollmannova
-- Elaheh Biglar Beigi
-- Maria Rigaki
-- kartik88363
-- arkamar</p>
-</div>
-<div class="section" id="how-to-contribute">
-<h1>How to contribute<a class="headerlink" href="#how-to-contribute" title="Permalink to this headline">¶</a></h1>
-<p>All contributors are welcomed! How you can help?
-- Run Slips and report bugs and needed features, and suggest ideas
-- Pull requests with a solved GitHub issue and new feature
-- Pull request with a new detection module. The instructions and a template for new detection module <a class="reference external" href="https://stratospherelinuxips.readthedocs.io/en/latest/">here</a>.</p>
 </div>
 
 

@@ -1,1 +1,0 @@
-# Authors and contributors
