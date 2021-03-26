@@ -60,20 +60,20 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
 **Contributors:**
 
-	- Kamila Babayeva
-	- Ondrej Lukas
-	- Alya Gomaa
-	- Veronica Valeros
-	- Frantisek Strasak
-	- Dita Hollmannova
-	- Elaheh Biglar Beigi
-	- Maria Rigaki 
-	- kartik88363
-	- arkamar
+- Kamila Babayeva
+- Ondrej Lukas
+- Alya Gomaa
+- Veronica Valeros
+- Frantisek Strasak
+- Dita Hollmannova
+- Elaheh Biglar Beigi
+- Maria Rigaki 
+- kartik88363
+- arkamar
 
 ## How to contribute
 All contributors are welcomed! How you can help?
 
-	- Run Slips and report bugs and needed features, and suggest ideas
-	- Pull requests with a solved GitHub issue and new feature
-	- Pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/latest/).
+- Run Slips and report bugs and needed features, and suggest ideas
+- Pull requests with a solved GitHub issue and new feature
+- Pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/latest/).
