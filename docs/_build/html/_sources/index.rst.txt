@@ -5,6 +5,18 @@ Slips
 
 This documentation gives an overview how Slips works, how to use it and how to help. To be specific, that table of contents goes as follows:
 
+
+- **Installation**. Instructions to install Slips in a Docker and in a computer. See :doc:`Installation <installation>`.
+
+- **Usage**. Instructions and examples how to run Slips with different type of files and analyze the traffic using Slips and its GUI Kalipso. See :doc:`Usage <usage>`.
+
+- **Features**. Explanation of detection modules in Slips, types of input and output. See :doc:`Features <features>`.
+
+- **Architecture**. Internal architecture of Slips (profiles, timewindows), the use of Zeek and connection to Redis. See :doc:`Architecture <architecture>`.
+  
+- **Contributing**. Instructions how to contribute to Slips, create new detection module. See :doc:`Contributing <contributing>`.
+
+
 .. toctree::
    :maxdepth: 2
    :hidden:
@@ -13,3 +25,6 @@ This documentation gives an overview how Slips works, how to use it and how to h
    self 
    installation
    usage
+   features
+   architecture
+   contributing

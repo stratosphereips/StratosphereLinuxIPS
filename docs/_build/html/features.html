@@ -38,7 +38,9 @@
 
     
     <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="search.html" /> 
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Architecture" href="architecture.html" />
+    <link rel="prev" title="Usage" href="usage.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -84,10 +86,18 @@
             
             
               <p class="caption"><span class="caption-text">Slips</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="index.html">Slips</a></li>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Features</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#input">Input</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#output">Output</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#detection-modules">Detection Modules</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing</a></li>
 </ul>
 
             
@@ -157,37 +167,48 @@
             
   <div class="section" id="features">
 <h1>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="input-and-output">
-<h2>Input and Output<a class="headerlink" href="#input-and-output" title="Permalink to this headline">¶</a></h2>
-<p>Input / Output. There are two I/O processes in Slips: the input process and the output process.
-The idea of Slips is to focus on the machine learning part of the detection and not in capturing the network traffic.
-The input process reads flows of different types:
-Pcap files (internally using Zeek[4])
-Packets directly from an interface (internally using Zeek)
-Suricata flows (from JSON files created by Suricata, such as eve.json)
-Argus flows (CSV file separated by commas or TABs)
-Zeek/Bro flows from a Zeek folder with log files
-Nfdump flows from a binary nfdump file
-All the input flows are converted to an internal format. So once read, Slips works the same with all of them.
-The output process collects output from the modules and handles the display of information on screen.</p>
+<p>Slips is a behavioral-based IPS that uses machine learning to detect malicious behaviors in the network traffic. It is a modular software that can be extended. When Slips is run, it spawns several child processes to manage the I/O, to profile attackers and to run the detection modules.</p>
+<p>Here we describe what Slips can take as input, what it produces as an output, and what detection modules are run on the traffic to detect malicious behaviour.</p>
+<div class="section" id="input">
+<h2>Input<a class="headerlink" href="#input" title="Permalink to this headline">¶</a></h2>
+<p>The input process reads flows of different types:</p>
+<ul class="simple">
+<li>Pcap files (internally using Zeek)</li>
+<li>Packets directly from an interface (internally using Zeek)</li>
+<li>Suricata flows (from JSON files created by Suricata, such as eve.json)</li>
+<li>Argus flows (CSV file separated by commas or TABs)</li>
+<li>Zeek/Bro flows from a Zeek folder with log files</li>
+<li>Nfdump flows from a binary nfdump file</li>
+</ul>
+<p>All the input flows are converted to an internal format. So once read, Slips works the same with all of them.</p>
+<p><strong><em>Note: look at ./slips.py –help to find correct argument to run Slips on each type of the file.</em></strong></p>
 </div>
-<div class="section" id="modules">
-<h2>Modules<a class="headerlink" href="#modules" title="Permalink to this headline">¶</a></h2>
-<p>Modules are Python-based files that allow any developer to extend the functionality of Slips. They process and analyze data, perform additional detections and store data in Redis for other modules to consume. Currently, Slips has the following modules:
-asn - module to load and find the ASN of each IP
-Geoip - module to find the country and geolocation information of each IP
-ML for https - module to train or test a RandomForest to detect malicious https flows
-Port scan detector - module to detect Horizontal and Vertical port scans
-Threat Intelligence - module to check if each IP is in a list of malicious IPs
-Timeline - module to create a timeline of what happened in the network based on all the flows and type of data available
-Lstm-cc-detection -  module to detect command and control channels using LSTM neural network and the stratosphere behavioral letters
-VirusTotal - module to lookup IP address on VirusTotal[5]
-Kalipso - graphical user interface to display analyzed traffic by Slips
-LongConnections -  module to detect long duration connections in the network traffic
-Malicious IRC - Machine Learning module to detect malicious IRC sessions, channels, and users
-P2P - module to share detection data between different instances of Slips by creating a custom p2p local network
-Update Manager - module to  update periodically Threat Intelligence files and control their changes by incrementally updating the database
-Blocking - module to block detected malicious IPs in the firewall. Currently available for Linux.</p>
+<div class="section" id="output">
+<h2>Output<a class="headerlink" href="#output" title="Permalink to this headline">¶</a></h2>
+<p>The output process collects output from the modules and handles the display of information on screen. Currently, Slips’ analysis and detected malicious behaviour can be analyzed as following:</p>
+<ul class="simple">
+<li>Kalipso - Node.JS based graphical user interface in the terminal. Kalipso displays Slips detection and analysis in colorful table and graphs, highlighting important detections. See section Kalipso for more explanation.</li>
+<li>alerts.json and alerts.txt - collects all evidences and detections generated by Slips in a .txt and .json formats.</li>
+<li>log files in a folder <em>current-date-time</em> - separates the traffic into files according to a profile and timewindow and summarize the traffic according to each profile and timewindow.</li>
+</ul>
+</div>
+<div class="section" id="detection-modules">
+<h2>Detection Modules<a class="headerlink" href="#detection-modules" title="Permalink to this headline">¶</a></h2>
+<p>Modules are Python-based files that allow any developer to extend the functionality of Slips. They process and analyze data, perform additional detections and store data in Redis for other modules to consume. Currently, Slips has the following modules:</p>
+<p>TODO: create a table
+|   module  |   description | status |
+| —| — | :-: |
+| asn | loads and finds the ASN of each IP |✅|
+| geoip | finds the country and geolocation information of each IP |✅|
+| https | training&amp;test of RandomForest to detect malicious https flows |✅|
+| port scan detector | detects Horizontal and Vertical port scans |✅|
+| threat Intelligence | checks if each IP is in a list of malicious IPs  |✅|
+| timeline |  creates a timeline of what happened in the network based on all the flows and type of data available  |✅|
+| rnn-cc-detection | detects command and control channels using recurrent neural network and the stratosphere behavioral letters |✅|
+| VirusTotal | module to lookup IP address on VirusTotal |✅|
+| flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
+| blocking | module to block malicious IPs connecting to the device |⚠️|</p>
+<p>If you want to contribute: improve existing Slips detection modules or implement your own detection modules, see section :doc:<code class="docutils literal notranslate"><span class="pre">Contributing</span> <span class="pre">&lt;contributing&gt;</span></code>.</p>
 </div>
 </div>
 
@@ -196,6 +217,10 @@ Blocking - module to block detected malicious IPs in the firewall. Currently ava
            
           </div>
           <footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+        <a href="architecture.html" class="btn btn-neutral float-right" title="Architecture" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="usage.html" class="btn btn-neutral float-left" title="Usage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
 
   <hr/>
 
