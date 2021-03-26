@@ -56,9 +56,10 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
 ## Authors
 
-Main author: Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
+**Main author:** Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
 
-Contributors:
+**Contributors:**
+
 	- Kamila Babayeva
 	- Ondrej Lukas
 	- Alya Gomaa
@@ -72,6 +73,7 @@ Contributors:
 
 ## How to contribute
 All contributors are welcomed! How you can help?
+
 	- Run Slips and report bugs and needed features, and suggest ideas
 	- Pull requests with a solved GitHub issue and new feature
 	- Pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/latest/).
