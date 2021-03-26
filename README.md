@@ -70,7 +70,6 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 - Maria Rigaki 
 - kartik88363
 - arkamar
-- Alya Gomaa
 
 ## How to contribute
 All contributors are welcomed! How you can help?
