@@ -32,7 +32,7 @@ To build the docker locally from the Docker file, you can do as follows (we use 
 If you cloned StratosphereLinuxIPS in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
 
 	cd docker
-	docker build --network=host --no-cache -t slips -f Dockerfile .
+	docker build --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f dataset/test3.binetflow
 
@@ -280,7 +280,6 @@ In dockers running on CPU that dont support AVX, importing tensorflow may fail. 
 - MariaRigaki 
 - kartik88363
 - arkamar
-- AlyaGomaa
 
 
 [Stratosphere Testing Framework]: https://github.com/stratosphereips/StratosphereTestingFramework
@@ -288,5 +287,19 @@ In dockers running on CPU that dont support AVX, importing tensorflow may fail. 
 [Zeek]: https://www.zeek.org/download/index.html 
 
 
+
+### Modules
+|   module  |   description | status |
+| ---| --- | :-: |
+| asn | loads and finds the ASN of each IP |⛔|
+| geoip | finds the country and geolocation information of each IP |✅|
+| https | training&test of RandomForest to detect malicious https flows |✅|
+| port scan detector | detects Horizontal and Vertical port scans |✅|
+| threat Intelligence | checks if each IP is in a list of malicious IPs  |✅|
+| timeline |  creates a timeline of what happened in the network based on all the flows and type of data available  |✅|
+| rnn-cc-detection | detects command and control channels using recurrent neural network and the stratosphere behavioral letters |✅|
+| VirusTotal | module to lookup IP address on VirusTotal |✅|
+| flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
+| blocking | module to block malicious IPs connecting to the device |⚠️|
 
 
