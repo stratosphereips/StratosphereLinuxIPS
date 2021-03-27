@@ -195,7 +195,6 @@ class Module(Module, multiprocessing.Process):
 
     def handle_stop_process_message(self, message):
         """ Deletes slipsBlocking chain and rules based on the user's platform and firewall """
-        # TODO: test this again
         if self.platform_system == 'Linux':
             if self.firewall == 'iptables':
                 # Delete rules in slipsBlocking chain
