@@ -1,7 +1,5 @@
 <h1 align="center"> 
 
-![Slips_logo](slips_logo.png)
-<br>
 Slips v0.7.1
 </h1>
 
