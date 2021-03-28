@@ -161,7 +161,7 @@ class Module(Module, multiprocessing.Process):
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=0.01)
-
+                # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
                     return True
                 if message and message['channel'] == 'new_flow':
