@@ -1,6 +1,5 @@
 # Must imports
 import configparser
-
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
@@ -14,11 +13,10 @@ import time
 import ipaddress
 
 
-class VirusTotalModule(Module, multiprocessing.Process):
-    # Name: short name of the module. Do not use spaces
+class Module(Module, multiprocessing.Process):
     name = 'VirusTotal'
-    description = 'IP address lookup on VirusTotal'
-    authors = ['Dita Hollmannova']
+    description = 'IP address and domain lookup on VirusTotal'
+    authors = ['Dita Hollmannova, Kamila Babayeva']
 
     def __init__(self, outputqueue, config, testing=False):
         multiprocessing.Process.__init__(self)
@@ -30,7 +28,6 @@ class VirusTotalModule(Module, multiprocessing.Process):
         # This line might not be needed when running SLIPS, but when VT module is run standalone, it still uses the
         # database and this line is necessary. Do not delete it, instead move it to line 21.
         __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
-
         # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
         # The options change, so the last list is on the slips/core/database.py file. However common options are:
         # - new_ip
@@ -98,6 +95,49 @@ class VirusTotalModule(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def set_vt_data_in_IPInfo(self, ip, cached_data):
+        """
+        Function to set VirusTotal data of the IP in the IPInfo.
+        It also sets asn data if it is unknown or does not exist.
+        It also set passive dns retrieved from VirusTotal.
+        """
+        vt_scores, passive_dns, as_owner = self.get_ip_vt_data(ip)
+        vtdata = {"URL": vt_scores[0],
+                  "down_file": vt_scores[1],
+                  "ref_file": vt_scores[2],
+                  "com_file": vt_scores[3],
+                  "timestamp": time.time()}
+        data = {}
+        data["VirusTotal"] = vtdata
+
+        # Add asn if it is unknown or not in the IP info
+        if 'asn' not in cached_data or cached_data['asn'] == 'Unknown':
+            data['asn'] = as_owner
+
+        __database__.setInfoForIPs(ip, data)
+        __database__.set_passive_dns(ip, passive_dns)
+
+    def set_domain_data_in_DomainInfo(self, domain, cached_data):
+        """
+        Function to set VirusTotal data of the domain in the DomainInfo.
+        It also sets asn data if it is unknown or does not exist.
+        """
+        vt_scores, as_owner = self.get_domain_vt_data(domain)
+        vtdata = {"URL": vt_scores[0],
+                  "down_file": vt_scores[1],
+                  "ref_file": vt_scores[2],
+                  "com_file": vt_scores[3],
+                  "timestamp": time.time()}
+        data = {}
+        data["VirusTotal"] = vtdata
+
+        # Add asn (autonomous system number) if it is unknown or not in the Domain info
+        if 'asn' not in cached_data or cached_data['asn'] == 'Unknown':
+            data['asn'] = as_owner
+
+        __database__.setInfoForDomains(domain, data)
+
+
     def run(self):
         if self.key is None:
             # We don't have a virustotal key
@@ -106,7 +146,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
             # Main loop function
             while True:
                 message_c1 = self.c1.get_message(timeout=0.01)
-                # if timewindows are not updated for a long time we will stop slips automatically.
+                # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message_c1 and message_c1['data'] == 'stop_process':
                     return True
                 if message_c1 and message_c1['channel'] == 'new_flow' and message_c1["type"] == "message":
@@ -122,45 +162,22 @@ class VirusTotalModule(Module, multiprocessing.Process):
                             uid = key
                             flow_data = json.loads(value)
                         ip = flow_data['daddr']
-                        #ip = data_flow_dict['saddr']
-                        # The first message comes with data=1
-                        data = __database__.getIPData(ip)
+                        cached_data = __database__.getIPData(ip)
                         # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
                         ip_addr = ipaddress.ip_address(ip)
-                        # If we already have the VT for this ip, do not ask VT
-                        # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
-                        # Check if the ip is multicast, if yes, then fdo not process
-                        if (data or data == {}) and 'VirusTotal' not in data and not ip_addr.is_multicast:
-                            vt_scores, passive_dns, as_owner = self.get_ip_vt_data(ip)
-                            vtdata = {"URL": vt_scores[0],
-                                      "down_file": vt_scores[1],
-                                      "ref_file": vt_scores[2],
-                                      "com_file": vt_scores[3],
-                                      "timestamp": time.time()}
-                            data = {}
-                            data["VirusTotal"] = vtdata
 
-                            # Add asn if it is unknown or not in the IP info
-                            if 'asn' not in data or data['asn'] == 'Unknown':
-                                data['asn'] = as_owner
+                        # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
+                        # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
+                        if (cached_data or cached_data == {}) and 'VirusTotal' not in cached_data and not ip_addr.is_multicast:
+                            self.set_vt_data_in_IPInfo(self, ip, cached_data)
 
-                            __database__.setInfoForIPs(ip, data)
-                            __database__.set_passive_dns(ip, passive_dns)
-
-                        elif data and 'VirusTotal' in data:
+                        # if VT data of this IP is in the IPInfo, check the timestamp.
+                        elif cached_data and 'VirusTotal' in cached_data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                            if (time.time() - data["VirusTotal"]['timestamp']) > self.update_period:
-                                vt_scores, passive_dns, _ = self.get_ip_vt_data(ip)
-                                vtdata = {"URL": vt_scores[0],
-                                          "down_file": vt_scores[1],
-                                          "ref_file": vt_scores[2],
-                                          "com_file": vt_scores[3],
-                                          "timestamp": time.time()}
-                                data = {}
-                                data["VirusTotal"] = vtdata
-                                __database__.setInfoForIPs(ip, data)
-                                __database__.set_passive_dns(ip, passive_dns)
+                            if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
+                                self.set_vt_data_in_IPInfo(self, ip, cached_data)
 
+                # if timewindows are not updated for a long time, Slips is stopped automatically.
                 message_c2 = self.c2.get_message(timeout=0.01)
                 if message_c2 and message_c2['data'] == 'stop_process':
                     return True
@@ -173,37 +190,16 @@ class VirusTotalModule(Module, multiprocessing.Process):
                         twid = data['twid']
                         flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
                         domain = flow_data['query']
-                        data = __database__.getDomainData(domain)
-                        # If we already have the VT for this ip, do not ask VT
-                        # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
-                        if (data or data == {}) and 'VirusTotal' not in data:
-                            vt_scores, as_owner = self.get_domain_vt_data(domain)
-                            vtdata = {"URL": vt_scores[0],
-                                      "down_file": vt_scores[1],
-                                      "ref_file": vt_scores[2],
-                                      "com_file": vt_scores[3],
-                                      "timestamp": time.time()}
-                            data = {}
-                            data["VirusTotal"] = vtdata
+                        cached_data = __database__.getDomainData(domain)
+                        # If VT data of this domain is not in the DomainInfo, ask VT
+                        # If 'Virustotal' key is not in the DomainInfo
+                        if (cached_data or cached_data == {}) and 'VirusTotal' not in cached_data:
+                            set_domain_data_in_DomainInfo(domain, cached_data)
 
-                            # Add asn if it is unknown or not in the IP info
-                            if 'asn' not in data or data['asn'] == 'Unknown':
-                                data['asn'] = as_owner
-
-                            __database__.setInfoForDomains(domain, data)
-
-                        elif data and 'VirusTotal' in data:
+                        elif cached_data and 'VirusTotal' in cached_data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - data["VirusTotal"]['timestamp']) > self.update_period:
-                                vt_scores, _ = self.get_domain_vt_data(domain)
-                                vtdata = {"URL": vt_scores[0],
-                                          "down_file": vt_scores[1],
-                                          "ref_file": vt_scores[2],
-                                          "com_file": vt_scores[3],
-                                          "timestamp": time.time()}
-                                data = {}
-                                data["VirusTotal"] = vtdata
-                                __database__.setInfoForDomains(domain, data)
+                                set_domain_data_in_DomainInfo(domain, cached_data)
 
         except KeyboardInterrupt:
             return True
@@ -216,7 +212,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
     def get_as_owner(self, response):
         """
-        Get as owner of the IP
+        Get as (autonomous system) owner of the IP
         :param response: json dictionary with response data
         """
         response_key = 'as_owner'
@@ -238,7 +234,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
     def get_ip_vt_data(self, ip: str):
         """
-        Look if this IP was already processed. If not, perform API call to VirusTotal and return scores for each of
+        Function to perform API call to VirusTotal and return scores for each of
         the four processed categories. Response is cached in a dictionary. Private IPs always return (0, 0, 0, 0).
         :param ip: IP address to check
         :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
@@ -266,7 +262,7 @@ class VirusTotalModule(Module, multiprocessing.Process):
 
     def get_domain_vt_data(self, domain: str):
         """
-        Look if this domain was already processed. If not, perform API call to VirusTotal and return scores for each of
+        Function perform API call to VirusTotal and return scores for each of
         the four processed categories. Response is cached in a dictionary.
         :param domain: Domain address to check
         :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
