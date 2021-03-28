@@ -194,12 +194,12 @@ class Module(Module, multiprocessing.Process):
                         # If VT data of this domain is not in the DomainInfo, ask VT
                         # If 'Virustotal' key is not in the DomainInfo
                         if (cached_data or cached_data == {}) and 'VirusTotal' not in cached_data:
-                            set_domain_data_in_DomainInfo(domain, cached_data)
+                            self.set_domain_data_in_DomainInfo(domain, cached_data)
 
                         elif cached_data and 'VirusTotal' in cached_data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - data["VirusTotal"]['timestamp']) > self.update_period:
-                                set_domain_data_in_DomainInfo(domain, cached_data)
+                                self.set_domain_data_in_DomainInfo(domain, cached_data)
 
         except KeyboardInterrupt:
             return True
