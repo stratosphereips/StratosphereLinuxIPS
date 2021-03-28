@@ -169,13 +169,13 @@ class Module(Module, multiprocessing.Process):
                         # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
                         # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
                         if (cached_data or cached_data == {}) and 'VirusTotal' not in cached_data and not ip_addr.is_multicast:
-                            self.set_vt_data_in_IPInfo(self, ip, cached_data)
+                            self.set_vt_data_in_IPInfo(ip, cached_data)
 
                         # if VT data of this IP is in the IPInfo, check the timestamp.
                         elif cached_data and 'VirusTotal' in cached_data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
-                                self.set_vt_data_in_IPInfo(self, ip, cached_data)
+                                self.set_vt_data_in_IPInfo(ip, cached_data)
 
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 message_c2 = self.c2.get_message(timeout=0.01)
