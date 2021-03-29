@@ -51,6 +51,23 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_blocking')
         self.timeout = None
 
+        # self.test()
+    def test(self):
+        """ For debugging purposes, once we're done with the module we'll delete it """
+
+        blocking_data = {
+                      "ip"       : "0.0.0.0",
+                      "block"    : True ,
+                      "from"     : True ,
+                      "to"       : True ,
+                      # "dport"    : Optional destination port number
+                      # "sport"    : Optional source port number
+                      # "protocol" : Optional protocol
+                  }
+        # Example of passing blocking_data to this module:
+        blocking_data = json.dumps(blocking_data)
+        __database__.publish('new_blocking', blocking_data )
+
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -90,7 +107,7 @@ class Module(Module, multiprocessing.Process):
             # Get the user's currently installed firewall
             self.firewall = self.determine_linux_firewall()
             if self.firewall == 'iptables':
-                print('Executing "sudo iptables -N slipsBlocking"')
+                self.print('Executing "sudo iptables -N slipsBlocking"')
                 # Add a new chain to iptables
                 os.system('sudo iptables -N slipsBlocking')
                 # TODO: use python iptc
@@ -104,7 +121,7 @@ class Module(Module, multiprocessing.Process):
                 os.system('sudo iptables -I FORWARD -j slipsBlocking')
 
             elif self.firewall == 'nftables':
-                print('Executing "sudo nft add table inet slipsBlocking"')
+                self.print('Executing "sudo nft add table inet slipsBlocking"')
                 # Add a new nft table that uses the inet family (ipv4,ipv6)
                 os.system('sudo nft add table inet slipsBlocking')
                 # TODO: HANDLE NFT TABLE
@@ -130,7 +147,7 @@ class Module(Module, multiprocessing.Process):
         for key in options.keys():
             command += options[key]
         command += " -j DROP"
-        print(command)
+        self.print("Executing: '" + command +" '")
         # Execute
         exit_status = os.system(command)
         # 0 is the success value
@@ -176,7 +193,7 @@ class Module(Module, multiprocessing.Process):
                                                                  options=options)
                     if exit_status:
                             # Successfully blocked an ip
-                            print("Blocked: " + ip_to_block)
+                            self.print("Blocked: " + ip_to_block)
             elif self.platform_system == 'Darwin':
                 # Blocking in MacOS
                 self.print('Mac OS blocking is not supported yet.')
@@ -238,7 +255,7 @@ class Module(Module, multiprocessing.Process):
 
         if exit_status:
             # Successfully blocked an ip
-            print("Unblocked: " + ip_to_unblock)
+            self.print("Unblocked: " + ip_to_unblock)
 
     def run(self):
         #TODO: handle MacOS
