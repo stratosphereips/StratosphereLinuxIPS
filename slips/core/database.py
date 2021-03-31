@@ -445,8 +445,27 @@ class Database(object):
             # Ask the threat intelligence modules, using a channel, that we need info about this IP
             # The threat intelligence module will process it and store the info back in IPsInfo
             # Therefore both ips will be checked for each flow
-            self.publish('give_threat_intelligence', str(daddr) + '-' + str(profileid) + '-' + str(twid) + '-' + 'dstip')
-            self.publish('give_threat_intelligence', str(saddr) + '-' + str(profileid) + '-' + str(twid) + '-' + 'srcip')
+            # Check destination ip
+            data_to_send = {
+                'ip': str(daddr),
+                'profileid' : str(profileid),
+                'twid' :  str(twid),
+                'proto' : proto,
+                'ip_state' : 'dstip'
+            }
+            data_to_send = json.dumps(data_to_send)
+            self.publish('give_threat_intelligence',data_to_send)
+
+            # Check source ip
+            data_to_send = {
+                'ip': str(saddr),
+                'profileid' : str(profileid),
+                'twid' :  str(twid),
+                'proto' : str(proto),
+                'ip_state' : 'srcip'
+            }
+            data_to_send = json.dumps(data_to_send)
+            self.publish('give_threat_intelligence',data_to_send)
 
             if role == 'Client':
                 # The profile corresponds to the src ip that received this flow
@@ -864,12 +883,15 @@ class Database(object):
         Get the evidence for this TW for this Profile
 
         Input:
-        - key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans, then this would be the port used.
+        - key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans,
+                then this would be the port used.
                the idea is that you can later update this specific detection when it evolves.
-               Examples of keys are: 'dport:1234' for all the evidences regarding this dport, or 'dip:1.1.1.1' for all the evidences regarding that dst ip
+               Examples of keys are: 'dport:1234' for all the evidences regarding this dport,
+               or 'dip:1.1.1.1' for all the evidences regarding that dst ip
         - type_evidence: The type of evidence you can send. For example PortScanType1
         - threat_level: How important this evidence is. Portscan? C&C channel? Exploit?
-        - confidence: How sure you are that this is what you say it is. Basically: the more data the more sure you are.
+        - confidence: How sure you are that this is what you say it is.
+            Basically: the more data the more sure you are.
 
         The evidence is stored as a dict.
         {
@@ -1303,7 +1325,13 @@ class Database(object):
         # If server_name is not empty, set in the IPsInfo and send to TI
         if server_name:
             self.setInfoForIPs(str(daddr_as_obj), {'SNI':server_name})
-            self.publish('give_threat_intelligence', server_name + '-' + str(profileid) + '-' + str(twid) + '-' + ' ')
+            data_to_send = {
+                'server_name' : server_name,
+                'profileid' : str(profileid),
+                'twid': str(twid)
+            }
+            data_to_send = json.dumps(data_to_send)
+            self.publish('give_threat_intelligence',data_to_send)
 
     def add_out_http(self, profileid, twid, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
         """
@@ -1336,7 +1364,14 @@ class Database(object):
         self.publish('new_http', to_send)
         self.print('Adding HTTP flow to DB: {}'.format(data), 5, 0)
         # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
-        self.publish('give_threat_intelligence', host + '-' + str(profileid) + '-' + str(twid) + '-'+ ' ')
+
+        data_to_send = {
+                'host': host,
+                'profileid' : str(profileid),
+                'twid' :  str(twid)
+            }
+        data_to_send = json.dumps(data_to_send)
+        self.publish('give_threat_intelligence',data_to_send)
 
     def add_out_ssh(self, profileid, twid, flowtype, uid, ssh_version, auth_attempts, auth_success, client, server, cipher_alg, mac_alg, compression_alg, kex_alg, host_key_alg, host_key):
         """
@@ -1413,7 +1448,13 @@ class Database(object):
 
         self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
-        self.publish('give_threat_intelligence', str(query) + '-' + str(profileid) + '-' + str(twid) + '-'+ ' ')
+        data_to_send = {
+                'query': str(query),
+                'profileid' : str(profileid),
+                'twid' :  str(twid),
+            }
+        data_to_send = json.dumps(data_to_send)
+        self.publish('give_threat_intelligence',data_to_send)
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
@@ -1714,3 +1755,5 @@ class Database(object):
 
 
 __database__ = Database()
+
+
