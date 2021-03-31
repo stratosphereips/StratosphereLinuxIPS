@@ -55,7 +55,7 @@ Even though we just installed pip3, the package installer for Python (3.7), we n
 
 Now that pip3 is upgraded, we can proceed to install all required packages via pip3 python packet manager:
 
-	pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1
+	sudo pip3 install -r requirements.txt
 
 _Note: for those using a different base image, you need to also install tensorflow==2.2.0 via pip3._
 
