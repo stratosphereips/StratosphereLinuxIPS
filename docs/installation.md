@@ -37,9 +37,18 @@ You can also put your own files in the /dataset/ folder and analyze them with Sl
 
 Slips is dependent on three major elements: Python 3.7+, Zeek and Redis database. To install these elements we will use APT package manager. Afterwards, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages. 
 
-**Instrucitons to download everything for Slips are below.**
+**Instructions to download everything for Slips are below.**
 <br>
 
+## Install using shell script
+You can install it using install.sh
+
+	sudo chmod +x install.sh
+	sudo ./install.sh
+	
+or install it manually
+
+## Installing manually
 ### Installing Python, Redis, NodeJs, and required python and npm libraries.
 Update the repository of packages so you see the latest versions:
 
