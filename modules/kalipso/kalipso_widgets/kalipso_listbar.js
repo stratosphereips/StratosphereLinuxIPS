@@ -82,11 +82,11 @@ class ListBar{
                          },    
 
                 'quit hotkey':{
-                  keys : ['q']
+                  keys : ['ESC']
                          },  
 
                 'quit kalipso':{
-                  keys : ['ESC']
+                  keys : ['q']
                          },
 
                  'help':{
