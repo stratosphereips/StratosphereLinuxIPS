@@ -40,7 +40,8 @@ sklearn
 tensorflow 
 
 # slips/modules/virustotal/virustotal.py: 11
-urllib3 
+urllib3
+requests==2.21.0
 
 # slips/modules/ThreatIntelligence1/threatintelligence-1.py: 14
 # slips/modules/UpdateManager/update_file_manager.py: 7
