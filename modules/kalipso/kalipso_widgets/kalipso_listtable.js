@@ -99,10 +99,10 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
         var ip_keys = Object.keys(ipInfo_json);
 
         if (ipInfo_json.hasOwnProperty('VirusTotal')){
-          ip_info_dict['VirusTotal']['URL'] = String(this.round(ipInfo_json['VirusTotal']['URL'],5))
-          ip_info_dict['VirusTotal']['down'] = String(this.round(ipInfo_json['VirusTotal']['down_file'],5))
-          ip_info_dict['VirusTotal']['ref'] = String(this.round(ipInfo_json['VirusTotal']['ref_file'],5))
-          ip_info_dict['VirusTotal']['com'] = String(this.round(ipInfo_json['VirusTotal']['com_file'],5))
+          ip_info_dict['VirusTotal']['URL'] = String(this.round(ipInfo_json['VirusTotal']['URL'],2))
+          ip_info_dict['VirusTotal']['down'] = String(this.round(ipInfo_json['VirusTotal']['down_file'],2))
+          ip_info_dict['VirusTotal']['ref'] = String(this.round(ipInfo_json['VirusTotal']['ref_file'],2))
+          ip_info_dict['VirusTotal']['com'] = String(this.round(ipInfo_json['VirusTotal']['com_file'],2))
         }
         if(ipInfo_json.hasOwnProperty('asn')){
           ip_info_dict['asn'] = ipInfo_json['asn']
@@ -141,7 +141,7 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
 
   getIPInfo_dict(ip){
     /*
-    Function to fill the dictionsry for the ip info dict
+    Function to fill the dictionary for the ip info dict
     */
     return new Promise ((resolve, reject)=>{this.redis_database.getIpInfo(ip)
       .then(redis_IpInfo_data=>{
@@ -153,10 +153,10 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
             var ip_keys = Object.keys(ipInfo_json);
 
             if (ipInfo_json.hasOwnProperty('VirusTotal')){
-              ip_info_dict['URL'] = String(this.round(ipInfo_json['VirusTotal']['URL'],5))
-              ip_info_dict['down'] = String(this.round(ipInfo_json['VirusTotal']['down_file'],5))
-              ip_info_dict['ref'] = String(this.round(ipInfo_json['VirusTotal']['ref_file'],5))
-              ip_info_dict['com'] = String(this.round(ipInfo_json['VirusTotal']['com_file'],5))
+              ip_info_dict['URL'] = String(this.round(ipInfo_json['VirusTotal']['URL'],2))
+              ip_info_dict['down'] = String(this.round(ipInfo_json['VirusTotal']['down_file'],2))
+              ip_info_dict['ref'] = String(this.round(ipInfo_json['VirusTotal']['ref_file'],2))
+              ip_info_dict['com'] = String(this.round(ipInfo_json['VirusTotal']['com_file'],2))
             }
             if(ipInfo_json.hasOwnProperty('asn')){
               ip_info_dict['asn'] = ipInfo_json['asn']
@@ -370,8 +370,8 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                 ['-i','outTuples ‘IP-port-protocol’combined together with outTuples Behavioral letters, DNS resolution  of the IP, ASN, geo country and Virus Total summary.'],
                 ['-y','inTuples ‘IP-port-protocol’combined together with inTuples Behavioral letters, DNS resolution  of the IP, ASN, geo country and Virus Total summary.'],
                 ['-o','manually update the tree with profiles and timewindows. Default is 2 minutes. '],
-                ['-q','exit the hotkey'],
-                ['-ESC','exit Kalipso']]
+                ['-q','exit Kalipso'],
+                ['-ESC','exit the hotkey']]
     this.setData(data)
   }
 
