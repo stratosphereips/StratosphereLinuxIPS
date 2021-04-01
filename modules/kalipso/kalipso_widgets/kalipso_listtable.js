@@ -185,8 +185,8 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
     try{
       this.redis_database.getOutTuples(ip, timewindow)
       .then(redis_outTuples=>{
-        var data = [['key','string','dns_resolution','SNI','asn','geo','url','down','ref','com']]
-        if(redis_outTuples==null){this.setData(data);this.screen.render(); return;}
+        var data = [['key','string','dns_resolution','SNI','asn','geo','resolveToIP','downloadFromIP','ipInFiles','contactedIP']]
+          if(redis_outTuples==null){this.setData(data);this.screen.render(); return;}
         else{
           var json_outTuples = JSON.parse(redis_outTuples)
           var keys = Object.keys(json_outTuples)
@@ -276,7 +276,7 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
     try{
       this.redis_database.getInTuples(ip, timewindow)
       .then(redis_outTuples=>{
-        var data = [['key','string','dns_resolution','SNI','asn','geo','url','down','ref','com']]
+        var data = [['key','string','dns_resolution','SNI','asn','geo','resolveToIP','downloadFromIP','ipInFiles','contactedIP']]
         if(redis_outTuples==null){this.setData(data);this.screen.render(); return;}
         else{
           var json_outTuples = JSON.parse(redis_outTuples)
