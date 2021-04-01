@@ -40,6 +40,7 @@ RUN pip3 install wheel \
     setuptools \
     validators \
     colorama \
+    requests==2.21.0 \
  && pip3 install --upgrade tensorflow==2.1.0
 
 # Download and unpack Slips.
