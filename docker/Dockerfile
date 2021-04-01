@@ -26,6 +26,7 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-watchdog \
     python3-keras \
     redis-server \
+    python3-redis \
     zeek \
     python3-pip \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
@@ -34,17 +35,19 @@ RUN apt update && apt install -y --no-install-recommends \
 RUN pip3 install --upgrade pip
 
 # Install redis using PIP3
-RUN pip3 install wheel
-RUN pip3 install redis
-RUN pip3 install setuptools
-RUN pip3 install validators
-RUN pip3 install colorama
-RUN pip3 install --upgrade tensorflow==2.1.0
+RUN pip3 install wheel \
+    redis \
+    setuptools \
+    validators \
+    colorama \
+ && pip3 install --upgrade tensorflow==2.1.0
 
 # Download and unpack Slips.
 #RUN wget -nv https://github.com/stratosphereips/StratosphereLinuxIPS/archive/master.tar.gz -O /slips.tar.gz \
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-RUN cd StratosphereLinuxIPS && git checkout develop && chmod 774 slips.py 
+RUN cd StratosphereLinuxIPS \
+    && git checkout develop \
+    && chmod 774 slips.py
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_10.x  | bash -
@@ -59,7 +62,7 @@ RUN cd StratosphereLinuxIPS/modules/kalipso && npm install \
     strip-ansi \
     redis \
     sorted-array-async \
-    yargS
+    yargs
 
 # Change the backed of keras to tensorflow
 #RUN sed -i 's/theano/tensorflow/' $HOME/.keras/keras.json
