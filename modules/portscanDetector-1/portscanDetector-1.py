@@ -75,8 +75,10 @@ class PortScanProcess(Module, multiprocessing.Process):
                         self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 6, 0)
                         # For port scan detection, we will measure different things:
                         # 1. Vertical port scan:
+                        # (single IP being scanned for multiple ports)
                         # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
                         # 2. Horizontal port scan:
+                        #  (scan against a group of IPs for a single port)
                         # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip. 
                         # 3. Too many connections???:
                         # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
@@ -157,7 +159,19 @@ class PortScanProcess(Module, multiprocessing.Process):
                                     # Between 3 and 10 pkts compute a kind of linear grow
                                     confidence = pkts_sent / 10.0
                                 # Description
-                                description = 'New horizontal port scan detected to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
+                                description = 'Horizontal port scan detected to port {}. TCP not established from IP: {}. Total packets sent to all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
+                                description += '\nIPs Scanned:\n'
+                                # For printing
+                                number_of_ips_in_a_row = 11
+                                # print maximum 11 ips in each row
+                                for dip in dstips.keys():
+                                    description += dip + '\t'
+                                    number_of_ips_in_a_row -= 1
+                                    # once the number_of_ips_in_a_row reaches 11 start a new line
+                                    if number_of_ips_in_a_row==0:
+                                        number_of_ips_in_a_row=11
+                                        description+='\n'
+
                                 __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
                                 self.print(description, 3, 0)
                                 # Store in our local cache how many dips were there:
@@ -205,7 +219,19 @@ class PortScanProcess(Module, multiprocessing.Process):
                                     # Between 3 and 10 pkts compute a kind of linear grow
                                     confidence = pkts_sent / 10.0
                                 # Description
-                                description = 'New vertical port scan detected to IP {} from {}. Total {} dst ports. Not Estab TCP. Tot pkts sent all ports: {}'.format(dstip, profileid.split(self.fieldseparator)[1], amount_of_dports, pkts_sent, confidence)
+                                description = 'Vertical port scan detected to IP {} from {}. Total {} dst ports scanned. TCP not established. Total packets sent to all ports: {}'.format(dstip, profileid.split(self.fieldseparator)[1], amount_of_dports, pkts_sent, confidence)
+                                description += '\nPorts Scanned:\n'
+                                # For printing
+                                number_of_ports_in_a_row = 18
+                                # print maximum 18 dstports in each row
+                                for dstport in dstports.keys():
+                                    description += dstport + '\t'
+                                    number_of_ports_in_a_row -= 1
+                                    # once the number_of_ports_in_a_row reaches 18 start a new line
+                                    if number_of_ports_in_a_row==0:
+                                        number_of_ports_in_a_row=18
+                                        description+='\n'
+
                                 __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
                                 self.print(description, 3, 0)
                                 # Store in our local cache how many dips were there:
