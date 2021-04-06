@@ -1,5 +1,6 @@
 FROM debian:buster
 
+ENV AM_I_IN_A_DOCKER_CONTAINER Yes
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
