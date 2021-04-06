@@ -60,6 +60,7 @@ You can now put pcap files or other flow files in the ./dataset/ folder and anal
 ## People Involved
 
 **Founder:** Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
+
 **Main authors:** Sebastian Garcia, Kamila Babayeva 
 
 **Contributors:**
