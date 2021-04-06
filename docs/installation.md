@@ -21,7 +21,7 @@ Before building the docker locally from the Dockerfile, first you should clone S
 
 If you cloned StratosphereLinuxIPS in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
 
-	cd docker
+	cd ~/code/StratosphereLinuxIPS/docker
 	docker build --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f dataset/test3.binetflow
