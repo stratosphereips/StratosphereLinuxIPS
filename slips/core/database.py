@@ -1555,14 +1555,14 @@ class Database(object):
         """
         self.rcache.hset('IoC_domains', domain, description)
 
-    def add_malicious_ip(self, ip, profileid_twid):
+    def set_malicious_ip(self, ip, profileid_twid):
         """
         Save in DB malicious IP found in the traffic
         with its profileid and twid
         """
         self.r.hset('MaliciousIPs', ip, profileid_twid)
 
-    def add_malicious_domain(self, domain, profileid_twid):
+    def set_malicious_domain(self, domain, profileid_twid):
         """
         Save in DB a malicious domain found in the traffic
         with its profileid and twid
