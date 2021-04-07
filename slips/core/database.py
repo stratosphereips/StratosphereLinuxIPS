@@ -450,7 +450,7 @@ class Database(object):
                 'ip': str(daddr),
                 'profileid' : str(profileid),
                 'twid' :  str(twid),
-                'proto' : proto,
+                'proto' : str(proto),
                 'ip_state' : 'dstip'
             }
             data_to_send = json.dumps(data_to_send)
