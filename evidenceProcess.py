@@ -203,47 +203,41 @@ class EvidenceProcess(multiprocessing.Process):
                     self.logfile.close()
                     self.jsonfile.close()
                     return True
-                elif message['channel'] == 'evidence_added':
-                    # Get the profileid and twid
-                    try:
+                elif message['channel'] == 'evidence_added' and type(message['data']) is not int:
+                    # Data sent in the channel as a json dict, it needs to be deserialized first
+                    data = json.loads(message['data'])
+                    profileid = data.get('profileid')
+                    twid = data.get('twid')
+                    new_evidence_key = data.get('key')
+                    new_evidence_description = data.get('description')
 
-                        message_data = message['data']
-                        profileid = message_data.split(self.separator)[0]+ self.separator + message_data.split(self.separator)[1]
-                        twid = message_data.split(self.separator)[2]
+                    # Separate new evidence, so it can be logged in alerts.log
+                    new_evidence_key_split = new_evidence_key.split(':')
+                    new_evidence_detection_type = new_evidence_key_split[0]
+                    new_evidence_detection_module = new_evidence_key_split[-1]
+                    # In case of TI, this info is IP, in case of LSTM this is a tuple
+                    new_evidence_detection_info = new_evidence_key[len(new_evidence_detection_type) + 1:-len(new_evidence_detection_module) - 1]
+                    ip = profileid.split(self.separator)[1]
 
-                        # Separate new evidence, so it can be logged in alerts.log
-                        new_evidence_key = message_data.split(self.separator)[3]
-                        new_evidence_description = message_data.split(self.separator)[4]
-                        new_evidence_key_split = new_evidence_key.split(':')
-                        new_evidence_detection_type = new_evidence_key_split[0]
-                        new_evidence_detection_module = new_evidence_key_split[-1]
-                        new_evidence_detection_info = new_evidence_key[len(new_evidence_detection_type) + 1:-len(new_evidence_detection_module) - 1]  # In case of TI, this info is IP, in case of LSTM this is a tuple
-                        ip = profileid.split(self.separator)[1]
+                    now = datetime.now()
+                    current_time = now.strftime('%Y-%m-%d %H:%M:%S')
 
-                        now = datetime.now()
-                        current_time = now.strftime('%Y-%m-%d %H:%M:%S')
+                    evidence_to_log = self.print_evidence(profileid,
+                                                          twid,
+                                                          ip,
+                                                          new_evidence_detection_module,
+                                                          new_evidence_detection_type,
+                                                          new_evidence_detection_info,
+                                                          new_evidence_description)
 
-                        evidence_to_log = self.print_evidence(profileid,
-                                                              twid,
-                                                              ip,
-                                                              new_evidence_detection_module,
-                                                              new_evidence_detection_type,
-                                                              new_evidence_detection_info,
-                                                              new_evidence_description)
-                        evidence_dict = {'timestamp': current_time, 'detected_ip': ip, 'detection_module':new_evidence_detection_module,  'detection_info':new_evidence_detection_type + ' ' + new_evidence_detection_info, "description":new_evidence_description}
+                    evidence_dict = {'timestamp': current_time,
+                                     'detected_ip': ip,
+                                     'detection_module':new_evidence_detection_module,
+                                     'detection_info':new_evidence_detection_type + ' ' + new_evidence_detection_info,
+                                     'description':new_evidence_description}
 
-                        self.addDataToLogFile(current_time + ' ' + evidence_to_log)
-                        self.addDataToJSONFile(evidence_dict)
-
-                        # add detection info threat  intelligence in the IP and Domain info
-                        if new_evidence_detection_module == 'ThreatIntelligenceBlacklistIP':
-                            self.set_TI_IP_detection(new_evidence_detection_info, new_evidence_description, profileid, twid)
-                        elif new_evidence_detection_module == 'ThreatIntelligenceBlacklistDomain':
-                            self.set_TI_Domain_detection(new_evidence_detection_info, new_evidence_description, profileid, twid)
-
-                    except AttributeError:
-                        # When the channel is created the data '1' is sent
-                        continue
+                    self.addDataToLogFile(current_time + ' ' + evidence_to_log)
+                    self.addDataToJSONFile(evidence_dict)
 
                     evidence = __database__.getEvidenceForTW(profileid, twid)
                     # Important! It may happen that the evidence is not related to a profileid and twid.
