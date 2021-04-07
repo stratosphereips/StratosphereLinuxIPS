@@ -24,7 +24,8 @@ import json
 
 
 class Module(Module, multiprocessing.Process):
-    # Data should be passed to this module as a json encoded python dict
+    """Data should be passed to this module as a json encoded python dict,
+    by default this module flushes all slipsBlocking chains before it starts """
     # Name: short name of the module. Do not use spaces
     name = 'Blocking'
     description = 'Module to block IPs connecting to this device'
@@ -48,6 +49,8 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_blocking')
+
+        self.set_sudo_according_to_env()
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -62,13 +65,14 @@ class Module(Module, multiprocessing.Process):
         else:
             # Other systems
             self.timeout = None
+
         # self.test()
 
     def test(self):
         """ For debugging purposes, once we're done with the module we'll delete it """
 
         blocking_data = {
-                      "ip"       : "0.0.0.0",
+                      "ip"       : "2.2.0.0",
                       "block"    : True ,
                       "from"     : True ,
                       "to"       : True ,
@@ -79,6 +83,19 @@ class Module(Module, multiprocessing.Process):
         # Example of passing blocking_data to this module:
         blocking_data = json.dumps(blocking_data)
         __database__.publish('new_blocking', blocking_data )
+        print("Blocked ip")
+
+    def set_sudo_according_to_env(self):
+        """ Check if running in host or in docker and sets sudo string accordingly.
+            There's no sudo in docker so we need to execute all commands without it
+         """
+        # This env variable is defined in the Dockerfile
+        running_in_docker = os.environ.get('AM_I_IN_A_DOCKER_CONTAINER', False)
+        global sudo
+        if running_in_docker:
+            sudo = ''
+        else:
+            sudo = 'sudo '
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -109,7 +126,7 @@ class Module(Module, multiprocessing.Process):
             return 'nftables'
         else:
             # If no firewall is found download and use iptables
-            os.sys("sudo apt install iptables")
+            os.system(sudo + "apt install iptables")
             return 'iptables'
 
     def delete_iptables_chain(self):
@@ -117,16 +134,16 @@ class Module(Module, multiprocessing.Process):
 
         # check if slipsBlocking chain exists before flushing it and suppress stderr and stdout while checking
         # 0 means it exists
-        if os.system("sudo iptables -nvL slipsBlocking >/dev/null 2>&1") == 0:
+        if os.system(sudo + " iptables -nvL slipsBlocking >/dev/null 2>&1") == 0:
             # Delete all references to slipsBlocking inserted in INPUT OUTPUT and FORWARD before deleting the chain
-            os.system('sudo iptables -D INPUT -j slipsBlocking')
-            os.system('sudo iptables -D OUTPUT -j slipsBlocking')
-            os.system('sudo iptables -D FORWARD -j slipsBlocking')
+            os.system(sudo + 'iptables -D INPUT -j slipsBlocking')
+            os.system(sudo + 'iptables -D OUTPUT -j slipsBlocking')
+            os.system(sudo + 'iptables -D FORWARD -j slipsBlocking')
 
             # flush all the rules in slipsBlocking 
-            os.system('sudo iptables -F slipsBlocking')
+            os.system(sudo + 'iptables -F slipsBlocking')
             # Delete slipsBlocking chain from iptables
-            os.system('sudo iptables -X slipsBlocking')
+            os.system(sudo + 'iptables -X slipsBlocking')
 
     def initialize_chains_in_firewall(self):
         """ For linux: Adds a chain to iptables or a table to nftables called
@@ -140,19 +157,19 @@ class Module(Module, multiprocessing.Process):
                 self.delete_iptables_chain()
                 self.print('Executing "sudo iptables -N slipsBlocking"')
                 # Add a new chain to iptables
-                os.system('sudo iptables -N slipsBlocking')
+                os.system(sudo + 'iptables -N slipsBlocking')
                 # TODO: use python iptc
                 # TODO: determine which one to use OUTPUT INPUT or FORWARD or is it safer to use the three of them?
                 # Redirect the traffic from all other chains to slipsBlocking so rules
                 # in any pre-existing chains dont override it
                 # -I to insert slipsBlocking at the top of the INPUT, OUTPUT and FORWARD chains
-                os.system('sudo iptables -I INPUT -j slipsBlocking')
-                os.system('sudo iptables -I OUTPUT -j slipsBlocking')
-                os.system('sudo iptables -I FORWARD -j slipsBlocking')
+                os.system(sudo + 'iptables -I INPUT -j slipsBlocking')
+                os.system(sudo + 'iptables -I OUTPUT -j slipsBlocking')
+                os.system(sudo + 'iptables -I FORWARD -j slipsBlocking')
             elif self.firewall == 'nftables':
                 self.print('Executing "sudo nft add table inet slipsBlocking"')
                 # Add a new nft table that uses the inet family (ipv4,ipv6)
-                os.system('sudo nft add table inet slipsBlocking')
+                os.system(sudo + "nft add table inet slipsBlocking")
                 # TODO: HANDLE NFT TABLE
         elif self.platform_system == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
@@ -170,7 +187,7 @@ class Module(Module, multiprocessing.Process):
           delete : to delete an existing rule
         """
 
-        command = "sudo iptables --" + action + " slipsBlocking " + flag + " " + ip_to_block
+        command = sudo + "iptables --" + action + " slipsBlocking " + flag + " " + ip_to_block
         # Add the options constructed in block_ip or unblock_ip to the iptables command
         for key in options.keys():
             command += options[key]
@@ -237,9 +254,9 @@ class Module(Module, multiprocessing.Process):
             elif self.firewall == 'nftables':
                 # TODO: handle the creation of the slipsBlocking chain in nftables
                 # Flush rules in slipsBlocking chain because you can't delete a chain without flushing first
-                os.system('sudo nft flush chain inet slipsBlocking')
+                os.system(sudo + "nft flush chain inet slipsBlocking")
                 # Delete slipsBlocking chain from nftables
-                os.system('sudo nft delete chain inet slipsBlocking')
+                os.system(sudo + "nft delete chain inet slipsBlocking")
         elif self.platform_system == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
 
