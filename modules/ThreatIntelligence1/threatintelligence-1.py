@@ -335,6 +335,16 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
 
+    def is_outgoing_icmp_packet(self, protocol: str, ip_state: str) -> bool:
+        """ Checks whether this ip is our computer sending an ICMP port unreacheable packet to
+            a blacklisted ip or not
+        """
+
+        if protocol == 'ICMP' and ip_state == 'dstip':
+            return True
+        return False
+
+
     def run(self):
         try:
             # Load the local Threat Intelligence files that are stored in the local folder
@@ -353,39 +363,37 @@ class Module(Module, multiprocessing.Process):
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
                 elif message['channel'] == 'give_threat_intelligence' and type(message['data']) is not int:
-                    data = message['data']
-                    new_data = data[:data.find('-profile')]
-                    data = data.split('-')
-                    # Some data may contain '-', so this split by '-' is
-                    # dangerous. To hack it now we access the data
-                    # from the end first
-                    profileid = data[-3]
-                    twid = data[-2]
-                    ip_state = data[-1]
+                    # Data is sent in the channel as a json dict so we need to deserialize it first
+                    data = json.loads(message['data'])
+                    # Extract data from dict
+                    profileid = data.get('profileid')
+                    twid = data.get('twid')
+                    ip_state = data.get('ip_state') # ip state is either 'srcip' or 'dstip'
+                    protocol = data.get('proto')
+                    # Data should contain either an ip or a domain so one of them will be None
+                    ip = data.get('ip')
+                    domain = data.get('host') or data.get('server_name') or data.get('query') #TODO: make sure that's correct
                     # Check if the new data is an ip or a domain
-                    try:
+                    if ip:
                         # Just try to see if it has the format of an ipv4 or ipv6
-                        new_ip = ipaddress.ip_address(new_data)
-                        # We need the string, not the ip object
-                        new_ip = new_data
-                        # Is an IP address (ipv4 or ipv6)
+                        # new_ip = ipaddress.ip_address(ip)
                         # Search for this IP in our database of IoC
-                        ip_description = __database__.search_IP_in_IoC(new_ip)
-
-                        if ip_description != False: # Dont change this condition. This is the only way it works
+                        ip_description = __database__.search_IP_in_IoC(ip)
+                        # Block only if the traffic isn't outgoing ICMP port unreachable packet
+                        if (ip_description != False
+                                and self.is_outgoing_icmp_packet(protocol,ip_state)==False): # Dont change this condition. This is the only way it works
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_description = json.loads(ip_description)
                             # ip_info = ip_description['description']
-                            ip_source = ip_description['source']
-                            self.set_evidence_ip(new_ip, ip_source, profileid, twid, ip_state)
-                    except ValueError:
-                        # This is not an IP, then should be a domain
-                        new_domain = new_data
+                            ip_source = ip_description['source'] # this is a .csv file
+                            self.set_evidence_ip(ip, ip_source, profileid, twid, ip_state)
+
+                    if domain:
                         # Search for this domain in our database of IoC
-                        domain_description = __database__.search_Domain_in_IoC(new_domain)
+                        domain_description = __database__.search_Domain_in_IoC(domain)
                         if domain_description != False: # Dont change this condition. This is the only way it works
                             # If the domain is in the blacklist of IoC. Set an evidence
-                            self.set_evidence_domain(new_domain, domain_description, profileid, twid)
+                            self.set_evidence_domain(domain, domain_description, profileid, twid)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
