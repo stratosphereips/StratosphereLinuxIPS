@@ -336,6 +336,58 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
 
+    def set_maliciousDomain_to_MaliciousDomains(self, domain, profileid, twid):
+        '''
+        Set malicious domain to DB 'MaliciousDomains' with a profileid and twid where domain was met
+        '''
+        # get all profiles and twis where this IP was met
+        domain_profiled_twid = __database__.get_malicious_domain(domain)
+        try:
+            profile_tws = domain_profiled_twid[profileid]               # a dictionary {profile:set(tw1, tw2)}
+            profile_tws = ast.literal_eval(profile_tws)                 # set(tw1, tw2)
+            profile_tws.add(twid)
+            domain_profiled_twid[profileid] = str(profile_tws)
+        except KeyError:
+            domain_profiled_twid[profileid] = str({twid})               # add key-pair to the dict if does not exist
+        data = json.dumps(domain_profiled_twid)
+        __database__.set_malicious_domain(domain, data)
+
+    def set_maliciousDomain_to_DomainInfo(self, domain, domain_description):
+        '''
+        Set malicious domain in DomainsInfo.
+        '''
+        domain_data = {}
+        # Maybe we should change the key to 'status' or something like that.
+        domain_data['threatintelligence'] = domain_description
+        __database__.setInfoForDomains(domain, domain_data)
+
+    def set_maliciousIP_to_MaliousIPs(self, ip, profileid, twid):
+        '''
+        Set malicious IP in 'MaliciousIPs' key with a profileid and twid.
+        '''
+
+        # Retrieve all profiles and twis, where this malicios IP was met.
+        ip_profileid_twid= __database__.get_malicious_ip(ip)
+        try:
+            profile_tws = ip_profileid_twid[profileid]             # a dictionary {profile:set(tw1, tw2)}
+            profile_tws = ast.literal_eval(profile_tws)            # set(tw1, tw2)
+            profile_tws.add(twid)
+            ip_profileid_twid[profileid] = str(profile_tws)
+        except KeyError:
+            ip_profileid_twid[profileid] = str({twid})                   # add key-pair to the dict if does not exist
+        data = json.dumps(ip_profileid_twid)
+        __database__.set_malicious_ip(ip, data)
+
+    def set_maliciousIP_to_IPInfo(self, ip, ip_description):
+        '''
+        Set malicious IP in IPsInfo.
+        '''
+
+        ip_data = {}
+        # Maybe we should change the key to 'status' or something like that.
+        ip_data['threatintelligence'] = ip_description
+        __database__.setInfoForIPs(ip, ip_data)  # Set in the IP info that IP is blacklisted
+
     def is_outgoing_icmp_packet(self, protocol: str, ip_state: str) -> bool:
         """
         Check whether this IP is our computer sending an ICMP unreacheable packet to
