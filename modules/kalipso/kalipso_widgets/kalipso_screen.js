@@ -139,15 +139,16 @@ class screen {
     }
 
     initTree(){
-      /*
-      Initialize tree on screen and fill in data
-      */
-    	this.tree_widget = new this.tree_class(this.grid, this.blessed, this.contrib, this.redis_database, this.timeline_widget, this.screen, this.evidence_box_widget, this.ipinfo_widget)
-    	this.tree_widget.getTreeDataFromDatabase() 
-      this.tree_widget.focus()
-      this.tree_widget.on()
-      this.tree_widget.widget.style.border.fg = 'magenta'
-      this.focus_widget = this.tree_widget
+        /*
+        Initialize tree on screen and fill in data
+        */
+        this.tree_widget = new this.tree_class(this.grid, this.blessed, this.contrib, this.redis_database, this.timeline_widget, this.screen, this.evidence_box_widget, this.ipinfo_widget)
+        this.tree_widget.getTreeDataFromDatabase()
+        this.tree_widget.focus()
+        this.tree_widget.on()
+        this.tree_widget.widget.style.border.fg = 'magenta'
+        this.focus_widget = this.tree_widget
+
     }
 
     initMain(){
@@ -326,13 +327,15 @@ class screen {
 //      this.focus_widget.on()
       this.render()
     }
+
     h_hotkey_routine(){
-    for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
-        this.hotkeys[widget_idx].hide()
-      }
+
+        for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+            this.hotkeys[widget_idx].hide()
+        }
         for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
-        this.mainPage[widget_idx].hide()
-      }
+            this.mainPage[widget_idx].hide()
+        }
         this.helptable.show()
         this.render()
     }
