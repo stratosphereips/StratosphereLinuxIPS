@@ -159,26 +159,6 @@ class EvidenceProcess(multiprocessing.Process):
             open('alerts.json', 'w').close()
         return open('alerts.json', 'a')
 
-    def add_maliciousIP(self, ip='', profileid='', twid=''):
-        '''
-        Add malicious IP to DB 'MaliciousIPs' with a profileid and twid where it was met
-        Returns nothing
-        '''
-
-        ip_location = __database__.get_malicious_ip(ip)
-        # if profileid or twid is None, do not put any value in a dictionary
-        if profileid != 'None':
-            try:
-                profile_tws = ip_location[profileid]
-                profile_tws = ast.literal_eval(profile_tws)
-                profile_tws.add(twid)
-                ip_location[profileid] = str(profile_tws)
-            except KeyError:
-                ip_location[profileid] = str({twid})
-        elif not ip_location:
-            ip_location = {}
-        data = json.dumps(ip_location)
-        __database__.add_malicious_ip(ip, data)
 
     def addDataToJSONFile(self, data):
         """
@@ -211,55 +191,6 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-    def add_maliciousDomain(self, domain='', profileid='', twid=''):
-        '''
-        Add malicious domain to DB 'MaliciousDomainss' with a profileid and twid where domain was met
-        Returns nothing
-        '''
-        domain_location = __database__.get_malicious_domain(domain)
-        # if profileid or twid is None, do not put any value in a dictionary
-        if profileid != 'None':
-            try:
-                profile_tws = domain_location[profileid]
-                profile_tws = ast.literal_eval(profile_tws)
-                profile_tws.add(twid)
-                domain_location[profileid] = str(profile_tws)
-            except KeyError:
-                domain_location[profileid] = str({twid})
-        elif not domain_location:
-            domain_location = {}
-        data = json.dumps(domain_location)
-        __database__.add_malicious_domain(domain, data)
-
-    def set_TI_IP_detection(self, ip, ip_description, profileid, twid):
-        '''
-        Funciton to set malicious IPs in IPsInfo and other db keys.
-        :ip: detected IP
-        :ip_description: source file of detected IP
-        :profileid: profile where IP was detected
-        :twid: timewindow where IP was detected
-        '''
-
-        ip_data = {}
-        # Maybe we should change the key to 'status' or something like that.
-        ip_data['threatintelligence'] = ip_description
-        self.add_maliciousIP(ip, profileid, twid)
-        __database__.setInfoForIPs(ip, ip_data)  # Set in the IP info that IP is blacklisted
-
-    def set_TI_Domain_detection(self, domain, domain_description, profileid, twid):
-        '''
-        Funciton to set malicious domains in DomainsInfo and other db keys.
-        :domain: detected domain
-        :domain_description: source file of detected domain
-        :profileid: profile where domain was detected
-        :twid: timewindow where domain was detected
-        '''
-
-        domain_data = {}
-        # Maybe we should change the key to 'status' or something like that.
-        domain_data['threatintelligence'] = domain_description
-        self.add_maliciousDomain(domain, profileid, twid)
-        __database__.setInfoForDomains(domain, domain_data)  # Set in the DomainsInfo info that Domain is blacklisted
 
     def run(self):
         try:
