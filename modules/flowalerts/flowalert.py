@@ -118,34 +118,21 @@ class Module(Module, multiprocessing.Process):
 
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
         """
-        Function to generate an evidence if a duration of the connection is
+        Check if a duration of the connection is
         above the threshold (more than 25 minutess by default).
         """
         if type(dur) == str:
             dur = float(dur)
         # If duration is above threshold, we should set an evidence
         if dur > self.long_connection_threshold:
-            # If the flow is 'in' feature, then we set source address (saddr) in
-            # the evidence
-            if daddr == profileid.split('_')[-1]:
-                self.set_evidence_long_connection(saddr, dur, profileid, twid, ip_state='srcip')
-            # If the flow is 'out' feature, then we set destination address (daddr)
-            # the evidence
-            else:
-                self.set_evidence_long_connection(daddr,
-                                                  dur,
-                                                  profileid,
+            # set "flowalerts-long-connection:malicious" label in the flow (needed for Ensembling module)
+            module_name = "flowalerts-long-connection"
+            module_label = self.malicious_label
+            __database__.set_module_label_to_flow(profileid,
                                                   twid,
-                                                  ip_state='dstip')
-
-                # set "flowalerts-long-connection:malicious" label in the flow (needed for Ensembling module)
-                module_name = "flowalerts-long-connection"
-                module_label = self.malicious_label
-                __database__.set_module_label_to_flow(profileid,
-                                                      twid,
-                                                      uid,
-                                                      module_name,
-                                                      module_label)
+                                                  uid,
+                                                  module_name,
+                                                  module_label)
         else:
             # set "flowalerts-long-connection:normal" label in the flow (needed for Ensembling module)
             module_name = "flowalerts-long-connection"
@@ -164,83 +151,82 @@ class Module(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
                     return True
-                if message and message['channel'] == 'new_flow':
+                if message and message['channel'] == 'new_flow' and type(message['data']) is not int:
                     data = message['data']
-                    if type(data) == str:
-                        # Convert from json to dict
-                        data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        # Get flow as a json
-                        flow = data['flow']
-                        # Convert flow to a dict
-                        flow = json.loads(flow)
-                        # Convert the common fields to something that can
-                        # be interpreted
-                        uid = next(iter(flow))
-                        flow_dict = json.loads(flow[uid])
-                        dur = flow_dict['dur']
-                        saddr = flow_dict['saddr']
-                        daddr = flow_dict['daddr']
-                        # stime = flow_dict['ts']
-                        # sport = flow_dict['sport']
-                        # timestamp = data['stime']
-                        # dport = flow_dict['dport']
-                        # proto = flow_dict['proto']
-                        # state = flow_dict['state']
-                        # pkts = flow_dict['pkts']
-                        # allbytes = flow_dict['allbytes']
+                    # Convert from json to dict
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    # Get flow as a json
+                    flow = data['flow']
+                    # Convert flow to a dict
+                    flow = json.loads(flow)
+                    # Convert the common fields to something that can
+                    # be interpreted
+                    uid = next(iter(flow))
+                    flow_dict = json.loads(flow[uid])
+                    dur = flow_dict['dur']
+                    saddr = flow_dict['saddr']
+                    daddr = flow_dict['daddr']
+                    # stime = flow_dict['ts']
+                    # sport = flow_dict['sport']
+                    # timestamp = data['stime']
+                    # dport = flow_dict['dport']
+                    # proto = flow_dict['proto']
+                    # state = flow_dict['state']
+                    # pkts = flow_dict['pkts']
+                    # allbytes = flow_dict['allbytes']
 
-                        # Do not check the duration of the flow if the daddr or
-                        # saddr is a  multicast.
-                        if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
-                            self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
+                    # Do not check the duration of the flow if the daddr or
+                    # saddr is a  multicast.
+                    if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
+                        self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
                 message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
                     return True
-                if message and message['channel'] == 'new_ssh':
+                if message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
                     data = message['data']
-                    if type(data) == str:
-                        # Convert from json to dict
-                        data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        # Get flow as a json
-                        flow = data['flow']
-                        # Convert flow to a dict
-                        flow_dict = json.loads(flow)
-                        uid = flow_dict['uid']
-                        # Try Zeek method to detect if SSh was successful or not.
-                        auth_success = flow_dict['auth_success']
-                        if auth_success:
-                            time.sleep(10)    # This logic should be fixed, it stops the whole module.
-                            original_ssh_flow = __database__.get_flow(profileid, twid, uid)
-                            original_flow_uid = next(iter(original_ssh_flow))
-                            if original_ssh_flow[original_flow_uid]:
-                                ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
-                                daddr = ssh_flow_dict['daddr']
-                                saddr = ssh_flow_dict['saddr']
-                                size = ssh_flow_dict['allbytes']
-                                self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Zeek')
-                        else:
-                            # Try Slips method to detect if SSH was successful.
-                            time.sleep(10) # This logic should be fixed, it stops the whole module.
-                            original_ssh_flow = __database__.get_flow(profileid, twid, uid)
-                            original_flow_uid = next(iter(original_ssh_flow))
-                            if original_ssh_flow[original_flow_uid]:
-                                ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
-                                daddr = ssh_flow_dict['daddr']
-                                saddr = ssh_flow_dict['saddr']
-                                size = ssh_flow_dict['allbytes']
-                                if size > self.ssh_succesful_detection_threshold:
-                                    # Set the evidence because there is no
-                                    # easier way to show how Slips detected
-                                    # the successful ssh and not Zeek
-                                    self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Slips')
-                                else:
-                                    # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
-                                    pass
+
+                    # Convert from json to dict
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    # Get flow as a json
+                    flow = data['flow']
+                    # Convert flow to a dict
+                    flow_dict = json.loads(flow)
+                    uid = flow_dict['uid']
+                    # Try Zeek method to detect if SSh was successful or not.
+                    auth_success = flow_dict['auth_success']
+                    if auth_success:
+                        time.sleep(10)    # This logic should be fixed, it stops the whole module.
+                        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+                        original_flow_uid = next(iter(original_ssh_flow))
+                        if original_ssh_flow[original_flow_uid]:
+                            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
+                            daddr = ssh_flow_dict['daddr']
+                            saddr = ssh_flow_dict['saddr']
+                            size = ssh_flow_dict['allbytes']
+                            self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Zeek')
+                    else:
+                        # Try Slips method to detect if SSH was successful.
+                        time.sleep(10) # This logic should be fixed, it stops the whole module.
+                        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+                        original_flow_uid = next(iter(original_ssh_flow))
+                        if original_ssh_flow[original_flow_uid]:
+                            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
+                            daddr = ssh_flow_dict['daddr']
+                            saddr = ssh_flow_dict['saddr']
+                            size = ssh_flow_dict['allbytes']
+                            if size > self.ssh_succesful_detection_threshold:
+                                # Set the evidence because there is no
+                                # easier way to show how Slips detected
+                                # the successful ssh and not Zeek
+                                self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Slips')
+                            else:
+                                # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
+                                pass
         except KeyboardInterrupt:
             return True
         except Exception as inst:
