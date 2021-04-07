@@ -90,7 +90,7 @@ class Module(Module, multiprocessing.Process):
             There's no sudo in docker so we need to execute all commands without it
          """
         # This env variable is defined in the Dockerfile
-        running_in_docker = os.environ.get('AM_I_IN_A_DOCKER_CONTAINER', False)
+        running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
         global sudo
         if running_in_docker:
             sudo = ''

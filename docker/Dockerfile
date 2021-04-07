@@ -1,6 +1,5 @@
 FROM debian:buster
 
-ENV AM_I_IN_A_DOCKER_CONTAINER Yes
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
@@ -30,6 +29,7 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-redis \
     zeek \
     python3-pip \
+    iptables \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
@@ -41,7 +41,7 @@ RUN pip3 install wheel \
     setuptools \
     validators \
     colorama \
-    requests==2.21.0 \
+    requests \
  && pip3 install --upgrade tensorflow==2.1.0
 
 # Download and unpack Slips.
@@ -65,6 +65,8 @@ RUN cd StratosphereLinuxIPS/modules/kalipso && npm install \
     redis \
     sorted-array-async \
     yargs
+# Blocking module requirement
+ENV IS_IN_A_DOCKER_CONTAINER True
 
 # Change the backed of keras to tensorflow
 #RUN sed -i 's/theano/tensorflow/' $HOME/.keras/keras.json
