@@ -12,6 +12,7 @@ import json
 import traceback
 import hashlib
 import validators
+import ast
 
 
 class Module(Module, multiprocessing.Process):
