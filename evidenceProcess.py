@@ -19,7 +19,6 @@ import multiprocessing
 from slips.core.database import __database__
 import json
 from datetime import datetime
-import ast
 import configparser
 import platform
 from colorama import init
