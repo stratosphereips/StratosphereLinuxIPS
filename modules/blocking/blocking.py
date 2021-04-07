@@ -62,8 +62,8 @@ class Module(Module, multiprocessing.Process):
         else:
             # Other systems
             self.timeout = None
-
         # self.test()
+
     def test(self):
         """ For debugging purposes, once we're done with the module we'll delete it """
 
@@ -102,6 +102,7 @@ class Module(Module, multiprocessing.Process):
 
     def determine_linux_firewall(self):
         """ Returns the currently installed firewall and installs iptables if none was found """
+
         if shutil.which('iptables'):
             return 'iptables'
         elif shutil.which('nftables'):
