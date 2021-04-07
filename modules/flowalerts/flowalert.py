@@ -54,6 +54,7 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_ssh')
+        self.c3 = __database__.subscribe('new_notice')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -171,14 +172,18 @@ class Module(Module, multiprocessing.Process):
                                                   module_name,
                                                   module_label)
 
+    def check_stop_process_msg(self,message):
+        if message and message['data'] == 'stop_process':
+            return True
+
     def run(self):
         try:
             # Main loop function
             while True:
+                # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=0.01)
                 # Check that the message is for you. Probably unnecessary...
-                if message and message['data'] == 'stop_process':
-                    return True
+                self.check_stop_process_msg(message)
                 if message and message['channel'] == 'new_flow':
                     data = message['data']
                     if type(data) == str:
@@ -211,9 +216,9 @@ class Module(Module, multiprocessing.Process):
                         if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
                             self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
+                # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
-                if message and message['data'] == 'stop_process':
-                    return True
+                self.check_stop_process_msg(message)
                 if message and message['channel'] == 'new_ssh':
                     data = message['data']
                     if type(data) == str:
@@ -259,6 +264,17 @@ class Module(Module, multiprocessing.Process):
                                 else:
                                     # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
                                     pass
+
+                # ---------------------------- new_ssh channel
+                message = self.c3.get_message(timeout=0.01)
+                self.check_stop_process_msg(message)
+                if message and message['channel'] == 'new_notice':
+                    data = message['data']
+                    # Convert from json to dict
+                    data = json.loads(data)
+                    #TODO handle new_notice msg
+                    pass
+
         except KeyboardInterrupt:
             return True
         except Exception as inst:
