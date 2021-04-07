@@ -336,8 +336,9 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst), 0, 0)
 
     def is_outgoing_icmp_packet(self, protocol: str, ip_state: str) -> bool:
-        """ Checks whether this ip is our computer sending an ICMP port unreacheable packet to
-            a blacklisted ip or not
+        """
+        Check whether this IP is our computer sending an ICMP unreacheable packet to
+        a blacklisted IP or not.
         """
 
         if protocol == 'ICMP' and ip_state == 'dstip':
@@ -372,11 +373,9 @@ class Module(Module, multiprocessing.Process):
                     protocol = data.get('proto')
                     # Data should contain either an ip or a domain so one of them will be None
                     ip = data.get('ip')
-                    domain = data.get('host') or data.get('server_name') or data.get('query') #TODO: make sure that's correct
+                    domain = data.get('host') or data.get('server_name') or data.get('query')
                     # Check if the new data is an ip or a domain
                     if ip:
-                        # Just try to see if it has the format of an ipv4 or ipv6
-                        # new_ip = ipaddress.ip_address(ip)
                         # Search for this IP in our database of IoC
                         ip_description = __database__.search_IP_in_IoC(ip)
                         # Block only if the traffic isn't outgoing ICMP port unreachable packet
