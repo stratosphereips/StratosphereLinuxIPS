@@ -137,7 +137,6 @@ class Module(Module, multiprocessing.Process):
         try:
             # Download lstm model
             tcpmodel = load_model(model_file)
-            # udpmodel = load_model('modules/lstm-cc-detection-1/detection_udpmodel-9.h5')
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
