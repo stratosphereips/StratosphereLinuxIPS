@@ -247,9 +247,9 @@ class Module(Module, multiprocessing.Process):
                             else:
                                 # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
                                 pass
+
                 # ---------------------------- new_notice channel
                 message = self.c3.get_message(timeout=0.01)
-                self.check_stop_process_msg(message)
                 if message and message['channel'] == 'new_notice':
                     data = message['data']
                     if type(data) == str:
@@ -265,9 +265,10 @@ class Module(Module, multiprocessing.Process):
                         description = 'Self-signed certificate. Destination IP: {}'.format(ip)
                         confidence = 0.5
                         threat_level = 30
+                        type_detection = 'dstip'
                         type_evidence = 'SelfSignedCertificate'
-                        key = 'dstip:' + str(ip) + ':' + type_evidence
-                        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+                        detection_info =ip
+                        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
                         self.print(description, 3, 0)
 
         except KeyboardInterrupt:
