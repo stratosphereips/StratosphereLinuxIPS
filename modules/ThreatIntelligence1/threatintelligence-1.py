@@ -434,7 +434,6 @@ class Module(Module, multiprocessing.Process):
                         # Block only if the traffic isn't outgoing ICMP port unreachable packet
                         if (ip_description != False
                                 and self.is_outgoing_icmp_packet(protocol,ip_state)==False): # Dont change this condition. This is the only way it works
-                            print(ip, ip_description)
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_description = json.loads(ip_description)
                             ip_source = ip_description['source'] # this is a .csv file
@@ -447,7 +446,6 @@ class Module(Module, multiprocessing.Process):
                     if domain:
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(domain)
-                        print(domain, domain_description)
                         if domain_description != False: # Dont change this condition. This is the only way it works
                             print(domain, domain_description)
                             # If the domain is in the blacklist of IoC. Set an evidence
