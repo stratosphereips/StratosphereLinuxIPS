@@ -133,7 +133,7 @@ class LogsProcess(multiprocessing.Process):
             return True
         except Exception as inst:
             # Stop the timer
-            timer.shutdown()
+            # timer.shutdown()
             self.outputqueue.put('01|logs|\t[Logs] Error with LogsProcess')
             self.outputqueue.put('01|logs|\t[Logs] {}'.format(type(inst)))
             self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))

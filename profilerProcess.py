@@ -1394,7 +1394,7 @@ class ProfilerProcess(multiprocessing.Process):
                     and not 'flow' in self.column_values['type'] \
                     and not 'argus' in self.column_values['type'] \
                     and not 'nfdump' in self.column_values['type']\
-                    and not 'notice' in self.column_values['type']\:
+                    and not 'notice' in self.column_values['type']:
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"

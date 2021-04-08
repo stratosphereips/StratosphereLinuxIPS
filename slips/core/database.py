@@ -867,8 +867,8 @@ class Database(object):
                the idea is that you can later update this specific detection when it evolves.
                Examples of keys are: 'dport:1234' for all the evidences regarding this dport, or 'dip:1.1.1.1' for all the evidences regarding that dst ip
         - type_evidence: The type of evidence you can send. For example PortScanType1
-        - threat_level: How important this evidence is. Portscan? C&C channel? Exploit?
-        - confidence: How sure you are that this is what you say it is. Basically: the more data the more sure you are.
+        - threat_level: from 0 to 100 , How important this evidence is. Portscan? C&C channel? Exploit?
+        - confidence: from 0 to 1, how sure you are that this is what you say it is. Basically: the more data the more sure you are.
 
         The evidence is stored as a dict.
         {
@@ -1428,7 +1428,8 @@ class Database(object):
         # Publish the new dns received
         to_send = {}
         to_send['profileid'] = profileid
-        to_send['twid'] = twid
+        to_send['twid'] = twid[flowalerts] ('Expecting value: line 1 column 1 (char 0)',)
+
         to_send['flow'] = data
         to_send = json.dumps(to_send)
         #publish a dns with its flow

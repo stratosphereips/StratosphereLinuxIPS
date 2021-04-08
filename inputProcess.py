@@ -176,7 +176,9 @@ class InputProcess(multiprocessing.Process):
                 except KeyError:
                     # First time we opened this file.
                     # Ignore the files that do not contain data.
-                    if 'capture_loss' in filename or 'loaded_scripts' in filename or 'packet_filter' in filename or 'stats' in filename or 'weird' in filename or 'reporter' in filename:
+                    if ('capture_loss' in filename or 'loaded_scripts' in filename
+                            or 'packet_filter' in filename or 'stats' in filename
+                            or 'weird' in filename or 'reporter' in filename):
                         continue
                     file_handler = open(filename + '.log', 'r')
                     open_file_handlers[filename] = file_handler

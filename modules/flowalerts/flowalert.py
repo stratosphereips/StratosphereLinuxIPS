@@ -272,15 +272,20 @@ class Module(Module, multiprocessing.Process):
                     if type(data) == str:
                         # Convert from json to dict
                         data = json.loads(data)
-                        pprint.pprint(data)
                         profileid = data['profileid']
                         twid = data['twid']
                         # Get flow as a json
                         flow = data['flow']
                         # Convert flow to a dict
-                        flow_dict = json.loads(flow)
-                        # TODO: do something with the flow_dict
-                        pass
+                        flow = json.loads(flow)
+                        ip = flow['daddr']
+                        description = 'Self-signed certificate. Destination IP: {}'.format(ip)
+                        confidence = 0.5
+                        threat_level = 30
+                        type_evidence = 'SelfSignedCertificate'
+                        key = 'dstip:' + str(ip) + ':' + type_evidence
+                        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+                        self.print(description, 3, 0)
 
         except KeyboardInterrupt:
             return True
