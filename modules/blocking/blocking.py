@@ -24,7 +24,7 @@ class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'blocking'
     description = 'Module to block IPs connecting to this device'
-    authors = ['Kamila Babayeva, Sebastian Garcia']
+    authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)

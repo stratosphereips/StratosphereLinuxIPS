@@ -1,4 +1,4 @@
-//import all widgets classes
+/*Import all the widgets.*/
 var screen_class = require('./kalipso_widgets/kalipso_screen')
 var blessed = require('blessed')
 var contrib = require('blessed-contrib')
@@ -24,15 +24,16 @@ var {argv} = require('yargs').option('l',{
 
 const {limit_letter_outtuple} = argv
 
+// Initialize all channels in Redis database.
 const redis_database = new redis_database_class(redis)
-//Initialize all channels in redis
 redis_database.createClient()
 
-//initialize screen with all necessary widget classes
+// Initialize screen with all necessary widgets.
 const screen = new screen_class(blessed, contrib, redis_database,tree, table, box,listtable, gauge, combine_listtable_gauge, listbar,limit_letter_outtuple)
 screen.init()
 screen.render()
-//Register all keypresses in the screen
+
+// Register all keypresses in the screen.
 screen.registerEvents()
 screen.update_interface()
 

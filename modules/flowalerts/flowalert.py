@@ -1,16 +1,3 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
-
 # Must imports
 from slips.common.abstracts import Module
 import multiprocessing
@@ -25,7 +12,6 @@ import time
 
 
 class Module(Module, multiprocessing.Process):
-    # Name: short name of the module. Do not use spaces
     name = 'flowalerts'
     description = 'Alerts about flows: long connection, successful ssh'
     authors = ['Kamila Babayeva', 'Sebastian Garcia']
@@ -108,61 +94,52 @@ class Module(Module, multiprocessing.Process):
         a better way to show it.
         The threat_level is 0.01 to show that this is not a detection
         """
+
+        type_detection = 'ip'
+        detection_info = saddr
         type_evidence = 'SSHSuccessful-by-' + by
-        key = 'ip:' + saddr + ':' + type_evidence
         threat_level = 0.01
         confidence = 0.5
         description = 'SSH Successful to IP :' + daddr + '. From IP ' + saddr + '. Size: ' + str(size) + '. Detection Model ' + by
         if not twid:
             twid = ''
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                 threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def set_evidence_long_connection(self, ip, duration, profileid, twid, ip_state='ip'):
         '''
-        Set an evidence for long connection in the tw
-        If profileid is None, do not set an Evidence
-        Returns nothing
+        Set an evidence for a long connection.
         '''
+        type_detection = ip_state
+        detection_info = ip
         type_evidence = 'LongConnection'
-        key = ip_state + ':' + ip + ':' + type_evidence
         threat_level = 10
         confidence = 0.5
         description = 'Long Connection ' + str(duration)
         if not twid:
             twid = ''
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
         """
-        Function to generate alert if the new connection's duration
-        if above the threshold (more than 25mins by default).
+        Check if a duration of the connection is
+        above the threshold (more than 25 minutess by default).
         """
-        # If duration is above threshold, we should set Evidence
         if type(dur) == str:
             dur = float(dur)
+        # If duration is above threshold, we should set an evidence
         if dur > self.long_connection_threshold:
-            # If the flow is 'in' feature, then we set source address in
-            # the evidence
-            if daddr == profileid.split('_')[-1]:
-                self.set_evidence_long_connection(saddr, dur, profileid, twid, ip_state='srcip')
-            # If the flow is as 'out' feature, then we set dst address
-            # as evidence
-            else:
-                self.set_evidence_long_connection(daddr,
-                                                  dur,
-                                                  profileid,
+            # set "flowalerts-long-connection:malicious" label in the flow (needed for Ensembling module)
+            module_name = "flowalerts-long-connection"
+            module_label = self.malicious_label
+
+            __database__.set_module_label_to_flow(profileid,
                                                   twid,
-                                                  ip_state='dstip')
-                # add flowalert detection in the flow
-                module_name = "flowalerts-long-connection"
-                module_label = self.malicious_label
-                __database__.set_module_label_to_flow(profileid,
-                                                      twid,
-                                                      uid,
-                                                      module_name,
-                                                      module_label)
+                                                  uid,
+                                                  module_name,
+                                                  module_label)
         else:
-            # if there is no long connection,put label malicous in the flow
+            # set "flowalerts-long-connection:normal" label in the flow (needed for Ensembling module)
             module_name = "flowalerts-long-connection"
             module_label = self.normal_label
             __database__.set_module_label_to_flow(profileid,
@@ -176,89 +153,85 @@ class Module(Module, multiprocessing.Process):
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=0.01)
-                # Check that the message is for you. Probably unnecessary...
+                # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
                     return True
-                if message and message['channel'] == 'new_flow':
+                if message and message['channel'] == 'new_flow' and type(message['data']) is not int:
                     data = message['data']
-                    if type(data) == str:
-                        # Convert from json to dict
-                        data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        # Get flow as a json
-                        flow = data['flow']
-                        # Convert flow to a dict
-                        flow = json.loads(flow)
-                        # Convert the common fields to something that can
-                        # be interpreted
-                        uid = next(iter(flow))
-                        flow_dict = json.loads(flow[uid])
-                        dur = flow_dict['dur']
-                        saddr = flow_dict['saddr']
-                        daddr = flow_dict['daddr']
-                        # stime = flow_dict['ts']
-                        # sport = flow_dict['sport']
-                        # timestamp = data['stime']
-                        # dport = flow_dict['dport']
-                        # proto = flow_dict['proto']
-                        # state = flow_dict['state']
-                        # pkts = flow_dict['pkts']
-                        # allbytes = flow_dict['allbytes']
+                    # Convert from json to dict
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    # Get flow as a json
+                    flow = data['flow']
+                    # Convert flow to a dict
+                    flow = json.loads(flow)
+                    # Convert the common fields to something that can
+                    # be interpreted
+                    uid = next(iter(flow))
+                    flow_dict = json.loads(flow[uid])
+                    dur = flow_dict['dur']
+                    saddr = flow_dict['saddr']
+                    daddr = flow_dict['daddr']
+                    # stime = flow_dict['ts']
+                    # sport = flow_dict['sport']
+                    # timestamp = data['stime']
+                    # dport = flow_dict['dport']
+                    # proto = flow_dict['proto']
+                    # state = flow_dict['state']
+                    # pkts = flow_dict['pkts']
+                    # allbytes = flow_dict['allbytes']
 
-                        # Do not check the duration of the flow if the daddr or
-                        # saddr is multicast
-                        if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
-                            self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
+                    # Do not check the duration of the flow if the daddr or
+                    # saddr is a  multicast.
+                    if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
+                        self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
                 message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
                     return True
-                if message and message['channel'] == 'new_ssh':
+                if message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
                     data = message['data']
-                    if type(data) == str:
-                        # Convert from json to dict
-                        data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        # Get flow as a json
-                        flow = data['flow']
-                        # Convert flow to a dict
-                        flow_dict = json.loads(flow)
-                        uid = flow_dict['uid']
-                        # First try the Zeek method
-                        auth_success = flow_dict['auth_success']
-                        # self.print(f'Received SSH Flow: {flow_dict}')
-                        if auth_success:
-                            # self.print(f'NEW Successsul by Zeek SSH recived: {data}', 1, 0)
-                            time.sleep(10)
-                            original_ssh_flow = __database__.get_flow(profileid, twid, uid)
-                            original_flow_uid = next(iter(original_ssh_flow))
-                            if original_ssh_flow[original_flow_uid]:
-                                ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
-                                daddr = ssh_flow_dict['daddr']
-                                saddr = ssh_flow_dict['saddr']
-                                size = ssh_flow_dict['allbytes']
-                                self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Zeek')
-                        else:
-                            # Second try the Stratosphere method method
-                            time.sleep(10)
-                            original_ssh_flow = __database__.get_flow(profileid, twid, uid)
-                            original_flow_uid = next(iter(original_ssh_flow))
-                            if original_ssh_flow[original_flow_uid]:
-                                ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
-                                daddr = ssh_flow_dict['daddr']
-                                saddr = ssh_flow_dict['saddr']
-                                size = ssh_flow_dict['allbytes']
-                                if size > self.ssh_succesful_detection_threshold:
-                                    # self.print(f'NEW Successsul by Stratosphere SSH recived: {data}', 1, 0)
-                                    # Set the evidence because there is no
-                                    # easier # way to show how slips detected
-                                    # the successful ssh and not Zeek
-                                    self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Slips')
-                                else:
-                                    # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
-                                    pass
+
+                    # Convert from json to dict
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    # Get flow as a json
+                    flow = data['flow']
+                    # Convert flow to a dict
+                    flow_dict = json.loads(flow)
+                    uid = flow_dict['uid']
+                    # Try Zeek method to detect if SSh was successful or not.
+                    auth_success = flow_dict['auth_success']
+                    if auth_success:
+                        time.sleep(10)    # This logic should be fixed, it stops the whole module.
+                        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+                        original_flow_uid = next(iter(original_ssh_flow))
+                        if original_ssh_flow[original_flow_uid]:
+                            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
+                            daddr = ssh_flow_dict['daddr']
+                            saddr = ssh_flow_dict['saddr']
+                            size = ssh_flow_dict['allbytes']
+                            self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Zeek')
+                    else:
+                        # Try Slips method to detect if SSH was successful.
+                        time.sleep(10) # This logic should be fixed, it stops the whole module.
+                        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+                        original_flow_uid = next(iter(original_ssh_flow))
+                        if original_ssh_flow[original_flow_uid]:
+                            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
+                            daddr = ssh_flow_dict['daddr']
+                            saddr = ssh_flow_dict['saddr']
+                            size = ssh_flow_dict['allbytes']
+                            if size > self.ssh_succesful_detection_threshold:
+                                # Set the evidence because there is no
+                                # easier way to show how Slips detected
+                                # the successful ssh and not Zeek
+                                self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Slips')
+                            else:
+                                # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
+                                pass
         except KeyboardInterrupt:
             return True
         except Exception as inst:
