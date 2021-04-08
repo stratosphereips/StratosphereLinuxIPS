@@ -21,7 +21,6 @@ import warnings
 import numpy as np
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 from tensorflow.python.keras.models import load_model
-from keras.utils import to_categorical
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -82,16 +81,16 @@ class Module(Module, multiprocessing.Process):
 
     def set_evidence(self, score, confidence, tupleid='', profileid='', twid=''):
         '''
-        Set an evidence for malicious IP met in the timewindow
-        If profileid is None, do not set an Evidence
-        Returns nothing
+        Set an evidence for malicious Tuple
         '''
+        type_detection = 'outTuple'
+        detection_info = tupleid
         type_evidence = 'C&C channels detection'
-        key = 'outTuple' + ':' + tupleid + ':' + type_evidence
         threat_level = 100
         description = 'RNN C&C channels detection, score: ' + str(score)
-        self.print(f'Setting evidence of {description} with threat level {threat_level} and confidence {confidence}. For {profileid}, tuple: {tupleid} on {twid}', 3, 0)
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
+        __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                 threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def convert_input_for_module(self, pre_behavioral_model):
         """
@@ -137,7 +136,6 @@ class Module(Module, multiprocessing.Process):
         try:
             # Download lstm model
             tcpmodel = load_model(model_file)
-            # udpmodel = load_model('modules/lstm-cc-detection-1/detection_udpmodel-9.h5')
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)

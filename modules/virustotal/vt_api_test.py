@@ -4,7 +4,7 @@ import socket
 import os
 import numpy as np
 
-from modules.virustotal.virustotal import VirusTotalModule
+from modules.virustotal.virustotal import Module
 
 
 def check_ip_from_file(ip):

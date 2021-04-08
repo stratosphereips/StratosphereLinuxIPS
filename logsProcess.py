@@ -369,7 +369,12 @@ class LogsProcess(multiprocessing.Process):
                     evidence = json.loads(evidence)
                     self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
                     for key in evidence:
-                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence Description: {}. Confidence: {}. Threat Level: {} (key:{})'.format(evidence[key][2], evidence[key][0], evidence[key][1], key), file_mode='a+', data_type='text')
+                        key_json = json.loads(key)
+                        key_values = ':'.join(key_json.values())
+                        self.addDataToFile(profilefolder + '/' + twlog,
+                                           '\tEvidence Description: {}. Confidence: {}. Threat Level: {} (key:{})'.format(
+                                               evidence[key].get('description'), evidence[key].get('confidence'), evidence[key].get('threat_level'), key_values,
+                                           file_mode='a+', data_type='text'))
 
                 # Add free line between tuple info and information about ports and IP.
                 self.addDataToFile(profilefolder + '/' + twlog, '', file_mode='a+', data_type='text')

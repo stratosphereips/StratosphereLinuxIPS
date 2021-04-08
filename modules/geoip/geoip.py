@@ -1,13 +1,3 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder. 
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-
 # Must imports
 from slips.common.abstracts import Module
 import multiprocessing
@@ -20,9 +10,8 @@ import maxminddb
 import ipaddress
 
 class Module(Module, multiprocessing.Process):
-    # Name: short name of the module. Do not use spaces
     name = 'geoip'
-    description = 'Module to find the Country and geolocaiton information of an IP address'
+    description = 'Module to find the cCountry and geolocaiton information of an IP address'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
@@ -71,11 +60,10 @@ class Module(Module, multiprocessing.Process):
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
-                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message['data'] == 'stop_process':
                     return True
                 elif message['channel'] == 'new_ip':
-                    # Not all the ips!! only the new one coming in the data
                     ip = message['data']
                     # The first message comes with data=1
                     if type(ip) == str:

@@ -57,13 +57,14 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
 
-## Authors
+## People Involved
 
-**Main author:** Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
+**Founder:** Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
+
+**Main authors:** Sebastian Garcia, Kamila Babayeva 
 
 **Contributors:**
 
-- Kamila Babayeva
 - Ondrej Lukas
 - Alya Gomaa
 - Veronica Valeros

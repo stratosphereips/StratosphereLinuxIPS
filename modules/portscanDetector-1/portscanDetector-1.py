@@ -134,6 +134,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                             # Type of evidence
                             type_evidence = 'PortScanType2'
                             # Key
+                            type_detection = 'dport'
+                            detection_info = dport
                             key = 'dport' + ':' + dport + ':' + type_evidence
                             # Threat level
                             threat_level = 25
@@ -158,7 +160,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                                     confidence = pkts_sent / 10.0
                                 # Description
                                 description = 'New horizontal port scan detected to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
-                                __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+                                __database__.setEvidence(type_detection, detection_info,type_evidence,
+                                                         threat_level, confidence, description, profileid=profileid, twid=twid)
                                 self.print(description, 3, 0)
                                 # Store in our local cache how many dips were there:
                                 self.cache_det_thresholds[cache_key] = amount_of_dips
@@ -180,6 +183,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                             amount_of_dports = len(dstports)
                             #self.print('Vertical Portscan check. Amount of dports: {}. Threshold=3'.format(amount_of_dports), 3, 0)
                             # Type of evidence
+                            type_detection = 'dstip'
+                            detection_info = dstip
                             type_evidence = 'PortScanType1'
                             # Key
                             key = 'dstip' + ':' + dstip + ':' + type_evidence
@@ -206,7 +211,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                                     confidence = pkts_sent / 10.0
                                 # Description
                                 description = 'New vertical port scan detected to IP {} from {}. Total {} dst ports. Not Estab TCP. Tot pkts sent all ports: {}'.format(dstip, profileid.split(self.fieldseparator)[1], amount_of_dports, pkts_sent, confidence)
-                                __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+                                __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                         threat_level, confidence, description, profileid=profileid, twid=twid)
                                 self.print(description, 3, 0)
                                 # Store in our local cache how many dips were there:
                                 self.cache_det_thresholds[cache_key] = amount_of_dports
