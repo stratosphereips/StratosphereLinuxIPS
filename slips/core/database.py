@@ -6,7 +6,6 @@ import configparser
 import traceback
 from datetime import datetime
 
-
 def timing(f):
     """ Function to measure the time another function takes."""
     def wrap(*args):
@@ -1166,6 +1165,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_ssh' in channel:
             pubsub.subscribe(channel)
+        elif 'new_notice' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
@@ -1379,6 +1380,28 @@ class Database(object):
 
         self.print('Adding SSH flow to DB: {}'.format(data), 5, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+
+    def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg):
+        """" Checks for self signed certificates in the notice.log data """
+
+        # We're looking for self signed certs in the 'msg' field
+        if 'self signed' in msg or 'self-signed' in msg: # TODO: should i check here or in flowalert.py?
+            data = {
+                'daddr'     :      daddr,
+                'sport'     :      sport,
+                'dport'     :      dport,
+                'note'      :      note,
+                'msg'       :      msg,
+            }
+            data = json.dumps(data) # this is going to be sent inside another dict
+            to_send = {}
+            to_send['profileid'] = profileid
+            to_send['twid'] = twid
+            to_send['flow'] = data
+            to_send = json.dumps(to_send)
+            self.publish('new_notice', to_send)
+            self.print('Adding notice flow to DB: {}'.format(data), 5, 0)
+
 
     def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """
