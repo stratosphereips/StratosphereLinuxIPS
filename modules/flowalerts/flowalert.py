@@ -1,4 +1,4 @@
-# Ths is a template module for you to copy and create your own slips module
+# This is a template module for you to copy and create your own slips module
 # Instructions
 # 1. Create a new folder on ./modules with the name of your template. Example:
 #    mkdir modules/anomaly_detector
@@ -22,7 +22,6 @@ import json
 import configparser
 from ipaddress import ip_address
 import time
-
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -265,15 +264,23 @@ class Module(Module, multiprocessing.Process):
                                     # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
                                     pass
 
-                # ---------------------------- new_ssh channel
+                # ---------------------------- new_notice channel
                 message = self.c3.get_message(timeout=0.01)
                 self.check_stop_process_msg(message)
                 if message and message['channel'] == 'new_notice':
                     data = message['data']
-                    # Convert from json to dict
-                    data = json.loads(data)
-                    #TODO handle new_notice msg
-                    pass
+                    if type(data) == str:
+                        # Convert from json to dict
+                        data = json.loads(data)
+                        pprint.pprint(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        # Get flow as a json
+                        flow = data['flow']
+                        # Convert flow to a dict
+                        flow_dict = json.loads(flow)
+                        # TODO: do something with the flow_dict
+                        pass
 
         except KeyboardInterrupt:
             return True
