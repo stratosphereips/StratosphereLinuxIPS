@@ -94,27 +94,31 @@ class Module(Module, multiprocessing.Process):
         a better way to show it.
         The threat_level is 0.01 to show that this is not a detection
         """
+
+        type_detection = 'ip'
+        detection_info = saddr
         type_evidence = 'SSHSuccessful-by-' + by
-        key = 'ip:' + saddr + ':' + type_evidence
         threat_level = 0.01
         confidence = 0.5
         description = 'SSH Successful to IP :' + daddr + '. From IP ' + saddr + '. Size: ' + str(size) + '. Detection Model ' + by
         if not twid:
             twid = ''
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                 threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def set_evidence_long_connection(self, ip, duration, profileid, twid, ip_state='ip'):
         '''
         Set an evidence for a long connection.
         '''
+        type_detection = ip_state
+        detection_info = ip
         type_evidence = 'LongConnection'
-        key = ip_state + ':' + ip + ':' + type_evidence
         threat_level = 10
         confidence = 0.5
         description = 'Long Connection ' + str(duration)
         if not twid:
             twid = ''
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
         """
@@ -128,6 +132,7 @@ class Module(Module, multiprocessing.Process):
             # set "flowalerts-long-connection:malicious" label in the flow (needed for Ensembling module)
             module_name = "flowalerts-long-connection"
             module_label = self.malicious_label
+
             __database__.set_module_label_to_flow(profileid,
                                                   twid,
                                                   uid,
