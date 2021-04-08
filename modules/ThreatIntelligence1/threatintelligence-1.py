@@ -55,32 +55,32 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_ip(self, ip, ip_description='', profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
-        If profileid is None, do not set an Evidence
-        Returns nothing
         '''
+
+        type_detection = ip_state
+        detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
-        key = ip_state + ':' + ip + ':' + type_evidence
         threat_level = 80
         confidence = 1
         description = ip_description
-        if not twid:
-            twid = ''
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
+        __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                 threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def set_evidence_domain(self, domain, domain_description='', profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
-        If profileid is None, do not set an Evidence
-        Returns nothing
         '''
+
+        type_detection = 'dstdomain'
+        detection_info = domain
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
-        key = 'dstdomain' + ':' + domain + ':' + type_evidence
         threat_level = 50
         confidence = 1
         description = domain_description
-        if not twid:
-            twid = ''
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
+        __database__.setEvidence(type_detection,detection_info, type_evidence,
+                                 threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -433,8 +433,7 @@ class Module(Module, multiprocessing.Process):
                         ip_description = __database__.search_IP_in_IoC(ip)
                         # Block only if the traffic isn't outgoing ICMP port unreachable packet
                         if (ip_description != False
-                                and self.is_outgoing_icmp_packet(protocol,ip_state)==False): # Dont change this condition. This is the only way it works
-                            print(ip, ip_description)
+                                and self.is_outgoing_icmp_packet(protocol,ip_state)==False): # Dont change this condition. This is the only way it works                            print(ip, ip_description)
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_description = json.loads(ip_description)
                             ip_source = ip_description['source'] # this is a .csv file
@@ -447,7 +446,6 @@ class Module(Module, multiprocessing.Process):
                     if domain:
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(domain)
-                        print(domain, domain_description)
                         if domain_description != False: # Dont change this condition. This is the only way it works
                             print(domain, domain_description)
                             # If the domain is in the blacklist of IoC. Set an evidence
