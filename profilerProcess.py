@@ -29,7 +29,6 @@ import os
 import binascii
 import base64
 
-
 def timeit(method):
     def timed(*args, **kw):
         ts = time.time()
@@ -656,10 +655,10 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'tunnel' in new_line['type']:
             self.column_values['type'] = 'tunnel'
 
-    def process_zeek_input(self, new_line):
+    def process_zeek_input(self, new_line: dict):
         """
-        Process the line and extract columns for zeek
-        Its a dictionary
+        Process one zeek line(new_line) and extract columns
+        (parse them into column_values dict) to send to the database
         """
         line = new_line['data']
         file_type = new_line['type']
@@ -685,7 +684,11 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['daddr'] = ''
 
         if 'conn' in file_type:
-            # {'ts': 1538080852.403669, 'uid': 'Cewh6D2USNVtfcLxZe', 'id.orig_h': '192.168.2.12', 'id.orig_p': 56343, 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364, 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1, 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8', 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
+            # {'ts': 1538080852.403669, 'uid': 'Cewh6D2USNVtfcLxZe', 'id.orig_h': '192.168.2.12', 'id.orig_p': 56343,
+            # 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364,
+            # 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1,
+            # 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8',
+            # 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
             self.column_values['type'] = 'conn'
             try:
                 self.column_values['dur'] = float(line['duration'])
@@ -947,6 +950,18 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'syslog'
         elif 'tunnel' in file_type:
             self.column_values['type'] = 'tunnel'
+        elif 'notice' in file_type:
+            """ Parse the fields we're interested in in the notice.log file """
+
+            # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
+            self.column_values['type'] = 'notice'
+            self.column_values['daddr'] = line.get('id.resp_h', '')
+            self.column_values['sport'] = line.get('id.orig_p', '')
+            self.column_values['dport'] = line.get('id.resp_p', '')
+            self.column_values['note'] = line.get('note', '')
+            self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
+            # self.column_values['actions'] = line.get('actions', '')
+            # self.column_values['suppress_for'] = line.get('suppress_for', '')
 
     def process_argus_input(self, new_line):
         """
@@ -1364,19 +1379,26 @@ class ProfilerProcess(multiprocessing.Process):
         """
         This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
         It includes checking if the profile exists and how to put the flow correctly.
-        It interprets each colum
+        It interprets each column
         A flow has two IP addresses, so treat both of them correctly.
         """
         try:
-            # Define which type of flows we are going to preocess
+            # Define which type of flows we are going to process
             if not self.column_values:
                 return True
-            elif not 'ssh' in self.column_values['type'] and not 'ssl' in self.column_values['type'] and not 'http' in self.column_values['type'] and not 'dns' in self.column_values['type'] and not 'conn' in self.column_values['type'] and not 'flow' in self.column_values['type'] and not 'argus' in self.column_values['type'] and not 'nfdump' in self.column_values['type']:
+            elif not 'ssh' in self.column_values['type'] \
+                    and not 'ssl' in self.column_values['type'] \
+                    and not 'http' in self.column_values['type'] \
+                    and not 'dns' in self.column_values['type'] \
+                    and not 'conn' in self.column_values['type'] \
+                    and not 'flow' in self.column_values['type'] \
+                    and not 'argus' in self.column_values['type'] \
+                    and not 'nfdump' in self.column_values['type']\
+                    and not 'notice' in self.column_values['type']\:
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
-
             try:
                 # seconds.
                 starttime = self.column_values['starttime'].timestamp()
@@ -1423,7 +1445,6 @@ class ProfilerProcess(multiprocessing.Process):
                 direction = self.column_values['dir']
                 dpkts = self.column_values['dpkts']
                 dbytes = self.column_values['dbytes']
-
             elif 'dns' in flow_type:
                 query = self.column_values['query']
                 qclass_name = self.column_values['qclass_name']
@@ -1431,7 +1452,6 @@ class ProfilerProcess(multiprocessing.Process):
                 rcode_name = self.column_values['rcode_name']
                 answers = self.column_values['answers']
                 ttls = self.column_values['TTLs']
-
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(saddr)
@@ -1483,6 +1503,13 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_out_ssl(profileid, twid, daddr_as_obj, flow_type, uid, self.column_values['sslversion'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
                 elif flow_type == 'ssh':
                     __database__.add_out_ssh(profileid, twid, flow_type, uid, self.column_values['version'], self.column_values['auth_attempts'], self.column_values['auth_success'], self.column_values['client'], self.column_values['server'], self.column_values['cipher_alg'], self.column_values['mac_alg'], self.column_values['compression_alg'], self.column_values['kex_alg'], self.column_values['host_key_alg'], self.column_values['host_key'])
+                elif flow_type == 'notice':
+                     __database__.add_out_notice(profileid,twid,\
+                                                 self.column_values['daddr'],\
+                                                 self.column_values['sport'],\
+                                                 self.column_values['dport'],\
+                                                 self.column_values['note'],\
+                                                 self.column_values['msg'])
 
             def store_features_going_in(profileid, twid, starttime):
                 """
