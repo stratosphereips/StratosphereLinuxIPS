@@ -878,7 +878,8 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
-    def setEvidence(self, key, threat_level, confidence, description, profileid='', twid='',):
+    def setEvidence(self, type_detection, detection_info, type_evidence,
+                    threat_level, confidence, description, profileid='', twid='',):
         """
         Set the evidence for this Profile and Timewindow.
 
@@ -907,12 +908,22 @@ class Database(object):
             current_evidence = json.loads(current_evidence)
         else:
             current_evidence = {}
-        # Prepare new evidence
-        data = []
-        data.append(confidence)
-        data.append(threat_level)
-        data.append(description)
-        current_evidence[key] = data
+
+        # Prepare key for a new evidence
+        key = dict()
+        key['type_detection'] = type_detection
+        key['detection_info'] = detection_info
+        key['type_evidence'] = type_evidence
+
+        #Prepare data for a new evidence
+        data = dict()
+        data['confidence']= confidence
+        data['threat_level'] = threat_level
+        data['description'] = description
+
+        # key uses dictionary format, so it needs to be converted to json to work as a dict key.
+        key_json = json.dumps(key)
+        current_evidence[key_json] = data
         current_evidence_json = json.dumps(current_evidence)
         # Set evidence in the database.
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
@@ -921,7 +932,7 @@ class Database(object):
             'profileid': str(profileid),
             'twid': str(twid),
             'key': key,
-            'description': description
+            'data': data
         }
         evidence_to_send = json.dumps(evidence_to_send)
 
