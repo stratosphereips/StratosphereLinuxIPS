@@ -55,32 +55,32 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_ip(self, ip, ip_description='', profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
-        If profileid is None, do not set an Evidence
-        Returns nothing
         '''
+
+        type_detection = ip_state
+        detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
-        key = ip_state + ':' + ip + ':' + type_evidence
         threat_level = 80
         confidence = 1
         description = ip_description
-        if not twid:
-            twid = ''
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
+        __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                 threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def set_evidence_domain(self, domain, domain_description='', profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
-        If profileid is None, do not set an Evidence
-        Returns nothing
         '''
+
+        type_detection = 'dstdomain'
+        detection_info = domain
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
-        key = 'dstdomain' + ':' + domain + ':' + type_evidence
         threat_level = 50
         confidence = 1
         description = domain_description
-        if not twid:
-            twid = ''
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
+        __database__.setEvidence(type_detection,detection_info, type_evidence,
+                                 threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def print(self, text, verbose=1, debug=0):
         """

@@ -206,34 +206,34 @@ class EvidenceProcess(multiprocessing.Process):
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
                     profileid = data.get('profileid')
-                    twid = data.get('twid')
-                    new_evidence_key = data.get('key')
-                    new_evidence_description = data.get('description')
-
-                    # Separate new evidence, so it can be logged in alerts.log
-                    new_evidence_key_split = new_evidence_key.split(':')
-                    new_evidence_detection_type = new_evidence_key_split[0]
-                    new_evidence_detection_module = new_evidence_key_split[-1]
-                    # In case of TI, this info is IP, in case of LSTM this is a tuple
-                    new_evidence_detection_info = new_evidence_key[len(new_evidence_detection_type) + 1:-len(new_evidence_detection_module) - 1]
                     ip = profileid.split(self.separator)[1]
-
-                    now = datetime.now()
-                    current_time = now.strftime('%Y-%m-%d %H:%M:%S')
+                    twid = data.get('twid')
+                    # Key data
+                    key = data.get('key')
+                    type_detection = key.get('type_detection')
+                    detection_info = key.get('detection_info')
+                    type_evidence = key.get('type_evidence')
+                    # evidence data
+                    evidence_data = data.get('data')
+                    description = evidence_data.get('description')
 
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
                                                           ip,
-                                                          new_evidence_detection_module,
-                                                          new_evidence_detection_type,
-                                                          new_evidence_detection_info,
-                                                          new_evidence_description)
+                                                          type_evidence,
+                                                          type_detection,
+                                                          detection_info,
+                                                          description)
+                    print(evidence_to_log)
+                    # timestamp
+                    now = datetime.now()
+                    current_time = now.strftime('%Y-%m-%d %H:%M:%S')
 
                     evidence_dict = {'timestamp': current_time,
                                      'detected_ip': ip,
-                                     'detection_module':new_evidence_detection_module,
-                                     'detection_info':new_evidence_detection_type + ' ' + new_evidence_detection_info,
-                                     'description':new_evidence_description}
+                                     'detection_module':type_evidence,
+                                     'detection_info':type_detection + ' ' + detection_info,
+                                     'description':description}
 
                     self.addDataToLogFile(current_time + ' ' + evidence_to_log)
                     self.addDataToJSONFile(evidence_dict)
@@ -250,15 +250,19 @@ class EvidenceProcess(multiprocessing.Process):
                         # CONTINUE HERE
                         ip = profileid.split(self.separator)[1]
                         for key in evidence:
-                            key_split = key.split(':')
-                            detection_type = key_split[0]
-                            detection_module = key_split[-1]
-                            detection_info = key[len(detection_type)+1:-len(detection_module)-1] # In case of TI, this info is IP, in case of LSTM this is a tuple
+
+                            # Deserialize key data
+                            key_json = json.loads(key)
+                            type_detection = key_json.get('type_detection')
+                            detection_info = key_json.get('detection_info')
+                            type_evidence = key_json.get('type_evidence')
+
+                            # Deserialize evidence data
                             data = evidence[key]
-                            self.print('\tEvidence for key {}'.format(key), 3, 0)
-                            confidence = float(data[0])
-                            threat_level = float(data[1])
-                            description = data[2]
+                            confidence = data.get('confidence')
+                            threat_level = data.get('threat_level')
+                            description = data.get('description')
+
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
                             self.print('\t\tWeighted Threat Level: {}'.format(new_threat_level), 5, 0)
@@ -274,7 +278,7 @@ class EvidenceProcess(multiprocessing.Process):
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
-                                evidence_to_print = self.print_evidence(profileid, twid, ip, detection_module, detection_type,detection_info, description)
+                                evidence_to_print = self.print_evidence(profileid, twid, ip, type_evidence, type_detection,detection_info, description)
                                 self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 __database__.publish('new_blocking', ip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
