@@ -174,7 +174,7 @@ if __name__ == '__main__':
                         help='To read a PCAP - Packet Capture.')
     parser.add_argument('-b', '--nfdump',action='store',required=False,
                         help='To read an NFDUMP - netflow dump. ')
-    parser.add_argument('-l','--nologging',action='store_true',required=False,
+    parser.add_argument('-l','--nologfiles',action='store_true',required=False,
                         help='Do not create log files with all the traffic info and detections.')
     parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
                         help='Packet filter for Zeek. BPF style.')
@@ -323,14 +323,14 @@ if __name__ == '__main__':
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
 
-    # Get the type of output from the parameters
-    # Several combinations of outputs should be able to be used
-    if args.gui:
-        # Create the curses thread
-        guiProcessQueue = Queue()
-        guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
-        guiProcessThread.start()
-        outputProcessQueue.put('quiet')
+    # # Get the type of output from the parameters
+    # # Several combinations of outputs should be able to be used
+    # if args.gui:
+    #     # Create the curses thread
+    #     guiProcessQueue = Queue()
+    #     guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+    #     guiProcessThread.start()
+    #     outputProcessQueue.put('quiet')
     if not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
         do_logs = read_configuration(config, 'parameters', 'create_log_files')
@@ -354,7 +354,7 @@ if __name__ == '__main__':
     # Create the queue for the profile thread
     profilerProcessQueue = Queue()
     # Create the profile thread and start it
-    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
+    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config)
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
 
