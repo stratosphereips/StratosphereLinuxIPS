@@ -19,6 +19,7 @@ class screen {
         this.tree_widget = undefined
         this.timeline_widget = undefined
         this.evidence_box_widget = undefined
+        this.profile_evidences_widget = undefined
         this.ipinfo_widget = undefined
         this.focus_widget = undefined
         this.focus_hotkey = false
@@ -108,6 +109,14 @@ class screen {
       Initialize timeline on screen and fill in data
       */
       this.timeline_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
+    }
+
+    initProfileEvidences(){
+    /*
+    Initialize profile evidences on screen and fill in data.
+    */
+      this.profile_evidences_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[200], true])
+
     }
 
     initIPInfo(){
@@ -273,6 +282,26 @@ class screen {
       )
     }
 
+    z_hotkey_routine(){
+      /*
+      Function to fill and prepare the widget with out tuples
+      */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
+      for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
+          this.mainPage[widget_idx].hide()
+      }
+      this.gauge1.hide()
+      this.gauge2.hide()
+      this.listtable2.hide()
+      this.listtable1.hide()
+      this.profile_evidences_widget.setEvidenceInProfile(this.tree_widget.current_ip)
+      this.profile_evidences_widget.show()
+      this.profile_evidences_widget.focus()
+      this.render()
+    }
+
     i_hotkey_routine(){
       /*
       Function to fill and prepare the widget with out tuples  
@@ -434,6 +463,11 @@ class screen {
         else if(key.name == 'i'){
           this.helpbar.selectTab(6)
           this.i_hotkey_routine()
+          this.focus_hotkey = false
+        }
+        else if(key.name == 'z'){
+//          this.helpbar.selectTab(6)
+          this.z_hotkey_routine()
           this.focus_hotkey = false
         }
         else if(key.name == 'y'){
