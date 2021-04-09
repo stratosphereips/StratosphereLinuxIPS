@@ -75,6 +75,61 @@
     })
   }
 
+  setEvidenceInProfile(ip){
+  /*
+  Set Evidence in all timewindows.
+  */
+    try{
+        this.redis_database.getAllProfileEvidences(ip).then(all_profile_evidences=>{
+        var evidence_data = [];
+        if(all_profile_evidences.length < 1){this.setData([ip], evidence_data);}
+        else{
+          async.each(all_profile_evidences, (tw_evidences, callback)=>{
+            var evidence_json = JSON.parse(tw_evidences)
+            async.each(evidence_json, (key,callback)=>{
+                var row = [];
+                var key_dict = JSON.parse(key)
+                var key_values = Object.values(key_dict).join(':')
+                evidence_data = '{bold}'+color.green(key_values)+'{/bold}'+" "+evidence_json[key]["description"]+'\n'
+                callback();
+                }, (err)=>{
+                if(err){console.log(err)}
+                else{return this.setData(evidence_data)}
+            });
+
+                if(value && !http_data){
+                  final_timeline += value +' ';}
+                }
+              row.push(final_timeline);
+              timeline_data.push(row);
+              if(http_data){
+                var http_timeline = ''
+
+                for (let [key, value] of Object.entries(http_data)) {
+                    row = []
+                    http_timeline = key.padStart(21+key.length) +': ' +color.rgb(51, 153, 255)(value);
+                    row.push(http_timeline);
+                    timeline_data.push(row);
+                }
+            }}
+
+
+          callback();
+          },(err)=>{
+            if(err) {console.log(err);}
+            else{
+              this.setData([ip+" "+timewindow], timeline_data);
+              this.screen.render()}
+          });
+        }
+      })
+
+    }
+
+    catch(err){}
+
+  }
+
   setTimeline(ip, timewindow){
     /*
     Fill timeline data in the widget with appropriate color.
@@ -137,7 +192,8 @@
                   http_data = value;
                 }
                 if(value && !http_data){
-                  final_timeline += value +' ';}}
+                  final_timeline += value +' ';}
+                }
               row.push(final_timeline);
               timeline_data.push(row);
               if(http_data){
