@@ -174,7 +174,7 @@ if __name__ == '__main__':
                         help='To read a PCAP - Packet Capture.')
     parser.add_argument('-b', '--nfdump',action='store',required=False,
                         help='To read an NFDUMP - netflow dump. ')
-    parser.add_argument('-l','--nologging',action='store_true',required=False,
+    parser.add_argument('-l','--nologfiles',action='store_true',required=False,
                         help='Do not create log files with all the traffic info and detections.')
     parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
                         help='Packet filter for Zeek. BPF style.')
