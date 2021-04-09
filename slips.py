@@ -160,7 +160,7 @@ if __name__ == '__main__':
 
     # Parse the parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False)
+    parser.add_argument('-c', '--config', help='Path to the slips config file, Using slips.conf by default.', action='store', required=False, default='slips.conf')
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
