@@ -150,6 +150,13 @@ def load_modules(to_ignore):
 
     return plugins
 
+def get_slips_conf_path():
+    for arg in sys.argv:
+        if 'slips.py' in arg:
+            # get the path preceeding slips.py (may be ../ or  ../../ or '' if slips.py is in the cwd) , this path is where slips.conf will be
+            slips_conf_path = arg[:arg.index('slips.py')]
+            return slips_conf_path + 'slips.conf'
+
 
 ####################
 # Main
@@ -160,7 +167,7 @@ if __name__ == '__main__':
 
     # Parse the parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', help='Path to the slips config file, Using slips.conf by default.', action='store', required=False, default='slips.conf')
+    parser.add_argument('-c', '--config', help='Path to the slips config file, Using slips.conf by default.', action='store', required=False, default=get_slips_conf_path())
     parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
     parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
     parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
