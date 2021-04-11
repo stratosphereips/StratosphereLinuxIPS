@@ -13,8 +13,7 @@
         {
           keys: true
         , vi:true
-        , style:{border:{ fg:'blue'},
-            }
+        , style:{border:{ fg:'blue'}}           
         , interactive:characteristics[6]
         , scrollbar: true
         , label: characteristics[4]
@@ -28,6 +27,13 @@
     To set data in the widget
     */
     this.widget.setData({headers:ip_tw, data:timeline_data})
+  }
+
+    setData_Evidences(twid, evidence_data){
+    /*
+    To set data in the widget
+    */
+    this.widget.setData({headers:twid, data:evidence_data});
   }
 
 
@@ -75,36 +81,43 @@
     })
   }
 
-  setEvidenceInProfile(ip){
+  setEvidencesInProfile(ip){
   /*
   Set Evidence in all timewindows.
   */
     try{
+        this.widget.setLabel('profile_'+ip+' Evidences')
         this.redis_database.getAllProfileEvidences(ip).then(all_profile_evidences=>{
             var evidence_data = [];
-            if(all_profile_evidences.length < 1){this.setData([ip], evidence_data);}
+            if(all_profile_evidences==null){this.setData(['twid','evidences'], evidence_data); this.screen.render()}
             else{
-                all_profile_evidences.forEach([twid,tw_evidences], index1)=>{
+                async.forEach(Object.entries(all_profile_evidences),([twid,tw_evidences], callback)=>{
                     var tw_evidences_json = JSON.parse(tw_evidences);
-                    tw_evidences_json.forEachOf([key, evidence], index2)=>{
+                    async.forEachOf(Object.entries(tw_evidences_json),([key, evidence], index)=>{
                         var row = []
-                        if(index2==0){
+                        if(index==0){
                             row.push(twid)
                         }
                         else{
-                            row.push(' ')
+                            row.push('')
                         }
                         var key_dict = JSON.parse(key)
                         var key_values = Object.values(key_dict).join(':')
-                        var evidence_data = '{bold}'+color.green(key_values)+'{/bold}'+" "+evidence_json[key]["description"]+'\n'
-                        row.push(evidence_data)
+                        var evidence_final = '{bold}'+color.green(key_values)+'{/bold}'+" "+evidence["description"]+'\n'
+                        row.push(evidence_final);
                         evidence_data.push(row)
-                    }
-                }
-                this.setData([ip], evidence_data);
+                            })
+        callback()
+        },(err)=>{
+            if(err){console.log(err)}
+            else{
+                this.setData_Evidences(['timewindow','evidence'],evidence_data);
                 this.screen.render();
             }
         });
+    }
+    })
+
     }
     catch(err){console.log(err)}
   }
