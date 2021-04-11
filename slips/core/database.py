@@ -927,6 +927,7 @@ class Database(object):
         current_evidence_json = json.dumps(current_evidence)
         # Set evidence in the database.
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
+        self.r.hset('evidence'+profileid, twid, current_evidence_json)
 
         evidence_to_send = {
             'profileid': str(profileid),
