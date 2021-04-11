@@ -44,12 +44,13 @@ class screen {
         this.initTimeline()
         this.initIPInfo()
         this.initTree()
-        this.initMain()
         this.initListtableGauge()
         this.initCombine()
         this.initTuple()
         this.initListBar()
         this.initHelpTable()
+        this.initEvidencesInProfile()
+        this.initMain()
         this.initHotkeys()
         this.render()
     }
@@ -111,12 +112,12 @@ class screen {
       this.timeline_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
     }
 
-    initProfileEvidences(){
+    initEvidencesInProfile(){
     /*
     Initialize profile evidences on screen and fill in data.
     */
-      this.profile_evidences_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[200], true])
-
+      this.profile_evidences_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
+      this.profile_evidences_widget.hide()
     }
 
     initIPInfo(){
@@ -171,7 +172,7 @@ class screen {
       /*
       Keep track of all hotkeys widgets
       */
-      this.hotkeys = [this.listtable1, this.listtable2, this.gauge1, this.gauge2, this.tuple_widget, this.helptable]
+      this.hotkeys = [this.listtable1, this.listtable2, this.gauge1, this.gauge2, this.tuple_widget, this.profile_evidences_widget,this.helptable]
     }
 
     e_hotkey_routine(){
@@ -296,7 +297,7 @@ class screen {
       this.gauge2.hide()
       this.listtable2.hide()
       this.listtable1.hide()
-      this.profile_evidences_widget.setEvidenceInProfile(this.tree_widget.current_ip)
+      this.profile_evidences_widget.setEvidencesInProfile(this.tree_widget.current_ip)
       this.profile_evidences_widget.show()
       this.profile_evidences_widget.focus()
       this.render()
@@ -421,12 +422,12 @@ class screen {
             this.timeline_widget.widget.style.border.fg='blue'
             this.focus_widget = this.evidence_box_widget
             this.evidence_box_widget.widget.focus()}
-          else{
+          else if (this.focus_widget == this.evidence_box_widget){
             this.focus_widget = this.tree_widget
             this.tree_widget.widget.style.border.fg = 'magenta'
             this.tree_widget.focus();}
-        		this.render()
-        }	
+            this.render();
+        }
       	else if(key.name == 'q' || key.name == "C-c"){
       		return process.exit(0);
       	}
