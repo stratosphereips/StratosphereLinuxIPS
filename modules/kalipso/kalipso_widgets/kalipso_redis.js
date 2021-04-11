@@ -20,7 +20,7 @@
         this.tcp_data_notest = this.redis.createClient()
         this.udp_data_notest = this.redis.createClient()
         this.redis_resolved_dns = this.redis.createClient()
-        this.all_profile_tws = this.redis.createClient()
+        this.all_profile_evidences = this.redis.createClient()
   	}
 
   	getAllKeys(){
@@ -160,12 +160,12 @@
       });})
     }
 
-    getAllProfileEvidence(ip){
+    getAllProfileEvidences(ip){
     /*
     Get all evidence in the profile.
     */
         return new Promise(
-               (resolve,reject)=>{this.all_profile_evidences.hgetall("evidenceprofile_"+ip, 0, -1, (err,reply)=>{
+               (resolve,reject)=>{this.all_profile_evidences.hgetall("evidenceprofile_"+ip, (err,reply)=>{
                    if(err){console.log(err); reject(err);}
                    else{
                         resolve(reply);
