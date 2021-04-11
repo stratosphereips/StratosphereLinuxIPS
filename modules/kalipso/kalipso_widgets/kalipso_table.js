@@ -107,17 +107,16 @@
                         row.push(evidence_final);
                         evidence_data.push(row)
                             })
-        callback()
-        },(err)=>{
-            if(err){console.log(err)}
-            else{
-                this.setData_Evidences(['timewindow','evidence'],evidence_data);
-                this.screen.render();
+                callback()
+                },(err)=>{
+                    if(err){console.log(err)}
+                    else{
+                        this.setData_Evidences(['timewindow','evidence'],evidence_data);
+                        this.screen.render();
+                    }
+                });
             }
-        });
-    }
-    })
-
+        })
     }
     catch(err){console.log(err)}
   }
