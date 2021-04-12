@@ -374,7 +374,7 @@ class EvidenceProcess(multiprocessing.Process):
                     ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
                     ignore_alerts_from_org = ignore_alerts and is_srcorg and ('src' in from_ or 'both' in from_)
                     ignore_alerts_to_org = ignore_alerts and is_dstorg and ('dst' in from_ or 'both' in from_)
-                    
+
                     if ignore_alerts_from_org or ignore_alerts_to_org:
                         # Method 1: using asn
                         # Check if the IP in the content of the alert has ASN info in the db
@@ -545,7 +545,14 @@ class EvidenceProcess(multiprocessing.Process):
                                 self.addDataToLogFile(alert_to_log)
                                 self.addDataToJSONFile(alert_dict)
 
-                                __database__.publish('new_blocking', srcip)
+                                # TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
+                                blocking_data = {
+                                    'ip':str(ip),
+                                    'block' : True,
+                                }
+                                blocking_data = json.dumps(blocking_data)
+                                # this line won't work with anything other than -i specified (the user's interface)
+                                __database__.publish('new_blocking', blocking_data)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
             except KeyboardInterrupt:
                 self.logfile.close()
