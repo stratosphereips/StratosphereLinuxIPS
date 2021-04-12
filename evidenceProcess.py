@@ -352,7 +352,14 @@ class EvidenceProcess(multiprocessing.Process):
                                 # Differentiate the type of evidence for different detections
                                 evidence_to_print = self.print_evidence(profileid, twid, ip, detection_module, detection_type,detection_info, description)
                                 self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
-                                __database__.publish('new_blocking', ip)
+                                # TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
+                                blocking_data = {
+                                    'ip':str(ip),
+                                    'block' : True,
+                                }
+                                blocking_data = json.dumps(blocking_data)
+                                # this line won't work with anything other than -i specified (the user's interface)
+                                __database__.publish('new_blocking', blocking_data)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
             self.logfile.close()
