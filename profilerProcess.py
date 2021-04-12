@@ -1500,7 +1500,13 @@ class ProfilerProcess(multiprocessing.Process):
                 elif flow_type == 'http':
                     __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'], self.column_values['host'], self.column_values['uri'], self.column_values['httpversion'], self.column_values['user_agent'], self.column_values['request_body_len'], self.column_values['response_body_len'], self.column_values['status_code'], self.column_values['status_msg'], self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
                 elif flow_type == 'ssl':
-                    __database__.add_out_ssl(profileid, twid, daddr_as_obj, flow_type, uid, self.column_values['sslversion'], self.column_values['cipher'], self.column_values['resumed'], self.column_values['established'], self.column_values['cert_chain_fuids'], self.column_values['client_cert_chain_fuids'], self.column_values['subject'], self.column_values['issuer'], self.column_values['validation_status'], self.column_values['curve'], self.column_values['server_name'])
+                    __database__.add_out_ssl(profileid, twid, daddr_as_obj,
+                                             flow_type, uid, self.column_values['sslversion'],
+                                             self.column_values['cipher'], self.column_values['resumed'],
+                                             self.column_values['established'], self.column_values['cert_chain_fuids'],
+                                             self.column_values['client_cert_chain_fuids'], self.column_values['subject'],
+                                             self.column_values['issuer'], self.column_values['validation_status'],
+                                             self.column_values['curve'], self.column_values['server_name'])
                 elif flow_type == 'ssh':
                     __database__.add_out_ssh(profileid, twid, flow_type, uid, self.column_values['version'], self.column_values['auth_attempts'], self.column_values['auth_success'], self.column_values['client'], self.column_values['server'], self.column_values['cipher_alg'], self.column_values['mac_alg'], self.column_values['compression_alg'], self.column_values['kex_alg'], self.column_values['host_key_alg'], self.column_values['host_key'])
                 elif flow_type == 'notice':

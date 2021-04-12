@@ -53,6 +53,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_ssh')
         self.c3 = __database__.subscribe('new_notice')
+        self.c4 = __database__.subscribe('new_ssl')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -249,6 +250,7 @@ class Module(Module, multiprocessing.Process):
                                 pass
 
                 # ---------------------------- new_notice channel
+                # Check for self signed certificates in new_notice channel (notice.log)
                 message = self.c3.get_message(timeout=0.01)
                 if message and message['channel'] == 'new_notice':
                     data = message['data']
@@ -270,6 +272,39 @@ class Module(Module, multiprocessing.Process):
                         detection_info =ip
                         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
                         self.print(description, 3, 0)
+                # ---------------------------- new_ssl channel
+                message = self.c4.get_message(timeout=0.01)
+                if message and message['channel'] == 'new_ssl':
+                # Check for self signed certificates in new_ssl channel (ssl.log)
+                    data = message['data']
+                    if type(data) == str:
+                        # Convert from json to dict
+                        data = json.loads(data)
+                        # Get flow as a json
+                        flow = data['flow']
+                        # Convert flow to a dict
+                        flow = json.loads(flow)
+                        if 'self signed' in flow['validation_status']:
+                            profileid = data['profileid']
+                            twid = data['twid']
+                            ip = flow['daddr']
+                            server_name = flow.get('server_name') # returns None if not found
+                            if server_name:
+                                description = 'Self-signed certificate. Destination: {}. IP: {}'.format(server_name,ip)
+                            else:
+                                description = 'Self-signed certificate. Destination IP: {}'.format(ip)
+                            confidence = 0.5
+                            threat_level = 30
+                            type_detection = 'dstip'
+                            type_evidence = 'SelfSignedCertificate'
+                            detection_info =ip
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                     threat_level, confidence, description, profileid=profileid, twid=twid)
+                            self.print(description, 3, 0)
+
+
+
+
 
         except KeyboardInterrupt:
             return True

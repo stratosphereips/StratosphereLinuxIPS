@@ -1253,7 +1253,9 @@ class Database(object):
             self.publish('new_flow', to_send)
             self.print('Adding complete flow to DB: {}'.format(data), 5, 0)
 
-    def add_out_ssl(self, profileid, twid, daddr_as_obj, flowtype, uid, version, cipher, resumed, established, cert_chain_fuids, client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
+    def add_out_ssl(self, profileid, twid, daddr_as_obj, flowtype, uid,
+                    version, cipher, resumed, established, cert_chain_fuids,
+                    client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
         """	
         Store in the DB an ssl request	
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.	
@@ -1273,6 +1275,8 @@ class Database(object):
         data['validation_status'] = validation_status
         data['curve'] = curve
         data['server_name'] = server_name
+        data['daddr'] = str(daddr_as_obj)
+        if server_name : data['server_name'] = server_name
         # Convert to json string
         data = json.dumps(data)
         self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
