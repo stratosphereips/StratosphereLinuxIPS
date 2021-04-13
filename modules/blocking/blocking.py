@@ -298,7 +298,20 @@ class Module(Module, multiprocessing.Process):
                     and message['type'] == 'message':
                     # sent from slips.py
                     if message['data'] == 'delete slipsBlocking chain':
-                       pass
+                        # -p isn't provided, we need to clear slipsBlocking chain
+                        if self.platform_system == 'Linux':
+                        # Get the user's currently installed firewall
+                            self.firewall = self.determine_linux_firewall()
+                            if self.firewall == 'iptables':
+                                    self.delete_iptables_chain()
+                            elif self.firewall == 'nftables':
+                                # TODO: handle the creation of the slipsBlocking chain in nftables
+                                # Flush rules in slipsBlocking chain because you can't delete a chain without flushing first
+                                os.system(sudo + "nft flush chain inet slipsBlocking")
+                                # Delete slipsBlocking chain from nftables
+                                os.system(sudo + "nft delete chain inet slipsBlocking")
+                        elif self.platform_system == 'Darwin':
+                            self.print('Mac OS blocking is not supported yet.')
 
                     else:
 
