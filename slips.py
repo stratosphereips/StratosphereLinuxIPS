@@ -533,6 +533,7 @@ if __name__ == '__main__':
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
+
     # This plugins import will automatically load the modules and put them in the __modules__ variable
     # if slips is given a .rdb file, don't load the modules as we don't need them
     if to_ignore and not args.db:
@@ -542,9 +543,9 @@ if __name__ == '__main__':
         export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ","").lower()
         if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
             to_ignore.append('ExportingAlerts')
-        # Disable blocking if was not asked and if it is not interface
-        if not args.blocking or not args.interface:
-            to_ignore.append('blocking')
+        # # Disable blocking if was not asked and if it is not interface
+        # if not args.blocking or not args.interface:
+        #     to_ignore.append('blocking')
         try:
             # This 'imports' all the modules somehow, but then we ignore some
             modules_to_call = load_modules(to_ignore)[0]
@@ -558,6 +559,12 @@ if __name__ == '__main__':
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
+
+
+    if not args.blocking:
+        # Tell the blocking module that -p isn't provided so it can clear the slips chain
+        __database__.publish('new_blocking', 'delete slipsBlocking chain')
+        # to_ignore.append('blocking')
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
