@@ -12,6 +12,7 @@ import json
 import traceback
 import hashlib
 import validators
+import ast
 
 
 class Module(Module, multiprocessing.Process):
@@ -54,32 +55,32 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_ip(self, ip, ip_description='', profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
-        If profileid is None, do not set an Evidence
-        Returns nothing
         '''
+
+        type_detection = ip_state
+        detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
-        key = ip_state + ':' + ip + ':' + type_evidence
         threat_level = 80
         confidence = 1
         description = ip_description
-        if not twid:
-            twid = ''
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
+        __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                 threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def set_evidence_domain(self, domain, domain_description='', profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
-        If profileid is None, do not set an Evidence
-        Returns nothing
         '''
+
+        type_detection = 'dstdomain'
+        detection_info = domain
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
-        key = 'dstdomain' + ':' + domain + ':' + type_evidence
         threat_level = 50
         confidence = 1
         description = domain_description
-        if not twid:
-            twid = ''
-        __database__.setEvidence(key, threat_level, confidence, description, profileid=profileid, twid=twid)
+
+        __database__.setEvidence(type_detection,detection_info, type_evidence,
+                                 threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -335,6 +336,58 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
 
+    def set_maliciousDomain_to_MaliciousDomains(self, domain, profileid, twid):
+        '''
+        Set malicious domain to DB 'MaliciousDomains' with a profileid and twid where domain was met
+        '''
+        # get all profiles and twis where this IP was met
+        domain_profiled_twid = __database__.get_malicious_domain(domain)
+        try:
+            profile_tws = domain_profiled_twid[profileid]               # a dictionary {profile:set(tw1, tw2)}
+            profile_tws = ast.literal_eval(profile_tws)                 # set(tw1, tw2)
+            profile_tws.add(twid)
+            domain_profiled_twid[profileid] = str(profile_tws)
+        except KeyError:
+            domain_profiled_twid[profileid] = str({twid})               # add key-pair to the dict if does not exist
+        data = json.dumps(domain_profiled_twid)
+        __database__.set_malicious_domain(domain, data)
+
+    def set_maliciousDomain_to_DomainInfo(self, domain, domain_description):
+        '''
+        Set malicious domain in DomainsInfo.
+        '''
+        domain_data = {}
+        # Maybe we should change the key to 'status' or something like that.
+        domain_data['threatintelligence'] = domain_description
+        __database__.setInfoForDomains(domain, domain_data)
+
+    def set_maliciousIP_to_MaliousIPs(self, ip, profileid, twid):
+        '''
+        Set malicious IP in 'MaliciousIPs' key with a profileid and twid.
+        '''
+
+        # Retrieve all profiles and twis, where this malicios IP was met.
+        ip_profileid_twid= __database__.get_malicious_ip(ip)
+        try:
+            profile_tws = ip_profileid_twid[profileid]             # a dictionary {profile:set(tw1, tw2)}
+            profile_tws = ast.literal_eval(profile_tws)            # set(tw1, tw2)
+            profile_tws.add(twid)
+            ip_profileid_twid[profileid] = str(profile_tws)
+        except KeyError:
+            ip_profileid_twid[profileid] = str({twid})                   # add key-pair to the dict if does not exist
+        data = json.dumps(ip_profileid_twid)
+        __database__.set_malicious_ip(ip, data)
+
+    def set_maliciousIP_to_IPInfo(self, ip, ip_description):
+        '''
+        Set malicious IP in IPsInfo.
+        '''
+
+        ip_data = {}
+        # Maybe we should change the key to 'status' or something like that.
+        ip_data['threatintelligence'] = ip_description
+        __database__.setInfoForIPs(ip, ip_data)  # Set in the IP info that IP is blacklisted
+
     def is_outgoing_icmp_packet(self, protocol: str, ip_state: str) -> bool:
         """
         Check whether this IP is our computer sending an ICMP unreacheable packet to
@@ -383,16 +436,24 @@ class Module(Module, multiprocessing.Process):
                                 and self.is_outgoing_icmp_packet(protocol,ip_state)==False): # Dont change this condition. This is the only way it works
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_description = json.loads(ip_description)
-                            # ip_info = ip_description['description']
                             ip_source = ip_description['source'] # this is a .csv file
                             self.set_evidence_ip(ip, ip_source, profileid, twid, ip_state)
+                            # set malicious IP in IPInfo
+                            self.set_maliciousIP_to_IPInfo(ip,ip_description)
+                            # set malicious IP in MaliciousIPs
+                            self.set_maliciousIP_to_MaliousIPs(ip,profileid,twid)
 
                     if domain:
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(domain)
                         if domain_description != False: # Dont change this condition. This is the only way it works
+                            print(domain, domain_description)
                             # If the domain is in the blacklist of IoC. Set an evidence
                             self.set_evidence_domain(domain, domain_description, profileid, twid)
+                            # set malicious domain in DomainInfo
+                            self.set_maliciousDomain_to_DomainInfo(domain, domain_description)
+                            # set malicious domain in MaliciousDomains
+                            self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
         except KeyboardInterrupt:
             return True
         except Exception as inst:

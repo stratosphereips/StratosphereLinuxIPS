@@ -19,6 +19,7 @@ class screen {
         this.tree_widget = undefined
         this.timeline_widget = undefined
         this.evidence_box_widget = undefined
+        this.profile_evidences_widget = undefined
         this.ipinfo_widget = undefined
         this.focus_widget = undefined
         this.focus_hotkey = false
@@ -43,12 +44,13 @@ class screen {
         this.initTimeline()
         this.initIPInfo()
         this.initTree()
-        this.initMain()
         this.initListtableGauge()
         this.initCombine()
         this.initTuple()
         this.initListBar()
         this.initHelpTable()
+        this.initEvidencesInProfile()
+        this.initMain()
         this.initHotkeys()
         this.render()
     }
@@ -110,6 +112,14 @@ class screen {
       this.timeline_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
     }
 
+    initEvidencesInProfile(){
+    /*
+    Initialize profile evidences on screen and fill in data.
+    */
+      this.profile_evidences_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
+      this.profile_evidences_widget.hide()
+    }
+
     initIPInfo(){
       /*
       Initialize ipinfo widget on screen and fill in data
@@ -162,7 +172,7 @@ class screen {
       /*
       Keep track of all hotkeys widgets
       */
-      this.hotkeys = [this.listtable1, this.listtable2, this.gauge1, this.gauge2, this.tuple_widget, this.helptable]
+      this.hotkeys = [this.listtable1, this.listtable2, this.gauge1, this.gauge2, this.tuple_widget, this.profile_evidences_widget,this.helptable]
     }
 
     e_hotkey_routine(){
@@ -271,6 +281,26 @@ class screen {
         ['estDstPortClient',  'totalflows','totalpkts','totalbytes'],
         ['NotEstDstPortClient',  'totalflows','totalpkts','totalbytes']
       )
+    }
+
+    z_hotkey_routine(){
+      /*
+      Function to fill and prepare the widget with out tuples
+      */
+      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
+        this.hotkeys[widget_idx].hide()
+      }
+      for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
+          this.mainPage[widget_idx].hide()
+      }
+      this.gauge1.hide()
+      this.gauge2.hide()
+      this.listtable2.hide()
+      this.listtable1.hide()
+      this.profile_evidences_widget.setEvidencesInProfile(this.tree_widget.current_ip)
+      this.profile_evidences_widget.show()
+      this.profile_evidences_widget.focus()
+      this.render()
     }
 
     i_hotkey_routine(){
@@ -392,12 +422,12 @@ class screen {
             this.timeline_widget.widget.style.border.fg='blue'
             this.focus_widget = this.evidence_box_widget
             this.evidence_box_widget.widget.focus()}
-          else{
+          else if (this.focus_widget == this.evidence_box_widget){
             this.focus_widget = this.tree_widget
             this.tree_widget.widget.style.border.fg = 'magenta'
             this.tree_widget.focus();}
-        		this.render()
-        }	
+            this.render();
+        }
       	else if(key.name == 'q' || key.name == "C-c"){
       		return process.exit(0);
       	}
@@ -434,6 +464,11 @@ class screen {
         else if(key.name == 'i'){
           this.helpbar.selectTab(6)
           this.i_hotkey_routine()
+          this.focus_hotkey = false
+        }
+        else if(key.name == 'z'){
+//          this.helpbar.selectTab(6)
+          this.z_hotkey_routine()
           this.focus_hotkey = false
         }
         else if(key.name == 'y'){

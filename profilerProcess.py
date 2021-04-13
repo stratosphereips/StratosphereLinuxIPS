@@ -47,13 +47,12 @@ def timeit(method):
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
     """ A class to create the profiles for IPs and the rest of data """
-    def __init__(self, inputqueue, outputqueue, config, width):
+    def __init__(self, inputqueue, outputqueue, config):
         self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.config = config
-        self.width = width
         self.columns_defined = False
         self.timeformat = None
         self.input_type = False
@@ -93,7 +92,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.home_net = False
 
         # Get the time window width, if it was not specified as a parameter
-        if not self.width:
             try:
                 data = self.config.get('parameters', 'time_window_width')
                 self.width = float(data)
@@ -109,11 +107,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # There is a conf, but there is no option, or no section or no
                 # configuration file specified
                 self.width = 3600
-        # Limit any width to be > 0. By default we use 300 seconds, 5minutes
-        elif self.width < 0:
-            self.width = 3600
-        else:
-            self.width = 3600
+
         # Report the time window width
         if self.width == 9999999999:
             self.print(f'Time Windows Width used: {self.width} seconds. Only 1 time windows. Dates in the names of files are 100 years in the past.', 4, 0)

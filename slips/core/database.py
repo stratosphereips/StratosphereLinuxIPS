@@ -878,49 +878,66 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
-    def setEvidence(self, key, threat_level, confidence, description, profileid='', twid='',):
+    def setEvidence(self, type_detection, detection_info, type_evidence,
+                    threat_level, confidence, description, profileid='', twid='',):
         """
-        Get the evidence for this TW for this Profile
+        Set the evidence for this Profile and Timewindow.
 
-        Input:
-        - key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans,
-                then this would be the port used.
-               the idea is that you can later update this specific detection when it evolves.
-               Examples of keys are: 'dport:1234' for all the evidences regarding this dport,
-               or 'dip:1.1.1.1' for all the evidences regarding that dst ip
-        - type_evidence: The type of evidence you can send. For example PortScanType1
-        - threat_level: How important this evidence is. Portscan? C&C channel? Exploit?
-        - confidence: How sure you are that this is what you say it is.
-            Basically: the more data the more sure you are.
+        Parameters:
+            key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans,
+                 then this would be the port used. The idea is that you can later update
+                 this specific detection when it evolves. Examples of keys are:
+                 'dport:1234' for all the evidences regarding this dport,
+                 'dip:1.1.1.1' for all the evidences regarding that dst ip
 
+        type_evidence: determine the type of evidenc. E.g. PortScan, ThreatIntelligence
+        threat_level: determine the importance of the evidence.
+        confidence: determine the confidence of the detection. (How sure you are that this is what you say it is.)
+
+        Example:
         The evidence is stored as a dict.
         {
             'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'],
             'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1']
             'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
         }
-
-        Adapt to set the evidence of ips without profile and tw
-
         """
-        # See if we have and get the current evidence stored in the DB fot this profileid in this twid
+        # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
         else:
-            # We never had any evidence for nothing
             current_evidence = {}
-        # We dont care if there is previous evidence or not in this key. We just change add all the values.
-        data = []
-        data.append(confidence)
-        data.append(threat_level)
-        data.append(description)
-        current_evidence[key] = data
 
+        # Prepare key for a new evidence
+        key = dict()
+        key['type_detection'] = type_detection
+        key['detection_info'] = detection_info
+        key['type_evidence'] = type_evidence
+
+        #Prepare data for a new evidence
+        data = dict()
+        data['confidence']= confidence
+        data['threat_level'] = threat_level
+        data['description'] = description
+
+        # key uses dictionary format, so it needs to be converted to json to work as a dict key.
+        key_json = json.dumps(key)
+        current_evidence[key_json] = data
         current_evidence_json = json.dumps(current_evidence)
+        # Set evidence in the database.
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
-        # Tell everyone an evidence was added
-        self.publish('evidence_added', profileid + self.separator  + twid + self.separator  + key + self.separator +str(data[2]))
+        self.r.hset('evidence'+profileid, twid, current_evidence_json)
+
+        evidence_to_send = {
+            'profileid': str(profileid),
+            'twid': str(twid),
+            'key': key,
+            'data': data
+        }
+        evidence_to_send = json.dumps(evidence_to_send)
+
+        self.publish('evidence_added', evidence_to_send)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -1555,14 +1572,14 @@ class Database(object):
         """
         self.rcache.hset('IoC_domains', domain, description)
 
-    def add_malicious_ip(self, ip, profileid_twid):
+    def set_malicious_ip(self, ip, profileid_twid):
         """
         Save in DB malicious IP found in the traffic
         with its profileid and twid
         """
         self.r.hset('MaliciousIPs', ip, profileid_twid)
 
-    def add_malicious_domain(self, domain, profileid_twid):
+    def set_malicious_domain(self, domain, profileid_twid):
         """
         Save in DB a malicious domain found in the traffic
         with its profileid and twid
