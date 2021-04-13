@@ -667,22 +667,18 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values = {}
         # We need to set it to empty at the beggining so any new flow has the key 'type'
         self.column_values['type'] = ''
-        try:
-            self.column_values['starttime'] = self.get_time(line['ts'])
-        except KeyError:
+
+        # to set the default value to '' if ts isn't found
+        ts = line.get('ts','')
+        if ts:
+            self.column_values['starttime'] = self.get_time(ts)
+        else:
             self.column_values['starttime'] = ''
-        try:
-            self.column_values['uid'] = line['uid']
-        except KeyError:
-            self.column_values['uid'] = False
-        try:
-            self.column_values['saddr'] = line['id.orig_h']
-        except KeyError:
-            self.column_values['saddr'] = ''
-        try:
-            self.column_values['daddr'] = line['id.resp_h']
-        except KeyError:
-            self.column_values['daddr'] = ''
+
+
+        self.column_values['uid'] = line.get('uid',False)
+        self.column_values['saddr'] = line.get('id.orig_h','')
+        self.column_values['daddr'] = line.get('id.resp_h','')
 
         if 'conn' in file_type:
             # {'ts': 1538080852.403669, 'uid': 'Cewh6D2USNVtfcLxZe', 'id.orig_h': '192.168.2.12', 'id.orig_p': 56343, 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364, 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1, 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8', 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
@@ -693,222 +689,83 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dur'] = 0
             self.column_values['endtime'] = self.column_values['starttime'] + timedelta(seconds=self.column_values['dur'])
             self.column_values['proto'] = line['proto']
-            try:
-                self.column_values['appproto'] = line['service']
-            except KeyError:
-                # no service recognized
-                self.column_values['appproto'] = ''
-            try:
-                self.column_values['sport'] = line['id.orig_p']
-            except KeyError:
-                self.column_values['sport'] = ''
+
+            self.column_values['appproto'] = line.get('service','')
+            self.column_values['sport'] = line.get('id.orig_p','')
+            self.column_values['dport'] = line.get('id.resp_p','')
+            self.column_values['state'] = line.get('conn_state','')
             self.column_values['dir'] = '->'
-            try:
-                self.column_values['dport'] = line['id.resp_p']
-            except KeyError:
-                self.column_values['dport'] = ''
-            try:
-                self.column_values['state'] = line['conn_state']
-            except KeyError:
-                self.column_values['state'] = ''
-            try:
-                self.column_values['spkts'] = line['orig_pkts']
-            except KeyError:
-                self.column_values['spkts'] = 0
-            try:
-                self.column_values['dpkts'] = line['resp_pkts']
-            except KeyError:
-                self.column_values['dpkts'] = 0
+            self.column_values['spkts'] = line.get('orig_pkts',0)
+            self.column_values['dpkts'] = line.get('resp_pkts',0)
+            self.column_values['sbytes'] = line.get('orig_bytes',0)
+            self.column_values['dbytes'] = line.get('resp_bytes',0)
             self.column_values['pkts'] = self.column_values['spkts'] + self.column_values['dpkts']
-            try:
-                self.column_values['sbytes'] = line['orig_bytes']
-            except KeyError:
-                self.column_values['sbytes'] = 0
-            try:
-                self.column_values['dbytes'] = line['resp_bytes']
-            except KeyError:
-                self.column_values['dbytes'] = 0
             self.column_values['bytes'] = self.column_values['sbytes'] + self.column_values['dbytes']
-            try:
-                self.column_values['state_hist'] = line['history']
-            except KeyError:
-                self.column_values['state_hist'] = self.column_values['state']
-            try:
-                self.column_values['smac'] = line['orig_l2_addr']
-            except KeyError:
-                self.column_values['smac'] = ''
-            try:
-                self.column_values['dmac'] = line['resp_l2_addr']
-            except KeyError:
-                self.column_values['dmac'] = ''
+            self.column_values['state_hist'] = line.get('history',self.column_values['state'])
+            self.column_values['smac'] = line.get('orig_l2_addr','')
+            self.column_values['dmac'] = line.get('resp_l2_addr','')
+
+
         elif 'dns' in file_type:
             #{"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
             self.column_values['type'] = 'dns'
-            try:
-                self.column_values['query'] = line['query']
-            except KeyError:
-                self.column_values['query'] = ''
-            try:
-                self.column_values['qclass_name'] = line['qclass_name']
-            except KeyError:
-                self.column_values['qclass_name'] = ''
-            try:
-                self.column_values['qtype_name'] = line['qtype_name']
-            except KeyError:
-                self.column_values['qtype_name'] = ''
-            try:
-                self.column_values['rcode_name'] = line['rcode_name']
-            except KeyError:
-                self.column_values['rcode_name'] = ''
-            try:
-                self.column_values['answers'] = line['answers']
-            except KeyError:
-                self.column_values['answers'] = ''
-            try:
-                self.column_values['TTLs'] = line['TTLs']
-            except KeyError:
-                self.column_values['TTLs'] = ''
+            self.column_values['query'] = line.get('query','')
+            self.column_values['qclass_name'] = line.get('qclass_name','')
+            self.column_values['qtype_name'] = line.get('qtype_name','')
+            self.column_values['rcode_name'] = line.get('rcode_name','')
+            self.column_values['answers'] = line.get('answers','')
+            self.column_values['TTLs'] = line.get('TTLs','')
+
         elif 'http' in  file_type:
             # {"ts":158.957403,"uid":"CnNLbE2dyfy5KyqEhh","id.orig_h":"10.0.2.105","id.orig_p":49158,"id.resp_h":"64.182.208.181","id.resp_p":80,"trans_depth":1,"method":"GET","host":"icanhazip.com","uri":"/","version":"1.1","user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.38 (KHTML, like Gecko) Chrome/45.0.2456.99 Safari/537.38","request_body_len":0,"response_body_len":13,"status_code":200,"status_msg":"OK","tags":[],"resp_fuids":["FwraVxIOACcjkaGi3"],"resp_mime_types":["text/plain"]}
             self.column_values['type'] = 'http'
-            try:
-                self.column_values['method'] = line['method']
-            except KeyError:
-                self.column_values['method'] = ''
-            try:
-                self.column_values['host'] = line['host']
-            except KeyError:
-                self.column_values['host'] = ''
-            try:
-                self.column_values['uri'] = line['uri']
-            except KeyError:
-                self.column_values['uri'] = ''
-            try:
-                self.column_values['httpversion'] = line['version']
-            except KeyError:
-                self.column_values['httpversion'] = ''
-            try:
-                self.column_values['user_agent'] = line['user_agent']
-            except KeyError:
-                self.column_values['user_agent'] = ''
-            try:
-                self.column_values['request_body_len'] = line['request_body_len']
-            except KeyError:
-                self.column_values['request_body_len'] = 0
-            try:
-                self.column_values['response_body_len'] = line['response_body_len']
-            except KeyError:
-                self.column_values['response_body_len'] = 0
-            try:
-                self.column_values['status_code'] = line['status_code']
-            except KeyError:
-                self.column_values['status_code'] = ''
-            try:
-                self.column_values['status_msg'] = line['status_msg']
-            except KeyError:
-                self.column_values['status_msg'] = ''
-            try:
-                self.column_values['resp_mime_types'] = line['resp_mime_types']
-            except KeyError:
-                self.column_values['resp_mime_types'] = ''
-            try:
-                self.column_values['resp_fuids'] = line['resp_fuids']
-            except KeyError:
-                self.column_values['resp_fuids'] = ''
+            self.column_values['method'] = line.get('method','')
+            self.column_values['host'] = line.get('host','')
+            self.column_values['uri'] = line.get('uri','')
+            self.column_values['httpversion'] = line.get('version',0)
+            self.column_values['user_agent'] = line.get('user_agent','')
+            self.column_values['request_body_len'] = line.get('request_body_len',0)
+            self.column_values['response_body_len'] = line.get('response_body_len',0)
+            self.column_values['status_code'] = line.get('status_code','')
+            self.column_values['status_msg'] = line.get('status_msg','')
+            self.column_values['resp_mime_types'] = line.get('resp_mime_types','')
+            self.column_values['resp_fuids'] = line.get('resp_fuids','')
+
         elif 'ssl' in file_type:
             # {"ts":12087.045499,"uid":"CdoFDp4iW79I5ZmsT7","id.orig_h":"10.0.2.105","id.orig_p":49704,"id.resp_h":"195.211.240.166","id.resp_p":443,"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
             # {"ts":1382354909.915615,"uid":"C7W6ZA4vI8FxJ9J0bh","id.orig_h":"147.32.83.53","id.orig_p":36567,"id.resp_h":"195.113.214.241","id.resp_p":443,"version":"TLSv12","cipher":"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA","curve":"secp256r1","server_name":"id.google.com.ar","resumed":false,"established":true,"cert_chain_fuids":["FnomJz1vghKIOHtytf","FSvQff1KsaDkRtKXo4","Fif2PF48bytqq6xMDb"],"client_cert_chain_fuids":[],"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
             self.column_values['type'] = 'ssl'
-            try:
-                self.column_values['sslversion'] = line['version']
-            except KeyError:
-                self.column_values['sslversion'] = ''
-            try:
-                self.column_values['cipher'] = line['cipher']
-            except KeyError:
-                self.column_values['cipher'] = ''
-            try:
-                self.column_values['resumed'] = line['resumed']
-            except KeyError:
-                self.column_values['resumed'] = ''
-            try:
-                self.column_values['established'] = line['established']
-            except KeyError:
-                self.column_values['established'] = ''
-            try:
-                self.column_values['cert_chain_fuids'] = line['cert_chain_fuids']
-            except KeyError:
-                self.column_values['cert_chain_fuids'] = ''
-            try:
-                self.column_values['client_cert_chain_fuids'] = line['client_cert_chain_fuids']
-            except KeyError:
-                self.column_values['client_cert_chain_fuids'] = ''
-            try:
-                self.column_values['subject'] = line['subject']
-            except KeyError:
-                self.column_values['subject'] = ''
-            try:
-                self.column_values['issuer'] = line['issuer']
-            except KeyError:
-                self.column_values['issuer'] = ''
-            try:
-                self.column_values['validation_status'] = line['validation_status']
-            except KeyError:
-                self.column_values['validation_status'] = ''
-            try:
-                self.column_values['curve'] = line['curve']
-            except KeyError:
-                self.column_values['curve'] = ''
-            try:
-                self.column_values['server_name'] = line['server_name']
-            except KeyError:
-                self.column_values['server_name'] = ''
+
+
+            self.column_values['sslversion'] = line.get('version','')
+            self.column_values['cipher'] = line.get('cipher','')
+            self.column_values['resumed'] = line.get('resumed','')
+            self.column_values['established'] = line.get('established','')
+            self.column_values['cert_chain_fuids'] = line.get('cert_chain_fuids','')
+            self.column_values['client_cert_chain_fuids'] = line.get('client_cert_chain_fuids','')
+            self.column_values['subject'] = line.get('subject','')
+            self.column_values['issuer'] = line.get('issuer','')
+            self.column_values['validation_status'] = line.get('validation_status','')
+            self.column_values['curve'] = line.get('curve','')
+            self.column_values['server_name'] = line.get('server_name','')
+
+
+
+
         elif 'ssh' in file_type:
             self.column_values['type'] = 'ssh'
-            try:
-                self.column_values['version'] = line['version']
-            except KeyError:
-                self.column_values['version'] = ''
-            try:
-                self.column_values['auth_success'] = line['auth_success']
-            except KeyError:
-                self.column_values['auth_success'] = ''
-            try:
-                self.column_values['auth_attempts'] = line['auth_attempts']
-            except KeyError:
-                self.column_values['auth_attempts'] = ''
-            try:
-                self.column_values['client'] = line['client']
-            except KeyError:
-                self.column_values['client'] = ''
-            try:
-                self.column_values['server'] = line['server']
-            except KeyError:
-                self.column_values['server'] = ''
-            try:
-                self.column_values['cipher_alg'] = line['cipher_alg']
-            except KeyError:
-                self.column_values['cipher_alg'] = ''
-            try:
-                self.column_values['mac_alg'] = line['mac_alg']
-            except KeyError:
-                self.column_values['mac_alg'] = ''
-            try:
-                self.column_values['compression_alg'] = line['compression_alg']
-            except KeyError:
-                self.column_values['compression_alg'] = ''
-            try:
-                self.column_values['kex_alg'] = line['kex_alg']
-            except KeyError:
-                self.column_values['kex_alg'] = ''
-            try:
-                self.column_values['host_key_alg'] = line['host_key_alg']
-            except KeyError:
-                self.column_values['host_key_alg'] = ''
-            try:
-                self.column_values['host_key'] = line['host_key']
-            except KeyError:
-                self.column_values['host_key'] = ''
+            self.column_values['version'] = line.get('version','')
+            self.column_values['auth_success'] = line.get('auth_success','')
+            self.column_values['auth_attempts'] = line.get('auth_attempts','')
+            self.column_values['client'] = line.get('client','')
+            self.column_values['server'] = line.get('server','')
+            self.column_values['cipher_alg'] = line.get('cipher_alg','')
+            self.column_values['mac_alg'] = line.get('mac_alg','')
+            self.column_values['compression_alg'] = line.get('compression_alg','')
+            self.column_values['kex_alg'] = line.get('kex_alg','')
+            self.column_values['host_key_alg'] = line.get('host_key_alg','')
+            self.column_values['host_key'] = line.get('host_key','')
+
         elif 'irc' in file_type:
             self.column_values['type'] = 'irc'
         elif 'long' in file_type:
@@ -955,22 +812,6 @@ class ProfilerProcess(multiprocessing.Process):
         line = new_line['data']
         self.column_values = {}
         self.column_values['starttime'] = False
-        self.column_values['endtime'] = False
-        self.column_values['dur'] = False
-        self.column_values['proto'] = False
-        self.column_values['appproto'] = False
-        self.column_values['saddr'] = False
-        self.column_values['sport'] = False
-        self.column_values['dir'] = False
-        self.column_values['daddr'] = False
-        self.column_values['dport'] = False
-        self.column_values['state'] = False
-        self.column_values['pkts'] = False
-        self.column_values['spkts'] = False
-        self.column_values['dpkts'] = False
-        self.column_values['bytes'] = False
-        self.column_values['sbytes'] = False
-        self.column_values['dbytes'] = False
         self.column_values['type'] = 'argus'
 
         # Read the lines fast
@@ -979,70 +820,24 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['starttime'] = self.get_time(nline[self.column_idx['starttime']])
         except KeyError:
             pass
-        try:
-            self.column_values['endtime'] = nline[self.column_idx['endtime']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['dur'] = nline[self.column_idx['dur']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['proto'] = nline[self.column_idx['proto']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['appproto'] = nline[self.column_idx['appproto']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['saddr'] = nline[self.column_idx['saddr']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['sport'] = nline[self.column_idx['sport']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['dir'] = nline[self.column_idx['dir']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['daddr'] = nline[self.column_idx['daddr']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['dport'] = nline[self.column_idx['dport']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['state'] = nline[self.column_idx['state']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['pkts'] = int(nline[self.column_idx['pkts']])
-        except KeyError:
-            pass
-        try:
-            self.column_values['spkts'] = int(nline[self.column_idx['spkts']])
-        except KeyError:
-            pass
-        try:
-            self.column_values['dpkts'] = int(nline[self.column_idx['dpkts']])
-        except KeyError:
-            pass
-        try:
-            self.column_values['bytes'] = int(nline[self.column_idx['bytes']])
-        except KeyError:
-            pass
-        try:
-            self.column_values['sbytes'] = int(nline[self.column_idx['sbytes']])
-        except KeyError:
-            pass
-        try:
-            self.column_values['dbytes'] = int(nline[self.column_idx['dbytes']])
-        except KeyError:
-            pass
+
+        self.column_values['endtime'] = nline.get(self.column_idx['endtime'],False)
+        self.column_values['dur'] = nline.get(self.column_idx['dur'],False)
+        self.column_values['proto'] = nline.get(self.column_idx['proto'],False)
+        self.column_values['appproto'] = nline.get(self.column_idx['appproto'],False)
+        self.column_values['saddr'] = nline.get(self.column_idx['saddr'],False)
+        self.column_values['sport'] = nline.get(self.column_idx['sport'],False)
+        self.column_values['dir'] = nline.get(self.column_idx['dir'],False)
+        self.column_values['daddr'] = nline.get(self.column_idx['daddr'],False)
+        self.column_values['dport'] = nline.get(self.column_idx['dport'],False)
+        self.column_values['state'] = nline.get(self.column_idx['state'],False)
+        self.column_values['pkts'] = int(nline.get(self.column_idx['pkts'],False))
+        self.column_values['spkts'] = int(nline.get(self.column_idx['spkts'],False))
+        self.column_values['dpkts'] = int(nline.get(self.column_idx['dpkts'],False))
+        self.column_values['bytes'] = int(nline.get(self.column_idx['bytes'],False))
+        self.column_values['sbytes'] = int(nline.get(self.column_idx['sbytes'],False))
+        self.column_values['dbytes'] = int(nline.get(self.column_idx['dbytes'],False))
+
 
     def process_nfdump_input(self, new_line):
         """
@@ -1153,39 +948,15 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['starttime'] = False
         self.column_values['endtime'] = False
         self.column_values['dur'] = 0
-        try:
-            self.column_values['flow_id'] = line['flow_id']
-        except KeyError:
-            self.column_values['flow_id'] = False
-        try:
-            self.column_values['saddr'] = line['src_ip']
-        except KeyError:
-            self.column_values['saddr'] = False
-        try:
-            self.column_values['sport'] = line['src_port']
-        except KeyError:
-            self.column_values['sport'] = False
-        try:
-            self.column_values['daddr'] = line['dest_ip']
-        except KeyError:
-            self.column_values['daddr'] = False
-        try:
-            self.column_values['dport'] = line['dest_port']
-        except KeyError:
-            self.column_values['dport'] = False
-        try:
-            self.column_values['proto'] = line['proto']
-        except KeyError:
-            self.column_values['proto'] = False
-        try:
-            self.column_values['type'] = line['event_type']
-        except KeyError:
-            self.column_values['type'] = False
+        self.column_values['flow_id'] = line.get('flow_id',False)
+        self.column_values['saddr'] = line.get('src_ip',False)
+        self.column_values['sport'] = line.get('src_port',False)
+        self.column_values['daddr'] = line.get('dest_ip',False)
+        self.column_values['dport'] = line.get('dest_port',False)
+        self.column_values['proto'] = line.get('proto',False)
+        self.column_values['type'] = line.get('event_type',False)
         self.column_values['dir'] = '->'
-        try:
-            self.column_values['appproto'] = line['app_proto']
-        except KeyError:
-            self.column_values['appproto'] = False
+        self.column_values['appproto'] = line.get('app_proto',False)
 
         if self.column_values['type']:
             """
