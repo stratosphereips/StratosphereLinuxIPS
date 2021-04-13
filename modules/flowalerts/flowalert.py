@@ -221,7 +221,7 @@ class Module(Module, multiprocessing.Process):
                     # Try Zeek method to detect if SSh was successful or not.
                     auth_success = flow_dict['auth_success']
                     if auth_success:
-                        time.sleep(10)    # This logic should be fixed, it stops the whole module.
+                        time.sleep(10) # This logic should be fixed, it stops the whole module.
                         original_ssh_flow = __database__.get_flow(profileid, twid, uid)
                         original_flow_uid = next(iter(original_ssh_flow))
                         if original_ssh_flow[original_flow_uid]:
@@ -253,29 +253,34 @@ class Module(Module, multiprocessing.Process):
                 # Check for self signed certificates in new_notice channel (notice.log)
                 message = self.c3.get_message(timeout=0.01)
                 if message and message['channel'] == 'new_notice':
+                    """ Checks for self signed certificates in the notice data """
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
                         data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
                         # Get flow as a json
                         flow = data['flow']
                         # Convert flow to a dict
                         flow = json.loads(flow)
-                        ip = flow['daddr']
-                        description = 'Self-signed certificate. Destination IP: {}'.format(ip)
-                        confidence = 0.5
-                        threat_level = 30
-                        type_detection = 'dstip'
-                        type_evidence = 'SelfSignedCertificate'
-                        detection_info =ip
-                        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
-                        self.print(description, 3, 0)
+                        msg = flow['msg']
+                        # We're looking for self signed certs in the 'msg' field
+                        if 'self signed' in msg or 'self-signed' in msg:
+                            profileid = data['profileid']
+                            twid = data['twid']
+                            ip = flow['daddr']
+                            description = 'Self-signed certificate. Destination IP: {}'.format(ip)
+                            confidence = 0.5
+                            threat_level = 30
+                            type_detection = 'dstip'
+                            type_evidence = 'SelfSignedCertificate'
+                            detection_info =ip
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                     threat_level, confidence, description, profileid=profileid, twid=twid)
+                            self.print(description, 3, 0)
                 # ---------------------------- new_ssl channel
                 message = self.c4.get_message(timeout=0.01)
                 if message and message['channel'] == 'new_ssl':
-                # Check for self signed certificates in new_ssl channel (ssl.log)
+                    # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict

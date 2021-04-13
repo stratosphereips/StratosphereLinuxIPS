@@ -381,7 +381,7 @@ class LogsProcess(multiprocessing.Process):
                 """
                 Dst ports and Src ports
                 """
-                """     
+                """
                 flow_type_key = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established, NotEstablished] 
                 Example: flow_type_key = 'SrcPortClientTCPEstablished'
                 """

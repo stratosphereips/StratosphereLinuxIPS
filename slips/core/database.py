@@ -1377,24 +1377,22 @@ class Database(object):
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
 
     def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg):
-        """" Checks for self signed certificates in the notice.log data """
-        # We're looking for self signed certs in the 'msg' field
-        if 'self signed' in msg or 'self-signed' in msg: # TODO: should i check here or in flowalert.py?
-            data = {
-                'daddr'     :      daddr,
-                'sport'     :      sport,
-                'dport'     :      dport,
-                'note'      :      note,
-                'msg'       :      msg,
-            }
-            data = json.dumps(data) # this is going to be sent inside another dict
-            to_send = {}
-            to_send['profileid'] = profileid
-            to_send['twid'] = twid
-            to_send['flow'] = data
-            to_send = json.dumps(to_send)
-            self.publish('new_notice', to_send)
-            self.print('Adding notice flow to DB: {}'.format(data), 5, 0)
+        """" Send notice.log data to new_notice channel to look for self-signed certificates """
+        data = {
+            'daddr' :  daddr,
+            'sport' :  sport,
+            'dport' :  dport,
+            'note'  :  note,
+            'msg'   :  msg,
+        }
+        data = json.dumps(data) # this is going to be sent inside another dict
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['flow'] = data
+        to_send = json.dumps(to_send)
+        self.publish('new_notice', to_send)
+        self.print('Adding notice flow to DB: {}'.format(data), 5, 0)
 
     def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """	
@@ -1714,7 +1712,7 @@ class Database(object):
         '''
         # data = self.get_malicious_file_info(file)
         # for key in file_data:
-        #     data[key] = file_data[key]
+        # data[key] = file_data[key]
         data = json.dumps(data)
         self.rcache.hset('malicious_files_info', file, data)
 
