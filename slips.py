@@ -212,8 +212,7 @@ if __name__ == '__main__':
         clear_redis_cache_database()
 
     # If the user wants to blocks, the user needs to give a permission to modify iptables
-    # Also check if the user blocks on interface, does not make sense to block on files
-    if args.interface and args.blocking:
+    if args.blocking:
         print('Run slips with sudo to enable the blocking module.')
 
     """
@@ -294,13 +293,11 @@ if __name__ == '__main__':
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
+
     # This plugins import will automatically load the modules and put them in the __modules__ variable
     if to_ignore:
         # Convert string to list
         to_ignore = eval(to_ignore)
-        # Disable blocking if was not asked and if it is not interface
-        if not args.blocking or not args.interface:
-            to_ignore.append('blocking')
         try:
             # This 'imports' all the modules somehow, but then we ignore some
             modules_to_call = load_modules(to_ignore)
@@ -313,6 +310,12 @@ if __name__ == '__main__':
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
+
+
+    if not args.blocking:
+        # Tell the blocking module that -p isn't provided so it can clear the slips chain
+        __database__.publish('new_blocking', 'delete slipsBlocking chain')
+        # to_ignore.append('blocking')
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used

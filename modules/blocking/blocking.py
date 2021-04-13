@@ -49,7 +49,6 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_blocking')
-
         self.set_sudo_according_to_env()
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
@@ -154,11 +153,10 @@ class Module(Module, multiprocessing.Process):
             self.firewall = self.determine_linux_firewall()
             if self.firewall == 'iptables':
                 # delete any pre existing slipsBlocking rules that may conflict before adding a new one
-                self.delete_iptables_chain()
+                # self.delete_iptables_chain()
                 self.print('Executing "sudo iptables -N slipsBlocking"')
                 # Add a new chain to iptables
                 os.system(sudo + 'iptables -N slipsBlocking')
-                # TODO: use python iptc
                 # TODO: determine which one to use OUTPUT INPUT or FORWARD or is it safer to use the three of them?
                 # Redirect the traffic from all other chains to slipsBlocking so rules
                 # in any pre-existing chains dont override it
@@ -244,22 +242,6 @@ class Module(Module, multiprocessing.Process):
                 # Blocking in MacOS
                 self.print('Mac OS blocking is not supported yet.')
 
-        
-    def handle_stop_process_message(self, message):
-        """ Deletes slipsBlocking chain and rules based on the user's platform and firewall """
-        if self.platform_system == 'Linux':
-            if self.firewall == 'iptables':
-                # Delete rules in slipsBlocking chain
-                self.delete_iptables_chain()
-            elif self.firewall == 'nftables':
-                # TODO: handle the creation of the slipsBlocking chain in nftables
-                # Flush rules in slipsBlocking chain because you can't delete a chain without flushing first
-                os.system(sudo + "nft flush chain inet slipsBlocking")
-                # Delete slipsBlocking chain from nftables
-                os.system(sudo + "nft delete chain inet slipsBlocking")
-        elif self.platform_system == 'Darwin':
-            self.print('Mac OS blocking is not supported yet.')
-
     def unblock_ip(self,
                    ip_to_unblock,
                    from_, to,
@@ -309,44 +291,49 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
-                    self.handle_stop_process_message(message)
                     return True
 
                 # There's an IP that needs to be blocked
                 if message['channel'] == 'new_blocking' \
                     and message['type'] == 'message':
-                    # message['data'] in the new_blocking channel is a dictionary that contains
-                    # the ip and the blocking options
-                    # Example of the data dictionary to block or unblock an ip:
-                    #   (notice you have to specify from,to,dport,sport,protocol or at least 2 of them when unblocking)
-                    #   blocking_data = {
-                    #       "ip"       : "0.0.0.0"
-                    #       "block"    : True to block  - False to unblock
-                    #       "from"     : True to block traffic from ip (default) - False does nothing
-                    #       "to"       : True to block traffic to ip  (default)  - False does nothing
-                    #       "dport"    : Optional destination port number
-                    #       "sport"    : Optional source port number
-                    #       "protocol" : Optional protocol
-                    #   }
-                    # Example of passing blocking_data to this module:
-                    #   blocking_data = json.dumps(blocking_data)
-                    #   __database__.publish('new_blocking', blocking_data )
+                    # sent from slips.py
+                    if message['data'] == 'delete slipsBlocking chain':
+                       pass
 
-                    # Decode(deserialize) the python dict into JSON formatted string
-                    data = json.loads(message['data'])
-                    # Parse the data dictionary
-                    ip    = data.get("ip")
-                    block = data.get("block")
-                    from_ = data.get("from")
-                    to    = data.get("to")
-                    dport = data.get("dport")
-                    sport = data.get("sport")
-                    protocol = data.get("protocol")
-
-                    if block:
-                        self.block_ip(ip, from_, to, dport, sport, protocol)
                     else:
-                        self.unblock_ip(ip, from_, to, dport, sport, protocol)
+
+                        # message['data'] in the new_blocking channel is a dictionary that contains
+                        # the ip and the blocking options
+                        # Example of the data dictionary to block or unblock an ip:
+                        #   (notice you have to specify from,to,dport,sport,protocol or at least 2 of them when unblocking)
+                        #   blocking_data = {
+                        #       "ip"       : "0.0.0.0"
+                        #       "block"    : True to block  - False to unblock
+                        #       "from"     : True to block traffic from ip (default) - False does nothing
+                        #       "to"       : True to block traffic to ip  (default)  - False does nothing
+                        #       "dport"    : Optional destination port number
+                        #       "sport"    : Optional source port number
+                        #       "protocol" : Optional protocol
+                        #   }
+                        # Example of passing blocking_data to this module:
+                        #   blocking_data = json.dumps(blocking_data)
+                        #   __database__.publish('new_blocking', blocking_data )
+
+                        # Decode(deserialize) the python dict into JSON formatted string
+                        data = json.loads(message['data'])
+                        # Parse the data dictionary
+                        ip    = data.get("ip")
+                        block = data.get("block")
+                        from_ = data.get("from")
+                        to    = data.get("to")
+                        dport = data.get("dport")
+                        sport = data.get("sport")
+                        protocol = data.get("protocol")
+
+                        if block:
+                            self.block_ip(ip, from_, to, dport, sport, protocol)
+                        else:
+                            self.unblock_ip(ip, from_, to, dport, sport, protocol)
 
         except KeyboardInterrupt:
             return True
