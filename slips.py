@@ -39,6 +39,7 @@ from slips_files.common.argparse import ArgumentParser
 import errno
 import subprocess
 import re
+from collections import OrderedDict
 
 version = '0.7.3'
 
@@ -162,6 +163,11 @@ def load_modules(to_ignore):
             if inspect.isclass(member_object):
                 if issubclass(member_object, Module) and member_object is not Module:
                     plugins[member_object.name] = dict(obj=member_object, description=member_object.description)
+    # Change the order of the blocking module(load it first) so it can receive msgs sent from other modules
+    if 'Blocking' in plugins:
+        plugins = OrderedDict(plugins)
+        # last=False to move to the beginning of the dict
+        plugins.move_to_end('Blocking', last=False)
 
     return plugins,failed_to_load_modules
 

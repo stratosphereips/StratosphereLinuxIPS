@@ -551,8 +551,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     'block' : True,
                                 }
                                 blocking_data = json.dumps(blocking_data)
-                                # IMPORTANT: if the blocking module is loaded after this module this line won't work!!!
-                                #TODO: load the blocking module before any other module so it recieves msgs properly
+                                # If the blocking module is loaded after this module this line won't work!!!
                                 __database__.publish('new_blocking', blocking_data)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
             except KeyboardInterrupt:
