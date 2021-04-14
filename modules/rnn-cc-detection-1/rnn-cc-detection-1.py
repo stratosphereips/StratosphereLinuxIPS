@@ -21,7 +21,6 @@ import warnings
 import numpy as np
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 from tensorflow.python.keras.models import load_model
-from keras.utils import to_categorical
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -29,9 +28,9 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'lstm-cc-detection-1'
+    name = 'rnn-cc-detection-1'
     description = 'Detect C&C channels based on behavioral letters'
-    authors = ['Sebastian Garcia', 'Kamila Babayeva']
+    authors = ['Sebastian Garcia', 'Kamila Babayeva', 'Ondrej Lukas']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -132,7 +131,7 @@ class Module(Module, multiprocessing.Process):
         # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
         return pre_behavioral_model
 
-    def run(self, model_file="modules/lstm-cc-detection-1/rnn_model.h5"):
+    def run(self, model_file="modules/rnn-cc-detection-1/rnn_model.h5"):
         # TODO: set the decision threshold in the function call
         try:
             # Download lstm model
