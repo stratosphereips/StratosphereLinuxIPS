@@ -78,9 +78,9 @@ class Module(Module, multiprocessing.Process):
             There's no sudo in docker so we need to execute all commands without it
          """
         # This env variable is defined in the Dockerfile
-        running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+        self.running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
         global sudo
-        if running_in_docker:
+        if self.running_in_docker:
             sudo = ''
         else:
             sudo = 'sudo '
@@ -109,13 +109,13 @@ class Module(Module, multiprocessing.Process):
         """ Returns the currently installed firewall and installs iptables if none was found """
 
         if shutil.which('iptables'):
+            # comes pre installed in docker
             return 'iptables'
         elif shutil.which('nftables'):
             return 'nftables'
         else:
-            # If no firewall is found download and use iptables
-            os.system(sudo + "apt install iptables")
-            return 'iptables'
+            # no firewall installed
+            return None
 
     def delete_iptables_chain(self):
         """ Flushes and deletes everything in slipsBlocking chain """
@@ -158,6 +158,10 @@ class Module(Module, multiprocessing.Process):
                 # Add a new nft table that uses the inet family (ipv4,ipv6)
                 os.system(sudo + "nft add table inet slipsBlocking")
                 # TODO: HANDLE NFT TABLE
+            elif not self.running_in_docker and self.firewall == None :
+                # user doesn't have a firewall
+                self.print("iptables is not installed. Blocking module is quitting.")
+                pass
         elif self.platform_system == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
 
