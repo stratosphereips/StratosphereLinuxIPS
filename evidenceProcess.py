@@ -249,7 +249,6 @@ class EvidenceProcess(multiprocessing.Process):
                         # CONTINUE HERE
                         ip = profileid.split(self.separator)[1]
                         for key in evidence:
-
                             # Deserialize key data
                             key_json = json.loads(key)
                             type_detection = key_json.get('type_detection')

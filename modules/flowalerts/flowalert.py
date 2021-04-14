@@ -1,3 +1,16 @@
+# This is a template module for you to copy and create your own slips module
+# Instructions
+# 1. Create a new folder on ./modules with the name of your template. Example:
+#    mkdir modules/anomaly_detector
+# 2. Copy this template file in that folder.
+#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
+# 3. Make it a module
+#    touch modules/template/__init__.py
+# 4. Change the name of the module, description and author in the variables
+# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
+# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
+# 7. The name of the class MUST be 'Module', do not change it.
+
 # Must imports
 from slips.common.abstracts import Module
 import multiprocessing
@@ -9,7 +22,6 @@ import json
 import configparser
 from ipaddress import ip_address
 import time
-
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -40,6 +52,8 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_ssh')
+        self.c3 = __database__.subscribe('new_notice')
+        self.c4 = __database__.subscribe('new_ssl')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -152,6 +166,7 @@ class Module(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
+                # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
@@ -187,6 +202,7 @@ class Module(Module, multiprocessing.Process):
                     if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
+                # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
                     return True
@@ -205,7 +221,7 @@ class Module(Module, multiprocessing.Process):
                     # Try Zeek method to detect if SSh was successful or not.
                     auth_success = flow_dict['auth_success']
                     if auth_success:
-                        time.sleep(10)    # This logic should be fixed, it stops the whole module.
+                        time.sleep(10) # This logic should be fixed, it stops the whole module.
                         original_ssh_flow = __database__.get_flow(profileid, twid, uid)
                         original_flow_uid = next(iter(original_ssh_flow))
                         if original_ssh_flow[original_flow_uid]:
@@ -232,6 +248,69 @@ class Module(Module, multiprocessing.Process):
                             else:
                                 # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
                                 pass
+
+                # ---------------------------- new_notice channel
+                # Check for self signed certificates in new_notice channel (notice.log)
+                message = self.c3.get_message(timeout=0.01)
+                if message and message['channel'] == 'new_notice':
+                    """ Checks for self signed certificates in the notice data """
+                    data = message['data']
+                    if type(data) == str:
+                        # Convert from json to dict
+                        data = json.loads(data)
+                        # Get flow as a json
+                        flow = data['flow']
+                        # Convert flow to a dict
+                        flow = json.loads(flow)
+                        msg = flow['msg']
+                        # We're looking for self signed certs in the 'msg' field
+                        if 'self signed' in msg or 'self-signed' in msg:
+                            profileid = data['profileid']
+                            twid = data['twid']
+                            ip = flow['daddr']
+                            description = 'Self-signed certificate. Destination IP: {}'.format(ip)
+                            confidence = 0.5
+                            threat_level = 30
+                            type_detection = 'dstip'
+                            type_evidence = 'SelfSignedCertificate'
+                            detection_info =ip
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                     threat_level, confidence, description, profileid=profileid, twid=twid)
+                            self.print(description, 3, 0)
+                # ---------------------------- new_ssl channel
+                message = self.c4.get_message(timeout=0.01)
+                if message and message['channel'] == 'new_ssl':
+                    # Check for self signed certificates in new_ssl channel (ssl.log)
+                    data = message['data']
+                    if type(data) == str:
+                        # Convert from json to dict
+                        data = json.loads(data)
+                        # Get flow as a json
+                        flow = data['flow']
+                        # Convert flow to a dict
+                        flow = json.loads(flow)
+                        if 'self signed' in flow['validation_status']:
+                            profileid = data['profileid']
+                            twid = data['twid']
+                            ip = flow['daddr']
+                            server_name = flow.get('server_name') # returns None if not found
+                            if server_name:
+                                description = 'Self-signed certificate. Destination: {}. IP: {}'.format(server_name,ip)
+                            else:
+                                description = 'Self-signed certificate. Destination IP: {}'.format(ip)
+                            confidence = 0.5
+                            threat_level = 30
+                            type_detection = 'dstip'
+                            type_evidence = 'SelfSignedCertificate'
+                            detection_info =ip
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                     threat_level, confidence, description, profileid=profileid, twid=twid)
+                            self.print(description, 3, 0)
+
+
+
+
+
         except KeyboardInterrupt:
             return True
         except Exception as inst:
