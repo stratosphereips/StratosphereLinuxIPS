@@ -338,13 +338,13 @@ class Database(object):
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
         """	
-        Mark a TW in a profile as modified	
+        Mark a TW in a profile as modified
         This means:	
-        1- To add it to the list of ModifiedTW	
-        2- Add the timestamp received to the time_of_last_modification	
+        1- To add it to the list of ModifiedTW
+        2- Add the timestamp received to the time_of_last_modification
            in the TW itself	
         3- To update the internal time of slips	
-        4- To check if we should 'close' some TW	
+        4- To check if we should 'close' some TW
         """
         # Add this tw to the list of modified TW, so others can
         # check only these later
@@ -1439,6 +1439,9 @@ class Database(object):
 
     def add_timeline_line(self, profileid, twid, data, timestamp):
         """ Add a line to the time line of this profileid and twid """
+        print("****")
+        print('Adding timeline for {}, {}: {}'.format(profileid, twid, data))
+
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = json.dumps(data)
