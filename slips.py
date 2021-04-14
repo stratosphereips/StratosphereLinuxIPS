@@ -306,8 +306,7 @@ if __name__ == '__main__':
     parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
     parser.add_argument('-cc','--clearcache',action='store_true', required=False,
                         help='clear a cache database.')
-    parser.add_argument('-p', '--blocking',action='store_true',required=False,
-                        help='block IPs that connect to the computer. Supported only on Linux.')
+    parser.add_argument('-p', '--blocking', help='Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.',required=False, default=False, action='store_true')
     parser.add_argument('-o', '--output', action='store', required=False, default=alerts_default_path,
                         help='store alerts.json and alerts.txt in the provided folder.')
     parser.add_argument('-s', '--save',action='store_true',required=False,

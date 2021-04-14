@@ -35,7 +35,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | ARPScanDetector | module to check for ARP scans in ARP traffic  |✅|
 | ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|
 | http_analyzer | module to analyze HTTP traffic |✅|
-| blocking | module to block malicious IPs connecting to the device |⚠️|
+| blocking | module to block malicious IPs connecting to the device |✅|
 
 
 Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.
