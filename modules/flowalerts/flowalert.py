@@ -221,7 +221,7 @@ class Module(Module, multiprocessing.Process):
                     # Try Zeek method to detect if SSh was successful or not.
                     auth_success = flow_dict['auth_success']
                     if auth_success:
-                        time.sleep(10) # This logic should be fixed, it stops the whole module.
+                        # time.sleep(10) # This logic should be fixed, it stops the whole module.
                         original_ssh_flow = __database__.get_flow(profileid, twid, uid)
                         original_flow_uid = next(iter(original_ssh_flow))
                         if original_ssh_flow[original_flow_uid]:
@@ -232,7 +232,7 @@ class Module(Module, multiprocessing.Process):
                             self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Zeek')
                     else:
                         # Try Slips method to detect if SSH was successful.
-                        time.sleep(10) # This logic should be fixed, it stops the whole module.
+                        # time.sleep(10) # This logic should be fixed, it stops the whole module.
                         original_ssh_flow = __database__.get_flow(profileid, twid, uid)
                         original_flow_uid = next(iter(original_ssh_flow))
                         if original_ssh_flow[original_flow_uid]:
