@@ -408,10 +408,10 @@ class InputProcess(multiprocessing.Process):
                     # Find if the pcap file name was absolute or relative
                     if self.input_information[0] == '/':
                         # If absolute, do nothing
-                        bro_parameter = '-r ' + self.input_information
+                        bro_parameter = '-r "' + self.input_information  + '"'
                     else:
                         # If relative, add ../ since we will move into a special folder
-                        bro_parameter = '-r ' + '../' + self.input_information
+                        bro_parameter = '-r "../' + self.input_information + '"'
                     # This is for stoping the input if bro does not receive any new line while reading a pcap
                     self.bro_timeout = 30
 
@@ -423,7 +423,7 @@ class InputProcess(multiprocessing.Process):
 
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                command = "cd " + self.zeek_folder + "; "+self.zeek_or_bro + " -C " + bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+                command ="cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
                 self.print(f'Zeek command: {command}', 3, 0)
                 # Run zeek.
                 os.system(command)

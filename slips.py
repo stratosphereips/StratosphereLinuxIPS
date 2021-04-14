@@ -150,6 +150,13 @@ def load_modules(to_ignore):
 
     return plugins
 
+def get_slips_conf_path():
+    for arg in sys.argv:
+        if 'slips.py' in arg:
+            # get the path preceeding slips.py (may be ../ or  ../../ or '' if slips.py is in the cwd) , this path is where slips.conf will be
+            slips_conf_path = arg[:arg.index('slips.py')]
+            return slips_conf_path + 'slips.conf'
+
 
 ####################
 # Main
