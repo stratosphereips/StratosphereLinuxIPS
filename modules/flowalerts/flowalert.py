@@ -252,6 +252,8 @@ class Module(Module, multiprocessing.Process):
                 # ---------------------------- new_notice channel
                 # Check for self signed certificates in new_notice channel (notice.log)
                 message = self.c3.get_message(timeout=0.01)
+                if message and message['data'] == 'stop_process':
+                    return True
                 if message and message['channel'] == 'new_notice':
                     """ Checks for self signed certificates in the notice data """
                     data = message['data']
@@ -279,6 +281,8 @@ class Module(Module, multiprocessing.Process):
                             self.print(description, 3, 0)
                 # ---------------------------- new_ssl channel
                 message = self.c4.get_message(timeout=0.01)
+                if message and message['data'] == 'stop_process':
+                    return True
                 if message and message['channel'] == 'new_ssl':
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
