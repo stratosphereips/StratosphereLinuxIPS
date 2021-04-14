@@ -180,7 +180,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     parser.add_argument('-cc', '--clearcache', help='Clear cache.', required=False, default=False, action='store_true')
-    parser.add_argument('-p', '--blocking', help='Block IPs that connect to the computer. Supported only on Linux.',required=False, default=False, action='store_true')
+    parser.add_argument('-p', '--blocking', help='Block IPs that connect to the computer. Requires root access. Supported only on Linux.',required=False, default=False, action='store_true')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters

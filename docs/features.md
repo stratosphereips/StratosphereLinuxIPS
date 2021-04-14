@@ -105,7 +105,7 @@ tr:nth-child(even) {
   <tr>
     <td>blocking</td>
     <td>module to block malicious IPs connecting to the device</td>
-    <td>⚠️</td>
+    <td>✅️</td>
   </tr>
   
 </table>

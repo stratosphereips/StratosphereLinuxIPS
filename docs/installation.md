@@ -94,3 +94,4 @@ Once Redis is running it’s time to clone the Stratosphere Linux IPS repository
 	cd StratosphereLinuxIPS/
 	./slips.py -c slips.conf -r datasets/hide-and-seek-short.pcap
 
+Run slips with sudo to enable blocking (Optional) 

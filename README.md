@@ -31,7 +31,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | rnn-cc-detection | detects command and control channels using recurrent neural network and the stratosphere behavioral letters |✅|
 | VirusTotal | module to lookup IP address on VirusTotal |✅|
 | flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
-| blocking | module to block malicious IPs connecting to the device |⚠️|
+| blocking | module to block malicious IPs connecting to the device |✅|
 
 
 Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.
@@ -56,6 +56,8 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 	./slips.py -c slips.conf -f dataset/test3.binetflow
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
+
+If you want to block with -p, then you need to be root or sudo.
 
 ## Authors
 
