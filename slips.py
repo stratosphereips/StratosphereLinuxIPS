@@ -167,7 +167,7 @@ if __name__ == '__main__':
 
     # Parse the parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c','--config', action='store',required=False,
+    parser.add_argument('-c','--config', action='store',required=False, default=get_slips_conf_path(),
                         help='Path to the Slips config file.')
     parser.add_argument('-v', '--verbose',action='store', required=False, type=int,
                         help='Amount of verbosity. This shows more info about the results.')
