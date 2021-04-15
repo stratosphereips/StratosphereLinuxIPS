@@ -150,12 +150,13 @@ def load_modules(to_ignore):
 
     return plugins
 
-def get_slips_conf_path():
+def get_cwd():
+    # Can't use os.getcwd() because slips directory name won't always be StratosphereLinuxIPS plus this way requires less parsing
     for arg in sys.argv:
         if 'slips.py' in arg:
             # get the path preceeding slips.py (may be ../ or  ../../ or '' if slips.py is in the cwd) , this path is where slips.conf will be
-            slips_conf_path = arg[:arg.index('slips.py')]
-            return slips_conf_path + 'slips.conf'
+            cwd = arg[:arg.index('slips.py')]
+            return cwd
 
 
 ####################
@@ -167,7 +168,8 @@ if __name__ == '__main__':
 
     # Parse the parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c','--config', action='store',required=False, default=get_slips_conf_path(),
+    slips_conf_path = get_cwd() + 'slips.conf'
+    parser.add_argument('-c','--config', action='store',required=False, default=slips_conf_path ,
                         help='Path to the Slips config file.')
     parser.add_argument('-v', '--verbose',action='store', required=False, type=int,
                         help='Amount of verbosity. This shows more info about the results.')
