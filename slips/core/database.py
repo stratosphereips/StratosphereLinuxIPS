@@ -5,6 +5,7 @@ from typing import Tuple, Dict, Set, Callable
 import configparser
 import traceback
 import os
+import subprocess
 from datetime import datetime
 
 def timing(f):
@@ -1732,19 +1733,48 @@ class Database(object):
 
     def save(self,backup_file):
         """
-        Save the db to disk using the file's name
+        Save the db to disk.
         backup_file should be the path+name of the file you want to store the db in
-        If you -s the same file twice the old backup will be replaced
+        If you -s the same file twice the old backup will be overwritten.
         """
         # Saves to /var/lib/redis/dump.rdb
         # this path is only accessible by root
         self.r.save()
         # if you're not root, this will return False even if the path exists
         if os.path.exists('/var/lib/redis/dump.rdb'):
-            command = 'cp /var/lib/redis/dump.rdb ' + backup_file + '.rdb'
+            command = 'sudo cp /var/lib/redis/dump.rdb ' + backup_file + '.rdb'
             os.system(command)
             self.print("Backup stored in {}.rdb".format(backup_file))
         else:
             self.print("Error Saving: Cannot find redis backup directory")
 
+    def load(self,backup_file: str) -> bool:
+        """
+        Load the db from disk
+        backup_file should be the full path of the .rdb
+        """
+        # TODO: locate dump.rdb instead of hardcoding it. sudo cat /etc/redis/*.conf | grep .rdb , sudo cat /etc/redis/*.conf | grep "/var"
+        # TODO: handle redis.exceptions.ConnectionError thrown by all modules?
+        if os.path.exists(backup_file):
+            # Check if valid .rdb file
+            command = 'file ' + backup_file
+            result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+            # Get command output
+            file_type = result.stdout.decode('utf-8')
+            # Check if valid redis database
+            if 'Redis' in file_type:
+                # Stop the server first in order for redis to load another db
+                os.system('sudo service redis-server stop')
+                command = 'sudo cp ' + backup_file + ' /var/lib/redis/dump.rdb'
+                os.system(command)
+                # Start the server again
+                os.system('sudo service redis-server start')
+                self.print("{} loaded.".format(backup_file))
+                return True
+            else:
+                self.print("{} is not a valid redis database file.".format(backup_file))
+                return False
+        else:
+            self.print("{} doesn't exist.".format(backup_file))
+            return False
 __database__ = Database()
