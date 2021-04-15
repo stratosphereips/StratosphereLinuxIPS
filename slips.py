@@ -191,6 +191,10 @@ if __name__ == '__main__':
                         help='To clear a cache database.')
     parser.add_argument('-p', '--blocking',action='store_true',required=False,
                         help='Block IPs that connect to the computer. Supported only on Linux.')
+    parser.add_argument('-s', '--save',action='store_true',required=False,
+                        help='To Save redis db to disk.')
+    parser.add_argument('-d', '--db',action='store',required=False,
+                        help='To read a redis .rdb saved file.')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
@@ -206,6 +210,11 @@ if __name__ == '__main__':
 
     # Check if redis server running
     if check_redis_database() is False:
+        terminate_slips()
+
+    # Check if user want to save and load a db at the same time
+    if args.save and args.db:
+        print("Can't use -s and -b together")
         terminate_slips()
 
     # If we need zeek (bro), test if we can run it.
@@ -228,7 +237,7 @@ if __name__ == '__main__':
         print('Deleting Cache DB in Redis.')
         clear_redis_cache_database()
 
-    # If the user wants to blocks, the user needs to give a permission to modify iptables
+    # If the user wants to block, the user needs to give a permission to modify iptables
     # Also check if the user blocks on interface, does not make sense to block on files
     if args.interface and args.blocking:
         print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
@@ -372,6 +381,17 @@ if __name__ == '__main__':
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
+
+    if args.save:
+        # Create a new dir to store backups
+        backups_dir = get_cwd() +'redis_backups' + '/'
+        try:
+            os.mkdir(backups_dir)
+        except FileExistsError:
+            pass
+        # The name of the interface/pcap/nfdump/binetflow used is in input_information
+        # Give the exact path to save(), this is where the .rdb backup will be
+        __database__.save(backups_dir + input_information)
 
     # Store the host IP address if input type is interface
     if input_type == 'interface':
