@@ -192,7 +192,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--blocking',action='store_true',required=False,
                         help='Block IPs that connect to the computer. Supported only on Linux.')
     parser.add_argument('-s', '--save',action='store_true',required=False,
-                        help='To Save redis db to disk.')
+                        help='To Save redis db to disk. Requires root access.')
     parser.add_argument('-d', '--db',action='store',required=False,
                         help='To read a redis .rdb saved file.')
     args = parser.parse_args()
@@ -382,17 +382,6 @@ if __name__ == '__main__':
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
 
-    if args.save:
-        # Create a new dir to store backups
-        backups_dir = get_cwd() +'redis_backups' + '/'
-        try:
-            os.mkdir(backups_dir)
-        except FileExistsError:
-            pass
-        # The name of the interface/pcap/nfdump/binetflow used is in input_information
-        # Give the exact path to save(), this is where the .rdb backup will be
-        __database__.save(backups_dir + input_information)
-
     # Store the host IP address if input type is interface
     if input_type == 'interface':
         hostIP = recognize_host_ip()
@@ -466,6 +455,23 @@ if __name__ == '__main__':
                     if minimum_intervals_to_wait == 0:
                         # Stop the output Process
                         print('Stopping Slips')
+                        # If the user specified -s, save the database before stopping
+                        if args.save:
+                            # Create a new dir to store backups
+                            backups_dir = get_cwd() +'redis_backups' + '/'
+                            try:
+                                os.mkdir(backups_dir)
+                            except FileExistsError:
+                                pass
+                            print("backups_dir" + backups_dir)
+                            # The name of the interface/pcap/nfdump/binetflow used is in input_information
+                            # We need to seperate it from the path
+                            input_information = os.path.basename(input_information)
+                            # Remove the extension from the filename
+                            input_information = input_information[:input_information.index('.')]
+                            # Give the exact path to save(), this is where the .rdb backup will be
+                            __database__.save(backups_dir + input_information)
+
                         # Stop the modules that are subscribed to channels
                         __database__.publish_stop()
                         # Here we should Wait for any channel if it has still
