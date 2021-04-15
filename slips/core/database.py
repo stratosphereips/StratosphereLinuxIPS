@@ -4,6 +4,7 @@ import json
 from typing import Tuple, Dict, Set, Callable
 import configparser
 import traceback
+import os
 from datetime import datetime
 
 def timing(f):
@@ -1728,4 +1729,22 @@ class Database(object):
         else:
             data = ''
         return data
+
+    def save(self,backup_file):
+        """
+        Save the db to disk using the file's name
+        backup_file should be the path+name of the file you want to store the db in
+        If you -s the same file twice the old backup will be replaced
+        """
+        # Saves to /var/lib/redis/dump.rdb
+        # this path is only accessible by root
+        self.r.save()
+        # if you're not root, this will return False even if the path exists
+        if os.path.exists('/var/lib/redis/dump.rdb'):
+            command = 'cp /var/lib/redis/dump.rdb ' + backup_file + '.rdb'
+            os.system(command)
+            self.print("Backup stored in {}.rdb".format(backup_file))
+        else:
+            self.print("Error Saving: Cannot find redis backup directory")
+
 __database__ = Database()
