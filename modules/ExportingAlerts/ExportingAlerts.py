@@ -16,15 +16,21 @@ from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
 import platform
-
 # Your imports
+from slack import WebClient
+from slack.errors import SlackApiError
+import os
+#todo add this to requirements.txt and install.sh and dockerimage
 
 
 class Module(Module, multiprocessing.Process):
-    # Name: short name of the module. Do not use spaces
-    name = 'TemplateModule'
-    description = 'Template module'
-    authors = ['Template Author']
+    """
+    Module to export alerts to slack and/or STINX
+    You need to have the token in your environment variables to use this module
+    """
+    name = 'ExportingAlerts'
+    description = 'Module to export alerts to slack and STINX'
+    authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -36,15 +42,8 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        # To which channels do you wnat to subscribe? When a message
-        # arrives on the channel the module will wakeup
-        # The options change, so the last list is on the
-        # slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
-        # Remember to subscribe to this channel in database.py
-        self.c1 = __database__.subscribe('new_ip')
+        self.c1 = __database__.subscribe('export_alert')
+        self.BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -57,6 +56,11 @@ class Module(Module, multiprocessing.Process):
         else:
             # Other systems
             self.timeout = None
+        self.test()
+
+    def test(self):
+        """ to test this module, we'll remove it once we're done """
+        __database__.publish('export_alert','ok')
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -86,12 +90,13 @@ class Module(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
                     return True
-                if message['channel'] == 'new_ip':
-                    # Example of printing the number of profiles in the
-                    # Database every second
-                    data = len(__database__.getProfiles())
-                    self.print('Amount of profiles: {}'.format(data))
-
+                if message['channel'] == 'export_alert':
+                    # Msgs sent in this channel will be exported either to slack or STINX
+                    # Token to login to our slack bot. This is a different kind of token.
+                    if not self.BOT_TOKEN:
+                        self.print("Can't find SLACK_BOT_TOKEN in your environment variables.",0,1)
+                    else:
+                        pass
         except KeyboardInterrupt:
             return True
         except Exception as inst:

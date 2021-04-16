@@ -1157,6 +1157,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_notice' in channel:
             pubsub.subscribe(channel)
+        elif 'export_alert' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
