@@ -34,6 +34,7 @@ RUN pip3 install sklearn
 RUN pip3 install urllib3
 RUN pip3 install scipy
 RUN pip3 install watchdog
+RUN pip3 install slackclient
 RUN pip3 install --upgrade tensorflow==2.1.0
 
 # Download and unpack Slips.

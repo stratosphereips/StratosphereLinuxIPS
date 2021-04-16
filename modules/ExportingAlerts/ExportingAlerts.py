@@ -20,7 +20,7 @@ import platform
 from slack import WebClient
 from slack.errors import SlackApiError
 import os
-#todo add this to requirements.txt and install.sh and dockerimage
+#todo add this to requirements.txt
 
 
 class Module(Module, multiprocessing.Process):
@@ -96,7 +96,15 @@ class Module(Module, multiprocessing.Process):
                     if not self.BOT_TOKEN:
                         self.print("Can't find SLACK_BOT_TOKEN in your environment variables.",0,1)
                     else:
-                        pass
+                        slack_client = WebClient(token=self.BOT_TOKEN)
+                        try:
+                            response = slack_client.chat_postMessage(
+                                       channel="proj_slips_alerting_module",
+                                       text="Hello from exporting alerts module! :tada:"
+                                        )
+                        except SlackApiError as e:
+                            # You will get a SlackApiError if "ok" is False
+                            assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
         except KeyboardInterrupt:
             return True
         except Exception as inst:

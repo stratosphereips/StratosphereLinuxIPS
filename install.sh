@@ -1,3 +1,4 @@
+
 #!/bin/sh
 # Installing slips dependencies
 
@@ -8,7 +9,7 @@ sudo apt-get -y install curl git redis python3.7-minimal python3-redis python3-p
 echo "[+] Executing 'python3 -m pip install --upgrade pip'"
 python3 -m pip install --upgrade pip
 echo "[+] Executing 'pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1'"
-pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1
+pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1 slackclient
 echo "[+] Executing 'sudo npm install blessed blessed-contrib redis async chalk strip-ansi clipboardy fs sorted-array-async'"
 sudo npm install blessed blessed-contrib redis async chalk strip-ansi clipboardy fs sorted-array-async
 
