@@ -1753,8 +1753,14 @@ class Database(object):
         Load the db from disk
         backup_file should be the full path of the .rdb
         """
-        # TODO: locate dump.rdb instead of hardcoding it. sudo cat /etc/redis/*.conf | grep .rdb , sudo cat /etc/redis/*.conf | grep "/var"
-        # TODO: handle redis.exceptions.ConnectionError thrown by all modules?
+        # Locate the default path of redis dump.rdb
+        command = 'sudo cat /etc/redis/*.conf | grep -w "dir"'
+        redis_dir = subprocess.getoutput(command)
+        if 'dir /var/lib/redis' in redis_dir:
+            redis_dir = '/var/lib/redis'
+        else:
+            # Get the exact path without spaces
+            redis_dir = redis_dir[redis_dir.index(' ')+1:]
         if os.path.exists(backup_file):
             # Check if valid .rdb file
             command = 'file ' + backup_file
@@ -1763,9 +1769,13 @@ class Database(object):
             file_type = result.stdout.decode('utf-8')
             # Check if valid redis database
             if 'Redis' in file_type:
+                # All modules throw redis.exceptions.ConnectionError when we stop the redis-server so we need to close all channels first
+                # We won't need them since we're loading a db that's already been analyzed
+                self.publish_stop()
                 # Stop the server first in order for redis to load another db
                 os.system('sudo service redis-server stop')
-                command = 'sudo cp ' + backup_file + ' /var/lib/redis/dump.rdb'
+                # Copy out saved db to the dump.rdb (the db redis uses by default)
+                command = 'sudo cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
                 os.system(command)
                 # Start the server again
                 os.system('sudo service redis-server start')
