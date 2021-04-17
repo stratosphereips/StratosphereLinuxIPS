@@ -224,7 +224,6 @@ class EvidenceProcess(multiprocessing.Process):
                                                           type_detection,
                                                           detection_info,
                                                           description)
-                    print(evidence_to_log)
                     # timestamp
                     now = datetime.now()
                     current_time = now.strftime('%Y-%m-%d %H:%M:%S')
@@ -250,7 +249,6 @@ class EvidenceProcess(multiprocessing.Process):
                         # CONTINUE HERE
                         ip = profileid.split(self.separator)[1]
                         for key in evidence:
-
                             # Deserialize key data
                             key_json = json.loads(key)
                             type_detection = key_json.get('type_detection')
