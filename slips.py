@@ -34,6 +34,7 @@ import inspect
 import modules
 import importlib
 from slips.common.abstracts import Module
+from slips.common.argparse import ArgumentParser
 
 version = '0.7.1'
 
