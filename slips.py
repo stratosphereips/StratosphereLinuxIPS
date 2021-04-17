@@ -167,29 +167,32 @@ if __name__ == '__main__':
     print('https://stratosphereips.org\n')
 
     # Parse the parameters
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c','--config', action='store',required=False,
-                        help='Path to the Slips config file.')
-    parser.add_argument('-v', '--verbose',action='store', required=False, type=int,
-                        help='Amount of verbosity. This shows more info about the results.')
-    parser.add_argument('-e', '--debug', action='store', required=False, type=int,
-                        help='Amount of debugging. This shows inner information about the program.')
-    parser.add_argument('-f', '--filepath', action='store',required=False,
-                        help='To read an Argus binetflow or a Zeek folder.')
-    parser.add_argument('-i','--interface', action='store', required=False,
-                        help='To read packets from an interface.')
-    parser.add_argument('-r', '--pcapfile', action='store', required=False,
-                        help='To read a PCAP - Packet Capture.')
-    parser.add_argument('-b', '--nfdump',action='store',required=False,
-                        help='To read an NFDUMP - netflow dump. ')
+    parser = ArgumentParser(usage = "./slips.py -c <configfile> [options] [file ...]",
+                            argument_default=argparse.SUPPRESS, allow_abbrev=False, add_help=False)
+    parser.add_argument('-c','--config', metavar='<configfile>',action='store',required=False,
+                        help='path to the Slips config file.')
+    parser.add_argument('-v', '--verbose',metavar='<verbositylevel>',action='store', required=False, type=int,
+                        help='amount of verbosity. This shows more info about the results.')
+    parser.add_argument('-e', '--debug', metavar='<debuglevel>',action='store', required=False, type=int,
+                        help='amount of debugging. This shows inner information about the program.')
+    parser.add_argument('-f', '--filepath',metavar='<file>', action='store',required=False,
+                        help='read an Argus binetflow or a Zeek folder.')
+    parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
+                        help='read packets from an interface.')
+    parser.add_argument('-r', '--pcapfile',metavar='<file>', action='store', required=False,
+                        help='read a PCAP - Packet Capture.')
+    parser.add_argument('-b', '--nfdump', metavar='<file>',action='store',required=False,
+                        help='read an NFDUMP - netflow dump. ')
     parser.add_argument('-l','--nologfiles',action='store_true',required=False,
-                        help='Do not create log files with all the traffic info and detections.')
+                        help='do not create log files with all the traffic info and detections.')
     parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
-                        help='Packet filter for Zeek. BPF style.')
+                        help='packet filter for Zeek. BPF style.')
     parser.add_argument('-cc','--clearcache',action='store_true', required=False,
-                        help='To clear a cache database.')
+                        help='clear a cache database.')
     parser.add_argument('-p', '--blocking',action='store_true',required=False,
-                        help='Block IPs that connect to the computer. Supported only on Linux.')
+                        help='block IPs that connect to the computer. Supported only on Linux.')
+    parser.add_argument("-h", "--help", action="help", help="command line help")
+
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
