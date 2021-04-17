@@ -902,6 +902,5 @@
 [1] | From-Normal | Google-443-tcp | 11,r,r,r,A+a+i.a*R.r,r,r,r,r,r,a,R.r,A,r
 [1] | From-Normal | Fastly-80-tcp | 77.g.g.g.G.G.G.G.
 [1] | From-Botnet | 1.1.1.1-1947-tcp │ 77,g,g,g,g,g,g,g,g,g,g,g,g,g,g,g,g,g,g,g
-
-
-
+[1] | From-Normal | asdf | 88.
+[1] | From-Normal | asdf | 88.h.
