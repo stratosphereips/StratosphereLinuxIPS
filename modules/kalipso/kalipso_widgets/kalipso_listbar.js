@@ -76,6 +76,10 @@ class ListBar{
                 'InTuples': {
                   keys: ['y']
                             },
+
+                'ProfileEvidences':{
+                  keys : ['z']
+                         },
            
                 'reload':{
                   keys : ['o']
