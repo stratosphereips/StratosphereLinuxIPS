@@ -20,16 +20,17 @@ import platform
 from slack import WebClient
 from slack.errors import SlackApiError
 import os
+import json
 #todo add this to requirements.txt
 
 
 class Module(Module, multiprocessing.Process):
     """
-    Module to export alerts to slack and/or STINX
+    Module to export alerts to slack and/or STX
     You need to have the token in your environment variables to use this module
     """
     name = 'ExportingAlerts'
-    description = 'Module to export alerts to slack and STINX'
+    description = 'Module to export alerts to slack and STIX'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):
@@ -54,13 +55,19 @@ class Module(Module, multiprocessing.Process):
             # linux
             self.timeout = None
         else:
-            # Other systems
+            # Other systems)
             self.timeout = None
-        self.test()
+        #self.test()
 
     def test(self):
         """ to test this module, we'll remove it once we're done """
-        __database__.publish('export_alert','ok')
+        data_to_send = {
+            'export_to' : 'slack',
+            'msg' : 'Test message!!'
+        }
+        data_to_send = json.dumps(data_to_send)
+        __database__.publish('export_alert',data_to_send)
+        print("published")
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -82,7 +89,40 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def send_to_slack(self,msg_to_send):
+        # Msgs sent in this channel will be exported either to slack or STIX
+        # Token to login to our slack bot. This is a different kind of token.
+        if self.BOT_TOKEN == None:
+            self.print("Can't find SLACK_BOT_TOKEN in your environment variables.",0,1)
+        else:
+            slack_client = WebClient(token=self.BOT_TOKEN)
+            try:
+                response = slack_client.chat_postMessage(
+                           channel="proj_slips_alerting_module",
+                           text =  msg_to_send#"Hello Slack from exporting alerts module ! :tada:"
+                            )
+                self.print("Exported to slack")
+            except SlackApiError as e:
+                # You will get a SlackApiError if "ok" is False
+                assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
+
+    def send_to_STIX(self):
+        pass
+
     def run(self):
+        # Here's how this module works:
+        #1- the user specifies -a slack and adds SLACK_BOT_TOKEN to their environment variables
+        #2- if you run slips using sudo use sudo -E instead to pass all env variables
+        #2- we send a msg to evidence_added(evidenceprocess) telling it to export all evidence sent to it to export_alert channel(this module)
+        #3- evidenceProcess sends a msg to export_alert channel with the evidence that should be sent and then this module exports it
+
+        # Example of sending msgs to this module:
+        # data_to_send = {
+        #         'export_to' : 'slack',
+        #         'msg' : 'this msg is sent using json dumps/loads'
+        #     }
+        # data_to_send = json.dumps(data_to_send)
+        #__database__.publish('export_alert',data_to_send)
         try:
             # Main loop function
             while True:
@@ -91,20 +131,16 @@ class Module(Module, multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     return True
                 if message['channel'] == 'export_alert':
-                    # Msgs sent in this channel will be exported either to slack or STINX
-                    # Token to login to our slack bot. This is a different kind of token.
-                    if not self.BOT_TOKEN:
-                        self.print("Can't find SLACK_BOT_TOKEN in your environment variables.",0,1)
-                    else:
-                        slack_client = WebClient(token=self.BOT_TOKEN)
-                        try:
-                            response = slack_client.chat_postMessage(
-                                       channel="proj_slips_alerting_module",
-                                       text="Hello from exporting alerts module! :tada:"
-                                        )
-                        except SlackApiError as e:
-                            # You will get a SlackApiError if "ok" is False
-                            assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
+                    if type(message['data']) == str:
+                        data = json.loads(message['data'])
+                        # this is exactly what will be sent to slack
+                        msg_to_send = data.get("msg")
+                        if 'slack' in data['export_to']:
+                            self.send_to_slack(msg_to_send)
+                        elif 'stix' in data['export_to'].lower():
+                            self.send_to_STIX(msg_to_send)
+                            pass
+                        
         except KeyboardInterrupt:
             return True
         except Exception as inst:
