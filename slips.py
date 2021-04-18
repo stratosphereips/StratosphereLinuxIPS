@@ -189,6 +189,8 @@ if __name__ == '__main__':
                         help='To clear a cache database.')
     parser.add_argument('-p', '--blocking',action='store_true',required=False,
                         help='Block IPs that connect to the computer. Supported only on Linux.')
+    parser.add_argument('-a', '--exportalert',action='store',required=False,default='slack',
+                        help='To Export evidence as slack or STIX notifications.')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
@@ -370,6 +372,14 @@ if __name__ == '__main__':
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
+
+    if not args.exportalert:
+        to_ignore.append('ExportingAlerts')
+    else:
+        # export type can either be slack or stix
+        export_type = args.exportalert.lower()
+        # set the export_evidence variable to True so we can export all evidence that arrive to the evidenceProcess
+        __database__.publish('evidence_added','export '+ export_type)
 
     # Store the host IP address if input type is interface
     if input_type == 'interface':
