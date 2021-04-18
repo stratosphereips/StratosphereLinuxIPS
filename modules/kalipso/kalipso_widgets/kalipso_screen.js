@@ -467,7 +467,7 @@ class screen {
           this.focus_hotkey = false
         }
         else if(key.name == 'z'){
-//          this.helpbar.selectTab(6)
+          this.helpbar.selectTab(8)
           this.z_hotkey_routine()
           this.focus_hotkey = false
         }
@@ -482,7 +482,7 @@ class screen {
           this.focus_hotkey = false
         }
         else if(key.name == 'h'){
-          this.helpbar.selectTab(11)
+          this.helpbar.selectTab(12)
           this.h_hotkey_routine()
           this.focus_hotkey = false
         }
