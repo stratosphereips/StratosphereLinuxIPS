@@ -168,7 +168,7 @@ if __name__ == '__main__':
 
     # Parse the parameters
     parser = ArgumentParser(usage = "./slips.py -c <configfile> [options] [file ...]",
-                            argument_default=argparse.SUPPRESS, allow_abbrev=False, add_help=False)
+                            add_help=False)
     parser.add_argument('-c','--config', metavar='<configfile>',action='store',required=False,
                         help='path to the Slips config file.')
     parser.add_argument('-v', '--verbose',metavar='<verbositylevel>',action='store', required=False, type=int,
