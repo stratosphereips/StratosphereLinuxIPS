@@ -375,7 +375,6 @@ if __name__ == '__main__':
 
     if not args.exportalert:
         to_ignore.append('ExportingAlerts')
-        print("********ignoring module")
     else:
         # export type can either be slack or stix
         export_to = args.exportalert.lower()

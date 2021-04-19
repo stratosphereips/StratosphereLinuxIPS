@@ -22,6 +22,7 @@ from slack.errors import SlackApiError
 import os
 import json
 from stix2 import Indicator
+from stix2 import Bundle
 import ipaddress
 # pip install --ignore-installed six
 #todo add this to requirements.txt
@@ -105,18 +106,21 @@ class Module(Module, multiprocessing.Process):
                 # It does not look as IP address.
                 return False
         return True
-    
+
+
+
     def send_to_slack(self,msg_to_send):
-        # Msgs sent in this channel will be exported either to slack or STIX
-        # Token to login to our slack bot. This is a different kind of token.
+        # Msgs sent in this channel will be exported to slack
+        # Token to login to your slack bot. it should be set in your env. variables
         if self.BOT_TOKEN == None:
             self.print("Can't find SLACK_BOT_TOKEN in your environment variables.",0,1)
         else:
             slack_client = WebClient(token=self.BOT_TOKEN)
             try:
                 response = slack_client.chat_postMessage(
+                           # todo: change this to something more generic maybe take it as an argument?
                            channel="proj_slips_alerting_module",
-                           text =  msg_to_send#"Hello Slack from exporting alerts module ! :tada:"
+                           text =  msg_to_send
                             )
                 self.print("Exported to slack")
             except SlackApiError as e:
@@ -125,24 +129,20 @@ class Module(Module, multiprocessing.Process):
 
     def export_to_STIX(self,msg_to_send: tuple) -> bool:
         """
-        Function to export a STIX json file.
-        msg_to_send should be a tuple containing: (type_evidence, type_detection,detection_info, description)
+        Function to export evidence to a STIX json file.
+        msg_to_send is a tuple: (type_evidence, type_detection,detection_info, description)
             type_evidence: e.g PortScan, ThreatIntelligence etc
             type_detection: e.g dip sip dport sport
             detection_info: ip or port
-            description: e.g port scans
+            description: e.g 'New horizontal port scan detected to port 23. Not Estab TCP from IP: ip-address. Tot pkts sent all IPs: 9'
         """
-        # ['PortScanType2', 'dport', '23',
-        # 'New horizontal port scan detected to port 23. Not Estab TCP from IP: 192.168.2.16. Tot pkts sent all IPs: 9']
         # ---------------- set name attribute ----------------
         type_evidence, type_detection, detection_info, description =  msg_to_send[0], msg_to_send[1], msg_to_send[2] , msg_to_send[3]
-
-        # in case of ssh connection, type_evidence is set to SSHSuccessful-by-ip (special case) , ip here is variable
-        # so we change that to be able to access it in the below dict
+        # In case of ssh connection, type_evidence is set to SSHSuccessful-by-ip (special case) , ip here is variable
+        # So we change that to be able to access it in the below dict
         if 'SSHSuccessful' in type_evidence:
             type_evidence = 'SSHSuccessful'
-
-        # this dict contains each type and the way we should describe it in stix
+        # This dict contains each type and the way we should describe it in STIX name attribute
         type_evidence_descriptions = {
             'PortScanType1': 'Vertical port scan',
             'PortScanType2': 'Horizontal port scan',
@@ -151,8 +151,6 @@ class Module(Module, multiprocessing.Process):
             'LongConnection' : 'Long Connection', # todo what should be the description for this? should we even make it a stix indicator?
             'SSHSuccessful' :'SSH connection from ip' #SSHSuccessful-by-ip
         }
-
-        # Port scans are not passed in type_evidence , they're passed in the description
         # Get the right description to use in stix
         try:
             name = type_evidence_descriptions[type_evidence]
@@ -160,36 +158,63 @@ class Module(Module, multiprocessing.Process):
             self.print("Can't find the description for type_evidence: {}".format(type_evidence),0,1)
             return False
         # ---------------- set pattern attribute ----------------
-        if self.is_ip(type_detection):
-            pattern = "[ip-addr:value = '{}']".format(type_detection)
+
+        if 'port' in type_detection:
+            # detection_info is a port probably coming from a portscan we need the ip instead
+            detection_info = description[description.index("IP: ")+4:description.index(" Tot")-1]
+        if self.is_ip(detection_info):
+            pattern = "[ip-addr:value = '{}']".format(detection_info)
         else:
-            # It's a port probably coming from a portscan
-            #todo: get the ip
-            pass
+            self.print("Can't set pattern for STIX. {}".format(detection_info),0,1)
+            return False
         # Required Indicator Properties: type, spec_version, id, created, modified , all are set automatically
-        # valid_from, created and modified attribute will be set to the current time
-        # id will be generated randomly
+        # Valid_from, created and modified attribute will be set to the current time
+        # ID will be generated randomly
         indicator = Indicator(name=name,
                               pattern=pattern,
-                              pattern_type="stix") # characterize the pattern language that the indicator pattern is expressed in.
+                              pattern_type="stix") # the pattern language that the indicator pattern is expressed in.
+        # Create and Populate Bundle. All our indicators will be inside bundle['objects'].
+        bundle = Bundle()
+        if not self.is_bundle_created:
+            bundle = Bundle(indicator)
+            # Clear everything in the existing STIX_data.json if it's not empty
+            open('STIX_data.json','w').close()
+            # Write the bundle.
+            with open('STIX_data.json','w') as stix_file:
+                stix_file.write(str(bundle))
+            self.is_bundle_created = True
+        elif not self.ip_exists_in_stix_file(detection_info):
+            # Bundle is already created just append to it
+            # r+ to delete last 4 chars
+            with open('STIX_data.json','r+') as stix_file:
+                # delete the last 4 characters in the file ']\n}\n' so we can append to the objects array and add them back later
+                stix_file.seek(0, os.SEEK_END)
+                stix_file.seek(stix_file.tell() - 4, 0)
+                stix_file.truncate()
+            # Append mode to add the new indicator to the objects array
+            with open('STIX_data.json','a') as stix_file:
+                # Append the indicator in the objects array
+                stix_file.write("," + str(indicator) + "]\n}\n")
+        self.print("Indicator added to STIX_data.json")
         return True
 
     def run(self):
         # todo: should i add support for both stix and slack together?
+        # todo: which one of them should be enabled by default?
         # Here's how this module works:
         #1- the user specifies -a slack and adds SLACK_BOT_TOKEN to their environment variables
         #2- if you run slips using sudo use sudo -E instead to pass all env variables
         #2- we send a msg to evidence_added(evidenceprocess) telling it to export all evidence sent to it to export_alert channel(this module)
         #3- evidenceProcess sends a msg to export_alert channel with the evidence that should be sent and then this module exports it
-
         # Example of sending msgs to this module:
         # data_to_send = {
         #         'export_to' : 'slack',
-        #         'msg' : 'this msg is sent using json dumps/loads'
+        #         'msg' : 'temp msg'
         #     }
         # data_to_send = json.dumps(data_to_send)
         #__database__.publish('export_alert',data_to_send)
         try:
+            self.is_bundle_created = False
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
@@ -204,7 +229,10 @@ class Module(Module, multiprocessing.Process):
                         if 'slack' in data['export_to']:
                             self.send_to_slack(msg_to_send)
                         elif 'stix' in data['export_to'].lower():
-                            self.export_to_STIX(msg_to_send)
+                            # This bundle should be created once and we should append each indicator to it
+                            success = self.export_to_STIX(msg_to_send)
+                            if not success:
+                                self.print("Problem in export_to_STIX()",0,1)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
