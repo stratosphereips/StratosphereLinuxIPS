@@ -33,6 +33,8 @@ RUN pip3 install sklearn
 RUN pip3 install urllib3
 RUN pip3 install scipy
 RUN pip3 install watchdog
+RUN pip3 install stix2
+RUN pip3 install --ignore-installed six
 RUN pip3 install slackclient
 
 # Download and unpack Slips.

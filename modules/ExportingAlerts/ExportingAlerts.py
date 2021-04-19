@@ -24,7 +24,6 @@ import json
 from stix2 import Indicator
 from stix2 import Bundle
 import ipaddress
-# pip install --ignore-installed six
 #todo add this to requirements.txt
 
 
