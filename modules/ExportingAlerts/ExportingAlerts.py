@@ -107,7 +107,13 @@ class Module(Module, multiprocessing.Process):
                 return False
         return True
 
-
+    def ip_exists_in_stix_file(self,ip):
+        """ Searches for ip in STIX_data.json to avoid exporting duplicates """
+        # todo: find a more efficient way to do this
+        with open('STIX_data.json') as stix_file:
+            if ip in stix_file.read():
+                return True
+        return False
 
     def send_to_slack(self,msg_to_send):
         # Msgs sent in this channel will be exported to slack
