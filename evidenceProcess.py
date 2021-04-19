@@ -292,8 +292,14 @@ class EvidenceProcess(multiprocessing.Process):
                                         # Send a msg to the ExportingAlerts module to publish the evidence to slack/stix
                                         data_to_send = {
                                             'export_to' : self.export_to,
-                                            'msg' : evidence_to_print
                                         }
+                                        # set 'msg' key according to where we need to send it
+                                        if 'slack' in self.export_to:
+                                            # if we're sending to slack we need a less detailed msg
+                                            data_to_send['msg'] = evidence_to_print
+                                        elif 'stix' in self.export_to:
+                                            # send more details if we're exporting to stix
+                                            data_to_send['msg'] = (type_evidence, type_detection,detection_info,description)
                                         data_to_send = json.dumps(data_to_send)
                                         __database__.publish('export_alert',data_to_send)
                                     __database__.publish('new_blocking', ip)
