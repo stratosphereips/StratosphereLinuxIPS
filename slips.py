@@ -377,9 +377,14 @@ if __name__ == '__main__':
         to_ignore.append('ExportingAlerts')
     else:
         # export type can either be slack or stix
-        export_type = args.exportalert.lower()
-        # set the export_evidence variable to True so we can export all evidence that arrive to the evidenceProcess
-        __database__.publish('evidence_added','export '+ export_type)
+        export_to = args.exportalert.lower()
+        # Check if user passed a valid -a arg
+        if 'slack' not in export_to and 'stix' not in export_to:
+            print("Invalid export type {}".format(export_to))
+            to_ignore.append('ExportingAlerts')
+        else:
+            # set the export_evidence variable to True so we can export all evidence that arrive to the evidenceProcess
+            __database__.publish('evidence_added','export '+ export_to)
 
     # Store the host IP address if input type is interface
     if input_type == 'interface':
