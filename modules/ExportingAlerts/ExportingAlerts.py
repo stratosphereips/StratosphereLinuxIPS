@@ -92,6 +92,20 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def is_ip(self,value):
+        """ Checks if this value is a valid IP """
+        try:
+            # Is IPv4
+            ip_address = ipaddress.IPv4Address(value)
+        except ipaddress.AddressValueError:
+            # Is it ipv6?
+            try:
+                ip_address = ipaddress.IPv6Address(value)
+            except ipaddress.AddressValueError:
+                # It does not look as IP address.
+                return False
+        return True
+    
     def send_to_slack(self,msg_to_send):
         # Msgs sent in this channel will be exported either to slack or STIX
         # Token to login to our slack bot. This is a different kind of token.
