@@ -24,6 +24,7 @@ import json
 from stix2 import Indicator
 from stix2 import Bundle
 import ipaddress
+from cabby import create_client
 #todo add this to requirements.txt
 
 
@@ -47,7 +48,13 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('export_alert')
-        self.BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+        self.BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN") #todo add this to a file
+        self.slack_channel_name = self.config.get('ExportingAlerts', 'slack_channel_name')
+        self.sensor_name = self.config.get('ExportingAlerts', 'sensor_name')
+        # This bundle should be created once and we should append each indicator to it
+        self.is_bundle_created = False
+        # to avoid duplicates in stix_data.json
+        self.added_ips = set()
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -66,7 +73,7 @@ class Module(Module, multiprocessing.Process):
         """ to test this module, we'll remove it once we're done """
         data_to_send = {
             'export_to': 'slack',
-            'msg': 'Test message!!'
+            'msg': 'Test message with sensor name!!'
         }
         data_to_send = json.dumps(data_to_send)
         __database__.publish('export_alert', data_to_send)
@@ -120,13 +127,22 @@ class Module(Module, multiprocessing.Process):
             try:
                 response = slack_client.chat_postMessage(
                     # todo: change this to something more generic maybe take it as an argument? or set it to general?
-                    channel="proj_slips_alerting_module",
-                    text=msg_to_send
+                    # Channel name is set in slips.conf
+                    channel = self.slack_channel_name,
+                    # Sensor name is set in slips.conf
+                    text = self.sensor_name + ': ' + msg_to_send
                 )
                 self.print("Exported to slack")
             except SlackApiError as e:
                 # You will get a SlackApiError if "ok" is False
                 assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
+
+    def push_to_TAXII_server(self):
+        """
+        Use Inbox Service (TAXII Service to Support Producer-initiated pushes of cyber threat information) to publish
+        our STIX_data.json file
+        """
+        pass
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
         """
@@ -218,9 +234,6 @@ class Module(Module, multiprocessing.Process):
         # data_to_send = json.dumps(data_to_send)
         # __database__.publish('export_alert',data_to_send)
         try:
-            self.is_bundle_created = False
-            # Unique IPs added to stix_data.json
-            self.added_ips = set()
             # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
@@ -234,11 +247,12 @@ class Module(Module, multiprocessing.Process):
                         msg_to_send = data.get("msg")
                         if 'slack' in data['export_to']:
                             self.send_to_slack(msg_to_send)
-                        elif 'stix' in data['export_to'].lower():
-                            # This bundle should be created once and we should append each indicator to it
-                            success = self.export_to_STIX(msg_to_send)
-                            if not success:
+                        elif 'stix' in data['export_to']:
+                            exported_to_stix = self.export_to_STIX(msg_to_send)
+                            if not exported_to_stix:
                                 self.print("Problem in export_to_STIX()", 0, 1)
+                                return True
+                            self.push_to_TAXII_server()
         except KeyboardInterrupt:
             return True
         except Exception as inst:
