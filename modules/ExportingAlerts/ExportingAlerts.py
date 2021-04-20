@@ -25,7 +25,7 @@ from stix2 import Indicator
 from stix2 import Bundle
 import ipaddress
 from cabby import create_client
-#todo add this to requirements.txt
+#todo add cabby to requirements.txt
 
 
 class Module(Module, multiprocessing.Process):
@@ -129,7 +129,6 @@ class Module(Module, multiprocessing.Process):
             slack_client = WebClient(token=self.BOT_TOKEN)
             try:
                 response = slack_client.chat_postMessage(
-                    # todo: change this to something more generic maybe take it as an argument? or set it to general?
                     # Channel name is set in slips.conf
                     channel = self.slack_channel_name,
                     # Sensor name is set in slips.conf
@@ -147,10 +146,41 @@ class Module(Module, multiprocessing.Process):
         our STIX_data.json file
         """
         pass
+        # todo how often to call this function?
+        # inbox service isn't available in hailataxii.com
+        # https://www.taxiistand.com/
+        # https://open.taxiistand.com/
+        # https://test.taxiistand.com/
+        # are all down right now, can't test this function
+
+        # Create a cabby client
+        client = create_client('https://test.taxiistand.com', # todo: read it from slips.conf
+                                use_https= False,
+                                discovery_path='https://test.taxiistand.com/read-write/services/discovery') #todo make this variable
+        # Check the available services to make sure inbox service is there
+        services = client.discover_services()
+        available_services_in_TAXII_server = {}
+        for service in services:
+            # print('Service type={s.type}, address={s.address}'.format(s=service))
+            # Get a dict of all available services
+            available_services_in_TAXII_server.update({service.type : service.address})
+        # Check if inbox is there
+        for service_name in available_services_in_TAXII_server:
+            if 'inbox' not in service_name.lower():
+                self.print("Server doesn't have inbox available. Exporting STIX_data.json is cancelled.",0,1)
+                return False
+        # Get the data that we want to send
+        with open("STIX_data.json") as stix_file:
+            stix_data = stix_file.read()
+        binding = 'urn:stix.mitre.org:json:2.1' #TODO: NEEDS TESTING
+        # URI is the path to the inbox service we want to use in the taxii server
+        inbox_path= 'https://test.taxiistand.com/read-write/services/inbox-stix'
+        client.push(stix_data, binding, uri=inbox_path) #TODO: NEEDS TESTING
+        return True
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
         """
-        Function to export evidence to a STIX json file.
+        Function to export evidence to a STIX_data.json file in the cwd.
         msg_to_send is a tuple: (type_evidence, type_detection,detection_info, description)
             type_evidence: e.g PortScan, ThreatIntelligence etc
             type_detection: e.g dip sip dport sport
