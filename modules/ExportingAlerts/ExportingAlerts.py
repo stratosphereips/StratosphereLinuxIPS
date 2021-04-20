@@ -49,13 +49,17 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         self.c1 = __database__.subscribe('export_alert')
         # slack_bot_token_secret should contain your slack token only
-        with open("modules/ExportingAlerts/slack_bot_token_secret","r") as f:
+        with open("modules/ExportingAlerts/slack_bot_token_secret", "r") as f:
             self.BOT_TOKEN = f.read()
+        # Get config vaeriables
         self.slack_channel_name = self.config.get('ExportingAlerts', 'slack_channel_name')
         self.sensor_name = self.config.get('ExportingAlerts', 'sensor_name')
-        # This bundle should be created once and we should append each indicator to it
+        self.TAXII_server = self.config.get('ExportingAlerts', 'TAXII_server')
+        self.discovery_path = self.config.get('ExportingAlerts', 'discovery_path')
+        self.inbox_path = self.config.get('ExportingAlerts', 'inbox_path')
+        # This bundle should be created once and we should append all indicators to it
         self.is_bundle_created = False
-        # to avoid duplicates in stix_data.json
+        # To avoid duplicates in STIX_data.json
         self.added_ips = set()
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
@@ -122,7 +126,8 @@ class Module(Module, multiprocessing.Process):
     def send_to_slack(self, msg_to_send: str) -> bool:
         # Msgs sent in this channel will be exported to slack
         # Token to login to your slack bot. it should be set in slack_bot_token_secret
-        if self.BOT_TOKEN is '': # The file is empty
+        if self.BOT_TOKEN is '':
+            # The file is empty
             self.print("Can't find SLACK_BOT_TOKEN in modules/ExportingAlerts/slack_bot_token_secret .", 0, 1)
             return False
         else:
@@ -154,9 +159,9 @@ class Module(Module, multiprocessing.Process):
         # are all down right now, can't test this function
 
         # Create a cabby client
-        client = create_client('https://test.taxiistand.com', # todo: read it from slips.conf
+        client = create_client(self.TAXII_server,  # 'https://test.taxiistand.com'
                                 use_https= False,
-                                discovery_path='https://test.taxiistand.com/read-write/services/discovery') #todo make this variable
+                                discovery_path=self.discovery_path)#'https://test.taxiistand.com/read-write/services/discovery')
         # Check the available services to make sure inbox service is there
         services = client.discover_services()
         available_services_in_TAXII_server = {}
@@ -174,7 +179,7 @@ class Module(Module, multiprocessing.Process):
             stix_data = stix_file.read()
         binding = 'urn:stix.mitre.org:json:2.1' #TODO: NEEDS TESTING
         # URI is the path to the inbox service we want to use in the taxii server
-        inbox_path= 'https://test.taxiistand.com/read-write/services/inbox-stix'
+        inbox_path= self.inbox_path #'https://test.taxiistand.com/read-write/services/inbox-stix'
         client.push(stix_data, binding, uri=inbox_path) #TODO: NEEDS TESTING
         return True
 
