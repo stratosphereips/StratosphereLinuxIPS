@@ -48,7 +48,9 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('export_alert')
-        self.BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN") #todo add this to a file
+        # slack_bot_token_secret should contain your slack token only
+        with open("modules/ExportingAlerts/slack_bot_token_secret","r") as f:
+            self.BOT_TOKEN = f.read()
         self.slack_channel_name = self.config.get('ExportingAlerts', 'slack_channel_name')
         self.sensor_name = self.config.get('ExportingAlerts', 'sensor_name')
         # This bundle should be created once and we should append each indicator to it
@@ -117,11 +119,12 @@ class Module(Module, multiprocessing.Process):
         """ Searches for ip in STIX_data.json to avoid exporting duplicates """
         return ip in self.added_ips
 
-    def send_to_slack(self, msg_to_send):
+    def send_to_slack(self, msg_to_send: str) -> bool:
         # Msgs sent in this channel will be exported to slack
-        # Token to login to your slack bot. it should be set in your env. variables
-        if self.BOT_TOKEN == None:
-            self.print("Can't find SLACK_BOT_TOKEN in your environment variables.", 0, 1)
+        # Token to login to your slack bot. it should be set in slack_bot_token_secret
+        if self.BOT_TOKEN is '': # The file is empty
+            self.print("Can't find SLACK_BOT_TOKEN in modules/ExportingAlerts/slack_bot_token_secret .", 0, 1)
+            return False
         else:
             slack_client = WebClient(token=self.BOT_TOKEN)
             try:
@@ -136,6 +139,7 @@ class Module(Module, multiprocessing.Process):
             except SlackApiError as e:
                 # You will get a SlackApiError if "ok" is False
                 assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
+            return True
 
     def push_to_TAXII_server(self):
         """
@@ -222,7 +226,7 @@ class Module(Module, multiprocessing.Process):
         # todo: should i add support for both stix and slack together?
         # todo: which one of them should be enabled by default?
         # Here's how this module works:
-        # 1- the user specifies -a slack and adds SLACK_BOT_TOKEN to their environment variables
+        # 1- the user specifies -a slack and adds SLACK_BOT_TOKEN to
         # 2- if you run slips using sudo use sudo -E instead to pass all env variables
         # 2- we send a msg to evidence_added(evidenceprocess) telling it to export all evidence sent to it to export_alert channel(this module)
         # 3- evidenceProcess sends a msg to export_alert channel with the evidence that should be sent and then this module exports it
@@ -246,7 +250,9 @@ class Module(Module, multiprocessing.Process):
                         data = json.loads(message['data'])
                         msg_to_send = data.get("msg")
                         if 'slack' in data['export_to']:
-                            self.send_to_slack(msg_to_send)
+                            sent_to_slack = self.send_to_slack(msg_to_send)
+                            if not sent_to_slack:
+                                self.print("Problem in send_to_slack()", 0, 1)
                         elif 'stix' in data['export_to']:
                             exported_to_stix = self.export_to_STIX(msg_to_send)
                             if not exported_to_stix:
