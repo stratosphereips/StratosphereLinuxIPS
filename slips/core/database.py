@@ -982,15 +982,13 @@ class Database(object):
         3- IP is not in the DB. Return False	
         """
         data = self.rcache.hget('IPsInfo', ip)
-        if data or data == {}:
+        if data:
             # This means the IP was in the database, with or without data
-            # Case 1 and 2
             # Convert the data
             data = json.loads(data)
             # print(f'In the DB: IP {ip}, and data {data}')
         else:
             # The IP was not in the DB
-            # Case 3
             data = False
             # print(f'In the DB: IP {ip}, and data {data}')
         return data
