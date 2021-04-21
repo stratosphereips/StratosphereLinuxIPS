@@ -113,8 +113,6 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                ip_info_dict['geo'] = '-'
          }
 
-
-
         ipInfo_data.push([ip_info_dict['asn'], ip_info_dict['geo'], ip_info_dict['VirusTotal']['URL'], ip_info_dict['VirusTotal']['down'],ip_info_dict['VirusTotal']['ref'],ip_info_dict['VirusTotal']['com']])
         this.setDataIPInfo(ipInfo_data)
         this.screen.render()
@@ -137,15 +135,13 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
     }
     
     return r
-  }
+  };
 
   getIPInfo_dict(ip){
-    /*
-    Function to fill the dictionsry for the ip info dict
-    */
-    return new Promise ((resolve, reject)=>{this.redis_database.getIpInfo(ip)
+     return new Promise ((resolve, reject)=>{this.redis_database.getIpInfo(ip)
       .then(redis_IpInfo_data=>{
-          var ip_info_dict = {'asn':'', 'geo':'','SNI':'', 'URL':'', 'down':'','ref':'','com':''}
+      try{
+          var ip_info_dict = {'asn':'', 'geo':'','SNI':'', 'url':'', 'down':'','ref':'','com':''}
           if(redis_IpInfo_data==null)resolve(ip_info_dict)
           else{
             var ipInfo_json = JSON.parse(redis_IpInfo_data);
@@ -377,4 +373,5 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
   }
 
 }
+
 module.exports = ListTable
