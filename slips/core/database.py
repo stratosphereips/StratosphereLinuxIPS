@@ -1092,15 +1092,12 @@ class Database(object):
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
-        if not data:
+        if data is False:
             # This IP is not in the dictionary, add it first:
             self.setNewIP(ip)
             # Now get the data, which should be empty, but just in case
             data = self.getIPData(ip)
-            # I think we dont need this anymore of the conversion
-            if type(data) == str:
-                # Convert the str to a dict
-                data = json.loads(data)
+
         for key in iter(ipdata):
             data_to_store = ipdata[key]
             # If there is data previously stored, check if we have this key already
