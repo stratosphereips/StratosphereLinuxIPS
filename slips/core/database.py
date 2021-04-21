@@ -1273,7 +1273,7 @@ class Database(object):
         data['curve'] = curve
         data['server_name'] = server_name
         data['daddr'] = str(daddr_as_obj)
-        if server_name : data['server_name'] = server_name
+        data['dport'] = dport
         # Convert to json string
         data = json.dumps(data)
         self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
@@ -1287,7 +1287,20 @@ class Database(object):
         # Check if the server_name (SNI) is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         # If server_name is not empty, set in the IPsInfo and send to TI
         if server_name:
-            self.setInfoForIPs(str(daddr_as_obj), {'SNI':server_name})
+            # Save new server name in the IPInfo. There might be several server_name per IP.
+            ipdata = self.getIPData(str(daddr_as_obj))
+            if ipdata:
+                sni_ipdata = ipdata.get('SNI', [])
+            else:
+                sni_ipdata = []
+
+            SNI_port = {'server_name':server_name, 'dport':dport}
+            # We do not want any duplicates.
+            if SNI_port not in sni_ipdata:
+                sni_ipdata.append(SNI_port)
+            self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
+
+            # We are giving only new server_name to the threat_intelligence module.
             data_to_send = {
                 'server_name' : server_name,
                 'profileid' : str(profileid),
