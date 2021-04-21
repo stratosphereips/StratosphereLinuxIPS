@@ -982,15 +982,13 @@ class Database(object):
         3- IP is not in the DB. Return False	
         """
         data = self.rcache.hget('IPsInfo', ip)
-        if data or data == {}:
+        if data:
             # This means the IP was in the database, with or without data
-            # Case 1 and 2
             # Convert the data
             data = json.loads(data)
             # print(f'In the DB: IP {ip}, and data {data}')
         else:
             # The IP was not in the DB
-            # Case 3
             data = False
             # print(f'In the DB: IP {ip}, and data {data}')
         return data
@@ -1094,15 +1092,12 @@ class Database(object):
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
-        if not data:
+        if data is False:
             # This IP is not in the dictionary, add it first:
             self.setNewIP(ip)
             # Now get the data, which should be empty, but just in case
             data = self.getIPData(ip)
-            # I think we dont need this anymore of the conversion
-            if type(data) == str:
-                # Convert the str to a dict
-                data = json.loads(data)
+
         for key in iter(ipdata):
             data_to_store = ipdata[key]
             # If there is data previously stored, check if we have this key already
@@ -1255,7 +1250,7 @@ class Database(object):
             self.publish('new_flow', to_send)
             self.print('Adding complete flow to DB: {}'.format(data), 5, 0)
 
-    def add_out_ssl(self, profileid, twid, daddr_as_obj, flowtype, uid,
+    def add_out_ssl(self, profileid, twid, daddr_as_obj, dport, flowtype, uid,
                     version, cipher, resumed, established, cert_chain_fuids,
                     client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
         """	
@@ -1278,7 +1273,7 @@ class Database(object):
         data['curve'] = curve
         data['server_name'] = server_name
         data['daddr'] = str(daddr_as_obj)
-        if server_name : data['server_name'] = server_name
+        data['dport'] = dport
         # Convert to json string
         data = json.dumps(data)
         self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
@@ -1292,7 +1287,20 @@ class Database(object):
         # Check if the server_name (SNI) is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         # If server_name is not empty, set in the IPsInfo and send to TI
         if server_name:
-            self.setInfoForIPs(str(daddr_as_obj), {'SNI':server_name})
+            # Save new server name in the IPInfo. There might be several server_name per IP.
+            ipdata = self.getIPData(str(daddr_as_obj))
+            if ipdata:
+                sni_ipdata = ipdata.get('SNI', [])
+            else:
+                sni_ipdata = []
+
+            SNI_port = {'server_name':server_name, 'dport':dport}
+            # We do not want any duplicates.
+            if SNI_port not in sni_ipdata:
+                sni_ipdata.append(SNI_port)
+            self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
+
+            # We are giving only new server_name to the threat_intelligence module.
             data_to_send = {
                 'server_name' : server_name,
                 'profileid' : str(profileid),

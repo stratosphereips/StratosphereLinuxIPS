@@ -165,10 +165,9 @@ class Module(Module, multiprocessing.Process):
                         cached_data = __database__.getIPData(ip)
                         # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
                         ip_addr = ipaddress.ip_address(ip)
-
                         # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
                         # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
-                        if (cached_data or cached_data == {}) and 'VirusTotal' not in cached_data and not ip_addr.is_multicast:
+                        if (not cached_data or 'VirusTotal' not in cached_data) and not ip_addr.is_multicast:
                             self.set_vt_data_in_IPInfo(ip, cached_data)
 
                         # if VT data of this IP is in the IPInfo, check the timestamp.
