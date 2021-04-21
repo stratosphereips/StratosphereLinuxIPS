@@ -205,7 +205,9 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
             var length_letter = letter_string_chunks.length
             if(dns_resolution){dns_resolution = JSON.parse(dns_resolution)}
             var length_dns_resolution = dns_resolution.length
-            var length_sni = ip_info_dict['SNI'].length
+            var all_sni = ip_info_dict['SNI']
+            var sni = all_sni.slice(Math.max(all_sni.length - 3, 0))
+            var length_sni = sni.length
             var max_length = Math.max(length_dns_resolution, length_letter, length_sni)
             var indexes_array = Array.from(Array(max_length).keys())
 
@@ -219,7 +221,7 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                 if(ip_info_dict['SNI'][ind] != undefined &&
                     outTuple_port.localeCompare(ip_info_dict['SNI'][ind]["dport"]) ==0 &&
                     outTuple_protocol.localeCompare("tcp") == 0)
-                   {temp_sni = ip_info_dict['SNI'][ind]["server_name"];}
+                   {temp_sni = sni[ind]["server_name"];}
 
                 if(letter_string_chunks[ind] != undefined){temp_str = letter_string_chunks[ind]}
 
