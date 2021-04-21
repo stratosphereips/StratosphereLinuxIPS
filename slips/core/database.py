@@ -1250,7 +1250,7 @@ class Database(object):
             self.publish('new_flow', to_send)
             self.print('Adding complete flow to DB: {}'.format(data), 5, 0)
 
-    def add_out_ssl(self, profileid, twid, daddr_as_obj, flowtype, uid,
+    def add_out_ssl(self, profileid, twid, daddr_as_obj, dport, flowtype, uid,
                     version, cipher, resumed, established, cert_chain_fuids,
                     client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
         """	
