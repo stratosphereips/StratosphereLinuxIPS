@@ -482,6 +482,14 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'ssl' in new_line['type']:
             self.column_values['type'] = 'ssl'
             try:
+                self.column_values['sport'] = line[3]
+            except IndexError:
+                self.column_values['sport'] = ''
+            try:
+                self.column_values['dport'] = line[5]
+            except IndexError:
+                self.column_values['dport'] = ''
+            try:
                 self.column_values['sslversion'] = line[6]
             except IndexError:
                 self.column_values['sslversion'] = ''
@@ -816,6 +824,21 @@ class ProfilerProcess(multiprocessing.Process):
             # {"ts":12087.045499,"uid":"CdoFDp4iW79I5ZmsT7","id.orig_h":"10.0.2.105","id.orig_p":49704,"id.resp_h":"195.211.240.166","id.resp_p":443,"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
             # {"ts":1382354909.915615,"uid":"C7W6ZA4vI8FxJ9J0bh","id.orig_h":"147.32.83.53","id.orig_p":36567,"id.resp_h":"195.113.214.241","id.resp_p":443,"version":"TLSv12","cipher":"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA","curve":"secp256r1","server_name":"id.google.com.ar","resumed":false,"established":true,"cert_chain_fuids":["FnomJz1vghKIOHtytf","FSvQff1KsaDkRtKXo4","Fif2PF48bytqq6xMDb"],"client_cert_chain_fuids":[],"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
             self.column_values['type'] = 'ssl'
+            try:
+                self.column_values['sport'] = line['id.orig_p']
+            except KeyError:
+                self.column_values['sport'] = ''
+            try:
+                self.column_values['dport'] = line['id.resp_p']
+            except KeyError:
+                self.column_values['dport'] = ''  # try:
+                self.column_values['sport'] = line['id.orig_p']
+            except KeyError:
+                self.column_values['sport'] = ''
+            try:
+                self.column_values['dport'] = line['id.resp_p']
+            except KeyError:
+                self.column_values['dport'] = ''
             try:
                 self.column_values['sslversion'] = line['version']
             except KeyError:
