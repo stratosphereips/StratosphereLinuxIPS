@@ -309,7 +309,11 @@ class Module(Module, multiprocessing.Process):
                 # In the case of the local file, we dont store the e-tag but
                 # the hash
                 new_hash = self.__get_hash_from_file(path_to_files + '/' + localfile)
-                if new_hash and old_hash != new_hash:
+                if old_hash == new_hash:
+                    # The 2 hashes are identical. File is up to date.
+                    self.print(f'File {localfile} is up to date.', 3, 0)
+                    return True
+                elif new_hash and old_hash != new_hash:
                     # Our malicious file was changed. Load the new one
                     self.print(f'Updating the local TI file {localfile}', 3, 0)
                     if old_hash:
@@ -327,8 +331,9 @@ class Module(Module, multiprocessing.Process):
                     return True
                 elif not new_hash:
                     # Something failed. Do not download
-                    self.print(f'Some error ocurred. Not loading  the file {localfile}', 0, 1)
+                    self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 1)
                     return False
+
 
         except Exception as inst:
             self.print('Problem on __load_malicious_local_files()', 0, 0)
