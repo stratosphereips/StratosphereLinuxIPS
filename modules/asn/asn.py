@@ -76,9 +76,8 @@ class Module(Module, multiprocessing.Process):
                     if type(ip) == str:
                         data = __database__.getIPData(ip)
                         ip_addr = ipaddress.ip_address(ip)
-                        # If we alredy have the country for this ip, do not ask the file
-                        # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
-                        if (data or data == {}) and 'asn' not in data and not ip_addr.is_multicast:
+                        # Check whether asn data is in the DB, and that the data is not empty
+                        if (not data or 'asn' not in data) and not ip_addr.is_multicast:
                             asninfo = self.reader.get(ip)
                             if asninfo:
                                 try:
