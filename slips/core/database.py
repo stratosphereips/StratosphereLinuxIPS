@@ -1253,7 +1253,6 @@ class Database(object):
             to_send['stime'] = stime
             to_send = json.dumps(to_send)
             self.publish('new_flow', to_send)
-            self.print('Adding complete flow to DB: {}'.format(data), 5, 0)
 
     def add_out_ssl(self, profileid, twid, daddr_as_obj, flowtype, uid,
                     version, cipher, resumed, established, cert_chain_fuids,
@@ -1439,9 +1438,6 @@ class Database(object):
 
     def add_timeline_line(self, profileid, twid, data, timestamp):
         """ Add a line to the time line of this profileid and twid """
-        print("****")
-        print('Adding timeline for {}, {}: {}'.format(profileid, twid, data))
-
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = json.dumps(data)
