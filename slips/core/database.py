@@ -1780,6 +1780,7 @@ class Database(object):
                 self.publish_stop()
                 # Stop the server first in order for redis to load another db
                 os.system(self.sudo +'service redis-server stop')
+                # todo: find/generate dump.rdb in docker.
                 # Copy out saved db to the dump.rdb (the db redis uses by default)
                 command = self.sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
                 os.system(command)
