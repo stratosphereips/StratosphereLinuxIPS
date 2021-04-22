@@ -25,6 +25,11 @@ class Database(object):
         self.separator = '_'
         self.normal_label = 'normal'
         self.malicious_label = 'malicious'
+        self.running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+        if self.running_in_docker:
+            self.sudo =''
+        else:
+            self.sudo = 'sudo '
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -1742,7 +1747,7 @@ class Database(object):
         self.r.save()
         # if you're not root, this will return False even if the path exists
         if os.path.exists('/var/lib/redis/dump.rdb'):
-            command = 'sudo cp /var/lib/redis/dump.rdb ' + backup_file + '.rdb'
+            command = self.sudo + 'cp /var/lib/redis/dump.rdb ' + backup_file + '.rdb'
             os.system(command)
             self.print("Backup stored in {}.rdb".format(backup_file))
         else:
@@ -1754,13 +1759,8 @@ class Database(object):
         backup_file should be the full path of the .rdb
         """
         # Set sudo according to environment
-        running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
-        if running_in_docker:
-            sudo =''
-        else:
-            sudo = 'sudo '
         # Locate the default path of redis dump.rdb
-        command = sudo + 'cat /etc/redis/*.conf | grep -w "dir"'
+        command = self.sudo + 'cat /etc/redis/*.conf | grep -w "dir"'
         redis_dir = subprocess.getoutput(command)
         if 'dir /var/lib/redis' in redis_dir:
             redis_dir = '/var/lib/redis'
@@ -1779,12 +1779,12 @@ class Database(object):
                 # We won't need them since we're loading a db that's already been analyzed
                 self.publish_stop()
                 # Stop the server first in order for redis to load another db
-                os.system(sudo +'service redis-server stop')
+                os.system(self.sudo +'service redis-server stop')
                 # Copy out saved db to the dump.rdb (the db redis uses by default)
-                command = sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
+                command = self.sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
                 os.system(command)
                 # Start the server again
-                os.system(sudo + 'service redis-server start')
+                os.system(self.sudo + 'service redis-server start')
                 self.print("{} loaded.".format(backup_file))
                 return True
             else:
