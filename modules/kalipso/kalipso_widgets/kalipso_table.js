@@ -137,7 +137,7 @@
 			var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version', 'Login', 'Auth attempts','Server','Client']
 			var pink_keywords_parameter = ['dns_resolution']
             var red_keywords = ['critical warning' ]
-            var orange_keywords = ['Sent','Recv','Tot','Size','Type']
+            var orange_keywords = ['Sent','Recv','Tot','Size','Type','Duration']
             var blue_keywords = ['dport_name', 'dport_name/proto']
             var cyan_keywords = ['daddr', 'saddr']
 
