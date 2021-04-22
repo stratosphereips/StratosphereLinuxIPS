@@ -1753,8 +1753,14 @@ class Database(object):
         Load the db from disk
         backup_file should be the full path of the .rdb
         """
+        # Set sudo according to environment
+        running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+        if running_in_docker:
+            sudo =''
+        else:
+            sudo = 'sudo '
         # Locate the default path of redis dump.rdb
-        command = 'sudo cat /etc/redis/*.conf | grep -w "dir"'
+        command = sudo + 'cat /etc/redis/*.conf | grep -w "dir"'
         redis_dir = subprocess.getoutput(command)
         if 'dir /var/lib/redis' in redis_dir:
             redis_dir = '/var/lib/redis'
@@ -1773,12 +1779,12 @@ class Database(object):
                 # We won't need them since we're loading a db that's already been analyzed
                 self.publish_stop()
                 # Stop the server first in order for redis to load another db
-                os.system('sudo service redis-server stop')
+                os.system(sudo +'service redis-server stop')
                 # Copy out saved db to the dump.rdb (the db redis uses by default)
-                command = 'sudo cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
+                command = sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
                 os.system(command)
                 # Start the server again
-                os.system('sudo service redis-server start')
+                os.system(sudo + 'service redis-server start')
                 self.print("{} loaded.".format(backup_file))
                 return True
             else:
