@@ -975,10 +975,11 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['daddr'] = line.get('id.resp_h', '')
             self.column_values['sport'] = line.get('id.orig_p', '')
             self.column_values['dport'] = line.get('id.resp_p', '')
+            # self.column_values['scanned_ip'] = line.get('dst', '')
             self.column_values['note'] = line.get('note', '')
             self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
-            # self.column_values['actions'] = line.get('actions', '')
-            # self.column_values['suppress_for'] = line.get('suppress_for', '')
+            self.column_values['scanned_port'] = line.get('p', '')
+            self.column_values['scanning_ip'] = line.get('src', '')
 
     def process_argus_input(self, new_line):
         """
@@ -1538,7 +1539,10 @@ class ProfilerProcess(multiprocessing.Process):
                                                  self.column_values['sport'],\
                                                  self.column_values['dport'],\
                                                  self.column_values['note'],\
-                                                 self.column_values['msg'])
+                                                 self.column_values['msg'],\
+                                                 self.column_values['scanned_port'],\
+                                                 self.column_values['scanning_ip']
+                                                 )
 
             def store_features_going_in(profileid, twid, starttime):
                 """
