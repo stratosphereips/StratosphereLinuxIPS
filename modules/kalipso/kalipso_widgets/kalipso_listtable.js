@@ -216,12 +216,13 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                 var temp_dns_resolution = ''
                 var temp_str =''
                 var temp_sni ='';
+
                 if(dns_resolution[ind] != undefined){temp_dns_resolution = dns_resolution[ind]};
 
-                if(ip_info_dict['SNI'][ind] != undefined &&
-                    outTuple_port.localeCompare(ip_info_dict['SNI'][ind]["dport"]) ==0 &&
-                    outTuple_protocol.localeCompare("tcp") == 0)
-                   {temp_sni = sni[ind]["server_name"];}
+                if(sni[ind] != undefined &&
+                    outTuple_port.localeCompare(sni[ind]["dport"]) ==0 &&
+                    outTuple_protocol.localeCompare("tcp") == 0){
+                    temp_sni = sni[ind]["server_name"];}
 
                 if(letter_string_chunks[ind] != undefined){temp_str = letter_string_chunks[ind]}
 
