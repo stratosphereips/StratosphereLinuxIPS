@@ -110,6 +110,11 @@ class Database(object):
             self.outputqueue.put('00|database|{}'.format(type(inst)))
             self.outputqueue.put('00|database|{}'.format(inst))
 
+    def add_mac_addr_to_profile(self,profileid, mac_addr):
+        """ Used when mac adddr  """
+        # Add the MAC addr of this profile
+        self.r.hset(profileid,'MAC', mac_addr)
+
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
         try:
