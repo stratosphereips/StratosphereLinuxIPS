@@ -1447,9 +1447,6 @@ class Database(object):
 
     def add_timeline_line(self, profileid, twid, data, timestamp):
         """ Add a line to the time line of this profileid and twid """
-        print("****")
-        print('Adding timeline for {}, {}: {}'.format(profileid, twid, data))
-
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = json.dumps(data)
