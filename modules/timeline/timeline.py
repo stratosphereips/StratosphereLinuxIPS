@@ -180,7 +180,7 @@ class Module(Module, multiprocessing.Process):
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
 
-                    activity = {'timestamp': timestamp_human, 'dport_name': dport_name, 'preposition': 'from','dns_resolution':dns_resolution, 'saddr': saddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name, 'Duration': dur}
+                    activity = {'timestamp': timestamp_human, 'dport_name': dport_name, 'preposition': 'from','dns_resolution':dns_resolution, 'saddr': saddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'Duration': dur, 'critical warning': critical_warning_dport_name}
 
                 elif 'ICMP' in proto:
                     if type(sport) == int:
@@ -240,7 +240,7 @@ class Module(Module, multiprocessing.Process):
 
                     if not dns_resolution:
                         dns_resolution = '????'
-                    activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to','dns_resolution':dns_resolution, 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human, 'critical warning': critical_warning_dport_name, 'Duration': dur}
+                    activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to','dns_resolution':dns_resolution, 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human,'Duration': dur, 'critical warning': critical_warning_dport_name}
 
                 elif 'ICMP' in proto:
                     if type(sport) == int:
