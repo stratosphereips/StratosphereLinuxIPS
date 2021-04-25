@@ -111,7 +111,7 @@ class Module(Module, multiprocessing.Process):
         data["VirusTotal"] = vtdata
 
         # Add asn if it is unknown or not in the IP info
-        if 'asn' not in cached_data or cached_data['asn'] == 'Unknown':
+        if cached_data and ('asn' not in cached_data or cached_data['asn'] == 'Unknown'):
             data['asn'] = as_owner
 
         __database__.setInfoForIPs(ip, data)
@@ -132,9 +132,8 @@ class Module(Module, multiprocessing.Process):
         data["VirusTotal"] = vtdata
 
         # Add asn (autonomous system number) if it is unknown or not in the Domain info
-        if 'asn' not in cached_data or cached_data['asn'] == 'Unknown':
+        if cached_data and ('asn' not in cached_data or cached_data['asn'] == 'Unknown'):
             data['asn'] = as_owner
-
         __database__.setInfoForDomains(domain, data)
 
 
@@ -192,12 +191,12 @@ class Module(Module, multiprocessing.Process):
                         cached_data = __database__.getDomainData(domain)
                         # If VT data of this domain is not in the DomainInfo, ask VT
                         # If 'Virustotal' key is not in the DomainInfo
-                        if (cached_data or cached_data == {}) and 'VirusTotal' not in cached_data:
+                        if not cached_data or 'VirusTotal' not in cached_data:
                             self.set_domain_data_in_DomainInfo(domain, cached_data)
 
                         elif cached_data and 'VirusTotal' in cached_data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                            if (time.time() - data["VirusTotal"]['timestamp']) > self.update_period:
+                            if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_domain_data_in_DomainInfo(domain, cached_data)
 
         except KeyboardInterrupt:
