@@ -111,7 +111,7 @@ class Module(Module, multiprocessing.Process):
             uid = next(iter(flow))
             flow_dict = json.loads(flow[uid])
             profile_ip = profileid.split('_')[1]
-            dur = round(flow_dict['dur'],3)
+            dur = round(float(flow_dict['dur']),3)
             stime = flow_dict['ts']
             saddr = flow_dict['saddr']
             sport = flow_dict['sport']
