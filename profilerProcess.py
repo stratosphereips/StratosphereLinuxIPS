@@ -675,7 +675,6 @@ class ProfilerProcess(multiprocessing.Process):
         else:
             self.column_values['starttime'] = ''
 
-
         self.column_values['uid'] = line.get('uid',False)
         self.column_values['saddr'] = line.get('id.orig_h','')
         self.column_values['daddr'] = line.get('id.resp_h','')
@@ -704,7 +703,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['state_hist'] = line.get('history',self.column_values['state'])
             self.column_values['smac'] = line.get('orig_l2_addr','')
             self.column_values['dmac'] = line.get('resp_l2_addr','')
-
 
         elif 'dns' in file_type:
             #{"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
@@ -735,8 +733,6 @@ class ProfilerProcess(multiprocessing.Process):
             # {"ts":12087.045499,"uid":"CdoFDp4iW79I5ZmsT7","id.orig_h":"10.0.2.105","id.orig_p":49704,"id.resp_h":"195.211.240.166","id.resp_p":443,"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
             # {"ts":1382354909.915615,"uid":"C7W6ZA4vI8FxJ9J0bh","id.orig_h":"147.32.83.53","id.orig_p":36567,"id.resp_h":"195.113.214.241","id.resp_p":443,"version":"TLSv12","cipher":"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA","curve":"secp256r1","server_name":"id.google.com.ar","resumed":false,"established":true,"cert_chain_fuids":["FnomJz1vghKIOHtytf","FSvQff1KsaDkRtKXo4","Fif2PF48bytqq6xMDb"],"client_cert_chain_fuids":[],"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
             self.column_values['type'] = 'ssl'
-
-
             self.column_values['sslversion'] = line.get('version','')
             self.column_values['cipher'] = line.get('cipher','')
             self.column_values['resumed'] = line.get('resumed','')
@@ -748,9 +744,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['validation_status'] = line.get('validation_status','')
             self.column_values['curve'] = line.get('curve','')
             self.column_values['server_name'] = line.get('server_name','')
-
-
-
 
         elif 'ssh' in file_type:
             self.column_values['type'] = 'ssh'
@@ -812,6 +805,22 @@ class ProfilerProcess(multiprocessing.Process):
         line = new_line['data']
         self.column_values = {}
         self.column_values['starttime'] = False
+        self.column_values['endtime'] = False
+        self.column_values['dur'] = False
+        self.column_values['proto'] = False
+        self.column_values['appproto'] = False
+        self.column_values['saddr'] = False
+        self.column_values['sport'] = False
+        self.column_values['dir'] = False
+        self.column_values['daddr'] = False
+        self.column_values['dport'] = False
+        self.column_values['state'] = False
+        self.column_values['pkts'] = False
+        self.column_values['spkts'] = False
+        self.column_values['dpkts'] = False
+        self.column_values['bytes'] = False
+        self.column_values['sbytes'] = False
+        self.column_values['dbytes'] = False
         self.column_values['type'] = 'argus'
 
         # Read the lines fast
@@ -820,24 +829,70 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['starttime'] = self.get_time(nline[self.column_idx['starttime']])
         except KeyError:
             pass
-
-        self.column_values['endtime'] = nline.get(self.column_idx['endtime'],False)
-        self.column_values['dur'] = nline.get(self.column_idx['dur'],False)
-        self.column_values['proto'] = nline.get(self.column_idx['proto'],False)
-        self.column_values['appproto'] = nline.get(self.column_idx['appproto'],False)
-        self.column_values['saddr'] = nline.get(self.column_idx['saddr'],False)
-        self.column_values['sport'] = nline.get(self.column_idx['sport'],False)
-        self.column_values['dir'] = nline.get(self.column_idx['dir'],False)
-        self.column_values['daddr'] = nline.get(self.column_idx['daddr'],False)
-        self.column_values['dport'] = nline.get(self.column_idx['dport'],False)
-        self.column_values['state'] = nline.get(self.column_idx['state'],False)
-        self.column_values['pkts'] = int(nline.get(self.column_idx['pkts'],False))
-        self.column_values['spkts'] = int(nline.get(self.column_idx['spkts'],False))
-        self.column_values['dpkts'] = int(nline.get(self.column_idx['dpkts'],False))
-        self.column_values['bytes'] = int(nline.get(self.column_idx['bytes'],False))
-        self.column_values['sbytes'] = int(nline.get(self.column_idx['sbytes'],False))
-        self.column_values['dbytes'] = int(nline.get(self.column_idx['dbytes'],False))
-
+        try:
+            self.column_values['endtime'] = nline[self.column_idx['endtime']]
+        except KeyError:
+            pass
+        try:
+            self.column_values['dur'] = nline[self.column_idx['dur']]
+        except KeyError:
+            pass
+        try:
+            self.column_values['proto'] = nline[self.column_idx['proto']]
+        except KeyError:
+            pass
+        try:
+            self.column_values['appproto'] = nline[self.column_idx['appproto']]
+        except KeyError:
+            pass
+        try:
+            self.column_values['saddr'] = nline[self.column_idx['saddr']]
+        except KeyError:
+            pass
+        try:
+            self.column_values['sport'] = nline[self.column_idx['sport']]
+        except KeyError:
+            pass
+        try:
+            self.column_values['dir'] = nline[self.column_idx['dir']]
+        except KeyError:
+            pass
+        try:
+            self.column_values['daddr'] = nline[self.column_idx['daddr']]
+        except KeyError:
+            pass
+        try:
+            self.column_values['dport'] = nline[self.column_idx['dport']]
+        except KeyError:
+            pass
+        try:
+            self.column_values['state'] = nline[self.column_idx['state']]
+        except KeyError:
+            pass
+        try:
+            self.column_values['pkts'] = int(nline[self.column_idx['pkts']])
+        except KeyError:
+            pass
+        try:
+            self.column_values['spkts'] = int(nline[self.column_idx['spkts']])
+        except KeyError:
+            pass
+        try:
+            self.column_values['dpkts'] = int(nline[self.column_idx['dpkts']])
+        except KeyError:
+            pass
+        try:
+            self.column_values['bytes'] = int(nline[self.column_idx['bytes']])
+        except KeyError:
+            pass
+        try:
+            self.column_values['sbytes'] = int(nline[self.column_idx['sbytes']])
+        except KeyError:
+            pass
+        try:
+            self.column_values['dbytes'] = int(nline[self.column_idx['dbytes']])
+        except KeyError:
+            pass
 
     def process_nfdump_input(self, new_line):
         """
@@ -862,7 +917,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values['sbytes'] = False
         self.column_values['dbytes'] = False
         self.column_values['type'] = 'nfdump'
-
         # Read the lines fast
         line = new_line['data']
         nline = line.strip().split(self.separator)
@@ -1076,13 +1130,10 @@ class ProfilerProcess(multiprocessing.Process):
                         self.column_values['qtype_name'] = line['dns']['rrtype']
                     except KeyError:
                         self.column_values['qtype_name'] = ''
-
                     # can not find in eve.json:
                     self.column_values['qclass_name'] = ''
                     self.column_values['rcode_name'] = ''
                     self.column_values['answers'] = ''
-
-
             elif self.column_values['type'] == 'tls':
                 if line.get('tls', None):
                     try:
