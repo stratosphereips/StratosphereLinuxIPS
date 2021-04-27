@@ -72,7 +72,7 @@ class Module(Module, multiprocessing.Process):
             self.push_delay = int(self.config.get('ExportingAlerts', 'push_delay'))
         except:
             # Here means that push_delay is None in slips.conf(default value).
-            # we set it to export to the server every 1h by default #todo
+            # we set it to export to the server every 1h by default
             self.push_delay = 60*60
         self.print(f"Exporting STIX data to {self.TAXII_server} every {self.push_delay} seconds.")
         self.collection_name = self.config.get('ExportingAlerts', 'collection_name')
@@ -172,7 +172,6 @@ class Module(Module, multiprocessing.Process):
         Use Inbox Service (TAXII Service to Support Producer-initiated pushes of cyber threat information) to publish
         our STIX_data.json file
         """
-        # todo how often to call this function?
         # Create a cabby client
         client = create_client(self.TAXII_server,
                                 use_https = bool(self.use_https),
@@ -226,8 +225,8 @@ class Module(Module, multiprocessing.Process):
             'PortScanType1': 'Vertical port scan',
             'PortScanType2': 'Horizontal port scan',
             'ThreatIntelligenceBlacklistIP' : 'Blacklisted IP',
-            'SelfSignedCertificate' : 'Self-signed certificate', # todo:  should we make it a stix indicator?
-            'LongConnection' : 'Long Connection', # todo what should be the description for this? should we even make it a stix indicator?
+            'SelfSignedCertificate' : 'Self-signed certificate',
+            'LongConnection' : 'Long Connection',
             'SSHSuccessful' :'SSH connection from ip', #SSHSuccessful-by-ip
             'C&C channels detection' : 'C&C channels detection'
         }
