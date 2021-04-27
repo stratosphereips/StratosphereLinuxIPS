@@ -25,7 +25,9 @@ from stix2 import Indicator
 from stix2 import Bundle
 import ipaddress
 from cabby import create_client
-#todo add cabby to requirements.txt
+import time
+import _thread
+import sys
 
 
 class Module(Module, multiprocessing.Process):
@@ -64,11 +66,21 @@ class Module(Module, multiprocessing.Process):
             self.use_https = False
         self.discovery_path = self.config.get('ExportingAlerts', 'discovery_path')
         self.inbox_path = self.config.get('ExportingAlerts', 'inbox_path')
+        # push delay exists -> create thread that waits
+        # push delay doesnt exist -> running using file not interface -> only push to taxii server once before stopping
+        try:
+            self.push_delay = int(self.config.get('ExportingAlerts', 'push_delay'))
+        except:
+            # Here means that push_delay is None in slips.conf(default value).
+            # we set it to export to the server every 1h by default #todo
+            self.push_delay = 60*60
+        self.print(f"Exporting STIX data to {self.TAXII_server} every {self.push_delay} seconds.")
         self.collection_name = self.config.get('ExportingAlerts', 'collection_name')
         self.taxii_username = self.config.get('ExportingAlerts', 'taxii_username')
         self.taxii_password = self.config.get('ExportingAlerts', 'taxii_password')
         # This bundle should be created once and we should append all indicators to it
         self.is_bundle_created = False
+        self.is_thread_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
         # Set the timeout based on the platform. This is because the
@@ -183,13 +195,15 @@ class Module(Module, multiprocessing.Process):
         # Get the data that we want to send
         with open("STIX_data.json") as stix_file:
             stix_data = stix_file.read()
-        binding = 'urn:stix.mitre.org:json:2.1'
-        # URI is the path to the inbox service we want to use in the taxii server
-        client.push(stix_data, binding,
-                    collection_names=[self.collection_name],
-                    uri=self.inbox_path)
-        self.print(f"Successfully exported to {self.TAXII_server}.")
-        return True
+        # Make sure we don't push empty files
+        if len(stix_data) > 0:
+            binding = 'urn:stix.mitre.org:json:2.1'
+            # URI is the path to the inbox service we want to use in the taxii server
+            client.push(stix_data, binding,
+                        collection_names=[self.collection_name],
+                        uri=self.inbox_path)
+            self.print(f"Successfully exported to {self.TAXII_server}.")
+            return True
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
         """
@@ -197,7 +211,7 @@ class Module(Module, multiprocessing.Process):
         msg_to_send is a tuple: (type_evidence, type_detection,detection_info, description)
             type_evidence: e.g PortScan, ThreatIntelligence etc
             type_detection: e.g dip sip dport sport
-            detection_info: ip or port
+            detection_info: ip or port  OR ip:port:proto
             description: e.g 'New horizontal port scan detected to port 23. Not Estab TCP from IP: ip-address. Tot pkts sent all IPs: 9'
         """
         # ---------------- set name attribute ----------------
@@ -214,7 +228,8 @@ class Module(Module, multiprocessing.Process):
             'ThreatIntelligenceBlacklistIP' : 'Blacklisted IP',
             'SelfSignedCertificate' : 'Self-signed certificate', # todo:  should we make it a stix indicator?
             'LongConnection' : 'Long Connection', # todo what should be the description for this? should we even make it a stix indicator?
-            'SSHSuccessful' :'SSH connection from ip' #SSHSuccessful-by-ip
+            'SSHSuccessful' :'SSH connection from ip', #SSHSuccessful-by-ip
+            'C&C channels detection' : 'C&C channels detection'
         }
         # Get the right description to use in stix
         try:
@@ -223,10 +238,14 @@ class Module(Module, multiprocessing.Process):
             self.print("Can't find the description for type_evidence: {}".format(type_evidence), 0, 1)
             return False
         # ---------------- set pattern attribute ----------------
-
         if 'port' in type_detection:
             # detection_info is a port probably coming from a portscan we need the ip instead
             detection_info = description[description.index("IP: ") + 4:description.index(" Tot") - 1]
+        elif 'tcp' in detection_info:
+            #for example 127.0.0.1:443:tcp
+            # Get the ip
+            detection_info = detection_info.split(':')[0]
+
         if self.is_ip(detection_info):
             pattern = "[ip-addr:value = '{}']".format(detection_info)
         else:
@@ -265,9 +284,22 @@ class Module(Module, multiprocessing.Process):
         self.print("Indicator added to STIX_data.json")
         return True
 
+    def send_to_server(self):
+        """ Responsible for publishing STIX_data.json to the taxii server every n seconds """
+        while True:
+            time.sleep(self.push_delay)
+            # Sometimes the time's up and we need to send to server again but there's no
+            # new alerts in stix_data.json yet
+            if os.path.exists("STIX_data.json"):
+                self.push_to_TAXII_server()
+                # Delete stix_data.json file so we don't send duplicates
+                os.remove('STIX_data.json')
+                self.is_bundle_created = False
+            else:
+                self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.")
+
     def run(self):
-        # todo: should i add support for both stix and slack together?
-        # todo: which one of them should be enabled by default?
+        # this module doesn't export data to server in case of growing pcaps
         # Here's how this module works:
         # 1- the user specifies -a slack and adds SLACK_BOT_TOKEN to
         # 2- if you run slips using sudo use sudo -E instead to pass all env variables
@@ -289,19 +321,31 @@ class Module(Module, multiprocessing.Process):
                     return True
                 if message['channel'] == 'export_alert':
                     if type(message['data']) == str:
-                        # The data dict has two fields: export_to and msg
-                        data = json.loads(message['data'])
-                        msg_to_send = data.get("msg")
-                        if 'slack' in data['export_to']:
-                            sent_to_slack = self.send_to_slack(msg_to_send)
-                            if not sent_to_slack:
-                                self.print("Problem in send_to_slack()", 0, 1)
-                        elif 'stix' in data['export_to']:
-                            exported_to_stix = self.export_to_STIX(msg_to_send)
-                            if not exported_to_stix:
-                                self.print("Problem in export_to_STIX()", 0, 1)
-                                return True
+                        # This msg is sent (from slips.py) before stopping in case slips is
+                        # running on a file. We need to push to server only once before stopping
+                        if 'push to taxii server' in message['data']:
                             self.push_to_TAXII_server()
+                        else:
+                            # The data dict has two fields: export_to and msg
+                            data = json.loads(message['data'])
+                            msg_to_send = data.get("msg")
+                            if 'slack' in data['export_to']:
+                                sent_to_slack = self.send_to_slack(msg_to_send)
+                                if not sent_to_slack:
+                                    self.print("Problem in send_to_slack()", 0, 1)
+                                    return True
+                            elif 'stix' in data['export_to']:
+                                # this thread is responsible for waiting n seconds before each push to the stix server
+                                # it starts the timer when the first alert happens
+                                # push_delay should be an int when slips is running using -i
+                                if self.is_thread_created is False and '-i' in sys.argv:
+                                    # this thread is started only once
+                                    _thread.start_new_thread(self.send_to_server,())
+                                    self.is_thread_created = True
+                                exported_to_stix = self.export_to_STIX(msg_to_send)
+                                if not exported_to_stix:
+                                    self.print("Problem in export_to_STIX()", 0, 1)
+                                    return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:
