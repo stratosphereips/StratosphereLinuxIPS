@@ -55,8 +55,18 @@ class Module(Module, multiprocessing.Process):
         self.slack_channel_name = self.config.get('ExportingAlerts', 'slack_channel_name')
         self.sensor_name = self.config.get('ExportingAlerts', 'sensor_name')
         self.TAXII_server = self.config.get('ExportingAlerts', 'TAXII_server')
+        # taxii server port
+        self.port = self.config.get('ExportingAlerts', 'port')
+        self.use_https = self.config.get('ExportingAlerts', 'use_https')
+        if self.use_https.lower() == 'true':
+            self.use_https = True
+        elif self.use_https.lower() == 'false':
+            self.use_https = False
         self.discovery_path = self.config.get('ExportingAlerts', 'discovery_path')
         self.inbox_path = self.config.get('ExportingAlerts', 'inbox_path')
+        self.collection_name = self.config.get('ExportingAlerts', 'collection_name')
+        self.taxii_username = self.config.get('ExportingAlerts', 'taxii_username')
+        self.taxii_password = self.config.get('ExportingAlerts', 'taxii_password')
         # This bundle should be created once and we should append all indicators to it
         self.is_bundle_created = False
         # To avoid duplicates in STIX_data.json
@@ -150,37 +160,35 @@ class Module(Module, multiprocessing.Process):
         Use Inbox Service (TAXII Service to Support Producer-initiated pushes of cyber threat information) to publish
         our STIX_data.json file
         """
-        pass
         # todo how often to call this function?
-        # inbox service isn't available in hailataxii.com
-        # https://www.taxiistand.com/
-        # https://open.taxiistand.com/
-        # https://test.taxiistand.com/
-        # are all down right now, can't test this function
-
         # Create a cabby client
-        client = create_client(self.TAXII_server,  # 'https://test.taxiistand.com'
-                                use_https= False,
-                                discovery_path=self.discovery_path)#'https://test.taxiistand.com/read-write/services/discovery')
+        client = create_client(self.TAXII_server,
+                                use_https = bool(self.use_https),
+                                port = self.port,
+                                discovery_path=self.discovery_path)
+        client.set_auth(
+                username=self.taxii_username,
+                password=self.taxii_password
+            ) # todo fix authentication not working
         # Check the available services to make sure inbox service is there
         services = client.discover_services()
-        available_services_in_TAXII_server = {}
-        for service in services:
-            # print('Service type={s.type}, address={s.address}'.format(s=service))
-            # Get a dict of all available services
-            available_services_in_TAXII_server.update({service.type : service.address})
         # Check if inbox is there
-        for service_name in available_services_in_TAXII_server:
-            if 'inbox' not in service_name.lower():
-                self.print("Server doesn't have inbox available. Exporting STIX_data.json is cancelled.",0,1)
-                return False
+        for service in services :
+            if 'inbox' in service.type.lower():
+                break
+        else:
+            # Comes here if it cant find inbox in services
+            self.print("Server doesn't have inbox available. Exporting STIX_data.json is cancelled.",0,1)
+            return False
         # Get the data that we want to send
         with open("STIX_data.json") as stix_file:
             stix_data = stix_file.read()
-        binding = 'urn:stix.mitre.org:json:2.1' #TODO: NEEDS TESTING
+        binding = 'urn:stix.mitre.org:json:2.1'
         # URI is the path to the inbox service we want to use in the taxii server
-        inbox_path= self.inbox_path #'https://test.taxiistand.com/read-write/services/inbox-stix'
-        client.push(stix_data, binding, uri=inbox_path) #TODO: NEEDS TESTING
+        client.push(stix_data, binding,
+                    collection_names=[self.collection_name],
+                    uri=self.inbox_path)
+        self.print(f"Successfully exported to {self.TAXII_server}.")
         return True
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
@@ -273,7 +281,7 @@ class Module(Module, multiprocessing.Process):
         # data_to_send = json.dumps(data_to_send)
         # __database__.publish('export_alert',data_to_send)
         try:
-            # Main loop function
+        # Main loop function
             while True:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
