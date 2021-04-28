@@ -21,7 +21,7 @@ Before building the docker locally from the Dockerfile, first you should clone S
 
 If you cloned StratosphereLinuxIPS in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
 
-	cd docker
+	cd ~/code/StratosphereLinuxIPS/docker
 	docker build --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f dataset/test3.binetflow
@@ -37,9 +37,18 @@ You can also put your own files in the /dataset/ folder and analyze them with Sl
 
 Slips is dependent on three major elements: Python 3.7+, Zeek and Redis database. To install these elements we will use APT package manager. Afterwards, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages. 
 
-**Instrucitons to download everything for Slips are below.**
+**Instructions to download everything for Slips are below.**
 <br>
 
+## Install using shell script
+You can install it using install.sh
+
+	sudo chmod +x install.sh
+	sudo ./install.sh
+	
+or install it manually
+
+## Installing manually
 ### Installing Python, Redis, NodeJs, and required python and npm libraries.
 Update the repository of packages so you see the latest versions:
 
@@ -55,13 +64,13 @@ Even though we just installed pip3, the package installer for Python (3.7), we n
 
 Now that pip3 is upgraded, we can proceed to install all required packages via pip3 python packet manager:
 
-	pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1
+	sudo pip3 install -r requirements.txt
 
 _Note: for those using a different base image, you need to also install tensorflow==2.2.0 via pip3._
 
 As we mentioned before, the GUI of Slips known as Kalipso relies on ns. For it to work we will install the following npm packages:
 
-	npm install blessed blessed-contrib redis async chalk strip-ansi clipboardy fs sorted-array-async
+	npm install blessed blessed-contrib redis async chalk strip-ansi clipboardy fs sorted-array-async yargs
 
 ###  Installing Zeek
 

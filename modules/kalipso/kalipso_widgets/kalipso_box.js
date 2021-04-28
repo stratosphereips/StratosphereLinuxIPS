@@ -55,7 +55,9 @@ class Box{
         var evidence_json = JSON.parse(redis_evidence_data);
         var evidence_keys = Object.keys(evidence_json); 
         async.each(evidence_keys, (key,callback)=>{
-          evidence_data = evidence_data+'{bold}'+color.green(key)+'{/bold}'+" "+evidence_json[key]+'\n'
+          var key_dict = JSON.parse(key)
+          var key_values = Object.values(key_dict).join(':')
+          evidence_data = evidence_data+'{bold}'+color.green(key_values)+'{/bold}'+" "+evidence_json[key]["description"]+'\n'
           callback();
           }, (err)=>{
             if(err){console.log(err)}

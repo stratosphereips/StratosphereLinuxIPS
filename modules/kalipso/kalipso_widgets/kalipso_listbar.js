@@ -76,17 +76,21 @@ class ListBar{
                 'InTuples': {
                   keys: ['y']
                             },
+
+                'ProfileEvidences':{
+                  keys : ['z']
+                         },
            
                 'reload':{
                   keys : ['o']
                          },    
 
                 'quit hotkey':{
-                  keys : ['q']
+                  keys : ['ESC']
                          },  
 
                 'quit kalipso':{
-                  keys : ['ESC']
+                  keys : ['q']
                          },
 
                  'help':{

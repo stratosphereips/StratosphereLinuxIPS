@@ -19,7 +19,6 @@ import multiprocessing
 from slips.core.database import __database__
 import json
 from datetime import datetime
-import ast
 import configparser
 import platform
 from colorama import init
@@ -159,26 +158,6 @@ class EvidenceProcess(multiprocessing.Process):
             open('alerts.json', 'w').close()
         return open('alerts.json', 'a')
 
-    def add_maliciousIP(self, ip='', profileid='', twid=''):
-        '''
-        Add malicious IP to DB 'MaliciousIPs' with a profileid and twid where it was met
-        Returns nothing
-        '''
-
-        ip_location = __database__.get_malicious_ip(ip)
-        # if profileid or twid is None, do not put any value in a dictionary
-        if profileid != 'None':
-            try:
-                profile_tws = ip_location[profileid]
-                profile_tws = ast.literal_eval(profile_tws)
-                profile_tws.add(twid)
-                ip_location[profileid] = str(profile_tws)
-            except KeyError:
-                ip_location[profileid] = str({twid})
-        elif not ip_location:
-            ip_location = {}
-        data = json.dumps(ip_location)
-        __database__.add_malicious_ip(ip, data)
 
     def addDataToJSONFile(self, data):
         """
@@ -211,55 +190,6 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-    def add_maliciousDomain(self, domain='', profileid='', twid=''):
-        '''
-        Add malicious domain to DB 'MaliciousDomainss' with a profileid and twid where domain was met
-        Returns nothing
-        '''
-        domain_location = __database__.get_malicious_domain(domain)
-        # if profileid or twid is None, do not put any value in a dictionary
-        if profileid != 'None':
-            try:
-                profile_tws = domain_location[profileid]
-                profile_tws = ast.literal_eval(profile_tws)
-                profile_tws.add(twid)
-                domain_location[profileid] = str(profile_tws)
-            except KeyError:
-                domain_location[profileid] = str({twid})
-        elif not domain_location:
-            domain_location = {}
-        data = json.dumps(domain_location)
-        __database__.add_malicious_domain(domain, data)
-
-    def set_TI_IP_detection(self, ip, ip_description, profileid, twid):
-        '''
-        Funciton to set malicious IPs in IPsInfo and other db keys.
-        :ip: detected IP
-        :ip_description: source file of detected IP
-        :profileid: profile where IP was detected
-        :twid: timewindow where IP was detected
-        '''
-
-        ip_data = {}
-        # Maybe we should change the key to 'status' or something like that.
-        ip_data['threatintelligence'] = ip_description
-        self.add_maliciousIP(ip, profileid, twid)
-        __database__.setInfoForIPs(ip, ip_data)  # Set in the IP info that IP is blacklisted
-
-    def set_TI_Domain_detection(self, domain, domain_description, profileid, twid):
-        '''
-        Funciton to set malicious domains in DomainsInfo and other db keys.
-        :domain: detected domain
-        :domain_description: source file of detected domain
-        :profileid: profile where domain was detected
-        :twid: timewindow where domain was detected
-        '''
-
-        domain_data = {}
-        # Maybe we should change the key to 'status' or something like that.
-        domain_data['threatintelligence'] = domain_description
-        self.add_maliciousDomain(domain, profileid, twid)
-        __database__.setInfoForDomains(domain, domain_data)  # Set in the DomainsInfo info that Domain is blacklisted
 
     def run(self):
         try:
@@ -272,47 +202,40 @@ class EvidenceProcess(multiprocessing.Process):
                     self.logfile.close()
                     self.jsonfile.close()
                     return True
-                elif message['channel'] == 'evidence_added':
-                    # Get the profileid and twid
-                    try:
+                elif message['channel'] == 'evidence_added' and type(message['data']) is not int:
+                    # Data sent in the channel as a json dict, it needs to be deserialized first
+                    data = json.loads(message['data'])
+                    profileid = data.get('profileid')
+                    ip = profileid.split(self.separator)[1]
+                    twid = data.get('twid')
+                    # Key data
+                    key = data.get('key')
+                    type_detection = key.get('type_detection')
+                    detection_info = key.get('detection_info')
+                    type_evidence = key.get('type_evidence')
+                    # evidence data
+                    evidence_data = data.get('data')
+                    description = evidence_data.get('description')
 
-                        message_data = message['data']
-                        profileid = message_data.split(self.separator)[0]+ self.separator + message_data.split(self.separator)[1]
-                        twid = message_data.split(self.separator)[2]
+                    evidence_to_log = self.print_evidence(profileid,
+                                                          twid,
+                                                          ip,
+                                                          type_evidence,
+                                                          type_detection,
+                                                          detection_info,
+                                                          description)
+                    # timestamp
+                    now = datetime.now()
+                    current_time = now.strftime('%Y-%m-%d %H:%M:%S')
 
-                        # Separate new evidence, so it can be logged in alerts.log
-                        new_evidence_key = message_data.split(self.separator)[3]
-                        new_evidence_description = message_data.split(self.separator)[4]
-                        new_evidence_key_split = new_evidence_key.split(':')
-                        new_evidence_detection_type = new_evidence_key_split[0]
-                        new_evidence_detection_module = new_evidence_key_split[-1]
-                        new_evidence_detection_info = new_evidence_key[len(new_evidence_detection_type) + 1:-len(new_evidence_detection_module) - 1]  # In case of TI, this info is IP, in case of LSTM this is a tuple
-                        ip = profileid.split(self.separator)[1]
+                    evidence_dict = {'timestamp': current_time,
+                                     'detected_ip': ip,
+                                     'detection_module':type_evidence,
+                                     'detection_info':type_detection + ' ' + detection_info,
+                                     'description':description}
 
-                        now = datetime.now()
-                        current_time = now.strftime('%Y-%m-%d %H:%M:%S')
-
-                        evidence_to_log = self.print_evidence(profileid,
-                                                              twid,
-                                                              ip,
-                                                              new_evidence_detection_module,
-                                                              new_evidence_detection_type,
-                                                              new_evidence_detection_info,
-                                                              new_evidence_description)
-                        evidence_dict = {'timestamp': current_time, 'detected_ip': ip, 'detection_module':new_evidence_detection_module,  'detection_info':new_evidence_detection_type + ' ' + new_evidence_detection_info, "description":new_evidence_description}
-
-                        self.addDataToLogFile(current_time + ' ' + evidence_to_log)
-                        self.addDataToJSONFile(evidence_dict)
-
-                        # add detection info threat  intelligence in the IP and Domain info
-                        if new_evidence_detection_module == 'ThreatIntelligenceBlacklistIP':
-                            self.set_TI_IP_detection(new_evidence_detection_info, new_evidence_description, profileid, twid)
-                        elif new_evidence_detection_module == 'ThreatIntelligenceBlacklistDomain':
-                            self.set_TI_Domain_detection(new_evidence_detection_info, new_evidence_description, profileid, twid)
-
-                    except AttributeError:
-                        # When the channel is created the data '1' is sent
-                        continue
+                    self.addDataToLogFile(current_time + ' ' + evidence_to_log)
+                    self.addDataToJSONFile(evidence_dict)
 
                     evidence = __database__.getEvidenceForTW(profileid, twid)
                     # Important! It may happen that the evidence is not related to a profileid and twid.
@@ -326,15 +249,18 @@ class EvidenceProcess(multiprocessing.Process):
                         # CONTINUE HERE
                         ip = profileid.split(self.separator)[1]
                         for key in evidence:
-                            key_split = key.split(':')
-                            detection_type = key_split[0]
-                            detection_module = key_split[-1]
-                            detection_info = key[len(detection_type)+1:-len(detection_module)-1] # In case of TI, this info is IP, in case of LSTM this is a tuple
+                            # Deserialize key data
+                            key_json = json.loads(key)
+                            type_detection = key_json.get('type_detection')
+                            detection_info = key_json.get('detection_info')
+                            type_evidence = key_json.get('type_evidence')
+
+                            # Deserialize evidence data
                             data = evidence[key]
-                            self.print('\tEvidence for key {}'.format(key), 3, 0)
-                            confidence = float(data[0])
-                            threat_level = float(data[1])
-                            description = data[2]
+                            confidence = data.get('confidence')
+                            threat_level = data.get('threat_level')
+                            description = data.get('description')
+
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
                             self.print('\t\tWeighted Threat Level: {}'.format(new_threat_level), 5, 0)
@@ -350,7 +276,7 @@ class EvidenceProcess(multiprocessing.Process):
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
-                                evidence_to_print = self.print_evidence(profileid, twid, ip, detection_module, detection_type,detection_info, description)
+                                evidence_to_print = self.print_evidence(profileid, twid, ip, type_evidence, type_detection,detection_info, description)
                                 self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 __database__.publish('new_blocking', ip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)

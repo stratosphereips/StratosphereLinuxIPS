@@ -34,8 +34,9 @@ import inspect
 import modules
 import importlib
 from slips.common.abstracts import Module
+from slips.common.argparse import ArgumentParser
 
-version = '0.7.1'
+version = '0.7.2'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -150,6 +151,13 @@ def load_modules(to_ignore):
 
     return plugins
 
+def get_slips_conf_path():
+    for arg in sys.argv:
+        if 'slips.py' in arg:
+            # get the path preceeding slips.py (may be ../ or  ../../ or '' if slips.py is in the cwd) , this path is where slips.conf will be
+            slips_conf_path = arg[:arg.index('slips.py')]
+            return slips_conf_path + 'slips.conf'
+
 
 ####################
 # Main
@@ -159,20 +167,32 @@ if __name__ == '__main__':
     print('https://stratosphereips.org\n')
 
     # Parse the parameters
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', help='Path to the slips config file.', action='store', required=False)
-    parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', required=False, type=int)
-    parser.add_argument('-e', '--debug', help='Amount of debugging. This shows inner information about the program.', action='store', required=False, type=int)
-    parser.add_argument('-w', '--width', help='Width of the time window used. In seconds.', action='store', required=False, type=int)
-    parser.add_argument('-f', '--filepath', help='If a filename is specified, then it is a path to the flow file to read (usually Argus binetflow files or conn.log file). If a folder is specified then a Zeek folder.', required=False)
-    parser.add_argument('-i', '--interface', help='Interface name to read packets from. Zeek is run on it and slips interfaces with Zeek.', required=False)
-    parser.add_argument('-r', '--pcapfile', help='Pcap file to read. Zeek is run on it and slips interfaces with Zeek.', required=False)
-    parser.add_argument('-b', '--nfdump', help='A binary file from NFDUMP to read. NFDUMP is used to send data to slips.', required=False)
-    parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
-    parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
-    parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
-    parser.add_argument('-cc', '--clearcache', help='Clear cache.', required=False, default=False, action='store_true')
-    parser.add_argument('-p', '--blocking', help='Block IPs that connect to the computer. Supported only on Linux.',required=False, default=False, action='store_true')
+    parser = ArgumentParser(usage = "./slips.py -c <configfile> [options] [file ...]",
+                            add_help=False)
+    parser.add_argument('-c','--config', metavar='<configfile>',action='store',required=False,
+                        help='path to the Slips config file.')
+    parser.add_argument('-v', '--verbose',metavar='<verbositylevel>',action='store', required=False, type=int,
+                        help='amount of verbosity. This shows more info about the results.')
+    parser.add_argument('-e', '--debug', metavar='<debuglevel>',action='store', required=False, type=int,
+                        help='amount of debugging. This shows inner information about the program.')
+    parser.add_argument('-f', '--filepath',metavar='<file>', action='store',required=False,
+                        help='read an Argus binetflow or a Zeek folder.')
+    parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
+                        help='read packets from an interface.')
+    parser.add_argument('-r', '--pcapfile',metavar='<file>', action='store', required=False,
+                        help='read a PCAP - Packet Capture.')
+    parser.add_argument('-b', '--nfdump', metavar='<file>',action='store',required=False,
+                        help='read an NFDUMP - netflow dump. ')
+    parser.add_argument('-l','--nologfiles',action='store_true',required=False,
+                        help='do not create log files with all the traffic info and detections.')
+    parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
+                        help='packet filter for Zeek. BPF style.')
+    parser.add_argument('-cc','--clearcache',action='store_true', required=False,
+                        help='clear a cache database.')
+    parser.add_argument('-p', '--blocking',action='store_true',required=False,
+                        help='block IPs that connect to the computer. Supported only on Linux.')
+    parser.add_argument("-h", "--help", action="help", help="command line help")
+
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
@@ -314,14 +334,14 @@ if __name__ == '__main__':
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
 
-    # Get the type of output from the parameters
-    # Several combinations of outputs should be able to be used
-    if args.gui:
-        # Create the curses thread
-        guiProcessQueue = Queue()
-        guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
-        guiProcessThread.start()
-        outputProcessQueue.put('quiet')
+    # # Get the type of output from the parameters
+    # # Several combinations of outputs should be able to be used
+    # if args.gui:
+    #     # Create the curses thread
+    #     guiProcessQueue = Queue()
+    #     guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+    #     guiProcessThread.start()
+    #     outputProcessQueue.put('quiet')
     if not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
         do_logs = read_configuration(config, 'parameters', 'create_log_files')
@@ -345,7 +365,7 @@ if __name__ == '__main__':
     # Create the queue for the profile thread
     profilerProcessQueue = Queue()
     # Create the profile thread and start it
-    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config, args.width)
+    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config)
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
 
