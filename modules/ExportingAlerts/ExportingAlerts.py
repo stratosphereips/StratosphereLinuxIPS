@@ -175,7 +175,7 @@ class Module(Module, multiprocessing.Process):
         """
         # Create a cabby client
         client = create_client(self.TAXII_server,
-                                use_https = bool(self.use_https),
+                                use_https = self.use_https,
                                 port = self.port,
                                 discovery_path=self.discovery_path)
         # jwt_auth_url is optional
