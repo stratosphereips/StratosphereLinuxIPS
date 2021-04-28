@@ -78,6 +78,7 @@ class Module(Module, multiprocessing.Process):
         self.collection_name = self.config.get('ExportingAlerts', 'collection_name')
         self.taxii_username = self.config.get('ExportingAlerts', 'taxii_username')
         self.taxii_password = self.config.get('ExportingAlerts', 'taxii_password')
+        self.jwt_auth_url = self.config.get('ExportingAlerts', 'jwt_auth_url')
         # This bundle should be created once and we should append all indicators to it
         self.is_bundle_created = False
         self.is_thread_created = False
@@ -177,10 +178,20 @@ class Module(Module, multiprocessing.Process):
                                 use_https = bool(self.use_https),
                                 port = self.port,
                                 discovery_path=self.discovery_path)
-        client.set_auth(
+        # jwt_auth_url is optional
+        if self.jwt_auth_url is not '':
+            client.set_auth(
                 username=self.taxii_username,
-                password=self.taxii_password
-            ) # todo fix authentication not working
+                password=self.taxii_password,
+                # URL used to obtain JWT token
+                jwt_auth_url=self.jwt_auth_url
+            )
+        else:
+            # User didn't provide jwt_auth_url in slips.conf
+            client.set_auth(
+                username=self.taxii_username,
+                password=self.taxii_password,
+            )
         # Check the available services to make sure inbox service is there
         services = client.discover_services()
         # Check if inbox is there
