@@ -313,7 +313,8 @@ class InputProcess(multiprocessing.Process):
                             time.sleep(self.read_lines_delay)
                             line['data'] = t_line
                             self.print(f'	> Sent Line: {line}', 0, 3)
-                            self.profilerqueue.put(line)
+                            if len(t_line.strip()) != 0:
+                                self.profilerqueue.put(line)
                             lines += 1
                         file_stream.close()
 

@@ -1493,6 +1493,26 @@ class Database(object):
         data = self.r.smembers('zeekfiles')
         return data
 
+    def set_profile_module_label(self, profileid, module, label):
+        """
+        Set a module label for a profile.
+        """
+        data = self.get_profile_modules_labels(profileid)
+        data[module] = label
+        data = json.dumps(data)
+        self.r.hset(profileid, 'modules_labels', data)
+
+    def get_profile_modules_labels(self, profileid):
+        """
+        Get labels set by modules in the profile.
+        """
+        data = self.r.hget(profileid, 'modules_labels')
+        if data:
+            data = json.loads(data)
+        else:
+            data = {}
+        return data
+
     def del_zeek_file(self, filename):
         """ Delete an entry from the list of zeek files """
         self.r.srem('zeekfiles', filename)

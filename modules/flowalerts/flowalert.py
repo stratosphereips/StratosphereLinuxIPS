@@ -134,6 +134,19 @@ class Module(Module, multiprocessing.Process):
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
 
+    def set_evidence_self_signed_certificates(self, profileid, twid, ip, description,  ip_state='ip'):
+        '''
+        Set an evidence for a self signed certificate.
+        '''
+        confidence = 0.5
+        threat_level = 30
+        type_detection = 'dstip'
+        type_evidence = 'SelfSignedCertificate'
+        detection_info = ip
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
         """
         Check if a duration of the connection is
@@ -271,13 +284,7 @@ class Module(Module, multiprocessing.Process):
                             twid = data['twid']
                             ip = flow['daddr']
                             description = 'Self-signed certificate. Destination IP: {}'.format(ip)
-                            confidence = 0.5
-                            threat_level = 30
-                            type_detection = 'dstip'
-                            type_evidence = 'SelfSignedCertificate'
-                            detection_info =ip
-                            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                     threat_level, confidence, description, profileid=profileid, twid=twid)
+                            self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
                 # ---------------------------- new_ssl channel
                 message = self.c4.get_message(timeout=0.01)
@@ -302,17 +309,8 @@ class Module(Module, multiprocessing.Process):
                                 description = 'Self-signed certificate. Destination: {}. IP: {}'.format(server_name,ip)
                             else:
                                 description = 'Self-signed certificate. Destination IP: {}'.format(ip)
-                            confidence = 0.5
-                            threat_level = 30
-                            type_detection = 'dstip'
-                            type_evidence = 'SelfSignedCertificate'
-                            detection_info =ip
-                            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                     threat_level, confidence, description, profileid=profileid, twid=twid)
+                            self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
-
-
-
 
 
         except KeyboardInterrupt:

@@ -30,6 +30,9 @@ class PortScanProcess(Module, multiprocessing.Process):
         # We need to know that after a detection, if we receive another flow that does not modify the count for the detection, we are not
         # re-detecting again only becase the threshold was overcomed last time.
         self.cache_det_thresholds = {}
+        # Retrieve malicious/benigh labels
+        self.normal_label = __database__.normal_label
+        self.malicious_label = __database__.malicious_label
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -162,6 +165,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 description = 'New horizontal port scan detected to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
                                 __database__.setEvidence(type_detection, detection_info,type_evidence,
                                                          threat_level, confidence, description, profileid=profileid, twid=twid)
+                                # Set 'malicious' label in the detected profile
+                                __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                                 self.print(description, 3, 0)
                                 # Store in our local cache how many dips were there:
                                 self.cache_det_thresholds[cache_key] = amount_of_dips
@@ -213,6 +218,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 description = 'New vertical port scan detected to IP {} from {}. Total {} dst ports. Not Estab TCP. Tot pkts sent all ports: {}'.format(dstip, profileid.split(self.fieldseparator)[1], amount_of_dports, pkts_sent, confidence)
                                 __database__.setEvidence(type_detection, detection_info, type_evidence,
                                                          threat_level, confidence, description, profileid=profileid, twid=twid)
+                                # Set 'malicious' label in the detected profile
+                                __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                                 self.print(description, 3, 0)
                                 # Store in our local cache how many dips were there:
                                 self.cache_det_thresholds[cache_key] = amount_of_dports
