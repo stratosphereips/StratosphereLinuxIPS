@@ -1401,7 +1401,7 @@ class Database(object):
             'scanned_port' : scanned_port,
             'scanning_ip'  : scanning_ip
         }
-        data = json.dumps(data) # this is going to be sent inside another dict
+        data = json.dumps(data) # this is going to be sent insidethe to_send dict
         to_send = {}
         to_send['profileid'] = profileid
         to_send['twid'] = twid
