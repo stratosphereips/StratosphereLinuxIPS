@@ -685,6 +685,7 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             self.column_values['daddr'] = ''
 
+        # Handle each zeek file type separately
         if 'conn' in file_type:
             # {'ts': 1538080852.403669, 'uid': 'Cewh6D2USNVtfcLxZe', 'id.orig_h': '192.168.2.12', 'id.orig_p': 56343,
             # 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364,
@@ -969,10 +970,14 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'tunnel'
         elif 'notice' in file_type:
             """ Parse the fields we're interested in in the notice.log file """
-
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
             self.column_values['type'] = 'notice'
-            self.column_values['daddr'] = line.get('id.resp_h', '')
+            # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
+            if self.column_values['saddr'] is '' :
+                self.column_values['saddr'] = line.get('src','' )
+            if self.column_values['daddr'] is '':
+                # set daddr to src for now because the notice that contains portscan doesn't have a dst field and slips needs it to work
+                self.column_values['daddr'] = line.get('dst', self.column_values['saddr'] )
             self.column_values['sport'] = line.get('id.orig_p', '')
             self.column_values['dport'] = line.get('id.resp_p', '')
             # self.column_values['scanned_ip'] = line.get('dst', '')
