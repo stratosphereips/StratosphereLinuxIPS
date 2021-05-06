@@ -132,7 +132,7 @@ XMPP Chat. Google Talk. Telegram or Whatsapp,5222,tcp,XMPP Chat. Google Talk, Te
 Apple Notification Protocol or XMPP,5223,tcp,Apple Notification Protocol or XMPP (Jabber)
 Google Playstore or Google Talk or Google Chrome Sync,5228,tcp,Google Playstore or Google Talk or Google Chrome Sync
 http-alt,8080,tcp,HTTP Alternative
-http-alt,8081,tcp,HTTP Alternative
+http-alt,8081,udp,HTTP Alternative
 nat-pmp,5351,udp,Nat Port Mapping Protocol
 nat-pmp,5351,tcp,Nat Port Mapping Protocol
 mdns,5353,udp,Multicast DNS
@@ -142,3 +142,8 @@ IRC,6667,tcp,IRC Protocol
 STUN,3478,udp,STUN Protocol
 bittorrent,6881,udp,Bittorrent protocol usually
 bittorrent,6882,udp,Bittorrent protocol usually
+mysql,3306,tcp,MySQL database system
+mysql,3306,udp,MySQL database system
+vnc-server,5900,tcp,Apple Virtual Network Computing
+vnc-server,5900,udp,Apple Virtual Network Computing
+
