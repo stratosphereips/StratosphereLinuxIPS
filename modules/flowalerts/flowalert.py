@@ -21,12 +21,11 @@ import platform
 import json
 import configparser
 from ipaddress import ip_address
-import time
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
     description = 'Alerts about flows: long connection, successful ssh'
-    authors = ['Kamila Babayeva', 'Sebastian Garcia']
+    authors = ['Kamila Babayeva', 'Sebastian Garcia','Alya Gomaa']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -136,7 +135,7 @@ class Module(Module, multiprocessing.Process):
 
     def set_evidence_self_signed_certificates(self, profileid, twid, ip, description,  ip_state='ip'):
         '''
-        Set an evidence for a self signed certificate.
+        Set evidence for self signed certificates.
         '''
         confidence = 0.5
         threat_level = 30
@@ -148,7 +147,17 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description):
-        pass
+        '''
+        Set evidence for Invalid SSL certificates.
+        '''
+        confidence = 0.5
+        threat_level = 20
+        type_detection  = 'dstip'
+        type_evidence = 'InvalidCertificate'
+        detection_info = ip
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
         """
