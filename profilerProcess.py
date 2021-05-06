@@ -968,17 +968,12 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'tunnel' in file_type:
             self.column_values['type'] = 'tunnel'
         elif 'notice' in file_type:
-            """ Parse the fields we're interested in in the notice.log file """
-
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
             self.column_values['type'] = 'notice'
-            self.column_values['daddr'] = line.get('id.resp_h', '')
             self.column_values['sport'] = line.get('id.orig_p', '')
             self.column_values['dport'] = line.get('id.resp_p', '')
             self.column_values['note'] = line.get('note', '')
             self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
-            # self.column_values['actions'] = line.get('actions', '')
-            # self.column_values['suppress_for'] = line.get('suppress_for', '')
 
     def process_argus_input(self, new_line):
         """
