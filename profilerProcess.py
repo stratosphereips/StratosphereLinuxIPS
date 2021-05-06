@@ -656,6 +656,27 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'syslog'
         elif 'tunnel' in new_line['type']:
             self.column_values['type'] = 'tunnel'
+        elif 'notice' in new_line['type']:
+            #fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	fuid	file_mime_type	file_desc
+            # proto	note	msg	sub	src	dst	p	n	peer_descr	actions	suppress_for
+            self.column_values['type'] = 'notice'
+            # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
+            if self.column_values['saddr'] is '-' :
+                self.column_values['saddr'] = line[13] #  src field
+
+            if self.column_values['daddr'] is '-':
+                self.column_values['daddr'] = line[14]  #  dst field
+                if self.column_values['daddr'] is '-':
+                    self.column_values['daddr'] = self.column_values['saddr']
+
+            self.column_values['dport'] = line[5] # id.orig_p
+            if self.column_values['dport'] is '-':
+                self.column_values['dport'] = line[15] # p field
+
+            self.column_values['sport'] = line[3]
+            self.column_values['note'] = line[10]
+            self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
+
 
     def process_zeek_input(self, new_line: dict):
         """
