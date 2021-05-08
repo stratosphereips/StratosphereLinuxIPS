@@ -1,0 +1,15 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	files
+#open	2020-10-06-17-33-11
+#fields	ts	fuid	tx_hosts	rx_hosts	conn_uids	source	depth	analyzers	mime_type	filename	duration	local_orig	is_orig	seen_bytes	total_bytes	missing_bytes	overflow_bytes	timedout	parent_fuid	md5	sha1	sha256	extracted	extracted_cutoff	extracted_size
+#types	time	string	set[addr]	set[addr]	set[string]	string	count	set[string]	string	string	interval	bool	bool	count	count	count	count	bool	string	string	string	string	string	bool	count
+1601998391.128990	FRBu481kCfyF0aScA1	3.232.121.231	147.32.83.156	CYetmM3b29tLNkUk42	SSL	0	MD5,X509,SHA1,SHA256	application/x-x509-user-cert	-	0.000000	-	F	1638	-	0	0	F	-	aeeb74a57c1f9df4cfc4536d26a38b8c	0a6b201a7bff643cc5dd6631e5940e858ee07d25	fc85d5ae673d6d3befce84844d750aff3c8d3c9f041330017ed3c47b9c26c86e	-	-	-
+1601998391.128990	Fyjto01jEK20hLjiY1	3.232.121.231	147.32.83.156	CYetmM3b29tLNkUk42	SSL	0	MD5,X509,SHA1,SHA256	application/x-x509-ca-cert	-	0.000000	-	F	1174	-	0	0	F	-	b15409274f54ad8f023d3b85a5ecec5d	e6a3b45b062d509b3382282d196efe97d5956ccb	25847d668eb4f04fdd40b12b6b0740c567da7d024308eb6c2c96fe41d9de218d	-	-	-
+1601998391.128990	FhnCNgxaBzf0nhUYg	3.232.121.231	147.32.83.156	CYetmM3b29tLNkUk42	SSL	0	MD5,SHA1	application/ocsp-response	-	0.000000	-	F	527	-	0	0	F	-	742893f349203edba6a727dc3176708a	68b98b3cb88d58b1806dc968f22e171bde7e9491	-	-	-	-
+1601998391.179142	FjGF8o46zypp408Lm5	3.232.121.231	147.32.83.156	CuMXP94isDk3tncxy	SSL	0	MD5,X509,SHA1,SHA256	application/x-x509-user-cert	-	0.000000	-	F	1638	-	0	0	F	-	aeeb74a57c1f9df4cfc4536d26a38b8c	0a6b201a7bff643cc5dd6631e5940e858ee07d25	fc85d5ae673d6d3befce84844d750aff3c8d3c9f041330017ed3c47b9c26c86e	-	-	-
+1601998391.179142	F235Vw4yh8qSRq7CCi	3.232.121.231	147.32.83.156	CuMXP94isDk3tncxy	SSL	0	MD5,X509,SHA1,SHA256	application/x-x509-ca-cert	-	0.000000	-	F	1174	-	0	0	F	-	b15409274f54ad8f023d3b85a5ecec5d	e6a3b45b062d509b3382282d196efe97d5956ccb	25847d668eb4f04fdd40b12b6b0740c567da7d024308eb6c2c96fe41d9de218d	-	-	-
+1601998391.179142	FHP6qv21BoEJOWVRv6	3.232.121.231	147.32.83.156	CuMXP94isDk3tncxy	SSL	0	MD5,SHA1	application/ocsp-response	-	0.000000	-	F	527	-	0	0	F	-	742893f349203edba6a727dc3176708a	68b98b3cb88d58b1806dc968f22e171bde7e9491	-	-	-	-
+#close	2020-10-06-17-33-29

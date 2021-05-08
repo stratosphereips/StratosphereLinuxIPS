@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator  ,
+#empty_field    (empty)
+#unset_field    -
+#path   notice
+#open   2018-07-19-15-33-35
+#fields ts  uid id.orig_h   id.orig_p   id.resp_h   id.resp_p   fuid    file_mime_type  file_desc   proto   note    msg sub src dst p   n   peer_descr  actions suppress_for    dropped remote_location.country_code    remote_location.region  remote_location.city    remote_location.latitude    remote_location.longitude
+#types  time    string  addr    port    addr    port    string  string  string  enum    enum    string  string  addr    addr    port    count   string  set[enum]   interval    bool    string  string  string  double  double
+1529149908.558020   -   -   -   -   -   -   -   -   tcp Scan::Address_Scan  147.32.83.156 scanned at least 25 unique hosts on port 22/tcp in 0m17s    remote  192.168.100.103 -   22  -   bro Notice::ACTION_LOG  3600.000000 F   -   -   -   -   -
+1529150229.021489   -   -   -   -   -   -   -   -   -   SSH::Password_Guessing  147.32.83.156 appears to be guessing SSH passwords (seen in 30 connections).  Sampled servers:  144.76.160.171, 144.76.160.171, 144.76.160.171, 144.76.160.171, 144.76.160.171    192.168.100.103 -   -   -   bro Notice::ACTION_LOG  3600.000000 F   -   -   -   -   -
