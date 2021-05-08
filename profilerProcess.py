@@ -177,7 +177,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.input_type = 'suricata'
                 except ValueError:
                     nr_commas = len(data.split(','))
-                    nr_tabs = len(data.split('	'))
+                    nr_tabs = len(data.split('   '))
                     if nr_commas > nr_tabs:
                         # Commas is the separator
                         self.separator = ','
@@ -330,9 +330,12 @@ class ProfilerProcess(multiprocessing.Process):
         Process the tab line from zeek.
         """
         line = new_line['data']
-        line = line.rstrip()
-        line = line.split('\t')
-
+        line = line.rstrip('\n')
+        # the data is either \t separated or triple space separated
+        if '\t' in line:
+            line = line.split('\t')
+        else:
+            line = line.split('   ')
         # Generic fields in Zeek
         self.column_values: dict = {}
         # We need to set it to empty at the beginning so any new flow has
