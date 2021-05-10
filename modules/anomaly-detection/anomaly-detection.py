@@ -18,6 +18,10 @@ from slips.core.database import __database__
 import platform
 
 # Your imports
+import pandas as pd
+from pyod.models.pca import PCA
+import argparse
+import warnings
 
 
 class Module(Module, multiprocessing.Process):
@@ -75,17 +79,20 @@ class Module(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                message_c1 = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. Probably unnecessary...
-                if message_c1['data'] == 'stop_process':
-                    return True
-                if message_c1 and message_c1['channel'] == 'new_conn_flow' and message_c1["type"] == "message":
-                    data = message_c1["data"]
-                    if type(data) == str:
-                        if 'trained'in self.mode:
-                            return True
-                        elif 'test' in self.mode:
-                            return True
+                #todo: which mode should be the default, shoud this module be enabled by default?
+                if 'training' in self.mode:
+                    message_c1 = self.c1.get_message(timeout=self.timeout)
+                    # Check that the message is for you. Probably unnecessary...
+                    if message_c1['data'] == 'stop_process':
+                        return True
+                    if message_c1 and message_c1['channel'] == 'new_conn_flow' and message_c1["type"] == "message":
+                        data = message_c1["data"]
+                        if type(data) == str:
+                            pass
+                elif 'test' in self.mode:
+                    pass
+                else:
+                    self.print("{self.mode} is not a valid mode, available options are: training or test. anomaly-detection.py stopping.")
         except KeyboardInterrupt:
             return True
         except Exception as inst:
