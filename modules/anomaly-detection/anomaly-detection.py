@@ -37,7 +37,7 @@ class Module(Module, multiprocessing.Process):
         self.mode = self.config.get('anomaly-detection', 'mode')
         # Start the DB
         __database__.start(self.config)
-        # self.c1 = __database__.subscribe('new_ip')
+        self.c1 = __database__.subscribe('new_conn_flow')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -75,20 +75,17 @@ class Module(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-
-                # message = self.c1.get_message(timeout=self.timeout)
+                message_c1 = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                # if message['data'] == 'stop_process':
-                #     return True
-                # if message['channel'] == 'new_ip':
-                #     # Example of printing the number of profiles in the
-                #     # Database every second
-                #     data = len(__database__.getProfiles())
-                #     self.print('Amount of profiles: {}'.format(data))
-                if 'trained'in self.mode:
+                if message_c1['data'] == 'stop_process':
                     return True
-                elif 'test' in self.mode:
-                    return True
+                if message_c1 and message_c1['channel'] == 'new_conn_flow' and message_c1["type"] == "message":
+                    data = message_c1["data"]
+                    if type(data) == str:
+                        if 'trained'in self.mode:
+                            return True
+                        elif 'test' in self.mode:
+                            return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:
