@@ -36,7 +36,7 @@ import importlib
 from slips.common.abstracts import Module
 from slips.common.argparse import ArgumentParser
 
-version = '0.7.1'
+version = '0.7.2'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -151,12 +151,13 @@ def load_modules(to_ignore):
 
     return plugins
 
-def get_slips_conf_path():
+def get_cwd():
+    # Can't use os.getcwd() because slips directory name won't always be StratosphereLinuxIPS plus this way requires less parsing
     for arg in sys.argv:
         if 'slips.py' in arg:
             # get the path preceeding slips.py (may be ../ or  ../../ or '' if slips.py is in the cwd) , this path is where slips.conf will be
-            slips_conf_path = arg[:arg.index('slips.py')]
-            return slips_conf_path + 'slips.conf'
+            cwd = arg[:arg.index('slips.py')]
+            return cwd
 
 
 ####################
@@ -167,6 +168,7 @@ if __name__ == '__main__':
     print('https://stratosphereips.org\n')
 
     # Parse the parameters
+    slips_conf_path = get_cwd() + 'slips.conf'
     parser = ArgumentParser(usage = "./slips.py -c <configfile> [options] [file ...]",
                             add_help=False)
     parser.add_argument('-c','--config', metavar='<configfile>',action='store',required=False,

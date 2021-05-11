@@ -338,13 +338,13 @@ class Database(object):
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
         """	
-        Mark a TW in a profile as modified	
+        Mark a TW in a profile as modified
         This means:	
-        1- To add it to the list of ModifiedTW	
-        2- Add the timestamp received to the time_of_last_modification	
+        1- To add it to the list of ModifiedTW
+        2- Add the timestamp received to the time_of_last_modification
            in the TW itself	
         3- To update the internal time of slips	
-        4- To check if we should 'close' some TW	
+        4- To check if we should 'close' some TW
         """
         # Add this tw to the list of modified TW, so others can
         # check only these later
@@ -1248,7 +1248,6 @@ class Database(object):
             to_send['stime'] = stime
             to_send = json.dumps(to_send)
             self.publish('new_flow', to_send)
-            self.print('Adding complete flow to DB: {}'.format(data), 5, 0)
 
     def add_out_ssl(self, profileid, twid, daddr_as_obj, dport, flowtype, uid,
                     version, cipher, resumed, established, cert_chain_fuids,
@@ -1494,6 +1493,26 @@ class Database(object):
     def get_all_zeek_file(self):
         """ Return all entries from the list of zeek files """
         data = self.r.smembers('zeekfiles')
+        return data
+
+    def set_profile_module_label(self, profileid, module, label):
+        """
+        Set a module label for a profile.
+        """
+        data = self.get_profile_modules_labels(profileid)
+        data[module] = label
+        data = json.dumps(data)
+        self.r.hset(profileid, 'modules_labels', data)
+
+    def get_profile_modules_labels(self, profileid):
+        """
+        Get labels set by modules in the profile.
+        """
+        data = self.r.hget(profileid, 'modules_labels')
+        if data:
+            data = json.loads(data)
+        else:
+            data = {}
         return data
 
     def del_zeek_file(self, filename):

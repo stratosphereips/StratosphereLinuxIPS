@@ -91,21 +91,21 @@ class ProfilerProcess(multiprocessing.Process):
             self.home_net = False
 
         # Get the time window width, if it was not specified as a parameter
-            try:
-                data = self.config.get('parameters', 'time_window_width')
-                self.width = float(data)
-            except ValueError:
-                # Its not a float
-                if 'only_one_tw' in data:
-                    # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
-                    self.width = 9999999999
-            except configparser.NoOptionError:
-                # By default we use 3600 seconds, 1hs
-                self.width = 3600
-            except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-                # There is a conf, but there is no option, or no section or no
-                # configuration file specified
-                self.width = 3600
+        try:
+            data = self.config.get('parameters', 'time_window_width')
+            self.width = float(data)
+        except ValueError:
+            # Its not a float
+            if 'only_one_tw' in data:
+                # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
+                self.width = 9999999999
+        except configparser.NoOptionError:
+            # By default we use 3600 seconds, 1hs
+            self.width = 3600
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no
+            # configuration file specified
+            self.width = 3600
 
         # Report the time window width
         if self.width == 9999999999:
