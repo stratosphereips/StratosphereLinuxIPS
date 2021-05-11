@@ -123,14 +123,14 @@ class Module(Module, multiprocessing.Process):
         # 0 means it exists
         if os.system(self.sudo + " iptables -nvL slipsBlocking >/dev/null 2>&1") == 0:
             # Delete all references to slipsBlocking inserted in INPUT OUTPUT and FORWARD before deleting the chain
-            os.system(self.sudo + 'iptables -D INPUT -j slipsBlocking')
-            os.system(self.sudo + 'iptables -D OUTPUT -j slipsBlocking')
-            os.system(self.sudo + 'iptables -D FORWARD -j slipsBlocking')
+            os.system(self.sudo + 'iptables -D INPUT -j slipsBlocking >/dev/null 2>&1')
+            os.system(self.sudo + 'iptables -D OUTPUT -j slipsBlocking >/dev/null 2>&1')
+            os.system(self.sudo + 'iptables -D FORWARD -j slipsBlocking >/dev/null 2>&1')
 
             # flush all the rules in slipsBlocking 
-            os.system(self.sudo + 'iptables -F slipsBlocking')
+            os.system(self.sudo + 'iptables -F slipsBlocking >/dev/null 2>&1')
             # Delete slipsBlocking chain from iptables
-            os.system(self.sudo + 'iptables -X slipsBlocking')
+            os.system(self.sudo + 'iptables -X slipsBlocking >/dev/null 2>&1')
 
     def initialize_chains_in_firewall(self):
         """ For linux: Adds a chain to iptables or a table to nftables called
