@@ -157,7 +157,24 @@ def load_modules(to_ignore):
 
     return plugins
 
-
+def stop_slips(profilerProcessQueue):
+    # Stop the output Process
+    print('Stopping Slips')
+    # Stop the modules that are subscribed to channels
+    __database__.publish_stop()
+    # Here we should Wait for any channel if it has still
+    # data to receive in its channel
+    # Send manual stops to the process not using channels
+    try:
+        logsProcessQueue.put('stop_process')
+    except NameError:
+        # The logsProcessQueue is not there because we
+        # didnt started the logs files (used -l)
+        pass
+    outputProcessQueue.put('stop_process')
+    profilerProcessQueue.put('stop_process')
+    inputProcess.terminate()
+    os._exit(1)
 
 ####################
 # Main
@@ -319,10 +336,7 @@ if __name__ == '__main__':
             print('No modules are ignored')
 
 
-    if not args.blocking:
-        # Tell the blocking module that -p isn't provided so it can clear the slips chain
-        __database__.publish('new_blocking', 'delete slipsBlocking chain')
-        # to_ignore.append('blocking')
+
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
@@ -436,41 +450,11 @@ if __name__ == '__main__':
                     # print('Counter to stop Slips. Amount of modified
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:
-                        # Stop the output Process
-                        print('Stopping Slips')
-                        # Stop the modules that are subscribed to channels
-                        __database__.publish_stop()
-                        # Here we should Wait for any channel if it has still
-                        # data to receive in its channel
-                        # Send manual stops to the process not using channels
-                        try:
-                            logsProcessQueue.put('stop_process')
-                        except NameError:
-                            # The logsProcessQueue is not there because we
-                            # didnt started the logs files (used -l)
-                            pass
-                        outputProcessQueue.put('stop_process')
-                        profilerProcessQueue.put('stop_process')
+                        stop_slips(profilerProcessQueue)
                         break
                     minimum_intervals_to_wait -= 1
                 else:
                     minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
     except KeyboardInterrupt:
-        print('Stopping Slips')
-        # Stop the modules that are subscribed to channels
-        __database__.publish_stop()
-        # Here we should Wait for any channel if it has still data to receive
-        # in its channel
-        # Send manual stops to the process not using channels
-        try:
-            logsProcessQueue.put('stop_process')
-        except NameError:
-            # The logsProcessQueue is not there because we didnt started the
-            # logs files (used -l)
-            pass
-
-        outputProcessQueue.put('stop_process')
-        profilerProcessQueue.put('stop_process')
-        inputProcess.terminate()
-        os._exit(1)
+        stop_slips(profilerProcessQueue)
