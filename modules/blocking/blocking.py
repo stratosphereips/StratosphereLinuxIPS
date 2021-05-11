@@ -152,7 +152,7 @@ class Module(Module, multiprocessing.Process):
             self.firewall = self.determine_linux_firewall()
             if self.firewall == 'iptables':
                 # delete any pre existing slipsBlocking rules that may conflict before adding a new one
-                # self.delete_iptables_chain()
+                self.delete_iptables_chain()
                 self.print('Executing "sudo iptables -N slipsBlocking"',6,0)
                 # Add a new chain to iptables
                 os.system(self.sudo + 'iptables -N slipsBlocking')
@@ -295,7 +295,6 @@ class Module(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
                     return True
-
                 # There's an IP that needs to be blocked
                 if message['channel'] == 'new_blocking' \
                     and message['type'] == 'message':
@@ -315,9 +314,7 @@ class Module(Module, multiprocessing.Process):
                                 os.system(self.sudo + "nft delete chain inet slipsBlocking")
                         elif self.platform_system == 'Darwin':
                             self.print('Mac OS blocking is not supported yet.')
-
                     else:
-
                         # message['data'] in the new_blocking channel is a dictionary that contains
                         # the ip and the blocking options
                         # Example of the data dictionary to block or unblock an ip:
@@ -350,7 +347,6 @@ class Module(Module, multiprocessing.Process):
                             self.block_ip(ip, from_, to, dport, sport, protocol)
                         else:
                             self.unblock_ip(ip, from_, to, dport, sport, protocol)
-
         except KeyboardInterrupt:
             return True
         except Exception as inst:
