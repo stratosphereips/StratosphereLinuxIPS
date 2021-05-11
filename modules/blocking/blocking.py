@@ -129,7 +129,6 @@ class Module(Module, multiprocessing.Process):
 
     def delete_iptables_chain(self):
         """ Flushes and deletes everything in slipsBlocking chain """
-
         # check if slipsBlocking chain exists before flushing it and suppress stderr and stdout while checking
         # 0 means it exists
         if os.system(self.sudo + " iptables -nvL slipsBlocking >/dev/null 2>&1") == 0:
@@ -160,9 +159,9 @@ class Module(Module, multiprocessing.Process):
                 # Redirect the traffic from all other chains to slipsBlocking so rules
                 # in any pre-existing chains dont override it
                 # -I to insert slipsBlocking at the top of the INPUT, OUTPUT and FORWARD chains
-                os.system(self.sudo + 'iptables -I INPUT -j slipsBlocking')
-                os.system(self.sudo + 'iptables -I OUTPUT -j slipsBlocking')
-                os.system(self.sudo + 'iptables -I FORWARD -j slipsBlocking')
+                os.system(self.sudo + 'iptables -I INPUT -j slipsBlocking >/dev/null 2>&1')
+                os.system(self.sudo + 'iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1')
+                os.system(self.sudo + 'iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1')
             elif self.firewall == 'nftables':
                 self.print('Executing "sudo nft add table inet slipsBlocking"',6,0)
                 # Add a new nft table that uses the inet family (ipv4,ipv6)
