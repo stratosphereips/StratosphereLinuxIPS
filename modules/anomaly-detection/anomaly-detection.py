@@ -18,11 +18,10 @@ from slips.core.database import __database__
 import platform
 
 # Your imports
-import pandas as pd
+import pandas as pd # todo add pandas to install.sh
 from pyod.models.pca import PCA
-import argparse
-import warnings
-
+import json
+import os
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -79,7 +78,6 @@ class Module(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                #todo: which mode should be the default, shoud this module be enabled by default?
                 if 'training' in self.mode:
                     message_c1 = self.c1.get_message(timeout=self.timeout)
                     # Check that the message is for you. Probably unnecessary...
@@ -88,11 +86,19 @@ class Module(Module, multiprocessing.Process):
                     if message_c1 and message_c1['channel'] == 'new_conn_flow' and message_c1["type"] == "message":
                         data = message_c1["data"]
                         if type(data) == str:
-                            pass
+                            connection = json.loads(data)
+                            try:
+                                # Is there a dataframe? append to it
+                                bro_df = bro_df.append(connection , ignore_index=False) #todo fix this
+                            except UnboundLocalError:
+                                # There's no dataframe, create one
+                                bro_df = pd.DataFrame(connection, index=[0])
+
                 elif 'test' in self.mode:
                     pass
                 else:
-                    self.print("{self.mode} is not a valid mode, available options are: training or test. anomaly-detection.py stopping.")
+                    self.print(f"{self.mode} is not a valid mode, available options are: training or test. anomaly-detection.py Stopping.")
+                    return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -101,7 +107,3 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             return True
-
-
-
-
