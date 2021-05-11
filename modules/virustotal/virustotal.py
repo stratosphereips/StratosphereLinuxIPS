@@ -111,7 +111,7 @@ class Module(Module, multiprocessing.Process):
         data["VirusTotal"] = vtdata
 
         # Add asn if it is unknown or not in the IP info
-        if 'asn' not in cached_data or cached_data['asn'] == 'Unknown':
+        if cached_data and ('asn' not in cached_data or cached_data['asn'] == 'Unknown'):
             data['asn'] = as_owner
 
         __database__.setInfoForIPs(ip, data)
@@ -132,9 +132,8 @@ class Module(Module, multiprocessing.Process):
         data["VirusTotal"] = vtdata
 
         # Add asn (autonomous system number) if it is unknown or not in the Domain info
-        if 'asn' not in cached_data or cached_data['asn'] == 'Unknown':
+        if cached_data and ('asn' not in cached_data or cached_data['asn'] == 'Unknown'):
             data['asn'] = as_owner
-
         __database__.setInfoForDomains(domain, data)
 
 
@@ -165,10 +164,9 @@ class Module(Module, multiprocessing.Process):
                         cached_data = __database__.getIPData(ip)
                         # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
                         ip_addr = ipaddress.ip_address(ip)
-
                         # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
                         # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
-                        if (cached_data or cached_data == {}) and 'VirusTotal' not in cached_data and not ip_addr.is_multicast:
+                        if (not cached_data or 'VirusTotal' not in cached_data) and not ip_addr.is_multicast:
                             self.set_vt_data_in_IPInfo(ip, cached_data)
 
                         # if VT data of this IP is in the IPInfo, check the timestamp.
@@ -193,12 +191,12 @@ class Module(Module, multiprocessing.Process):
                         cached_data = __database__.getDomainData(domain)
                         # If VT data of this domain is not in the DomainInfo, ask VT
                         # If 'Virustotal' key is not in the DomainInfo
-                        if (cached_data or cached_data == {}) and 'VirusTotal' not in cached_data:
+                        if not cached_data or 'VirusTotal' not in cached_data:
                             self.set_domain_data_in_DomainInfo(domain, cached_data)
 
                         elif cached_data and 'VirusTotal' in cached_data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                            if (time.time() - data["VirusTotal"]['timestamp']) > self.update_period:
+                            if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_domain_data_in_DomainInfo(domain, cached_data)
 
         except KeyboardInterrupt:

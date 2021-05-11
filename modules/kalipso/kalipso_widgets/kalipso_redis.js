@@ -6,20 +6,21 @@
   		this.BlockedIPsTWs = undefined
   	}
 
-  	createClient(){
-  		this.tree_keys = this.redis.createClient()
+    createClient(){
+        this.tree_keys = this.redis.createClient()
   		this.BlockedIPsTWs = this.redis.createClient()
-  		this.client = this.redis.createClient()
-      this.timeline_data = this.redis.createClient()
-      this.evidence_data = this.redis.createClient()
-      this.ipInfo_data = this.redis.createClient({'db':1})
-      this.outTuples_data = this.redis.createClient()
-      this.inTuples_data = this.redis.createClient()
-      this.tcp_data_est = this.redis.createClient()
-      this.udp_data_est = this.redis.createClient()
-      this.tcp_data_notest = this.redis.createClient()
-      this.udp_data_notest = this.redis.createClient()
-      this.redis_resolved_dns = this.redis.createClient()
+        this.client = this.redis.createClient()
+        this.timeline_data = this.redis.createClient()
+        this.evidence_data = this.redis.createClient()
+        this.ipInfo_data = this.redis.createClient({'db':1})
+        this.outTuples_data = this.redis.createClient()
+        this.inTuples_data = this.redis.createClient()
+        this.tcp_data_est = this.redis.createClient()
+        this.udp_data_est = this.redis.createClient()
+        this.tcp_data_notest = this.redis.createClient()
+        this.udp_data_notest = this.redis.createClient()
+        this.redis_resolved_dns = this.redis.createClient()
+        this.all_profile_evidences = this.redis.createClient()
   	}
 
   	getAllKeys(){
@@ -29,7 +30,7 @@
   		return new Promise((resolve,reject)=>{this.tree_keys.keys('*',(err, reply)=>{
   			if(err){console.log(err); reject(err)}
   			else{resolve(reply)}
-  		});})
+        });})
   	}
 
   	getBlockedIPsTWs(){
@@ -157,6 +158,20 @@
 
           resolve(reply);}
       });})
+    }
+
+    getAllProfileEvidences(ip){
+    /*
+    Get all evidence in the profile.
+    */
+        return new Promise(
+               (resolve,reject)=>{this.all_profile_evidences.hgetall("evidenceprofile_"+ip, (err,reply)=>{
+                   if(err){console.log(err); reject(err);}
+                   else{
+                        resolve(reply);
+                   }
+               })}
+        )
     }
 }
   module.exports = Redis

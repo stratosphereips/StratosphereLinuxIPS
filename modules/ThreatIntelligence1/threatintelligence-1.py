@@ -309,7 +309,11 @@ class Module(Module, multiprocessing.Process):
                 # In the case of the local file, we dont store the e-tag but
                 # the hash
                 new_hash = self.__get_hash_from_file(path_to_files + '/' + localfile)
-                if new_hash and old_hash != new_hash:
+                if old_hash == new_hash:
+                    # The 2 hashes are identical. File is up to date.
+                    self.print(f'File {localfile} is up to date.', 3, 0)
+                    return True
+                elif new_hash and old_hash != new_hash:
                     # Our malicious file was changed. Load the new one
                     self.print(f'Updating the local TI file {localfile}', 3, 0)
                     if old_hash:
@@ -327,8 +331,9 @@ class Module(Module, multiprocessing.Process):
                     return True
                 elif not new_hash:
                     # Something failed. Do not download
-                    self.print(f'Some error ocurred. Not loading  the file {localfile}', 0, 1)
+                    self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 1)
                     return False
+
 
         except Exception as inst:
             self.print('Problem on __load_malicious_local_files()', 0, 0)
@@ -447,7 +452,6 @@ class Module(Module, multiprocessing.Process):
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(domain)
                         if domain_description != False: # Dont change this condition. This is the only way it works
-                            print(domain, domain_description)
                             # If the domain is in the blacklist of IoC. Set an evidence
                             self.set_evidence_domain(domain, domain_description, profileid, twid)
                             # set malicious domain in DomainInfo

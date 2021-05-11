@@ -1,0 +1,22 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	ssl
+#open	2020-10-06-17-32-54
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	version	cipher	curve	server_name	resumed	last_alert	next_protocol	established	cert_chain_fuids	client_cert_chain_fuids	subject	issuer	client_subject	client_issuer	validation_status
+#types	time	string	addr	port	addr	port	string	string	string	string	bool	string	string	bool	vector[string]	vector[string]	string	string	string	string	string
+1601998374.677015	ChFiXL2utOiY0g4YXh	2001:718:2:1663:dc58:6d9:ef13:51a5	52591	2a00:1450:4014:801::200a	443	TLSv13	TLS_AES_128_GCM_SHA256	x25519	addons-pa.clients6.google.com	T	-	-	T	-	-	-	-	-	-	-
+1601998390.892400	CYetmM3b29tLNkUk42	147.32.83.156	52592	3.232.121.231	443	TLSv12	TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256	x25519	virtual.secai.com	F	-	http/1.1	T	FRBu481kCfyF0aScA1,Fyjto01jEK20hLjiY1	(empty)	CN=virtual.secai.com	CN=Let's Encrypt Authority X3,O=Let's Encrypt,C=US	-	-	ok
+1601998391.007525	CuMXP94isDk3tncxy	147.32.83.156	52593	3.232.121.231	443	TLSv12	TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256	x25519	virtual.secai.com	F	-	http/1.1	T	FjGF8o46zypp408Lm5,F235Vw4yh8qSRq7CCi	(empty)	CN=virtual.secai.com	CN=Let's Encrypt Authority X3,O=Let's Encrypt,C=US	-	-	ok
+1601998395.242316	CbBIuq4gU33jn1dnxl	2001:718:2:1663:dc58:6d9:ef13:51a5	52594	2a00:1450:4014:800::200e	443	TLSv13	TLS_AES_128_GCM_SHA256	x25519	encrypted-tbn0.gstatic.com	T	-	-	T	-	-	-	-	-	-	-
+1601998396.470273	CEx4pp1sWKYrz5tyPi	2001:718:2:1663:dc58:6d9:ef13:51a5	52595	2a00:1450:4014:80d::200a	443	TLSv13	TLS_AES_128_GCM_SHA256	x25519	content-autofill.googleapis.com	T	-	-	T	-	-	-	-	-	-	-
+1601998397.796557	CLWTfjygWqWa6mbu8	2001:718:2:1663:dc58:6d9:ef13:51a5	52596	2620:0:862:ed1a::1	443	TLSv13	TLS_AES_256_GCM_SHA384	x25519	en.wikipedia.org	T	-	-	T	-	-	-	-	-	-	-
+1601998398.103286	CpSFWJ1PRfPsjV5Dr8	2001:718:2:1663:dc58:6d9:ef13:51a5	52597	2620:0:862:ed1a::2:b	443	TLSv13	TLS_AES_256_GCM_SHA384	x25519	upload.wikimedia.org	T	-	-	T	-	-	-	-	-	-	-
+1601998398.103286	COc5Uz4TTfQclmgqg	2001:718:2:1663:dc58:6d9:ef13:51a5	52598	2620:0:862:ed1a::2:b	443	TLSv13	TLS_AES_256_GCM_SHA384	x25519	upload.wikimedia.org	T	-	-	T	-	-	-	-	-	-	-
+1601998398.103286	CQXQn74CvZjGORATgf	2001:718:2:1663:dc58:6d9:ef13:51a5	52600	2620:0:862:ed1a::2:b	443	TLSv13	TLS_AES_256_GCM_SHA384	x25519	upload.wikimedia.org	T	-	-	T	-	-	-	-	-	-	-
+1601998398.103286	Cn2Wea1HwvFkcQ8Fzj	2001:718:2:1663:dc58:6d9:ef13:51a5	52599	2620:0:862:ed1a::2:b	443	TLSv13	TLS_AES_256_GCM_SHA384	x25519	upload.wikimedia.org	T	-	-	T	-	-	-	-	-	-	-
+1601998398.103286	CoXMBH3rZnuBbVCDZa	2001:718:2:1663:dc58:6d9:ef13:51a5	52601	2620:0:862:ed1a::2:b	443	TLSv13	TLS_AES_256_GCM_SHA384	x25519	upload.wikimedia.org	T	-	-	T	-	-	-	-	-	-	-
+1601998398.103286	CCXdYC4sizvAdo02Mi	2001:718:2:1663:dc58:6d9:ef13:51a5	52602	2620:0:862:ed1a::2:b	443	TLSv13	TLS_AES_256_GCM_SHA384	x25519	upload.wikimedia.org	T	-	-	T	-	-	-	-	-	-	-
+1601998405.531212	CV96ZHPaAnfoPr23c	2001:718:2:1663:dc58:6d9:ef13:51a5	52603	2a00:1450:4014:801::2005	443	TLSv13	TLS_AES_128_GCM_SHA256	x25519	mail.google.com	T	-	-	T	-	-	-	-	-	-	-
+#close	2020-10-06-17-33-29
