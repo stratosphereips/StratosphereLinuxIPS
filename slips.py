@@ -306,7 +306,8 @@ if __name__ == '__main__':
     parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
     parser.add_argument('-cc','--clearcache',action='store_true', required=False,
                         help='clear a cache database.')
-    parser.add_argument('-p', '--blocking', help='Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.',required=False, default=False, action='store_true')
+    parser.add_argument('-p', '--blocking', help='Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.',
+                        required=False, default=False, action='store_true')
     parser.add_argument('-o', '--output', action='store', required=False, default=alerts_default_path,
                         help='store alerts.json and alerts.txt in the provided folder.')
     parser.add_argument('-s', '--save',action='store_true',required=False,
@@ -314,6 +315,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--db',action='store',required=False,
                         help='To read a redis (rdb) saved file. Requires root access.')
     parser.add_argument("-h", "--help", action="help", help="command line help")
+    parser.add_argument('-cb', '--clearblocking', help='Flush and delete slipsBlocking chain',required=False, default=False, action='store_true')
 
     args = parser.parse_args()
 
@@ -640,6 +642,13 @@ if __name__ == '__main__':
                 print("Not Connected to the internet. Reconnecting in 10s.")
                 time.sleep(10)
                 hostIP = recognize_host_ip()
+
+    if args.clearblocking:
+        # Tell the blocking module to clear the slips chain
+        __database__.publish('new_blocking', 'delete slipsBlocking chain')
+        # Wait enough time for the msg to arrive to the module and be processed
+        time.sleep(3)
+        stop_slips(profilerProcessQueue)
 
     # As the main program, keep checking if we should stop slips or not
     # This is not easy since we need to be sure all the modules are stopped
