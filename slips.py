@@ -566,10 +566,7 @@ if __name__ == '__main__':
             print('No modules are ignored')
 
 
-    if not args.blocking:
-        # Tell the blocking module that -p isn't provided so it can clear the slips chain
-        __database__.publish('new_blocking', 'delete slipsBlocking chain')
-        # to_ignore.append('blocking')
+
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
