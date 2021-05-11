@@ -142,7 +142,7 @@ class Module(Module, multiprocessing.Process):
             if self.firewall == 'iptables':
                 # delete any pre existing slipsBlocking rules that may conflict before adding a new one
                 # self.delete_iptables_chain()
-                self.print('Executing "sudo iptables -N slipsBlocking"')
+                self.print('Executing "sudo iptables -N slipsBlocking"',6,0)
                 # Add a new chain to iptables
                 os.system(self.sudo + 'iptables -N slipsBlocking')
                 # TODO: determine which one to use OUTPUT INPUT or FORWARD or is it safer to use the three of them?
@@ -153,7 +153,7 @@ class Module(Module, multiprocessing.Process):
                 os.system(self.sudo + 'iptables -I OUTPUT -j slipsBlocking')
                 os.system(self.sudo + 'iptables -I FORWARD -j slipsBlocking')
             elif self.firewall == 'nftables':
-                self.print('Executing "sudo nft add table inet slipsBlocking"')
+                self.print('Executing "sudo nft add table inet slipsBlocking"',6,0)
                 # Add a new nft table that uses the inet family (ipv4,ipv6)
                 os.system(self.sudo + "nft add table inet slipsBlocking")
                 # TODO: HANDLE NFT TABLE
@@ -182,7 +182,7 @@ class Module(Module, multiprocessing.Process):
         for key in options.keys():
             command += options[key]
         command += " -j DROP"
-        self.print("Executing: '" + command +" '")
+        self.print("Executing: '" + command +" '",6,0)
         # Execute
         exit_status = os.system(command)
         # 0 is the success value
