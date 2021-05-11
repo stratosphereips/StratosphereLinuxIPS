@@ -190,7 +190,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--blocking',action='store_true',required=False,
                         help='Block IPs that connect to the computer. Supported only on Linux.')
     parser.add_argument('-a', '--exportalert',action='store',required=False,
-                        help='To Export evidence as slack or STIX notifications.')
+                        help='To Export evidence as slack or STIX notifications. Available options are -a slack or -a stix')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
