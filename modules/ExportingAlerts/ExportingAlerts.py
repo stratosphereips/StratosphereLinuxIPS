@@ -51,8 +51,13 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         self.c1 = __database__.subscribe('export_alert')
         # slack_bot_token_secret should contain your slack token only
-        with open("modules/ExportingAlerts/slack_bot_token_secret", "r") as f:
-            self.BOT_TOKEN = f.read()
+        try:
+            with open("modules/ExportingAlerts/slack_bot_token_secret", "r") as f:
+                self.BOT_TOKEN = f.read()
+        except FileNotFoundError:
+            self.print("Please add slack bot token to modules/ExportingAlerts/slack_bot_token_secret. Stopping.")
+            # Stop the module
+            __database__.publish('export_alert','stop_process')
         # Get config vaeriables
         self.slack_channel_name = self.config.get('ExportingAlerts', 'slack_channel_name')
         self.sensor_name = self.config.get('ExportingAlerts', 'sensor_name')
@@ -74,7 +79,6 @@ class Module(Module, multiprocessing.Process):
             # Here means that push_delay is None in slips.conf(default value).
             # we set it to export to the server every 1h by default
             self.push_delay = 60*60
-        self.print(f"Exporting STIX data to {self.TAXII_server} every {self.push_delay} seconds.")
         self.collection_name = self.config.get('ExportingAlerts', 'collection_name')
         self.taxii_username = self.config.get('ExportingAlerts', 'taxii_username')
         self.taxii_password = self.config.get('ExportingAlerts', 'taxii_password')
@@ -151,22 +155,23 @@ class Module(Module, multiprocessing.Process):
         # Token to login to your slack bot. it should be set in slack_bot_token_secret
         if self.BOT_TOKEN is '':
             # The file is empty
-            self.print("Can't find SLACK_BOT_TOKEN in modules/ExportingAlerts/slack_bot_token_secret .", 0, 1)
+            self.print("Can't find SLACK_BOT_TOKEN in modules/ExportingAlerts/slack_bot_token_secret.", 0, 1)
+            # Stop the module
+            __database__.publish('export_alert','stop_process')
             return False
-        else:
-            slack_client = WebClient(token=self.BOT_TOKEN)
-            try:
-                response = slack_client.chat_postMessage(
-                    # Channel name is set in slips.conf
-                    channel = self.slack_channel_name,
-                    # Sensor name is set in slips.conf
-                    text = self.sensor_name + ': ' + msg_to_send
-                )
-                self.print("Exported to slack")
-            except SlackApiError as e:
-                # You will get a SlackApiError if "ok" is False
-                assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
-            return True
+        slack_client = WebClient(token=self.BOT_TOKEN)
+        try:
+            response = slack_client.chat_postMessage(
+                # Channel name is set in slips.conf
+                channel = self.slack_channel_name,
+                # Sensor name is set in slips.conf
+                text = self.sensor_name + ': ' + msg_to_send
+            )
+            self.print("Exported to slack")
+        except SlackApiError as e:
+            # You will get a SlackApiError if "ok" is False
+            assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
+        return True
 
     def push_to_TAXII_server(self):
         """
@@ -224,6 +229,7 @@ class Module(Module, multiprocessing.Process):
             detection_info: ip or port  OR ip:port:proto
             description: e.g 'New horizontal port scan detected to port 23. Not Estab TCP from IP: ip-address. Tot pkts sent all IPs: 9'
         """
+        self.print(f"Exporting STIX data to {self.TAXII_server} every {self.push_delay} seconds.")
         # ---------------- set name attribute ----------------
         type_evidence, type_detection, detection_info, description = msg_to_send[0], msg_to_send[1], msg_to_send[2], \
                                                                      msg_to_send[3]
