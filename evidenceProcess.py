@@ -216,7 +216,6 @@ class EvidenceProcess(multiprocessing.Process):
                     # evidence data
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
-
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
                                                           ip,
@@ -224,7 +223,6 @@ class EvidenceProcess(multiprocessing.Process):
                                                           type_detection,
                                                           detection_info,
                                                           description)
-                    print(evidence_to_log)
                     # timestamp
                     now = datetime.now()
                     current_time = now.strftime('%Y-%m-%d %H:%M:%S')
