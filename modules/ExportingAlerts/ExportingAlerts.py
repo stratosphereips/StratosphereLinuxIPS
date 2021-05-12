@@ -50,6 +50,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('evidence_added')
+        self.c1 = __database__.subscribe('push_to_taxii_server')
         # slack_bot_token_secret should contain your slack token only
         try:
             with open("modules/ExportingAlerts/slack_bot_token_secret", "r") as f:
@@ -309,36 +310,16 @@ class Module(Module, multiprocessing.Process):
                 self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.")
 
     def run(self):
-        # this module doesn't export data to server in case of growing pcaps
-        # Here's how this module works:
-        # 1- the user specifies -a slack and adds SLACK_BOT_TOKEN to
-        # 2- if you run slips using sudo use sudo -E instead to pass all env variables
-        # 2- we send a msg to evidence_added(evidenceprocess) telling it to export all evidence sent to it to export_alert channel(this module)
-        # 3- evidenceProcess sends a msg to export_alert channel with the evidence that should be sent and then this module exports it
-        # Example of sending msgs to this module:
-        # data_to_send = {
-        #         'export_to' : 'slack',
-        #         'msg' : 'temp msg'
-        #     }
-        # data_to_send = json.dumps(data_to_send)
-        # __database__.publish('export_alert',data_to_send)
         try:
-        # Main loop function
+            # Main loop function
             while True:
-                message = self.c1.get_message(timeout=self.timeout)
+                message_c1 = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                if message['data'] == 'stop_process':
+                if message_c1['data'] == 'stop_process':
                     return True
-                if message['channel'] == 'evidence_added':
-                    if type(message['data']) == str:
-                        # get the description of each evidence
-                        evidence = json.loads(message['data'])
-                        # This msg is sent (from slips.py) before stopping in case slips is #todo
-                        # running on a file. We need to push to server only once before stopping
-                        # if 'push to taxii server' in message['data']:
-                        #     self.push_to_TAXII_server()
-                        # else:
-                        # The data dict has two fields: export_to and msg
+                if message_c1['channel'] == 'evidence_added':
+                    if type(message_c1['data']) == str:
+                        evidence = json.loads(message_c1['data'])
                         if 'slack' in self.export_to:
                             msg_to_send = evidence['description']
                             sent_to_slack = self.send_to_slack(msg_to_send)
@@ -358,6 +339,20 @@ class Module(Module, multiprocessing.Process):
                             exported_to_stix = self.export_to_STIX(msg_to_send)
                             if not exported_to_stix:
                                 self.print("Problem in export_to_STIX()", 2, 1)
+
+                # -------------------- push_to_taxii_server channel
+                # This channel recieves a 'True' msg from slips.py if all 3 conditions are true
+                # 1- slips is running on a file (not an interface)
+                # 2- slips is about to stop.
+                # 3- export_to in slips.conf has 'stix' enabled
+                # We need to publish to taxii server before stopping
+                message_c2 = self.c1.get_message(timeout=self.timeout)
+                if message_c2['data'] == 'stop_process':
+                    return True
+                if message_c2['channel'] == 'push_to_taxii_server':
+                    if type(message_c2['data']) == str and 'True' in message_c2['data']:
+                        self.push_to_TAXII_server()
+                        return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:

@@ -447,10 +447,9 @@ if __name__ == '__main__':
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:
                         # Export to taxii server before exiting
-                        #todo edit this
-                        if args.exportalert and 'stix' in args.exportalert.lower():
-                                __database__.publish('export_alert',"push to taxii server")
-                                time.sleep(5) # give slips time to push to server
+                        if 'stix' in export_to.lower():
+                            __database__.publish('push_to_taxii_server','True')
+                            time.sleep(5) # give slips time to push to server
                         # Stop the output Process
                         print('Stopping Slips')
                         # Stop the modules that are subscribed to channels

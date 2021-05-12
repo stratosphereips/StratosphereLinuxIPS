@@ -1158,6 +1158,8 @@ class Database(object):
             pubsub.subscribe(channel)
         elif 'new_notice' in channel:
             pubsub.subscribe(channel)
+        elif 'push_to_taxii_server' in channel:
+            pubsub.subscribe(channel)
         return pubsub
 
     def publish(self, channel, data):
