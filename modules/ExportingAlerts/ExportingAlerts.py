@@ -129,23 +129,23 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def get_ioc_type(self, value):
-        """ Checks if this value is a valid IP """
+    def get_ioc_type(self, ioc):
+        """ Check the type of ioc, returns url, ip or domain"""
         try:
             # Is IPv4
-            ip_address = ipaddress.IPv4Address(value)
+            ip_address = ipaddress.IPv4Address(ioc)
             return 'ip'
-
         except ipaddress.AddressValueError:
             # Is it ipv6?
             try:
-                ip_address = ipaddress.IPv6Address(value)
+                ip_address = ipaddress.IPv6Address(ioc)
                 return 'ip'
             except ipaddress.AddressValueError:
                 # It does not look as IP address.
-                if validators.domain(value):
+                if validators.domain(ioc):
                     return 'domain'
-        return 'unknown'
+                elif validators.url(ioc):
+                    return 'url'
 
     def ip_exists_in_stix_file(self, ip):
         """ Searches for ip in STIX_data.json to avoid exporting duplicates """
@@ -266,6 +266,8 @@ class Module(Module, multiprocessing.Process):
             pattern = "[ip-addr:value = '{}']".format(detection_info)
         elif ioc_type is 'domain':
             pattern = "[domain-name:value = '{}']".format(detection_info)
+        elif ioc_type is 'url':
+            pattern = "[url:value = '{}']".format(detection_info)
         else:
             self.print("Can't set pattern for STIX. {}".format(detection_info), 0, 1)
             return False
