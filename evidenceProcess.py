@@ -48,8 +48,6 @@ class EvidenceProcess(multiprocessing.Process):
         self.c1 = __database__.subscribe('evidence_added')
         self.logfile = self.clean_evidence_log_file()
         self.jsonfile = self.clean_evidence_json_file()
-        # A message will be sent to evidence_added to enable this variable if the user specified -a
-        self.export_evidence = False
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -205,91 +203,83 @@ class EvidenceProcess(multiprocessing.Process):
                     self.jsonfile.close()
                     return True
                 elif message['channel'] == 'evidence_added' and type(message['data']) is not int:
-                    # If the user wants to export to slack or STIX  a message with 'export' will be sent to this channel
-                    # then this channel will send all evidence to ExportingAlerts module
-                    if 'export' in message['data']:
-                        # The expected message will be either: 'export slack' or 'export stix'
-                        self.export_to = message['data'].split()[1]
-                        self.export_evidence = True
-                    # not and export message, then it's a json data dict, deal with it
-                    else:
-                        # Data sent in the channel as a json dict, it needs to be deserialized first
-                        data = json.loads(message['data'])
-                        profileid = data.get('profileid')
+                    # Data sent in the channel as a json dict, it needs to be deserialized first
+                    data = json.loads(message['data'])
+                    profileid = data.get('profileid')
+                    ip = profileid.split(self.separator)[1]
+                    twid = data.get('twid')
+                    # Key data
+                    key = data.get('key')
+                    type_detection = key.get('type_detection')
+                    detection_info = key.get('detection_info')
+                    type_evidence = key.get('type_evidence')
+                    # evidence data
+                    evidence_data = data.get('data')
+                    description = evidence_data.get('description')
+
+                    evidence_to_log = self.print_evidence(profileid,
+                                                          twid,
+                                                          ip,
+                                                          type_evidence,
+                                                          type_detection,
+                                                          detection_info,
+                                                          description)
+                    # timestamp
+                    now = datetime.now()
+                    current_time = now.strftime('%Y-%m-%d %H:%M:%S')
+
+                    evidence_dict = {'timestamp': current_time,
+                                     'detected_ip': ip,
+                                     'detection_module':type_evidence,
+                                     'detection_info':type_detection + ' ' + detection_info,
+                                     'description':description}
+
+                    self.addDataToLogFile(current_time + ' ' + evidence_to_log)
+                    self.addDataToJSONFile(evidence_dict)
+
+                    evidence = __database__.getEvidenceForTW(profileid, twid)
+                    # Important! It may happen that the evidence is not related to a profileid and twid.
+                    # For example when the evidence is on some src IP attacking our home net, and we are not creating
+                    # profiles for attackers
+                    if evidence:
+                        evidence = json.loads(evidence)
+                        # self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
+                        # The accumulated threat level is for all the types of evidence for this profile
+                        accumulated_threat_level = 0.0
+                        # CONTINUE HERE
                         ip = profileid.split(self.separator)[1]
-                        twid = data.get('twid')
-                        # Key data
-                        key = data.get('key')
-                        type_detection = key.get('type_detection')
-                        detection_info = key.get('detection_info')
-                        type_evidence = key.get('type_evidence')
-                        # evidence data
-                        evidence_data = data.get('data')
-                        description = evidence_data.get('description')
+                        for key in evidence:
+                            # Deserialize key data
+                            key_json = json.loads(key)
+                            type_detection = key_json.get('type_detection')
+                            detection_info = key_json.get('detection_info')
+                            type_evidence = key_json.get('type_evidence')
 
-                        evidence_to_log = self.print_evidence(profileid,
-                                                              twid,
-                                                              ip,
-                                                              type_evidence,
-                                                              type_detection,
-                                                              detection_info,
-                                                              description)
-                        # timestamp
-                        now = datetime.now()
-                        current_time = now.strftime('%Y-%m-%d %H:%M:%S')
+                            # Deserialize evidence data
+                            data = evidence[key]
+                            confidence = data.get('confidence')
+                            threat_level = data.get('threat_level')
+                            description = data.get('description')
 
-                        evidence_dict = {'timestamp': current_time,
-                                         'detected_ip': ip,
-                                         'detection_module':type_evidence,
-                                         'detection_info':type_detection + ' ' + detection_info,
-                                         'description':description}
+                            # Compute the moving average of evidence
+                            new_threat_level = threat_level * confidence
+                            self.print('\t\tWeighted Threat Level: {}'.format(new_threat_level), 5, 0)
+                            accumulated_threat_level += new_threat_level
+                            self.print('\t\tAccumulated Threat Level: {}'.format(accumulated_threat_level), 5, 0)
 
-                        self.addDataToLogFile(current_time + ' ' + evidence_to_log)
-                        self.addDataToJSONFile(evidence_dict)
-
-                        evidence = __database__.getEvidenceForTW(profileid, twid)
-                        # Important! It may happen that the evidence is not related to a profileid and twid.
-                        # For example when the evidence is on some src IP attacking our home net, and we are not creating
-                        # profiles for attackers
-                        if evidence:
-                            evidence = json.loads(evidence)
-                            # self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
-                            # The accumulated threat level is for all the types of evidence for this profile
-                            accumulated_threat_level = 0.0
-                            # CONTINUE HERE
-                            ip = profileid.split(self.separator)[1]
-                            for key in evidence:
-                                # Deserialize key data
-                                key_json = json.loads(key)
-                                type_detection = key_json.get('type_detection')
-                                detection_info = key_json.get('detection_info')
-                                type_evidence = key_json.get('type_evidence')
-
-                                # Deserialize evidence data
-                                data = evidence[key]
-                                confidence = data.get('confidence')
-                                threat_level = data.get('threat_level')
-                                description = data.get('description')
-
-                                # Compute the moving average of evidence
-                                new_threat_level = threat_level * confidence
-                                self.print('\t\tWeighted Threat Level: {}'.format(new_threat_level), 5, 0)
-                                accumulated_threat_level += new_threat_level
-                                self.print('\t\tAccumulated Threat Level: {}'.format(accumulated_threat_level), 5, 0)
-
-                            # This is the part to detect if the accumulated evidence was enough for generating a detection
-                            # The detection should be done in attacks per minute. The parameter in the configuration is attacks per minute
-                            # So find out how many attacks corresponds to the width we are using
-                            # 60 because the width is specified in seconds
-                            detection_threshold_in_this_width = self.detection_threshold * self.width / 60
-                            if accumulated_threat_level >= detection_threshold_in_this_width:
-                                # if this profile was not already blocked in this TW
-                                if not __database__.checkBlockedProfTW(profileid, twid):
-                                    # Differentiate the type of evidence for different detections
-                                    evidence_to_print = self.print_evidence(profileid, twid, ip, type_evidence, type_detection,detection_info, description)
-                                    self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
-                                    __database__.publish('new_blocking', ip)
-                                    __database__.markProfileTWAsBlocked(profileid, twid)
+                        # This is the part to detect if the accumulated evidence was enough for generating a detection
+                        # The detection should be done in attacks per minute. The parameter in the configuration is attacks per minute
+                        # So find out how many attacks corresponds to the width we are using
+                        # 60 because the width is specified in seconds
+                        detection_threshold_in_this_width = self.detection_threshold * self.width / 60
+                        if accumulated_threat_level >= detection_threshold_in_this_width:
+                            # if this profile was not already blocked in this TW
+                            if not __database__.checkBlockedProfTW(profileid, twid):
+                                # Differentiate the type of evidence for different detections
+                                evidence_to_print = self.print_evidence(profileid, twid, ip, type_evidence, type_detection,detection_info, description)
+                                self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
+                                __database__.publish('new_blocking', ip)
+                                __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
             self.logfile.close()
             self.jsonfile.close()
