@@ -214,7 +214,7 @@ class Module(Module, multiprocessing.Process):
             return True
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
-        """ # todo fix this bc msg to send is changed
+        """
         Function to export evidence to a STIX_data.json file in the cwd.
         msg_to_send is a tuple: (type_evidence, type_detection,detection_info, description)
             type_evidence: e.g PortScan, ThreatIntelligence etc
@@ -222,7 +222,7 @@ class Module(Module, multiprocessing.Process):
             detection_info: ip or port  OR ip:port:proto
             description: e.g 'New horizontal port scan detected to port 23. Not Estab TCP from IP: ip-address. Tot pkts sent all IPs: 9'
         """
-        self.print(f"Exporting STIX data to {self.TAXII_server} every {self.push_delay} seconds.")
+        # self.print(f"Exporting STIX data to {self.TAXII_server} every {self.push_delay} seconds.")
         # ---------------- set name attribute ----------------
         type_evidence, type_detection, detection_info, description = msg_to_send[0], msg_to_send[1], msg_to_send[2], \
                                                                      msg_to_send[3]
@@ -331,31 +331,33 @@ class Module(Module, multiprocessing.Process):
                     return True
                 if message['channel'] == 'evidence_added':
                     if type(message['data']) == str:
-                        # This msg is sent (from slips.py) before stopping in case slips is
+                        # get the description of each evidence
+                        evidence = json.loads(message['data'])
+                        # This msg is sent (from slips.py) before stopping in case slips is #todo
                         # running on a file. We need to push to server only once before stopping
-                        if 'push to taxii server' in message['data']:
-                            self.push_to_TAXII_server()
-                        else:
-                            # The data dict has two fields: export_to and msg
-                            data = json.loads(message['data'])
-                            msg_to_send = data.get("msg")
-                            if 'slack' in data['export_to']:
-                                sent_to_slack = self.send_to_slack(msg_to_send)
-                                if not sent_to_slack:
-                                    self.print("Problem in send_to_slack()", 0, 1)
-                                    return True
-                            elif 'stix' in data['export_to']:
-                                # this thread is responsible for waiting n seconds before each push to the stix server
-                                # it starts the timer when the first alert happens
-                                # push_delay should be an int when slips is running using -i
-                                if self.is_thread_created is False and '-i' in sys.argv:
-                                    # this thread is started only once
-                                    _thread.start_new_thread(self.send_to_server,())
-                                    self.is_thread_created = True
-                                exported_to_stix = self.export_to_STIX(msg_to_send)
-                                if not exported_to_stix:
-                                    self.print("Problem in export_to_STIX()", 0, 1)
-                                    return True
+                        # if 'push to taxii server' in message['data']:
+                        #     self.push_to_TAXII_server()
+                        # else:
+                        # The data dict has two fields: export_to and msg
+                        if 'slack' in self.export_to:
+                            msg_to_send = evidence['description']
+                            sent_to_slack = self.send_to_slack(msg_to_send)
+                            if not sent_to_slack:
+                                self.print("Problem in send_to_slack()", 0, 1)
+                        if 'stix' in self.export_to:
+                            key = evidence['key']
+                            msg_to_send = (key['type_evidence'],key['type_detection'],
+                                                key['detection_info'], evidence['description'])
+                            # This thread is responsible for waiting n seconds before each push to the stix server
+                            # it starts the timer when the first alert happens
+                            # push_delay should be an int when slips is running using -i
+                            if self.is_thread_created is False and '-i' in sys.argv:
+                                # this thread is started only once
+                                _thread.start_new_thread(self.send_to_server,())
+                                self.is_thread_created = True
+                            exported_to_stix = self.export_to_STIX(msg_to_send)
+                            if not exported_to_stix:
+                                self.print("Problem in export_to_STIX()", 2, 1)
         except KeyboardInterrupt:
             return True
         except Exception as inst:
