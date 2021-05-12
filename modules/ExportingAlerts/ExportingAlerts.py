@@ -49,7 +49,7 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        self.c1 = __database__.subscribe('export_alert')
+        self.c1 = __database__.subscribe('evidence_added')
         # slack_bot_token_secret should contain your slack token only
         try:
             with open("modules/ExportingAlerts/slack_bot_token_secret", "r") as f:
@@ -59,6 +59,12 @@ class Module(Module, multiprocessing.Process):
             # Stop the module
             __database__.publish('export_alert','stop_process')
         # Get config vaeriables
+        # Available options ['slack','stix']
+        self.export_to = self.config.get('ExportingAlerts', 'export_to')
+        # convert to list
+        self.export_to = self.export_to.strip('][').replace(" ","").split(',')
+        # Convert to lowercase
+        self.export_to =  [option.lower() for option in self.export_to]
         self.slack_channel_name = self.config.get('ExportingAlerts', 'slack_channel_name')
         self.sensor_name = self.config.get('ExportingAlerts', 'sensor_name')
         self.TAXII_server = self.config.get('ExportingAlerts', 'TAXII_server')
@@ -100,17 +106,6 @@ class Module(Module, multiprocessing.Process):
         else:
             # Other systems)
             self.timeout = None
-        # self.test()
-
-    def test(self):
-        """ to test this module, we'll remove it once we're done """
-        data_to_send = {
-            'export_to': 'slack',
-            'msg': 'Test message with sensor name!!'
-        }
-        data_to_send = json.dumps(data_to_send)
-        __database__.publish('export_alert', data_to_send)
-        print("published")
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -156,8 +151,6 @@ class Module(Module, multiprocessing.Process):
         if self.BOT_TOKEN is '':
             # The file is empty
             self.print("Can't find SLACK_BOT_TOKEN in modules/ExportingAlerts/slack_bot_token_secret.", 0, 1)
-            # Stop the module
-            __database__.publish('export_alert','stop_process')
             return False
         slack_client = WebClient(token=self.BOT_TOKEN)
         try:
@@ -221,7 +214,7 @@ class Module(Module, multiprocessing.Process):
             return True
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
-        """
+        """ # todo fix this bc msg to send is changed
         Function to export evidence to a STIX_data.json file in the cwd.
         msg_to_send is a tuple: (type_evidence, type_detection,detection_info, description)
             type_evidence: e.g PortScan, ThreatIntelligence etc
@@ -246,6 +239,7 @@ class Module(Module, multiprocessing.Process):
             'LongConnection' : 'Long Connection',
             'SSHSuccessful' :'SSH connection from ip', #SSHSuccessful-by-ip
             'C&C channels detection' : 'C&C channels detection'
+            # todo support 'ThreatIntelligenceBlacklistDomain' : 'Threat Intelligence Blacklist Domain'
         }
         # Get the right description to use in stix
         try:
@@ -297,7 +291,7 @@ class Module(Module, multiprocessing.Process):
                 stix_file.write("," + str(indicator) + "]\n}\n")
         # Set of unique ips added to stix_data.json to avoid duplicates
         self.added_ips.add(detection_info)
-        self.print("Indicator added to STIX_data.json")
+        self.print("Indicator added to STIX_data.json",6,0)
         return True
 
     def send_to_server(self):
@@ -335,7 +329,7 @@ class Module(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
                     return True
-                if message['channel'] == 'export_alert':
+                if message['channel'] == 'evidence_added':
                     if type(message['data']) == str:
                         # This msg is sent (from slips.py) before stopping in case slips is
                         # running on a file. We need to push to server only once before stopping

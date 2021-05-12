@@ -189,8 +189,6 @@ if __name__ == '__main__':
                         help='To clear a cache database.')
     parser.add_argument('-p', '--blocking',action='store_true',required=False,
                         help='Block IPs that connect to the computer. Supported only on Linux.')
-    parser.add_argument('-a', '--exportalert',action='store',required=False,
-                        help='To Export evidence as slack or STIX notifications. Available options are -a slack or -a stix')
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
@@ -373,19 +371,6 @@ if __name__ == '__main__':
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
 
-    if not args.exportalert:
-        to_ignore.append('ExportingAlerts')
-    else:
-        # export type can either be slack or stix
-        export_to = args.exportalert.lower()
-        # Check if user passed a valid -a arg
-        if 'slack' not in export_to and 'stix' not in export_to:
-            print("Invalid export type {}".format(export_to))
-            to_ignore.append('ExportingAlerts')
-        else:
-            # set the export_evidence variable to True so we can export all evidence that arrive to the evidenceProcess
-            __database__.publish('evidence_added','export '+ export_to)
-
     # Store the host IP address if input type is interface
     if input_type == 'interface':
         hostIP = recognize_host_ip()
@@ -458,6 +443,7 @@ if __name__ == '__main__':
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:
                         # Export to taxii server before exiting
+                        #todo edit this
                         if args.exportalert and 'stix' in args.exportalert.lower():
                                 __database__.publish('export_alert',"push to taxii server")
                                 time.sleep(5) # give slips time to push to server
