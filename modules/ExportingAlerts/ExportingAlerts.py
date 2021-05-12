@@ -28,6 +28,7 @@ from cabby import create_client
 import time
 import _thread
 import sys
+import validators
 
 
 class Module(Module, multiprocessing.Process):
@@ -50,7 +51,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('evidence_added')
-        self.c1 = __database__.subscribe('push_to_taxii_server')
+        self.c2 = __database__.subscribe('push_to_taxii_server')
         # slack_bot_token_secret should contain your slack token only
         try:
             with open("modules/ExportingAlerts/slack_bot_token_secret", "r") as f:
@@ -128,19 +129,23 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def is_ip(self, value):
+    def get_ioc_type(self, value):
         """ Checks if this value is a valid IP """
         try:
             # Is IPv4
             ip_address = ipaddress.IPv4Address(value)
+            return 'ip'
+
         except ipaddress.AddressValueError:
             # Is it ipv6?
             try:
                 ip_address = ipaddress.IPv6Address(value)
+                return 'ip'
             except ipaddress.AddressValueError:
                 # It does not look as IP address.
-                return False
-        return True
+                if validators.domain(value):
+                    return 'domain'
+        return 'unknown'
 
     def ip_exists_in_stix_file(self, ip):
         """ Searches for ip in STIX_data.json to avoid exporting duplicates """
@@ -239,8 +244,8 @@ class Module(Module, multiprocessing.Process):
             'SelfSignedCertificate' : 'Self-signed certificate',
             'LongConnection' : 'Long Connection',
             'SSHSuccessful' :'SSH connection from ip', #SSHSuccessful-by-ip
-            'C&C channels detection' : 'C&C channels detection'
-            # todo support 'ThreatIntelligenceBlacklistDomain' : 'Threat Intelligence Blacklist Domain'
+            'C&C channels detection' : 'C&C channels detection',
+            'ThreatIntelligenceBlacklistDomain' : 'Threat Intelligence Blacklist Domain'
         }
         # Get the right description to use in stix
         try:
@@ -256,9 +261,11 @@ class Module(Module, multiprocessing.Process):
             #for example 127.0.0.1:443:tcp
             # Get the ip
             detection_info = detection_info.split(':')[0]
-
-        if self.is_ip(detection_info):
+        ioc_type = self.get_ioc_type(detection_info)
+        if ioc_type is 'ip':
             pattern = "[ip-addr:value = '{}']".format(detection_info)
+        elif ioc_type is 'domain':
+            pattern = "[domain-name:value = '{}']".format(detection_info)
         else:
             self.print("Can't set pattern for STIX. {}".format(detection_info), 0, 1)
             return False
@@ -293,6 +300,7 @@ class Module(Module, multiprocessing.Process):
         # Set of unique ips added to stix_data.json to avoid duplicates
         self.added_ips.add(detection_info)
         self.print("Indicator added to STIX_data.json",6,0)
+        self.print(f"Indicator added to STIX_data.json")
         return True
 
     def send_to_server(self):
@@ -320,15 +328,15 @@ class Module(Module, multiprocessing.Process):
                 if message_c1['channel'] == 'evidence_added':
                     if type(message_c1['data']) == str:
                         evidence = json.loads(message_c1['data'])
+                        description = evidence['description']
                         if 'slack' in self.export_to:
-                            msg_to_send = evidence['description']
-                            sent_to_slack = self.send_to_slack(msg_to_send)
+                            sent_to_slack = self.send_to_slack(description)
                             if not sent_to_slack:
                                 self.print("Problem in send_to_slack()", 0, 1)
                         if 'stix' in self.export_to:
                             key = evidence['key']
                             msg_to_send = (key['type_evidence'],key['type_detection'],
-                                                key['detection_info'], evidence['description'])
+                                                key['detection_info'], description)
                             # This thread is responsible for waiting n seconds before each push to the stix server
                             # it starts the timer when the first alert happens
                             # push_delay should be an int when slips is running using -i
