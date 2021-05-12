@@ -314,6 +314,10 @@ if __name__ == '__main__':
     if to_ignore:
         # Convert string to list
         to_ignore = eval(to_ignore)
+        # Ignore exporting alerts module if export_to is empty
+        export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ","")
+        if 'stix' not in export_to.lower() and 'slack' not in export_to.lower():
+            to_ignore.append('ExportingAlerts')
         # Disable blocking if was not asked and if it is not interface
         if not args.blocking or not args.interface:
             to_ignore.append('blocking')

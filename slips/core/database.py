@@ -888,7 +888,8 @@ class Database(object):
             'profileid': str(profileid),
             'twid': str(twid),
             'key': key,
-            'data': data
+            'data': data,
+            'description': description
         }
         evidence_to_send = json.dumps(evidence_to_send)
         self.publish('evidence_added', evidence_to_send)
@@ -1156,8 +1157,6 @@ class Database(object):
         elif 'new_ssh' in channel:
             pubsub.subscribe(channel)
         elif 'new_notice' in channel:
-            pubsub.subscribe(channel)
-        elif 'export_alert' in channel:
             pubsub.subscribe(channel)
         return pubsub
 

@@ -288,20 +288,6 @@ class EvidenceProcess(multiprocessing.Process):
                                     # Differentiate the type of evidence for different detections
                                     evidence_to_print = self.print_evidence(profileid, twid, ip, type_evidence, type_detection,detection_info, description)
                                     self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
-                                    if self.export_evidence:
-                                        # Send a msg to the ExportingAlerts module to publish the evidence to slack/stix
-                                        data_to_send = {
-                                            'export_to' : self.export_to,
-                                        }
-                                        # set 'msg' key according to where we need to send it
-                                        if 'slack' in self.export_to:
-                                            # if we're sending to slack we need a less detailed msg
-                                            data_to_send['msg'] = evidence_to_print
-                                        elif 'stix' in self.export_to:
-                                            # send more details if we're exporting to stix
-                                            data_to_send['msg'] = (type_evidence, type_detection,detection_info,description)
-                                        data_to_send = json.dumps(data_to_send)
-                                        __database__.publish('export_alert',data_to_send)
                                     __database__.publish('new_blocking', ip)
                                     __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
