@@ -42,6 +42,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('new_conn_flow')
+        self.c2 = __database__.subscribe('new_flow')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -79,9 +80,8 @@ class Module(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                if 'training' in self.mode:
+                if 'train' in self.mode:
                     message_c1 = self.c1.get_message(timeout=self.timeout)
-                    # Check that the message is for you. Probably unnecessary...
                     if message_c1['data'] == 'stop_process':
                         return True
                     if message_c1 and message_c1['channel'] == 'new_conn_flow' and message_c1["type"] == "message":
@@ -90,17 +90,12 @@ class Module(Module, multiprocessing.Process):
                             connection = json.loads(data)
                             try:
                                 # Is there a dataframe? append to it
-                                bro_df = bro_df.append(connection , ignore_index=False) #todo fix this
+                                bro_df = bro_df.append(connection , ignore_index=True)
                             except UnboundLocalError:
                                 # There's no dataframe, create one
                                 bro_df = pd.DataFrame(connection, index=[0])
-                            # Amount of anomalies to show
-                            amountanom = 10 #todo ??
-
-                            # todo disable this module if not run with -f
-
+                            #todo disable this module if not run with -f?
                             #todo add read_csv with sep='/t' (tab separated zeek files)
-
                             # In case you need a label, due to some models being able to work in a
                             # semisupervized mode, then put it here. For now everything is
                             # 'normal', but we are not using this for detection
@@ -122,18 +117,8 @@ class Module(Module, multiprocessing.Process):
                             bro_df['resp_ip_bytes'] = bro_df['resp_ip_bytes'].fillna(0).astype('int32')
                             bro_df['dur'].replace('-', '0', inplace=True)
                             bro_df['dur'] = bro_df['dur'].fillna(0).astype('float64')
-                            # Save dataframe to disk as CSV
-                            # if not os.path.exists('anomaly-detection-output'):
-                            #     os.makedir('anomaly-detection-output')
-                            # bro_df.to_csv('anomaly-detection-output/output.csv')
-
                             # Add the columns from the log file that we know are numbers. This is only for conn.log files.
                             X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
-                            # X_train = bro_df[['duration', 'orig_bytes', 'id.resp_p', 'resp_bytes', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes']]
-                            # Our y is the label. But we are not using it now.
-                            y = bro_df.label
-                            # The X_test is where we are going to search for anomalies. In our case, its the same set of data than X_train.
-                            X_test = X_train
                             #################
                             # Select a model from below
                             # ABOD class for Angle-base Outlier Detection. For an observation, the
@@ -173,10 +158,70 @@ class Module(Module, multiprocessing.Process):
                             clf.fit(X_train)
                             # *****
                             # Save the model to disk
-                            with open("modules/anomaly-detection/anomaly-detection-model",'wb') as file:
-                                pickle.dump(clf,file)
+                            with open("modules/anomaly-detection/anomaly-detection-model",'wb') as model:
+                                pickle.dump(clf,model)
                 elif 'test' in self.mode:
-                    pass
+                    message_c2 = self.c2.get_message(timeout=self.timeout)
+                    if message_c2['data'] == 'stop_process':
+                        return True
+                    if message_c2 and message_c2['channel'] == 'new_flow' and message_c2["type"] == "message":
+                        data = message_c2["data"]
+                        if type(data) == str:
+                            data = json.loads(data)
+                            # flow is a json serialized dict of one key {'uid' : str(flow)}
+                            flow = json.loads(data['flow'])
+                            # get the flow dict as str
+                            flow = list(flow.values())[0]
+                            # convert flow to dict
+                            flow_dict  = json.loads(flow)
+                            # create a dataframe
+                            bro_df = pd.DataFrame(flow_dict , index=[0])
+                            # Get the values we're interested in from the flow in a list to give the model
+                            try:
+                                X_test = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
+                            except KeyError:
+                                # This flow doesn't have the fields we're interested in
+                                continue
+                            try:
+                                with open('modules/anomaly-detection/anomaly-detection-model','rb') as model:
+                                    clf = pickle.load(model)
+                            except:
+                                self.print("No models found in modules/anomaly-detection. Stopping.")
+                                return True
+
+                            # get the prediction on the test data
+                            y_test_pred = clf.predict(X_test)  # outlier labels (0 or 1)
+
+                            y_test_scores = clf.decision_function(X_test)  # outlier scores
+
+                            # Convert the ndarrays of scores and predictions to  pandas series
+                            scores_series = pd.Series(y_test_scores)
+                            pred_series = pd.Series(y_test_pred)
+
+                            # Now use the series to add a new column to the X test
+                            X_test['score'] = scores_series.values
+                            X_test['pred'] = pred_series.values
+
+                            # Add the score to the bro_df also. So we can show it at the end
+                            bro_df['score'] = X_test['score']
+
+                            # Keep the positive predictions only. That is, keep only what we predict is an anomaly.
+                            X_test_predicted = X_test[X_test.pred == 1]
+
+                            amountanom = 10 #todo
+
+                            # Keep the top X amount of anomalies
+                            top10 = X_test_predicted.sort_values(by='score', ascending=False).iloc[:amountanom]
+                            # Print the results
+                            # Find the predicted anomalies in the original bro dataframe, where the rest of the data is
+                            df_to_print = bro_df.iloc[top10.index]
+                            # todo store the anomalies in the flow in the db label: anomaly_score
+                            # print('\nFlows of the top anomalies')
+                            # # Only print some columns, not all, so its easier to read.
+                            # # 'local_orig', local_resp , tunnel_parents are not found
+                            # df_to_print = df_to_print.drop(['conn_state', 'history', \
+                            #                                 'missed_bytes', 'starttime', 'uid', 'label'], axis=1)
+                            # print(df_to_print)
                 else:
                     self.print(f"{self.mode} is not a valid mode, available options are: training or test. anomaly-detection module stopping.")
                     return True
