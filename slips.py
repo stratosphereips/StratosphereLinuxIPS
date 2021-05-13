@@ -236,10 +236,6 @@ if __name__ == '__main__':
         print('Deleting Cache DB in Redis.')
         clear_redis_cache_database()
 
-    # If the user wants to blocks, the user needs to give a permission to modify iptables
-    if args.blocking:
-        print('Run slips with sudo to enable the blocking module.')
-
     """
     Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
     """
