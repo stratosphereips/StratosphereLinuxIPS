@@ -21,7 +21,7 @@ import platform
 import os
 import shutil
 import json
-
+import subprocess
 
 class Module(Module, multiprocessing.Process):
     """Data should be passed to this module as a json encoded python dict,
@@ -70,19 +70,22 @@ class Module(Module, multiprocessing.Process):
     def test(self):
         """ For debugging purposes, once we're done with the module we'll delete it """
 
-        blocking_data = {
-                      "ip"       : "2.2.0.0",
-                      "block"    : True ,
-                      "from"     : True ,
-                      "to"       : True ,
-                      # "dport"    : Optional destination port number
-                      # "sport"    : Optional source port number
-                      # "protocol" : Optional protocol
-                  }
-        # Example of passing blocking_data to this module:
-        blocking_data = json.dumps(blocking_data)
-        __database__.publish('new_blocking', blocking_data )
-        print("Blocked ip")
+        if not self.is_ip_blocked('2.2.0.0'):
+            blocking_data = {
+                          "ip"       : "2.2.0.0",
+                          "block"    : True ,
+                          "from"     : True ,
+                          "to"       : True ,
+                          # "dport"    : Optional destination port number
+                          # "sport"    : Optional source port number
+                          # "protocol" : Optional protocol
+                      }
+            # Example of passing blocking_data to this module:
+            blocking_data = json.dumps(blocking_data)
+            __database__.publish('new_blocking', blocking_data )
+            self.print("Blocked ip")
+        else:
+            self.print("IP is blocked.")
 
     def set_sudo_according_to_env(self):
         """ Check if running in host or in docker and sets sudo string accordingly.
@@ -136,8 +139,7 @@ class Module(Module, multiprocessing.Process):
             os.system(self.sudo + 'iptables -D INPUT -j slipsBlocking >/dev/null 2>&1')
             os.system(self.sudo + 'iptables -D OUTPUT -j slipsBlocking >/dev/null 2>&1')
             os.system(self.sudo + 'iptables -D FORWARD -j slipsBlocking >/dev/null 2>&1')
-
-            # flush all the rules in slipsBlocking 
+            # flush all the rules in slipsBlocking
             os.system(self.sudo + 'iptables -F slipsBlocking >/dev/null 2>&1')
             # Delete slipsBlocking chain from iptables
             os.system(self.sudo + 'iptables -X slipsBlocking >/dev/null 2>&1')
@@ -202,15 +204,25 @@ class Module(Module, multiprocessing.Process):
         else:
             return 0  # success
 
+    def is_ip_blocked(self, ip) -> bool:
+        """ Checks if ip is already blocked or not """
+
+        command = self.sudo + 'iptables -L slipsBlocking -v -n'
+        # Execute command
+        result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+        result = result.stdout.decode('utf-8')
+        return ip in result
 
     def block_ip(self, ip_to_block=None, from_=True, to=True,
                  dport=None, sport=None, protocol=None):
         """
             This function determines the user's platform and firewall and calls
             the appropriate function to add the rules to the used firewall.
-            By default this function blocks all traffic from or to the given ip.
+            By default this function blocks all traffic from and to the given ip.
         """
-        if type(ip_to_block) == str:
+
+        # Make sure ip isn't already blocked before blocking
+        if type(ip_to_block) == str and self.is_ip_blocked(ip_to_block) is False:
             # Block this ip in iptables
             if self.platform_system == 'Linux':
                 # Blocking in iptables
@@ -316,7 +328,7 @@ class Module(Module, multiprocessing.Process):
                         # message['data'] in the new_blocking channel is a dictionary that contains
                         # the ip and the blocking options
                         # Example of the data dictionary to block or unblock an ip:
-                        #   (notice you have to specify from,to,dport,sport,protocol or at least 2 of them when unblocking)
+                        # (notice you have to specify from,to,dport,sport,protocol or at least 2 of them when unblocking)
                         #   blocking_data = {
                         #       "ip"       : "0.0.0.0"
                         #       "block"    : True to block  - False to unblock
@@ -340,7 +352,6 @@ class Module(Module, multiprocessing.Process):
                         dport = data.get("dport")
                         sport = data.get("sport")
                         protocol = data.get("protocol")
-
                         if block:
                             self.block_ip(ip, from_, to, dport, sport, protocol)
                         else:
