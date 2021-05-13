@@ -140,7 +140,7 @@ class Module(Module, multiprocessing.Process):
             self.firewall = self.determine_linux_firewall()
             if self.firewall == 'iptables':
                 # delete any pre existing slipsBlocking rules that may conflict before adding a new one
-                self.delete_iptables_chain()
+                # self.delete_iptables_chain()
                 self.print('Executing "sudo iptables -N slipsBlocking"',6,0)
                 # Add a new chain to iptables
                 os.system(self.sudo + 'iptables -N slipsBlocking')
@@ -307,7 +307,6 @@ class Module(Module, multiprocessing.Process):
                     and message['type'] == 'message':
                     # sent from slips.py
                     if message['data'] == 'delete slipsBlocking chain':
-                        # -p isn't provided, we need to clear slipsBlocking chain
                         if self.platform_system == 'Linux':
                         # Get the user's currently installed firewall
                             self.firewall = self.determine_linux_firewall()
