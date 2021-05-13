@@ -19,6 +19,7 @@ import platform
 
 # Your imports
 import pandas as pd # todo add pandas to install.sh
+import pickle # todo add pickle to install.sh
 from pyod.models.pca import PCA
 import json
 import os
@@ -93,11 +94,91 @@ class Module(Module, multiprocessing.Process):
                             except UnboundLocalError:
                                 # There's no dataframe, create one
                                 bro_df = pd.DataFrame(connection, index=[0])
+                            # Amount of anomalies to show
+                            amountanom = 10 #todo ??
 
+                            # todo disable this module if not run with -f
+
+                            #todo add read_csv with sep='/t' (tab separated zeek files)
+
+                            # In case you need a label, due to some models being able to work in a
+                            # semisupervized mode, then put it here. For now everything is
+                            # 'normal', but we are not using this for detection
+                            bro_df['label'] = 'normal'
+                            # Replace the rows without data (with '-') with 0.
+                            # Even though this may add a bias in the algorithms,
+                            # is better than not using the lines.
+                            # Also fill the no values with 0
+                            # Finally put a type to each column
+                            bro_df['sbytes'].replace('-', '0', inplace=True) #orig_bytes
+                            bro_df['sbytes'] = bro_df['sbytes'].fillna(0).astype('int32')
+                            bro_df['dbytes'].replace('-', '0', inplace=True) # resp_bytes
+                            bro_df['dbytes'] = bro_df['dbytes'].fillna(0).astype('int32')
+                            bro_df['dpkts'].replace('-', '0', inplace=True)
+                            bro_df['dpkts'] = bro_df['dpkts'].fillna(0).astype('int32') # resp_packets
+                            bro_df['orig_ip_bytes'].replace('-', '0', inplace=True)
+                            bro_df['orig_ip_bytes'] = bro_df['orig_ip_bytes'].fillna(0).astype('int32')
+                            bro_df['resp_ip_bytes'].replace('-', '0', inplace=True)
+                            bro_df['resp_ip_bytes'] = bro_df['resp_ip_bytes'].fillna(0).astype('int32')
+                            bro_df['dur'].replace('-', '0', inplace=True)
+                            bro_df['dur'] = bro_df['dur'].fillna(0).astype('float64')
+                            # Save dataframe to disk as CSV
+                            # if not os.path.exists('anomaly-detection-output'):
+                            #     os.makedir('anomaly-detection-output')
+                            # bro_df.to_csv('anomaly-detection-output/output.csv')
+
+                            # Add the columns from the log file that we know are numbers. This is only for conn.log files.
+                            X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
+                            # X_train = bro_df[['duration', 'orig_bytes', 'id.resp_p', 'resp_bytes', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes']]
+                            # Our y is the label. But we are not using it now.
+                            y = bro_df.label
+                            # The X_test is where we are going to search for anomalies. In our case, its the same set of data than X_train.
+                            X_test = X_train
+                            #################
+                            # Select a model from below
+                            # ABOD class for Angle-base Outlier Detection. For an observation, the
+                            # variance of its weighted cosine scores to all neighbors could be
+                            # viewed as the outlying score.
+                            # clf = ABOD()
+                            # LOF
+                            # clf = LOF()
+                            # CBLOF
+                            # clf = CBLOF()
+                            # LOCI
+                            # clf = LOCI()
+                            # LSCP
+                            # clf = LSCP()
+                            # MCD
+                            # clf = MCD()
+                            # OCSVM
+                            # clf = OCSVM()
+                            # PCA. Good and fast!
+                            clf = PCA()
+                            # SOD
+                            # clf = SOD()
+                            # SO_GAAL
+                            # clf = SO_GALL()
+                            # SOS
+                            # clf = SOS()
+                            # XGBOD
+                            # clf = XGBOD()
+                            # KNN
+                            # Good results but slow
+                            # clf = KNN()
+                            # clf = KNN(n_neighbors=10)
+                            #################
+                            # extract the value of dataframe to matrix
+                            X_train = X_train.values
+                            # Fit the model to the train data
+                            clf.fit(X_train)
+                            # *****
+                            # Save the model to disk
+                            with open("modules/anomaly-detection/anomaly-detection-model",'wb') as file:
+                                pickle.dump(clf,file)
                 elif 'test' in self.mode:
                     pass
                 else:
-                    self.print(f"{self.mode} is not a valid mode, available options are: training or test. anomaly-detection.py Stopping.")
+                    self.print(f"{self.mode} is not a valid mode, available options are: training or test. anomaly-detection module stopping.")
                     return True
         except KeyboardInterrupt:
             return True
