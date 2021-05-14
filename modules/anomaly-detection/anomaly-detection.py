@@ -38,7 +38,7 @@ class Module(Module, multiprocessing.Process):
         # In case you need to read the slips.conf configuration file for
         # your own configurations
         self.config = config
-        self.mode = self.config.get('anomaly-detection', 'mode')
+        self.mode = self.config.get('anomaly-detection', 'mode').lower()
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('new_conn_flow')
@@ -94,7 +94,6 @@ class Module(Module, multiprocessing.Process):
                             except UnboundLocalError:
                                 # There's no dataframe, create one
                                 bro_df = pd.DataFrame(connection, index=[0])
-                            # todo disable this module if not run with -f?
                             # todo add read_csv with sep='/t' (tab separated zeek files)
                             # In case you need a label, due to some models being able to work in a
                             # semisupervized mode, then put it here. For now everything is
@@ -187,6 +186,7 @@ class Module(Module, multiprocessing.Process):
                                 with open('modules/anomaly-detection/anomaly-detection-model', 'rb') as model:
                                     clf = pickle.load(model)
                             except:
+                                # probably because slips wasn't run in train mode first or conn.log is empty.
                                 self.print("No models found in modules/anomaly-detection. Stopping.")
                                 return True
                             # Get the prediction on the test data
@@ -196,6 +196,11 @@ class Module(Module, multiprocessing.Process):
                             # Add the score to the flow
                             __database__.set_module_label_to_flow(profileid, twid, uid, 'anomaly-detection-score',
                                                                 str(scores_series.values[0]))
+                elif self.mode is 'None' or self.mode is '':
+                    # None is the default value, we can't set it to train because it'll force the user to use -f on the first run of slips
+                    # we can't set it to test because there will be no model. the user has to manually enable this model in slips.conf and run slips
+                    # with -f first if he wants to use it
+                    return True
                 else:
                     self.print(f"{self.mode} is not a valid mode, available options are: training or test. anomaly-detection module stopping.")
                     return True
