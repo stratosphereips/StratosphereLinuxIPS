@@ -90,12 +90,12 @@ class Module(Module, multiprocessing.Process):
                             connection = json.loads(data)
                             try:
                                 # Is there a dataframe? append to it
-                                bro_df = bro_df.append(connection , ignore_index=True)
+                                bro_df = bro_df.append(connection, ignore_index=True)
                             except UnboundLocalError:
                                 # There's no dataframe, create one
                                 bro_df = pd.DataFrame(connection, index=[0])
-                            #todo disable this module if not run with -f?
-                            #todo add read_csv with sep='/t' (tab separated zeek files)
+                            # todo disable this module if not run with -f?
+                            # todo add read_csv with sep='/t' (tab separated zeek files)
                             # In case you need a label, due to some models being able to work in a
                             # semisupervized mode, then put it here. For now everything is
                             # 'normal', but we are not using this for detection
@@ -105,12 +105,12 @@ class Module(Module, multiprocessing.Process):
                             # is better than not using the lines.
                             # Also fill the no values with 0
                             # Finally put a type to each column
-                            bro_df['sbytes'].replace('-', '0', inplace=True) #orig_bytes
+                            bro_df['sbytes'].replace('-', '0', inplace=True)  # orig_bytes
                             bro_df['sbytes'] = bro_df['sbytes'].fillna(0).astype('int32')
-                            bro_df['dbytes'].replace('-', '0', inplace=True) # resp_bytes
+                            bro_df['dbytes'].replace('-', '0', inplace=True)  # resp_bytes
                             bro_df['dbytes'] = bro_df['dbytes'].fillna(0).astype('int32')
                             bro_df['dpkts'].replace('-', '0', inplace=True)
-                            bro_df['dpkts'] = bro_df['dpkts'].fillna(0).astype('int32') # resp_packets
+                            bro_df['dpkts'] = bro_df['dpkts'].fillna(0).astype('int32')  # resp_packets
                             bro_df['orig_ip_bytes'].replace('-', '0', inplace=True)
                             bro_df['orig_ip_bytes'] = bro_df['orig_ip_bytes'].fillna(0).astype('int32')
                             bro_df['resp_ip_bytes'].replace('-', '0', inplace=True)
@@ -156,10 +156,9 @@ class Module(Module, multiprocessing.Process):
                             X_train = X_train.values
                             # Fit the model to the train data
                             clf.fit(X_train)
-                            # *****
                             # Save the model to disk
-                            with open("modules/anomaly-detection/anomaly-detection-model",'wb') as model:
-                                pickle.dump(clf,model)
+                            with open("modules/anomaly-detection/anomaly-detection-model", 'wb') as model:
+                                pickle.dump(clf, model)
                 elif 'test' in self.mode:
                     message_c2 = self.c2.get_message(timeout=self.timeout)
                     if message_c2['data'] == 'stop_process':
@@ -168,14 +167,16 @@ class Module(Module, multiprocessing.Process):
                         data = message_c2["data"]
                         if type(data) == str:
                             data = json.loads(data)
+                            profileid = data['profileid']
+                            twid = data['twid']
                             # flow is a json serialized dict of one key {'uid' : str(flow)}
                             flow = json.loads(data['flow'])
-                            # get the flow dict as str
-                            flow = list(flow.values())[0]
-                            # convert flow to dict
-                            flow_dict  = json.loads(flow)
-                            # create a dataframe
-                            bro_df = pd.DataFrame(flow_dict , index=[0])
+                            #  flow contains only one key(uid). Get it.
+                            uid = list(flow.keys())[0]
+                            # Get the flow as dict
+                            flow_dict = json.loads(flow[uid])
+                            # Create a dataframe
+                            bro_df = pd.DataFrame(flow_dict, index=[0])
                             # Get the values we're interested in from the flow in a list to give the model
                             try:
                                 X_test = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
@@ -183,45 +184,18 @@ class Module(Module, multiprocessing.Process):
                                 # This flow doesn't have the fields we're interested in
                                 continue
                             try:
-                                with open('modules/anomaly-detection/anomaly-detection-model','rb') as model:
+                                with open('modules/anomaly-detection/anomaly-detection-model', 'rb') as model:
                                     clf = pickle.load(model)
                             except:
                                 self.print("No models found in modules/anomaly-detection. Stopping.")
                                 return True
-
-                            # get the prediction on the test data
-                            y_test_pred = clf.predict(X_test)  # outlier labels (0 or 1)
-
+                            # Get the prediction on the test data
                             y_test_scores = clf.decision_function(X_test)  # outlier scores
-
                             # Convert the ndarrays of scores and predictions to  pandas series
                             scores_series = pd.Series(y_test_scores)
-                            pred_series = pd.Series(y_test_pred)
-
-                            # Now use the series to add a new column to the X test
-                            X_test['score'] = scores_series.values
-                            X_test['pred'] = pred_series.values
-
-                            # Add the score to the bro_df also. So we can show it at the end
-                            bro_df['score'] = X_test['score']
-
-                            # Keep the positive predictions only. That is, keep only what we predict is an anomaly.
-                            X_test_predicted = X_test[X_test.pred == 1]
-
-                            amountanom = 10 #todo
-
-                            # Keep the top X amount of anomalies
-                            top10 = X_test_predicted.sort_values(by='score', ascending=False).iloc[:amountanom]
-                            # Print the results
-                            # Find the predicted anomalies in the original bro dataframe, where the rest of the data is
-                            df_to_print = bro_df.iloc[top10.index]
-                            # todo store the anomalies in the flow in the db label: anomaly_score
-                            # print('\nFlows of the top anomalies')
-                            # # Only print some columns, not all, so its easier to read.
-                            # # 'local_orig', local_resp , tunnel_parents are not found
-                            # df_to_print = df_to_print.drop(['conn_state', 'history', \
-                            #                                 'missed_bytes', 'starttime', 'uid', 'label'], axis=1)
-                            # print(df_to_print)
+                            # Add the score to the flow
+                            __database__.set_module_label_to_flow(profileid, twid, uid, 'anomaly-detection-score',
+                                                                str(scores_series.values[0]))
                 else:
                     self.print(f"{self.mode} is not a valid mode, available options are: training or test. anomaly-detection module stopping.")
                     return True
