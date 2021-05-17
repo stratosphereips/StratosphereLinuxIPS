@@ -140,25 +140,22 @@ class ProfilerProcess(multiprocessing.Process):
             self.label = 'unknown'
 
     def read_whitelist(self):
-        """ Read the content of whitelist.csv """
+        """ Reads the content of whitelist.csv and stores in the database """
 
-        self.whitelisted_ips = {}
+        self.whitelisted_IPs = {}
         self.whitelisted_domains = {}
         self.whitelisted_orgs = {}
         with open("whitelist.csv") as whitelist:
-            # Remove comments and find the description column if possible
-            description_column = None
+            # Ignore comments
             while True:
                 line = whitelist.readline()
                 # break while statement if it is not a comment line
                 # i.e. does not startwith #
                 if not line.startswith('#') and not line.startswith('"type"'):
                     break
-            # # Store the current position of the TI file
-            # current_file_position = whitelist.tell()
-
+            # Process lines after comments
             while line:
-                # line should be: ["type","domain/ip/organization","from","what to ignore"]
+                # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
                 line = line.replace("\n","").split(",")
                 try:
                     type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
@@ -169,7 +166,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # validate the type before processing
                 if ('ip' in type_ and
                     (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
-                    self.whitelisted_ips[data] =  (from_, what_to_ignore)
+                    self.whitelisted_IPs[data] =  (from_, what_to_ignore)
                 elif 'domain' in type_ and validators.domain(data):
                     self.whitelisted_domains[data] =  (from_, what_to_ignore)
                 elif 'org' in type_ and data in ("google", "microsoft", "apple", "facebook", "twitter"):
@@ -178,6 +175,9 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print(f"{data} is not a valid {type}.",1,0)
                 line = whitelist.readline()
 
+        __database__.set_whitelist(self.whitelisted_IPs,
+                                   self.whitelisted_domains,
+                                   self.whitelisted_orgs)
 
     def define_type(self, line):
         """
@@ -1490,12 +1490,12 @@ class ProfilerProcess(multiprocessing.Process):
             profileid = 'profile' + self.id_separator + str(saddr)
 
             # Ignore flow if it's whitelisted
-            if saddr in self.whitelisted_ips:
+            if saddr in self.whitelisted_IPs:
                 from_, what_to_ignore = self.whitelisted_ips[saddr]
                 # check if we should ignore src flow from this ip
                 if 'flow' in what_to_ignore and ('src' in from_ or 'both' in from_):
                     return True
-            if daddr in self.whitelisted_ips:
+            if daddr in self.whitelisted_IPs:
                 from_, what_to_ignore = self.whitelisted_ips[daddr]
                 # check if we should ignore dst flow from this ip
                 if 'flow' in what_to_ignore and ('dst' in from_ or 'both' in from_):

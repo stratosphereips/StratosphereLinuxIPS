@@ -1755,4 +1755,27 @@ class Database(object):
         else:
             data = ''
         return data
+
+    def set_whitelist(self,whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
+        """ Stores a dict of whitelisted IPs, domains and organizations in the db """
+
+        # Convert the values of all keys in 3 dicts to str instead of tuple to be able
+        # to store it in redis
+        for ip, domain, org in zip(whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
+            whitelisted_IPs[ip] = str(whitelisted_IPs[ip])
+            whitelisted_domains[domain] = str(whitelisted_domains[domain])
+            whitelisted_organizations[org] = str(whitelisted_organizations[org])
+        # Store it in the db
+        self.r.hmset("whitelisted_IPs", whitelisted_IPs)
+        self.r.hmset("whitelisted_domains", whitelisted_domains)
+        self.r.hmset("whitelisted_organizations", whitelisted_organizations)
+
+    def get_whitelist(self):
+        """ Returns 3 dictionaries. whitelisted_ips, whitelisted_domains and whitelisted_organizations """
+
+        whitelisted_IPs = self.r.hgetall('whitelisted_IPs')
+        whitelisted_domains = self.r.hgetall('whitelisted_domains')
+        whitelisted_organizations = self.r.hgetall('whitelisted_organizations')
+        return whitelisted_IPs, whitelisted_domains, whitelisted_organizations
+
 __database__ = Database()
