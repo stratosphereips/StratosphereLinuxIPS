@@ -28,6 +28,7 @@ import traceback
 import os
 import binascii
 import base64
+import validators
 
 def timeit(method):
     def timed(*args, **kw):
@@ -41,7 +42,6 @@ def timeit(method):
             print(f'\t\033[1;32;40mFunction {method.__name__}() took {(te - ts) * 1000:2.2f}ms\033[00m')
         return result
     return timed
-
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -57,6 +57,9 @@ class ProfilerProcess(multiprocessing.Process):
         self.input_type = False
         # Read the configuration
         self.read_configuration()
+        # Read the whitelist
+        # anything in this list will be ignored
+        self.read_whitelist()
         # Start the DB
         __database__.start(self.config)
         # Set the database output queue
@@ -135,6 +138,39 @@ class ProfilerProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default
             self.label = 'unknown'
+
+    def read_whitelist(self):
+        """ Read the content of whitelist.csv """
+
+        with open("whitelist.csv") as whitelist:
+            # Remove comments and find the description column if possible
+            description_column = None
+            while True:
+                line = whitelist.readline()
+                # break while statement if it is not a comment line
+                # i.e. does not startwith #
+                if not line.startswith('#') and not line.startswith('"type"'):
+                    break
+            # Store the current position of the TI file
+            current_file_position = whitelist.tell()
+            # line should be: ["type","domain/ip/organization","from","what to ignore"]
+            line = line.replace("\n","").split(",")
+            try:
+                type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
+            except:
+                # line is missing a column, ignore it
+                pass
+            # validate the type before processing
+            if ('ip' in type_ and
+                (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
+                pass
+            elif 'domain' in type_ and validators.domain(data):
+                pass
+            elif 'org' in type_ and data in ("google", "microsoft", "apple", "facebook", "twitter"):
+                pass
+            else:
+                self.print(f"{data} is not a valid {type}.")
+            # print( type_ , data, from_ , what_to_ignore)
 
     def define_type(self, line):
         """
@@ -2114,13 +2150,11 @@ class ProfilerProcess(multiprocessing.Process):
                         except KeyError:
                             # When the columns are not there. Not sure if it works
                             self.define_columns(line)
-
                     elif self.input_type == 'suricata':
                         # self.print('Suricata line')
                         self.process_suricata_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
-
                     elif self.input_type == 'zeek-tabs':
                         # self.print('Zeek-tabs line')
                         self.process_zeek_tabs_input(line)
