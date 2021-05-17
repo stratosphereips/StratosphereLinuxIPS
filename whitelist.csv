@@ -1,0 +1,15 @@
+# A whitelist of IPs that should be completely ignored.
+#
+# "type","domain/ip/organization","from","what to ignore"
+# Supported types: "ip","domain","organization"
+# from: can either be "src" or "dst"
+# supported organizations: "google", "microsoft", "apple", "facebook", "twitter"...
+# what to ignore: either "alerts" or "flows"
+# ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
+# ignore flows: the flow will be completely discarded
+#
+# Examples
+#
+# "ip","1.2.3.4","dst","alerts"
+# "domain","google.com","src","flows"
+# "organization","twitter","dst","alerts"
