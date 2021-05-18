@@ -142,6 +142,7 @@ class ProfilerProcess(multiprocessing.Process):
     def read_whitelist(self):
         """ Reads the content of whitelist.csv and stores in the database """
 
+        #todo handle empty whitelists
         self.whitelisted_IPs = {}
         self.whitelisted_domains = {}
         self.whitelisted_orgs = {}
@@ -166,11 +167,13 @@ class ProfilerProcess(multiprocessing.Process):
                 # validate the type before processing
                 if ('ip' in type_ and
                     (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
-                    self.whitelisted_IPs[data] =  (from_, what_to_ignore)
+                    # Store the values as commma sepatrated strings instead of tuples for better performance
+                    # Reddis doesn't support storing tuples
+                    self.whitelisted_IPs[data] = [from_, what_to_ignore]
                 elif 'domain' in type_ and validators.domain(data):
-                    self.whitelisted_domains[data] =  (from_, what_to_ignore)
+                    self.whitelisted_domains[data] = [from_, what_to_ignore]
                 elif 'org' in type_ and data in ("google", "microsoft", "apple", "facebook", "twitter"):
-                    self.whitelisted_orgs[data] =  (from_, what_to_ignore)
+                    self.whitelisted_orgs[data] = [from_, what_to_ignore]
                 else:
                     self.print(f"{data} is not a valid {type}.",1,0)
                 line = whitelist.readline()
@@ -1491,12 +1494,12 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Ignore flow if it's whitelisted
             if saddr in self.whitelisted_IPs:
-                from_, what_to_ignore = self.whitelisted_ips[saddr]
+                from_, what_to_ignore = self.whitelisted_IPs[saddr]
                 # check if we should ignore src flow from this ip
                 if 'flow' in what_to_ignore and ('src' in from_ or 'both' in from_):
                     return True
             if daddr in self.whitelisted_IPs:
-                from_, what_to_ignore = self.whitelisted_ips[daddr]
+                from_, what_to_ignore = self.whitelisted_IPs[daddr]
                 # check if we should ignore dst flow from this ip
                 if 'flow' in what_to_ignore and ('dst' in from_ or 'both' in from_):
                     return True

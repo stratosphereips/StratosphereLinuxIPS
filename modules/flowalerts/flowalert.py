@@ -175,6 +175,42 @@ class Module(Module, multiprocessing.Process):
                                                   module_name,
                                                   module_label)
 
+    def is_whitelisted(self, ip, type_) -> bool:
+        """
+        Checks if IP is whitelisted
+        type_: 'saddr' or 'daddr'
+        """
+        # todo check domains and orgs
+        # todo determine ioc type (ip,domain,org)
+        # todo figure out where else to put this line
+        # todo: handle Detected IP: 10.11.10.149  due to RNN C&C channels detection, score: 0.93887365.
+
+        self.whitelist = __database__.get_whitelist()
+        # empty dicts evaluate to False
+        while bool(self.whitelist) is False:
+            #todo handle if whitelist is empty not by mistake
+            self.whitelist = __database__.get_whitelist()
+        try:
+            # Convert each list from str to dict
+            self.whitelisted_IPs = json.loads(self.whitelist['IPs'])
+            self.whitelisted_domains = json.loads(self.whitelist['domains'])
+            self.whitelisted_organizations = json.loads(self.whitelist['organizations'])
+        except:
+            # one of the 3 dicts doesn't exist? #todo
+            pass
+        if type_ is 'saddr' and ip in self.whitelisted_IPs:
+            # ip in whitelist. check if we should ignore src or dst alerts from this ip
+            from_, what_to_ignore = self.whitelisted_IPs[ip]
+            if 'alert' in what_to_ignore and ('src' in from_ or 'both' in from_):
+                return True
+        if  type_ is 'daddr' and ip in self.whitelisted_IPs:
+            from_, what_to_ignore = self.whitelisted_IPs[ip]
+            # check if we should ignore dst alerts from this ip
+            if 'alert' in what_to_ignore and ('dst' in from_ or 'both' in from_):
+                return True
+
+        return False
+
     def run(self):
         try:
             # Main loop function
@@ -210,6 +246,10 @@ class Module(Module, multiprocessing.Process):
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
 
+                    # Ignore alert if ip is whitelisted
+                    if self.is_whitelisted(saddr, 'saddr') or self.is_whitelisted(daddr, 'daddr'):
+                        continue
+
                     # Do not check the duration of the flow if the daddr or
                     # saddr is a  multicast.
                     if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
@@ -241,6 +281,9 @@ class Module(Module, multiprocessing.Process):
                             ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
                             daddr = ssh_flow_dict['daddr']
                             saddr = ssh_flow_dict['saddr']
+                            # Ignore alert if ip is whitelisted
+                            if self.is_whitelisted(saddr, 'saddr') or self.is_whitelisted(daddr, 'daddr'):
+                                continue
                             size = ssh_flow_dict['allbytes']
                             self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Zeek')
                     else:
@@ -252,6 +295,9 @@ class Module(Module, multiprocessing.Process):
                             ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
                             daddr = ssh_flow_dict['daddr']
                             saddr = ssh_flow_dict['saddr']
+                            # Ignore alert if ip is whitelisted
+                            if self.is_whitelisted(saddr, 'saddr') or self.is_whitelisted(daddr, 'daddr'):
+                                continue
                             size = ssh_flow_dict['allbytes']
                             if size > self.ssh_succesful_detection_threshold:
                                 # Set the evidence because there is no
@@ -282,7 +328,10 @@ class Module(Module, multiprocessing.Process):
                         if 'self signed' in msg or 'self-signed' in msg:
                             profileid = data['profileid']
                             twid = data['twid']
-                            ip = flow['daddr']
+                            daddr = flow['daddr']
+                            # Ignore alert if ip is whitelisted
+                            if self.is_whitelisted(daddr, 'daddr'):
+                                continue
                             description = 'Self-signed certificate. Destination IP: {}'.format(ip)
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
@@ -303,7 +352,10 @@ class Module(Module, multiprocessing.Process):
                         if 'self signed' in flow['validation_status']:
                             profileid = data['profileid']
                             twid = data['twid']
-                            ip = flow['daddr']
+                            daddr = flow['daddr']
+                            # Ignore alert if ip is whitelisted
+                            if self.is_whitelisted(daddr, 'daddr'):
+                                continue
                             server_name = flow.get('server_name') # returns None if not found
                             if server_name:
                                 description = 'Self-signed certificate. Destination: {}. IP: {}'.format(server_name,ip)
@@ -311,7 +363,6 @@ class Module(Module, multiprocessing.Process):
                                 description = 'Self-signed certificate. Destination IP: {}'.format(ip)
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
-
 
         except KeyboardInterrupt:
             return True
