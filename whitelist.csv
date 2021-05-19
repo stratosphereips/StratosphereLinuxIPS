@@ -3,7 +3,7 @@
 # Supported types: ip,domain,organization
 # from: can either be src, dst or both
 # supported organizations: google, microsoft, apple, facebook, twitter...
-# what to ignore: either alerts or flows
+# what to ignore: either alerts or flows (plural)
 # ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
 # ignore flows: the flow will be completely discarded.
 #
@@ -14,4 +14,3 @@
 # organization,twitter,dst,alerts
 #
 "type","domain/ip/organization","from","what to ignore"
-ip,1.2.3.4,both,alerts

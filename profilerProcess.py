@@ -1496,12 +1496,12 @@ class ProfilerProcess(multiprocessing.Process):
             if saddr in self.whitelisted_IPs:
                 from_, what_to_ignore = self.whitelisted_IPs[saddr]
                 # check if we should ignore src flow from this ip
-                if 'flow' in what_to_ignore and ('src' in from_ or 'both' in from_):
+                if 'flows' in what_to_ignore and ('src' in from_ or 'both' in from_):
                     return True
             if daddr in self.whitelisted_IPs:
                 from_, what_to_ignore = self.whitelisted_IPs[daddr]
                 # check if we should ignore dst flow from this ip
-                if 'flow' in what_to_ignore and ('dst' in from_ or 'both' in from_):
+                if 'flows' in what_to_ignore and ('dst' in from_ or 'both' in from_):
                     return True
 
             if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
