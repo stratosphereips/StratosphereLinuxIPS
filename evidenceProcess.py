@@ -239,7 +239,7 @@ class EvidenceProcess(multiprocessing.Process):
                 if 'alerts' in what_to_ignore and ('src' in from_ or 'both' in from_):
                     return True
 
-            if is_dstip:
+            elif is_dstip:
                 from_, what_to_ignore = self.whitelisted_IPs[data]
                 if 'alerts' in what_to_ignore and ('dst' in from_ or 'both' in from_):
                     return True
@@ -275,6 +275,9 @@ class EvidenceProcess(multiprocessing.Process):
                     type_evidence = key.get('type_evidence') # example: PortScan, ThreatIntelligence, etc..
                     # Ignore alert if ip is whitelisted
                     if self.is_whitelisted(detection_info, type_detection):
+                        # All evidence are added to the db and to kalipso because before reaching this module
+                        # Remove evidence from db so it will be completely ignored from kalipso as well as the terminal
+                        __database__.deleteEvidence(profileid, twid, key)
                         continue
                     # evidence data
                     evidence_data = data.get('data')

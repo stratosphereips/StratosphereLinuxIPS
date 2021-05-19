@@ -883,7 +883,6 @@ class Database(object):
         # Set evidence in the database.
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
-
         evidence_to_send = {
             'profileid': str(profileid),
             'twid': str(twid),
@@ -892,6 +891,21 @@ class Database(object):
         }
         evidence_to_send = json.dumps(evidence_to_send)
         self.publish('evidence_added', evidence_to_send)
+
+    def deleteEvidence(self,profileid, twid, key):
+        """ Delete evidence from the database """
+
+        current_evidence = self.getEvidenceForTW(profileid, twid)
+        if current_evidence:
+            current_evidence = json.loads(current_evidence)
+        else:
+            current_evidence = {}
+        key_json = json.dumps(key)
+        # Delete the key regardless of whether it is in the dictionary
+        current_evidence.pop(key_json, None)
+        current_evidence_json = json.dumps(current_evidence)
+        self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
+        self.r.hset('evidence'+profileid, twid, current_evidence_json)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
