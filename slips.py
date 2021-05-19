@@ -189,6 +189,7 @@ if __name__ == '__main__':
                         help='do not create log files with all the traffic info and detections.')
     parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
                         help='packet filter for Zeek. BPF style.')
+    parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
     parser.add_argument('-cc','--clearcache',action='store_true', required=False,
                         help='clear a cache database.')
     parser.add_argument('-p', '--blocking',action='store_true',required=False,
@@ -336,14 +337,14 @@ if __name__ == '__main__':
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
 
-    # # Get the type of output from the parameters
-    # # Several combinations of outputs should be able to be used
-    # if args.gui:
-    #     # Create the curses thread
-    #     guiProcessQueue = Queue()
-    #     guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
-    #     guiProcessThread.start()
-    #     outputProcessQueue.put('quiet')
+    # Get the type of output from the parameters
+    # Several combinations of outputs should be able to be used
+    if args.gui:
+        # Create the curses thread
+        guiProcessQueue = Queue()
+        guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+        guiProcessThread.start()
+        outputProcessQueue.put('quiet')
     if not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
         do_logs = read_configuration(config, 'parameters', 'create_log_files')
