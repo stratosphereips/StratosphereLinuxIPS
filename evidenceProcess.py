@@ -190,6 +190,49 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
+    def is_whitelisted(self, ip, type_detection) -> bool:
+        """
+        Checks if IP is whitelisted
+        ip: str
+        type_detection: sip, dip, spor, dport, inTuple, outTuple
+        type_: 'saddr' or 'daddr'
+        """
+        # todo check domains and orgs
+        # todo determine ioc type (ip,domain,org)
+        # todo figure out where else to put this line
+        # todo: handle Detected IP: 10.11.10.149  due to RNN C&C channels detection, score: 0.93887365.
+
+        is_srcip = 'sip' in type_detection  or 'sport' in type_detection  or 'intuple' in type_detection.lower()
+        is_dstip = 'dip' in type_detection  or 'dport' in type_detection  or 'outtuple' in type_detection.lower()
+
+        self.whitelist = __database__.get_whitelist()
+        # empty dicts evaluate to False
+        while bool(self.whitelist) is False:
+            #todo handle if whitelist is empty not by mistake
+            self.whitelist = __database__.get_whitelist()
+        try:
+            # Convert each list from str to dict
+            self.whitelisted_IPs = json.loads(self.whitelist['IPs'])
+            self.whitelisted_domains = json.loads(self.whitelist['domains'])
+            self.whitelisted_organizations = json.loads(self.whitelist['organizations'])
+        except:
+            # one of the 3 dicts doesn't exist? #todo
+            pass
+        # todo support both as what to ignore value
+        if is_srcip and ip in self.whitelisted_IPs:
+            #Check if we should ignore src or dst alerts from this ip
+            from_, what_to_ignore = self.whitelisted_IPs[ip]
+            # from_ can be: src, dst, both
+            # what_to_ignore can be: alerts or flows
+            if 'alert' in what_to_ignore and ('src' in from_ or 'both' in from_):
+                return True
+        if is_dstip and ip in self.whitelisted_IPs:
+            from_, what_to_ignore = self.whitelisted_IPs[ip]
+            if 'alert' in what_to_ignore and ('dst' in from_ or 'both' in from_):
+                return True
+
+        return False
+
 
     def run(self):
         try:
@@ -210,13 +253,15 @@ class EvidenceProcess(multiprocessing.Process):
                     twid = data.get('twid')
                     # Key data
                     key = data.get('key')
-                    type_detection = key.get('type_detection')
-                    detection_info = key.get('detection_info')
-                    type_evidence = key.get('type_evidence')
+                    type_detection = key.get('type_detection') # example: dip sip dport sport
+                    detection_info = key.get('detection_info') # example: ip, port, inTuple, outTuple
+                    type_evidence = key.get('type_evidence') # example: PortScan, ThreatIntelligence, etc..
+                    # Ignore alert if ip is whitelisted
+                    if self.is_whitelisted(ip, type_detection):
+                        continue
                     # evidence data
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
-
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
                                                           ip,
