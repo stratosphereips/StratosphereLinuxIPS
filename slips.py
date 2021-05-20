@@ -319,7 +319,7 @@ if __name__ == '__main__':
     # This plugins import will automatically load the modules and put them in the __modules__ variable
     if to_ignore:
         # Convert string to list
-        to_ignore = eval(to_ignore)
+        to_ignore = to_ignore.replace("[","").replace("]","").replace(" ","").split(",")
         # Disable blocking if was not asked and if it is not interface
         if not args.blocking or not args.interface:
             to_ignore.append('blocking')
