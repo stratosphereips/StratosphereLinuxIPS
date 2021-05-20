@@ -1438,6 +1438,41 @@ class ProfilerProcess(multiprocessing.Process):
                 except KeyError:
                     self.column_values['filesize'] = ''
 
+    def is_whitelisted(self,ip="",type_of_ip="") -> bool:
+        """ Checks if domain or ip is whitelisted.
+        If ip is not passed it finds and checks domain
+        type_of_ip: 'saddr' or 'daddr'
+        """
+        if ip:
+            # Ignore flow if it's whitelisted
+            if type_of_ip is 'saddr' and ip in self.whitelisted_IPs:
+                from_, what_to_ignore = self.whitelisted_IPs[saddr]
+                ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
+                # check if we should ignore src flow from this ip
+                if ignore_flows and ('src' in from_ or 'both' in from_):
+                    return True
+            if type_of_ip is 'daddr' and ip in self.whitelisted_IPs:
+                from_, what_to_ignore = self.whitelisted_IPs[daddr]
+                ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
+                # check if we should ignore dst flow from this ip
+                if ignore_flows and ('dst' in from_ or 'both' in from_):
+                    return True
+        else:
+            # try to get the domain of this flow
+            # domain names are stored in different zeek files using different names, the following list
+            # tries to get the domain from each file, only one domain will be present in the list, the rest will be "",
+            domain = self.column_values.get('server_name','') # ssl.log
+            if not domain: domain = self.column_values.get('host','') # http.log
+            if not domain: domain = self.column_values.get('query','') # in dns.log
+            if not domain: domain = self.column_values.get('sub','').replace("CN=","") # in notice.log
+            if domain in self.whitelisted_domains:
+                from_, what_to_ignore = self.whitelisted_domains[domain]
+                ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
+                if ignore_flows:
+                    return True
+        return False
+
+
     def add_flow_to_profile(self):
         """
         This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
@@ -1449,15 +1484,8 @@ class ProfilerProcess(multiprocessing.Process):
             # Define which type of flows we are going to process
             if not self.column_values:
                 return True
-            elif not 'ssh' in self.column_values['type'] \
-                    and not 'ssl' in self.column_values['type'] \
-                    and not 'http' in self.column_values['type'] \
-                    and not 'dns' in self.column_values['type'] \
-                    and not 'conn' in self.column_values['type'] \
-                    and not 'flow' in self.column_values['type'] \
-                    and not 'argus' in self.column_values['type'] \
-                    and not 'nfdump' in self.column_values['type']\
-                    and not 'notice' in self.column_values['type']:
+            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice'):
+                # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
@@ -1492,21 +1520,12 @@ class ProfilerProcess(multiprocessing.Process):
             daddr = self.column_values['daddr']
             profileid = 'profile' + self.id_separator + str(saddr)
 
-
-            # todo ignore flow of whitelisted domains
-            # Ignore flow if it's whitelisted
-            if saddr in self.whitelisted_IPs:
-                from_, what_to_ignore = self.whitelisted_IPs[saddr]
-                ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
-                # check if we should ignore src flow from this ip
-                if ignore_flows and ('src' in from_ or 'both' in from_):
-                    return True
-            if daddr in self.whitelisted_IPs:
-                from_, what_to_ignore = self.whitelisted_IPs[daddr]
-                ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
-                # check if we should ignore dst flow from this ip
-                if ignore_flows and ('dst' in from_ or 'both' in from_):
-                    return True
+            # Ignore flow if whitelisted
+            is_flow_whitelisted = (self.is_whitelisted(ip=daddr, type_of_ip='daddr')
+                                  or self.is_whitelisted(ip=saddr, type_of_ip='saddr')
+                                  or self.is_whitelisted())
+            if is_flow_whitelisted:
+                return 
 
             if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                 dur = self.column_values['dur']
@@ -1570,7 +1589,10 @@ class ProfilerProcess(multiprocessing.Process):
                     port_type = 'Src'
                     __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
+                                          saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj),
+                                          dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
+                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
                 elif 'dns' in flow_type:
                     __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                     # Add DNS resolution if there are answers for the query
@@ -1591,9 +1613,13 @@ class ProfilerProcess(multiprocessing.Process):
                                              self.column_values['client_cert_chain_fuids'], self.column_values['subject'],
                                              self.column_values['issuer'], self.column_values['validation_status'],
                                              self.column_values['curve'], self.column_values['server_name'])
-
                 elif flow_type == 'ssh':
-                    __database__.add_out_ssh(profileid, twid, flow_type, uid, self.column_values['version'], self.column_values['auth_attempts'], self.column_values['auth_success'], self.column_values['client'], self.column_values['server'], self.column_values['cipher_alg'], self.column_values['mac_alg'], self.column_values['compression_alg'], self.column_values['kex_alg'], self.column_values['host_key_alg'], self.column_values['host_key'])
+                    __database__.add_out_ssh(profileid, twid, flow_type, uid, self.column_values['version'],
+                                             self.column_values['auth_attempts'], self.column_values['auth_success'],
+                                             self.column_values['client'], self.column_values['server'],
+                                             self.column_values['cipher_alg'], self.column_values['mac_alg'],
+                                             self.column_values['compression_alg'], self.column_values['kex_alg'],
+                                             self.column_values['host_key_alg'], self.column_values['host_key'])
                 elif flow_type == 'notice':
                      __database__.add_out_notice(profileid,twid,\
                                                  self.column_values['daddr'],\
@@ -1624,7 +1650,10 @@ class ProfilerProcess(multiprocessing.Process):
                     port_type = 'Src'
                     __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
                     # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
+                                          saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport,
+                                          proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes,
+                                          appproto=appproto, uid=uid, label=self.label)
                     # No dns check going in. Probably ok.
 
             def get_rev_profile(starttime, daddr_as_obj):

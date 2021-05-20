@@ -11,6 +11,6 @@
 #
 # ip,1.2.3.4,both,alerts
 # domain,google.com,src,flows
-# organization,twitter,dst,alerts
+# organization,twitter,dst,both
 #
 "type","domain/ip/organization","from","what to ignore"
