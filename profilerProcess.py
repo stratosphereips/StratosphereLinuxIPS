@@ -175,7 +175,7 @@ class ProfilerProcess(multiprocessing.Process):
                 elif 'org' in type_ and data in ("google", "microsoft", "apple", "facebook", "twitter"):
                     self.whitelisted_orgs[data] = [from_, what_to_ignore]
                 else:
-                    self.print(f"{data} is not a valid {type}.",1,0)
+                    self.print(f"{data} is not a valid {type_}.",1,0)
                 line = whitelist.readline()
 
         __database__.set_whitelist(self.whitelisted_IPs,
@@ -1492,16 +1492,20 @@ class ProfilerProcess(multiprocessing.Process):
             daddr = self.column_values['daddr']
             profileid = 'profile' + self.id_separator + str(saddr)
 
+
+            # todo ignore flow of whitelisted domains
             # Ignore flow if it's whitelisted
             if saddr in self.whitelisted_IPs:
                 from_, what_to_ignore = self.whitelisted_IPs[saddr]
+                ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
                 # check if we should ignore src flow from this ip
-                if 'flows' in what_to_ignore and ('src' in from_ or 'both' in from_):
+                if ignore_flows and ('src' in from_ or 'both' in from_):
                     return True
             if daddr in self.whitelisted_IPs:
                 from_, what_to_ignore = self.whitelisted_IPs[daddr]
+                ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
                 # check if we should ignore dst flow from this ip
-                if 'flows' in what_to_ignore and ('dst' in from_ or 'both' in from_):
+                if ignore_flows and ('dst' in from_ or 'both' in from_):
                     return True
 
             if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:

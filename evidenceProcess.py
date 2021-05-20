@@ -196,10 +196,8 @@ class EvidenceProcess(multiprocessing.Process):
         Checks if IP is whitelisted
         data: (detection_info) can be ip, domain, tuple(ip:port:proto), or org
         type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
-        type_: 'saddr' or 'daddr'
         """
         # todo check orgs
-        # todo support both as what to ignore value
         whitelist = __database__.get_whitelist()
         # empty dicts evaluate to False
         while bool(whitelist) is False:
@@ -233,19 +231,20 @@ class EvidenceProcess(multiprocessing.Process):
 
             if is_srcip:
                 # Check if we should ignore src or dst alerts from this ip
-                from_, what_to_ignore = self.whitelisted_IPs[data]
                 # from_ can be: src, dst, both
-                # what_to_ignore can be: alerts or flows
-                if 'alerts' in what_to_ignore and ('src' in from_ or 'both' in from_):
+                # what_to_ignore can be: alerts or flows or both
+                from_, what_to_ignore = self.whitelisted_IPs[data]
+                ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                if ignore_alerts and ('src' in from_ or 'both' in from_):
                     return True
-
             elif is_dstip:
                 from_, what_to_ignore = self.whitelisted_IPs[data]
-                if 'alerts' in what_to_ignore and ('dst' in from_ or 'both' in from_):
+                ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                if ignore_alerts and ('dst' in from_ or 'both' in from_):
                     return True
-        elif  data_type is 'domain' and data in self.whitelisted_domains:
+        elif data_type is 'domain' and data in self.whitelisted_domains:
             what_to_ignore = self.whitelisted_domains[data] # alerts or flows
-            if 'alerts' in what_to_ignore:
+            if 'alerts' in what_to_ignore or 'both' in what_to_ignore:
                 return True
 
         return False
