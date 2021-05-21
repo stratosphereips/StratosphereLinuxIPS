@@ -155,32 +155,51 @@ class ProfilerProcess(multiprocessing.Process):
                 if not line.startswith('#') and not line.startswith('"type"'):
                     break
             # Process lines after comments
+            line_number = 0
             while line:
+                line_number+=1
                 # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
-                line = line.replace("\n","").split(",")
+                line = line.replace("\n","").replace(" ","").split(",")
                 try:
                     type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
                 except:
                     # line is missing a column, ignore it.
+                    self.print(f"Line {line_number} is missing a column. Skipping.")
                     line = whitelist.readline()
                     continue
-                # validate the type before processing
-                if ('ip' in type_ and
-                    (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
-                    # Store the values as commma sepatrated strings instead of tuples for better performance
-                    # Reddis doesn't support storing tuples
-                    self.whitelisted_IPs[data] = [from_, what_to_ignore]
-                elif 'domain' in type_ and validators.domain(data):
-                    self.whitelisted_domains[data] = [from_, what_to_ignore]
-                elif 'org' in type_ and data in ("google", "microsoft", "apple", "facebook", "twitter"):
-                    self.whitelisted_orgs[data] = [from_, what_to_ignore]
-                else:
-                    self.print(f"{data} is not a valid {type_}.",1,0)
+                # Validate the type before processing
+                try:
+                    if ('ip' in type_ and
+                        (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
+                        self.whitelisted_IPs[data] = [from_, what_to_ignore]
+                    elif 'domain' in type_ and validators.domain(data):
+                        self.whitelisted_domains[data] = [from_, what_to_ignore]
+                    elif 'org' in type_ and data in ("google", "microsoft", "apple", "facebook", "twitter"):
+                        #todo this should be a dict with 'IPs' key
+                        self.whitelisted_orgs[data] = [from_, what_to_ignore]
+                    else:
+                        self.print(f"{data} is not a valid {type_}.",1,0)
+                except:
+                    self.print(f"Line {line_number} in whitelist.csv is invalid. Skipping.")
                 line = whitelist.readline()
 
         __database__.set_whitelist(self.whitelisted_IPs,
                                    self.whitelisted_domains,
                                    self.whitelisted_orgs)
+
+    def load_org_info(self,org):
+        """ Reads the specified org's info from slips/organizations_asn_info and stores the info in the database """
+        try:
+            # Each file is named after the organization's name and contains comma separated ips/domains
+            # todo we should update  these files manually and upload them to a remote github repo, and update them the same way we do ti_files
+            file = 'slips/organizations_asn_info/' + org
+            with open(file,'r') as f:
+                # Store the ips in a list
+                org_IPs= f.read().split(",")
+                # Store them in the db as str
+                __database__.set_org_whitelisted_IPs(org, json.dumps(org_IPs))
+        except:
+            self.print("Can't Read slips/organizations_asn_info/. Aborting. ")
 
     def define_type(self, line):
         """
@@ -1444,20 +1463,23 @@ class ProfilerProcess(multiprocessing.Process):
         type_of_ip: 'saddr' or 'daddr'
         """
         if ip:
+            #---------------------------------------- Check IPs
             # Ignore flow if it's whitelisted
+            # todo refactor the below conditions!!
             if type_of_ip is 'saddr' and ip in self.whitelisted_IPs:
-                from_, what_to_ignore = self.whitelisted_IPs[saddr]
+                from_, what_to_ignore = self.whitelisted_IPs[ip]
                 ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
                 # check if we should ignore src flow from this ip
                 if ignore_flows and ('src' in from_ or 'both' in from_):
                     return True
-            if type_of_ip is 'daddr' and ip in self.whitelisted_IPs:
-                from_, what_to_ignore = self.whitelisted_IPs[daddr]
+            elif type_of_ip is 'daddr' and ip in self.whitelisted_IPs:
+                from_, what_to_ignore = self.whitelisted_IPs[ip]
                 ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
                 # check if we should ignore dst flow from this ip
                 if ignore_flows and ('dst' in from_ or 'both' in from_):
                     return True
         else:
+            #---------------------------------------- Check domains
             # try to get the domain of this flow
             # domain names are stored in different zeek files using different names, the following list
             # tries to get the domain from each file, only one domain will be present in the list, the rest will be "",
