@@ -1771,14 +1771,22 @@ class Database(object):
         return data
 
     def set_whitelist(self,whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
-        """ Stores a dict of whitelisted IPs, domains and organizations in the db """
+        """ Store a dict of whitelisted IPs, domains and organizations in the db """
 
         self.r.hset("whitelist" , "IPs", json.dumps(whitelisted_IPs))
         self.r.hset("whitelist" , "domains", json.dumps(whitelisted_domains))
         self.r.hset("whitelist" , "organizations", json.dumps(whitelisted_organizations))
 
     def get_whitelist(self):
-        """ Returns dict of 3 keys: IPs, domains and organizations"""
+        """ Return dict of 3 keys: IPs, domains and organizations"""
         return self.r.hgetall('whitelist')
+
+    def set_org_whitelisted_IPs(self,org,data):
+        """ Set organization data in the organizations_info hash """
+        self.r.hset('organizations_info', org, data)
+
+    def get_org_whitelisted_IPs(self,org) -> str:
+        """ Return the specified organization's ips/domains"""
+        return self.r.hget('organizations_info',org)
 
 __database__ = Database()
