@@ -183,6 +183,21 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print(f"Line {line_number} in whitelist.csv is invalid. Skipping.")
                 line = whitelist.readline()
 
+        # If the user specified an org in the whitelist, load the info about it only to the db and to memory
+        self.whitelisted_organizations_IPs = {}
+        for org in self.whitelisted_orgs:
+            # Store the IPs of this org in the db
+            self.load_org_info(org)
+            # Create a new dict to hold the ips + all the data taken from the user
+            self.whitelisted_organizations_IPs[org]= {}
+            # Store the IPs of this org in a separate dict (in memory)
+            self.whitelisted_organizations_IPs[org]['IPs'] = __database__.get_org_whitelisted_IPs(org)
+            # ignore flows/alerts from src ip or dst ip or both??
+            self.whitelisted_organizations_IPs[org]['from'] =  self.whitelisted_orgs[org][0]
+            # ignore flows or alerts or both??
+            self.whitelisted_organizations_IPs[org]['what_to_ignore'] = self.whitelisted_orgs[org][1]
+            # todo check if ip/domain is in the loaded asn data
+
         __database__.set_whitelist(self.whitelisted_IPs,
                                    self.whitelisted_domains,
                                    self.whitelisted_orgs)
