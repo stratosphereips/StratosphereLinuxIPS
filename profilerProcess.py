@@ -1493,6 +1493,22 @@ class ProfilerProcess(multiprocessing.Process):
                 # check if we should ignore dst flow from this ip
                 if ignore_flows and ('dst' in from_ or 'both' in from_):
                     return True
+            #---------------------------------------- Check orgs
+            # This process will be very slow because there are sooo many IPs for each org
+            # Did the user specify any whitelisted orgs??
+            elif self.whitelisted_orgs:
+                # Check if ip belongs to a whitelisted organization
+                for org in self.whitelisted_organizations_IPs:
+                    from_ =  self.whitelisted_organizations_IPs[org]['from']
+                    what_to_ignore = self.whitelisted_organizations_IPs[org]['what_to_ignore']
+                    ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
+                    if (ignore_flows and
+                            (type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_))
+                            or
+                            (type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_))):
+                        # Now start searching for this ip in the list or the org IPs
+                        if ip in self.whitelisted_organizations_IPs[org]['IPs']:
+                            return True
         else:
             #---------------------------------------- Check domains
             # try to get the domain of this flow
@@ -1562,7 +1578,7 @@ class ProfilerProcess(multiprocessing.Process):
                                   or self.is_whitelisted(ip=saddr, type_of_ip='saddr')
                                   or self.is_whitelisted())
             if is_flow_whitelisted:
-                return 
+                return
 
             if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                 dur = self.column_values['dur']
