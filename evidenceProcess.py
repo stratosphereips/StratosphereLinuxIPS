@@ -33,7 +33,7 @@ class EvidenceProcess(multiprocessing.Process):
     It only work on evidence for IPs that were profiled
     This should be converted into a module
     """
-    def __init__(self, inputqueue, outputqueue, config):
+    def __init__(self, inputqueue, outputqueue, config, output_folder):
         self.name = 'Evidence'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
@@ -46,8 +46,8 @@ class EvidenceProcess(multiprocessing.Process):
         self.read_configuration()
         # Subscribe to channel 'tw_modified'
         self.c1 = __database__.subscribe('evidence_added')
-        self.logfile = self.clean_evidence_log_file()
-        self.jsonfile = self.clean_evidence_json_file()
+        self.logfile = self.clean_evidence_log_file(output_folder)
+        self.jsonfile = self.clean_evidence_json_file(output_folder)
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -142,7 +142,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         return evidence_string
 
-    def clean_evidence_log_file(self, output_folder=''):
+    def clean_evidence_log_file(self, output_folder):
         '''
         Clear the file if exists for evidence log
         '''
@@ -150,7 +150,7 @@ class EvidenceProcess(multiprocessing.Process):
             open(output_folder  + 'alerts.log', 'w').close()
         return open(output_folder + 'alerts.log', 'a')
 
-    def clean_evidence_json_file(self, output_folder=''):
+    def clean_evidence_json_file(self, output_folder):
         '''
         Clear the file if exists for evidence log
         '''
