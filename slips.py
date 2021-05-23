@@ -193,6 +193,8 @@ if __name__ == '__main__':
                         help='clear a cache database.')
     parser.add_argument('-p', '--blocking',action='store_true',required=False,
                         help='block IPs that connect to the computer. Supported only on Linux.')
+    parser.add_argument('-o', '--output', action='store_true', required=False,
+                        help='store alerts.json and alerts.txt in the provided folder.')
     parser.add_argument("-h", "--help", action="help", help="command line help")
 
     args = parser.parse_args()
