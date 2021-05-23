@@ -1782,7 +1782,11 @@ class Database(object):
         return self.r.hgetall('whitelist')
 
     def set_org_whitelisted_IPs(self,org,data):
-        """ Set organization data in the organizations_info hash """
+        """
+        Set organization data in the organizations_info hash
+        data is a dict with key:the first two octets of the ip range
+                            value: all ips in that subnet to make searching faster
+        """
         self.r.hset('organizations_info', org, data)
 
     def get_org_whitelisted_IPs(self,org) -> str:

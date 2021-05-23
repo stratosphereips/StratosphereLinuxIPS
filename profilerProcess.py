@@ -140,7 +140,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.label = 'unknown'
 
     def read_whitelist(self):
-        """ Reads the content of whitelist.csv and stores in the database """
+        """ Reads the content of whitelist.csv and stores information about each ip/org/domain in the database """
 
         #todo handle empty whitelists
         self.whitelisted_IPs = {}
@@ -164,7 +164,7 @@ class ProfilerProcess(multiprocessing.Process):
                     type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
                 except:
                     # line is missing a column, ignore it.
-                    self.print(f"Line {line_number} is missing a column. Skipping.")
+                    self.print(f"Line {line_number} in whitelist.csv is missing a column. Skipping.")
                     line = whitelist.readline()
                     continue
                 # Validate the type before processing
@@ -175,46 +175,65 @@ class ProfilerProcess(multiprocessing.Process):
                     elif 'domain' in type_ and validators.domain(data):
                         self.whitelisted_domains[data] = [from_, what_to_ignore]
                     elif 'org' in type_ and data in ("google", "microsoft", "apple", "facebook", "twitter"):
-                        #todo this should be a dict with 'IPs' key
-                        self.whitelisted_orgs[data] = [from_, what_to_ignore]
+                        #organizations dicts look something like this:
+                        #  {'google': {'from':'dst',
+                        #               'what_to_ignore': 'alerts'
+                        #               'IPs': {'34.64.0.0/10': set(IPs in this subnet),...}}
+
+                        self.whitelisted_orgs[data] = {'from': from_,
+                                                       'what_to_ignore': what_to_ignore}
                     else:
                         self.print(f"{data} is not a valid {type_}.",1,0)
                 except:
                     self.print(f"Line {line_number} in whitelist.csv is invalid. Skipping.")
                 line = whitelist.readline()
-
+        # after we're done reading the file, process organizations info
         # If the user specified an org in the whitelist, load the info about it only to the db and to memory
-        self.whitelisted_organizations_IPs = {}
         for org in self.whitelisted_orgs:
             # Store the IPs of this org in the db
-            self.load_org_info(org)
-            # Create a new dict to hold the ips + all the data taken from the user
-            self.whitelisted_organizations_IPs[org]= {}
-            # Store the IPs of this org in a separate dict (in memory)
-            self.whitelisted_organizations_IPs[org]['IPs'] = __database__.get_org_whitelisted_IPs(org)
-            # ignore flows/alerts from src ip or dst ip or both??
-            self.whitelisted_organizations_IPs[org]['from'] =  self.whitelisted_orgs[org][0]
-            # ignore flows or alerts or both??
-            self.whitelisted_organizations_IPs[org]['what_to_ignore'] = self.whitelisted_orgs[org][1]
+            IPs_dict = self.load_org_info(org)
+            # Store the IPs of this org
+            self.whitelisted_orgs[org].update({'IPs' : IPs_dict})
             # todo check if ip/domain is in the loaded asn data
-
+        # store everything in the db because we'll be needing this info in the evidenceProcess
         __database__.set_whitelist(self.whitelisted_IPs,
                                    self.whitelisted_domains,
                                    self.whitelisted_orgs)
 
-    def load_org_info(self,org):
-        """ Reads the specified org's info from slips/organizations_asn_info and stores the info in the database """
+    def load_org_info(self,org) -> dict :
+        """
+        Reads the specified org's info from slips/organizations_asn_info and stores the info in the database
+        org: 'google', 'facebook', 'twitter', etc...
+        returns a dict with all this organization's IPs sorted by
+        """
         try:
-            # Each file is named after the organization's name and contains comma separated ips/domains
+            #todo handle different errors
+            # Each file is named after the organization's name
+            # each line of the file containes an ip range, for example: 34.64.0.0/10
             # todo we should update  these files manually and upload them to a remote github repo, and update them the same way we do ti_files
             file = 'slips/organizations_asn_info/' + org
+            # IPs_dict structure: key: ip/subnet for example: 34.64.0.0/10
+            #                     value: all ips in that subnet to make searching faster
+            IPs_dict = {}
             with open(file,'r') as f:
-                # Store the ips in a list
-                org_IPs= f.read().split(",")
-                # Store them in the db as str
-                __database__.set_org_whitelisted_IPs(org, json.dumps(org_IPs))
+                line = f.readline()
+                while line:
+                    # each line will be something like this: 34.64.0.0/10
+                    # the idea is to store the ip/subnet as the key and all the hosts in the subnet as the value
+                    # so when searching we first find check if the ip is in this subnet and
+                    # if so, we search that range only instead of searching all the IPs
+
+                    # get each ip in this subnet
+                    hosts = list(ipaddress.ip_network(line.replace("\n","")).hosts())
+                    # convert from ipv4Address object to str
+                    hosts = list(map(str,hosts))
+                    IPs_dict[line] = hosts
+                    line = f.readline()
+            # Store them in the db as str
+            __database__.set_org_whitelisted_IPs(org, json.dumps(IPs_dict))
+            return IPs_dict
         except:
-            self.print("Can't Read slips/organizations_asn_info/. Aborting. ")
+            self.print("Can't Read slips/organizations_asn_info/{org} Aborting.")
 
     def define_type(self, line):
         """
@@ -1479,7 +1498,6 @@ class ProfilerProcess(multiprocessing.Process):
         """
         if ip:
             #---------------------------------------- Check IPs
-            # Ignore flow if it's whitelisted
             # todo refactor the below conditions!!
             if type_of_ip is 'saddr' and ip in self.whitelisted_IPs:
                 from_, what_to_ignore = self.whitelisted_IPs[ip]
@@ -1498,18 +1516,29 @@ class ProfilerProcess(multiprocessing.Process):
             # Did the user specify any whitelisted orgs??
             elif self.whitelisted_orgs:
                 # Check if ip belongs to a whitelisted organization
-                for org in self.whitelisted_organizations_IPs:
-                    from_ =  self.whitelisted_organizations_IPs[org]['from']
-                    what_to_ignore = self.whitelisted_organizations_IPs[org]['what_to_ignore']
+                for org in self.whitelisted_orgs:
+                    from_ =  self.whitelisted_orgs[org]['from']
+                    what_to_ignore = self.whitelisted_orgs[org]['what_to_ignore']
                     ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
                     if (ignore_flows and
                             (type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_))
                             or
                             (type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_))):
-                        # Now start searching for this ip in the list or the org IPs
-                        if ip in self.whitelisted_organizations_IPs[org]['IPs']:
-                            return True
+                        # Now start searching for this ip in the list of org IPs
+                        IPs_dict = self.whitelisted_orgs[org]['IPs']
+                        ip_octets = ip.split(".")
+                        try:
+                            first_2_octets = f'{ip_octets[0]}.{ip_octets[1]}'
+                            for key,val in IPs_dict.items():
+                                # if our ip belongs to this subnet, search the hosts of this subnet, if not move to the next subnet and repeat
+                                if first_2_octets in key and ip in val:
+                                    return True
+                        except IndexError:
+                            # this ip isn't ipv4 , ignore it
+                            return False
+
         else:
+            # todo resolve each domain to ip and check it in whitelisted orgs
             #---------------------------------------- Check domains
             # try to get the domain of this flow
             # domain names are stored in different zeek files using different names, the following list
@@ -1573,7 +1602,8 @@ class ProfilerProcess(multiprocessing.Process):
             daddr = self.column_values['daddr']
             profileid = 'profile' + self.id_separator + str(saddr)
 
-            # Ignore flow if whitelisted
+            # Ignore flow if whitelisted, check saddr,daddr and flow domain
+            # todo change saddr and daddr to self.saddr and self.daddr and call the below function only once
             is_flow_whitelisted = (self.is_whitelisted(ip=daddr, type_of_ip='daddr')
                                   or self.is_whitelisted(ip=saddr, type_of_ip='saddr')
                                   or self.is_whitelisted())
