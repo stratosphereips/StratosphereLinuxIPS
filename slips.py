@@ -193,6 +193,8 @@ if __name__ == '__main__':
                         help='clear a cache database.')
     parser.add_argument('-p', '--blocking',action='store_true',required=False,
                         help='block IPs that connect to the computer. Supported only on Linux.')
+    parser.add_argument('-o', '--output', action='store', required=False, default='output/',
+                        help='store alerts.json and alerts.txt in the provided folder.')
     parser.add_argument("-h", "--help", action="help", help="command line help")
 
     args = parser.parse_args()
@@ -231,7 +233,9 @@ if __name__ == '__main__':
     if args.clearcache:
         print('Deleting Cache DB in Redis.')
         clear_redis_cache_database()
-
+    # Create output folder for alerts.txt and alerts.json if they do not exist
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
     # If the user wants to blocks, the user needs to give a permission to modify iptables
     # Also check if the user blocks on interface, does not make sense to block on files
     if args.interface and args.blocking:
@@ -359,7 +363,7 @@ if __name__ == '__main__':
     # Create the queue for the evidence thread
     evidenceProcessQueue = Queue()
     # Create the thread and start it
-    evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config)
+    evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output)
     evidenceProcessThread.start()
     outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
 
