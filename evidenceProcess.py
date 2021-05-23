@@ -142,21 +142,21 @@ class EvidenceProcess(multiprocessing.Process):
 
         return evidence_string
 
-    def clean_evidence_log_file(self):
+    def clean_evidence_log_file(self, output_folder=''):
         '''
         Clear the file if exists for evidence log
         '''
-        if path.exists('alerts.log'):
-            open('alerts.log', 'w').close()
-        return open('alerts.log', 'a')
+        if path.exists(output_folder  + 'alerts.log'):
+            open(output_folder  + 'alerts.log', 'w').close()
+        return open(output_folder + 'alerts.log', 'a')
 
-    def clean_evidence_json_file(self):
+    def clean_evidence_json_file(self, output_folder=''):
         '''
         Clear the file if exists for evidence log
         '''
-        if path.exists('alerts.json'):
-            open('alerts.json', 'w').close()
-        return open('alerts.json', 'a')
+        if path.exists(output_folder  + 'alerts.json'):
+            open(output_folder  + 'alerts.json', 'w').close()
+        return open(output_folder + 'alerts.json', 'a')
 
 
     def addDataToJSONFile(self, data):
