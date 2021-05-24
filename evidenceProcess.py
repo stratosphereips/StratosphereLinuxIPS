@@ -26,6 +26,7 @@ from os import path
 from colorama import Fore, Back, Style
 import validators
 import ipaddress
+import socket
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -191,13 +192,22 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
+    def ip2int(self,ip):
+        """ Convert IP address to integer """
+
+        # convert ipv4address object to str ip
+        ip = str(ip)
+        # convert each octet to int
+        integer_ip = list(map(int, ip.split('.')))
+        res = (16777216 * integer_ip[0]) + (65536 * integer_ip[1]) + (256 * integer_ip[2]) + integer_ip[3]
+        return res
+
     def is_whitelisted(self, data, type_detection) -> bool:
         """
         Checks if IP is whitelisted
-        data: (detection_info) can be ip, domain, tuple(ip:port:proto), or org
+        data: (detection_info) can be ip, domain, tuple(ip:port:proto)
         type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
         """
-        # todo check orgs
         whitelist = __database__.get_whitelist()
         # empty dicts evaluate to False
         while bool(whitelist) is False:
@@ -205,14 +215,14 @@ class EvidenceProcess(multiprocessing.Process):
             whitelist = __database__.get_whitelist()
         try:
             # Convert each list from str to dict
-            self.whitelisted_IPs = json.loads(whitelist['IPs'])
-            self.whitelisted_domains = json.loads(whitelist['domains'])
-            self.whitelisted_organizations = json.loads(whitelist['organizations'])
-        except:
+            whitelisted_IPs = json.loads(whitelist['IPs'])
+            whitelisted_domains = json.loads(whitelist['domains'])
+            whitelisted_organizations = json.loads(whitelist['organizations'])
+        except IndexError:
             # one of the 3 dicts doesn't exist? #todo
             pass
 
-        # Is data ip or domain?
+        # Set data type
         if 'domain' in type_detection:
             data_type = 'domain'
         elif 'outTuple' in type_detection:
@@ -223,32 +233,62 @@ class EvidenceProcess(multiprocessing.Process):
         else:
             # it's probably one of the following:  'sip', 'dip', 'sport', 'dport'
             data_type = 'ip'
-
-        if data_type is 'ip' and data in self.whitelisted_IPs:
-            # Is it a srcip or a dstip??
-            is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
-            is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple')
-
-            if is_srcip:
-                # Check if we should ignore src or dst alerts from this ip
-                # from_ can be: src, dst, both
-                # what_to_ignore can be: alerts or flows or both
-                from_, what_to_ignore = self.whitelisted_IPs[data]
+        #---------------------------------------- Check domains
+        if data_type is 'domain' :
+            # is domain in whitelisted domains?
+            if data in whitelisted_domains:
+                # ignore flows or alerts?
+                what_to_ignore = whitelisted_domains[data] # alerts or flows
+                return 'alerts' in what_to_ignore or 'both' in what_to_ignore
+            # domain not in whitelisted domains.
+            # resolve this domain and check if it's in whitelisted ips or whitelisted orgs
+            resolved_domain = socket.gethostbyname(data)
+            #todo handle socket.gaierror
+            data = resolved_domain
+            data_type = 'ip'
+        # Is it a srcip or a dstip??
+        is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
+        is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple','domain')
+        ip = data
+        if data_type is 'ip' and ip in whitelisted_IPs:
+            # Check if we should ignore src or dst alerts from this ip
+            # from_ can be: src, dst, both
+            # what_to_ignore can be: alerts or flows or both
+            from_, what_to_ignore = whitelisted_IPs[ip]
+            ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+            ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
+            ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
+            return ignore_alerts_from_ip or ignore_alerts_to_ip
+        #---------------------------------------- Check orgs
+        # Did the user specify any whitelisted orgs??
+        elif whitelisted_organizations:
+            # Check if ip belongs to a whitelisted organization
+            for org in whitelisted_organizations:
+                from_ =  whitelisted_organizations[org]['from']
+                what_to_ignore = whitelisted_organizations[org]['what_to_ignore']
                 ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
-                if ignore_alerts and ('src' in from_ or 'both' in from_):
-                    return True
-            elif is_dstip:
-                from_, what_to_ignore = self.whitelisted_IPs[data]
-                ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
-                if ignore_alerts and ('dst' in from_ or 'both' in from_):
-                    return True
-        elif data_type is 'domain' and data in self.whitelisted_domains:
-            what_to_ignore = self.whitelisted_domains[data] # alerts or flows
-            if 'alerts' in what_to_ignore or 'both' in what_to_ignore:
-                return True
-
+                ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
+                ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
+                if ignore_alerts_from_ip or ignore_alerts_to_ip:
+                    IPs_dict = whitelisted_organizations[org]['IPs']
+                    # Now start searching for this ip in the list of org IPs
+                    ip_octets = ip.split(".")
+                    try:
+                        first_2_octets = f'{ip_octets[0]}.{ip_octets[1]}'
+                        for subnet, ip_range in IPs_dict.items():
+                            # if our ip belongs to this subnet, search the hosts of this subnet,
+                            # if not move to the next subnet and repeat
+                            if first_2_octets in subnet:
+                                first_ip_in_subnet = ip_range[0]
+                                last_ip_in_subnet = ip_range[1]
+                                int_ip = self.ip2int(ip)
+                                # if it's in the stored range, it's whitelisted, ignore it
+                                return int_ip >= first_ip_in_subnet and int_ip <= last_ip_in_subnet
+                    except (IndexError, AttributeError) as e:
+                        # IndexError this ip isn't ipv4, ignore it
+                        # AttributeError IPs_dict is empty, ignore it
+                        return False
         return False
-
 
     def run(self):
         try:
@@ -275,7 +315,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # Ignore alert if ip is whitelisted
                     if self.is_whitelisted(detection_info, type_detection):
                         # All evidence are added to the db and to kalipso because before reaching this module
-                        # Remove evidence from db so it will be completely ignored from kalipso as well as the terminal
+                        # Remove evidence from db so it will be completely ignored from kalipso and the terminal
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
                     # evidence data

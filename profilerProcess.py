@@ -175,13 +175,12 @@ class ProfilerProcess(multiprocessing.Process):
                         (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
                         self.whitelisted_IPs[data] = [from_, what_to_ignore]
                     elif 'domain' in type_ and validators.domain(data):
-                        self.whitelisted_domains[data] = [from_, what_to_ignore]
+                        self.whitelisted_domains[data] = what_to_ignore
                     elif 'org' in type_ and data in ("google", "microsoft", "apple", "facebook", "twitter"):
                         #organizations dicts look something like this:
                         #  {'google': {'from':'dst',
                         #               'what_to_ignore': 'alerts'
                         #               'IPs': {'34.64.0.0/10': (first ip in range,last ip in range)}}
-
                         self.whitelisted_orgs[data] = {'from': from_,
                                                        'what_to_ignore': what_to_ignore}
                     else:
@@ -203,6 +202,8 @@ class ProfilerProcess(multiprocessing.Process):
                                    self.whitelisted_orgs)
 
     def ip2int(self,ip):
+        """ Convert IP address to integer """
+
         # convert ipv4address object to str ip
         ip = str(ip)
         # convert each octet to int
@@ -1514,7 +1515,6 @@ class ProfilerProcess(multiprocessing.Process):
         else:
             # whether it's a resolved domain or a daddr
             type_of_ip = 'daddr'
-
          #---------------------------------------- Check domains
         if not ip:
             # No ip is passed, Try to get the domain of this flow
@@ -1525,11 +1525,12 @@ class ProfilerProcess(multiprocessing.Process):
             if not domain: domain = self.column_values.get('query','') # in dns.log
             if not domain: domain = self.column_values.get('sub','').replace("CN=","") # in notice.log
             if domain in self.whitelisted_domains:
-                from_, what_to_ignore = self.whitelisted_domains[domain]
+                what_to_ignore = self.whitelisted_domains[domain]
                 return 'flows' in what_to_ignore or 'both' in what_to_ignore
             # domain not in whitelisted domains, resolve this domain and check if it's in whitelisted ips or whitelisted orgs
             resolved_domain = socket.gethostbyname(domain)
             ip = resolved_domain
+            #todo handle socket.gaierror
         #---------------------------------------- Check IPs
         if ip in self.whitelisted_IPs:
             from_, what_to_ignore = self.whitelisted_IPs[ip]
