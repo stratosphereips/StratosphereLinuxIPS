@@ -29,6 +29,7 @@ import os
 import binascii
 import base64
 import validators
+import netaddr
 
 def timeit(method):
     def timed(*args, **kw):
@@ -178,7 +179,7 @@ class ProfilerProcess(multiprocessing.Process):
                         #organizations dicts look something like this:
                         #  {'google': {'from':'dst',
                         #               'what_to_ignore': 'alerts'
-                        #               'IPs': {'34.64.0.0/10': set(IPs in this subnet),...}}
+                        #               'IPs': {'34.64.0.0/10': (first ip in range,last ip in range)}}
 
                         self.whitelisted_orgs[data] = {'from': from_,
                                                        'what_to_ignore': what_to_ignore}
@@ -192,13 +193,21 @@ class ProfilerProcess(multiprocessing.Process):
         for org in self.whitelisted_orgs:
             # Store the IPs of this org in the db
             IPs_dict = self.load_org_info(org)
-            # Store the IPs of this org
-            self.whitelisted_orgs[org].update({'IPs' : IPs_dict})
-            # todo check if ip/domain is in the loaded asn data
+            if IPs_dict:
+                # Store the IPs of this org
+                self.whitelisted_orgs[org].update({'IPs' : IPs_dict})
         # store everything in the db because we'll be needing this info in the evidenceProcess
         __database__.set_whitelist(self.whitelisted_IPs,
                                    self.whitelisted_domains,
                                    self.whitelisted_orgs)
+
+    def ip2int(self,ip):
+        # convert ipv4address object to str ip
+        ip = str(ip)
+        # convert each octet to int
+        integer_ip = list(map(int, ip.split('.')))
+        res = (16777216 * integer_ip[0]) + (65536 * integer_ip[1]) + (256 * integer_ip[2]) + integer_ip[3]
+        return res
 
     def load_org_info(self,org) -> dict :
         """
@@ -207,33 +216,35 @@ class ProfilerProcess(multiprocessing.Process):
         returns a dict with all this organization's IPs sorted by
         """
         try:
-            #todo handle different errors
             # Each file is named after the organization's name
-            # each line of the file containes an ip range, for example: 34.64.0.0/10
+            # Each line of the file containes an ip range, for example: 34.64.0.0/10
             # todo we should update  these files manually and upload them to a remote github repo, and update them the same way we do ti_files
-            file = 'slips/organizations_asn_info/' + org
             # IPs_dict structure: key: ip/subnet for example: 34.64.0.0/10
-            #                     value: all ips in that subnet to make searching faster
+            #                     value: (first,last) ips in that subnet as integers to make searching faster
             IPs_dict = {}
+            file = f'slips/organizations_info/{org}'
             with open(file,'r') as f:
                 line = f.readline()
                 while line:
                     # each line will be something like this: 34.64.0.0/10
-                    # the idea is to store the ip/subnet as the key and all the hosts in the subnet as the value
+                    # the idea is to store the ip/subnet as the key and the (first,last) hosts as an int in the value
                     # so when searching we first find check if the ip is in this subnet and
-                    # if so, we search that range only instead of searching all the IPs
-
-                    # get each ip in this subnet
-                    hosts = list(ipaddress.ip_network(line.replace("\n","")).hosts())
-                    # convert from ipv4Address object to str
-                    hosts = list(map(str,hosts))
-                    IPs_dict[line] = hosts
+                    # if so, we convert the ip to int tand check if it's in the stored range or not.
+                    line = line.replace("\n","")
+                    # get first and last ip in this range
+                    ips = netaddr.IPNetwork(line)
+                    first_ip = self.ip2int(ips[0])
+                    last_ip = self.ip2int(ips[-1])
+                    # empty this list so it doesn't take up memory
+                    ips = []
+                    IPs_dict[line] = (first_ip, last_ip)
                     line = f.readline()
             # Store them in the db as str
             __database__.set_org_whitelisted_IPs(org, json.dumps(IPs_dict))
             return IPs_dict
-        except:
-            self.print("Can't Read slips/organizations_asn_info/{org} Aborting.")
+        except (FileNotFoundError, IOError):
+            self.print(f"Can't read slips/organizations_info/{org} ... Aborting.")
+            return False
 
     def define_type(self, line):
         """
@@ -1498,21 +1509,15 @@ class ProfilerProcess(multiprocessing.Process):
         """
         if ip:
             #---------------------------------------- Check IPs
-            # todo refactor the below conditions!!
-            if type_of_ip is 'saddr' and ip in self.whitelisted_IPs:
+            if ip in self.whitelisted_IPs:
                 from_, what_to_ignore = self.whitelisted_IPs[ip]
                 ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
                 # check if we should ignore src flow from this ip
-                if ignore_flows and ('src' in from_ or 'both' in from_):
-                    return True
-            elif type_of_ip is 'daddr' and ip in self.whitelisted_IPs:
-                from_, what_to_ignore = self.whitelisted_IPs[ip]
-                ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
-                # check if we should ignore dst flow from this ip
-                if ignore_flows and ('dst' in from_ or 'both' in from_):
-                    return True
+                ignore_flows_from_ip = ignore_flows and type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_)
+                ignore_flows_to_ip = ignore_flows and type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_)
+                # if one of them is true return true
+                return ignore_flows_from_ip or ignore_flows_to_ip
             #---------------------------------------- Check orgs
-            # This process will be very slow because there are sooo many IPs for each org
             # Did the user specify any whitelisted orgs??
             elif self.whitelisted_orgs:
                 # Check if ip belongs to a whitelisted organization
@@ -1520,23 +1525,28 @@ class ProfilerProcess(multiprocessing.Process):
                     from_ =  self.whitelisted_orgs[org]['from']
                     what_to_ignore = self.whitelisted_orgs[org]['what_to_ignore']
                     ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
-                    if (ignore_flows and
-                            (type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_))
-                            or
-                            (type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_))):
-                        # Now start searching for this ip in the list of org IPs
+                    ignore_flows_from_ip = ignore_flows and type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_)
+                    ignore_flows_to_ip = ignore_flows and type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_)
+                    if ignore_flows_from_ip or ignore_flows_to_ip:
+                        # we can get this dict from the db but it's already present in this class
                         IPs_dict = self.whitelisted_orgs[org]['IPs']
+                        # Now start searching for this ip in the list of org IPs
                         ip_octets = ip.split(".")
                         try:
                             first_2_octets = f'{ip_octets[0]}.{ip_octets[1]}'
-                            for key,val in IPs_dict.items():
-                                # if our ip belongs to this subnet, search the hosts of this subnet, if not move to the next subnet and repeat
-                                if first_2_octets in key and ip in val:
-                                    return True
-                        except IndexError:
-                            # this ip isn't ipv4 , ignore it
+                            for subnet, ip_range in IPs_dict.items():
+                                # if our ip belongs to this subnet, search the hosts of this subnet,
+                                # if not move to the next subnet and repeat
+                                if first_2_octets in subnet:
+                                    first_ip_in_subnet = ip_range[0]
+                                    last_ip_in_subnet = ip_range[1]
+                                    int_ip = self.ip2int(ip)
+                                    # if it's in the stored range, it's whitelisted, ignore it
+                                    return int_ip >= first_ip_in_subnet and int_ip <= last_ip_in_subnet
+                        except (IndexError, AttributeError) as e:
+                            # IndexError this ip isn't ipv4, ignore it
+                            # AttributeError IPs_dict is empty, ignore it
                             return False
-
         else:
             # todo resolve each domain to ip and check it in whitelisted orgs
             #---------------------------------------- Check domains
