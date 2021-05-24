@@ -239,13 +239,18 @@ class EvidenceProcess(multiprocessing.Process):
             if data in whitelisted_domains:
                 # ignore flows or alerts?
                 what_to_ignore = whitelisted_domains[data] # alerts or flows
-                return 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                if ignore_alerts:
+                    return True
             # domain not in whitelisted domains.
             # resolve this domain and check if it's in whitelisted ips or whitelisted orgs
-            resolved_domain = socket.gethostbyname(data)
-            #todo handle socket.gaierror
-            data = resolved_domain
-            data_type = 'ip'
+            try:
+                resolved_domain = socket.gethostbyname(data)
+                data = resolved_domain
+                data_type = 'ip'
+            except socket.gaierror:
+                # the given host name is invalid
+                return False
         # Is it a srcip or a dstip??
         is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
         is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple','domain')
@@ -258,7 +263,8 @@ class EvidenceProcess(multiprocessing.Process):
             ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
             ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
             ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
-            return ignore_alerts_from_ip or ignore_alerts_to_ip
+            if ignore_alerts_from_ip or ignore_alerts_to_ip:
+                return True
         #---------------------------------------- Check orgs
         # Did the user specify any whitelisted orgs??
         elif whitelisted_organizations:

@@ -1526,11 +1526,15 @@ class ProfilerProcess(multiprocessing.Process):
             if not domain: domain = self.column_values.get('sub','').replace("CN=","") # in notice.log
             if domain in self.whitelisted_domains:
                 what_to_ignore = self.whitelisted_domains[domain]
-                return 'flows' in what_to_ignore or 'both' in what_to_ignore
+                ignore_flows =  'flows' in what_to_ignore or 'both' in what_to_ignore
+                if ignore_flows:
+                    return True
             # domain not in whitelisted domains, resolve this domain and check if it's in whitelisted ips or whitelisted orgs
-            resolved_domain = socket.gethostbyname(domain)
-            ip = resolved_domain
-            #todo handle socket.gaierror
+            try:
+                resolved_domain = socket.gethostbyname(domain)
+                ip = resolved_domain
+            except socket.gaierror:
+                return False
         #---------------------------------------- Check IPs
         if ip in self.whitelisted_IPs:
             from_, what_to_ignore = self.whitelisted_IPs[ip]
@@ -1539,7 +1543,9 @@ class ProfilerProcess(multiprocessing.Process):
             ignore_flows_from_ip = ignore_flows and type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_)
             ignore_flows_to_ip = ignore_flows and type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_)
             # if one of them is true return true
-            return ignore_flows_from_ip or ignore_flows_to_ip
+            ignore_flows = ignore_flows_from_ip or ignore_flows_to_ip
+            if ignore_flows:
+                return True
         #---------------------------------------- Check orgs
         # Did the user specify any whitelisted orgs??
         elif self.whitelisted_orgs:
