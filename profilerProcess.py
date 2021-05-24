@@ -30,6 +30,7 @@ import binascii
 import base64
 import validators
 import netaddr
+import socket
 
 def timeit(method):
     def timed(*args, **kw):
@@ -1502,66 +1503,72 @@ class ProfilerProcess(multiprocessing.Process):
                 except KeyError:
                     self.column_values['filesize'] = ''
 
-    def is_whitelisted(self,ip="",type_of_ip="") -> bool:
-        """ Checks if domain or ip is whitelisted.
-        If ip is not passed it finds and checks domain
-        type_of_ip: 'saddr' or 'daddr'
+    def is_whitelisted(self,ip='') -> bool:
         """
-        if ip:
-            #---------------------------------------- Check IPs
-            if ip in self.whitelisted_IPs:
-                from_, what_to_ignore = self.whitelisted_IPs[ip]
-                ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
-                # check if we should ignore src flow from this ip
-                ignore_flows_from_ip = ignore_flows and type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_)
-                ignore_flows_to_ip = ignore_flows and type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_)
-                # if one of them is true return true
-                return ignore_flows_from_ip or ignore_flows_to_ip
-            #---------------------------------------- Check orgs
-            # Did the user specify any whitelisted orgs??
-            elif self.whitelisted_orgs:
-                # Check if ip belongs to a whitelisted organization
-                for org in self.whitelisted_orgs:
-                    from_ =  self.whitelisted_orgs[org]['from']
-                    what_to_ignore = self.whitelisted_orgs[org]['what_to_ignore']
-                    ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
-                    ignore_flows_from_ip = ignore_flows and type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_)
-                    ignore_flows_to_ip = ignore_flows and type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_)
-                    if ignore_flows_from_ip or ignore_flows_to_ip:
-                        # we can get this dict from the db but it's already present in this class
-                        IPs_dict = self.whitelisted_orgs[org]['IPs']
-                        # Now start searching for this ip in the list of org IPs
-                        ip_octets = ip.split(".")
-                        try:
-                            first_2_octets = f'{ip_octets[0]}.{ip_octets[1]}'
-                            for subnet, ip_range in IPs_dict.items():
-                                # if our ip belongs to this subnet, search the hosts of this subnet,
-                                # if not move to the next subnet and repeat
-                                if first_2_octets in subnet:
-                                    first_ip_in_subnet = ip_range[0]
-                                    last_ip_in_subnet = ip_range[1]
-                                    int_ip = self.ip2int(ip)
-                                    # if it's in the stored range, it's whitelisted, ignore it
-                                    return int_ip >= first_ip_in_subnet and int_ip <= last_ip_in_subnet
-                        except (IndexError, AttributeError) as e:
-                            # IndexError this ip isn't ipv4, ignore it
-                            # AttributeError IPs_dict is empty, ignore it
-                            return False
+        Checks if ip or domain is whitelisted.
+        if ip is not passed it checks the domain of the current flow.
+        """
+
+        if ip is self.saddr:
+            type_of_ip = 'saddr'
         else:
-            # todo resolve each domain to ip and check it in whitelisted orgs
-            #---------------------------------------- Check domains
-            # try to get the domain of this flow
-            # domain names are stored in different zeek files using different names, the following list
-            # tries to get the domain from each file, only one domain will be present in the list, the rest will be "",
+            # whether it's a resolved domain or a daddr
+            type_of_ip = 'daddr'
+
+         #---------------------------------------- Check domains
+        if not ip:
+            # No ip is passed, Try to get the domain of this flow
+            # Domain names are stored in different zeek files using different names.
+            # Try to get the domain from each file.
             domain = self.column_values.get('server_name','') # ssl.log
             if not domain: domain = self.column_values.get('host','') # http.log
             if not domain: domain = self.column_values.get('query','') # in dns.log
             if not domain: domain = self.column_values.get('sub','').replace("CN=","") # in notice.log
             if domain in self.whitelisted_domains:
                 from_, what_to_ignore = self.whitelisted_domains[domain]
+                return 'flows' in what_to_ignore or 'both' in what_to_ignore
+            # domain not in whitelisted domains, resolve this domain and check if it's in whitelisted ips or whitelisted orgs
+            resolved_domain = socket.gethostbyname(domain)
+            ip = resolved_domain
+        #---------------------------------------- Check IPs
+        if ip in self.whitelisted_IPs:
+            from_, what_to_ignore = self.whitelisted_IPs[ip]
+            ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
+            # check if we should ignore src flow from this ip
+            ignore_flows_from_ip = ignore_flows and type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_)
+            ignore_flows_to_ip = ignore_flows and type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_)
+            # if one of them is true return true
+            return ignore_flows_from_ip or ignore_flows_to_ip
+        #---------------------------------------- Check orgs
+        # Did the user specify any whitelisted orgs??
+        elif self.whitelisted_orgs:
+            # Check if ip belongs to a whitelisted organization
+            for org in self.whitelisted_orgs:
+                from_ =  self.whitelisted_orgs[org]['from']
+                what_to_ignore = self.whitelisted_orgs[org]['what_to_ignore']
                 ignore_flows = 'flows' in what_to_ignore or 'both' in what_to_ignore
-                if ignore_flows:
-                    return True
+                ignore_flows_from_ip = ignore_flows and type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_)
+                ignore_flows_to_ip = ignore_flows and type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_)
+                if ignore_flows_from_ip or ignore_flows_to_ip:
+                    # we can get this dict from the db but it's already present in this class
+                    IPs_dict = self.whitelisted_orgs[org]['IPs']
+                    # Now start searching for this ip in the list of org IPs
+                    ip_octets = ip.split(".")
+                    try:
+                        first_2_octets = f'{ip_octets[0]}.{ip_octets[1]}'
+                        for subnet, ip_range in IPs_dict.items():
+                            # if our ip belongs to this subnet, search the hosts of this subnet,
+                            # if not move to the next subnet and repeat
+                            if first_2_octets in subnet:
+                                first_ip_in_subnet = ip_range[0]
+                                last_ip_in_subnet = ip_range[1]
+                                int_ip = self.ip2int(ip)
+                                # if it's in the stored range, it's whitelisted, ignore it
+                                return int_ip >= first_ip_in_subnet and int_ip <= last_ip_in_subnet
+                    except (IndexError, AttributeError) as e:
+                        # IndexError this ip isn't ipv4, ignore it
+                        # AttributeError IPs_dict is empty, ignore it
+                        return False
         return False
 
 
@@ -1608,17 +1615,16 @@ class ProfilerProcess(multiprocessing.Process):
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
 
             flow_type = self.column_values['type']
-            saddr = self.column_values['saddr']
-            daddr = self.column_values['daddr']
-            profileid = 'profile' + self.id_separator + str(saddr)
+            self.saddr = self.column_values['saddr']
+            self.daddr = self.column_values['daddr']
+            profileid = 'profile' + self.id_separator + str(self.saddr)
 
-            # Ignore flow if whitelisted, check saddr,daddr and flow domain
-            # todo change saddr and daddr to self.saddr and self.daddr and call the below function only once
-            is_flow_whitelisted = (self.is_whitelisted(ip=daddr, type_of_ip='daddr')
-                                  or self.is_whitelisted(ip=saddr, type_of_ip='saddr')
+            # Ignore flow if whitelisted, check saddr,daddr and domain of this flow
+            is_flow_whitelisted = (self.is_whitelisted(self.daddr)
+                                  or self.is_whitelisted(self.saddr)
                                   or self.is_whitelisted())
             if is_flow_whitelisted:
-                return
+                return True
 
             if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                 dur = self.column_values['dur']
@@ -1645,14 +1651,14 @@ class ProfilerProcess(multiprocessing.Process):
                 ttls = self.column_values['TTLs']
             # Create the objects of IPs
             try:
-                saddr_as_obj = ipaddress.IPv4Address(saddr)
-                daddr_as_obj = ipaddress.IPv4Address(daddr)
+                saddr_as_obj = ipaddress.IPv4Address(self.saddr)
+                daddr_as_obj = ipaddress.IPv4Address(self.daddr)
                 # Is ipv4
             except ipaddress.AddressValueError:
                 # Is it ipv6?
                 try:
-                    saddr_as_obj = ipaddress.IPv6Address(saddr)
-                    daddr_as_obj = ipaddress.IPv6Address(daddr)
+                    saddr_as_obj = ipaddress.IPv6Address(self.saddr)
+                    daddr_as_obj = ipaddress.IPv6Address(self.daddr)
                 except ipaddress.AddressValueError:
                     # Its a mac
                     return False
