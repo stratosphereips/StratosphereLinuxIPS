@@ -14,3 +14,5 @@
 # organization,twitter,dst,both
 #
 "type","domain/ip/organization","from","what to ignore"
+ip,94.23.253.72,both,alerts
+ip,91.121.83.118,both,alerts
