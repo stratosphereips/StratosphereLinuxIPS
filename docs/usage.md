@@ -163,8 +163,11 @@ If you want to export alerts using Stix, change ```export_to``` variable to expo
 ```STIX_data.json``` containing all alerts it detects.
 
 You can add your TAXII server details in the following variables:
+
 ```TAXII_server```: link to your TAXII server
+
 ```port```: port to be used
+
 ```use_https```: use https or not.
 
 ```discovery_path``` and ```inbox_path``` should contain URIs not full urls. For example:
@@ -172,12 +175,16 @@ You can add your TAXII server details in the following variables:
 ```python
 discovery_path = /services/discovery-a
 inbox_path = /services/inbox-a
+```
 
 ```collection_name```: the collection on the server you want to push your STIX data to.
 
 ```push_delay```: the time to wait before pushing STIX data to server (in seconds). It is used when slips is running non-stop (e.g with -i )
-```taxii_username````: TAXII server user credentials
+
+```taxii_username```: TAXII server user credentials
+
 ```taxii_password```: TAXII server user password
+
 ```jwt_auth_url```: auth url if JWT based authentication is used.
 
-If running on a file not an interface, slips will export to server after analysis is done. 
+If running on a file not an interface, Slips will export to server after analysis is done. 
