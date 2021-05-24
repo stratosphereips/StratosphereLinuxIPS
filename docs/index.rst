@@ -15,11 +15,10 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Usage**. Instructions and examples how to run Slips with different type of files and analyze the traffic using Slips and its GUI Kalipso. See :doc:`Usage <usage>`.
 
-- **Features**. Explanation of detection modules in Slips, types of input and output. See :doc:`Features <features>`.
+- **Detection modules**. Explanation of detection modules in Slips, types of input and output. See :doc:`Detection modules <detection_modules>`.
 
 - **Architecture**. Internal architecture of Slips (profiles, timewindows), the use of Zeek and connection to Redis. See :doc:`Architecture <architecture>`.
   
-- **Contributing**. Instructions how to contribute to Slips, create new detection module. See :doc:`Contributing <contributing>`.
 
 
 
@@ -31,6 +30,5 @@ This documentation gives an overview how Slips works, how to use it and how to h
    self 
    installation
    usage
-   features
+   detection_modules
    architecture
-   contributing
