@@ -208,18 +208,27 @@ class EvidenceProcess(multiprocessing.Process):
         data: (detection_info) can be ip, domain, tuple(ip:port:proto)
         type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
         """
+
         whitelist = __database__.get_whitelist()
+        max_tries = 10
+        # if this module is loaded before profilerProcess or before we're done processing the whitelist in general
+        # the database won't return the whitelist
+        # so we need to try several times until the db returns the populated whitelist
         # empty dicts evaluate to False
-        while bool(whitelist) is False:
-            #todo handle if whitelist is empty not by mistake
+        while bool(whitelist) is False and max_tries!=0:
+            # try max 10 times to get the whitelist, if it's still empty then it's not empty by mistake
+            max_tries -=1
             whitelist = __database__.get_whitelist()
+        if max_tries is 0:
+            # we tried 10 times to get the whitelist, it's probably empty.
+            return False
+
         try:
             # Convert each list from str to dict
             whitelisted_IPs = json.loads(whitelist['IPs'])
             whitelisted_domains = json.loads(whitelist['domains'])
             whitelisted_organizations = json.loads(whitelist['organizations'])
         except IndexError:
-            # one of the 3 dicts doesn't exist? #todo
             pass
 
         # Set data type

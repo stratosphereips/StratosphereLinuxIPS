@@ -144,7 +144,6 @@ class ProfilerProcess(multiprocessing.Process):
     def read_whitelist(self):
         """ Reads the content of whitelist.csv and stores information about each ip/org/domain in the database """
 
-        #todo handle empty whitelists
         self.whitelisted_IPs = {}
         self.whitelisted_domains = {}
         self.whitelisted_orgs = {}
