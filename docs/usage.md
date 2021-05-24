@@ -68,7 +68,7 @@ tr:nth-child(even) {
 (*) To find the interface in Linux, you can use the command ```ifconfig```.
 
 
-There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models separately.
+There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models separately. Configuration of the **slips.conf** is described [here](#modifying-a-configuration-file).
 
 ## Reading the output
 The output process collects output from the modules and handles the display of information on screen. Currently, Slips' analysis and detected malicious behaviour can be analyzed as following:
