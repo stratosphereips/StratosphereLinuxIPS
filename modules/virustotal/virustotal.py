@@ -303,7 +303,8 @@ class Module(Module, multiprocessing.Process):
         # repeat query if API limit was reached (code 204)
         while response.status != 200:
 
-            # requests per minute limit reached
+            # 204 means Request rate limit exceeded. You are making more requests
+            # than allowed. You have exceeded one of your quotas (minute, daily or monthly).
             if response.status == 204:
                 # usually sleeping for 40 seconds is enough, if not, try adding 20 more
                 if sleep_attempts == 0:
@@ -312,11 +313,11 @@ class Module(Module, multiprocessing.Process):
                     sleep_time = 20
                 sleep_attempts += 1
 
-            # requests per hour limit reached
+            # 403 means you don't have enough privileges to make the request or wrong API key
             elif response.status == 403:
                 # 10 minutes
                 sleep_time = 600
-                self.print("Please check that your API key is correct. Code 403 means timeout but also wrong API key.")
+                self.print("Please check that your API key is correct.")
 
             else:
                 # if the query was unsuccessful but it is not caused by API limit, abort (this is some unknown error)
