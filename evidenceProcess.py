@@ -192,16 +192,6 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-    def ip2int(self,ip):
-        """ Convert IP address to integer """
-
-        # convert ipv4address object to str ip
-        ip = str(ip)
-        # convert each octet to int
-        integer_ip = list(map(int, ip.split('.')))
-        res = (16777216 * integer_ip[0]) + (65536 * integer_ip[1]) + (256 * integer_ip[2]) + integer_ip[3]
-        return res
-
     def is_whitelisted(self, data, type_detection) -> bool:
         """
         Checks if IP is whitelisted
@@ -278,6 +268,7 @@ class EvidenceProcess(multiprocessing.Process):
         # Did the user specify any whitelisted orgs??
         elif whitelisted_organizations:
             # Check if ip belongs to a whitelisted organization
+            ip = ipaddress.ip_address(ip)
             for org in whitelisted_organizations:
                 from_ =  whitelisted_organizations[org]['from']
                 what_to_ignore = whitelisted_organizations[org]['what_to_ignore']
@@ -285,24 +276,11 @@ class EvidenceProcess(multiprocessing.Process):
                 ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
                 ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
                 if ignore_alerts_from_ip or ignore_alerts_to_ip:
-                    IPs_dict = whitelisted_organizations[org]['IPs']
-                    # Now start searching for this ip in the list of org IPs
-                    ip_octets = ip.split(".")
-                    try:
-                        first_2_octets = f'{ip_octets[0]}.{ip_octets[1]}'
-                        for subnet, ip_range in IPs_dict.items():
-                            # if our ip belongs to this subnet, search the hosts of this subnet,
-                            # if not move to the next subnet and repeat
-                            if first_2_octets in subnet:
-                                first_ip_in_subnet = ip_range[0]
-                                last_ip_in_subnet = ip_range[1]
-                                int_ip = self.ip2int(ip)
-                                # if it's in the stored range, it's whitelisted, ignore it
-                                return int_ip >= first_ip_in_subnet and int_ip <= last_ip_in_subnet
-                    except (IndexError, AttributeError) as e:
-                        # IndexError this ip isn't ipv4, ignore it
-                        # AttributeError IPs_dict is empty, ignore it
-                        return False
+                    org_subnets = json.loads(whitelisted_organizations[org]['IPs'])
+                    for network in org_subnets:
+                        # check if ip belongs to this network
+                        if ip in ipaddress.ip_network(network):
+                            return True
         return False
 
     def run(self):

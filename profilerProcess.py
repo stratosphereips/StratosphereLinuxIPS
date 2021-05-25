@@ -29,7 +29,6 @@ import os
 import binascii
 import base64
 import validators
-import netaddr
 import socket
 
 def timeit(method):
@@ -191,58 +190,43 @@ class ProfilerProcess(multiprocessing.Process):
         # If the user specified an org in the whitelist, load the info about it only to the db and to memory
         for org in self.whitelisted_orgs:
             # Store the IPs of this org in the db
-            IPs_dict = self.load_org_info(org)
-            if IPs_dict:
+            org_subnets = self.load_org_info(org)
+            if org_subnets:
                 # Store the IPs of this org
-                self.whitelisted_orgs[org].update({'IPs' : IPs_dict})
+                self.whitelisted_orgs[org].update({'IPs' : json.dumps(org_subnets)})
         # store everything in the db because we'll be needing this info in the evidenceProcess
         __database__.set_whitelist(self.whitelisted_IPs,
                                    self.whitelisted_domains,
                                    self.whitelisted_orgs)
 
-    def ip2int(self,ip):
-        """ Convert IP address to integer """
-
-        # convert ipv4address object to str ip
-        ip = str(ip)
-        # convert each octet to int
-        integer_ip = list(map(int, ip.split('.')))
-        res = (16777216 * integer_ip[0]) + (65536 * integer_ip[1]) + (256 * integer_ip[2]) + integer_ip[3]
-        return res
-
     def load_org_info(self,org) -> dict :
         """
-        Reads the specified org's info from slips/organizations_asn_info and stores the info in the database
+        Reads the specified org's info from slips/organizations_info and stores the info in the database
         org: 'google', 'facebook', 'twitter', etc...
-        returns a dict with all this organization's IPs sorted by
+        returns a list of this organization's subnets
         """
         try:
             # Each file is named after the organization's name
             # Each line of the file containes an ip range, for example: 34.64.0.0/10
-            # todo we should update  these files manually and upload them to a remote github repo, and update them the same way we do ti_files
             # IPs_dict structure: key: ip/subnet for example: 34.64.0.0/10
-            #                     value: (first,last) ips in that subnet as integers to make searching faster
-            IPs_dict = {}
+            #                     value:
+            org_subnets = []
             file = f'slips/organizations_info/{org}'
             with open(file,'r') as f:
                 line = f.readline()
                 while line:
                     # each line will be something like this: 34.64.0.0/10
-                    # the idea is to store the ip/subnet as the key and the (first,last) hosts as an int in the value
-                    # so when searching we first find check if the ip is in this subnet and
-                    # if so, we convert the ip to int tand check if it's in the stored range or not.
-                    line = line.replace("\n","")
-                    # get first and last ip in this range
-                    ips = netaddr.IPNetwork(line)
-                    first_ip = self.ip2int(ips[0])
-                    last_ip = self.ip2int(ips[-1])
-                    # empty this list so it doesn't take up memory
-                    ips = []
-                    IPs_dict[line] = (first_ip, last_ip)
+                    line = line.replace("\n","").strip()
+                    try:
+                        # make sure this line is a valid network
+                        is_valid_line = ipaddress.ip_network(line)
+                        org_subnets.append(line)
+                    except ValueError:
+                        # not a valid line, ignore it
+                        pass
                     line = f.readline()
             # Store them in the db as str
-            __database__.set_org_whitelisted_IPs(org, json.dumps(IPs_dict))
-            return IPs_dict
+            return org_subnets
         except (FileNotFoundError, IOError):
             self.print(f"Can't read slips/organizations_info/{org} ... Aborting.")
             return False
@@ -1556,27 +1540,13 @@ class ProfilerProcess(multiprocessing.Process):
                 ignore_flows_from_ip = ignore_flows and type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_)
                 ignore_flows_to_ip = ignore_flows and type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_)
                 if ignore_flows_from_ip or ignore_flows_to_ip:
-                    # we can get this dict from the db but it's already present in this class
-                    IPs_dict = self.whitelisted_orgs[org]['IPs']
+                    # we can get this list from the db but it's already present in this class
+                    org_subnets = json.loads(self.whitelisted_orgs[org]['IPs'])
                     # Now start searching for this ip in the list of org IPs
-                    ip_octets = ip.split(".")
-                    try:
-                        first_2_octets = f'{ip_octets[0]}.{ip_octets[1]}'
-                        for subnet, ip_range in IPs_dict.items():
-                            # if our ip belongs to this subnet, search the hosts of this subnet,
-                            # if not move to the next subnet and repeat
-                            if first_2_octets in subnet:
-                                first_ip_in_subnet = ip_range[0]
-                                last_ip_in_subnet = ip_range[1]
-                                int_ip = self.ip2int(ip)
-                                # if it's in the stored range, it's whitelisted, ignore it
-                                return int_ip >= first_ip_in_subnet and int_ip <= last_ip_in_subnet
-                    except (IndexError, AttributeError) as e:
-                        # IndexError this ip isn't ipv4, ignore it
-                        # AttributeError IPs_dict is empty, ignore it
-                        return False
+                    for network in org_subnets:
+                        if ipaddress.ip_address(ip) in ipaddress.ip_network(network):
+                            return True
         return False
-
 
     def add_flow_to_profile(self):
         """
