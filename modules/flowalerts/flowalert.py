@@ -294,7 +294,7 @@ class Module(Module, multiprocessing.Process):
                             confidence = 1
                             threat_level = 60
                             # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
-                            description = 'Vertical port scan. ' + msg
+                            description = 'Zeek: Vertical port scan. ' + msg
                             type_evidence = 'PortScanType1'
                             type_detection = 'dstip'
                             detection_info = flow.get('scanning_ip')
@@ -306,7 +306,7 @@ class Module(Module, multiprocessing.Process):
                             # Horizontal port scan
                             confidence = 1
                             threat_level = 60
-                            description = 'Horizontal port scan. ' + msg
+                            description = 'Zeek: Horizontal port scan. ' + msg
                             type_evidence = 'PortScanType2'
                             type_detection = 'dport'
                             detection_info = flow.get('scanned_port')
