@@ -11,6 +11,7 @@ import urllib3
 import certifi
 import time
 import ipaddress
+import threading
 
 
 class Module(Module, multiprocessing.Process):
@@ -63,6 +64,9 @@ class Module(Module, multiprocessing.Process):
         else:
             #??
             self.timeout = None
+        # start the queue thread
+        self.api_calls_thread = threading.Thread(target=self.API_calls_thread,
+                         daemon=True)
 
     def __read_configuration(self) -> str:
         """ Read the configuration file for what we need """
@@ -137,11 +141,30 @@ class Module(Module, multiprocessing.Process):
             data['asn'] = as_owner
         __database__.setInfoForDomains(domain, data)
 
+    def API_calls_thread(self):
+        """
+        This thread starts if there's an API calls queue,
+         it operates every minute, and executes 4 api calls
+         from the queue then sleeps again.
+        """
+
+        while True:
+            # wait until the queue is populated
+            if not self.api_call_queue: time.sleep(30)
+            # wait the api limit
+            time.sleep(60)
+            while self.api_call_queue:
+                # get the first element in the queue
+                ip = self.api_call_queue.pop(0)
+                # try to query. the ip will be added back to the queue if the api call isn't successfull
+                self.api_query_(ip)
+
     def run(self):
         if self.key is None:
             # We don't have a virustotal key
             return
         try:
+            self.api_calls_thread.start()
             # Main loop function
             while True:
                 message_c1 = self.c1.get_message(timeout=0.01)
@@ -198,12 +221,7 @@ class Module(Module, multiprocessing.Process):
                             if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_domain_data_in_DomainInfo(domain, cached_data)
 
-                # try to preform api_query of queued api calls
-                while self.api_call_queue:
-                    # get the first element in the queue
-                    ip = self.api_call_queue.pop(0)
-                    # try to query. the ip will be added back to the queue if the api call isn't successfull
-                    self.api_query_(ip)
+
         except KeyboardInterrupt:
             return True
         except Exception as inst:
