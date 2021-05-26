@@ -163,7 +163,10 @@ def get_cwd():
 ####################
 # Main
 ####################
-if __name__ == '__main__':  
+if __name__ == '__main__':
+    # Before the argparse, we need to set up the default path fr alerts.log and alerts.json. In our case, it is output folder.
+    alerts_default_path = 'output/'
+
     print('Stratosphere Linux IPS. Version {}'.format(version))
     print('https://stratosphereips.org\n')
 
@@ -193,7 +196,7 @@ if __name__ == '__main__':
                         help='clear a cache database.')
     parser.add_argument('-p', '--blocking',action='store_true',required=False,
                         help='block IPs that connect to the computer. Supported only on Linux.')
-    parser.add_argument('-o', '--output', action='store', required=False, default='output/',
+    parser.add_argument('-o', '--output', action='store', required=False, default=alerts_default_path,
                         help='store alerts.json and alerts.txt in the provided folder.')
     parser.add_argument("-h", "--help", action="help", help="command line help")
 
@@ -233,9 +236,14 @@ if __name__ == '__main__':
     if args.clearcache:
         print('Deleting Cache DB in Redis.')
         clear_redis_cache_database()
+
+    # Remove default folder for alerts, if exists
+    if os.path.exists(alerts_default_path):
+        shutil.rmtree(alerts_default_path)
     # Create output folder for alerts.txt and alerts.json if they do not exist
     if not os.path.exists(args.output):
         os.makedirs(args.output)
+
     # If the user wants to blocks, the user needs to give a permission to modify iptables
     # Also check if the user blocks on interface, does not make sense to block on files
     if args.interface and args.blocking:
