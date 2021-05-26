@@ -55,6 +55,8 @@ class Module(Module, multiprocessing.Process):
         else:
             # Other systems
             self.timeout = None
+        self.is_first_run = True
+        self.current_srcip = ''
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -89,6 +91,15 @@ class Module(Module, multiprocessing.Process):
                         if type(data) == str:
                             # data example: profile_192.168.1.1_timewindow1
                             data = data.split('_')
+                            self.new_srcip = data[1]
+                            # on the first run, current srcip will be '' , so don't save the empty model to disk
+                            # make sure it is not first run so we don't save an empty model to disk
+                            if (self.is_first_run is False and self.current_srcip != self.new_srcip) :
+                                # srcip changed, save the current model to disk
+                                with open(f'modules/anomaly-detection/{self.current_srcip}-model', 'wb') as model:
+                                    pickle.dump(clf, model)
+                                # empty the current dataframe so we can create a new one for the new srcip
+                                bro_df = None
                             profileid = f'{data[0]}_{data[1]}'
                             twid = data[2]
                             # get all flows in the tw
@@ -99,8 +110,10 @@ class Module(Module, multiprocessing.Process):
                                 try:
                                     # Is there a dataframe? append to it
                                     bro_df = bro_df.append(flow, ignore_index=True)
-                                except UnboundLocalError:
+                                except (UnboundLocalError, AttributeError):
                                     # There's no dataframe, create one
+                                    # current sip will be used as the model name
+                                    self.current_srcip = data[1]
                                     bro_df = pd.DataFrame(flow, index=[0])
                             # In case you need a label, due to some models being able to work in a
                             # semisupervized mode, then put it here. For now everything is
@@ -162,11 +175,7 @@ class Module(Module, multiprocessing.Process):
                             X_train = X_train.values
                             # Fit the model to the train data
                             clf.fit(X_train)
-                            # break
-                            # # todo do this when slips is about to stop
-                            # # Save the model to disk
-                            # with open("modules/anomaly-detection/anomaly-detection-model", 'wb') as model:
-                            #     pickle.dump(clf, model)
+                            self.is_first_run = False
                 elif 'test' in self.mode:
                     message_c2 = self.c2.get_message(timeout=self.timeout)
                     if message_c2['data'] == 'stop_process':
@@ -194,8 +203,8 @@ class Module(Module, multiprocessing.Process):
                             try:
                                 with open('modules/anomaly-detection/anomaly-detection-model', 'rb') as model:
                                     clf = pickle.load(model)
-                            except:
-                                # probably because slips wasn't run in train mode first or conn.log is empty.
+                            except FileNotFoundError :
+                                # probably because slips wasn't run in train mode first
                                 self.print("No models found in modules/anomaly-detection. Stopping.")
                                 return True
                             # Get the prediction on the test data
