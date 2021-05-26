@@ -78,6 +78,19 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def get_model(self) -> str:
+        """
+        Find the correct model to use for testing depending on the current source ip
+        returns the model path
+        """
+        models = os.listdir('modules/anomaly-detection/models/')
+        for model_name in models:
+            if self.current_srcip in model_name:
+                return f'modules/anomaly-detection/models/{model_name}'
+        else:
+            # no model with srcip found #todo????
+            return ''
+
     def run(self):
         try:
             # Main loop function
@@ -85,21 +98,30 @@ class Module(Module, multiprocessing.Process):
                 if 'train' in self.mode:
                     message_c3 = self.c3.get_message(timeout=self.timeout)
                     if message_c3['data'] == 'stop_process':
+                        # with open(path_to_df, 'wb') as model:
+                        #  pickle.dump(clf, model)
                         return True
                     if message_c3 and message_c3['channel'] == 'tw_closed' and message_c3["type"] == "message":
                         data = message_c3["data"]
                         if type(data) == str:
                             # data example: profile_192.168.1.1_timewindow1
                             data = data.split('_')
-                            self.new_srcip = data[1]
-                            # on the first run, current srcip will be '' , so don't save the empty model to disk
+                            # in case of mac addresses, you can't create files with colons in the name, replace the colon with '-'
+                            self.new_srcip = data[1].replace(':','-')
+
                             # make sure it is not first run so we don't save an empty model to disk
                             if (self.is_first_run is False and self.current_srcip != self.new_srcip) :
-                                # srcip changed, save the current model to disk
-                                with open(f'modules/anomaly-detection/{self.current_srcip}-model', 'wb') as model:
-                                    pickle.dump(clf, model)
-                                # empty the current dataframe so we can create a new one for the new srcip
-                                bro_df = None
+                                # srcip changed, append to srcip df or save the current df to disk
+                                path_to_df = f'modules/anomaly-detection/models/{self.current_srcip}.pkl'
+                                if os.path.exists(path_to_df):
+                                    # there is a model and a dataframe for this src ip, append to it
+                                    bro_df = pd.read_pickle(path_to_df)
+                                else:
+                                    # dump the df to disk, we'lll be appending to it if we encounter this srcip again
+                                    bro_df.to_pickle(path_to_df)
+                                    # empty the current dataframe so we can create a new one for the new srcip
+                                    bro_df = None
+
                             profileid = f'{data[0]}_{data[1]}'
                             twid = data[2]
                             # get all flows in the tw
@@ -112,8 +134,8 @@ class Module(Module, multiprocessing.Process):
                                     bro_df = bro_df.append(flow, ignore_index=True)
                                 except (UnboundLocalError, AttributeError):
                                     # There's no dataframe, create one
-                                    # current sip will be used as the model name
-                                    self.current_srcip = data[1]
+                                    # current srcip will be used as the model name
+                                    self.current_srcip = data[1].replace(':', '-')
                                     bro_df = pd.DataFrame(flow, index=[0])
                             # In case you need a label, due to some models being able to work in a
                             # semisupervized mode, then put it here. For now everything is
@@ -136,45 +158,48 @@ class Module(Module, multiprocessing.Process):
                             bro_df['resp_ip_bytes'] = bro_df['resp_ip_bytes'].fillna(0).astype('int32')
                             bro_df['dur'].replace('-', '0', inplace=True)
                             bro_df['dur'] = bro_df['dur'].fillna(0).astype('float64')
-                            # Add the columns from the log file that we know are numbers. This is only for conn.log files.
-                            X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
-                            #################
-                            # Select a model from below
-                            # ABOD class for Angle-base Outlier Detection. For an observation, the
-                            # variance of its weighted cosine scores to all neighbors could be
-                            # viewed as the outlying score.
-                            # clf = ABOD()
-                            # LOF
-                            # clf = LOF()
-                            # CBLOF
-                            # clf = CBLOF()
-                            # LOCI
-                            # clf = LOCI()
-                            # LSCP
-                            # clf = LSCP()
-                            # MCD
-                            # clf = MCD()
-                            # OCSVM
-                            # clf = OCSVM()
-                            # PCA. Good and fast!
-                            clf = PCA()
-                            # SOD
-                            # clf = SOD()
-                            # SO_GAAL
-                            # clf = SO_GALL()
-                            # SOS
-                            # clf = SOS()
-                            # XGBOD
-                            # clf = XGBOD()
-                            # KNN
-                            # Good results but slow
-                            # clf = KNN()
-                            # clf = KNN(n_neighbors=10)
-                            #################
-                            # extract the value of dataframe to matrix
-                            X_train = X_train.values
-                            # Fit the model to the train data
-                            clf.fit(X_train)
+
+                            # train
+
+                            # # Add the columns from the log file that we know are numbers. This is only for conn.log files.
+                            # X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
+                            # #################
+                            # # Select a model from below
+                            # # ABOD class for Angle-base Outlier Detection. For an observation, the
+                            # # variance of its weighted cosine scores to all neighbors could be
+                            # # viewed as the outlying score.
+                            # # clf = ABOD()
+                            # # LOF
+                            # # clf = LOF()
+                            # # CBLOF
+                            # # clf = CBLOF()
+                            # # LOCI
+                            # # clf = LOCI()
+                            # # LSCP
+                            # # clf = LSCP()
+                            # # MCD
+                            # # clf = MCD()
+                            # # OCSVM
+                            # # clf = OCSVM()
+                            # # PCA. Good and fast!
+                            # self.clf = PCA()
+                            # # SOD
+                            # # clf = SOD()
+                            # # SO_GAAL
+                            # # clf = SO_GALL()
+                            # # SOS
+                            # # clf = SOS()
+                            # # XGBOD
+                            # # clf = XGBOD()
+                            # # KNN
+                            # # Good results but slow
+                            # # clf = KNN()
+                            # # clf = KNN(n_neighbors=10)
+                            # #################
+                            # # extract the value of dataframe to matrix
+                            # X_train = X_train.values
+                            # # Fit the model to the train data
+                            # self.clf.fit(X_train)
                             self.is_first_run = False
                 elif 'test' in self.mode:
                     message_c2 = self.c2.get_message(timeout=self.timeout)
@@ -192,6 +217,7 @@ class Module(Module, multiprocessing.Process):
                             uid = list(flow.keys())[0]
                             # Get the flow as dict
                             flow_dict = json.loads(flow[uid])
+                            self.current_srcip = flow_dict['saddr'].replace(':','-')
                             # Create a dataframe
                             bro_df = pd.DataFrame(flow_dict, index=[0])
                             # Get the values we're interested in from the flow in a list to give the model
@@ -200,8 +226,9 @@ class Module(Module, multiprocessing.Process):
                             except KeyError:
                                 # This flow doesn't have the fields we're interested in
                                 continue
+                            path_to_model = self.get_model()
                             try:
-                                with open('modules/anomaly-detection/anomaly-detection-model', 'rb') as model:
+                                with open(path_to_model, 'rb') as model:
                                     clf = pickle.load(model)
                             except FileNotFoundError :
                                 # probably because slips wasn't run in train mode first
