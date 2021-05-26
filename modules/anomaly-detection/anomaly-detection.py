@@ -41,8 +41,8 @@ class Module(Module, multiprocessing.Process):
         self.mode = self.config.get('anomaly-detection', 'mode').lower()
         # Start the DB
         __database__.start(self.config)
-        self.c1 = __database__.subscribe('new_conn_flow')
         self.c2 = __database__.subscribe('new_flow')
+        self.c3 = __database__.subscribe('tw_closed')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -81,20 +81,27 @@ class Module(Module, multiprocessing.Process):
             # Main loop function
             while True:
                 if 'train' in self.mode:
-                    message_c1 = self.c1.get_message(timeout=self.timeout)
-                    if message_c1['data'] == 'stop_process':
+                    message_c3 = self.c3.get_message(timeout=self.timeout)
+                    if message_c3['data'] == 'stop_process':
                         return True
-                    if message_c1 and message_c1['channel'] == 'new_conn_flow' and message_c1["type"] == "message":
-                        data = message_c1["data"]
+                    if message_c3 and message_c3['channel'] == 'tw_closed' and message_c3["type"] == "message":
+                        data = message_c3["data"]
                         if type(data) == str:
-                            connection = json.loads(data)
-                            try:
-                                # Is there a dataframe? append to it
-                                bro_df = bro_df.append(connection, ignore_index=True)
-                            except UnboundLocalError:
-                                # There's no dataframe, create one
-                                bro_df = pd.DataFrame(connection, index=[0])
-                            # todo add read_csv with sep='/t' (tab separated zeek files)
+                            # data example: profile_192.168.1.1_timewindow1
+                            data = data.split('_')
+                            profileid = f'{data[0]}_{data[1]}'
+                            twid = data[2]
+                            # get all flows in the tw
+                            flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
+                            # flows is a dict of uids ad keys and actual flows as values
+                            for flow in flows.values():
+                                flow = json.loads(flow)
+                                try:
+                                    # Is there a dataframe? append to it
+                                    bro_df = bro_df.append(flow, ignore_index=True)
+                                except UnboundLocalError:
+                                    # There's no dataframe, create one
+                                    bro_df = pd.DataFrame(flow, index=[0])
                             # In case you need a label, due to some models being able to work in a
                             # semisupervized mode, then put it here. For now everything is
                             # 'normal', but we are not using this for detection
@@ -155,9 +162,11 @@ class Module(Module, multiprocessing.Process):
                             X_train = X_train.values
                             # Fit the model to the train data
                             clf.fit(X_train)
-                            # Save the model to disk
-                            with open("modules/anomaly-detection/anomaly-detection-model", 'wb') as model:
-                                pickle.dump(clf, model)
+                            # break
+                            # # todo do this when slips is about to stop
+                            # # Save the model to disk
+                            # with open("modules/anomaly-detection/anomaly-detection-model", 'wb') as model:
+                            #     pickle.dump(clf, model)
                 elif 'test' in self.mode:
                     message_c2 = self.c2.get_message(timeout=self.timeout)
                     if message_c2['data'] == 'stop_process':
