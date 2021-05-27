@@ -23,6 +23,8 @@ import pickle # todo add pickle to install.sh
 from pyod.models.pca import PCA
 import json
 import os
+import threading
+import time
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -58,6 +60,33 @@ class Module(Module, multiprocessing.Process):
         self.is_first_run = True
         self.current_srcip = ''
         self.dataframes = {}
+        self.saving_thread = threading.Thread(target=self.save_models_thread,
+                         daemon=True)
+        self.thread_started = False
+        
+    def save_models_thread(self):
+        """ Saves models to disk every 1h """
+
+        while True:
+            time.sleep(60*60)
+            self.save_models()
+
+    def save_models(self):
+        """ train and save trained models to disk """
+
+        for srcip, bro_df in self.dataframes.items():
+            # Add the columns from the log file that we know are numbers. This is only for conn.log files.
+            X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
+            # PCA. Good and fast!
+            clf = PCA()
+            # extract the value of dataframe to matrix
+            X_train = X_train.values
+            # Fit the model to the train data
+            clf.fit(X_train)
+            # save the model to disk
+            path_to_df = f'modules/anomaly-detection/models/{srcip}'
+            with open(path_to_df, 'wb') as model:
+                pickle.dump(clf, model)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -97,22 +126,15 @@ class Module(Module, multiprocessing.Process):
             # Main loop function
             while True:
                 if 'train' in self.mode:
+                    # start the saving thread only once
+                    if self.thread_started is False:
+                        self.saving_thread.start()
+                        self.thread_started = True
+
                     message_c3 = self.c3.get_message(timeout=self.timeout)
                     if message_c3['data'] == 'stop_process':
                         # train and save the models before exitting
-                        for srcip, bro_df in self.dataframes.items():
-                            # Add the columns from the log file that we know are numbers. This is only for conn.log files.
-                            X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
-                            # PCA. Good and fast!
-                            clf = PCA()
-                            # extract the value of dataframe to matrix
-                            X_train = X_train.values
-                            # Fit the model to the train data
-                            clf.fit(X_train)
-                            # save the model to disk
-                            path_to_df = f'modules/anomaly-detection/models/{srcip}'
-                            with open(path_to_df, 'wb') as model:
-                                pickle.dump(clf, model)
+                        self.save_models()
                         return True
                     if message_c3 and message_c3['channel'] == 'tw_closed' and message_c3["type"] == "message":
                         data = message_c3["data"]
@@ -210,10 +232,8 @@ class Module(Module, multiprocessing.Process):
                             # Add the score to the flow
                             __database__.set_module_label_to_flow(profileid, twid, uid, 'anomaly-detection-score',
                                                                 str(scores_series.values[0]))
-                elif self.mode is 'None' or self.mode is '':
-                    # None is the default value, we can't set it to train because it'll force the user to use -f on the first run of slips
-                    # we can't set it to test because there will be no model. the user has to manually enable this model in slips.conf and run slips
-                    # with -f first if he wants to use it
+                elif self.mode.lower() is 'none' or self.mode is '':
+                    #  ignore this module
                     return True
                 else:
                     self.print(f"{self.mode} is not a valid mode, available options are: training or test. anomaly-detection module stopping.")
