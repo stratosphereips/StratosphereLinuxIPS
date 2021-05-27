@@ -118,8 +118,9 @@ class Module(Module, multiprocessing.Process):
             if self.current_srcip in model_name:
                 return f'modules/anomaly-detection/models/{model_name}'
         else:
-            # no model with srcip found #todo????
-            return ''
+            # no model with srcip found
+            # return a random model
+            return f'modules/anomaly-detection/models/{model_name}'
 
     def run(self):
         try:
@@ -154,7 +155,6 @@ class Module(Module, multiprocessing.Process):
                                     self.dataframes[self.current_srcip] = bro_df
                                     # empty the current dataframe so we can create a new one for the new srcip
                                     bro_df = None
-
                             profileid = f'{data[0]}_{data[1]}'
                             twid = data[2]
                             # get all flows in the tw
@@ -208,7 +208,9 @@ class Module(Module, multiprocessing.Process):
                             uid = list(flow.keys())[0]
                             # Get the flow as dict
                             flow_dict = json.loads(flow[uid])
-                            self.current_srcip = flow_dict['saddr'].replace(':','-')
+                            self.new_srcip = flow_dict['saddr'].replace(':','-')
+                            if self.is_first_run:
+                                self.current_srcip = self.new_srcip
                             # Create a dataframe
                             bro_df = pd.DataFrame(flow_dict, index=[0])
                             # Get the values we're interested in from the flow in a list to give the model
@@ -217,14 +219,16 @@ class Module(Module, multiprocessing.Process):
                             except KeyError:
                                 # This flow doesn't have the fields we're interested in
                                 continue
-                            path_to_model = self.get_model()
-                            try:
-                                with open(path_to_model, 'rb') as model:
-                                    clf = pickle.load(model)
-                            except FileNotFoundError :
-                                # probably because slips wasn't run in train mode first
-                                self.print("No models found in modules/anomaly-detection. Stopping.")
-                                return True
+                            # if the srcip changed open the right model (don't reopen the same model on every run)
+                            if self.current_srcip != self.new_srcip or (self.current_srcip is self.new_srcip and self.is_first_run):
+                                path_to_model = self.get_model()
+                                try:
+                                    with open(path_to_model, 'rb') as model:
+                                        clf = pickle.load(model)
+                                except FileNotFoundError :
+                                    # probably because slips wasn't run in train mode first
+                                    self.print("No models found in modules/anomaly-detection. Stopping.")
+                                    return True
                             # Get the prediction on the test data
                             y_test_scores = clf.decision_function(X_test)  # outlier scores
                             # Convert the ndarrays of scores and predictions to  pandas series
@@ -232,6 +236,8 @@ class Module(Module, multiprocessing.Process):
                             # Add the score to the flow
                             __database__.set_module_label_to_flow(profileid, twid, uid, 'anomaly-detection-score',
                                                                 str(scores_series.values[0]))
+                            # update the current srcip
+                            self.current_srcip = self.new_srcip
                 elif self.mode.lower() is 'none' or self.mode is '':
                     #  ignore this module
                     return True
