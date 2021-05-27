@@ -22,7 +22,7 @@ import os
 from datetime import datetime
 from watchdog.observers import Observer
 from filemonitor import FileEventHandler
-from slips_files.core.database import __database__
+from slips.core.database import __database__
 import configparser
 import time
 import json
@@ -41,7 +41,7 @@ class InputProcess(multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.input_type = input_type
-        self.input_information = input_information
+        self.given_path = input_information
         self.zeek_folder = './zeek_files'
         self.name = 'input'
         self.zeek_or_bro = zeek_or_bro
@@ -98,7 +98,6 @@ class InputProcess(multiprocessing.Process):
         if not self.nfdump_output:
             # The nfdump command returned nothing
             self.print("Error reading nfdump output ", 1, 3)
-            lines =0
         else:
             lines = len(self.nfdump_output.splitlines())
             for nfdump_line in self.nfdump_output.splitlines():
@@ -252,165 +251,194 @@ class InputProcess(multiprocessing.Process):
             open_file_handlers[file].close()
         return lines
 
+
+    def read_zeek_folder(self):
+        # This is the case that a folder full of zeek files is passed with -f. Read them all
+        for file in os.listdir(self.given_path):
+            # Remove .log extension and add file name to database.
+            extension = file[-4:]
+            if extension == '.log':
+                # Add log file to database
+                file_name_without_extension = file[:-4]
+                __database__.add_zeek_file(self.given_path + '/' + file_name_without_extension)
+
+        # We want to stop bro if no new line is coming.
+        self.bro_timeout = 1
+        lines = self.read_zeek_files()
+        self.print("We read everything from the folder. No more input. Stopping input process. Sent {} lines".format(lines))
+        self.profilerqueue.put("stop")
+        self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+        self.outputqueue.close()
+        self.profilerqueue.close()
+
+    def read_from_stdin(self):
+        self.print('Receiving flows from the stdin.', 3, 0)
+        # By default read the stdin
+        sys.stdin.close()
+        sys.stdin = os.fdopen(0, 'r')
+        file_stream = sys.stdin
+        line = {}
+        line['type'] = 'stdin'
+        for t_line in file_stream:
+            line['data'] = t_line
+            self.print(f'	> Sent Line: {t_line}', 0, 3)
+            self.profilerqueue.put(line)
+            self.lines += 1
+        self.profilerqueue.put("stop")
+        self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+        self.outputqueue.close()
+        self.profilerqueue.close()
+
+
+    def handle_binetflow(self):
+        file_stream = open(self.given_path)
+        line = {}
+        line['type'] = 'argus'
+        # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
+        # self.profilerqueue.put(fake)
+        self.read_lines_delay = 0.02
+        for t_line in file_stream:
+            time.sleep(self.read_lines_delay)
+            line['data'] = t_line
+            self.print(f'	> Sent Line: {line}', 0, 3)
+            if len(t_line.strip()) != 0:
+                self.profilerqueue.put(line)
+            self.lines += 1
+        file_stream.close()
+        self.profilerqueue.put("stop")
+        self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+        self.outputqueue.close()
+        self.profilerqueue.close()
+
+    def handle_zeek_log_file(self):
+        file_stream = open(self.given_path)
+        line = {}
+        line['type'] = 'zeek'
+        file_name = self.given_path.split('/')[-1]
+        for t_line in file_stream:
+            time.sleep(self.read_lines_delay)
+            line['data'] = t_line
+            self.print(f'	> Sent Line: {line}', 0, 3)
+            if len(t_line.strip()) != 0:
+                self.profilerqueue.put(line)
+            self.lines += 1
+        file_stream.close()
+        self.profilerqueue.put("stop")
+        self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+        self.outputqueue.close()
+        self.profilerqueue.close()
+
+    def handle_nfdump(self):
+        command = 'nfdump -b -N -o csv -q -r ' + self.given_path
+        # Execute command
+        result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+        # Get command output
+        self.nfdump_output = result.stdout.decode('utf-8')
+        self.lines = self.read_nfdump_output()
+        self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(self.lines))
+
+    def handle_pcap_and_interface(self):
+        # Create zeek_folder if does not exist.
+        if not os.path.exists(self.zeek_folder):
+            os.makedirs(self.zeek_folder)
+        # Now start the observer of new files. We need the observer because Zeek does not create all the files
+        # at once, but when the traffic appears. That means that we need
+        # some process to tell us which files to read in real time when they appear
+        # Get the file eventhandler
+        # We have to set event_handler and event_observer before running zeek.
+        self.event_handler = FileEventHandler(self.config)
+        # Create an observer
+        self.event_observer = Observer()
+        # Schedule the observer with the callback on the file handler
+        self.event_observer.schedule(self.event_handler, self.zeek_folder, recursive=True)
+        # Start the observer
+        self.event_observer.start()
+
+        # This double if is horrible but we just need to change a string
+        if self.input_type is 'interface':
+            # Change the bro command
+            bro_parameter = '-i ' + self.given_path
+            # We don't want to stop bro if we read from an interface
+            self.bro_timeout = 9999999999999999
+        elif self.input_type is 'pcap':
+            # We change the bro command
+            bro_parameter = '-r'
+            # Find if the pcap file name was absolute or relative
+            if self.given_path[0] == '/':
+                # If absolute, do nothing
+                bro_parameter = '-r "' + self.given_path + '"'
+            else:
+                # If relative, add ../ since we will move into a special folder
+                bro_parameter = '-r "../' + self.given_path + '"'
+            # This is for stoping the input if bro does not receive any new line while reading a pcap
+            self.bro_timeout = 30
+
+        if len(os.listdir(self.zeek_folder)) > 0:
+            # First clear the zeek folder of old .log files
+            # The rm should not be in background because we must wait until the folder is empty
+            command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null"
+            os.system(command)
+
+        # Run zeek on the pcap or interface. The redef is to have json files
+        # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
+        command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+        self.print(f'Zeek command: {command}', 3, 0)
+        # Run zeek.
+        os.system(command)
+
+        # Give Zeek some time to generate at least 1 file.
+        time.sleep(3)
+
+        lines = self.read_zeek_files()
+        self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
+
+        # Stop the observer
+        try:
+            self.event_observer.stop()
+            self.event_observer.join()
+        except AttributeError:
+            # In the case of nfdump, there is no observer
+            pass
+
     def run(self):
         try:
             # Process the file that was given
-            lines = 0
-            if self.input_type == 'file':
-                """
-                Path to the flow input file to read. It can be a Argus
-                binetflow flow, a Zeek conn.log file or a Zeek folder
-                with all the log files.
-                """
-
-                # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
-                if not self.input_information or self.input_information == '-':
-                    self.print('Receiving flows from the stdin.', 3, 0)
-                    # By default read the stdin
-                    sys.stdin.close()
-                    sys.stdin = os.fdopen(0, 'r')
-                    file_stream = sys.stdin
-                    line = {}
-                    line['type'] = 'stdin'
-                    for t_line in file_stream:
-                        line['data'] = t_line
-                        self.print(f'	> Sent Line: {t_line}', 0, 3)
-                        self.profilerqueue.put(line)
-                        lines += 1
-
-                elif self.input_information:
-                    # Are we given a file or a folder?
-                    if os.path.isdir(self.input_information):
-                        # This is the case that a folder full of zeek files is passed with -f. Read them all
-                        for file in os.listdir(self.input_information):
-                            # Remove .log extension and add file name to database.
-                            extension = file[-4:]
-                            if extension == '.log':
-                                # Add log file to database
-                                file_name_without_extension = file[:-4]
-                                __database__.add_zeek_file(self.input_information + '/' + file_name_without_extension)
-
-                        # We want to stop bro if no new line is coming.
-                        self.bro_timeout = 1
-                        lines = self.read_zeek_files()
-                        self.print("We read everything from the folder. No more input. Stopping input process. Sent {} lines".format(lines))
-                    else:
-                        # Is a file. Read and send independently of the type
-                        # of input
-                        self.print(f'Receiving flows from the single file {self.input_information}', 3, 0)
-
-                        # Try read a unique Zeek file
-                        file_stream = open(self.input_information)
-                        line = {}
-                        headers_line = self.input_information.split('/')[-1]
-                        if 'log' in headers_line:
-                            extension = self.input_information[-4:]
-                            if extension == '.log':
-                                # Add log file to database
-                                file_name_without_extension = self.input_information[:-4]
-                                __database__.add_zeek_file(file_name_without_extension)
-                                self.bro_timeout = 1
-                                lines = self.read_zeek_files()
-                        elif 'binetflow' in headers_line or 'argus' in headers_line:
-                            line['type'] = 'argus'
-                            # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
-                            # self.profilerqueue.put(fake)
-                            self.read_lines_delay = 0.02
-
-                            for t_line in file_stream:
-                                time.sleep(self.read_lines_delay)
-                                line['data'] = t_line
-                                self.print(f'	> Sent Line: {line}', 0, 3)
-                                if len(t_line.strip()) != 0:
-                                    self.profilerqueue.put(line)
-                                lines += 1
-                            file_stream.close()
-
-                self.profilerqueue.put("stop")
-                self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
-
-                self.outputqueue.close()
-                self.profilerqueue.close()
-
+            self.lines = 0
+            # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
+            if not self.given_path or self.given_path is '-':
+                self.read_from_stdin()
                 return True
-            # Process the binary nfdump file.
-            elif self.input_type == 'nfdump':
-                command = 'nfdump -b -N -o csv -q -r ' + self.input_information
-                # Execute command
-                result = subprocess.run(command.split(), stdout=subprocess.PIPE)
-                # Get command output
-                self.nfdump_output = result.stdout.decode('utf-8')
-                lines = self.read_nfdump_output()
-                self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
-
-
+            elif self.input_type is 'zeek_folder':
+                # is a zeek folder
+                self.read_zeek_folder()
+                return True
+            elif self.input_type is 'zeek_log_file':
+                # todo handle keyerror
+                # Is a zeek.log file
+                file_name = self.given_path.split('/')[-1]
+                if 'log' in file_name:
+                    self.handle_zeek_log_file()
+                    return True
+            elif self.input_type is 'nfdump':
+                # binary nfdump file
+                self.handle_nfdump()
+                return True
+            elif self.input_type is 'binetflow':
+                # argus or binetflow
+                self.handle_binetflow()
+                return True
             # Process the pcap files
-            elif self.input_type == 'pcap' or self.input_type == 'interface':
-                # Create zeek_folder if does not exist.
-                if not os.path.exists(self.zeek_folder):
-                    os.makedirs(self.zeek_folder)
-                # Now start the observer of new files. We need the observer because Zeek does not create all the files
-                # at once, but when the traffic appears. That means that we need
-                # some process to tell us which files to read in real time when they appear
-                # Get the file eventhandler
-                # We have to set event_handler and event_observer before running zeek.
-                self.event_handler = FileEventHandler(self.config)
-                # Create an observer
-                self.event_observer = Observer()
-                # Schedule the observer with the callback on the file handler
-                self.event_observer.schedule(self.event_handler, self.zeek_folder, recursive=True)
-                # Start the observer
-                self.event_observer.start()
-
-                # This double if is horrible but we just need to change a string
-                if self.input_type == 'interface':
-                    # Change the bro command
-                    bro_parameter = '-i ' + self.input_information
-                    # We don't want to stop bro if we read from an interface
-                    self.bro_timeout = 9999999999999999
-                elif self.input_type == 'pcap':
-                    # We change the bro command
-                    bro_parameter = '-r'
-                    # Find if the pcap file name was absolute or relative
-                    if self.input_information[0] == '/':
-                        # If absolute, do nothing
-                        bro_parameter = '-r "' + self.input_information  + '"'
-                    else:
-                        # If relative, add ../ since we will move into a special folder
-                        bro_parameter = '-r "../' + self.input_information + '"'
-                    # This is for stoping the input if bro does not receive any new line while reading a pcap
-                    self.bro_timeout = 30
-
-                if len(os.listdir(self.zeek_folder)) > 0:
-                    # First clear the zeek folder of old .log files
-                    # The rm should not be in background because we must wait until the folder is empty
-                    command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null"
-                    os.system(command)
-
-                # Run zeek on the pcap or interface. The redef is to have json files
-                # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                command ="cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
-                self.print(f'Zeek command: {command}', 3, 0)
-                # Run zeek.
-                os.system(command)
-
-                # Give Zeek some time to generate at least 1 file.
-                time.sleep(3)
-
-                lines = self.read_zeek_files()
-                self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
-
-                # Stop the observer
-                try:
-                    self.event_observer.stop()
-                    self.event_observer.join()
-                except AttributeError:
-                    # In the case of nfdump, there is no observer
-                    pass
+            elif (self.input_type is 'pcap'
+                  or self.input_type is 'interface'):
+                self.handle_pcap_and_interface()
+                return True
+            elif self.input_type is 'file':
+                # default value
+                self.print('Unrecognized file type. Stopping.')
                 return True
 
         except KeyboardInterrupt:
-            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(lines))
+            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(self.lines))
             try:
                 self.event_observer.stop()
                 self.event_observer.join()
@@ -422,7 +450,7 @@ class InputProcess(multiprocessing.Process):
             return True
         except Exception as inst:
             self.print("Problem with Input Process.", 0, 1)
-            self.print("Stopping input process. Sent {} lines".format(lines), 0, 1)
+            self.print("Stopping input process. Sent {} lines".format(self.lines), 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst.args, 0, 1)
             self.print(inst, 0, 1)
