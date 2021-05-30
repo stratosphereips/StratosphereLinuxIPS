@@ -33,7 +33,7 @@ class EvidenceProcess(multiprocessing.Process):
     It only work on evidence for IPs that were profiled
     This should be converted into a module
     """
-    def __init__(self, inputqueue, outputqueue, config, output_folder):
+    def __init__(self, inputqueue, outputqueue, config, output_folder, logs_folder):
         self.name = 'Evidence'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
@@ -48,6 +48,14 @@ class EvidenceProcess(multiprocessing.Process):
         self.c1 = __database__.subscribe('evidence_added')
         self.logfile = self.clean_evidence_log_file(output_folder)
         self.jsonfile = self.clean_evidence_json_file(output_folder)
+        # If logs enabled, write alerts to the log folder as well
+        if logs_folder:
+            self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
+            self.logs_jsonfile =  self.clean_evidence_json_file(logs_folder+'/')
+        else:
+            self.logs_logfile = False
+            self.logs_jsonfile = False
+
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -168,6 +176,11 @@ class EvidenceProcess(multiprocessing.Process):
             self.jsonfile.write(data_json)
             self.jsonfile.write('\n')
             self.jsonfile.flush()
+            # If logs folder are enabled, write alerts in the folder as well
+            if self.logs_jsonfile:
+                self.logs_jsonfile.write(data_json)
+                self.logs_jsonfile.write('\n')
+                self.logs_jsonfile.flush()
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -183,6 +196,11 @@ class EvidenceProcess(multiprocessing.Process):
             self.logfile.write(data)
             self.logfile.write('\n')
             self.logfile.flush()
+            # If logs are enabled, write alerts in the folder as well
+            if self.logs_logfile:
+                self.logs_logfile.write(data)
+                self.logs_logfile.write('\n')
+                self.logs_logfile.flush()
         except KeyboardInterrupt:
             return True
         except Exception as inst:
