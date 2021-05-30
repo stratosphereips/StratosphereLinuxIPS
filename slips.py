@@ -66,6 +66,15 @@ def recognize_host_ip():
         return None
     return ipaddr_check
 
+def create_folder_for_logs():
+    '''
+    Create a folder for logs if logs are enabled
+    '''
+    logs_folder = datetime.now().strftime('%Y-%m-%d--%H:%M:%S')
+    if not os.path.exists(logs_folder):
+        os.makedirs(logs_folder)
+    return logs_folder
+
 def update_malicious_file(outputqueue, config):
     '''
     Update malicious files and store them in database before slips start
@@ -93,8 +102,6 @@ def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> s
     rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=1, charset="utf-8",
                                decode_responses=True)
     rcache.flushdb()
-
-
 
 
 def check_zeek_or_bro():
@@ -360,18 +367,22 @@ if __name__ == '__main__':
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
         do_logs = read_configuration(config, 'parameters', 'create_log_files')
         if do_logs == 'yes':
+            # Create a folder for logs
+            logs_folder = create_folder_for_logs()
             # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
             logsProcessQueue = Queue()
-            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
             logsProcessThread.start()
             outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
-        # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
+    # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
+    else:
+        logs_folder = False
 
     # Evidence thread
     # Create the queue for the evidence thread
     evidenceProcessQueue = Queue()
     # Create the thread and start it
-    evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output)
+    evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output, logs_folder)
     evidenceProcessThread.start()
     outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
 
