@@ -678,8 +678,9 @@ class ProfilerProcess(multiprocessing.Process):
 
             self.column_values['sport'] = line[3]
             self.column_values['note'] = line[10]
+            self.column_values['scanned_port'] = line[15] # p field
+            self.column_values['scanning_ip'] = line[13] # src field
             self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
-
 
     def process_zeek_input(self, new_line: dict):
         """
