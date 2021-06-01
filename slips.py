@@ -247,7 +247,12 @@ if __name__ == '__main__':
 
     # Remove default folder for alerts, if exists
     if os.path.exists(alerts_default_path):
-        shutil.rmtree(alerts_default_path)
+        try:
+            shutil.rmtree(alerts_default_path)
+        except OSError :
+            # Directory not empty (may contain hidden non-deletable files), don't delete dir
+            pass
+
     # Create output folder for alerts.txt and alerts.json if they do not exist
     if not os.path.exists(args.output):
         os.makedirs(args.output)
