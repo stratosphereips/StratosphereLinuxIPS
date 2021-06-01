@@ -308,6 +308,21 @@ class Module(Module, multiprocessing.Process):
                                                  threat_level, confidence, description, profileid=profileid, twid=twid)
                             self.print(description, 3, 0)
 
+                        # We're looking for port scans in notice.log in the note field
+                        if 'Port_Scan' in note:
+                            # Vertical port scan
+                            # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
+                            confidence = 1
+                            threat_level = 60
+                            # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
+                            description = 'Zeek: Vertical port scan. ' + msg
+                            type_evidence = 'PortScanType1'
+                            type_detection = 'dstip'
+                            detection_info = flow.get('scanning_ip')
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                            self.print(description, 3, 0)
+
                         if 'Address_Scan' in note:
                             # Horizontal port scan
                             confidence = 1
