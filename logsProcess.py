@@ -141,7 +141,7 @@ class LogsProcess(multiprocessing.Process):
         Receive a profile id, create a folder if its not there. Create the log files.
         """
         # Ask the field separator to the db
-        profilefolder = profileid.split(self.fieldseparator)[1]
+        profilefolder = profileid.split(self.fieldseparator)[1].replace(':','-')
         if not os.path.exists(profilefolder):
             os.makedirs(profilefolder)
             ip = profileid.split(self.fieldseparator)[1]
