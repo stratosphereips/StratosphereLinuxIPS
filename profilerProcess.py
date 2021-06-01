@@ -28,6 +28,8 @@ import traceback
 import os
 import binascii
 import base64
+import pytz
+from tzlocal import get_localzone
 
 def timeit(method):
     def timed(*args, **kw):
@@ -63,6 +65,8 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.setOutputQueue(self.outputqueue)
         # 1st. Get the data from the interpreted columns
         self.id_separator = __database__.getFieldSeparator()
+        # get the user's local timezone
+        self.local_timezone = get_localzone()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -298,6 +302,7 @@ class ProfilerProcess(multiprocessing.Process):
         Take time in string and return datetime object.
         The format of time can be completely different. It can be seconds, or dates with specific formats.
         If user does not define the time format in configuration file, we have to try most frequent cases of time formats.
+        :param time: epoch time
         """
 
         if not self.timeformat:
@@ -308,11 +313,14 @@ class ProfilerProcess(multiprocessing.Process):
         if self.timeformat:
             if self.timeformat == 'unixtimestamp':
                 # The format of time is in seconds.
-                defined_datetime = datetime.fromtimestamp(float(time))
+                # get the datetime according to the current timezone
+                defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
             else:
                 try:
                     # The format of time is a complete date.
                     defined_datetime = datetime.strptime(time, self.timeformat)
+                    # convert to local timezone
+                    defined_datetime = defined_datetime.astimezone(self.local_timezone)
                 except ValueError:
                     defined_datetime = None
         else:
