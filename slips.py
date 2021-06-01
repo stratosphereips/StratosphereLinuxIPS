@@ -210,7 +210,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Read the config file name given from the parameters
-    config = configparser.ConfigParser()
+    # don't use '%' for interpolation.
+    config = configparser.ConfigParser(interpolation=None)
     try:
         with open(args.config) as source:
             config.read_file(source)
