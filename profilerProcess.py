@@ -28,6 +28,7 @@ import traceback
 import os
 import binascii
 import base64
+from re import split
 
 def timeit(method):
     def timed(*args, **kw):
@@ -331,11 +332,14 @@ class ProfilerProcess(multiprocessing.Process):
         """
         line = new_line['data']
         line = line.rstrip('\n')
-        # the data is either \t separated or triple space separated
+        # the data is either \t separated or space separated
         if '\t' in line:
             line = line.split('\t')
         else:
-            line = line.split('   ')
+            # zeek files that are space separated are either separated by 2 or 3 spaces so we can't use python's split()
+            # using regex split, split line when you encounter more than 2 spaces in a row
+            line = split(r'\s{2,}', line)
+
         # Generic fields in Zeek
         self.column_values: dict = {}
         # We need to set it to empty at the beginning so any new flow has
@@ -665,7 +669,12 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'notice'
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
             if self.column_values['saddr'] is '-' :
-                self.column_values['saddr'] = line[13] #  src field
+                try:
+                    self.column_values['saddr'] = line[13] #  src field
+                except IndexError:
+                    # line doesn't have a p field
+                    # keep it - as it is
+                    pass
 
             if self.column_values['daddr'] is '-':
                 self.column_values['daddr'] = line[14]  #  dst field
@@ -674,12 +683,16 @@ class ProfilerProcess(multiprocessing.Process):
 
             self.column_values['dport'] = line[5] # id.orig_p
             if self.column_values['dport'] is '-':
-                self.column_values['dport'] = line[15] # p field
-
+                try:
+                    self.column_values['dport'] = line[15] # p field
+                except IndexError:
+                    # line doesn't have a p field
+                    # keep it - as it is
+                    pass
             self.column_values['sport'] = line[3]
             self.column_values['note'] = line[10]
-            self.column_values['scanned_port'] = line[15] # p field
-            self.column_values['scanning_ip'] = line[13] # src field
+            self.column_values['scanning_ip'] = self.column_values['saddr']
+            self.column_values['scanned_port'] =  self.column_values['dport']
             self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
 
     def process_zeek_input(self, new_line: dict):
