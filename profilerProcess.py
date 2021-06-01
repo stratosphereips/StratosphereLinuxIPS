@@ -958,7 +958,15 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'long' in file_type:
             self.column_values['type'] = 'long'
         elif 'dhcp' in file_type:
+            """ Parse the fields we're interested in in zeek's dhcp.log file """
+
             self.column_values['type'] = 'dhcp'
+            self.column_values['client_addr'] = line.get('client_addr','')
+            # self.column_values['server_addr'] = line.get('server_addr','')
+            # self.column_values['host_name'] = line.get('host_name','')
+            self.column_values['mac'] = line.get('mac','')
+            # self.column_values['domain'] = line.get('domain','')
+            # self.column_values['assigned_addr'] = line.get('assigned_addr','')
         elif 'dce_rpc' in file_type:
             self.column_values['type'] = 'dce_rpc'
         elif 'dnp3' in file_type:
@@ -1435,7 +1443,8 @@ class ProfilerProcess(multiprocessing.Process):
                     and not 'flow' in self.column_values['type'] \
                     and not 'argus' in self.column_values['type'] \
                     and not 'nfdump' in self.column_values['type']\
-                    and not 'notice' in self.column_values['type']:
+                    and not 'notice' in self.column_values['type']\
+                    and not 'dhcp' in self.column_values['type']:
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
@@ -1470,6 +1479,20 @@ class ProfilerProcess(multiprocessing.Process):
             daddr = self.column_values['daddr']
             profileid = 'profile' + self.id_separator + str(saddr)
 
+            def get_rev_profile(starttime, daddr_as_obj):
+                # Compute the rev_profileid
+                rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                if not rev_profileid:
+                    self.print("The dstip profile was not here... create", 0, 7)
+                    # Create a reverse profileid for managing the data going to the dstip.
+                    rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
+                    __database__.addProfile(rev_profileid, starttime, self.width)
+                    # Try again
+                    rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                    # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
+                rev_twid = self.get_timewindow(starttime, rev_profileid)
+                return rev_profileid, rev_twid
+
             if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                 dur = self.column_values['dur']
                 sport = self.column_values['sport']
@@ -1493,6 +1516,11 @@ class ProfilerProcess(multiprocessing.Process):
                 rcode_name = self.column_values['rcode_name']
                 answers = self.column_values['answers']
                 ttls = self.column_values['TTLs']
+            elif 'dhcp' in flow_type:
+                mac_addr = self.column_values['mac']
+                client_addr = self.column_values['client_addr']
+                profileid = get_rev_profile(starttime, client_addr)[0]
+                __database__.add_mac_addr_to_profile(profileid,mac_addr)
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(saddr)
@@ -1588,20 +1616,6 @@ class ProfilerProcess(multiprocessing.Process):
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur, saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
                     # No dns check going in. Probably ok.
-
-            def get_rev_profile(starttime, daddr_as_obj):
-                # Compute the rev_profileid
-                rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
-                if not rev_profileid:
-                    self.print("The dstip profile was not here... create", 0, 7)
-                    # Create a reverse profileid for managing the data going to the dstip.
-                    rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
-                    __database__.addProfile(rev_profileid, starttime, self.width)
-                    # Try again
-                    rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
-                    # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
-                rev_twid = self.get_timewindow(starttime, rev_profileid)
-                return rev_profileid, rev_twid
 
             ##########################################
             # 5th. Store the data according to the paremeters
