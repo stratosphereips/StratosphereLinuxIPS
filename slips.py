@@ -62,7 +62,7 @@ def recognize_host_ip():
         ipaddr_check = s.getsockname()[0]
         s.close()
     except Exception as ex:
-        print('Network is unreachable')
+        # not connected to the internet
         return None
     return ipaddr_check
 
@@ -408,7 +408,14 @@ if __name__ == '__main__':
     # Store the host IP address if input type is interface
     if input_type == 'interface':
         hostIP = recognize_host_ip()
-        __database__.set_host_ip(hostIP)
+        while True:
+            try:
+                __database__.set_host_ip(hostIP)
+                break
+            except redis.exceptions.DataError:
+                print("Not Connected to the internet. Reconnecting in 10s.")
+                time.sleep(10)
+                hostIP = recognize_host_ip()
 
     # As the main program, keep checking if we should stop slips or not
     # This is not easy since we need to be sure all the modules are stopped
@@ -442,7 +449,7 @@ if __name__ == '__main__':
             __database__.check_TW_to_close()
 
             # In interface we keep track of the host IP. If there was no
-            # modified TWs in the host IP, we check if the network was changed.
+            # modified TWs in the host NotIP, we check if the network was changed.
             # Dont try to stop slips if its catpurting from an interface
             if args.interface:
                 # To check of there was a modified TW in the host IP. If not,
