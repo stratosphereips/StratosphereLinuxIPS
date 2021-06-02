@@ -340,6 +340,10 @@ if __name__ == '__main__':
     if to_ignore:
         # Convert string to list
         to_ignore = eval(to_ignore)
+        # Ignore exporting alerts module if export_to is empty
+        export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ","")
+        if 'stix' not in export_to.lower() and 'slack' not in export_to.lower():
+            to_ignore.append('ExportingAlerts')
         # Disable blocking if was not asked and if it is not interface
         if not args.blocking or not args.interface:
             to_ignore.append('blocking')
@@ -472,6 +476,10 @@ if __name__ == '__main__':
                     # print('Counter to stop Slips. Amount of modified
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:
+                        # Export to taxii server before exiting
+                        if 'stix' in export_to.lower():
+                            __database__.publish('push_to_taxii_server','True')
+                            time.sleep(5) # give slips time to push to server
                         # Stop the output Process
                         print('Stopping Slips')
                         # Stop the modules that are subscribed to channels

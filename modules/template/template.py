@@ -43,6 +43,7 @@ class Module(Module, multiprocessing.Process):
         # - new_ip
         # - tw_modified
         # - evidence_added
+        # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
