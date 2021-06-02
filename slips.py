@@ -229,7 +229,7 @@ if __name__ == '__main__':
         elif 'dBase' in cmd_result:
             input_type = 'nfdump'
         elif 'CSV' in cmd_result:
-            input_type = 'bineflow'
+            input_type = 'binetflow'
         elif 'directory'in cmd_result:
             input_type = 'zeek_folder'
         else:
