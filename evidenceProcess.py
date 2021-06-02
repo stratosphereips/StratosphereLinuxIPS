@@ -138,15 +138,12 @@ class EvidenceProcess(multiprocessing.Process):
                 evidence_string = f'Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}. '
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-            evidence_string = f'Detected domain: {detection_info} due to {description}.'
-
-        elif detection_module == 'LongConnection':
-            evidence_string = f'Detected IP {detection_info} {dns_resolution_detection_info_final} due to a {description}.'
+            evidence_string = f'Detected domain {detection_info} due to {description}.'
 
         elif detection_module == 'SSHSuccessful':
-            evidence_string = f'IP: {ip} did a successful SSH. {description}.'
+            evidence_string = f'IP {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'Detected IP: {ip} {dns_resolution_ip_final} due to {description}.'
+            evidence_string = f'Detected IP {ip} {dns_resolution_ip_final} due to {description}.'
 
         return evidence_string
 
