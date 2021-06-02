@@ -234,7 +234,6 @@ class EvidenceProcess(multiprocessing.Process):
                     # evidence data
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
-
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
                                                           ip,

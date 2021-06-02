@@ -130,7 +130,13 @@ class LogsProcess(multiprocessing.Process):
             return True
         except Exception as inst:
             # Stop the timer
-            # timer.shutdown()
+            try:
+                timer.shutdown()
+            except UnboundLocalError:
+                # The timer variable didn't exist, so just end
+                pass
+
+
             self.outputqueue.put('01|logs|\t[Logs] Error with LogsProcess')
             self.outputqueue.put('01|logs|\t[Logs] {}'.format(type(inst)))
             self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))
