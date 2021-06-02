@@ -339,7 +339,7 @@ if __name__ == '__main__':
     # This plugins import will automatically load the modules and put them in the __modules__ variable
     if to_ignore:
         # Convert string to list
-        to_ignore = eval(to_ignore)
+        to_ignore = to_ignore.replace("[","").replace("]","").replace(" ","").split(",")
         # Ignore exporting alerts module if export_to is empty
         export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ","")
         if 'stix' not in export_to.lower() and 'slack' not in export_to.lower():
