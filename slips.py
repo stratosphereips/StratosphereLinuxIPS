@@ -216,7 +216,6 @@ if __name__ == '__main__':
         input_information = args.filepath
         # default value
         input_type = 'file'
-        # todo check if file cmd is supported in docker
         # Get the type of file
         command = 'file ' + input_information
         # Execute command
