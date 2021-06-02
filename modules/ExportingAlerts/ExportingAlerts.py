@@ -166,7 +166,7 @@ class Module(Module, multiprocessing.Process):
                 # Sensor name is set in slips.conf
                 text = self.sensor_name + ': ' + msg_to_send
             )
-            self.print("Exported to slack")
+            self.print("Exported to slack", 0, 1)
         except SlackApiError as e:
             # You will get a SlackApiError if "ok" is False
             assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
@@ -204,7 +204,7 @@ class Module(Module, multiprocessing.Process):
                 break
         else:
             # Comes here if it cant find inbox in services
-            self.print("Server doesn't have inbox available. Exporting STIX_data.json is cancelled.",0,1)
+            self.print("Server doesn't have inbox available. Exporting STIX_data.json is cancelled.", 0, 1)
             return False
         # Get the data that we want to send
         with open("STIX_data.json") as stix_file:
@@ -216,7 +216,7 @@ class Module(Module, multiprocessing.Process):
             client.push(stix_data, binding,
                         collection_names=[self.collection_name],
                         uri=self.inbox_path)
-            self.print(f"Successfully exported to {self.TAXII_server}.")
+            self.print(f"Successfully exported to {self.TAXII_server}.", 0, 1)
             return True
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
@@ -301,8 +301,7 @@ class Module(Module, multiprocessing.Process):
                 stix_file.write("," + str(indicator) + "]\n}\n")
         # Set of unique ips added to stix_data.json to avoid duplicates
         self.added_ips.add(detection_info)
-        self.print("Indicator added to STIX_data.json",6,0)
-        self.print(f"Indicator added to STIX_data.json")
+        self.print("Indicator added to STIX_data.json", 6, 0)
         return True
 
     def send_to_server(self):
@@ -348,7 +347,7 @@ class Module(Module, multiprocessing.Process):
                                 self.is_thread_created = True
                             exported_to_stix = self.export_to_STIX(msg_to_send)
                             if not exported_to_stix:
-                                self.print("Problem in export_to_STIX()", 2, 1)
+                                self.print("Problem in export_to_STIX()", 0, 1)
 
                 # -------------------- push_to_taxii_server channel
                 # This channel recieves a 'True' msg from slips.py if all 3 conditions are true
