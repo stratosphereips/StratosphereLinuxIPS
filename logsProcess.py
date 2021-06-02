@@ -136,10 +136,8 @@ class LogsProcess(multiprocessing.Process):
             try:
                 timer.shutdown()
             except UnboundLocalError:
-                # Create a timer to process the data every X seconds
-                timer = TimerThread(self.report_time, self.process_global_data)
-                timer.start()
-                timer.shutdown()
+                # The timer variable didn't exist, so just end
+                pass
 
 
             self.outputqueue.put('01|logs|\t[Logs] Error with LogsProcess')
