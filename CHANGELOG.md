@@ -1,3 +1,16 @@
+- 0.7.3
+	- Slips 
+		- Fixed the docker image for Ubuntu
+		- Added a new module for exporting alerts to Slack and TAXII server
+		- Added new Threat Intelligence trackers
+		- Added new notice.log detections
+		- Fixed reading Zeek logs with TABs
+		- Added a parameter -cb to clean chains in blocking module
+		- Updated documentation with a usage
+		- Added a new module for Zeek anomaly detections
+		- Fixed a bug of tensorflow not working in the docker
+	- Kalipso
+		- Fix the print of evidences in the Evidence box
 - 0.7.2 (published 2020/04/28)
 	- Slips
 		- New documentation in read-the-docs
