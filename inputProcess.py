@@ -306,8 +306,8 @@ class InputProcess(multiprocessing.Process):
                             extension = self.input_information[-4:]
                             if extension == '.log':
                                 # Add log file to database
-                                file_name_without_extension = file[:-4]
-                                __database__.add_zeek_file(self.input_information + '/' + file_name_without_extension)
+                                file_name_without_extension = self.input_information[:-4]
+                                __database__.add_zeek_file(file_name_without_extension)
                                 self.bro_timeout = 1
                                 lines = self.read_zeek_files()
                         elif 'binetflow' in headers_line or 'argus' in headers_line:
