@@ -36,7 +36,7 @@ import importlib
 from slips.common.abstracts import Module
 from slips.common.argparse import ArgumentParser
 
-version = '0.7.2'
+version = '0.7.3'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
