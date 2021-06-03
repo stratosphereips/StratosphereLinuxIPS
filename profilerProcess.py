@@ -1569,11 +1569,11 @@ class ProfilerProcess(multiprocessing.Process):
                         #method 1: using asn
                         # first check if ip has asn info in the db
                         ip_data = __database__.getIPData(ip)
-                        asn = ip_data['asn']
+                        ip_asn = ip_data['asn']
                         # make sure the asn field contains a value
-                        if (ip_data['asn'] not in ('','Unknown')
-                                and (org.lower() in ip_data['asn'].lower()
-                                        or ip_data['asn'] in self.whitelisted_orgs[org]['asn'])):
+                        if (ip_asn not in ('','Unknown')
+                                and (org.lower() in ip_asn.lower()
+                                        or ip_asn in self.whitelisted_orgs[org]['asn'])):
                             # this ip belongs to a whitelisted org, ignore flow
                             return True
                     except (KeyError, TypeError):
@@ -1581,8 +1581,9 @@ class ProfilerProcess(multiprocessing.Process):
                         # we can get this list from the db but it's already present in this class
                         org_subnets = json.loads(self.whitelisted_orgs[org]['IPs'])
                         # Now start searching for this ip in the list of org IPs
+                        ip = ipaddress.ip_address(ip)
                         for network in org_subnets:
-                            if ipaddress.ip_address(ip) in ipaddress.ip_network(network):
+                            if ip in ipaddress.ip_network(network):
                                 return True
         return False
 

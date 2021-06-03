@@ -217,7 +217,7 @@ class EvidenceProcess(multiprocessing.Process):
             # Convert each list from str to dict
             whitelisted_IPs = json.loads(whitelist['IPs'])
             whitelisted_domains = json.loads(whitelist['domains'])
-            whitelisted_organizations = json.loads(whitelist['organizations'])
+            whitelisted_orgs = json.loads(whitelist['organizations'])
         except IndexError:
             pass
 
@@ -266,21 +266,36 @@ class EvidenceProcess(multiprocessing.Process):
                 return True
         #---------------------------------------- Check orgs
         # Did the user specify any whitelisted orgs??
-        elif whitelisted_organizations:
+        elif whitelisted_orgs:
             # Check if ip belongs to a whitelisted organization
-            ip = ipaddress.ip_address(ip)
-            for org in whitelisted_organizations:
-                from_ =  whitelisted_organizations[org]['from']
-                what_to_ignore = whitelisted_organizations[org]['what_to_ignore']
+            for org in whitelisted_orgs:
+                from_ =  whitelisted_orgs[org]['from']
+                what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
                 ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
                 ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
                 ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
                 if ignore_alerts_from_ip or ignore_alerts_to_ip:
-                    org_subnets = json.loads(whitelisted_organizations[org]['IPs'])
-                    for network in org_subnets:
-                        # check if ip belongs to this network
-                        if ip in ipaddress.ip_network(network):
+                    # now we know for sure we need to whitelist this alert
+                    try:
+                        # method 1: using asn
+                        # first check if ip has asn info in the db
+                        ip_data = __database__.getIPData(ip)
+                        ip_asn = ip_data['asn']
+                        # make sure the asn field contains a value
+                        if (ip_asn not in ('','Unknown')
+                                and (org.lower() in ip_asn.lower()
+                                        or ip_asn in whitelisted_orgs[org]['asn'])):
+                            # this ip belongs to a whitelisted org, ignore alert
                             return True
+                    except (KeyError, TypeError):
+                        # method 2 using the organization's list of ips
+                        # ip doesn't have asn info, search in the list of organization IPs
+                        org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
+                        ip = ipaddress.ip_address(ip)
+                        for network in org_subnets:
+                            # check if ip belongs to this network
+                            if ip in ipaddress.ip_network(network):
+                                return True
         return False
 
     def run(self):
