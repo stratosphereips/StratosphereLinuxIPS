@@ -213,9 +213,14 @@ if __name__ == '__main__':
         terminate_slips()
 
     # Check if user want to save and load a db at the same time
-    if args.save and args.db:
-        print("Can't use -s and -b together")
-        terminate_slips()
+    if args.save :
+        # make sure slips is running as root
+        if os.geteuid() != 0:
+            print("Slips needs to be run as root to save the database. Stopping.")
+            terminate_slips()
+        if args.db:
+            print("Can't use -s and -b together")
+            terminate_slips()
 
     # If we need zeek (bro), test if we can run it.
     # Need to be assign to something because we pass it to inputProcess later
