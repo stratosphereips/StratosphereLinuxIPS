@@ -197,7 +197,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--nologfiles', help='Do not create log files with all the traffic info and detections, only show in the stdout.', required=False, default=False, action='store_true')
     parser.add_argument('-F', '--pcapfilter', help='Packet filter for Zeek. BPF style.', required=False, type=str, action='store')
     parser.add_argument('-cc', '--clearcache', help='Clear cache.', required=False, default=False, action='store_true')
-    parser.add_argument('-p', '--blocking', help='Block IPs that connect to the computer. Supported only on Linux. Requires root',required=False, default=False, action='store_true')
+    parser.add_argument('-p', '--blocking', help='Block IPs that connect to the computer. Supported only on Linux. Requires root.',required=False, default=False, action='store_true')
     parser.add_argument('-cb', '--clearblocking', help='Flush and delete slipsBlocking chain. Requires root.',required=False, default=False, action='store_true')
     args = parser.parse_args()
 
@@ -214,6 +214,10 @@ if __name__ == '__main__':
 
     # Check if redis server running
     if check_redis_database() is False:
+        terminate_slips()
+
+    if args.blocking and os.geteuid() != 0:
+        print("Slips needs to be run as root to run the blocking module. Stopping.")
         terminate_slips()
 
     # If we need zeek (bro), test if we can run it.
@@ -382,11 +386,15 @@ if __name__ == '__main__':
         __database__.set_host_ip(hostIP)
 
     if args.clearblocking:
-        # Tell the blocking module to clear the slips chain
-        __database__.publish('new_blocking', 'delete slipsBlocking chain')
-        # Wait enough time for the msg to arrive to the module and be processed
-        time.sleep(3)
-        stop_slips(profilerProcessQueue)
+        if os.geteuid() != 0:
+            print("Slips needs to be run as root to clear the slipsBlocking chain. Stopping.")
+            terminate_slips()
+        else:
+            # Tell the blocking module to clear the slips chain
+            __database__.publish('new_blocking', 'delete slipsBlocking chain')
+            # Wait enough time for the msg to arrive to the module and be processed
+            time.sleep(3)
+            stop_slips(profilerProcessQueue)
 
     # As the main program, keep checking if we should stop slips or not
     # This is not easy since we need to be sure all the modules are stopped
