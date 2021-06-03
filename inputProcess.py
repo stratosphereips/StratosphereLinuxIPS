@@ -311,18 +311,15 @@ class InputProcess(multiprocessing.Process):
         self.profilerqueue.close()
 
     def handle_zeek_log_file(self):
-        file_stream = open(self.given_path)
-        line = {}
-        line['type'] = 'zeek'
-        file_name = self.given_path.split('/')[-1]
-        for t_line in file_stream:
-            time.sleep(self.read_lines_delay)
-            line['data'] = t_line
-            self.print(f'	> Sent Line: {line}', 0, 3)
-            if len(t_line.strip()) != 0:
-                self.profilerqueue.put(line)
-            self.lines += 1
-        file_stream.close()
+        try:
+            file_name_without_extension = self.given_path[:self.given_path.index('.')]
+        except IndexError:
+            # filename doesn't have an extension, probably not a conn.log
+            return
+        # Add log file to database
+        __database__.add_zeek_file(file_name_without_extension)
+        self.bro_timeout = 1
+        self.lines = self.read_zeek_files()
         self.profilerqueue.put("stop")
         self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
         self.outputqueue.close()
