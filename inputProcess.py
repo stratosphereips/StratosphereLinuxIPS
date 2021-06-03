@@ -302,21 +302,28 @@ class InputProcess(multiprocessing.Process):
                         file_stream = open(self.input_information)
                         line = {}
                         headers_line = self.input_information.split('/')[-1]
-                        if 'binetflow' in headers_line or 'argus' in headers_line:
+                        if 'log' in headers_line:
+                            extension = self.input_information[-4:]
+                            if extension == '.log':
+                                # Add log file to database
+                                file_name_without_extension = self.input_information[:-4]
+                                __database__.add_zeek_file(file_name_without_extension)
+                                self.bro_timeout = 1
+                                lines = self.read_zeek_files()
+                        elif 'binetflow' in headers_line or 'argus' in headers_line:
                             line['type'] = 'argus'
                             # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
                             # self.profilerqueue.put(fake)
                             self.read_lines_delay = 0.02
-                        elif 'log' in headers_line:
-                            line['type'] = 'zeek'
-                        for t_line in file_stream:
-                            time.sleep(self.read_lines_delay)
-                            line['data'] = t_line
-                            self.print(f'	> Sent Line: {line}', 0, 3)
-                            if len(t_line.strip()) != 0:
-                                self.profilerqueue.put(line)
-                            lines += 1
-                        file_stream.close()
+
+                            for t_line in file_stream:
+                                time.sleep(self.read_lines_delay)
+                                line['data'] = t_line
+                                self.print(f'	> Sent Line: {line}', 0, 3)
+                                if len(t_line.strip()) != 0:
+                                    self.profilerqueue.put(line)
+                                lines += 1
+                            file_stream.close()
 
                 self.profilerqueue.put("stop")
                 self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
