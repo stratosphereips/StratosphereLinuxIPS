@@ -190,16 +190,42 @@ class ProfilerProcess(multiprocessing.Process):
         # If the user specified an org in the whitelist, load the info about it only to the db and to memory
         for org in self.whitelisted_orgs:
             # Store the IPs of this org in the db
-            org_subnets = self.load_org_info(org)
+            org_subnets = self.load_org_IPs(org)
+            org_asn = self.load_org_asn(org)
             if org_subnets:
                 # Store the IPs of this org
                 self.whitelisted_orgs[org].update({'IPs' : json.dumps(org_subnets)})
+            if org_asn:
+                # Store the ASN of this org
+                self.whitelisted_orgs[org].update({'asn' : json.dumps(org_asn)})
         # store everything in the db because we'll be needing this info in the evidenceProcess
         __database__.set_whitelist(self.whitelisted_IPs,
                                    self.whitelisted_domains,
                                    self.whitelisted_orgs)
 
-    def load_org_info(self,org) -> dict :
+    def load_org_asn(self, org) -> list :
+        """
+        Reads the specified org's asn from slips/organizations_info and stores the info in the database
+        org: 'google', 'facebook', 'twitter', etc...
+        returns a list containing the org's asn
+        """
+        try:
+            # Each file is named after the organization's name followed by _asn
+            org_asn =[]
+            file = f'slips/organizations_info/{org}_asn'
+            with open(file,'r') as f:
+                line = f.readline()
+                while line:
+                    # each line will be something like this: 34.64.0.0/10
+                    line = line.replace("\n","").strip()
+                    org_asn.append(line)
+                    line = f.readline()
+            return org_asn
+        except (FileNotFoundError, IOError):
+            self.print(f"Can't read slips/organizations_info/{org}_asn ... Aborting.")
+            return False
+
+    def load_org_IPs(self, org) -> list :
         """
         Reads the specified org's info from slips/organizations_info and stores the info in the database
         org: 'google', 'facebook', 'twitter', etc...
@@ -208,8 +234,6 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             # Each file is named after the organization's name
             # Each line of the file containes an ip range, for example: 34.64.0.0/10
-            # IPs_dict structure: key: ip/subnet for example: 34.64.0.0/10
-            #                     value:
             org_subnets = []
             file = f'slips/organizations_info/{org}'
             with open(file,'r') as f:
