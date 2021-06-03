@@ -178,7 +178,6 @@ if __name__ == '__main__':
                         help='read a Zeek folder, Argus binetflow, pcapfile or nfdump.')
     parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
                         help='read packets from an interface.')
-    #todo update usage.md
     parser.add_argument('-l','--nologfiles',action='store_true',required=False,
                         help='do not create log files with all the traffic info and detections.')
     parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
