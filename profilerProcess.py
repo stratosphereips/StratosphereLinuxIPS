@@ -1564,12 +1564,26 @@ class ProfilerProcess(multiprocessing.Process):
                 ignore_flows_from_ip = ignore_flows and type_of_ip is 'saddr' and ('src' in from_ or 'both' in from_)
                 ignore_flows_to_ip = ignore_flows and type_of_ip is 'daddr' and ('dst' in from_ or 'both' in from_)
                 if ignore_flows_from_ip or ignore_flows_to_ip:
-                    # we can get this list from the db but it's already present in this class
-                    org_subnets = json.loads(self.whitelisted_orgs[org]['IPs'])
-                    # Now start searching for this ip in the list of org IPs
-                    for network in org_subnets:
-                        if ipaddress.ip_address(ip) in ipaddress.ip_network(network):
+                    # now we know for sure we need to whitelist this flow
+                    try:
+                        #method 1: using asn
+                        # first check if ip has asn info in the db
+                        ip_data = __database__.getIPData(ip)
+                        asn = ip_data['asn']
+                        # make sure the asn field contains a value
+                        if (ip_data['asn'] not in ('','Unknown')
+                                and (org.lower() in ip_data['asn'].lower()
+                                        or ip_data['asn'] in self.whitelisted_orgs[org]['asn'])):
+                            # this ip belongs to a whitelisted org, ignore flow
                             return True
+                    except (KeyError, TypeError):
+                        # method 2 using the organization's list of ips
+                        # we can get this list from the db but it's already present in this class
+                        org_subnets = json.loads(self.whitelisted_orgs[org]['IPs'])
+                        # Now start searching for this ip in the list of org IPs
+                        for network in org_subnets:
+                            if ipaddress.ip_address(ip) in ipaddress.ip_network(network):
+                                return True
         return False
 
     def add_flow_to_profile(self):
