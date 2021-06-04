@@ -28,6 +28,7 @@ import traceback
 import os
 import binascii
 import base64
+import subprocess
 
 def timeit(method):
     def timed(*args, **kw):
@@ -1324,7 +1325,20 @@ class ProfilerProcess(multiprocessing.Process):
                 mac_addr = self.column_values['mac']
                 client_addr = self.column_values['client_addr']
                 profileid = get_rev_profile(starttime, client_addr)[0]
-                __database__.add_mac_addr_to_profile(profileid,mac_addr)
+                MAC_info = {'MAC': mac_addr}
+                # Try to get the vendor of the mac address
+                command = f'curl https://api.macvendors.com/{mac_addr}'
+                # Execute command
+                result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+                # Get command output
+                vendor = result.stdout.decode('utf-8')
+                # response may contain errors such as 'Too Many Requests'
+                if 'errors' not in vendor:
+                    MAC_info.update({'Vendor': vendor})
+                # Store info in the db
+                MAC_info = json.dumps(MAC_info)
+                __database__.add_mac_addr_to_profile(profileid, MAC_info)
+
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(saddr)
