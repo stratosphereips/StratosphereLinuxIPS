@@ -178,7 +178,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.whitelisted_IPs[data] = [from_, what_to_ignore]
                     elif 'domain' in type_ and validators.domain(data):
                         self.whitelisted_domains[data] = what_to_ignore
-                    elif 'org' in type_ and data in ("google", "microsoft", "apple", "facebook", "twitter"):
+                    elif 'org' in type_:
                         #organizations dicts look something like this:
                         #  {'google': {'from':'dst',
                         #               'what_to_ignore': 'alerts'
@@ -226,7 +226,7 @@ class ProfilerProcess(multiprocessing.Process):
                     line = f.readline()
             return org_asn
         except (FileNotFoundError, IOError):
-            self.print(f"Can't read slips/organizations_info/{org}_asn ... Aborting.")
+            self.print(f"Can't read slips/organizations_info/{org}_asn ... Aborting.",2,2)
             return False
 
     def load_org_IPs(self, org) -> list :
@@ -256,7 +256,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Store them in the db as str
             return org_subnets
         except (FileNotFoundError, IOError):
-            self.print(f"Can't read slips/organizations_info/{org} ... Aborting.")
+            self.print(f"Can't read slips/organizations_info/{org} ... Aborting.",2,2)
             return False
 
     def define_type(self, line):
@@ -1583,12 +1583,18 @@ class ProfilerProcess(multiprocessing.Process):
                     except (KeyError, TypeError):
                         # method 2 using the organization's list of ips
                         # we can get this list from the db but it's already present in this class
-                        org_subnets = json.loads(self.whitelisted_orgs[org]['IPs'])
-                        # Now start searching for this ip in the list of org IPs
-                        ip = ipaddress.ip_address(ip)
-                        for network in org_subnets:
-                            if ip in ipaddress.ip_network(network):
-                                return True
+                        try:
+                            org_subnets = json.loads(self.whitelisted_orgs[org]['IPs'])
+                            # Now start searching for this ip in the list of org IPs
+                            ip = ipaddress.ip_address(ip)
+                            for network in org_subnets:
+                                if ip in ipaddress.ip_network(network):
+                                    return True
+                        except (KeyError,TypeError):
+                            # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
+                            # and ip doesn't have asn info.
+                            # so we don't know how to link this ip to the whitelisted org!
+                            pass
         return False
 
     def add_flow_to_profile(self):

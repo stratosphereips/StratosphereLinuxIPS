@@ -200,7 +200,6 @@ class EvidenceProcess(multiprocessing.Process):
         :param description: may contain IPs if te evidence is coming from portscan module
         """
 
-        # print(f"*************got data: {data}, type detection: {type_detection}")
         whitelist = __database__.get_whitelist()
         max_tries = 10
         # if this module is loaded before profilerProcess or before we're done processing the whitelist in general
@@ -245,7 +244,7 @@ class EvidenceProcess(multiprocessing.Process):
             # it's probably one of the following:  'sip', 'dip', 'sport', 'dport'
             data_type = 'ip'
         #---------------------------------------- Check domains
-        if data_type is 'domain' :
+        if data_type is 'domain':
             # is domain in whitelisted domains?
             if data in whitelisted_domains:
                 # ignore flows or alerts?
@@ -302,12 +301,18 @@ class EvidenceProcess(multiprocessing.Process):
                     except (KeyError, TypeError):
                         # method 2 using the organization's list of ips
                         # ip doesn't have asn info, search in the list of organization IPs
-                        org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
-                        ip = ipaddress.ip_address(ip)
-                        for network in org_subnets:
-                            # check if ip belongs to this network
-                            if ip in ipaddress.ip_network(network):
-                                return True
+                        try:
+                            org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
+                            ip = ipaddress.ip_address(ip)
+                            for network in org_subnets:
+                                # check if ip belongs to this network
+                                if ip in ipaddress.ip_network(network):
+                                    return True
+                        except (KeyError,TypeError):
+                            # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
+                            # and ip doesn't have asn info.
+                            # so we don't know how to link this ip to the whitelisted org!
+                            pass
         return False
 
     def run(self):
