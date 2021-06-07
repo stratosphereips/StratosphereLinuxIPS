@@ -1,9 +1,9 @@
 # A whitelist of IPs that should be completely ignored.
 #
-# Supported types: ip,domain,organization
-# from: can be src, dst or both
+# Supported IoCTypes: ip,domain,organization
+# Direction: can be src, dst or both
 # supported organizations: google, microsoft, apple, facebook, twitter...
-# what to ignore: either alerts or flows (plural) or both
+# IgnoreType: either alerts or flows (plural) or both
 # ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
 # ignore flows: the flow will be completely discarded.
 #
@@ -13,6 +13,6 @@
 # domain,google.com,src,flows
 # organization,twitter,dst,both
 #
-"type","domain/ip/organization","from","what to ignore"
+"IoCType","IoCValue","Direction","IgnoreType"
 ip,94.23.253.72,both,alerts
 ip,91.121.83.118,both,alerts

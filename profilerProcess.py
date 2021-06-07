@@ -152,7 +152,7 @@ class ProfilerProcess(multiprocessing.Process):
                 line = whitelist.readline()
                 # break while statement if it is not a comment line
                 # i.e. does not startwith #
-                if not line.startswith('#') and not line.startswith('"type"'):
+                if not line.startswith('#') and not line.startswith('"IoCType"'):
                     break
             # Process lines after comments
             line_number = 0
@@ -166,7 +166,7 @@ class ProfilerProcess(multiprocessing.Process):
                 line = line.replace("\n","").replace(" ","").split(",")
                 try:
                     type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
-                except:
+                except IndexError:
                     # line is missing a column, ignore it.
                     self.print(f"Line {line_number} in whitelist.csv is missing a column. Skipping.")
                     line = whitelist.readline()
@@ -182,7 +182,7 @@ class ProfilerProcess(multiprocessing.Process):
                         #organizations dicts look something like this:
                         #  {'google': {'from':'dst',
                         #               'what_to_ignore': 'alerts'
-                        #               'IPs': {'34.64.0.0/10': (first ip in range,last ip in range)}}
+                        #               'IPs': {'34.64.0.0/10': subnet}}
                         self.whitelisted_orgs[data] = {'from': from_,
                                                        'what_to_ignore': what_to_ignore}
                     else:
