@@ -158,6 +158,10 @@ class ProfilerProcess(multiprocessing.Process):
             line_number = 0
             while line:
                 line_number+=1
+                # ignore comments
+                if line.startswith('#'):
+                    line = whitelist.readline()
+                    continue
                 # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
                 line = line.replace("\n","").replace(" ","").split(",")
                 try:
