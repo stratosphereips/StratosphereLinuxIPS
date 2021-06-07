@@ -28,6 +28,7 @@ import traceback
 import os
 import binascii
 import base64
+from re import split
 
 def timeit(method):
     def timed(*args, **kw):
@@ -186,7 +187,7 @@ class ProfilerProcess(multiprocessing.Process):
                         else:
                             self.input_type = 'argus'
 
-                    elif nr_tabs > nr_commas:
+                    elif nr_tabs >= nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
                         self.separator = '	'
@@ -335,7 +336,10 @@ class ProfilerProcess(multiprocessing.Process):
         if '\t' in line:
             line = line.split('\t')
         else:
-            line = line.split('   ')
+            # zeek files that are space separated are either separated by 2 or 3 spaces so we can't use python's split()
+            # using regex split, split line when you encounter more than 2 spaces in a row
+            line = split(r'\s{2,}', line)
+
         # Generic fields in Zeek
         self.column_values: dict = {}
         # We need to set it to empty at the beginning so any new flow has
@@ -2115,7 +2119,10 @@ class ProfilerProcess(multiprocessing.Process):
                         # We should do this before checking the type of input so we don't lose the first line of input
 
                     # What type of input do we have?
-                    if self.input_type == 'zeek':
+                    if not self.input_type:
+                        # can't definee the type of input
+                        self.print("Can't determine input type.",5,6)
+                    elif self.input_type == 'zeek':
                         # self.print('Zeek line')
                         self.process_zeek_input(line)
                         # Add the flow to the profile
