@@ -98,6 +98,7 @@ class InputProcess(multiprocessing.Process):
         if not self.nfdump_output:
             # The nfdump command returned nothing
             self.print("Error reading nfdump output ", 1, 3)
+            lines =0
         else:
             lines = len(self.nfdump_output.splitlines())
             for nfdump_line in self.nfdump_output.splitlines():

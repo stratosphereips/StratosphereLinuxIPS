@@ -192,13 +192,15 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-    def is_whitelisted(self, data, type_detection) -> bool:
+    def is_whitelisted(self, data, type_detection, description) -> bool:
         """
         Checks if IP is whitelisted
-        data: (detection_info) can be ip, domain, tuple(ip:port:proto)
-        type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
+        :param data: (detection_info) can be ip, domain, tuple(ip:port:proto)
+        :param type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
+        :param description: may contain IPs if te evidence is coming from portscan module
         """
 
+        # print(f"*************got data: {data}, type detection: {type_detection}")
         whitelist = __database__.get_whitelist()
         max_tries = 10
         # if this module is loaded before profilerProcess or before we're done processing the whitelist in general
@@ -229,6 +231,16 @@ class EvidenceProcess(multiprocessing.Process):
             # get the ip
             data = data.split(":")[0]
             data_type = 'ip'
+        elif 'dport' in type_detection:
+            # is coming from portscan module
+            try:
+                # data coming from portscan module contains the port and not the ip, we need to extract
+                # the ip from the description
+                data = description.split('. Tot')[0].split(': ')[1]
+                data_type = 'ip'
+            except (IndexError,ValueError):
+                # not coming from portscan module , data is a dport, do nothing
+                pass
         else:
             # it's probably one of the following:  'sip', 'dip', 'sport', 'dport'
             data_type = 'ip'
@@ -320,15 +332,15 @@ class EvidenceProcess(multiprocessing.Process):
                     type_detection = key.get('type_detection') # example: dstip srcip dport sport dstdomain
                     detection_info = key.get('detection_info') # example: ip, port, inTuple, outTuple, domain
                     type_evidence = key.get('type_evidence') # example: PortScan, ThreatIntelligence, etc..
+                    # evidence data
+                    evidence_data = data.get('data')
+                    description = evidence_data.get('description')
                     # Ignore alert if ip is whitelisted
-                    if self.is_whitelisted(detection_info, type_detection):
+                    if self.is_whitelisted(detection_info, type_detection, description):
                         # All evidence are added to the db and to kalipso because before reaching this module
                         # Remove evidence from db so it will be completely ignored from kalipso and the terminal
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
-                    # evidence data
-                    evidence_data = data.get('data')
-                    description = evidence_data.get('description')
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
                                                           ip,
