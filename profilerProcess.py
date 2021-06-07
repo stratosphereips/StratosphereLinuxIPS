@@ -2312,7 +2312,10 @@ class ProfilerProcess(multiprocessing.Process):
                         # We should do this before checking the type of input so we don't lose the first line of input
 
                     # What type of input do we have?
-                    if self.input_type == 'zeek':
+                    if not self.input_type:
+                        # can't definee the type of input
+                        self.print("Can't determine input type.",5,6)
+                    elif self.input_type == 'zeek':
                         # self.print('Zeek line')
                         self.process_zeek_input(line)
                         # Add the flow to the profile
