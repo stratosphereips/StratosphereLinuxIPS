@@ -323,6 +323,9 @@ if __name__ == '__main__':
     if to_ignore:
         # Convert string to list
         to_ignore = eval(to_ignore)
+        # don't run blocking module unless specified
+        if not args.clearblocking and not args.blocking:
+            to_ignore.append('blocking')
         try:
             # This 'imports' all the modules somehow, but then we ignore some
             modules_to_call = load_modules(to_ignore)
