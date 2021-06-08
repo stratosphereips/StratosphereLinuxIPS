@@ -146,7 +146,11 @@ class Module(Module, multiprocessing.Process):
 
     def get_cmd_output(self,command):
         """ Executes a command and returns the output """
-        return subprocess.check_output(command.split()).decode('UTF-8').rstrip()#, stdout=subprocess.PIPE).stdout.decode('utf-8')
+
+        # Execute command
+        result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+        # Get command output
+        return result.stdout.decode('utf-8')
 
     def initialize_chains_in_firewall(self):
         """ For linux: Adds a chain to iptables or a table to nftables called
