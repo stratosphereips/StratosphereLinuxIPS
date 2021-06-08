@@ -187,7 +187,7 @@ class ProfilerProcess(multiprocessing.Process):
                         else:
                             self.input_type = 'argus'
 
-                    elif nr_tabs > nr_commas:
+                    elif nr_tabs >= nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
                         self.separator = '	'
