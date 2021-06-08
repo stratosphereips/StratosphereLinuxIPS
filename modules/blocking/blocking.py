@@ -72,9 +72,9 @@ class Module(Module, multiprocessing.Process):
             # Example of passing blocking_data to this module:
             blocking_data = json.dumps(blocking_data)
             __database__.publish('new_blocking', blocking_data )
-            self.print("Blocked ip")
+            self.print("Blocked ip.")
         else:
-            self.print("IP is blocked.")
+            self.print("IP is already blocked.")
 
     def set_sudo_according_to_env(self):
         """ Check if running in host or in docker and sets sudo string accordingly.
@@ -123,7 +123,7 @@ class Module(Module, multiprocessing.Process):
         """ Flushes and deletes everything in slipsBlocking chain """
         # check if slipsBlocking chain exists before flushing it and suppress stderr and stdout while checking
         # 0 means it exists
-        if os.system(self.sudo + " iptables -nvL slipsBlocking >/dev/null 2>&1") == 0:
+        if os.system(self.sudo + "iptables -nvL slipsBlocking >/dev/null 2>&1") == 0:
             # Delete all references to slipsBlocking inserted in INPUT OUTPUT and FORWARD before deleting the chain
             os.system(self.sudo + 'iptables -D INPUT -j slipsBlocking >/dev/null 2>&1')
             os.system(self.sudo + 'iptables -D OUTPUT -j slipsBlocking >/dev/null 2>&1')
@@ -132,6 +132,10 @@ class Module(Module, multiprocessing.Process):
             os.system(self.sudo + 'iptables -F slipsBlocking >/dev/null 2>&1')
             # Delete slipsBlocking chain from iptables
             os.system(self.sudo + 'iptables -X slipsBlocking >/dev/null 2>&1')
+
+    def get_cmd_output(self,command):
+        """ Executes a command and returns the output """
+        return subprocess.check_output(command.split()).decode('UTF-8').rstrip()#, stdout=subprocess.PIPE).stdout.decode('utf-8')
 
     def initialize_chains_in_firewall(self):
         """ For linux: Adds a chain to iptables or a table to nftables called
@@ -146,13 +150,21 @@ class Module(Module, multiprocessing.Process):
                 self.print('Executing "sudo iptables -N slipsBlocking"',6,0)
                 # Add a new chain to iptables
                 os.system(self.sudo + 'iptables -N slipsBlocking')
-                # TODO: determine which one to use OUTPUT INPUT or FORWARD or is it safer to use the three of them?
+
+                # Check if we're already redirecting to slipsBlocking chain
+                INPUT_chain_rules = self.get_cmd_output(self.sudo + " iptables -nvL INPUT")
+                OUTPUT_chain_rules = self.get_cmd_output(self.sudo + " iptables -nvL OUTPUT")
+                FORWARD_chain_rules = self.get_cmd_output(self.sudo + " iptables -nvL FORWARD")
                 # Redirect the traffic from all other chains to slipsBlocking so rules
                 # in any pre-existing chains dont override it
                 # -I to insert slipsBlocking at the top of the INPUT, OUTPUT and FORWARD chains
-                os.system(self.sudo + 'iptables -I INPUT -j slipsBlocking >/dev/null 2>&1')
-                os.system(self.sudo + 'iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1')
-                os.system(self.sudo + 'iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1')
+                if 'slipsBlocking' not in INPUT_chain_rules :
+                    os.system(self.sudo + 'iptables -I INPUT -j slipsBlocking >/dev/null 2>&1')
+                if 'slipsBlocking' not in OUTPUT_chain_rules :
+                    os.system(self.sudo + 'iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1')
+                if 'slipsBlocking' not in FORWARD_chain_rules :
+                    os.system(self.sudo + 'iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1')
+
             elif self.firewall == 'nftables':
                 self.print('Executing "sudo nft add table inet slipsBlocking"',6,0)
                 # Add a new nft table that uses the inet family (ipv4,ipv6)
@@ -320,7 +332,7 @@ class Module(Module, multiprocessing.Process):
                     # sent from slips.py
                     if message['data'] == 'delete slipsBlocking chain':
                         if self.platform_system == 'Linux':
-                        # Get the user's currently installed firewall
+                            # Get the user's currently installed firewall
                             self.firewall = self.determine_linux_firewall()
                             if self.firewall == 'iptables':
                                     self.delete_iptables_chain()
