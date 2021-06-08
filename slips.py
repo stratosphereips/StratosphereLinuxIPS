@@ -551,9 +551,9 @@ if __name__ == '__main__':
         export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ","").lower()
         if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
             to_ignore.append('ExportingAlerts')
-        # # Disable blocking if was not asked and if it is not interface
-        # if not args.blocking or not args.interface:
-        #     to_ignore.append('blocking')
+        # don't run blocking module unless specified
+        if not args.clearblocking and not args.blocking:
+            to_ignore.append('blocking')
         try:
             # This 'imports' all the modules somehow, but then we ignore some
             modules_to_call = load_modules(to_ignore)[0]
