@@ -150,8 +150,7 @@ class Module(Module, multiprocessing.Process):
                         if type(data) == str:
                             # data example: profile_192.168.1.1_timewindow1
                             data = data.split('_')
-                            # in case of mac addresses, you can't create files with colons in the name, replace the colon with '-'
-                            self.new_srcip = data[1].replace(':','_')
+                            self.new_srcip = data[1]
                             # make sure it is not first run so we don't save an empty model to disk
                             if self.is_first_run == False and self.current_srcip != self.new_srcip:
                                 # srcip changed
@@ -177,7 +176,7 @@ class Module(Module, multiprocessing.Process):
                                 except (UnboundLocalError, AttributeError):
                                     # There's no dataframe, create one
                                     # current srcip will be used as the model name
-                                    self.current_srcip = data[1].replace(':', '_')
+                                    self.current_srcip = data[1]
                                     bro_df = pd.DataFrame(flow, index=[0])
                             # In case you need a label, due to some models being able to work in a
                             # semisupervized mode, then put it here. For now everything is
@@ -221,7 +220,7 @@ class Module(Module, multiprocessing.Process):
                             uid = list(flow.keys())[0]
                             # Get the flow as dict
                             flow_dict = json.loads(flow[uid])
-                            self.new_srcip = flow_dict['saddr'].replace(':','-')
+                            self.new_srcip = flow_dict['saddr']
                             if self.is_first_run:
                                 self.current_srcip = self.new_srcip
                             # Create a dataframe
