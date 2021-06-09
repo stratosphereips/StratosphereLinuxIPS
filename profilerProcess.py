@@ -172,10 +172,13 @@ class ProfilerProcess(multiprocessing.Process):
                     self.input_type = 'zeek'
             else:
                 try:
+                    # suricata lines have 'event_type' key, either flow, dns, etc..
                     data = json.loads(data)
-                    if data['event_type'] == 'flow':
+                    if data['event_type']:
+                        # found the key, is suricata
                         self.input_type = 'suricata'
                 except ValueError:
+                    # not suricata
                     nr_commas = len(data.split(','))
                     nr_tabs = len(data.split('   '))
                     if nr_commas > nr_tabs:
@@ -1193,9 +1196,21 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             pass
 
-    def process_suricata_input(self, line: str) -> None:
+    def process_suricata_input(self, line) -> None:
         """ Read suricata json input """
-        line = json.loads(line)
+
+        # convert to dict if it's not a dict already
+        if type(line)== str:
+            # lien is the actual data
+            line = json.loads(line)
+        else:
+            # line is a dict with data and type as keys
+            try:
+                line = json.loads(line['data'])
+            except KeyError:
+                # can't find the line!
+                return True
+
 
         self.column_values: dict = {}
         try:

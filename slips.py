@@ -231,7 +231,14 @@ if __name__ == '__main__':
         elif 'directory'in cmd_result:
             input_type = 'zeek_folder'
         else:
-            input_type = 'zeek_log_file'
+            # is a json file, is it a zeek log file or suricata?
+            # use first line to determine
+            with open(input_information,'r') as f:
+                first_line = f.readline()
+            if 'flow_id' in first_line:
+                input_type = 'suricata'
+            else:
+                input_type = 'zeek_log_file'
     else:
         print('You need to define an input source.')
         sys.exit(-1)
