@@ -1936,7 +1936,6 @@ class ProfilerProcess(multiprocessing.Process):
                         # This line will be discarded because
                         self.define_type(line)
                         # We should do this before checking the type of input so we don't lose the first line of input
-
                     # What type of input do we have?
                     if self.input_type == 'zeek':
                         # self.print('Zeek line')
