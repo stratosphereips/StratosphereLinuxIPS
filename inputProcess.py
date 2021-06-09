@@ -309,6 +309,21 @@ class InputProcess(multiprocessing.Process):
         file_stream.close()
         self.stop_queues()
 
+    def handle_suricata(self):
+        file_stream = open(self.given_path)
+        line = {}
+        line['type'] = 'suricata'
+        self.read_lines_delay = 0.02
+        for t_line in file_stream:
+            time.sleep(self.read_lines_delay)
+            line['data'] = t_line
+            self.print(f'	> Sent Line: {line}', 0, 3)
+            if len(t_line.strip()) != 0:
+                self.profilerqueue.put(line)
+            self.lines += 1
+        file_stream.close()
+        self.stop_queues()
+
     def handle_zeek_log_file(self):
         try:
             file_name_without_extension = self.given_path[:self.given_path.index('.')]
@@ -406,7 +421,6 @@ class InputProcess(multiprocessing.Process):
                 self.read_zeek_folder()
                 return True
             elif self.input_type is 'zeek_log_file':
-                # todo handle keyerror
                 # Is a zeek.log file
                 file_name = self.given_path.split('/')[-1]
                 if 'log' in file_name:
@@ -425,7 +439,10 @@ class InputProcess(multiprocessing.Process):
                   or self.input_type is 'interface'):
                 self.handle_pcap_and_interface()
                 return True
-            elif self.input_type is 'file':
+            elif self.input_type is 'suricata':
+                self.handle_suricata()
+            else:
+                # if self.input_type is 'file':
                 # default value
                 self.print('Unrecognized file type. Stopping.')
                 return True
