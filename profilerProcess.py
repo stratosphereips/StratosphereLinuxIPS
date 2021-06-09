@@ -322,6 +322,7 @@ class ProfilerProcess(multiprocessing.Process):
                             self.input_type = 'nfdump'
                         else:
                             self.input_type = 'argus'
+
                     elif nr_tabs >= nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
@@ -452,8 +453,8 @@ class ProfilerProcess(multiprocessing.Process):
                 defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
             else:
                 try:
-                    # The format of time is a complete date. 
-                    # Dont modify it, since 
+                    # The format of time is a complete date.
+                    # Dont modify it, since
                     # 1) The time is a string, so we dont know the original timezone
                     # 2) the python call datetime.fromtimestamp uses by default
                     # the local zone when nothing is specified.
@@ -1472,7 +1473,7 @@ class ProfilerProcess(multiprocessing.Process):
             for domain in list(self.whitelisted_domains.keys()):
                 what_to_ignore = self.whitelisted_domains[domain]['what_to_ignore']
                 # Here we iterate over all the domains to check so we can find
-                # subdomains. If slack.com was whitelisted, then test.slack.com 
+                # subdomains. If slack.com was whitelisted, then test.slack.com
                 # should be ignored too. But not 'slack.com.test'
                 for domain_to_check in domains_to_check:
                     main_domain = domain_to_check[-len(domain):]
@@ -1481,7 +1482,7 @@ class ProfilerProcess(multiprocessing.Process):
                         if 'flows' in what_to_ignore or 'both' in what_to_ignore:
                             #self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
                             return True
-    
+
                 # Now check the related domains of the src IP
                 from_ = self.whitelisted_domains[domain]['from']
                 if 'src' in from_ or 'both' in from_:
@@ -1542,7 +1543,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Check if src IP belongs to a whitelisted organization range
                         for network in org_subnets:
                             try:
-                                ip = ipaddress.ip_address(self.column_values['saddr']) 
+                                ip = ipaddress.ip_address(self.column_values['saddr'])
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
                                 return False
@@ -1565,7 +1566,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Check if dst IP belongs to a whitelisted organization range
                         for network in org_subnets:
                             try:
-                                ip = ipaddress.ip_address(self.column_values['daddr']) 
+                                ip = ipaddress.ip_address(self.column_values['daddr'])
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
                                 return False
@@ -1596,7 +1597,7 @@ class ProfilerProcess(multiprocessing.Process):
         try:
 
             # Define which type of flows we are going to process
-            
+
             if not self.column_values:
                 return True
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp'):
@@ -2347,6 +2348,8 @@ class ProfilerProcess(multiprocessing.Process):
                     elif self.input_type == 'nfdump':
                         self.process_nfdump_input(line)
                         self.add_flow_to_profile()
+                    else:
+                        self.print("Can't recognize input file type.")
         except KeyboardInterrupt:
             self.print("Received {} lines.".format(rec_lines), 0, 1)
             return True
