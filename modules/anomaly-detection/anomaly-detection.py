@@ -64,30 +64,6 @@ class Module(Module, multiprocessing.Process):
                          daemon=True)
         self.thread_started = False
         self.models_path = 'modules/anomaly-detection/models/'
-        
-    def save_models_thread(self):
-        """ Saves models to disk every 1h """
-
-        while True:
-            time.sleep(60*60)
-            self.save_models()
-
-    def save_models(self):
-        """ train and save trained models to disk """
-
-        for srcip, bro_df in self.dataframes.items():
-            # Add the columns from the log file that we know are numbers. This is only for conn.log files.
-            X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
-            # PCA. Good and fast!
-            clf = PCA()
-            # extract the value of dataframe to matrix
-            X_train = X_train.values
-            # Fit the model to the train data
-            clf.fit(X_train)
-            # save the model to disk
-            path_to_df = self.models_path + srcip
-            with open(path_to_df, 'wb') as model:
-                pickle.dump(clf, model)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -109,6 +85,37 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def save_models_thread(self):
+        """ Saves models to disk every 1h """
+
+        while True:
+            time.sleep(60*60)
+            self.save_models()
+
+    def save_models(self):
+        """ Train and save trained models to disk """
+
+        self.print('Saving models to disk...')
+
+        for srcip, bro_df in self.dataframes.items():
+            # Add the columns from the log file that we know are numbers. This is only for conn.log files.
+            X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
+            # PCA. Good and fast!
+            clf = PCA()
+            # extract the value of dataframe to matrix
+            X_train = X_train.values
+            # Fit the model to the train data
+            clf.fit(X_train)
+            # make sure there's a dir to save the models to
+            if not os.path.isdir(self.models_path):
+                os.mkdir(self.models_path)
+            # save the model to disk
+            path_to_df = self.models_path + srcip
+            with open(path_to_df, 'wb') as model:
+                pickle.dump(clf, model)
+
+        self.print('Done.')
+
     def get_model(self) -> str:
         """
         Find the correct model to use for testing depending on the current source ip
@@ -129,13 +136,13 @@ class Module(Module, multiprocessing.Process):
             while True:
                 if 'train' in self.mode:
                     # start the saving thread only once
-                    if self.thread_started is False:
+                    if self.thread_started == False:
                         self.saving_thread.start()
                         self.thread_started = True
 
                     message_c3 = self.c3.get_message(timeout=self.timeout)
                     if message_c3['data'] == 'stop_process':
-                        # train and save the models before exitting
+                        # train and save the models before exiting
                         self.save_models()
                         return True
                     if message_c3 and message_c3['channel'] == 'tw_closed' and message_c3["type"] == "message":
@@ -144,10 +151,11 @@ class Module(Module, multiprocessing.Process):
                             # data example: profile_192.168.1.1_timewindow1
                             data = data.split('_')
                             # in case of mac addresses, you can't create files with colons in the name, replace the colon with '-'
-                            self.new_srcip = data[1].replace(':','-')
+                            self.new_srcip = data[1].replace(':','_')
                             # make sure it is not first run so we don't save an empty model to disk
-                            if (self.is_first_run is False and self.current_srcip != self.new_srcip) :
+                            if self.is_first_run == False and self.current_srcip != self.new_srcip:
                                 # srcip changed
+                                self.current_srcip = self.new_srcip
                                 try:
                                     # there is a dataframe for this src ip, append to it
                                     bro_df = self.dataframes[self.current_srcip]
@@ -160,7 +168,7 @@ class Module(Module, multiprocessing.Process):
                             twid = data[2]
                             # get all flows in the tw
                             flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
-                            # flows is a dict of uids ad keys and actual flows as values
+                            # flows is a dict of uids and keys and actual flows as values
                             for flow in flows.values():
                                 flow = json.loads(flow)
                                 try:
@@ -169,7 +177,7 @@ class Module(Module, multiprocessing.Process):
                                 except (UnboundLocalError, AttributeError):
                                     # There's no dataframe, create one
                                     # current srcip will be used as the model name
-                                    self.current_srcip = data[1].replace(':', '-')
+                                    self.current_srcip = data[1].replace(':', '_')
                                     bro_df = pd.DataFrame(flow, index=[0])
                             # In case you need a label, due to some models being able to work in a
                             # semisupervized mode, then put it here. For now everything is
