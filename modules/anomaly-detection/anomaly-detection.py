@@ -63,6 +63,7 @@ class Module(Module, multiprocessing.Process):
         self.saving_thread = threading.Thread(target=self.save_models_thread,
                          daemon=True)
         self.thread_started = False
+        self.models_path = 'modules/anomaly-detection/models/'
         
     def save_models_thread(self):
         """ Saves models to disk every 1h """
@@ -84,7 +85,7 @@ class Module(Module, multiprocessing.Process):
             # Fit the model to the train data
             clf.fit(X_train)
             # save the model to disk
-            path_to_df = f'modules/anomaly-detection/models/{srcip}'
+            path_to_df = self.models_path + srcip
             with open(path_to_df, 'wb') as model:
                 pickle.dump(clf, model)
 
@@ -113,14 +114,14 @@ class Module(Module, multiprocessing.Process):
         Find the correct model to use for testing depending on the current source ip
         returns the model path
         """
-        models = os.listdir('modules/anomaly-detection/models/')
+        models = os.listdir(self.models_path)
         for model_name in models:
             if self.current_srcip in model_name:
-                return f'modules/anomaly-detection/models/{model_name}'
+                return self.models_path + model_name
         else:
             # no model with srcip found
             # return a random model
-            return f'modules/anomaly-detection/models/{model_name}'
+            return self.models_path + model_name
 
     def run(self):
         try:
@@ -199,6 +200,10 @@ class Module(Module, multiprocessing.Process):
                     if message_c2 and message_c2['channel'] == 'new_flow' and message_c2["type"] == "message":
                         data = message_c2["data"]
                         if type(data) == str:
+                            # Check if there's modules to test or not
+                            if not os.path.isdir(self.models_path) or not os.listdir(self.models_path) :
+                                self.print("No models found! Please train first. https://stratospherelinuxips.readthedocs.io/en/develop/")
+                                return True
                             data = json.loads(data)
                             profileid = data['profileid']
                             twid = data['twid']
@@ -242,7 +247,7 @@ class Module(Module, multiprocessing.Process):
                     #  ignore this module
                     return True
                 else:
-                    self.print(f"{self.mode} is not a valid mode, available options are: training or test. anomaly-detection module stopping.")
+                    self.print(f"{self.mode} is not a valid mode, available options are: training or testing. anomaly-detection module stopping.")
                     return True
         except KeyboardInterrupt:
             return True
