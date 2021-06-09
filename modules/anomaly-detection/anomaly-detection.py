@@ -40,7 +40,7 @@ class Module(Module, multiprocessing.Process):
         # In case you need to read the slips.conf configuration file for
         # your own configurations
         self.config = config
-        self.mode = self.config.get('anomaly-detection', 'mode').lower()
+        self.mode = self.config.get('parameters', 'anomaly_detection_mode').lower()
         # Start the DB
         __database__.start(self.config)
         self.c2 = __database__.subscribe('new_flow')
