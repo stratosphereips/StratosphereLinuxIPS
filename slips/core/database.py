@@ -4,7 +4,6 @@ import json
 from typing import Tuple, Dict, Set, Callable
 import configparser
 import traceback
-import ipaddress
 from datetime import datetime
 
 def timing(f):
@@ -1742,19 +1741,11 @@ class Database(object):
         """
         self.rcache.hset('cached_asn', asn, asn_range)
 
-    def get_asn(self, ip):
+    def get_asn_cache(self):
         """
         Returns cached asn of ip if present, or False.
         :param ip: ipaddress object
         """
-        cached_asn = self.rcache.hgetall('cached_asn')
-        if cached_asn:
-            for asn,ip_range in cached_asn.items():
-                # convert to objects
-                ip_range = ipaddress.ip_network(ip_range)
-                ip = ipaddress.ip_address(ip)
-                if ip in ip_range:
-                    return asn
-        return False
+        return self.rcache.hgetall('cached_asn')
 
 __database__ = Database()

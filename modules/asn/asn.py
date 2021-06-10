@@ -63,6 +63,17 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def get_cached_asn(self, ip):
+        cached_asn = __database__.get_asn_cache()
+        if cached_asn:
+            for asn,ip_range in cached_asn.items():
+                # convert to objects
+                ip_range = ipaddress.ip_network(ip_range)
+                ip = ipaddress.ip_address(ip)
+                if ip in ip_range:
+                    return asn
+        return False
+
     def run(self):
         try:
             # Main loop function
@@ -83,7 +94,7 @@ class Module(Module, multiprocessing.Process):
                         if (not data or 'asn' not in data) and not ip_addr.is_multicast:
                             data = {}
                             # do we have asn cached for this range?
-                            cached_asn = __database__.get_asn(ip)
+                            cached_asn = self.get_cached_asn(ip)
                             if not cached_asn:
                                 # we don't have it cached, get asn info from geolite db
                                 asninfo = self.reader.get(ip)
@@ -98,7 +109,6 @@ class Module(Module, multiprocessing.Process):
                                 else:
                                     # geolite returned nothing at all for this ip
                                     data['asn'] = 'Unknown'
-
                                 try:
                                     # Cache the range of this ip
                                     whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
