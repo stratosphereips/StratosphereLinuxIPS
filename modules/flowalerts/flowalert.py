@@ -66,6 +66,9 @@ class Module(Module, multiprocessing.Process):
         else:
             # Other systems
             self.timeout = None
+        # todo is there more ranges that i should ignore?
+        # ignore default LAN IP address, loopback addr, dns servers ...etc
+        self.ignore_list = ('192.168.0.1' ,'192.168.1.1', '127.0.0.1','255.255.255.255', '8.8.8.8', '8.8.8.8')
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -188,10 +191,43 @@ class Module(Module, multiprocessing.Process):
                                                   module_name,
                                                   module_label)
 
+    def check_connection_without_dns(self, daddr, twid, profileid):
+        """ Checks if there's a flow to a dstip that has no DNS answer """
+        resolved = False
+        answers_dict = __database__.get_dns_answers()
+        for answer in answers_dict.values():
+            answer = json.loads(answer)
+            if daddr in answer:
+                resolved = True
+                return
+
+        # IP has no dns answer, alert.
+        if not resolved:
+            confidence = 1
+            threat_level = 30
+            type_detection  = 'dstip'
+            type_evidence = 'ConnectionWithoutDNS'
+            detection_info = daddr
+            description = f'IP address connection without DNS resolution: {daddr} '
+            if not twid:
+                twid = ''
+            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+
     def run(self):
         try:
             # Main loop function
             while True:
+                # ---------------------------- new_dns_flow channel
+                message = self.c5.get_message(timeout=0.01)
+                if message and message['data'] == 'stop_process':
+                    return True
+                if message and message['channel'] == 'new_dns_flow' and type(message['data']) == str:
+                    flow = json.loads(message['data'])
+                    query = flow.get('query', False)
+                    answers = flow.get('answers', False)
+                    if query and answers:
+                        __database__.store_dns_answers(query, answers)
+
                 # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
@@ -222,11 +258,13 @@ class Module(Module, multiprocessing.Process):
                     # state = flow_dict['state']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-
                     # Do not check the duration of the flow if the daddr or
                     # saddr is a  multicast.
                     if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
+                        if daddr not in self.ignore_list :
+                            # check if daddr has a dns answer
+                            self.check_connection_without_dns(daddr, twid, profileid)
 
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
@@ -332,18 +370,6 @@ class Module(Module, multiprocessing.Process):
                                 description = 'Self-signed certificate. Destination IP: {}'.format(ip)
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
-
-                # ---------------------------- new_dns_flow channel
-                message = self.c5.get_message(timeout=0.01)
-                if message and message['data'] == 'stop_process':
-                    return True
-                if message and message['channel'] == 'new_dns_flow' and type(message['data']) == str:
-                    flow = json.loads(message['data'])
-                    query = flow.get('query', False)
-                    answers = flow.get('answers', False)
-                    if query and answers:
-                        __database__.store_dns_answers(query, answers)
-
 
         except KeyboardInterrupt:
             return True

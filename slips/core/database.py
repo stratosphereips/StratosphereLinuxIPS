@@ -1742,4 +1742,8 @@ class Database(object):
         answers = json.dumps(answers)
         self.rcache.hset('dns_answers', query, answers)
 
+    def get_dns_answers(self):
+        """ Returns dns_answers dict {query: serialized answers list}"""
+        return self.rcache.hgetall('dns_answers')
+
 __database__ = Database()
