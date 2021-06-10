@@ -53,6 +53,7 @@ class Module(Module, multiprocessing.Process):
         self.c2 = __database__.subscribe('new_ssh')
         self.c3 = __database__.subscribe('new_notice')
         self.c4 = __database__.subscribe('new_ssl')
+        self.c5 = __database__.subscribe('new_dns')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -332,6 +333,13 @@ class Module(Module, multiprocessing.Process):
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
 
+                # ---------------------------- new_dns channel
+                message = self.c5.get_message(timeout=0.01)
+                if message and message['data'] == 'stop_process':
+                    return True
+                if message and message['channel'] == 'new_dns' and type(message['data']) == str:
+                    data = message['data']
+                    pass
 
         except KeyboardInterrupt:
             return True
