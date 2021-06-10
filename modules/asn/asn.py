@@ -114,7 +114,7 @@ class Module(Module, multiprocessing.Process):
                                     whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
                                     asnorg = whois_info.get('asn_description', False)
                                     asn_cidr = whois_info.get('asn_cidr', False)
-                                    if asnorg and asn_cidr:
+                                    if asnorg and asn_cidr not in ('' , 'NA'):
                                         __database__.cache_asn(asnorg, asn_cidr)
                                 except ipwhois.exceptions.IPDefinedError:
                                     # private ip. don't cache
