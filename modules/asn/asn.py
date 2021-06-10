@@ -10,6 +10,8 @@ import platform
 import time
 import maxminddb
 import ipaddress
+import ipwhois
+#todo add to conda env
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -76,22 +78,42 @@ class Module(Module, multiprocessing.Process):
                     if type(ip) == str:
                         data = __database__.getIPData(ip)
                         ip_addr = ipaddress.ip_address(ip)
+
                         # Check whether asn data is in the DB, and that the data is not empty
                         if (not data or 'asn' not in data) and not ip_addr.is_multicast:
-                            asninfo = self.reader.get(ip)
-                            if asninfo:
-                                try:
-                                    asnorg = asninfo['autonomous_system_organization']
-                                    data = {}
-                                    data['asn'] = asnorg
-                                except KeyError:
-                                    data = {}
+                            data = {}
+                            # do we have asn cached for this range?
+                            cached_asn = __database__.get_asn(ip)
+                            if not cached_asn:
+                                # we don't have it cached, get asn info from geolite db
+                                asninfo = self.reader.get(ip)
+                                if asninfo:
+                                    try:
+                                        # found info in geolite
+                                        asnorg = asninfo['autonomous_system_organization']
+                                        data['asn'] = asnorg
+                                    except KeyError:
+                                        # asn info not found in geolite
+                                        data['asn'] = 'Unknown'
+                                else:
+                                    # geolite returned nothing at all for this ip
                                     data['asn'] = 'Unknown'
-                            else:
-                                data = {}
-                                data['asn'] = 'Unknown'
-                            __database__.setInfoForIPs(ip, data)
 
+                                try:
+                                    # Cache the range of this ip
+                                    whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
+                                    asnorg = whois_info.get('asn_description', False)
+                                    asn_cidr = whois_info.get('asn_cidr', False)
+                                    if asnorg and asn_cidr:
+                                        __database__.cache_asn(asnorg, asn_cidr)
+                                except ipwhois.exceptions.IPDefinedError:
+                                    # private ip. don't cache
+                                    pass
+                            else:
+                                # found cached asn
+                                data['asn'] = cached_asn
+                            # store asn info in the db
+                            __database__.setInfoForIPs(ip, data)
         except KeyboardInterrupt:
             if self.reader:
                 self.reader.close()
