@@ -195,6 +195,8 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
+                    # confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_flow' and type(message['data']) is not int:
                     data = message['data']
@@ -230,6 +232,8 @@ class Module(Module, multiprocessing.Process):
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
                     data = message['data']
@@ -278,6 +282,8 @@ class Module(Module, multiprocessing.Process):
                 # Check for self signed certificates in new_notice channel (notice.log)
                 message = self.c3.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_notice':
                     """ Checks for self signed certificates in the notice data """
@@ -309,6 +315,8 @@ class Module(Module, multiprocessing.Process):
                 # ---------------------------- new_ssl channel
                 message = self.c4.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_ssl':
                     # Check for self signed certificates in new_ssl channel (ssl.log)

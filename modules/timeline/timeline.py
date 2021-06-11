@@ -357,6 +357,8 @@ class Module(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 elif message['channel'] == 'new_flow' and message['data'] != 1:
                     mdata = message['data']

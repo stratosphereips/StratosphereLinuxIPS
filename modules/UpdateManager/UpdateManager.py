@@ -105,6 +105,8 @@ class UpdateManager(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
                     self.timer_manager.cancel()
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 continue
 

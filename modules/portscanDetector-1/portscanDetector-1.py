@@ -67,6 +67,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 elif message['channel'] == 'tw_modified':
                     # Get the profileid and twid

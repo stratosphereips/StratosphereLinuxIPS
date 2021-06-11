@@ -68,6 +68,8 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
+                    # confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 elif message['channel'] == 'new_ip':
                     # Not all the ips!! only the new one coming in the data

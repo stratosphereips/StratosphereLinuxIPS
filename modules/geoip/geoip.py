@@ -62,6 +62,8 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 elif message['channel'] == 'new_ip':
                     ip = message['data']

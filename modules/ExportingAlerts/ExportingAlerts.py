@@ -325,6 +325,8 @@ class Module(Module, multiprocessing.Process):
                 message_c1 = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message_c1['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message_c1['channel'] == 'evidence_added':
                     if type(message_c1['data']) == str:
@@ -357,6 +359,8 @@ class Module(Module, multiprocessing.Process):
                 # We need to publish to taxii server before stopping
                 message_c2 = self.c1.get_message(timeout=self.timeout)
                 if message_c2['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message_c2['channel'] == 'push_to_taxii_server':
                     if type(message_c2['data']) == str and 'True' in message_c2['data']:

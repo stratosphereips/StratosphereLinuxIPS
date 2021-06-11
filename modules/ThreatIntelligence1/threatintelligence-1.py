@@ -418,6 +418,8 @@ class Module(Module, multiprocessing.Process):
                 # (see at logsProcess.py), we will stop slips automatically.
                 # The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name

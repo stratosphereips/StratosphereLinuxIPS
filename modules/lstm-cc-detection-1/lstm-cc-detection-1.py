@@ -141,6 +141,8 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message['channel'] == 'new_letters' and type(message['data']) is not int:
                     data = message['data']
