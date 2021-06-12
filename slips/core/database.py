@@ -1362,7 +1362,7 @@ class Database(object):
         self.print('Adding SSH flow to DB: {}'.format(data), 5, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
 
-    def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg):
+    def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg, scanned_port, scanning_ip):
         """" Send notice.log data to new_notice channel to look for self-signed certificates """
         data = {
             'daddr' :  daddr,
@@ -1370,8 +1370,10 @@ class Database(object):
             'dport' :  dport,
             'note'  :  note,
             'msg'   :  msg,
+            'scanned_port' : scanned_port,
+            'scanning_ip'  : scanning_ip
         }
-        data = json.dumps(data) # this is going to be sent inside another dict
+        data = json.dumps(data) # this is going to be sent insidethe to_send dict
         to_send = {}
         to_send['profileid'] = profileid
         to_send['twid'] = twid

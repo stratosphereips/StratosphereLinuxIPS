@@ -280,23 +280,44 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     return True
                 if message and message['channel'] == 'new_notice':
-                    """ Checks for self signed certificates in the notice data """
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
                         data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
                         # Get flow as a json
                         flow = data['flow']
                         # Convert flow to a dict
                         flow = json.loads(flow)
                         msg = flow['msg']
-                        # We're looking for self signed certs in the 'msg' field
+                        note = flow['note']
+                        # We're looking for self signed certs in notice.log in the 'msg' field
                         if 'self signed' in msg or 'self-signed' in msg:
-                            profileid = data['profileid']
-                            twid = data['twid']
                             ip = flow['daddr']
                             description = 'Self-signed certificate. Destination IP: {}'.format(ip)
-                            self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
+                            confidence = 0.5
+                            threat_level = 30
+                            type_detection = 'dstip'
+                            type_evidence = 'SelfSignedCertificate'
+                            detection_info = ip
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                     threat_level, confidence, description, profileid=profileid, twid=twid)
+                            self.print(description, 3, 0)
+
+                        # We're looking for port scans in notice.log in the note field
+                        if 'Port_Scan' in note:
+                            # Vertical port scan
+                            # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
+                            confidence = 1
+                            threat_level = 60
+                            # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
+                            description = 'Zeek: Vertical port scan. ' + msg
+                            type_evidence = 'PortScanType1'
+                            type_detection = 'dstip'
+                            detection_info = flow.get('scanning_ip','')
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                 threat_level, confidence, description, profileid=profileid, twid=twid)
                             self.print(description, 3, 0)
                         if 'SSL certificate validation failed' in msg:
                             profileid = data['profileid']
@@ -306,6 +327,19 @@ class Module(Module, multiprocessing.Process):
                             description = msg + ' Destination IP: {}'.format(ip)
                             self.set_evidence_for_invalid_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
+
+                        if 'Address_Scan' in note:
+                            # Horizontal port scan
+                            confidence = 1
+                            threat_level = 60
+                            description = 'Zeek: Horizontal port scan. ' + msg
+                            type_evidence = 'PortScanType2'
+                            type_detection = 'dport'
+                            detection_info = flow.get('scanned_port','')
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                            self.print(description, 3, 0)
+
                 # ---------------------------- new_ssl channel
                 message = self.c4.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
@@ -331,8 +365,6 @@ class Module(Module, multiprocessing.Process):
                                 description = 'Self-signed certificate. Destination IP: {}'.format(ip)
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
-
-
         except KeyboardInterrupt:
             return True
         except Exception as inst:

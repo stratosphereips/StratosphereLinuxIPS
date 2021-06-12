@@ -70,7 +70,7 @@ def create_folder_for_logs():
     '''
     Create a folder for logs if logs are enabled
     '''
-    logs_folder = datetime.now().strftime('%Y-%m-%d--%H:%M:%S')
+    logs_folder = datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
     if not os.path.exists(logs_folder):
         os.makedirs(logs_folder)
     return logs_folder

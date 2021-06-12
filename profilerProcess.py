@@ -28,6 +28,7 @@ import traceback
 import os
 import binascii
 import base64
+from re import split
 
 def timeit(method):
     def timed(*args, **kw):
@@ -186,7 +187,7 @@ class ProfilerProcess(multiprocessing.Process):
                         else:
                             self.input_type = 'argus'
 
-                    elif nr_tabs > nr_commas:
+                    elif nr_tabs >= nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
                         self.separator = '	'
@@ -331,11 +332,14 @@ class ProfilerProcess(multiprocessing.Process):
         """
         line = new_line['data']
         line = line.rstrip('\n')
-        # the data is either \t separated or triple space separated
+        # the data is either \t separated or space separated
         if '\t' in line:
             line = line.split('\t')
         else:
-            line = line.split('   ')
+            # zeek files that are space separated are either separated by 2 or 3 spaces so we can't use python's split()
+            # using regex split, split line when you encounter more than 2 spaces in a row
+            line = split(r'\s{2,}', line)
+
         # Generic fields in Zeek
         self.column_values: dict = {}
         # We need to set it to empty at the beginning so any new flow has
@@ -665,7 +669,12 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'notice'
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
             if self.column_values['saddr'] is '-' :
-                self.column_values['saddr'] = line[13] #  src field
+                try:
+                    self.column_values['saddr'] = line[13] #  src field
+                except IndexError:
+                    # line doesn't have a p field
+                    # keep it - as it is
+                    pass
 
             if self.column_values['daddr'] is '-':
                 self.column_values['daddr'] = line[14]  #  dst field
@@ -674,12 +683,17 @@ class ProfilerProcess(multiprocessing.Process):
 
             self.column_values['dport'] = line[5] # id.orig_p
             if self.column_values['dport'] is '-':
-                self.column_values['dport'] = line[15] # p field
-
+                try:
+                    self.column_values['dport'] = line[15] # p field
+                except IndexError:
+                    # line doesn't have a p field
+                    # keep it - as it is
+                    pass
             self.column_values['sport'] = line[3]
             self.column_values['note'] = line[10]
+            self.column_values['scanning_ip'] = self.column_values['saddr']
+            self.column_values['scanned_port'] =  self.column_values['dport']
             self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
-
 
     def process_zeek_input(self, new_line: dict):
         """
@@ -704,6 +718,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values['saddr'] = line.get('id.orig_h','')
         self.column_values['daddr'] = line.get('id.resp_h','')
 
+        # Handle each zeek file type separately
         if 'conn' in file_type:
             # {'ts': 1538080852.403669, 'uid': 'Cewh6D2USNVtfcLxZe', 'id.orig_h': '192.168.2.12', 'id.orig_p': 56343,
             # 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364,
@@ -837,12 +852,22 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'tunnel' in file_type:
             self.column_values['type'] = 'tunnel'
         elif 'notice' in file_type:
+            """ Parse the fields we're interested in in the notice.log file """
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
             self.column_values['type'] = 'notice'
+            # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
+            if self.column_values['saddr'] is '' :
+                self.column_values['saddr'] = line.get('src','' )
+            if self.column_values['daddr'] is '':
+                # set daddr to src for now because the notice that contains portscan doesn't have a dst field and slips needs it to work
+                self.column_values['daddr'] = line.get('dst', self.column_values['saddr'] )
             self.column_values['sport'] = line.get('id.orig_p', '')
             self.column_values['dport'] = line.get('id.resp_p', '')
+            # self.column_values['scanned_ip'] = line.get('dst', '')
             self.column_values['note'] = line.get('note', '')
             self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
+            self.column_values['scanned_port'] = line.get('p', '')
+            self.column_values['scanning_ip'] = line.get('src', '')
 
     def process_argus_input(self, new_line):
         """
@@ -1394,7 +1419,10 @@ class ProfilerProcess(multiprocessing.Process):
                                                  self.column_values['sport'],\
                                                  self.column_values['dport'],\
                                                  self.column_values['note'],\
-                                                 self.column_values['msg'])
+                                                 self.column_values['msg'],\
+                                                 self.column_values['scanned_port'],\
+                                                 self.column_values['scanning_ip']
+                                                 )
 
             def store_features_going_in(profileid, twid, starttime):
                 """

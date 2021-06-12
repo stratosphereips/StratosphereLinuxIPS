@@ -245,12 +245,11 @@ class EvidenceProcess(multiprocessing.Process):
                     evidence_dict = {'timestamp': current_time,
                                      'detected_ip': ip,
                                      'detection_module':type_evidence,
-                                     'detection_info':type_detection + ' ' + detection_info,
+                                     'detection_info':str(type_detection) + ' ' + str(detection_info),
                                      'description':description}
 
                     self.addDataToLogFile(current_time + ' ' + evidence_to_log)
                     self.addDataToJSONFile(evidence_dict)
-
                     evidence = __database__.getEvidenceForTW(profileid, twid)
                     # Important! It may happen that the evidence is not related to a profileid and twid.
                     # For example when the evidence is on some src IP attacking our home net, and we are not creating
