@@ -96,7 +96,6 @@ class Module(Module, multiprocessing.Process):
         """ Train and save trained models to disk """
 
         self.print('Saving models to disk...')
-
         for srcip, bro_df in self.dataframes.items():
             # Add the columns from the log file that we know are numbers. This is only for conn.log files.
             X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
@@ -113,7 +112,6 @@ class Module(Module, multiprocessing.Process):
             path_to_df = self.models_path + srcip
             with open(path_to_df, 'wb') as model:
                 pickle.dump(clf, model)
-
         self.print('Done.')
 
     def get_model(self) -> str:
@@ -131,9 +129,9 @@ class Module(Module, multiprocessing.Process):
             return self.models_path + model_name
 
     def run(self):
-        try:
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
                 if 'train' in self.mode:
                     # start the saving thread only once
                     if self.thread_started == False:
@@ -144,6 +142,8 @@ class Module(Module, multiprocessing.Process):
                     if message_c3['data'] == 'stop_process':
                         # train and save the models before exiting
                         self.save_models()
+                        # Confirm that the module is done processing
+                        __database__.publish('finished_modules', self.name)
                         return True
                     if message_c3 and message_c3['channel'] == 'tw_closed' and message_c3["type"] == "message":
                         data = message_c3["data"]
@@ -256,11 +256,12 @@ class Module(Module, multiprocessing.Process):
                 else:
                     self.print(f"{self.mode} is not a valid mode, available options are: training or testing. anomaly-detection module stopping.")
                     return True
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
