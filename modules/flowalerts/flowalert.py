@@ -53,7 +53,6 @@ class Module(Module, multiprocessing.Process):
         self.c2 = __database__.subscribe('new_ssh')
         self.c3 = __database__.subscribe('new_notice')
         self.c4 = __database__.subscribe('new_ssl')
-        self.c5 = __database__.subscribe('new_dns_flow')
         self.c6 = __database__.subscribe('tw_closed')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
@@ -246,21 +245,6 @@ class Module(Module, multiprocessing.Process):
         try:
             # Main loop function
             while True:
-                # ---------------------------- new_dns_flow channel
-                message = self.c5.get_message(timeout=0.01)
-                if message and message['data'] == 'stop_process':
-                    return True
-                if message and message['channel'] == 'new_dns_flow' and type(message['data']) == str:
-                    data = json.loads(message['data'])
-                    flow = json.loads(data.get('flow',''))
-                    query = flow.get('query', False)
-                    answers = flow.get('answers', False)
-                    if query and answers:
-                        profileid = data.get('profileid','')
-                        twid = data.get('twid','')
-                        __database__.store_dns_answers( query, answers, profileid + twid)
-                        #todo move this to profilerprocess
-
                 # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.

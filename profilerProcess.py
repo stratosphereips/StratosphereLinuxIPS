@@ -1320,6 +1320,9 @@ class ProfilerProcess(multiprocessing.Process):
                 rcode_name = self.column_values['rcode_name']
                 answers = self.column_values['answers']
                 ttls = self.column_values['TTLs']
+                profileid  = get_rev_profile(starttime, daddr)[0]
+                twid  = get_rev_profile(starttime, daddr)[1]
+                __database__.store_dns_answers( query, answers, f'{profileid}_{twid}')
 
             elif 'dhcp' in flow_type:
                 mac_addr = self.column_values['mac']
