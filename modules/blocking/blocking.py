@@ -313,17 +313,28 @@ class Module(Module, multiprocessing.Process):
             self.print("Unblocked: " + ip_to_unblock)
 
     def run(self):
-        #TODO: handle MacOS
-        self.initialize_chains_in_firewall()
         try:
-            # Main loop function
-            while True:
+            self.initialize_chains_in_firewall()
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            self.print('Problem on the run()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
+
+        # Main loop function
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 # There's an IP that needs to be blocked
-                if message['channel'] == 'new_blocking' \
+                if message and message['channel'] == 'new_blocking' \
                     and message['type'] == 'message':
                     # sent from slips.py
                     if message['data'] == 'delete slipsBlocking chain':
@@ -372,11 +383,12 @@ class Module(Module, multiprocessing.Process):
                             self.block_ip(ip, from_, to, dport, sport, protocol)
                         else:
                             self.unblock_ip(ip, from_, to, dport, sport, protocol)
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

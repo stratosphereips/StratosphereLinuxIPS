@@ -1154,40 +1154,13 @@ class Database(object):
         """ Subscribe to channel """
         # For when a TW is modified
         pubsub = self.r.pubsub()
-        if 'tw_modified' in channel:
-            pubsub.subscribe(channel)
-        elif 'evidence_added' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_ip' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_flow' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_dns' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_dns_flow' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_http' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_ssl' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_profile' in channel:
-            pubsub.subscribe(channel)
-        elif 'give_threat_intelligence' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_letters' in channel:
-            pubsub.subscribe(channel)
-        elif 'ip_info_change' in channel:
-            pubsub.subscribe(channel)
-        elif 'dns_info_change' in channel:
-            pubsub.subscribe(channel)
-        elif 'tw_closed' in channel:
-            pubsub.subscribe(channel)
-        elif 'core_messages' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_blocking' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_ssh' in channel:
-            pubsub.subscribe(channel)
+        supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
+                    'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
+                    'new_blocking', 'new_ssh','new_notice', 'finished_modules']
+        for supported_channel in supported_channels:
+            if supported_channel in channel:
+                pubsub.subscribe(channel)
+                break
         return pubsub
 
     def publish(self, channel, data):
