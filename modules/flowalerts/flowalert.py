@@ -202,7 +202,9 @@ class Module(Module, multiprocessing.Process):
         """ Checks if there's a flow to a dstip that has no DNS answer """
         resolved = False
         answers_dict = __database__.get_dns_answers()
+        # answers dict is a dict {profileid_tw: {query:serialized answers list}}
         for answer in answers_dict.values():
+            # convert from str to list
             answer = json.loads(answer)
             if daddr in answer:
                 resolved = True
@@ -230,11 +232,14 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     return True
                 if message and message['channel'] == 'new_dns_flow' and type(message['data']) == str:
-                    flow = json.loads(message['data'])
+                    data = json.loads(message['data'])
+                    flow = json.loads(data.get('flow',''))
                     query = flow.get('query', False)
                     answers = flow.get('answers', False)
                     if query and answers:
-                        __database__.store_dns_answers(query, answers)
+                        profileid = data.get('profileid','')
+                        twid = data.get('twid','')
+                        __database__.store_dns_answers(query, answers, profileid + twid)
 
                 # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=0.01)

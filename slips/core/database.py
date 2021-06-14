@@ -1733,14 +1733,15 @@ class Database(object):
             data = ''
         return data
 
-    def store_dns_answers(self, query, answers):
+    def store_dns_answers(self, query, answers, profileid_twid):
         """
         Store DNS answers for each ip
         :param query: str
         :param answers: list
         """
         answers = json.dumps(answers)
-        self.rcache.hset('dns_answers', query, answers)
+        answers_in_this_tw = json.dumps({query: answers})
+        self.rcache.hset('dns_answers', profileid_twid, answers_in_this_tw)
 
     def get_dns_answers(self):
         """ Returns dns_answers dict {query: serialized answers list}"""
