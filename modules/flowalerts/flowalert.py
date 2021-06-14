@@ -20,7 +20,7 @@ import platform
 # Your imports
 import json
 import configparser
-from ipaddress import ip_address
+import ipaddress
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -67,8 +67,15 @@ class Module(Module, multiprocessing.Process):
             # Other systems
             self.timeout = None
         # todo is there more ranges that i should ignore?
-        # ignore default LAN IP address, loopback addr, dns servers ...etc
-        self.ignore_list = ('192.168.0.1' ,'192.168.1.1', '127.0.0.1','255.255.255.255', '8.8.8.8', '8.8.8.8')
+        # ignore default LAN IP address, loopback addr, dns servers, ...etc
+        self.ignored_ips = ('192.168.0.1' ,'192.168.1.1', '127.0.0.1', '8.8.8.8', '8.8.4.4', '1.1.1.1', '1.0.0.1', '9.9.9.9', '149.112.112.112',
+                            '208.67.222.222', '208.67.220.220', '185.228.168.9', '185.228.169.9','76.76.19.19', '76.223.122.150', '94.140.14.14',
+                            '94.140.15.15','193.159.232.5', '82.103.129.72', '103.113.200.10','77.68.45.252', '117.53.46.10', '103.11.98.187',
+                           '160.19.155.51', '31.204.180.44', '169.38.73.5', '104.152.211.99', '177.20.178.12', '185.43.51.84', '79.175.208.28',
+                           '223.31.121.171','169.53.182.120')
+        self.ignored_ranges = ('172.16.0.0/12',)
+        # store them as network objects
+        self.ignored_ranges = list(map(ipaddress.ip_network,self.ignored_ranges))
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -208,10 +215,11 @@ class Module(Module, multiprocessing.Process):
             type_detection  = 'dstip'
             type_evidence = 'ConnectionWithoutDNS'
             detection_info = daddr
-            description = f'IP address connection without DNS resolution: {daddr} '
+            description = f'IP address connection without DNS resolution: {daddr}'
             if not twid:
                 twid = ''
-            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                     description, profileid=profileid, twid=twid)
 
     def run(self):
         try:
@@ -259,12 +267,20 @@ class Module(Module, multiprocessing.Process):
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
                     # Do not check the duration of the flow if the daddr or
-                    # saddr is a  multicast.
-                    if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
+                    daddr_obj = ipaddress.ip_address(daddr)
+                    saddr_obj = ipaddress.ip_address(saddr)
+                    # don't check for multicast IPs
+                    if not daddr_obj.is_multicast and not saddr_obj.is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
-                        if daddr not in self.ignore_list :
-                            # check if daddr has a dns answer
-                            self.check_connection_without_dns(daddr, twid, profileid)
+                        # Check if daddr has a dns answer
+                        if daddr not in self.ignored_ips and not daddr.endswith('255'): # ignore if broadcast
+                            for network_range in self.ignored_ranges:
+                                if daddr_obj in network_range:
+                                    # ip found in one of the ranges, ignore it
+                                    break
+                            else:
+                                # Gets here if ip is not in any ignored range and is not an ignored ip
+                                self.check_connection_without_dns(daddr, twid, profileid)
 
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
