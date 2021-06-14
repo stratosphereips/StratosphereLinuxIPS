@@ -318,9 +318,9 @@ class Module(Module, multiprocessing.Process):
                 self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.")
 
     def run(self):
-        try:
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
                 message_c1 = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message_c1['data'] == 'stop_process':
@@ -353,11 +353,12 @@ class Module(Module, multiprocessing.Process):
                             if not exported_to_stix:
                                 self.print("Problem in export_to_STIX()", 6, 6)
 
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

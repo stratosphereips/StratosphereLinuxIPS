@@ -167,38 +167,45 @@ def get_cwd():
             return cwd
 
 def shutdown_gracefully():
-    # Stop the output Process
-    print('Stopping Slips')
-    # Stop the modules that are subscribed to channels
-    __database__.publish_stop()
-    # Here we should Wait for any channel if it has still
-    # data to receive in its channel
-    finished_modules = []
-    loaded_modules = modules_to_call.keys()
-    while len(finished_modules) < len(loaded_modules):
-        message = c1.get_message(timeout=0.01)
-        if message and message['data'] == 'stop_process':
-            continue
-        if message and message['channel'] == 'finished_modules' and type(message['data']) is not int:
-            print(message)
-            # all modules must reply with their names in this channel after
-            # receiving the stop_process msg
-            # to confirm that all processing is done and we can safely exit now
-            module_name = message['data']
-            if module_name not in finished_modules:
-                finished_modules.append(module_name)
-                print(f"{module_name} Closed.")
+    """ Wait for all modules to confirm thet they're done processing before shutting down """
 
-    # Send manual stops to the process not using channels
     try:
-        logsProcessQueue.put('stop_process')
-    except NameError:
-        # The logsProcessQueue is not there because we
-        # didnt started the logs files (used -l)
-        pass
-    outputProcessQueue.put('stop_process')
-    profilerProcessQueue.put('stop_process')
-    inputProcess.terminate()
+        print('Stopping Slips')
+        # Stop the modules that are subscribed to channels
+        __database__.publish_stop()
+        # Here we should Wait for any channel if it has still
+        # data to receive in its channel
+        finished_modules = []
+        loaded_modules = modules_to_call.keys()
+        # loop until all loaded modules are finished
+        while len(finished_modules) < len(loaded_modules):
+            # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
+            message = c1.get_message(timeout=0.01)
+            if message and message['data'] == 'stop_process':
+                continue
+            if message and message['channel'] == 'finished_modules' and type(message['data']) is not int:
+                # all modules must reply with their names in this channel after
+                # receiving the stop_process msg
+                # to confirm that all processing is done and we can safely exit now
+                module_name = message['data']
+                if module_name not in finished_modules:
+                    finished_modules.append(module_name)
+                    print(f"{module_name} Stopped.")
+
+        # Send manual stops to the process not using channels
+        try:
+            logsProcessQueue.put('stop_process')
+        except NameError:
+            # The logsProcessQueue is not there because we
+            # didnt started the logs files (used -l)
+            pass
+        outputProcessQueue.put('stop_process')
+        profilerProcessQueue.put('stop_process')
+        inputProcess.terminate()
+        os._exit(-1)
+        return
+    except KeyboardInterrupt:
+        return
 
 ####################
 # Main
@@ -528,4 +535,5 @@ if __name__ == '__main__':
 
     except KeyboardInterrupt:
         shutdown_gracefully()
-        os._exit(1)
+
+

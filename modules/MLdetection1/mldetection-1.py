@@ -106,8 +106,17 @@ class Module(Module, multiprocessing.Process):
                     self.print(
                         'There is no RF model stored. You need to train first with at least two different labels.')
                     return False
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            # Stop the timer
+            self.print('Error in run()')
+            self.print(type(inst))
+            self.print(inst)
+            return True
 
-            while True:
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
 
                 if message['data'] == 'stop_process':
@@ -170,14 +179,16 @@ class Module(Module, multiprocessing.Process):
                             pred = self.detect()
                             self.print('Prediction of flow {}: {}'.format(json_flow, pred[0]), 0, 0)
                 """
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            # Stop the timer
-            self.print('Error in run()')
-            self.print(type(inst))
-            self.print(inst)
-            return True
+
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                # Stop the timer
+                self.print('Error in run()')
+                self.print(type(inst))
+                self.print(inst)
+                return True
 
     def train(self):
         """ 
