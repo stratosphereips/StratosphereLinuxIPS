@@ -1321,10 +1321,6 @@ class ProfilerProcess(multiprocessing.Process):
                 answers = self.column_values['answers']
                 ttls = self.column_values['TTLs']
 
-                to_send = self.column_values.copy()
-                # datetime is not JSON serializable, we don't need it in this channel
-                to_send['starttime'] = ''
-                __database__.publish('new_dns_flow', json.dumps(to_send))
             elif 'dhcp' in flow_type:
                 mac_addr = self.column_values['mac']
                 client_addr = self.column_values['client_addr']

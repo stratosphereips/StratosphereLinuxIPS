@@ -54,6 +54,7 @@ class Module(Module, multiprocessing.Process):
         self.c3 = __database__.subscribe('new_notice')
         self.c4 = __database__.subscribe('new_ssl')
         self.c5 = __database__.subscribe('new_dns_flow')
+        self.c6 = __database__.subscribe('tw_closed')
         # Set the timeout based on the platform. This is because the
         # pyredis lib does not have officially recognized the
         # timeout=None as it works in only macos and timeout=-1 as it only works in linux
@@ -76,6 +77,16 @@ class Module(Module, multiprocessing.Process):
         self.ignored_ranges = ('172.16.0.0/12',)
         # store them as network objects
         self.ignored_ranges = list(map(ipaddress.ip_network,self.ignored_ranges))
+
+    def is_ignored_ip(self, ip) -> bool:
+        ip_obj =  ipaddress.ip_address(ip)
+        if ip_obj.is_multicast or ip in self.ignored_ips or ip.endswith('255'):
+            return True
+        for network_range in self.ignored_ranges:
+            if ip_obj in network_range:
+                # ip found in one of the ranges, ignore it
+                return True
+        return False
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -223,6 +234,14 @@ class Module(Module, multiprocessing.Process):
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                      description, profileid=profileid, twid=twid)
 
+    def check_ununsed_DNS_resolution(self, contacted_ips, answers, profileid, twid):
+        """
+         Checks if ip in cached DNS answers
+        :param contacted_ips: list of ips used in a specific tw
+        :param answers: dict {query: serialized answers list}
+        """
+        pass
+
     def run(self):
         try:
             # Main loop function
@@ -239,7 +258,8 @@ class Module(Module, multiprocessing.Process):
                     if query and answers:
                         profileid = data.get('profileid','')
                         twid = data.get('twid','')
-                        __database__.store_dns_answers(query, answers, profileid + twid)
+                        __database__.store_dns_answers( query, answers, profileid + twid)
+                        #todo move this to profilerprocess
 
                 # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=0.01)
@@ -277,15 +297,10 @@ class Module(Module, multiprocessing.Process):
                     # don't check for multicast IPs
                     if not daddr_obj.is_multicast and not saddr_obj.is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
+
                         # Check if daddr has a dns answer
-                        if daddr not in self.ignored_ips and not daddr.endswith('255'): # ignore if broadcast
-                            for network_range in self.ignored_ranges:
-                                if daddr_obj in network_range:
-                                    # ip found in one of the ranges, ignore it
-                                    break
-                            else:
-                                # Gets here if ip is not in any ignored range and is not an ignored ip
-                                self.check_connection_without_dns(daddr, twid, profileid)
+                        if not self.is_ignored_ip(daddr):
+                            self.check_connection_without_dns(daddr, twid, profileid)
 
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
@@ -391,6 +406,38 @@ class Module(Module, multiprocessing.Process):
                                 description = 'Self-signed certificate. Destination IP: {}'.format(ip)
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
+                # ---------------------------- tw_closed channel
+                message = self.c6.get_message(timeout=0.01)
+                if message and message['data'] == 'stop_process':
+                    return True
+                if message and message['channel'] == 'tw_closed' and type(message['data']) == str:
+                    pass
+                    data = message["data"]
+                    # Get an updated list of dns answers
+                    answers = __database__.get_dns_answers()
+                    # data example: profile_192.168.1.1_timewindow1
+                    data = data.split('_')
+                    profileid = f'{data[0]}_{data[1]}'
+                    twid = data[2]
+                    # get all flows in the tw
+                    flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
+                    # a list of contacte dips in this tw
+                    contacted_ips = []
+                    # flows is a dict of uids as keys and actual flows as values
+                    for flow in flows.values():
+                        flow = json.loads(flow)
+                        contacted_ip = flow.get('daddr','')
+                        # append ipv4 addresses only to ths list
+                        if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
+                            contacted_ips.append(contacted_ip)
+                    # set evidence if we have an answer that isn't used in the contacted ips
+                    self.check_ununsed_DNS_resolution(set(contacted_ips), answers, profileid, twid )
+
+
+        #todo fix [VirusTotal] Problem on the run()
+        # [VirusTotal] <class 'KeyError'>
+        # [VirusTotal] ('profileid',)
+        # [VirusTotal] 'profileid'
 
         except KeyboardInterrupt:
             return True
