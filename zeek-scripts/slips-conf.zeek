@@ -1,0 +1,1 @@
+redef LogAscii::use_json = T;

@@ -388,12 +388,13 @@ class InputProcess(multiprocessing.Process):
             command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null"
             os.system(command)
 
-        # Run zeek on the pcap or interface. The redef is to have json files
-        # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-        command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
-        self.print(f'Zeek command: {command}', 3, 0)
-        # Run zeek.
-        os.system(command)
+                # Run zeek on the pcap or interface. The redef is to have json files
+                # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
+                cwd = os.getcwd()
+                command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} {self.tcp_inactivity_timeout} local -f {self.packet_filter} {cwd}/zeek-scripts/slips-conf.zeek 2>&1 > /dev/null &'
+                self.print(f'Zeek command: {command}', 3, 0)
+                # Run zeek.
+                os.system(command)
 
         # Give Zeek some time to generate at least 1 file.
         time.sleep(3)
