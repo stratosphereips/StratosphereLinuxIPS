@@ -1,0 +1,1 @@
+@load ./slips-conf.zeek
