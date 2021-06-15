@@ -388,8 +388,19 @@ class InputProcess(multiprocessing.Process):
 
                 # Run zeek on the pcap or interface. The redef is to have json files
                 # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                cwd = os.getcwd()
-                command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} {self.tcp_inactivity_timeout} local -f {self.packet_filter} {cwd}/zeek-scripts/slips-conf.zeek 2>&1 > /dev/null &'
+                zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
+
+                # check if we have a script that isn't added to zeek-scripts/__load__.zeek file
+                with open(zeek_scripts_dir + '/__load__.zeek','r') as f:
+                    loaded_scripts = f.read()
+                for file_name in os.listdir(zeek_scripts_dir):
+                    # ignore the load file
+                    if file_name == '__load__.zeek':
+                        continue
+                    if file_name not in loaded_scripts:
+                        self.print(f'{file_name} is not loaded, Please add it to zeek-scripts/__load__.zeek')
+
+                command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} {self.tcp_inactivity_timeout} local -f {self.packet_filter} {zeek_scripts_dir} 2>&1 > /dev/null &'
                 self.print(f'Zeek command: {command}', 3, 0)
                 # Run zeek.
                 os.system(command)
