@@ -1738,13 +1738,26 @@ class Database(object):
         Store DNS answers for each ip
         :param query: str
         :param answers: list
+        :param profileid_twid: str
         """
-        answers = json.dumps(answers)
-        answers_in_this_tw = json.dumps({query: answers})
+
+        try:
+            # to avoid duplicates, if key exists update it
+            stored_answers = self.get_dns_answers()
+            # try to get the results that are stored in this tw
+            answers_dict = json.loads(stored_answers[profileid_twid])
+            # found results, update them
+            answers_dict.update({query:answers})
+            answers_in_this_tw = json.dumps(answers_dict)
+        except KeyError:
+            # key doesn't exist
+            answers = json.dumps(answers)
+            answers_in_this_tw = json.dumps({query: answers})
+            
         self.rcache.hset('dns_answers', profileid_twid, answers_in_this_tw)
 
     def get_dns_answers(self):
-        """ Returns dns_answers dict {query: serialized answers list}"""
+        """ Returns dns_answers dict {profileid_twid : {query: serialized answers list}}"""
         return self.rcache.hgetall('dns_answers')
 
 __database__ = Database()
