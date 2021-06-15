@@ -233,13 +233,44 @@ class Module(Module, multiprocessing.Process):
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                      description, profileid=profileid, twid=twid)
 
-    def check_ununsed_DNS_resolution(self, contacted_ips, answers, profileid, twid):
+    def check_ununsed_DNS_resolution(self, contacted_ips, profileid, twid):
         """
          Checks if ip in cached DNS answers
         :param contacted_ips: list of ips used in a specific tw
         :param answers: dict {query: serialized answers list}
         """
-        pass
+        if contacted_ips == []: return
+        # Get an updated list of dns answers
+        answers = __database__.get_dns_answers()
+        # get dns resolutions thayt took place in this tw only
+        tw_answers = answers.get(f'{profileid}_{twid}' , False)
+        if tw_answers:
+            tw_answers = json.loads(tw_answers)
+            for query,dns_answer in tw_answers.items():
+                # every dns answer is a list of ip that correspond to a spicif query,
+                # one of these ips should be present in the contacted ips
+                for answer in dns_answer:
+                    if answer in contacted_ips:
+                        # found a used dns resolution
+                        # continue to next dns_answer
+                        break
+                else:
+                    # found a query without usage
+                    confidence = 0.8
+                    threat_level = 30
+                    type_detection  = 'dstdomain'
+                    type_evidence = 'DNSWithoutConnection'
+                    try:
+                        detection_info = query[0]
+                    except IndexError:
+                        # query is a str
+                        detection_info = query
+                    description = f'Domain {query} resolved with no connection'
+                    __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                         description, profileid=profileid, twid=twid)
+        else:
+            # this tw has no dns resolutions.
+            return
 
     def run(self):
         try:
@@ -397,13 +428,11 @@ class Module(Module, multiprocessing.Process):
                 if message and message['channel'] == 'tw_closed' and type(message['data']) == str:
                     pass
                     data = message["data"]
-                    # Get an updated list of dns answers
-                    answers = __database__.get_dns_answers()
                     # data example: profile_192.168.1.1_timewindow1
                     data = data.split('_')
                     profileid = f'{data[0]}_{data[1]}'
                     twid = data[2]
-                    # get all flows in the tw
+                    # get all flows in this tw
                     flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
                     # a list of contacte dips in this tw
                     contacted_ips = []
@@ -415,13 +444,13 @@ class Module(Module, multiprocessing.Process):
                         if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
                             contacted_ips.append(contacted_ip)
                     # set evidence if we have an answer that isn't used in the contacted ips
-                    self.check_ununsed_DNS_resolution(set(contacted_ips), answers, profileid, twid )
-
+                    self.check_ununsed_DNS_resolution(set(contacted_ips), profileid, twid )
 
         #todo fix [VirusTotal] Problem on the run()
         # [VirusTotal] <class 'KeyError'>
         # [VirusTotal] ('profileid',)
         # [VirusTotal] 'profileid'
+        #todo fix errors in hide and seek pcap
 
         except KeyboardInterrupt:
             return True
