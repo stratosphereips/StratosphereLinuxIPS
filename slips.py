@@ -331,6 +331,20 @@ if __name__ == '__main__':
             # If we do not have bro or zeek, terminate Slips.
             print('no zeek nor bro')
             terminate_slips()
+        else:
+            zeek_scripts_dir  = os.getcwd() + '/zeek-scripts'
+            # load all scripts in zeek-script dir
+            with open(zeek_scripts_dir + '/__load__.zeek','r') as f:
+                loaded_scripts = f.read()
+            with open(zeek_scripts_dir + '/__load__.zeek','a') as f:
+
+                for file_name in os.listdir(zeek_scripts_dir):
+                    # ignore the load file
+                    if file_name == '__load__.zeek':
+                        continue
+                    if file_name not in loaded_scripts:
+                        # found a file in the dir that isn't in __load__.zeek, add it
+                        f.write(f'\n@load ./{file_name}')
 
     # See if we have the nfdump, if we need it according to the input type
     if input_type == 'nfdump' and shutil.which('nfdump') is None:
