@@ -175,9 +175,9 @@ class Module(Module, multiprocessing.Process):
                     data = message_c1["data"]
                     if type(data) == str:
                         data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        stime = data['stime']
+                        profileid = data.get('profileid','')
+                        twid = data.get('twid','')
+                        stime = data.get('stime','')
                         flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
                         # there is only one pair key-value in the dictionary
                         for key, value in flow.items():
@@ -206,8 +206,8 @@ class Module(Module, multiprocessing.Process):
                     # The first message comes with data=1
                     if type(data) == str:
                         data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
+                        profileid = data.get('profileid','')
+                        twid = data.get('twid','')
                         flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
                         domain = flow_data['query']
                         cached_data = __database__.getDomainData(domain)

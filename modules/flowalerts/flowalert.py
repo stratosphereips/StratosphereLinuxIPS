@@ -446,12 +446,6 @@ class Module(Module, multiprocessing.Process):
                     # set evidence if we have an answer that isn't used in the contacted ips
                     self.check_ununsed_DNS_resolution(set(contacted_ips), profileid, twid )
 
-        #todo fix [VirusTotal] Problem on the run()
-        # [VirusTotal] <class 'KeyError'>
-        # [VirusTotal] ('profileid',)
-        # [VirusTotal] 'profileid'
-        #todo fix errors in hide and seek pcap
-
         except KeyboardInterrupt:
             return True
         except Exception as inst:
