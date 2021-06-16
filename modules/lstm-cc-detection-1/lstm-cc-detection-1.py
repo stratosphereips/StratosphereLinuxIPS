@@ -142,6 +142,9 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             return True
+        except KeyboardInterrupt:
+            # enter the while loop to recieve stop_process msg
+            pass
 
         # Main loop function
         while True:

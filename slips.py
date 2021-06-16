@@ -177,8 +177,10 @@ def shutdown_gracefully():
         # data to receive in its channel
         finished_modules = []
         loaded_modules = modules_to_call.keys()
+        # timeout variable so we don't loop forever
+        max_loops = 130
         # loop until all loaded modules are finished
-        while len(finished_modules) < len(loaded_modules):
+        while len(finished_modules) < len(loaded_modules) and max_loops != 0:
             # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
             message = c1.get_message(timeout=0.01)
             if message and message['data'] == 'stop_process':
@@ -190,8 +192,9 @@ def shutdown_gracefully():
                 module_name = message['data']
                 if module_name not in finished_modules:
                     finished_modules.append(module_name)
-                    print(f"{module_name} Stopped.")
-
+                    modules_left = len(set(loaded_modules) - set(finished_modules))
+                    print(f"{module_name} Stopped... {modules_left} left.")
+            max_loops -=1
         # Send manual stops to the process not using channels
         try:
             logsProcessQueue.put('stop_process')
