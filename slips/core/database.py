@@ -1733,18 +1733,21 @@ class Database(object):
             data = ''
         return data
 
-    def cache_asn(self, asn, asn_range) -> None:
+    def cache_asn(self, asn, asn_range, timestamp) -> None:
         """
         Stores the range of asn in cached_asn hash
         :param asn: str
         :param asn_range: str
+        :param timestamp: float
         """
-        self.rcache.hset('cached_asn', asn, asn_range)
+        asn_info = json.dumps({'asn_range': asn_range ,
+                               'asn-timestamp': timestamp
+                               })
+        self.rcache.hset('cached_asn', asn, asn_info)
 
     def get_asn_cache(self):
         """
         Returns cached asn of ip if present, or False.
-        :param ip: ipaddress object
         """
         return self.rcache.hgetall('cached_asn')
 

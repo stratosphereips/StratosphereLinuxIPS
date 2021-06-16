@@ -11,6 +11,7 @@ import time
 import maxminddb
 import ipaddress
 import ipwhois
+import json
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
@@ -65,8 +66,12 @@ class Module(Module, multiprocessing.Process):
 
     def get_cached_asn(self, ip):
         cached_asn = __database__.get_asn_cache()
+        # cached_asn is a dict {asn: {'timestamp': ts, 'asn_range':cidr}}
         if cached_asn:
-            for asn,ip_range in cached_asn.items():
+            for asn,asn_info in cached_asn.items():
+                # convert from st to dict
+                asn_info = json.loads(asn_info)
+                ip_range = asn_info.get('asn_range')
                 # convert to objects
                 ip_range = ipaddress.ip_network(ip_range)
                 ip = ipaddress.ip_address(ip)
@@ -102,26 +107,33 @@ class Module(Module, multiprocessing.Process):
                                     try:
                                         # found info in geolite
                                         asnorg = asninfo['autonomous_system_organization']
-                                        data['asn'] = asnorg
+                                        data['asn'] = {'asnorg': asnorg,
+                                                    'timestamp': time.time()}
                                     except KeyError:
                                         # asn info not found in geolite
-                                        data['asn'] = 'Unknown'
+                                        data['asn'] ={'asnorg': 'Unknown',
+                                                    'timestamp': time.time()}
                                 else:
                                     # geolite returned nothing at all for this ip
-                                    data['asn'] = 'Unknown'
+                                    data['asn'] = {'asnorg': 'Unknown',
+                                                    'timestamp': time.time()}
+
                                 try:
                                     # Cache the range of this ip
                                     whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
                                     asnorg = whois_info.get('asn_description', False)
                                     asn_cidr = whois_info.get('asn_cidr', False)
                                     if asnorg and asn_cidr not in ('' , 'NA'):
-                                        __database__.cache_asn(asnorg, asn_cidr)
+                                        timestamp = time.time()
+                                        __database__.cache_asn(asnorg, asn_cidr, timestamp)
                                 except ipwhois.exceptions.IPDefinedError:
                                     # private ip. don't cache
                                     pass
                             else:
                                 # found cached asn
-                                data['asn'] = cached_asn
+
+                                data['asn'] = {'asnorg': cached_asn,
+                                            'timestamp': time.time()}
                             # store asn info in the db
                             __database__.setInfoForIPs(ip, data)
         except KeyboardInterrupt:

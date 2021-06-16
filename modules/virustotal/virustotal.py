@@ -107,17 +107,19 @@ class Module(Module, multiprocessing.Process):
         It also set passive dns retrieved from VirusTotal.
         """
         vt_scores, passive_dns, as_owner = self.get_ip_vt_data(ip)
+        ts = time.time()
         vtdata = {"URL": vt_scores[0],
                   "down_file": vt_scores[1],
                   "ref_file": vt_scores[2],
                   "com_file": vt_scores[3],
-                  "timestamp": time.time()}
+                  "timestamp": ts}
         data = {}
         data["VirusTotal"] = vtdata
 
         # Add asn if it is unknown or not in the IP info
-        if cached_data and ('asn' not in cached_data or cached_data['asn'] == 'Unknown'):
-            data['asn'] = as_owner
+        if cached_data and ('asn' not in cached_data or cached_data['asn']['asnorg'] == 'Unknown'):
+            data['asn'] = {'asnorg': as_owner,
+                           'timestamp': ts}
 
         __database__.setInfoForIPs(ip, data)
         __database__.set_passive_dns(ip, passive_dns)
