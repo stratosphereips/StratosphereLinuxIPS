@@ -104,7 +104,11 @@ class Module(Module, multiprocessing.Process):
                     ip = message['data']
                     # The first message comes with data=1
                     data = __database__.getIPData(ip)
-                    ip_addr = ipaddress.ip_address(ip)
+                    try:
+                        ip_addr = ipaddress.ip_address(ip)
+                    except ValueError:
+                        # not a valid ip skip
+                        continue
                     # Check if a month has passed since last time we updated asn
                     update_asn = self.update_asn(data)
                     if not ip_addr.is_multicast and update_asn:
