@@ -37,16 +37,10 @@ class Module(Module, multiprocessing.Process):
             self.print('Error opening the geolite2 db in ./GeoLite2-Country_20190402/GeoLite2-Country.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            #??
-            self.timeout = None
+        self.timeout = None
+        # update asn every 1 month
+        self.update_period = 2592000
+
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -66,18 +60,29 @@ class Module(Module, multiprocessing.Process):
 
     def get_cached_asn(self, ip):
         cached_asn = __database__.get_asn_cache()
-        # cached_asn is a dict {asn: {'timestamp': ts, 'asn_range':cidr}}
         if cached_asn:
-            for asn,asn_info in cached_asn.items():
-                # convert from st to dict
-                asn_info = json.loads(asn_info)
-                ip_range = asn_info.get('asn_range')
+            for asn,asn_range in cached_asn.items():
                 # convert to objects
-                ip_range = ipaddress.ip_network(ip_range)
+                ip_range = ipaddress.ip_network(asn_range)
                 ip = ipaddress.ip_address(ip)
                 if ip in ip_range:
                     return asn
         return False
+
+    def update_asn(self, cached_data) -> bool:
+        """
+        Returns True if
+        - no asn data is found in the db OR ip has no cached info
+        - OR month has passed since we last updated asn info in the db
+        :param cached_data: ip cached info from the database, dict
+        """
+        try:
+            update =  (time.time() - cached_data['asn']['timestamp']) > self.update_period
+            return update
+        except (KeyError, TypeError):
+            # no there's no cached asn info,or no timestamp, or cached_data is None
+            # we should update
+            return True
 
     def run(self):
         try:
@@ -87,55 +92,48 @@ class Module(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
                     return True
-                elif message['channel'] == 'new_ip':
+                elif message['channel'] == 'new_ip' and type(message['data'])==str:
                     # Not all the ips!! only the new one coming in the data
                     ip = message['data']
                     # The first message comes with data=1
-                    if type(ip) == str:
-                        data = __database__.getIPData(ip)
-                        ip_addr = ipaddress.ip_address(ip)
-
-                        # Check whether asn data is in the DB, and that the data is not empty
-                        if (not data or 'asn' not in data) and not ip_addr.is_multicast:
-                            data = {}
-                            # do we have asn cached for this range?
-                            cached_asn = self.get_cached_asn(ip)
-                            if not cached_asn:
-                                # we don't have it cached, get asn info from geolite db
-                                asninfo = self.reader.get(ip)
-                                if asninfo:
-                                    try:
-                                        # found info in geolite
-                                        asnorg = asninfo['autonomous_system_organization']
-                                        data['asn'] = {'asnorg': asnorg,
-                                                    'timestamp': time.time()}
-                                    except KeyError:
-                                        # asn info not found in geolite
-                                        data['asn'] ={'asnorg': 'Unknown',
-                                                    'timestamp': time.time()}
-                                else:
-                                    # geolite returned nothing at all for this ip
-                                    data['asn'] = {'asnorg': 'Unknown',
-                                                    'timestamp': time.time()}
-
+                    data = __database__.getIPData(ip)
+                    ip_addr = ipaddress.ip_address(ip)
+                    # Check if a month has passed since last time we updated asn
+                    update_asn = self.update_asn(data)
+                    if not ip_addr.is_multicast and update_asn:
+                        data = {}
+                        # do we have asn cached for this range?
+                        cached_asn = self.get_cached_asn(ip)
+                        if not cached_asn:
+                            # we don't have it cached get asn info from geolite db
+                            asninfo = self.reader.get(ip)
+                            if asninfo:
                                 try:
-                                    # Cache the range of this ip
-                                    whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
-                                    asnorg = whois_info.get('asn_description', False)
-                                    asn_cidr = whois_info.get('asn_cidr', False)
-                                    if asnorg and asn_cidr not in ('' , 'NA'):
-                                        timestamp = time.time()
-                                        __database__.cache_asn(asnorg, asn_cidr, timestamp)
-                                except ipwhois.exceptions.IPDefinedError:
-                                    # private ip. don't cache
-                                    pass
+                                    # found info in geolite
+                                    asnorg = asninfo['autonomous_system_organization']
+                                    data['asn'] = {'asnorg': asnorg}
+                                except KeyError:
+                                    # asn info not found in geolite
+                                    data['asn'] ={'asnorg': 'Unknown'}
                             else:
-                                # found cached asn
-
-                                data['asn'] = {'asnorg': cached_asn,
-                                            'timestamp': time.time()}
-                            # store asn info in the db
-                            __database__.setInfoForIPs(ip, data)
+                                # geolite returned nothing at all for this ip
+                                data['asn'] = {'asnorg': 'Unknown'}
+                            try:
+                                # Cache the range of this ip
+                                whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
+                                asnorg = whois_info.get('asn_description', False)
+                                asn_cidr = whois_info.get('asn_cidr', False)
+                                if asnorg and asn_cidr not in ('' , 'NA'):
+                                    __database__.set_asn_cache(asnorg, asn_cidr)
+                            except ipwhois.exceptions.IPDefinedError:
+                                # private ip. don't cache
+                                pass
+                        else:
+                            # found cached asn for this ip's range, store it
+                            data['asn'] = {'asnorg': cached_asn}
+                        # store asn info in the db
+                        data['asn'].update({'timestamp': time.time()})
+                        __database__.setInfoForIPs(ip, data)
         except KeyboardInterrupt:
             if self.reader:
                 self.reader.close()

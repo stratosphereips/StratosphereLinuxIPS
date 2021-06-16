@@ -1733,17 +1733,13 @@ class Database(object):
             data = ''
         return data
 
-    def cache_asn(self, asn, asn_range, timestamp) -> None:
+    def set_asn_cache(self, asn, asn_range) -> None:
         """
         Stores the range of asn in cached_asn hash
         :param asn: str
         :param asn_range: str
-        :param timestamp: float
         """
-        asn_info = json.dumps({'asn_range': asn_range ,
-                               'asn-timestamp': timestamp
-                               })
-        self.rcache.hset('cached_asn', asn, asn_info)
+        self.rcache.hset('cached_asn', asn, asn_range)
 
     def get_asn_cache(self):
         """
