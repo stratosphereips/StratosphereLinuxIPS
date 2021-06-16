@@ -47,16 +47,7 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
         # To know when to retrain. We store the number of labels when we last retrain
         self.retrain = 0
-
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # ??
-            self.timeout = None
+        self.timeout = None
 
     def read_configuration(self):
         """ Read the configuration file for what we need """

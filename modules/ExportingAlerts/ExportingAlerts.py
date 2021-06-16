@@ -96,18 +96,7 @@ class Module(Module, multiprocessing.Process):
         self.is_thread_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
-        # Set the timeout based on the platform. This is because the
-        # pyredis lib does not have officially recognized the
-        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # Other systems)
-            self.timeout = None
+        self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """

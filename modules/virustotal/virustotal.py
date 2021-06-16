@@ -54,16 +54,7 @@ class Module(Module, multiprocessing.Process):
         # Pool manager to make HTTP requests with urllib3
         # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            #??
-            self.timeout = None
+        self.timeout = None
         # start the queue thread
         self.api_calls_thread = threading.Thread(target=self.API_calls_thread,
                          daemon=True)

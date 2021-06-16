@@ -45,19 +45,7 @@ class UpdateManager(Module, multiprocessing.Process):
         self.update_manager = UpdateFileManager(self.outputqueue, config)
         # Timer to update the ThreatIntelligence files
         self.timer_manager = InfiniteTimer(self.update_period, self.update_malicious_files)
-
-        # Set the timeout based on the platform. This is because the
-        # pyredis lib does not have officially recognized the
-        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # Other systems
-            self.timeout = None
+        self.timeout = None
 
     def read_configuration(self):
         """ Read the configuration file for what we need """

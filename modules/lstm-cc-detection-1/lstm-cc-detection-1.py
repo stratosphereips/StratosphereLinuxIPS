@@ -50,18 +50,7 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_letters')
-        # Set the timeout based on the platform. This is because the pyredis
-        # lib does not have officially recognized the timeout=None as it works
-        # in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # ??
-            self.timeout = None
+        self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """
