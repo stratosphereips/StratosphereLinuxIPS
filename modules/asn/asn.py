@@ -60,13 +60,20 @@ class Module(Module, multiprocessing.Process):
 
     def get_cached_asn(self, ip):
         cached_asn = __database__.get_asn_cache()
-        if cached_asn:
+        try:
             for asn,asn_range in cached_asn.items():
                 # convert to objects
                 ip_range = ipaddress.ip_network(asn_range)
-                ip = ipaddress.ip_address(ip)
+                try:
+                    ip = ipaddress.ip_address(ip)
+                except ValueError:
+                    # not a valid ip
+                    break
                 if ip in ip_range:
                     return asn
+        except AttributeError:
+            # cached_asn is not found
+            pass
         return False
 
     def update_asn(self, cached_data) -> bool:
@@ -107,15 +114,14 @@ class Module(Module, multiprocessing.Process):
                         if not cached_asn:
                             # we don't have it cached get asn info from geolite db
                             asninfo = self.reader.get(ip)
-                            if asninfo:
-                                try:
-                                    # found info in geolite
-                                    asnorg = asninfo['autonomous_system_organization']
-                                    data['asn'] = {'asnorg': asnorg}
-                                except KeyError:
-                                    # asn info not found in geolite
-                                    data['asn'] ={'asnorg': 'Unknown'}
-                            else:
+                            try:
+                                # found info in geolite
+                                asnorg = asninfo['autonomous_system_organization']
+                                data['asn'] = {'asnorg': asnorg}
+                            except KeyError:
+                                # asn info not found in geolite
+                                data['asn'] ={'asnorg': 'Unknown'}
+                            except TypeError:
                                 # geolite returned nothing at all for this ip
                                 data['asn'] = {'asnorg': 'Unknown'}
                             try:
