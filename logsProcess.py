@@ -212,7 +212,24 @@ class LogsProcess(multiprocessing.Process):
                     try:
                         flow = json.loads(flow)
                         # format the flow
-                        #todo
+                        ts = flow.get('timestamp','').split()
+                        # print(f"flow: {flow}\n\n")
+                        # discard the seconds and milliseconds in ts
+                        ts = f'{ts[0]}  {ts[1][0:4]}'
+                        dport_name = flow.get('dport_name','')
+                        preposition = flow.get('preposition','')
+                        daddr = flow.get('daddr','')
+                        dport = flow.get('dport/proto','')
+                        query = flow.get('Query',False)
+                        ans = flow.get('Answers',False)
+                        state = flow.get('state','')
+                        critical_warning = flow.get('critical warning','')
+                        trusted = flow.get('Trusted','')
+                        to_print += f'{ts}:\n\t{dport_name} {preposition} {daddr} {dport} {critical_warning} {state}'
+                        if query: to_print+= f' query: {query}'
+                        if ans: to_print += f' answers: {ans}'
+                        if 'No' in trusted:  to_print += f', not trusted.'
+                        to_print +='\n\n'
                     except json.decoder.JSONDecodeError:
                         # data is a str, leave it as it is
                         to_print+= data
@@ -450,7 +467,7 @@ class LogsProcess(multiprocessing.Process):
                 timeline_path = profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt'
                 # If the file does not exists yet, create it
                 if not os.path.isfile(timeline_path):
-                    self.addDataToFile(timeline_path, 'Complete TimeLine of IP {}\n'.format(ip), file_mode='w+')
+                    self.addDataToFile(timeline_path, 'Complete Timeline of IP {}\n'.format(ip), file_mode='w+')
 
                 for twid_tuple in tws:
                     (twid, starttime) = twid_tuple
