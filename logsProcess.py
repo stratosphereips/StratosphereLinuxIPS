@@ -166,45 +166,61 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(profilefolder + '/' + 'ProfileData.txt', '\t' + data.strip(), file_mode='a+')
         return profilefolder
 
-    def addDataToFile(self, filename, data, file_mode='w+', data_type='txt', data_mode='text'):
+    def addDataToFile(self, file, data, file_mode='w+', data_type='txt', data_mode='text'):
         """
         Receive data and append it in the general log of this profile
         If the filename was not opened yet, then open it, write the data and return the file object.
         Do not close the file
+
+        :param file: can be file name or file object
+        :param data_mode: in which format do we want the data to be added to file
+        :param data_type: the data coming to this function
         In data_mode = 'text', we add a \n at the end
         In data_mode = 'raw', we do not add a \n at the end
+
         In data_type = 'text' we do not do anything now
-        In data_type = 'json' we do not do anything now, but we may interpret the json for better printing
-        In data_type = 'lines' we write all the lines together
+        In data_type = 'json' format before printing
+        In data_type = 'lines'  write all the lines together
         """
+
         try:
+
             if data_mode == 'text':
+                # The other mode is 'raw' where we do not add the \n
                 data = data + '\n'
-            # The other mode is 'raw' where we do not add the \n 
-            try:
-                if data_type == 'lines':
-                    # We received a bunch of lines all together. Just write them
-                    filename.writelines(data)
-                    filename.flush()
-                    return filename
-                else:
-                # The other mode is 'line' where we just write one line
-                    filename.write(data)
-                    filename.flush()
-                    return filename
-            except (NameError, AttributeError) as e:
+
+            # get the type of file param
+            if type(file) == str:
                 # The file was not opened yet
-                fileobj = open(filename, file_mode)
-                if data_type == 'lines':
-                    # We received a bunch of lines all together. Just write them
-                    fileobj.writelines(data)
-                    fileobj.flush()
-                    return fileobj
-                else:
-                    fileobj.write(data)
-                    fileobj.flush()
-                # For some reason the files are closed and flushed correclty.
-                return fileobj
+                fileobj =  open(file, file_mode)
+            else:
+                fileobj = file
+
+
+            if data_type == 'lines':
+                # We received a bunch of lines all together. Just write them
+                fileobj.writelines(data)
+            elif data_type == 'line' or type(data)==str:
+                # we just write one line
+                fileobj.write(data)
+
+            elif data_type == 'json':
+                # format the json data before writing
+                # data is a list of dicts
+                to_print = ''
+                for flow in data:
+                    try:
+                        flow = json.loads(flow)
+                        # format the flow
+                        #todo
+                    except json.decoder.JSONDecodeError:
+                        # data is a str, leave it as it is
+                        to_print+= data
+                data = to_print
+                fileobj.write(data)
+            fileobj.flush()
+            return file
+
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -260,7 +276,8 @@ class LogsProcess(multiprocessing.Process):
                 # Save in the log file all parts of the profile
 
                 # 0. Write the profileID for people getting know what they see in the file.
-                self.addDataToFile(profilefolder + '/' + twlog, 'ProfileID: {}\n'.format(profileid), file_mode='a+', data_type='text')
+                self.addDataToFile(profilefolder + '/' + twlog, 'ProfileID: {}\n'.format(profileid), file_mode='a+',
+                                   data_type='text')
 
                 # 0. Is a ip of this profile stored as malicious?
                 # If it still one profile do not ask again the database for each new time_window.
@@ -282,10 +299,12 @@ class LogsProcess(multiprocessing.Process):
                 evidence = __database__.getEvidenceForTW(profileid, twid)
                 if evidence:
                     evidence = json.loads(evidence)
-                    self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:',
+                                       file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] Evidence of detections in this TW:')
                     for data in evidence:
-                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence: {}'.format(data), file_mode='a+', data_type='text')
+                        self.addDataToFile(profilefolder + '/' + twlog, '\tEvidence: {}'.format(data), file_mode='a+',
+                                           data_type='text')
                         self.outputqueue.put('03|logs|\t\t\t Evidence: {}'.format(data[0]))
 
                 # 3. DstIPs
@@ -302,7 +321,9 @@ class LogsProcess(multiprocessing.Process):
                             printable_ip_info = ', '.join('{} {}'.format(k, v) for k, v in ip_info.items())
                         else:
                             printable_ip_info = '-'
-                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({} times). Info: {}'.format(key, data[key], printable_ip_info), file_mode='a+', data_type='text')
+                        self.addDataToFile(profilefolder + '/' + twlog,
+                                           '\t{} ({} times). Info: {}'.format(key, data[key], printable_ip_info),
+                                           file_mode='a+', data_type='text')
                     self.outputqueue.put('03|logs|\t\t[Logs] DstIP: ' + dstips)
 
                 # 4. SrcIPs
@@ -318,7 +339,9 @@ class LogsProcess(multiprocessing.Process):
                             printable_ip_info = ', '.join('{} {}'.format(k, v) for k, v in ip_info.items())
                         else:
                             printable_ip_info = '-'
-                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({} times). Info: {}'.format(key, data[key], printable_ip_info), file_mode='a+', data_type='text')
+                        self.addDataToFile(profilefolder + '/' + twlog,
+                                           '\t{} ({} times). Info: {}'.format(key, data[key], printable_ip_info),
+                                           file_mode='a+', data_type='text')
                         self.outputqueue.put('03|logs|\t\t\t[Logs] {} ({} times)'.format(key, data[key]))
 
                 # 5. OutTuples
@@ -329,7 +352,8 @@ class LogsProcess(multiprocessing.Process):
                     self.outputqueue.put('03|logs|\t\t[Logs] OutTuples:')
                     data = json.loads(out_tuples)
                     for key in data:
-                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]), file_mode='a+', data_type='text')
+                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]),
+                                           file_mode='a+', data_type='text')
                         self.outputqueue.put('03|logs|\t\t\t[Logs] {} ({})'.format(key, data[key]))
                     self.outputqueue.put('03|logs|\t\t[Logs] Tuples: ' + out_tuples)
 
@@ -341,7 +365,8 @@ class LogsProcess(multiprocessing.Process):
                     self.outputqueue.put('03|logs|\t\t[Logs] InTuples:')
                     data = json.loads(in_tuples)
                     for key in data:
-                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]), file_mode='a+', data_type='text')
+                        self.addDataToFile(profilefolder + '/' + twlog, '\t{} ({})'.format(key, data[key]),
+                                           file_mode='a+', data_type='text')
                         self.outputqueue.put('03|logs|\t\t\t[Logs] {} ({})'.format(key, data[key]))
 
 
@@ -360,24 +385,28 @@ class LogsProcess(multiprocessing.Process):
                                 data = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
                                 #self.print('LOGING data: {}'.format(data))
                                 if data:
-                                    self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
+                                    self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+',
+                                                       data_type='text')
                                     for port in data:
                                         text_data = '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}.'.format(port, data[port]['totalflows'], data[port]['totalpkt'], data[port]['totalbytes'])
-                                        self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+', data_type='text')
+                                        self.addDataToFile(profilefolder + '/' + twlog, text_data, file_mode='a+',
+                                                           data_type='text')
                                         self.outputqueue.put('03|logs|\t\t\t[Logs]: ' + text_data)
 
                 # 8. Info about the evidence so far for this TW.
                 evidence = __database__.getEvidenceForTW(profileid, twid)
                 if evidence:
                     evidence = json.loads(evidence)
-                    self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
+                    self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:',
+                                       file_mode='a+', data_type='text')
                     for key in evidence:
                         key_json = json.loads(key)
                         key_values = ':'.join(key_json.values())
                         self.addDataToFile(profilefolder + '/' + twlog,
                                            '\tEvidence Description: {}. Confidence: {}. Threat Level: {} (key:{})'.format(
-                                               evidence[key].get('description'), evidence[key].get('confidence'), evidence[key].get('threat_level'), key_values,
-                                           file_mode='a+', data_type='text'))
+                                               evidence[key].get('description'), evidence[key].get('confidence'),
+                                               evidence[key].get('threat_level'), key_values,
+                                               file_mode='a+', data_type='text'))
 
                 # Add free line between tuple info and information about ports and IP.
                 self.addDataToFile(profilefolder + '/' + twlog, '', file_mode='a+', data_type='text')
@@ -404,7 +433,9 @@ class LogsProcess(multiprocessing.Process):
                 # 9. This should be last. Detections to block
                 blocking = __database__.checkBlockedProfTW(profileid, twid)
                 if blocking:
-                    self.addDataToFile(profilefolder + '/' + twlog, 'Was requested to block in this time window: ' + str(blocking), file_mode='a+', data_type='json')
+                    self.addDataToFile(profilefolder + '/' + twlog,
+                                       'Was requested to block in this time window: ' + str(blocking), file_mode='a+',
+                                       data_type='json')
                     self.outputqueue.put('03|logs|\t\t[Logs] Blocking Request: ' + str(blocking))
 
                 ###########
@@ -429,7 +460,8 @@ class LogsProcess(multiprocessing.Process):
                     self.timeline_first_index[hash_key] = first_index
                     if data:
                         self.print('Adding to the profile line {} {}, data {}'.format(profileid, twid, data), 6, 0)
-                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data, file_mode='a+', data_type='lines', data_mode='raw')
+                        self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data,
+                                           file_mode='a+', data_type='json', data_mode='raw')
 
                 last_profile_id = profileid
 
@@ -439,7 +471,9 @@ class LogsProcess(multiprocessing.Process):
             if TWforProfileBlocked:
                 self.addDataToFile('Blocked.txt', 'Detections:\n', file_mode='w+', data_type='text')
                 for blocked in TWforProfileBlocked:
-                    self.addDataToFile('Blocked.txt', '\t' + str(blocked).split('_')[1] + ': ' + str(blocked).split('_')[2], file_mode='a+', data_type='json')
+                    self.addDataToFile('Blocked.txt',
+                                       '\t' + str(blocked).split('_')[1] + ': ' + str(blocked).split('_')[2],
+                                       file_mode='a+', data_type='json')
                     #self.outputqueue.put('03|logs|\t\t[Logs]: Blocked file updated: {}'.format(TWforProfileBlocked))
 
             # Create a file with information about the capture in general
