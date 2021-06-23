@@ -70,7 +70,7 @@ _Note: for those using a different base image, you need to also install tensorfl
 
 As we mentioned before, the GUI of Slips known as Kalipso relies on ns. For it to work we will install the following npm packages:
 
-	npm install blessed blessed-contrib redis async chalk strip-ansi clipboardy fs sorted-array-async yargs
+	npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 
 ###  Installing Zeek
 
