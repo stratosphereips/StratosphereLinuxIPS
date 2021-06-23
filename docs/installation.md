@@ -19,7 +19,7 @@ Before building the docker locally from the Dockerfile, first you should clone S
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 
-If you cloned StratosphereLinuxIPS in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
+If you cloned Slips in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
 
 	cd ~/code/StratosphereLinuxIPS/docker
 	docker build --no-cache -t slips -f Dockerfile .
@@ -97,7 +97,7 @@ When running Slips for the first time we need to start Redis:
 
 	redis-server --daemonize yes
 
-Once Redis is running it’s time to clone the Stratosphere Linux IPS repository and run it:
+Once Redis is running it’s time to clone the Slips repository and run it:
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 	cd StratosphereLinuxIPS/

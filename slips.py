@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Stratosphere Linux IPS. A machine-learning Intrusion Detection System
+# Slips. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
 
 # This program is free software; you can redistribute it and/or
@@ -159,7 +159,7 @@ def load_modules(to_ignore):
     return plugins
 
 def get_cwd():
-    # Can't use os.getcwd() because slips directory name won't always be StratosphereLinuxIPS plus this way requires less parsing
+    # Can't use os.getcwd() because slips directory name won't always be Slips plus this way requires less parsing
     for arg in sys.argv:
         if 'slips.py' in arg:
             # get the path preceeding slips.py (may be ../ or  ../../ or '' if slips.py is in the cwd) , this path is where slips.conf will be
@@ -174,7 +174,7 @@ if __name__ == '__main__':
     # Before the argparse, we need to set up the default path fr alerts.log and alerts.json. In our case, it is output folder.
     alerts_default_path = 'output/'
 
-    print('Stratosphere Linux IPS. Version {}'.format(version))
+    print('Slips. Version {}'.format(version))
     print('https://stratosphereips.org\n')
 
     # Parse the parameters
