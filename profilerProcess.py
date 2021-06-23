@@ -1348,8 +1348,9 @@ class ProfilerProcess(multiprocessing.Process):
             elif 'dhcp' in flow_type:
                 mac_addr = self.column_values['mac']
                 client_addr = self.column_values['client_addr']
-                profileid = get_rev_profile(starttime, client_addr)[0]
-                __database__.add_mac_addr_to_profile(profileid,mac_addr)
+                if client_addr:
+                    profileid = get_rev_profile(starttime, client_addr)[0]
+                    __database__.add_mac_addr_to_profile(profileid,mac_addr)
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(saddr)
