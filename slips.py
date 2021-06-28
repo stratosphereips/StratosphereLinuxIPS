@@ -530,7 +530,7 @@ if __name__ == '__main__':
 
 
     # Start each module in the folder modules
-    outputProcessQueue.put('01|main|[main] Starting modules')
+    outputProcessQueue.put('01|main|Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
     # This plugins import will automatically load the modules and put them in the __modules__ variable
     # if slips is given a .rdb file, don't load the modules as we don't need them
@@ -552,7 +552,7 @@ if __name__ == '__main__':
                     module_class = modules_to_call[module_name]['obj']
                     ModuleProcess = module_class(outputProcessQueue, config)
                     ModuleProcess.start()
-                    outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
+                    outputProcessQueue.put('20|main|\tStarting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
                     __database__.store_process_PID(module_name, int(ModuleProcess.pid))
         except TypeError:
             # There are not modules in the configuration to ignore?
@@ -655,7 +655,8 @@ if __name__ == '__main__':
                 __database__.setSlipsInternalTime(time_of_last_modified_tw)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
-            outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+            outputProcessQueue.put('20|Main|Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+
             # Check if we need to close some TW
             __database__.check_TW_to_close()
 
