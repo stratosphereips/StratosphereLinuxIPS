@@ -192,9 +192,18 @@ def shutdown_gracefully():
                 module_name = message['data']
                 if module_name not in finished_modules:
                     finished_modules.append(module_name)
-                    modules_left = len(set(loaded_modules) - set(finished_modules))
-                    print(f"{module_name} Stopped... {modules_left} left.")
+                    modules_left = set(loaded_modules) - set(finished_modules)
+                    print(f"{module_name} Stopped... {len(modules_left)} left.")
             max_loops -=1
+        # kill processes that didn't stop after timeout
+        PIDs = __database__.get_PIDs()
+        for unstopped_module in modules_left:
+            pid = PIDs[unstopped_module]
+            try:
+                os.kill(int(pid), 9)
+                print(f'{unstopped_module} Killed.')
+            except ProcessLookupError:
+                print(f'{unstopped_module}, {pid} already exited.')
         # Send manual stops to the process not using channels
         try:
             logsProcessQueue.put('stop_process')
@@ -399,7 +408,7 @@ if __name__ == '__main__':
                     ModuleProcess = module_class(outputProcessQueue, config)
                     ModuleProcess.start()
                     outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
-                    __database__.store_process_PID(module_name, ModuleProcess.pid)
+                    __database__.store_process_PID(module_name, int(ModuleProcess.pid))
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')

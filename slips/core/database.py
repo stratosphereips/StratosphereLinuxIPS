@@ -1738,10 +1738,10 @@ class Database(object):
     def store_process_PID(self, process, pid):
         """
         Stores each started process or module with it's PID
-        :param pid: str or int
+        :param pid: int
         :param process: str
         """
-        self.r.hset('PIDs', process, str(pid))
+        self.r.hset('PIDs', process, pid)
 
     def get_PIDs(self):
         """ returns a dict with module names as keys and pids as values """
