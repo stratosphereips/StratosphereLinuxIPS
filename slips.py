@@ -167,7 +167,7 @@ def get_cwd():
             return cwd
 
 def shutdown_gracefully():
-    """ Wait for all modules to confirm thet they're done processing before shutting down """
+    """ Wait for all modules to confirm that they're done processing before shutting down """
 
     try:
         print('Stopping Slips')
@@ -399,6 +399,7 @@ if __name__ == '__main__':
                     ModuleProcess = module_class(outputProcessQueue, config)
                     ModuleProcess.start()
                     outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
+                    __database__.store_process_PID(module_name, ModuleProcess.pid)
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
