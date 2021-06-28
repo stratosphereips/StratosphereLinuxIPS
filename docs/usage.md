@@ -248,8 +248,7 @@ To disable the creation of log files, there are two options:
 
 You can also change how often Slips creates log files using the ```log_report_time``` variable  in ```slips.conf```.
 
-
-We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 10.
+We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
 
 Defaut value for both of them is 1
 
@@ -257,7 +256,7 @@ To change them, We use ```-v``` for verbosity and ```-e``` for debugging
 
 For example:
 
-```./slips.py -c slips.conf -v 5 -e 3 -f zeek_dir ```
+```./slips.py -c slips.conf -v 2 -e 1 -f zeek_dir ```
 
 Verbosity is about less or more information on the normal work of slips. 
 
@@ -282,58 +281,23 @@ Below is a table showing each level of both.
 </tr>
 <tr style="height: 22px;">
 <td style="height: 22px;">&nbsp;0</td>
-<td style="height: 22px;">&nbsp;Don't show info about anything</td>
-<td style="height: 22px;">&nbsp;Don't log any errors</td>
+<td style="height: 22px;">&nbsp;Don't&nbsp;print</td>
+<td style="height: 22px;">&nbsp;Don't print</td>
 </tr>
 <tr style="height: 22px;">
 <td style="height: 22px;">1&nbsp;</td>
-<td style="height: 22px;">&nbsp;Show basic operation, proof of work every 5 seconds</td>
-<td style="height: 22px;">&nbsp;Print exceptions&nbsp;</td>
+<td style="height: 22px;">&nbsp;Show basic operation, proof of work&nbsp;</td>
+<td style="height: 22px;">&nbsp;Print exceptions</td>
 </tr>
 <tr style="height: 22px;">
 <td style="height: 22px;">2&nbsp;</td>
-<td style="height: 22px;">&nbsp;Show predictions about certain flows&nbsp;</td>
-<td style="height: 22px;">&nbsp;Warnings about&nbsp;potential errors, lik unsupported and unhandles types being used</td>
+<td style="height: 22px;">&nbsp;Log I/O operations and filenames</td>
+<td style="height: 22px;">&nbsp;Unsupported and unhandled types (cases that may cause errors)</td>
 </tr>
 <tr style="height: 22px;">
 <td style="height: 22px;">3&nbsp;</td>
-<td style="height: 22px;">&nbsp;Show every filename being read/written to.</td>
-<td style="height: 22px;">&nbsp;Print data about ports being used.</td>
-</tr>
-<tr style="height: 22px;">
-<td style="height: 22px;">4&nbsp;</td>
-<td style="height: 22px;">&nbsp;Which data is being processed in the ML module.</td>
-<td style="height: 22px;">&nbsp;Print profile and timewindow changes.</td>
-</tr>
-<tr style="height: 22px;">
-<td style="height: 22px;">5&nbsp;</td>
-<td style="height: 22px;">&nbsp;Print calculated threat levels.</td>
-<td style="height: 22px;">&nbsp;Log&nbsp;each time&nbsp;a new ip appears in the db.</td>
-</tr>
-<tr style="height: 22px;">
-<td style="height: 22px;">6&nbsp;</td>
-<td style="height: 22px;">&nbsp;Print&nbsp;every data read/written to every file.</td>
-<td style="height: 22px;">&nbsp;Print&nbsp;info about data being read&nbsp;files, for example detected ipv4, ipv6, domain ...etc in file X</td>
-</tr>
-<tr style="height: 22px;">
-<td style="height: 22px;">7&nbsp;</td>
-<td style="height: 22px;">&nbsp;Print currentlyexecuted function and module</td>
-<td style="height: 22px;">&nbsp;Log each data stored in each profile in the database.</td>
-</tr>
-<tr style="height: 22px;">
-<td style="height: 22px;">8&nbsp;</td>
-<td style="height: 22px;">&nbsp;Print currently executed function and function parameters</td>
-<td style="height: 22px;">&nbsp;Log info about symbols being computed</td>
-</tr>
-<tr style="height: 22.4px;">
-<td style="height: 22.4px;">9&nbsp;</td>
-<td style="height: 22.4px;">&nbsp;Print Currently executed function and return value</td>
-<td style="height: 22.4px;">&nbsp;Log unhandled cases and data types</td>
-</tr>
-<tr style="height: 22px;">
-<td style="height: 22px;">&nbsp;10</td>
-<td style="height: 22px;">&nbsp;Show all the above</td>
-<td style="height: 22px;">&nbsp;Print all the above</td>
+<td style="height: 22px;">&nbsp;Log database/profile/timewindow changes</td>
+<td style="height: 22px;">&nbsp;Red warnings that need examination - developer warnings</td>
 </tr>
 </tbody>
 </table>
