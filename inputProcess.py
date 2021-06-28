@@ -89,9 +89,8 @@ class InputProcess(multiprocessing.Process):
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        # self.name = f'{Fore.YELLOW}{self.name}{Style.RESET_ALL}'
-        vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        levels = f'{verbose}{debug}'
+        self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def stop_queues(self):
         """ Stops the profiler and output queues """
