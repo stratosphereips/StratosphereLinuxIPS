@@ -552,8 +552,8 @@ if __name__ == '__main__':
                     module_class = modules_to_call[module_name]['obj']
                     ModuleProcess = module_class(outputProcessQueue, config)
                     ModuleProcess.start()
-                    outputProcessQueue.put('20|main|\tStarting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
                     __database__.store_process_PID(module_name, int(ModuleProcess.pid))
+                    outputProcessQueue.put('20|main|\t\tStarting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
