@@ -38,9 +38,24 @@ class OutputProcess(multiprocessing.Process):
         """
         Extract the verbosity level, the sender and the message from the line.
         The line is separated by | and the fields are:
-        1. The level. It means the importance/verbosity we should be. Going from 0 to 100. The lower the less important
-            From 0 to 9 we have verbosity levels. 0 is show nothing, 10 show everything
-            From 10 to 19 we have debuging levels. 10 is no debug, 19 is all debug
+        1. The level. It means the importance/verbosity we should be. The lower the less important
+            The level is a two digit number
+            first digit: verbosity level
+            second digit: debug level
+            both levels range from 0 to 3
+
+            verbosity:
+                0 - don't print
+                1 - basic operation/proof of work
+                2 - log I/O operations and filenames
+                3 - log database/profile/timewindow changes
+
+            debug:
+                0 - don't print
+                1 - print exceptions
+                2 - unsupported and unhandled types (cases that may cause errors)
+                3 - red warnings that needs examination - developer warnings
+
             Messages should be about verbosity or debugging, but not both simultaneously
         2. The sender
         3. The message
@@ -49,17 +64,17 @@ class OutputProcess(multiprocessing.Process):
         """
         try:
             try:
-                level = int(line.split('|')[0])
-                if int(level) < 0 or int(level) > 100:
-                    level = 0
+                level = line.split('|')[0]
+                if int(level) < 0 or int(level) >= 100 or len(level) < 2:
+                    level = '00'
             except TypeError:
                 print('Error in the level sent to the Output Process')
             except KeyError:
-                level = 0
+                level = '00'
                 print('The level passed to OutputProcess was wrongly formated.')
             except ValueError as inst:
                 # We probably received some text instead of an int()
-                print('Error receiving a text to output. Check that you are sending the format of the msg correctly: level|sender|msg')
+                print('Error receiving a text to output. Check that you are sending the format of the msg correctly: level|msg')
                 print(inst)
                 sys.exit(-1)
             try:
@@ -69,7 +84,7 @@ class OutputProcess(multiprocessing.Process):
                 print('The sender passed to OutputProcess was wrongly formated.')
                 sys.exit(-1)
             try:
-                # If there are more | inside he msg, we don't care, just print them
+                # If there are more | inside the msg, we don't care, just print them
                 msg = ''.join(line.split('|')[2:])
             except KeyError:
                 msg = ''
@@ -88,29 +103,28 @@ class OutputProcess(multiprocessing.Process):
     def output_line(self, line):
         """ Get a line of text and output it correctly """
         (level, sender, msg) = self.process_line(line)
-        verbose_level = int(int(level) / 10)
-        debug_level = int(int(level) - (verbose_level * 10))
+        verbose_level, debug_level = int(level[0]), int(level[1])
+        # if verbosity level is 3 make it red
+        if debug_level == 3 : msg = f'\033[1;31;40m{msg}\033[00m'
         # There should be a level 0 that we never print. So its >, and not >=
-        if verbose_level > 0 and verbose_level <= 9 and verbose_level <= self.verbose:
-            print(msg)
-        elif debug_level > 0 and debug_level <= 9 and debug_level <= self.debug:
+        if verbose_level > 0 and verbose_level <= 3 and verbose_level <= self.verbose:
+            print(f'[{sender}] {msg}')
+        elif debug_level > 0 and debug_level <= 3 and debug_level <= self.debug:
             # For now print DEBUG, then we can use colors or something
-            print(msg)
+            print(f'[{sender}] {msg}')
         # This is to test if we are reading the flows completely
 
     def run(self):
         try:
             while True:
                 line = self.queue.get()
-                if 'quiet' == line:
+                if line == 'quiet':
                     self.quiet = True
-                # if timewindows are not updated for 25 seconds, we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
                     return True
-                elif 'stop' != line:
+                elif line != 'stop':
                     if not self.quiet:
                         self.output_line(line)
-
                 else:
                     # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
                     print('Stopping the output thread')
