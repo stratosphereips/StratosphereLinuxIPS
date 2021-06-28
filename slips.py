@@ -193,7 +193,7 @@ def shutdown_gracefully():
                 if module_name not in finished_modules:
                     finished_modules.append(module_name)
                     modules_left = set(loaded_modules) - set(finished_modules)
-                    print(f"{module_name} Stopped... {len(modules_left)} left.")
+                    print(f"\033[1;32;40m{module_name}\033[00m Stopped... \033[1;32;40m{len(modules_left)}\033[00m left.")
             max_loops -=1
         # kill processes that didn't stop after timeout
         PIDs = __database__.get_PIDs()
@@ -201,9 +201,9 @@ def shutdown_gracefully():
             pid = PIDs[unstopped_module]
             try:
                 os.kill(int(pid), 9)
-                print(f'{unstopped_module} Killed.')
+                print(f'\033[1;32;40m{unstopped_module}\033[00m Killed.')
             except ProcessLookupError:
-                print(f'{unstopped_module}, {pid} already exited.')
+                print(f'\033[1;32;40m{unstopped_module}\033[00m Already exited.')
         # Send manual stops to the process not using channels
         try:
             logsProcessQueue.put('stop_process')
