@@ -124,10 +124,10 @@ class OutputProcess(multiprocessing.Process):
         if debug_level == 3 : msg = f'\033[1;31;40m{msg}\033[00m'
         # There should be a level 0 that we never print. So its >, and not >=
         if verbose_level > 0 and verbose_level <= 3 and verbose_level <= self.verbose:
-            print(f'{sender}{msg}')
+            print(f'[{sender}] {msg}')
         elif debug_level > 0 and debug_level <= 3 and debug_level <= self.debug:
             # For now print DEBUG, then we can use colors or something
-            print(f'{sender}{msg}')
+            print(f'[{sender}] {msg}')
         # This is to test if we are reading the flows completely
 
     def run(self):
