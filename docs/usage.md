@@ -238,7 +238,9 @@ You can also change how often Slips creates log files using the ```log_report_ti
 
 We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
 
-We use ```-v``` for verbosity and ```-e``` for debugging
+Defaut value for both of them is 1
+
+To change them, We use ```-v``` for verbosity and ```-e``` for debugging
 
 For example:
 
