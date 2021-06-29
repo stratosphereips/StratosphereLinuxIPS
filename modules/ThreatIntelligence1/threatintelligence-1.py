@@ -143,7 +143,7 @@ class Module(Module, multiprocessing.Process):
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
 
-                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
+                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 2, 0)
 
                 # Remove comments and find the description column if possible
                 description_column = None
@@ -180,7 +180,7 @@ class Module(Module, multiprocessing.Process):
                         ip_address = ipaddress.IPv4Address(data[column].strip())
                         # Is IPv4! let go
                         data_column = column
-                        self.print(f'The data is on column {column} and is ipv4: {ip_address}', 0, 6)
+                        self.print(f'The data is on column {column} and is ipv4: {ip_address}', 2, 0)
                         break
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
@@ -188,21 +188,21 @@ class Module(Module, multiprocessing.Process):
                             ip_address = ipaddress.IPv6Address(data[column].strip())
                             # Is IPv6! let go
                             data_column = column
-                            self.print(f'The data is on column {column} and is ipv6: {ip_address}', 0, 6)
+                            self.print(f'The data is on column {column} and is ipv6: {ip_address}', 2,0)
                             break
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
                             if validators.domain(data[column].strip()):
                                 data_column = column
-                                self.print(f'The data is on column {column} and is domain: {data[column]}', 0, 6)
+                                self.print(f'The data is on column {column} and is domain: {data[column]}', 2,0)
                                 break
                             else:
                                 # Some string that is not a domain
                                 data_column = None
                                 pass
                 if data_column is None:
-                    self.print(f'Error while reading the TI file {malicious_file}. Could not find a column with an IP or domain', 1, 1)
+                    self.print(f'Error while reading the TI file {malicious_file}. Could not find a column with an IP or domain', 0, 2)
                     return False
 
                 # Now that we read the first line, go back so we
@@ -223,7 +223,7 @@ class Module(Module, multiprocessing.Process):
                     data = line.replace("\n","").replace("\"","").split(",")[data_column].strip()
 
                     description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
-                    self.print('\tRead Data {}: {}'.format(data, description), 6, 0)
+                    self.print('\tRead Data {}: {}'.format(data, description), 2, 0)
 
                     # Check if ip is valid.
                     try:
@@ -246,7 +246,7 @@ class Module(Module, multiprocessing.Process):
                                 # Store the ip in our local dict
                                 malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name})
                             else:
-                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 1, 1)
+                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 0, 2)
                                 continue
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
@@ -303,7 +303,7 @@ class Module(Module, multiprocessing.Process):
         try:
             local_ti_files = os.listdir(path_to_files)
             for localfile in local_ti_files:
-                self.print(f'Loading local TI file {localfile}', 3, 0)
+                self.print(f'Loading local TI file {localfile}', 2, 0)
                 # Get what files are stored in cache db and their E-TAG to comapre with current files
                 data = __database__.get_malicious_file_info(localfile)
                 try:
@@ -315,11 +315,11 @@ class Module(Module, multiprocessing.Process):
                 new_hash = self.__get_hash_from_file(path_to_files + '/' + localfile)
                 if old_hash == new_hash:
                     # The 2 hashes are identical. File is up to date.
-                    self.print(f'File {localfile} is up to date.', 3, 0)
+                    self.print(f'File {localfile} is up to date.', 2, 0)
                     return True
                 elif new_hash and old_hash != new_hash:
                     # Our malicious file was changed. Load the new one
-                    self.print(f'Updating the local TI file {localfile}', 3, 0)
+                    self.print(f'Updating the local TI file {localfile}', 2, 0)
                     if old_hash:
                         # File is updated and was in database.
                         # Delete previous data of this file.
@@ -335,7 +335,7 @@ class Module(Module, multiprocessing.Process):
                     return True
                 elif not new_hash:
                     # Something failed. Do not download
-                    self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 1)
+                    self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 3)
                     return False
 
 

@@ -79,7 +79,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         twid = message['data'].split(':')[1]
 
                         # Start of the port scan detection
-                        self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 6, 0)
+                        self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 3, 0)
                         # For port scan detection, we will measure different things:
                         # 1. Vertical port scan:
                         # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets

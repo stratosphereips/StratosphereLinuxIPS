@@ -268,7 +268,7 @@ class Module(Module, multiprocessing.Process):
         try:
             addr = ipaddress.ip_address(ip)
             if addr.is_private:
-                self.print("[" + ip + "] is private, skipping", 5, 3)
+                self.print("[" + ip + "] is private, skipping", 0, 2)
                 scores = 0,0,0,0
                 return scores, '', ''
 
@@ -348,7 +348,7 @@ class Module(Module, multiprocessing.Process):
 
             # report that API limit is reached, wait one minute and try again
             self.print("Status code is " + str(response.status) + " at " + str(time.asctime()) + ", query id: " + str(
-                self.counter), verbose=5)
+                self.counter), 0,2)
             # return empty dict because api call isn't successful
             data = {}
         else:

@@ -159,9 +159,9 @@ class Module(Module, multiprocessing.Process):
                         # function to convert each letter of behavioral model to ascii
                         behavioral_model = self.convert_input_for_module(pre_behavioral_model)
                         # predict the score of behavioral model being c&c channel
-                        self.print(f'predicting the sequence: {pre_behavioral_model}', 4, 0)
+                        self.print(f'predicting the sequence: {pre_behavioral_model}', 3, 0)
                         score = tcpmodel.predict(behavioral_model)
-                        self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 5, 0)
+                        self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 3, 0)
                         # get a float instead of numpy array
                         score = score[0][0]
                         if score > threshold:

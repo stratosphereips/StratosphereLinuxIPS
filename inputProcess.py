@@ -250,7 +250,7 @@ class InputProcess(multiprocessing.Process):
         # We reach here after the break produced if no zeek files are being updated.
         # No more files to read. Close the files
         for file in open_file_handlers:
-            self.print('Closing file {}'.format(file), 3, 0)
+            self.print('Closing file {}'.format(file), 2, 0)
             open_file_handlers[file].close()
         return lines
 
@@ -267,7 +267,7 @@ class InputProcess(multiprocessing.Process):
 
                 # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
                 if not self.input_information or self.input_information == '-':
-                    self.print('Receiving flows from the stdin.', 3, 0)
+                    self.print('Receiving flows from the stdin.', 2, 0)
                     # By default read the stdin
                     sys.stdin.close()
                     sys.stdin = os.fdopen(0, 'r')
@@ -299,7 +299,7 @@ class InputProcess(multiprocessing.Process):
                     else:
                         # Is a file. Read and send independently of the type
                         # of input
-                        self.print(f'Receiving flows from the single file {self.input_information}', 3, 0)
+                        self.print(f'Receiving flows from the single file {self.input_information}', 2, 0)
 
                         # Try read a unique Zeek file
                         file_stream = open(self.input_information)

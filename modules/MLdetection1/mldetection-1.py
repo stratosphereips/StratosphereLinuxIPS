@@ -95,7 +95,7 @@ class Module(Module, multiprocessing.Process):
                 # Load the old model if there is one
                 try:
                     f = open('./modules/MLdetection1/RFmodel.bin', 'rb')
-                    self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 3, 0)
+                    self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 2, 0)
                     self.clf = pickle.load(f)
                     f.close()
                 except FileNotFoundError:
