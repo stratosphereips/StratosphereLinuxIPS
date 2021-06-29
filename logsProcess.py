@@ -288,7 +288,7 @@ class LogsProcess(multiprocessing.Process):
                 # Get the time of this TW. For the file name
                 twtime = __database__.getTimeTW(profileid, twid)
                 twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
-                self.print('\tStoring Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime), 0, 2)
+                self.print('\tStoring Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime), 3, 0)
                 #self.print('\tProfile: {} has {} timewindows'.format(profileid, twLen), 0, 3)
 
                 # Create the folder for this profile if it doesn't exist
@@ -485,7 +485,7 @@ class LogsProcess(multiprocessing.Process):
                     data, first_index = __database__.get_timeline_last_lines(profileid, twid, first_index)
                     self.timeline_first_index[hash_key] = first_index
                     if data:
-                        self.print('Adding to the profile line {} {}, data {}'.format(profileid, twid, data), 6, 0)
+                        self.print('Adding to the profile line {} {}, data {}'.format(profileid, twid, data), 3, 0)
                         self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data,
                                            file_mode='a+', data_type='json', data_mode='raw')
 

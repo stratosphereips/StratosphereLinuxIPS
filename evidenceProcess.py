@@ -519,9 +519,9 @@ class EvidenceProcess(multiprocessing.Process):
 
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
-                            self.print('\t\tWeighted Threat Level: {}'.format(new_threat_level), 5, 0)
+                            self.print('\t\tWeighted Threat Level: {}'.format(new_threat_level), 3, 0)
                             accumulated_threat_level += new_threat_level
-                            self.print('\t\tAccumulated Threat Level: {}'.format(accumulated_threat_level), 5, 0)
+                            self.print('\t\tAccumulated Threat Level: {}'.format(accumulated_threat_level), 3, 0)
 
                         # This is the part to detect if the accumulated evidence was enough for generating a detection
                         # The detection should be done in attacks per minute. The parameter in the configuration is attacks per minute

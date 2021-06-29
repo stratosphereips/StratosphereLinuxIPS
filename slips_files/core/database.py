@@ -431,7 +431,7 @@ class Database(object):
         for profile_tw_to_close in profiles_tws_to_close:
             profile_tw_to_close_id = profile_tw_to_close[0]
             profile_tw_to_close_time = profile_tw_to_close[1]
-            self.print(f'The profile id {profile_tw_to_close_id} has to be closed because it was last modifed on {profile_tw_to_close_time} and we are closing everything older than {modification_time}. Current time {sit}. Difference: {modification_time - profile_tw_to_close_time}', 7, 0)
+            self.print(f'The profile id {profile_tw_to_close_id} has to be closed because it was last modifed on {profile_tw_to_close_time} and we are closing everything older than {modification_time}. Current time {sit}. Difference: {modification_time - profile_tw_to_close_time}', 3, 0)
             self.markProfileTWAsClosed(profile_tw_to_close_id)
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
@@ -520,7 +520,7 @@ class Database(object):
                 pass
             #############
             # 1- Count the dstips, and store the dstip in the db of this profile+tw
-            self.print('add_ips(): As a {}, add the {} IP {} to profile {}, twid {}'.format(role, type_host_key, str(ip_as_obj), profileid, twid), 0, 5)
+            self.print('add_ips(): As a {}, add the {} IP {} to profile {}, twid {}'.format(role, type_host_key, str(ip_as_obj), profileid, twid), 3, 0)
             # Get the hash of the timewindow
             hash_id = profileid + self.separator + twid
             # Get the DstIPs data for this tw in this profile
@@ -532,13 +532,13 @@ class Database(object):
                 # Convert the json str to a dictionary
                 data = json.loads(data)
                 # Add 1 because we found this ip again
-                self.print('add_ips(): Not the first time for this addr. Add 1 to {}'.format(str(ip_as_obj)), 0, 5)
+                self.print('add_ips(): Not the first time for this addr. Add 1 to {}'.format(str(ip_as_obj)), 3, 0)
                 data[str(ip_as_obj)] += 1
                 # Convet the dictionary to json
                 data = json.dumps(data)
             except (TypeError, KeyError) as e:
                 # There was no previous data stored in the DB
-                self.print('add_ips(): First time for addr {}. Count as 1'.format(str(ip_as_obj)), 0, 5)
+                self.print('add_ips(): First time for addr {}. Count as 1'.format(str(ip_as_obj)), 3,0)
                 data[str(ip_as_obj)] = 1
                 # Convet the dictionary to json
                 data = json.dumps(data)
@@ -556,7 +556,7 @@ class Database(object):
             prev_data = self.getDataFromProfileTW(profileid, twid, type_host_key, summaryState, proto, role, 'IPs')
             try:
                 innerdata = prev_data[str(ip_as_obj)]
-                self.print('add_ips(): Adding for dst port {}. PRE Data: {}'.format(dport, innerdata), 0, 3)
+                self.print('add_ips(): Adding for dst port {}. PRE Data: {}'.format(dport, innerdata), 3, 0)
                 # We had this port
                 # We need to add all the data
                 innerdata['totalflows'] += 1
@@ -571,7 +571,7 @@ class Database(object):
                     temp_dstports[str(dport)] = int(pkts)
                 innerdata['dstports'] = temp_dstports
                 prev_data[str(ip_as_obj)] = innerdata
-                self.print('add_ips() Adding for dst port {}. POST Data: {}'.format(dport, innerdata), 0, 3)
+                self.print('add_ips() Adding for dst port {}. POST Data: {}'.format(dport, innerdata),3,0)
             except KeyError:
                 # First time for this flow
                 innerdata = {}
@@ -583,7 +583,7 @@ class Database(object):
                 temp_dstports = {}
                 temp_dstports[str(dport)] = int(pkts)
                 innerdata['dstports'] = temp_dstports
-                self.print('add_ips() First time for dst port {}. Data: {}'.format(dport, innerdata), 0, 3)
+                self.print('add_ips() First time for dst port {}. Data: {}'.format(dport, innerdata),3,0)
                 prev_data[str(ip_as_obj)] = innerdata
             ###########
             # After processing all the features of the ip, store all the info in the database
@@ -622,7 +622,7 @@ class Database(object):
         elif role == 'Server':
             tuple_key = 'InTuples'
         try:
-            self.print('Add_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple), 0, 5)
+            self.print('Add_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple), 3,0)
             # Get all the InTuples or OutTuples for this profileid in this TW
             hash_id = profileid + self.separator + twid
             data = self.r.hget(hash_id, tuple_key)
@@ -636,7 +636,7 @@ class Database(object):
             try:
                 stored_tuple = data[tupleid]
                 # Disasemble the input
-                self.print('Not the first time for tuple {} as an {} for {} in TW {}. Add the symbol: {}. Store previous_times: {}. Prev Data: {}'.format(tupleid, tuple_key, profileid, twid, symbol_to_add, previous_two_timestamps, data), 0, 5)
+                self.print('Not the first time for tuple {} as an {} for {} in TW {}. Add the symbol: {}. Store previous_times: {}. Prev Data: {}'.format(tupleid, tuple_key, profileid, twid, symbol_to_add, previous_two_timestamps, data), 3,0)
                 # Get the last symbols of letters in the DB
                 prev_symbols = data[tupleid][0]
                 # Add it to form the string of letters
@@ -656,12 +656,12 @@ class Database(object):
                     to_send = json.dumps(to_send)
                     self.publish('new_letters', to_send)
                 data[tupleid] = new_data
-                self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol), 0, 6)
+                self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol),3,0)
                 data = json.dumps(data)
             except (TypeError, KeyError) as e:
                 # TODO check that this condition is triggered correctly only for the first case and not the rest after...
                 # There was no previous data stored in the DB
-                self.print('First time for tuple {} as an {} for {} in TW {}'.format(tupleid, tuple_key, profileid, twid), 0, 5)
+                self.print('First time for tuple {} as an {} for {} in TW {}'.format(tupleid, tuple_key, profileid, twid), 3,0)
                 # Here get the info from the ipinfo key
                 new_data = (symbol_to_add, previous_two_timestamps)
                 data[tupleid] = new_data
@@ -732,7 +732,7 @@ class Database(object):
                     temp_dstips[str(ip_address)]['uid'] = uid
                 innerdata[ip_key] = temp_dstips
                 prev_data[port] = innerdata
-                self.print('add_port(): Adding this new info about port {} for {}. Key: {}. NewData: {}'.format(port, profileid, key_name, innerdata), 0, 3)
+                self.print('add_port(): Adding this new info about port {} for {}. Key: {}. NewData: {}'.format(port, profileid, key_name, innerdata), 3,0)
             except KeyError:
                 # First time for this flow
                 innerdata = {}
@@ -746,11 +746,11 @@ class Database(object):
                 temp_dstips[str(ip_address)]['uid'] = uid
                 innerdata[ip_key] = temp_dstips
                 prev_data[port] = innerdata
-                self.print('add_port(): First time for port {} for {}. Key: {}. Data: {}'.format(port, profileid, key_name, innerdata), 0, 3)
+                self.print('add_port(): First time for port {} for {}. Key: {}. Data: {}'.format(port, profileid, key_name, innerdata), 3,0)
             # self.outputqueue.put('01|database|[DB] {} '.format(ip_address))
             # Convet the dictionary to json
             data = json.dumps(prev_data)
-            self.print('add_port(): Storing info about port {} for {}. Key: {}. Data: {}'.format(port, profileid, key_name, prev_data), 0, 3)
+            self.print('add_port(): Storing info about port {} for {}. Key: {}. Data: {}'.format(port, profileid, key_name, prev_data), 3,0)
             # Store this data in the profile hash
             hash_key = profileid + self.separator + twid
             self.r.hset(hash_key, key_name, str(data))
@@ -1353,7 +1353,7 @@ class Database(object):
     def publish_stop(self):
         """ Publish stop command to terminate slips """
         all_channels_list = self.r.pubsub_channels()
-        self.print('Sending the stop signal to all listeners', 3, 3)
+        self.print('Sending the stop signal to all listeners', 0, 3)
         for channel in all_channels_list:
             self.r.publish(channel, 'stop_process')
 
@@ -1499,7 +1499,7 @@ class Database(object):
         to_send['stime'] = stime
         to_send = json.dumps(to_send)
         self.publish('new_ssl', to_send)
-        self.print('Adding SSL flow to DB: {}'.format(data), 5, 0)
+        self.print('Adding SSL flow to DB: {}'.format(data), 3, 0)
         # Check if the server_name (SNI) is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         # If server_name is not empty, set in the IPsInfo and send to TI
         if server_name:
@@ -1562,7 +1562,7 @@ class Database(object):
         to_send = json.dumps(to_send)
         self.publish('new_http', to_send)
         self.publish('new_url', to_send)
-        self.print('Adding HTTP flow to DB: {}'.format(data), 5, 0)
+        self.print('Adding HTTP flow to DB: {}'.format(data), 3, 0)
         # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         data_to_send = {
                 'host': host,
@@ -1612,7 +1612,7 @@ class Database(object):
         to_send = json.dumps(to_send)
         # publish a dns with its flow
         self.publish('new_ssh', to_send)
-        self.print('Adding SSH flow to DB: {}'.format(data), 5, 0)
+        self.print('Adding SSH flow to DB: {}'.format(data), 3, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
 
     def add_out_notice(self,profileid, twid, stime, daddr, sport, dport, note, msg, scanned_port, scanning_ip, uid):
@@ -1636,7 +1636,7 @@ class Database(object):
         to_send['uid'] = uid
         to_send = json.dumps(to_send)
         self.publish('new_notice', to_send)
-        self.print('Adding notice flow to DB: {}'.format(data), 5, 0)
+        self.print('Adding notice flow to DB: {}'.format(data), 3, 0)
 
     def add_out_dns(self, profileid, twid, stime, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """
@@ -1668,7 +1668,7 @@ class Database(object):
         to_send = json.dumps(to_send)
         #publish a dns with its flow
         self.publish('new_dns_flow', to_send)
-        self.print('Adding DNS flow to DB: {}'.format(data), 5,0)
+        self.print('Adding DNS flow to DB: {}'.format(data), 3,0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         data_to_send = {
                 'query': str(query),
@@ -1686,7 +1686,7 @@ class Database(object):
 
     def add_timeline_line(self, profileid, twid, data, timestamp):
         """ Add a line to the time line of this profileid and twid """
-        self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 4, 0)
+        self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 3, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = json.dumps(data)
         mapping = {}
@@ -1978,18 +1978,18 @@ class Database(object):
         type_data: can be 'Ports' or 'IPs'
         """
         try:
-            self.print('Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(profileid, twid, direction, state, protocol, role, type_data), 0, 4)
+            self.print('Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(profileid, twid, direction, state, protocol, role, type_data), 3, 0)
             key = direction + type_data + role + protocol + state
             # self.print('Asked Key: {}'.format(key))
             data = self.r.hget(profileid + self.separator + twid, key)
             value = {}
             if data:
-                self.print('Key: {}. Getting info for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 5, 0)
+                self.print('Key: {}. Getting info for Profile {} TW {}. Data: {}'.format(key, profileid, twid, data), 3, 0)
                 # Convert the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
             elif not data:
-                self.print('There is no data for Key: {}. Profile {} TW {}'.format(key, profileid, twid), 5, 0)
+                self.print('There is no data for Key: {}. Profile {} TW {}'.format(key, profileid, twid), 3, 0)
             return value
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno

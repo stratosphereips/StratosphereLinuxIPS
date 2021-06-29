@@ -72,8 +72,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         profileid = message['data'].split(':')[0]
                         twid = message['data'].split(':')[1]
                         # Start of the port scan detection
-                        self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 6, 0)
-
+                        self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 3, 0)
                         # For port scan detection, we will measure different things:
 
                         # 1. Vertical port scan:  single IP being scanned for multiple ports

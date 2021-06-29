@@ -273,7 +273,7 @@ class InputProcess(multiprocessing.Process):
         # We reach here after the break produced if no zeek files are being updated.
         # No more files to read. Close the files
         for file, handle in open_file_handlers.items():
-            self.print('Closing file {}'.format(file), 3, 0)
+            self.print('Closing file {}'.format(file), 2, 0)
             handle.close()
         return lines
 

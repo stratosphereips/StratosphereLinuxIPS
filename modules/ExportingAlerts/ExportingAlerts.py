@@ -148,7 +148,7 @@ class Module(Module, multiprocessing.Process):
         # Token to login to your slack bot. it should be set in slack_bot_token_secret
         if self.BOT_TOKEN is '':
             # The file is empty
-            self.print("Can't find SLACK_BOT_TOKEN in modules/ExportingAlerts/slack_bot_token_secret.", 0, 1)
+            self.print("Can't find SLACK_BOT_TOKEN in modules/ExportingAlerts/slack_bot_token_secret.", 0, 2)
             return False
         slack_client = WebClient(token=self.BOT_TOKEN)
         try:
@@ -158,7 +158,7 @@ class Module(Module, multiprocessing.Process):
                 # Sensor name is set in slips.conf
                 text = self.sensor_name + ': ' + msg_to_send
             )
-            self.print("Exported to slack", 0, 1)
+            self.print("Exported to slack", 1, 0)
         except SlackApiError as e:
             # You will get a SlackApiError if "ok" is False
             assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
@@ -196,7 +196,7 @@ class Module(Module, multiprocessing.Process):
                 break
         else:
             # Comes here if it cant find inbox in services
-            self.print("Server doesn't have inbox available. Exporting STIX_data.json is cancelled.", 0, 1)
+            self.print("Server doesn't have inbox available. Exporting STIX_data.json is cancelled.", 0, 2)
             return False
         # Get the data that we want to send
         with open("STIX_data.json") as stix_file:
@@ -208,7 +208,7 @@ class Module(Module, multiprocessing.Process):
             client.push(stix_data, binding,
                         collection_names=[self.collection_name],
                         uri=self.inbox_path)
-            self.print(f"Successfully exported to {self.TAXII_server}.", 0, 1)
+            self.print(f"Successfully exported to {self.TAXII_server}.", 1, 0)
             return True
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
@@ -243,7 +243,7 @@ class Module(Module, multiprocessing.Process):
         try:
             name = type_evidence_descriptions[type_evidence]
         except KeyError:
-            self.print("Can't find the description for type_evidence: {}".format(type_evidence), 0, 1)
+            self.print("Can't find the description for type_evidence: {}".format(type_evidence), 0, 3)
             return False
         # ---------------- set pattern attribute ----------------
         if 'port' in type_detection:
@@ -261,7 +261,7 @@ class Module(Module, multiprocessing.Process):
         elif ioc_type is 'url':
             pattern = "[url:value = '{}']".format(detection_info)
         else:
-            self.print("Can't set pattern for STIX. {}".format(detection_info), 6, 6)
+            self.print("Can't set pattern for STIX. {}".format(detection_info), 0, 3)
             return False
         # Required Indicator Properties: type, spec_version, id, created, modified , all are set automatically
         # Valid_from, created and modified attribute will be set to the current time
@@ -293,7 +293,7 @@ class Module(Module, multiprocessing.Process):
                 stix_file.write("," + str(indicator) + "]\n}\n")
         # Set of unique ips added to stix_data.json to avoid duplicates
         self.added_ips.add(detection_info)
-        self.print("Indicator added to STIX_data.json", 6, 0)
+        self.print("Indicator added to STIX_data.json", 2, 0)
         return True
 
     def send_to_server(self):
@@ -308,7 +308,7 @@ class Module(Module, multiprocessing.Process):
                 os.remove('STIX_data.json')
                 self.is_bundle_created = False
             else:
-                self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.")
+                self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.",2,0)
 
     def export_to_json(self, evidence):
         """ Export alerts and flows to exported_alerts.json, a suricata like json format. """
@@ -371,7 +371,7 @@ class Module(Module, multiprocessing.Process):
                         if 'slack' in self.export_to:
                             sent_to_slack = self.send_to_slack(description)
                             if not sent_to_slack:
-                                self.print("Problem in send_to_slack()", 0, 1)
+                                self.print("Problem in send_to_slack()", 0, 3)
                         if 'stix' in self.export_to:
                             key = evidence['key']
                             msg_to_send = (key['type_evidence'],key['type_detection'],
