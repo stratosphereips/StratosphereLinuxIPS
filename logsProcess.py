@@ -373,7 +373,7 @@ class LogsProcess(multiprocessing.Process):
                     self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:', file_mode='a+', data_type='text')
                     for key in evidence:
                         key_json = json.loads(key)
-                        key_values = ':'.join(key_json.values())
+                        key_values = ':'.join(str(key_json.values()))
                         self.addDataToFile(profilefolder + '/' + twlog,
                                            '\tEvidence Description: {}. Confidence: {}. Threat Level: {} (key:{})'.format(
                                                evidence[key].get('description'), evidence[key].get('confidence'), evidence[key].get('threat_level'), key_values,
