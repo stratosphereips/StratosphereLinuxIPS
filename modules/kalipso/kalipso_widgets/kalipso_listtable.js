@@ -113,6 +113,9 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
                ip_info_dict['geo'] = '-'
          }
 
+        if(ipInfo_json.hasOwnProperty('reverse_dns')){
+            this.widget.setLabel(ipInfo_json['reverse_dns'])}
+
         ipInfo_data.push([ip_info_dict['asn'], ip_info_dict['geo'], ip_info_dict['VirusTotal']['URL'], ip_info_dict['VirusTotal']['down'],ip_info_dict['VirusTotal']['ref'],ip_info_dict['VirusTotal']['com']])
         this.setDataIPInfo(ipInfo_data)
         this.screen.render()

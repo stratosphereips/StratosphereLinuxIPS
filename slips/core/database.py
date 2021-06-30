@@ -68,14 +68,14 @@ class Database(object):
         self.setSlipsInternalTime(0)
 
     def print(self, text, verbose=1, debug=0):
-        """	
-        Function to use to print text using the outputqueue of slips.	
-        Slips then decides how, when and where to print this text by taking all the prcocesses into account	
-        Input	
-         verbose: is the minimum verbosity level required for this text to be printed	
-         debug: is the minimum debugging level required for this text to be printed	
-         text: text to print. Can include format like 'Test {}'.format('here')	
-        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0	
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the prcocesses into account
+        Input
+         verbose: is the minimum verbosity level required for this text to be printed
+         debug: is the minimum debugging level required for this text to be printed
+         text: text to print. Can include format like 'Test {}'.format('here')
+        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
@@ -85,10 +85,10 @@ class Database(object):
         self.outputqueue = outputqueue
 
     def addProfile(self, profileid, starttime, duration):
-        """	
-        Add a new profile to the DB. Both the list of profiles and the hasmap of profile data	
-        Profiles are stored in two structures. A list of profiles (index) and individual hashmaps for each profile (like a table)	
-        Duration is only needed for registration purposes in the profile. Nothing operational	
+        """
+        Add a new profile to the DB. Both the list of profiles and the hasmap of profile data
+        Profiles are stored in two structures. A list of profiles (index) and individual hashmaps for each profile (like a table)
+        Duration is only needed for registration purposes in the profile. Nothing operational
         """
         try:
             if not self.r.sismember('profiles', str(profileid)):
@@ -109,6 +109,11 @@ class Database(object):
             self.outputqueue.put('00|database|Error in addProfile in database.py')
             self.outputqueue.put('00|database|{}'.format(type(inst)))
             self.outputqueue.put('00|database|{}'.format(inst))
+
+    def add_mac_addr_to_profile(self,profileid, mac_addr):
+        """ Used when mac adddr  """
+        # Add the MAC addr of this profile
+        self.r.hset(profileid,'MAC', mac_addr)
 
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
@@ -132,9 +137,9 @@ class Database(object):
             return {}
 
     def getProfileData(self, profileid):
-        """ Get all the data for this particular profile.	
-        Returns:	
-        A json formated representation of the hashmap with all the data of the profile	
+        """ Get all the data for this particular profile.
+        Returns:
+        A json formated representation of the hashmap with all the data of the profile
         """
         profile = self.r.hgetall(profileid)
         if profile != set():
@@ -143,36 +148,36 @@ class Database(object):
             return False
 
     def getTWsfromProfile(self, profileid):
-        """	
-        Receives a profile id and returns the list of all the TW in that profile	
-        Returns a list with data or an empty list	
+        """
+        Receives a profile id and returns the list of all the TW in that profile
+        Returns a list with data or an empty list
         """
         data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
         return data
 
     def getamountTWsfromProfile(self, profileid):
-        """	
-        Receives a profile id and returns the list of all the TW in that profile	
+        """
+        Receives a profile id and returns the list of all the TW in that profile
         """
         return len(self.r.zrange('tws' + profileid, 0, -1, withscores=True))
 
     def getSrcIPsfromProfileTW(self, profileid, twid):
-        """	
-        Get the src ip for a specific TW for a specific profileid	
+        """
+        Get the src ip for a specific TW for a specific profileid
         """
         data = self.r.hget(profileid + self.separator + twid, 'SrcIPs')
         return data
 
     def getDstIPsfromProfileTW(self, profileid, twid):
-        """	
-        Get the dst ip for a specific TW for a specific profileid	
+        """
+        Get the dst ip for a specific TW for a specific profileid
         """
         data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
         return data
 
     def getT2ForProfileTW(self, profileid, twid, tupleid, tuple_key: str):
-        """	
-        Get T1 and the previous_time for this previous_time, twid and tupleid	
+        """
+        Get T1 and the previous_time for this previous_time, twid and tupleid
         """
         try:
             hash_id = profileid + self.separator + twid
@@ -210,11 +215,11 @@ class Database(object):
         return data
 
     def getTWforScore(self, profileid, time):
-        """	
-        Return the TW id and the time for the TW that includes the given time.	
-        The score in the DB is the start of the timewindow, so we should search	
-        a TW that includes the given time by making sure the start of the TW	
-        is < time, and the end of the TW is > time.	
+        """
+        Return the TW id and the time for the TW that includes the given time.
+        The score in the DB is the start of the timewindow, so we should search
+        a TW that includes the given time by making sure the start of the TW
+        is < time, and the end of the TW is > time.
         """
         # [-1] so we bring the last TW that matched this time.
         try:
@@ -314,8 +319,8 @@ class Database(object):
         return True
 
     def getModifiedTWTime(self, profileid, twid):
-        """	
-        Get the time when this TW was modified	
+        """
+        Get the time when this TW was modified
         """
         data = self.r.zcore('ModifiedTW', profileid + self.separator + twid)
         if not data:
@@ -329,21 +334,21 @@ class Database(object):
         self.r.set('slips_internal_time', timestamp)
 
     def markProfileTWAsClosed(self, profileid_tw):
-        """	
-        Mark the TW as closed so tools can work on its data	
+        """
+        Mark the TW as closed so tools can work on its data
         """
         self.r.sadd('ClosedTW', profileid_tw)
         self.r.zrem('ModifiedTW', profileid_tw)
         self.publish('tw_closed', profileid_tw)
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
-        """	
+        """
         Mark a TW in a profile as modified
-        This means:	
+        This means:
         1- To add it to the list of ModifiedTW
         2- Add the timestamp received to the time_of_last_modification
-           in the TW itself	
-        3- To update the internal time of slips	
+           in the TW itself
+        3- To update the internal time of slips
         4- To check if we should 'close' some TW
         """
         # Add this tw to the list of modified TW, so others can
@@ -357,10 +362,10 @@ class Database(object):
         self.check_TW_to_close()
 
     def check_TW_to_close(self):
-        """	
-        Check if we should close some TW	
-        Search in the modifed tw list and compare when they	
-        were modified with the slips internal time	
+        """
+        Check if we should close some TW
+        Search in the modifed tw list and compare when they
+        were modified with the slips internal time
         """
         # Get internal time
         sit = self.getSlipsInternalTime()
@@ -376,21 +381,21 @@ class Database(object):
             self.markProfileTWAsClosed(profile_tw_to_close_id)
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
-        """	
-        Function to add information about the an IP address	
-        The flow can go out of the IP (we are acting as Client) or into the IP	
-        (we are acting as Server)	
-        ip_as_obj: IP to add. It can be a dstIP or srcIP depending on the rol	
-        role: 'Client' or 'Server'	
-        This function does two things:	
-            1- Add the ip to this tw in this profile, counting how many times	
-            it was contacted, and storing it in the key 'DstIPs' or 'SrcIPs'	
-            in the hash of the profile	
-            2- Use the ip as a key to count how many times that IP was	
-            contacted on each port. We store it like this because its the	
-               pefect structure to detect vertical port scans later on	
-            3- Check if this IP has any detection in the threat intelligence	
-            module. The information is added by the module directly in the DB.	
+        """
+        Function to add information about the an IP address
+        The flow can go out of the IP (we are acting as Client) or into the IP
+        (we are acting as Server)
+        ip_as_obj: IP to add. It can be a dstIP or srcIP depending on the rol
+        role: 'Client' or 'Server'
+        This function does two things:
+            1- Add the ip to this tw in this profile, counting how many times
+            it was contacted, and storing it in the key 'DstIPs' or 'SrcIPs'
+            in the hash of the profile
+            2- Use the ip as a key to count how many times that IP was
+            contacted on each port. We store it like this because its the
+               pefect structure to detect vertical port scans later on
+            3- Check if this IP has any detection in the threat intelligence
+            module. The information is added by the module directly in the DB.
         """
         try:
             # Get the fields
@@ -533,17 +538,17 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
     def refresh_data_tuples(self):
-        """	
-        Go through all the tuples and refresh the data about the ipsinfo	
-        TODO	
+        """
+        Go through all the tuples and refresh the data about the ipsinfo
+        TODO
         """
         outtuples = self.getOutTuplesfromProfileTW()
         intuples = self.getInTuplesfromProfileTW()
 
     def add_tuple(self, profileid, twid, tupleid, data_tuple, role, starttime):
-        """	
-        Add the tuple going in or out for this profile	
-        role: 'Client' or 'Server'	
+        """
+        Add the tuple going in or out for this profile
+        role: 'Client' or 'Server'
         """
         # If the traffic is going out it is part of our outtuples, if not, part of our intuples
         if role == 'Client':
@@ -598,11 +603,11 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] {}'.format(traceback.format_exc()))
 
     def add_port(self, profileid: str, twid: str, ip_address: str, columns: dict, role: str, port_type: str):
-        """	
-        Store info learned from ports for this flow	
-        The flow can go out of the IP (we are acting as Client) or into the IP (we are acting as Server)	
-        role: 'Client' or 'Server'. Client also defines that the flow is going out, Server that is going in	
-        port_type: 'Dst' or 'Src'. Depending if this port was a destination port or a source port	
+        """
+        Store info learned from ports for this flow
+        The flow can go out of the IP (we are acting as Client) or into the IP (we are acting as Server)
+        role: 'Client' or 'Server'. Client also defines that the flow is going out, Server that is going in
+        port_type: 'Dst' or 'Src'. Depending if this port was a destination port or a source port
         """
         try:
             # Extract variables from columns
@@ -701,9 +706,9 @@ class Database(object):
         return data
 
     def getFinalStateFromFlags(self, state, pkts):
-        """ 	
-        Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags	
-        We receive the pakets to distinguish some Reset connections	
+        """
+        Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags
+        We receive the pakets to distinguish some Reset connections
         """
         try:
             #self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
@@ -841,24 +846,24 @@ class Database(object):
 
     def setEvidence(self, type_detection, detection_info, type_evidence,
                     threat_level, confidence, description, profileid='', twid='',):
-        """	
-        Set the evidence for this Profile and Timewindow.	
-        Parameters:	
-            key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans,	
-                 then this would be the port used. The idea is that you can later update	
-                 this specific detection when it evolves. Examples of keys are:	
-                 'dport:1234' for all the evidences regarding this dport,	
-                 'dip:1.1.1.1' for all the evidences regarding that dst ip	
-        type_evidence: determine the type of evidenc. E.g. PortScan, ThreatIntelligence	
-        threat_level: determine the importance of the evidence.	
-        confidence: determine the confidence of the detection. (How sure you are that this is what you say it is.)	
-        Example:	
-        The evidence is stored as a dict.	
-        {	
-            'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'],	
-            'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1']	
-            'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']	
-        }	
+        """
+        Set the evidence for this Profile and Timewindow.
+        Parameters:
+            key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans,
+                 then this would be the port used. The idea is that you can later update
+                 this specific detection when it evolves. Examples of keys are:
+                 'dport:1234' for all the evidences regarding this dport,
+                 'dip:1.1.1.1' for all the evidences regarding that dst ip
+        type_evidence: determine the type of evidenc. E.g. PortScan, ThreatIntelligence
+        threat_level: determine the importance of the evidence.
+        confidence: determine the confidence of the detection. (How sure you are that this is what you say it is.)
+        Example:
+        The evidence is stored as a dict.
+        {
+            'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'],
+            'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1']
+            'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
+        }
         """
         # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
@@ -888,7 +893,8 @@ class Database(object):
             'profileid': str(profileid),
             'twid': str(twid),
             'key': key,
-            'data': data
+            'data': data,
+            'description': description
         }
         evidence_to_send = json.dumps(evidence_to_send)
         self.publish('evidence_added', evidence_to_send)
@@ -899,15 +905,15 @@ class Database(object):
         return data
 
     def checkBlockedProfTW(self, profileid, twid):
-        """	
-        Check if profile and timewindow is blocked	
+        """
+        Check if profile and timewindow is blocked
         """
         res = self.r.sismember('BlockedProfTW', profileid + self.separator + twid)
         return res
 
     def set_first_stage_ensembling_label_to_flow(self, profileid, twid, uid, ensembling_label):
-        """	
-        Add a final label to the flow	
+        """
+        Add a final label to the flow
         """
         flow = self.get_flow(profileid, twid, uid)
         if flow:
@@ -917,8 +923,8 @@ class Database(object):
             self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
 
     def set_module_label_to_flow(self, profileid, twid, uid, module_name, module_label):
-        """	
-        Add a module label to the flow	
+        """
+        Add a module label to the flow
         """
         flow = self.get_flow(profileid, twid, uid)
         if flow:
@@ -929,8 +935,8 @@ class Database(object):
             self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
 
     def get_module_labels_from_flow(self, profileid, twid, uid):
-        """	
-        Get the label from the flow	
+        """
+        Get the label from the flow
         """
         flow = self.get_flow(profileid, twid, uid)
         if flow:
@@ -950,13 +956,13 @@ class Database(object):
         return data
 
     def getDomainData(self, domain):
-        """	
-        Return information about this domain	
-        Returns a dictionary or False if there is no domain in the database	
-        We need to separate these three cases:	
-        1- Domain is in the DB without data. Return empty dict.	
-        2- Domain is in the DB with data. Return dict.	
-        3- Domain is not in the DB. Return False	
+        """
+        Return information about this domain
+        Returns a dictionary or False if there is no domain in the database
+        We need to separate these three cases:
+        1- Domain is in the DB without data. Return empty dict.
+        2- Domain is in the DB with data. Return dict.
+        3- Domain is not in the DB. Return False
         """
         data = self.rcache.hget('DomainsInfo', domain)
         if data or data == {}:
@@ -973,13 +979,13 @@ class Database(object):
         return data
 
     def getIPData(self, ip):
-        """	
-        Return information about this IP	
-        Returns a dictionary or False if there is no IP in the database	
-        We need to separate these three cases:	
-        1- IP is in the DB without data. Return empty dict.	
-        2- IP is in the DB with data. Return dict.	
-        3- IP is not in the DB. Return False	
+        """
+        Return information about this IP
+        Returns a dictionary or False if there is no IP in the database
+        We need to separate these three cases:
+        1- IP is in the DB without data. Return empty dict.
+        2- IP is in the DB with data. Return dict.
+        3- IP is not in the DB. Return False
         """
         data = self.rcache.hget('IPsInfo', ip)
         if data:
@@ -1000,10 +1006,10 @@ class Database(object):
         return data
 
     def setNewDomain(self, domain: str):
-        """	
-        1- Stores this new domain in the Domains hash	
-        2- Publishes in the channels that there is a new domain, and that we want	
-            data from the Threat Intelligence modules	
+        """
+        1- Stores this new domain in the Domains hash
+        2- Publishes in the channels that there is a new domain, and that we want
+            data from the Threat Intelligence modules
         """
         data = self.getDomainData(domain)
         if data is False:
@@ -1017,13 +1023,13 @@ class Database(object):
             self.publish('new_dns', domain)
 
     def setNewIP(self, ip: str):
-        """	
-        1- Stores this new IP in the IPs hash	
-        2- Publishes in the channels that there is a new IP, and that we want	
-            data from the Threat Intelligence modules	
-        Sometimes it can happend that the ip comes as an IP object, but when	
-        accessed as str, it is automatically	
-        converted to str	
+        """
+        1- Stores this new IP in the IPs hash
+        2- Publishes in the channels that there is a new IP, and that we want
+            data from the Threat Intelligence modules
+        Sometimes it can happend that the ip comes as an IP object, but when
+        accessed as str, it is automatically
+        converted to str
         """
         data = self.getIPData(ip)
         if data is False:
@@ -1045,12 +1051,12 @@ class Database(object):
             return False
 
     def setInfoForDomains(self, domain: str, domaindata: dict):
-        """	
-        Store information for this domain	
-        We receive a dictionary, such as {'geocountry': 'rumania'} that we are	
-        going to store for this domain	
-        If it was not there before we store it. If it was there before, we	
-        overwrite it	
+        """
+        Store information for this domain
+        We receive a dictionary, such as {'geocountry': 'rumania'} that we are
+        going to store for this domain
+        If it was not there before we store it. If it was there before, we
+        overwrite it
         """
         # Get the previous info already stored
         data = self.getDomainData(domain)
@@ -1083,12 +1089,12 @@ class Database(object):
                 self.r.publish('dns_info_change', domain)
 
     def setInfoForIPs(self, ip: str, ipdata: dict):
-        """	
-        Store information for this IP	
-        We receive a dictionary, such as {'geocountry': 'rumania'} that we are	
-        going to store for this IP.	
-        If it was not there before we store it. If it was there before, we	
-        overwrite it	
+        """
+        Store information for this IP
+        We receive a dictionary, such as {'geocountry': 'rumania'} that we are
+        going to store for this IP.
+        If it was not there before we store it. If it was there before, we
+        overwrite it
         """
         # Get the previous info already stored
         data = self.getIPData(ip)
@@ -1116,42 +1122,13 @@ class Database(object):
         """ Subscribe to channel """
         # For when a TW is modified
         pubsub = self.r.pubsub()
-        if 'tw_modified' in channel:
-            pubsub.subscribe(channel)
-        elif 'evidence_added' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_ip' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_flow' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_dns' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_dns_flow' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_http' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_ssl' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_profile' in channel:
-            pubsub.subscribe(channel)
-        elif 'give_threat_intelligence' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_letters' in channel:
-            pubsub.subscribe(channel)
-        elif 'ip_info_change' in channel:
-            pubsub.subscribe(channel)
-        elif 'dns_info_change' in channel:
-            pubsub.subscribe(channel)
-        elif 'tw_closed' in channel:
-            pubsub.subscribe(channel)
-        elif 'core_messages' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_blocking' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_ssh' in channel:
-            pubsub.subscribe(channel)
-        elif 'new_notice' in channel:
-            pubsub.subscribe(channel)
+        supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
+                    'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
+                    'new_blocking', 'new_ssh','new_notice']
+        for supported_channel in supported_channels:
+            if supported_channel in channel:
+                pubsub.subscribe(channel)
+                break
         return pubsub
 
     def publish(self, channel, data):
@@ -1166,17 +1143,17 @@ class Database(object):
             self.r.publish(channel, 'stop_process')
 
     def get_all_flows_in_profileid_twid(self, profileid, twid):
-        """	
-        Return a list of all the flows in this profileid and twid	
+        """
+        Return a list of all the flows in this profileid and twid
         """
         data = self.r.hgetall(profileid + self.separator + twid + self.separator + 'flows')
         if data:
             return data
 
     def get_all_flows(self):
-        """	
-        Returns a list with all the flows in all profileids and twids	
-        Each position in the list is a dictionary of flows.	
+        """
+        Returns a list with all the flows in all profileids and twids
+        Each position in the list is a dictionary of flows.
         """
         data = []
         for profileid in self.getProfiles():
@@ -1187,9 +1164,9 @@ class Database(object):
         return data
 
     def get_flow(self, profileid, twid, uid):
-        """	
-        Returns the flow in the specific time	
-        The format is a dictionary	
+        """
+        Returns the flow in the specific time
+        The format is a dictionary
         """
         data = {}
         temp = self.r.hget(profileid + self.separator + twid + self.separator + 'flows', uid)
@@ -1202,9 +1179,9 @@ class Database(object):
         return self.r.zrange('labels', 0, -1, withscores=True)
 
     def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto='', uid='', label=''):
-        """	
-        Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.	
-        The profileid is the main profile that this flow is related too.	
+        """
+        Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
+        The profileid is the main profile that this flow is related too.
         """
         data = {}
         # data['uid'] = uid
@@ -1248,15 +1225,14 @@ class Database(object):
             to_send['stime'] = stime
             to_send = json.dumps(to_send)
             self.publish('new_flow', to_send)
-            self.print('Adding complete flow to DB: {}'.format(data), 5, 0)
 
     def add_out_ssl(self, profileid, twid, daddr_as_obj, dport, flowtype, uid,
                     version, cipher, resumed, established, cert_chain_fuids,
                     client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
-        """	
-        Store in the DB an ssl request	
-        All the type of flows that are not netflows are stored in a separate hash ordered by uid.	
-        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid	
+        """
+        Store in the DB an ssl request
+        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
         data = {}
         data['uid'] = uid
@@ -1310,10 +1286,10 @@ class Database(object):
             self.publish('give_threat_intelligence',data_to_send)
 
     def add_out_http(self, profileid, twid, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
-        """	
-        Store in the DB a http request	
-        All the type of flows that are not netflows are stored in a separate hash ordered by uid.	
-        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid	
+        """
+        Store in the DB a http request
+        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
         data = {}
         data['uid'] = uid
@@ -1349,12 +1325,12 @@ class Database(object):
         self.publish('give_threat_intelligence',data_to_send)
 
     def add_out_ssh(self, profileid, twid, flowtype, uid, ssh_version, auth_attempts, auth_success, client, server, cipher_alg, mac_alg, compression_alg, kex_alg, host_key_alg, host_key):
-        """	
-        Store in the DB a SSH request	
-        All the type of flows that are not netflows are stored in a	
-        separate hash ordered by uid.	
-        The idea is that from the uid of a netflow, you can access which	
-        other type of info is related to that uid	
+        """
+        Store in the DB a SSH request
+        All the type of flows that are not netflows are stored in a
+        separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which
+        other type of info is related to that uid
         """
         #  {"client":"SSH-2.0-OpenSSH_8.1","server":"SSH-2.0-OpenSSH_7.5p1 Debian-5","cipher_alg":"chacha20-pol y1305@openssh.com","mac_alg":"umac-64-etm@openssh.com","compression_alg":"zlib@openssh.com","kex_alg":"curve25519-sha256","host_key_alg":"ecdsa-sha2-nistp256","host_key":"de:04:98:42:1e:2a:06:86:5b:f0:5b:e3:65:9f:9d:aa"}
         data = {}
@@ -1386,7 +1362,7 @@ class Database(object):
         self.print('Adding SSH flow to DB: {}'.format(data), 5, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
 
-    def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg):
+    def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg, scanned_port, scanning_ip):
         """" Send notice.log data to new_notice channel to look for self-signed certificates """
         data = {
             'daddr' :  daddr,
@@ -1394,8 +1370,10 @@ class Database(object):
             'dport' :  dport,
             'note'  :  note,
             'msg'   :  msg,
+            'scanned_port' : scanned_port,
+            'scanning_ip'  : scanning_ip
         }
-        data = json.dumps(data) # this is going to be sent inside another dict
+        data = json.dumps(data) # this is going to be sent insidethe to_send dict
         to_send = {}
         to_send['profileid'] = profileid
         to_send['twid'] = twid
@@ -1405,10 +1383,10 @@ class Database(object):
         self.print('Adding notice flow to DB: {}'.format(data), 5, 0)
 
     def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
-        """	
-        Store in the DB a DNS request	
-        All the type of flows that are not netflows are stored in a separate hash ordered by uid.	
-        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid	
+        """
+        Store in the DB a DNS request
+        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
+        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
         data = {}
         data['uid'] = uid
@@ -1494,70 +1472,90 @@ class Database(object):
         data = self.r.smembers('zeekfiles')
         return data
 
+    def set_profile_module_label(self, profileid, module, label):
+        """
+        Set a module label for a profile.
+        """
+        data = self.get_profile_modules_labels(profileid)
+        data[module] = label
+        data = json.dumps(data)
+        self.r.hset(profileid, 'modules_labels', data)
+
+    def get_profile_modules_labels(self, profileid):
+        """
+        Get labels set by modules in the profile.
+        """
+        data = self.r.hget(profileid, 'modules_labels')
+        if data:
+            data = json.loads(data)
+        else:
+            data = {}
+        return data
+
     def del_zeek_file(self, filename):
         """ Delete an entry from the list of zeek files """
         self.r.srem('zeekfiles', filename)
 
     def delete_ips_from_IoC_ips(self, ips):
-        """	
-        Delete old IPs from IoC	
+        """
+        Delete old IPs from IoC
         """
         self.rcache.hdel('IoC_ips', *ips)
 
     def delete_domains_from_IoC_domains(self, domains):
-        """	
-        Delete old domains from IoC	
+        """
+        Delete old domains from IoC
         """
         self.rcache.hdel('IoC_domains', *domains)
 
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
-        """	
-        Store a group of IPs in the db as they were obtained from an IoC source	
-        What is the format of ips_and_description?	
+        """
+        Store a group of IPs in the db as they were obtained from an IoC source
+        What is the format of ips_and_description?
         """
         if ips_and_description:
             self.rcache.hmset('IoC_ips', ips_and_description)
 
     def add_domains_to_IoC(self, domains_and_description: dict) -> None:
-        """	
-        Store a group of domains in the db as they were obtained from	
-        an IoC source	
-        What is the format of domains_and_description?	
+        """
+        Store a group of domains in the db as they were obtained from
+        an IoC source
+        What is the format of domains_and_description?
         """
         if domains_and_description:
             self.rcache.hmset('IoC_domains', domains_and_description)
 
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
-        """	
-        Store in the DB 1 IP we read from an IoC source  with its description	
+        """
+        Store in the DB 1 IP we read from an IoC source  with its description
         """
         self.rcache.hset('IoC_ips', ip, description)
 
     def add_domain_to_IoC(self, domain: str, description: str) -> None:
-        """	
-        Store in the DB 1 domain we read from an IoC source	
-        with its description	
+        """
+        Store in the DB 1 domain we read from an IoC source
+        with its description
         """
         self.rcache.hset('IoC_domains', domain, description)
 
     def set_malicious_ip(self, ip, profileid_twid):
-        """	
-        Save in DB malicious IP found in the traffic	
-        with its profileid and twid	
+        """
+        Save in DB malicious IP found in the traffic
+        with its profileid and twid
         """
         self.r.hset('MaliciousIPs', ip, profileid_twid)
 
     def set_malicious_domain(self, domain, profileid_twid):
-        """	
-        Save in DB a malicious domain found in the traffic	
-        with its profileid and twid	
+        """
+        Save in DB a malicious domain found in the traffic
+        with its profileid and twid
         """
         self.r.hset('MaliciousDomains', domain, profileid_twid)
 
     def get_malicious_ip(self, ip):
-        """	
-        Return malicious IP and its list of presence in	
-        the traffic (profileid, twid)	
+        """
+        Return malicious IP and its list of presence in
+        the traffic (profileid, twid)
         """
         data = self.r.hget('MaliciousIPs', ip)
         if data:
@@ -1567,9 +1565,9 @@ class Database(object):
         return data
 
     def get_malicious_domain(self, domain):
-        """	
-        Return malicious domain and its list of presence in	
-        the traffic (profileid, twid)	
+        """
+        Return malicious domain and its list of presence in
+        the traffic (profileid, twid)
         """
         data = self.r.hget('MaliciousDomains', domain)
         if data:
@@ -1579,8 +1577,8 @@ class Database(object):
         return data
 
     def set_dns_resolution(self, query, answers):
-        """	
-        Save in DB DNS name for each IP	
+        """
+        Save in DB DNS name for each IP
         """
         for ans in answers:
             data = self.get_dns_resolution(ans)
@@ -1590,8 +1588,8 @@ class Database(object):
             self.r.hset('DNSresolution', ans, data)
 
     def get_dns_resolution(self, ip):
-        """	
-        Get DNS name of the IP, a list	
+        """
+        Get DNS name of the IP, a list
         """
         data = self.r.hget('DNSresolution', ip)
         if data:
@@ -1601,15 +1599,15 @@ class Database(object):
             return []
 
     def set_passive_dns(self, ip, data):
-        """	
-        Save in DB passive DNS from virus total	
+        """
+        Save in DB passive DNS from virus total
         """
         data = json.dumps(data)
         self.r.hset('passiveDNS', ip, data)
 
     def get_passive_dns(self, ip):
-        """	
-        Get passive DNS from virus total	
+        """
+        Get passive DNS from virus total
         """
         data = self.r.hget('passiveDNS', ip)
         if data:
@@ -1619,23 +1617,23 @@ class Database(object):
             return ''
 
     def get_IPs_in_IoC(self):
-        """	
-        Get all IPs and their description from IoC_ips	
+        """
+        Get all IPs and their description from IoC_ips
         """
         data = self.rcache.hgetall('IoC_ips')
         return data
 
     def get_Domains_in_IoC(self):
-        """	
-        Get all Domains and their description from IoC_domains	
+        """
+        Get all Domains and their description from IoC_domains
         """
         data = self.rcache.hgetall('IoC_domains')
         return data
 
     def search_IP_in_IoC(self, ip: str) -> str:
-        """	
-        Search in the dB of malicious IPs and return a	
-        description if we found a match	
+        """
+        Search in the dB of malicious IPs and return a
+        description if we found a match
         """
         ip_description = self.rcache.hget('IoC_ips', ip)
         if ip_description == None:
@@ -1644,9 +1642,9 @@ class Database(object):
             return ip_description
 
     def search_Domain_in_IoC(self, domain: str) -> str:
-        """	
-        Search in the dB of malicious domainss and return a	
-        description if we found a match	
+        """
+        Search in the dB of malicious domainss and return a
+        description if we found a match
         """
         domain_description = self.rcache.hget('IoC_domains', domain)
         if domain_description == None:
@@ -1655,13 +1653,13 @@ class Database(object):
             return domain_description
 
     def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
-        """	
-        Get the info about a certain role (Client or Server), for a particular protocol (TCP, UDP, ICMP, etc.) for a particular State (Established, etc.)	
-        direction: 'Dst' or 'Src'. This is used to know if you want the data of the src ip or ports, or the data from the dst ips or ports	
-        state: can be 'Established' or 'NotEstablished'	
-        protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'	
-        role: can be 'Client' or 'Server'	
-        type_data: can be 'Ports' or 'IPs'	
+        """
+        Get the info about a certain role (Client or Server), for a particular protocol (TCP, UDP, ICMP, etc.) for a particular State (Established, etc.)
+        direction: 'Dst' or 'Src'. This is used to know if you want the data of the src ip or ports, or the data from the dst ips or ports
+        state: can be 'Established' or 'NotEstablished'
+        protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
+        role: can be 'Client' or 'Server'
+        type_data: can be 'Ports' or 'IPs'
         """
         try:
             self.print('Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(profileid, twid, direction, state, protocol, role, type_data), 0, 4)
@@ -1717,8 +1715,8 @@ class Database(object):
         return data
 
     def set_malicious_file_info(self, file, data):
-        '''	
-        Set/update time and/or e-tag for malicious file	
+        '''
+        Set/update time and/or e-tag for malicious file
         '''
         # data = self.get_malicious_file_info(file)
         # for key in file_data:
@@ -1727,8 +1725,8 @@ class Database(object):
         self.rcache.hset('malicious_files_info', file, data)
 
     def get_malicious_file_info(self, file):
-        '''	
-        Get malicious file info	
+        '''
+        Get malicious file info
         '''
         data = self.rcache.hget('malicious_files_info', file)
         if data:

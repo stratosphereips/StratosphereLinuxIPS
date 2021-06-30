@@ -33,7 +33,7 @@ class EvidenceProcess(multiprocessing.Process):
     It only work on evidence for IPs that were profiled
     This should be converted into a module
     """
-    def __init__(self, inputqueue, outputqueue, config):
+    def __init__(self, inputqueue, outputqueue, config, output_folder, logs_folder):
         self.name = 'Evidence'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
@@ -46,8 +46,16 @@ class EvidenceProcess(multiprocessing.Process):
         self.read_configuration()
         # Subscribe to channel 'tw_modified'
         self.c1 = __database__.subscribe('evidence_added')
-        self.logfile = self.clean_evidence_log_file()
-        self.jsonfile = self.clean_evidence_json_file()
+        self.logfile = self.clean_evidence_log_file(output_folder)
+        self.jsonfile = self.clean_evidence_json_file(output_folder)
+        # If logs enabled, write alerts to the log folder as well
+        if logs_folder:
+            self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
+            self.logs_jsonfile =  self.clean_evidence_json_file(logs_folder+'/')
+        else:
+            self.logs_logfile = False
+            self.logs_jsonfile = False
+
         # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
         if platform.system() == 'Darwin':
             # macos
@@ -130,33 +138,30 @@ class EvidenceProcess(multiprocessing.Process):
                 evidence_string = f'Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}. '
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-            evidence_string = f'Detected domain: {detection_info} due to {description}.'
-
-        elif detection_module == 'LongConnection':
-            evidence_string = f'Detected IP {detection_info} {dns_resolution_detection_info_final} due to a {description}.'
+            evidence_string = f'Detected domain {detection_info} due to {description}.'
 
         elif detection_module == 'SSHSuccessful':
-            evidence_string = f'IP: {ip} did a successful SSH. {description}.'
+            evidence_string = f'IP {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'Detected IP: {ip} {dns_resolution_ip_final} due to {description}.'
+            evidence_string = f'Detected IP {ip} {dns_resolution_ip_final} due to {description}.'
 
         return evidence_string
 
-    def clean_evidence_log_file(self):
+    def clean_evidence_log_file(self, output_folder):
         '''
         Clear the file if exists for evidence log
         '''
-        if path.exists('alerts.log'):
-            open('alerts.log', 'w').close()
-        return open('alerts.log', 'a')
+        if path.exists(output_folder  + 'alerts.log'):
+            open(output_folder  + 'alerts.log', 'w').close()
+        return open(output_folder + 'alerts.log', 'a')
 
-    def clean_evidence_json_file(self):
+    def clean_evidence_json_file(self, output_folder):
         '''
         Clear the file if exists for evidence log
         '''
-        if path.exists('alerts.json'):
-            open('alerts.json', 'w').close()
-        return open('alerts.json', 'a')
+        if path.exists(output_folder  + 'alerts.json'):
+            open(output_folder  + 'alerts.json', 'w').close()
+        return open(output_folder + 'alerts.json', 'a')
 
 
     def addDataToJSONFile(self, data):
@@ -168,6 +173,11 @@ class EvidenceProcess(multiprocessing.Process):
             self.jsonfile.write(data_json)
             self.jsonfile.write('\n')
             self.jsonfile.flush()
+            # If logs folder are enabled, write alerts in the folder as well
+            if self.logs_jsonfile:
+                self.logs_jsonfile.write(data_json)
+                self.logs_jsonfile.write('\n')
+                self.logs_jsonfile.flush()
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -183,6 +193,11 @@ class EvidenceProcess(multiprocessing.Process):
             self.logfile.write(data)
             self.logfile.write('\n')
             self.logfile.flush()
+            # If logs are enabled, write alerts in the folder as well
+            if self.logs_logfile:
+                self.logs_logfile.write(data)
+                self.logs_logfile.write('\n')
+                self.logs_logfile.flush()
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -216,7 +231,6 @@ class EvidenceProcess(multiprocessing.Process):
                     # evidence data
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
-
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
                                                           ip,
@@ -231,12 +245,11 @@ class EvidenceProcess(multiprocessing.Process):
                     evidence_dict = {'timestamp': current_time,
                                      'detected_ip': ip,
                                      'detection_module':type_evidence,
-                                     'detection_info':type_detection + ' ' + detection_info,
+                                     'detection_info':str(type_detection) + ' ' + str(detection_info),
                                      'description':description}
 
                     self.addDataToLogFile(current_time + ' ' + evidence_to_log)
                     self.addDataToJSONFile(evidence_dict)
-
                     evidence = __database__.getEvidenceForTW(profileid, twid)
                     # Important! It may happen that the evidence is not related to a profileid and twid.
                     # For example when the evidence is on some src IP attacking our home net, and we are not creating

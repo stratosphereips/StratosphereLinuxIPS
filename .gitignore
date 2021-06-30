@@ -11,6 +11,10 @@ __pycache__/
 *.csv
 # Ignore the secret api key of virustotal
 api_key_secret
+
+# Ignore the secret slack bot token of ExportingAlerts module
+slack_bot_token_secret
+
 # Ignore the results folders
 2019-
 2020-

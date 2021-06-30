@@ -53,9 +53,9 @@ class Matrix(dict):
             #print '\t\tFinal Prob (log): {}'.format(cum_prob)
             return cum_prob
         except Exception as err:
-            print type(err)
-            print err.args
-            print err
+            print( type(err))
+            print( err.args)
+            print( err)
             sys.exit(-1)
 
 

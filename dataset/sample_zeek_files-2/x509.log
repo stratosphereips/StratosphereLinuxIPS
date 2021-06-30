@@ -1,0 +1,11 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	x509
+#open	2020-10-06-17-33-11
+#fields	ts	id	certificate.version	certificate.serial	certificate.subject	certificate.issuer	certificate.not_valid_before	certificate.not_valid_after	certificate.key_alg	certificate.sig_alg	certificate.key_type	certificate.key_length	certificate.exponent	certificate.curve	san.dns	san.uri	san.email	san.ip	basic_constraints.ca	basic_constraints.path_len
+#types	time	string	count	string	string	string	time	time	string	string	string	count	string	string	vector[string]	vector[string]	vector[string]	vector[addr]	bool	count
+1601998391.128990	FRBu481kCfyF0aScA1	3	032E779AD14811FCB96D752A31B6DD88C120	CN=virtual.rsecai.com	CN=Let's Encrypt Authority X3,O=Let's Encrypt,C=US	1599538205.000000	1607317805.000000	rsaEncryption	sha256WithRSAEncryption	rsa	4096	65537	-	virtual.secai.com	-	-	-	F	-
+1601998391.179142	FjGF8o46zypp408Lm5	3	032E779AD14811FCB96D752A31B6DD88C120	CN=virtual.secai.com	CN=Let's Encrypt Authority X3,O=Let's Encrypt,C=US	1599538205.000000	1607317805.000000	rsaEncryption	sha256WithRSAEncryption	rsa	4096	65537	-	virtual.secai.com	-	-	-	F	-
+#close	2020-10-06-17-33-29

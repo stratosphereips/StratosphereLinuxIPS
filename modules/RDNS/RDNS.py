@@ -18,13 +18,14 @@ from slips.core.database import __database__
 import platform
 
 # Your imports
+import socket
 
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'TemplateModule'
-    description = 'Template module'
-    authors = ['Template Author']
+    name = 'RDNS'
+    description = 'Module to get and store the reverse DNS info about IPs'
+    authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -36,13 +37,6 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        # To which channels do you wnat to subscribe? When a message
-        # arrives on the channel the module will wakeup
-        # The options change, so the last list is on the
-        # slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
         # Set the timeout based on the platform. This is because the
@@ -78,25 +72,48 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def get_ip_family(self, ip):
+        """
+        returns the family of the IP, AF_INET or AF_INET6
+        :param ip: str
+        """
+        if ':' in ip:
+            return socket.AF_INET6
+        return socket.AF_INET
+
     def run(self):
-        try:
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
                     return True
-                if message['channel'] == 'new_ip':
-                    # Example of printing the number of profiles in the
-                    # Database every second
-                    data = len(__database__.getProfiles())
-                    self.print('Amount of profiles: {}'.format(data))
-
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+                if (message and message['channel'] == 'new_ip'
+                            and message['type'] == "message"
+                            and type(message['data']) == str):
+                    ip = message['data']
+                    data = {}
+                    try:
+                        # works with both ipv4 and ipv6
+                        reverse_dns = socket.gethostbyaddr(ip)[0]
+                        # if there's no reverse dns record for this ip, reverse_dns will be an ip.
+                        try:
+                            # reverse_dns is an ip and there's no reverse dns, don't store
+                            socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
+                            continue
+                        except socket.error:
+                            # all good, store it
+                            data['reverse_dns'] = reverse_dns
+                    except (socket.gaierror, socket.herror, OSError):
+                        # not an ip or multicast, can't get the reverse dns record of it
+                        continue
+                    # Store in the db
+                    __database__.setInfoForIPs(ip, data)
+            except KeyboardInterrupt:
+                self.print('Stopping the process', 0, 1)
+                return True
+            except Exception as inst:
+                self.print('Error in run() of {}'.format(inst), 0, 1)
+                self.print(type(inst), 0, 1)
+                self.print(inst, 0, 1)

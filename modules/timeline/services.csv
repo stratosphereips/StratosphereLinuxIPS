@@ -139,5 +139,10 @@ mdns,5353,udp,Multicast DNS
 llmr,5355,udp,Link-Local Multicast Name Resolution
 IRC,6667,udp,IRC Protocol
 IRC,6667,tcp,IRC Protocol
+STUN,3478,udp,STUN Protocol
 bittorrent,6881,udp,Bittorrent protocol usually
 bittorrent,6882,udp,Bittorrent protocol usually
+mysql,3306,tcp,MySQL database system
+mysql,3306,udp,MySQL database system
+vnc-server,5900,tcp,Apple Virtual Network Computing
+vnc-server,5900,udp,Apple Virtual Network Computing

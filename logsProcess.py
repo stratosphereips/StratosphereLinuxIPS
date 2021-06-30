@@ -42,7 +42,7 @@ def timing(f):
 # Logs output Process
 class LogsProcess(multiprocessing.Process):
     """ A class to output data in logs files """
-    def __init__(self, inputqueue, outputqueue, verbose, debug, config):
+    def __init__(self, inputqueue, outputqueue, verbose, debug, config, mainfoldername):
         self.name = 'Logs'
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
@@ -59,7 +59,7 @@ class LogsProcess(multiprocessing.Process):
         self.fieldseparator = __database__.getFieldSeparator()
         # For some weird reason the database loses its outputqueue and we have to re set it here.......
         __database__.setOutputQueue(self.outputqueue)
-
+        self.mainfoldername = mainfoldername
         self.timeline_first_index = {}
         #self.stop_counter = 0
         self.is_timline_file = False
@@ -93,11 +93,8 @@ class LogsProcess(multiprocessing.Process):
         try:
             # Create our main output folder. The current datetime with microseconds
             # TODO. Do not create the folder if there is no data? (not sure how to)
-            self.mainfoldername = datetime.now().strftime('%Y-%m-%d--%H:%M:%S')
-            if not os.path.exists(self.mainfoldername):
-                    os.makedirs(self.mainfoldername)
-                    self.print('Using the folder {} for storing results.'.format(self.mainfoldername))
-            # go into this folder
+            self.print('Using the folder {} for storing results.'.format(self.mainfoldername))
+            # go into the main  folder
             os.chdir(self.mainfoldername)
 
             # Process the data with different strategies
@@ -133,7 +130,13 @@ class LogsProcess(multiprocessing.Process):
             return True
         except Exception as inst:
             # Stop the timer
-            # timer.shutdown()
+            try:
+                timer.shutdown()
+            except UnboundLocalError:
+                # The timer variable didn't exist, so just end
+                pass
+
+
             self.outputqueue.put('01|logs|\t[Logs] Error with LogsProcess')
             self.outputqueue.put('01|logs|\t[Logs] {}'.format(type(inst)))
             self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))
@@ -144,7 +147,7 @@ class LogsProcess(multiprocessing.Process):
         Receive a profile id, create a folder if its not there. Create the log files.
         """
         # Ask the field separator to the db
-        profilefolder = profileid.split(self.fieldseparator)[1]
+        profilefolder = profileid.split(self.fieldseparator)[1].replace(':','-')
         if not os.path.exists(profilefolder):
             os.makedirs(profilefolder)
             ip = profileid.split(self.fieldseparator)[1]

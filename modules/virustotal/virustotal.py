@@ -11,6 +11,7 @@ import urllib3
 import certifi
 import time
 import ipaddress
+import threading
 
 
 class Module(Module, multiprocessing.Process):
@@ -48,7 +49,8 @@ class Module(Module, multiprocessing.Process):
 
         # query counter for debugging purposes
         self.counter = 0
-
+        # Queue of API calls
+        self.api_call_queue = []
         # Pool manager to make HTTP requests with urllib3
         # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
@@ -62,6 +64,9 @@ class Module(Module, multiprocessing.Process):
         else:
             #??
             self.timeout = None
+        # start the queue thread
+        self.api_calls_thread = threading.Thread(target=self.API_calls_thread,
+                         daemon=True)
 
     def __read_configuration(self) -> str:
         """ Read the configuration file for what we need """
@@ -136,12 +141,30 @@ class Module(Module, multiprocessing.Process):
             data['asn'] = as_owner
         __database__.setInfoForDomains(domain, data)
 
+    def API_calls_thread(self):
+        """
+        This thread starts if there's an API calls queue,
+         it operates every minute, and executes 4 api calls
+         from the queue then sleeps again.
+        """
+
+        while True:
+            # wait until the queue is populated
+            if not self.api_call_queue: time.sleep(30)
+            # wait the api limit
+            time.sleep(60)
+            while self.api_call_queue:
+                # get the first element in the queue
+                ip = self.api_call_queue.pop(0)
+                # try to query. the ip will be added back to the queue if the api call isn't successfull
+                self.api_query_(ip)
 
     def run(self):
         if self.key is None:
             # We don't have a virustotal key
             return
         try:
+            self.api_calls_thread.start()
             # Main loop function
             while True:
                 message_c1 = self.c1.get_message(timeout=0.01)
@@ -174,7 +197,6 @@ class Module(Module, multiprocessing.Process):
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_vt_data_in_IPInfo(ip, cached_data)
-
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 message_c2 = self.c2.get_message(timeout=0.01)
                 if message_c2 and message_c2['data'] == 'stop_process':
@@ -198,6 +220,7 @@ class Module(Module, multiprocessing.Process):
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_domain_data_in_DomainInfo(domain, cached_data)
+
 
         except KeyboardInterrupt:
             return True
@@ -235,7 +258,7 @@ class Module(Module, multiprocessing.Process):
         Function to perform API call to VirusTotal and return scores for each of
         the four processed categories. Response is cached in a dictionary. Private IPs always return (0, 0, 0, 0).
         :param ip: IP address to check
-        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio 
+        :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
         """
 
         try:
@@ -298,26 +321,17 @@ class Module(Module, multiprocessing.Process):
                 self.print("Network is not available, waiting 10s")
                 time.sleep(10)
 
-        sleep_attempts = 0
-
-        # repeat query if API limit was reached (code 204)
-        while response.status != 200:
-
-            # requests per minute limit reached
+        if response.status != 200:
+            # 204 means Request rate limit exceeded. You are making more requests
+            # than allowed. You have exceeded one of your quotas (minute, daily or monthly).
             if response.status == 204:
-                # usually sleeping for 40 seconds is enough, if not, try adding 20 more
-                if sleep_attempts == 0:
-                    sleep_time = 40
-                else:
-                    sleep_time = 20
-                sleep_attempts += 1
-
-            # requests per hour limit reached
+                # Add to the queue of api calls in case of api limit reached.
+                self.api_call_queue.append(ip)
+            # 403 means you don't have enough privileges to make the request or wrong API key
             elif response.status == 403:
-                # 10 minutes
-                sleep_time = 600
-                self.print("Please check that your API key is correct. Code 403 means timeout but also wrong API key.")
-
+                # don't add to the api call queue because the user will have to restart slips anyway
+                # to add a correct API key and the queue wil be erased
+                self.print("Please check that your API key is correct.")
             else:
                 # if the query was unsuccessful but it is not caused by API limit, abort (this is some unknown error)
                 # X-Api-Message is a comprehensive error description, but it is not always present
@@ -331,19 +345,17 @@ class Module(Module, multiprocessing.Process):
             # report that API limit is reached, wait one minute and try again
             self.print("Status code is " + str(response.status) + " at " + str(time.asctime()) + ", query id: " + str(
                 self.counter), verbose=5)
-
-            self.print("API limit reached, going to sleep for " + str(sleep_time) + " seconds", verbose=1, debug=1)
-            time.sleep(sleep_time)
-            response = self.http.request("GET", self.url, fields=params)
-
-        data = json.loads(response.data)
-
-        # optionally, save data to file
-        if save_data:
-            filename = ip + ".txt"
-            if filename:
-                with open(filename, 'w') as f:
-                    json.dump(data, f)
+            # return empty dict because api call isn't successful
+            data = {}
+        else:
+            # query successful
+            data = json.loads(response.data)
+            # optionally, save data to file
+            if save_data:
+                filename = ip + ".txt"
+                if filename:
+                    with open(filename, 'w') as f:
+                        json.dump(data, f)
 
         return data
 
