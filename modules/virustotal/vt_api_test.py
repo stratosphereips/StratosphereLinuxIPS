@@ -3,9 +3,8 @@ import json
 import socket
 import os
 import numpy as np
-
-from modules.virustotal.virustotal import Module
-
+from modules.virustotal.virustotal import Module as VirusTotalModule
+import pytest
 
 def check_ip_from_file(ip):
     """
@@ -118,12 +117,16 @@ def get_default_config():
 
 
 def test_api_limit():
+    # Create an outputqueue to pass to vt module
+    from multiprocessing import Queue
+    outputqueue = Queue()
+
     import random
-    vt = VirusTotalModule(None, get_default_config(), testing=True)
-    while True:
-        ip = str(random.randint(0, 255)) + "." + str(random.randint(0, 255)) + "."\
-             + str(random.randint(0, 255)) + "." + str(random.randint(0, 255))
-        vt.check_ip(ip)
+    vt = VirusTotalModule(outputqueue, get_default_config(), testing=True)
+
+    ip = str(random.randint(0, 255)) + "." + str(random.randint(0, 255)) + "."\
+         + str(random.randint(0, 255)) + "." + str(random.randint(0, 255))
+    vt.api_query_(ip)
 
 
 if __name__ == "__main__":
