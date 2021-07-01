@@ -36,7 +36,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 
 Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.
 
-Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/latest/
+Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/develop/
 
 ### If you want to share files between your host and the docker, you can do:
 
