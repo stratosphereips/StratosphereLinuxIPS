@@ -36,6 +36,7 @@ RUN pip3 install watchdog
 RUN pip3 install stix2
 RUN pip3 install cabby
 RUN pip3 install ipwhois
+RUN pip3 install pytest
 RUN pip3 install --ignore-installed six
 RUN pip3 install slackclient
 RUN pip3 install tzlocal
