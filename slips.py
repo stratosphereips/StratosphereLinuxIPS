@@ -167,7 +167,7 @@ def get_cwd():
             return cwd
 
 def shutdown_gracefully():
-    """ Wait for all modules to confirm that they're done processing before shutting down """
+    """ Wait for all modules to confirm that they're done processing and then shutdown """
 
     try:
         print('Stopping Slips')
@@ -177,6 +177,8 @@ def shutdown_gracefully():
         # data to receive in its channel
         finished_modules = []
         loaded_modules = modules_to_call.keys()
+        # get dict of pids spawned by slips
+        PIDs = __database__.get_PIDs()
         # timeout variable so we don't loop forever
         max_loops = 130
         # loop until all loaded modules are finished
@@ -192,18 +194,18 @@ def shutdown_gracefully():
                 module_name = message['data']
                 if module_name not in finished_modules:
                     finished_modules.append(module_name)
-                    modules_left = set(loaded_modules) - set(finished_modules)
-                    print(f"\033[1;32;40m{module_name}\033[00m Stopped... \033[1;32;40m{len(modules_left)}\033[00m left.")
+                    # remove module from the list of opened pids
+                    PIDs.pop(module_name)
+                    modules_left = len(set(loaded_modules) - set(finished_modules))
+                    print(f"\033[1;32;40m{module_name}\033[00m Stopped... \033[1;32;40m{modules_left}\033[00m left.")
             max_loops -=1
         # kill processes that didn't stop after timeout
-        PIDs = __database__.get_PIDs()
-        for unstopped_module in modules_left:
-            pid = PIDs[unstopped_module]
+        for unstopped_proc,pid in PIDs.items():
             try:
                 os.kill(int(pid), 9)
-                print(f'\033[1;32;40m{unstopped_module}\033[00m Killed.')
+                print(f'\033[1;32;40m{unstopped_proc}\033[00m Killed.')
             except ProcessLookupError:
-                print(f'\033[1;32;40m{unstopped_module}\033[00m Already exited.')
+                print(f'\033[1;32;40m{unstopped_proc}\033[00m Already exited.')
         # Send manual stops to the process not using channels
         try:
             logsProcessQueue.put('stop_process')
@@ -384,6 +386,7 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid
     outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
+    __database__.store_process_PID('outputProcess',int(outputProcessThread.pid))
 
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
@@ -432,6 +435,8 @@ if __name__ == '__main__':
             logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
             logsProcessThread.start()
             outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
+            __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
+
     # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
     else:
         logs_folder = False
@@ -443,6 +448,8 @@ if __name__ == '__main__':
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output, logs_folder)
     evidenceProcessThread.start()
     outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
+    __database__.store_process_PID('evidenceProcess', int(evidenceProcessThread.pid))
+
 
     # Profile thread
     # Create the queue for the profile thread
@@ -451,12 +458,15 @@ if __name__ == '__main__':
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config)
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
+    __database__.store_process_PID('profilerProcess', int(profilerProcessThread.pid))
 
     # Input process
     # Create the input process and start it
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
+    __database__.store_process_PID('inputProcess', int(inputProcess.pid))
+
 
     c1 = __database__.subscribe('finished_modules')
 
