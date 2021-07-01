@@ -55,7 +55,9 @@ class Database(object):
         # Create the connection to redis
         if not hasattr(self, 'r'):
             try:
+                # db 0 changes everytime we run slips
                 self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+                # db 1 is cache, delete it using -cc flag
                 self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True) #password='password')
                 if self.deletePrevdb:
                     self.r.flushdb()
@@ -1124,7 +1126,7 @@ class Database(object):
         pubsub = self.r.pubsub()
         supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
                     'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
-                    'new_blocking', 'new_ssh','new_notice']
+                    'new_blocking', 'new_ssh','new_notice', 'finished_modules']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 pubsub.subscribe(channel)
@@ -1734,4 +1736,18 @@ class Database(object):
         else:
             data = ''
         return data
+
+    def store_process_PID(self, process, pid):
+        """
+        Stores each started process or module with it's PID
+        :param pid: int
+        :param process: str
+        """
+        self.r.hset('PIDs', process, pid)
+
+    def get_PIDs(self):
+        """ returns a dict with module names as keys and pids as values """
+        return self.r.hgetall('PIDs')
+
+
 __database__ = Database()
