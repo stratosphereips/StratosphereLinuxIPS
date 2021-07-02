@@ -54,6 +54,8 @@ class InputProcess(multiprocessing.Process):
             self.packet_filter = "'" + packet_filter + "'"
         self.event_handler = None
         self.event_observer = None
+        # number of lines read
+        self.lines = 0
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -101,8 +103,7 @@ class InputProcess(multiprocessing.Process):
         The task for this function is to send nfdump output line by line to profilerProcess.py for processing
         """
 
-        line = {}
-        line['type'] = 'nfdump'
+        line = {'type': 'nfdump'}
         if not self.nfdump_output:
             # The nfdump command returned nothing
             self.print("Error reading nfdump output ", 1, 3)
@@ -254,9 +255,9 @@ class InputProcess(multiprocessing.Process):
 
         # We reach here after the break produced if no zeek files are being updated.
         # No more files to read. Close the files
-        for file in open_file_handlers:
+        for file, handle in open_file_handlers.items():
             self.print('Closing file {}'.format(file), 3, 0)
-            open_file_handlers[file].close()
+            handle.close()
         return lines
 
 
@@ -275,6 +276,7 @@ class InputProcess(multiprocessing.Process):
         lines = self.read_zeek_files()
         self.print("We read everything from the folder. No more input. Stopping input process. Sent {} lines".format(lines))
         self.stop_queues()
+        return True
 
     def read_from_stdin(self):
         self.print('Receiving flows from the stdin.', 3, 0)
@@ -282,59 +284,58 @@ class InputProcess(multiprocessing.Process):
         sys.stdin.close()
         sys.stdin = os.fdopen(0, 'r')
         file_stream = sys.stdin
-        line = {}
-        line['type'] = 'stdin'
+        line = {'type': 'stdin'}
         for t_line in file_stream:
             line['data'] = t_line
             self.print(f'	> Sent Line: {t_line}', 0, 3)
             self.profilerqueue.put(line)
             self.lines += 1
         self.stop_queues()
-
+        return True
 
     def handle_binetflow(self):
-        file_stream = open(self.given_path)
-        line = {}
-        line['type'] = 'argus'
-        # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
-        # self.profilerqueue.put(fake)
-        self.read_lines_delay = 0.02
-        for t_line in file_stream:
-            time.sleep(self.read_lines_delay)
-            line['data'] = t_line
-            self.print(f'	> Sent Line: {line}', 0, 3)
-            if len(t_line.strip()) != 0:
-                self.profilerqueue.put(line)
-            self.lines += 1
-        file_stream.close()
+        self.lines =0
+        with open(self.given_path) as file_stream:
+            line = {'type': 'argus'}
+            # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
+            # self.profilerqueue.put(fake)
+            self.read_lines_delay = 0.02
+            for t_line in file_stream:
+                time.sleep(self.read_lines_delay)
+                line['data'] = t_line
+                self.print(f'	> Sent Line: {line}', 0, 3)
+                if len(t_line.strip()) != 0:
+                    self.profilerqueue.put(line)
+                self.lines += 1
         self.stop_queues()
+        return True
 
     def handle_suricata(self):
-        file_stream = open(self.given_path)
-        line = {}
-        line['type'] = 'suricata'
-        self.read_lines_delay = 0.02
-        for t_line in file_stream:
-            time.sleep(self.read_lines_delay)
-            line['data'] = t_line
-            self.print(f'	> Sent Line: {line}', 0, 3)
-            if len(t_line.strip()) != 0:
-                self.profilerqueue.put(line)
-            self.lines += 1
-        file_stream.close()
+        with open(self.given_path) as file_stream:
+            line = {'type': 'suricata'}
+            self.read_lines_delay = 0.02
+            for t_line in file_stream:
+                time.sleep(self.read_lines_delay)
+                line['data'] = t_line
+                self.print(f'	> Sent Line: {line}', 0, 3)
+                if len(t_line.strip()) != 0:
+                    self.profilerqueue.put(line)
+                self.lines += 1
         self.stop_queues()
+        return True
 
     def handle_zeek_log_file(self):
         try:
             file_name_without_extension = self.given_path[:self.given_path.index('.')]
         except IndexError:
             # filename doesn't have an extension, probably not a conn.log
-            return
+            return False
         # Add log file to database
         __database__.add_zeek_file(file_name_without_extension)
         self.bro_timeout = 1
         self.lines = self.read_zeek_files()
         self.stop_queues()
+        return True
 
     def handle_nfdump(self):
         command = 'nfdump -b -N -o csv -q -r ' + self.given_path
@@ -344,6 +345,7 @@ class InputProcess(multiprocessing.Process):
         self.nfdump_output = result.stdout.decode('utf-8')
         self.lines = self.read_nfdump_output()
         self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(self.lines))
+        return True
 
     def handle_pcap_and_interface(self) -> int:
         """ Returns the number of zeek lines read """
@@ -406,45 +408,42 @@ class InputProcess(multiprocessing.Process):
         except AttributeError:
             # In the case of nfdump, there is no observer
             pass
+        return True
 
     def run(self):
         try:
             # Process the file that was given
-            self.lines = 0
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
             if not self.given_path or self.given_path is '-':
                 self.read_from_stdin()
-                return True
             elif self.input_type is 'zeek_folder':
                 # is a zeek folder
                 self.read_zeek_folder()
-                return True
             elif self.input_type is 'zeek_log_file':
                 # Is a zeek.log file
                 file_name = self.given_path.split('/')[-1]
                 if 'log' in file_name:
                     self.handle_zeek_log_file()
-                    return True
+                else:
+                    return False
             elif self.input_type is 'nfdump':
                 # binary nfdump file
                 self.handle_nfdump()
-                return True
             elif self.input_type is 'binetflow':
                 # argus or binetflow
                 self.handle_binetflow()
-                return True
             # Process the pcap files
             elif (self.input_type is 'pcap'
                   or self.input_type is 'interface'):
                 self.handle_pcap_and_interface()
-                return True
             elif self.input_type is 'suricata':
                 self.handle_suricata()
             else:
                 # if self.input_type is 'file':
                 # default value
                 self.print('Unrecognized file type. Stopping.')
-                return True
+                return False
+            return True
 
         except KeyboardInterrupt:
             self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(self.lines))
