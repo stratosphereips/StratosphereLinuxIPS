@@ -19,6 +19,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Architecture**. Internal architecture of Slips (profiles, timewindows), the use of Zeek and connection to Redis. See :doc:`Architecture <architecture>`.
   
+- **Contributing**. Explanation how to contribute to Slips, and instructions how to implement new detection module in Slips. See :doc:`Contributing <contributing>`. 
 
 
 
@@ -32,3 +33,4 @@ This documentation gives an overview how Slips works, how to use it and how to h
    usage
    detection_modules
    architecture
+   contributing
