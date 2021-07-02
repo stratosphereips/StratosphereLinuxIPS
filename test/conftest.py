@@ -13,11 +13,15 @@ current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfra
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
+def do_nothing(*arg):
+    """ Used to override the print function because using the self.print causes broken pipes """
+    pass
+
 @pytest.fixture
 def outputQueue():
     """ This outputqueue will be passed to all module constructors that need it """
     outputQueue = Queue()
-    outputQueue.put = print
+    outputQueue.put = do_nothing
     return Queue()
 
 
@@ -25,7 +29,7 @@ def outputQueue():
 def profilerQueue():
     """ This profilerqueue will be passed to all module constructors that need it """
     profilerqueue = Queue()
-    profilerqueue.put = print
+    profilerqueue.put = do_nothing
     return profilerqueue
 
 
