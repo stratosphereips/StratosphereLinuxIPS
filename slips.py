@@ -166,6 +166,60 @@ def get_cwd():
             cwd = arg[:arg.index('slips.py')]
             return cwd
 
+def shutdown_gracefully():
+    """ Wait for all modules to confirm that they're done processing and then shutdown """
+
+    try:
+        print('Stopping Slips')
+        # Stop the modules that are subscribed to channels
+        __database__.publish_stop()
+        # Here we should Wait for any channel if it has still
+        # data to receive in its channel
+        finished_modules = []
+        loaded_modules = modules_to_call.keys()
+        # get dict of pids spawned by slips
+        PIDs = __database__.get_PIDs()
+        # timeout variable so we don't loop forever
+        max_loops = 130
+        # loop until all loaded modules are finished
+        while len(finished_modules) < len(loaded_modules) and max_loops != 0:
+            # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
+            message = c1.get_message(timeout=0.01)
+            if message and message['data'] == 'stop_process':
+                continue
+            if message and message['channel'] == 'finished_modules' and type(message['data']) is not int:
+                # all modules must reply with their names in this channel after
+                # receiving the stop_process msg
+                # to confirm that all processing is done and we can safely exit now
+                module_name = message['data']
+                if module_name not in finished_modules:
+                    finished_modules.append(module_name)
+                    # remove module from the list of opened pids
+                    PIDs.pop(module_name)
+                    modules_left = len(set(loaded_modules) - set(finished_modules))
+                    print(f"\033[1;32;40m{module_name}\033[00m Stopped... \033[1;32;40m{modules_left}\033[00m left.")
+            max_loops -=1
+        # kill processes that didn't stop after timeout
+        for unstopped_proc,pid in PIDs.items():
+            try:
+                os.kill(int(pid), 9)
+                print(f'\033[1;32;40m{unstopped_proc}\033[00m Killed.')
+            except ProcessLookupError:
+                print(f'\033[1;32;40m{unstopped_proc}\033[00m Already exited.')
+        # Send manual stops to the process not using channels
+        try:
+            logsProcessQueue.put('stop_process')
+        except NameError:
+            # The logsProcessQueue is not there because we
+            # didnt started the logs files (used -l)
+            pass
+        outputProcessQueue.put('stop_process')
+        profilerProcessQueue.put('stop_process')
+        inputProcess.terminate()
+        os._exit(-1)
+        return
+    except KeyboardInterrupt:
+        return
 
 ####################
 # Main
@@ -332,6 +386,7 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid
     outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
+    __database__.store_process_PID('outputProcess',int(outputProcessThread.pid))
 
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
@@ -356,6 +411,7 @@ if __name__ == '__main__':
                     ModuleProcess = module_class(outputProcessQueue, config)
                     ModuleProcess.start()
                     outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
+                    __database__.store_process_PID(module_name, int(ModuleProcess.pid))
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
@@ -379,6 +435,8 @@ if __name__ == '__main__':
             logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
             logsProcessThread.start()
             outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
+            __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
+
     # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
     else:
         logs_folder = False
@@ -390,6 +448,8 @@ if __name__ == '__main__':
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output, logs_folder)
     evidenceProcessThread.start()
     outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
+    __database__.store_process_PID('evidenceProcess', int(evidenceProcessThread.pid))
+
 
     # Profile thread
     # Create the queue for the profile thread
@@ -398,12 +458,17 @@ if __name__ == '__main__':
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config)
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
+    __database__.store_process_PID('profilerProcess', int(profilerProcessThread.pid))
 
     # Input process
     # Create the input process and start it
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
+    __database__.store_process_PID('inputProcess', int(inputProcess.pid))
+
+
+    c1 = __database__.subscribe('finished_modules')
 
     # Store the host IP address if input type is interface
     if input_type == 'interface':
@@ -475,6 +540,8 @@ if __name__ == '__main__':
                 else:
                     minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
+            # ---------------------------------------- Stopping slips
+
             # When running Slips in the file.
             # If there were no modified TW in the last timewindow time,
             # then start counting down
@@ -483,45 +550,13 @@ if __name__ == '__main__':
                     # print('Counter to stop Slips. Amount of modified
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:
-                        # Export to taxii server before exiting
-                        if 'stix' in export_to.lower():
-                            __database__.publish('push_to_taxii_server','True')
-                            time.sleep(5) # give slips time to push to server
-                        # Stop the output Process
-                        print('Stopping Slips')
-                        # Stop the modules that are subscribed to channels
-                        __database__.publish_stop()
-                        # Here we should Wait for any channel if it has still
-                        # data to receive in its channel
-                        # Send manual stops to the process not using channels
-                        try:
-                            logsProcessQueue.put('stop_process')
-                        except NameError:
-                            # The logsProcessQueue is not there because we
-                            # didnt started the logs files (used -l)
-                            pass
-                        outputProcessQueue.put('stop_process')
-                        profilerProcessQueue.put('stop_process')
+                        shutdown_gracefully()
                         break
                     minimum_intervals_to_wait -= 1
                 else:
                     minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
     except KeyboardInterrupt:
-        print('Stopping Slips')
-        # Stop the modules that are subscribed to channels
-        __database__.publish_stop()
-        # Here we should Wait for any channel if it has still data to receive
-        # in its channel
-        # Send manual stops to the process not using channels
-        try:
-            logsProcessQueue.put('stop_process')
-        except NameError:
-            # The logsProcessQueue is not there because we didnt started the
-            # logs files (used -l)
-            pass
+        shutdown_gracefully()
 
-        outputProcessQueue.put('stop_process')
-        profilerProcessQueue.put('stop_process')
-        inputProcess.terminate()
-        os._exit(1)
+

@@ -15,7 +15,7 @@ import threading
 
 
 class Module(Module, multiprocessing.Process):
-    name = 'VirusTotal'
+    name = 'virustotal'
     description = 'IP address and domain lookup on VirusTotal'
     authors = ['Dita Hollmannova, Kamila Babayeva']
 
@@ -160,16 +160,26 @@ class Module(Module, multiprocessing.Process):
                 self.api_query_(ip)
 
     def run(self):
-        if self.key is None:
-            # We don't have a virustotal key
-            return
         try:
+            if self.key is None:
+                # We don't have a virustotal key
+                return
             self.api_calls_thread.start()
-            # Main loop function
-            while True:
+        except Exception as inst:
+            self.print('Problem on the run()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
+
+        # Main loop function
+        while True:
+            try:
                 message_c1 = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message_c1 and message_c1['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message_c1 and message_c1['channel'] == 'new_flow' and message_c1["type"] == "message":
                     data = message_c1["data"]
@@ -200,6 +210,8 @@ class Module(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 message_c2 = self.c2.get_message(timeout=0.01)
                 if message_c2 and message_c2['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message_c2 and message_c2['channel'] == 'new_dns_flow' and message_c2["type"] == "message":
                     data = message_c2["data"]
@@ -221,15 +233,15 @@ class Module(Module, multiprocessing.Process):
                             if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_domain_data_in_DomainInfo(domain, cached_data)
 
-
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
 
     def get_as_owner(self, response):
         """

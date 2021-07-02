@@ -410,14 +410,24 @@ class Module(Module, multiprocessing.Process):
             # The remote files are being loaded by the UpdateManager
             if not self.load_malicious_local_files(self.path_to_local_threat_intelligence_data):
                 self.print(f'Could not load the local file of TI data {self.path_to_local_threat_intelligence_data}')
+        except Exception as inst:
+            self.print('Problem on the run()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            self.print(traceback.format_exc())
+            return True
 
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time
                 # (see at logsProcess.py), we will stop slips automatically.
                 # The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
@@ -458,12 +468,13 @@ class Module(Module, multiprocessing.Process):
                             self.set_maliciousDomain_to_DomainInfo(domain, domain_description)
                             # set malicious domain in MaliciousDomains
                             self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            self.print(traceback.format_exc())
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc())
+                return True

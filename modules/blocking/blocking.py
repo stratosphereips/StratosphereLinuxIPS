@@ -93,6 +93,8 @@ class Module(Module, multiprocessing.Process):
                         os.system('sudo iptables -X slipsBlocking')
                     elif self.platform_system == 'Darwin':
                         self.print('Mac OS blocking is not supported yet.')
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message['channel'] == 'new_blocking':
                     ip_to_block = message['data']

@@ -56,12 +56,16 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def run(self):
-        try:
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message['data'] == 'stop_process':
+                    if self.reader:
+                        self.reader.close()
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 elif message['channel'] == 'new_ip':
                     ip = message['data']
@@ -90,17 +94,14 @@ class Module(Module, multiprocessing.Process):
                                 data = {}
                                 data['geocountry'] = 'Unknown'
                             __database__.setInfoForIPs(ip, data)
-
-
-        except KeyboardInterrupt:
-            if self.reader:
-                self.reader.close()
-            return True
-        except Exception as inst:
-            if self.reader:
-                self.reader.close()
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                if self.reader:
+                    self.reader.close()
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

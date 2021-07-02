@@ -51,7 +51,6 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('evidence_added')
-        self.c2 = __database__.subscribe('push_to_taxii_server')
         # slack_bot_token_secret should contain your slack token only
         try:
             with open("modules/ExportingAlerts/slack_bot_token_secret", "r") as f:
@@ -269,7 +268,7 @@ class Module(Module, multiprocessing.Process):
         elif ioc_type is 'url':
             pattern = "[url:value = '{}']".format(detection_info)
         else:
-            self.print("Can't set pattern for STIX. {}".format(detection_info), 0, 1)
+            self.print("Can't set pattern for STIX. {}".format(detection_info), 6, 6)
             return False
         # Required Indicator Properties: type, spec_version, id, created, modified , all are set automatically
         # Valid_from, created and modified attribute will be set to the current time
@@ -319,12 +318,17 @@ class Module(Module, multiprocessing.Process):
                 self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.")
 
     def run(self):
-        try:
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
                 message_c1 = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message_c1['data'] == 'stop_process':
+                    # We need to publish to taxii server before stopping
+                    if 'stix' in self.export_to:
+                        self.push_to_TAXII_server()
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message_c1['channel'] == 'evidence_added':
                     if type(message_c1['data']) == str:
@@ -347,26 +351,14 @@ class Module(Module, multiprocessing.Process):
                                 self.is_thread_created = True
                             exported_to_stix = self.export_to_STIX(msg_to_send)
                             if not exported_to_stix:
-                                self.print("Problem in export_to_STIX()", 0, 1)
+                                self.print("Problem in export_to_STIX()", 6, 6)
 
-                # -------------------- push_to_taxii_server channel
-                # This channel recieves a 'True' msg from slips.py if all 3 conditions are true
-                # 1- slips is running on a file (not an interface)
-                # 2- slips is about to stop.
-                # 3- export_to in slips.conf has 'stix' enabled
-                # We need to publish to taxii server before stopping
-                message_c2 = self.c1.get_message(timeout=self.timeout)
-                if message_c2['data'] == 'stop_process':
-                    return True
-                if message_c2['channel'] == 'push_to_taxii_server':
-                    if type(message_c2['data']) == str and 'True' in message_c2['data']:
-                        self.push_to_TAXII_server()
-                        return True
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
