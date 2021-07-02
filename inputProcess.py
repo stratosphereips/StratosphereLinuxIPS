@@ -345,7 +345,8 @@ class InputProcess(multiprocessing.Process):
         self.lines = self.read_nfdump_output()
         self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(self.lines))
 
-    def handle_pcap_and_interface(self):
+    def handle_pcap_and_interface(self) -> int:
+        """ Returns the number of zeek lines read """
         # Create zeek_folder if does not exist.
         if not os.path.exists(self.zeek_folder):
             os.makedirs(self.zeek_folder)
@@ -369,8 +370,6 @@ class InputProcess(multiprocessing.Process):
             # We don't want to stop bro if we read from an interface
             self.bro_timeout = 9999999999999999
         elif self.input_type is 'pcap':
-            # We change the bro command
-            bro_parameter = '-r'
             # Find if the pcap file name was absolute or relative
             if self.given_path[0] == '/':
                 # If absolute, do nothing
