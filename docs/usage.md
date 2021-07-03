@@ -9,7 +9,7 @@ Slips can read the packets directly from the **network interface** of the host m
 
 After Slips was run on the traffic, the Slips output can be analyzed with Kalipso GUI interface. In this section, we will explain how to execute each type of file in Slips, and the output can be analyzed with Kalipso.
 
-Either you're [running Slips in docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-and-running-slips-inside-a-docker) or [Locally](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-in-your-own-computer), you can run slips using the same below commands and configurations.
+Either you are [running Slips in docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-and-running-slips-inside-a-docker) or [locally](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-in-your-own-computer), you can run Slips using the same below commands and configurations.
 
 
 ## Reading the input
@@ -90,17 +90,17 @@ There are two options how to run Kalipso Locally:
 
 In docker, you can use ```-G``` or open a new terminal inside the slips container and execute ```./kalipso.sh```
 
-To open a new terminal inside slips container first [run](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-inside-a-docker-from-the-dockerhub) slips in one terminal
+To open a new terminal inside Slips container first [run](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-inside-a-docker-from-the-dockerhub) Slips in one terminal
 
-Now in a new local terminal get the slips container id
+Now in a new local terminal get the Slips container ID:
 
 ```docker ps```
 
-create another terminal of the slips container using 
+Create another terminal of the Slips container using 
 
 ```docker exec -it <container_id> bash```
 
-now you can run 
+Now you can run 
 
 ```./kalipso.sh```
 
