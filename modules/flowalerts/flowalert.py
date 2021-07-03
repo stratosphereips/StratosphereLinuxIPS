@@ -177,13 +177,16 @@ class Module(Module, multiprocessing.Process):
                                                   module_label)
 
     def run(self):
-        try:
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
+
                 # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
+                    # confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_flow' and type(message['data']) is not int:
                     data = message['data']
@@ -219,6 +222,8 @@ class Module(Module, multiprocessing.Process):
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
                     data = message['data']
@@ -267,6 +272,8 @@ class Module(Module, multiprocessing.Process):
                 # Check for self signed certificates in new_notice channel (notice.log)
                 message = self.c3.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_notice':
                     data = message['data']
@@ -332,6 +339,8 @@ class Module(Module, multiprocessing.Process):
                 # ---------------------------- new_ssl channel
                 message = self.c4.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_ssl':
                     # Check for self signed certificates in new_ssl channel (ssl.log)
@@ -354,11 +363,14 @@ class Module(Module, multiprocessing.Process):
                                 description = 'Self-signed certificate. Destination IP: {}'.format(ip)
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+
+
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
