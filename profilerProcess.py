@@ -29,6 +29,7 @@ import os
 import binascii
 import base64
 from re import split
+from tzlocal import get_localzone
 
 def timeit(method):
     def timed(*args, **kw):
@@ -64,6 +65,8 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.setOutputQueue(self.outputqueue)
         # 1st. Get the data from the interpreted columns
         self.id_separator = __database__.getFieldSeparator()
+        # get the user's local timezone
+        self.local_timezone = get_localzone()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -299,6 +302,7 @@ class ProfilerProcess(multiprocessing.Process):
         Take time in string and return datetime object.
         The format of time can be completely different. It can be seconds, or dates with specific formats.
         If user does not define the time format in configuration file, we have to try most frequent cases of time formats.
+        :param time: epoch time
         """
 
         if not self.timeformat:
@@ -309,11 +313,16 @@ class ProfilerProcess(multiprocessing.Process):
         if self.timeformat:
             if self.timeformat == 'unixtimestamp':
                 # The format of time is in seconds.
-                defined_datetime = datetime.fromtimestamp(float(time))
+                # get the datetime according to the current timezone
+                defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
             else:
                 try:
                     # The format of time is a complete date.
-                    defined_datetime = datetime.strptime(time, self.timeformat)
+
+                    # convert epoch to datetime obj and use the current timezone
+                    defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
+                    # convert dt obj to user specified tiemformat
+                    defined_datetime = defined_datetime.strftime(self.timeformat)
                 except ValueError:
                     defined_datetime = None
         else:
@@ -368,7 +377,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dur'] = float(line[8])
             except (IndexError, ValueError):
                 self.column_values['dur'] = 0
-            self.column_values['endtime'] = self.column_values['starttime'] + timedelta(
+            self.column_values['endtime'] = str(self.column_values['starttime']) + timedelta(
                 seconds=self.column_values['dur'])
             self.column_values['proto'] = line[6]
             try:
@@ -730,7 +739,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dur'] = float(line['duration'])
             except KeyError:
                 self.column_values['dur'] = 0
-            self.column_values['endtime'] = self.column_values['starttime'] + timedelta(seconds=self.column_values['dur'])
+            self.column_values['endtime'] = str(self.column_values['starttime']) + str(timedelta(seconds=self.column_values['dur']))
             self.column_values['proto'] = line['proto']
 
             self.column_values['appproto'] = line.get('service','')
@@ -1280,7 +1289,12 @@ class ProfilerProcess(multiprocessing.Process):
                 return True
             try:
                 # seconds.
-                starttime = self.column_values['starttime'].timestamp()
+                # make sure starttime is a datetime obj (not a str) so we can get the timestamp
+                if type(self.column_values['starttime']) == str:
+                    datetime_obj = datetime.strptime( self.column_values['starttime'] , self.timeformat)
+                    starttime = datetime_obj.timestamp()
+                else:
+                    starttime = self.column_values['starttime'].timestamp()
             except ValueError:
                 # date
                 try:
