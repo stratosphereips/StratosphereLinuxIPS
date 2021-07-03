@@ -148,15 +148,15 @@ class Module(Module, multiprocessing.Process):
                         # store asn info in the db
                         data['asn'].update({'timestamp': time.time()})
                         __database__.setInfoForIPs(ip, data)
-        except KeyboardInterrupt:
-            if self.reader:
-                self.reader.close()
-            return True
-        except Exception as inst:
-            if self.reader:
-                self.reader.close()
-            self.print('Problem on run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+            except KeyboardInterrupt:
+                if self.reader:
+                    self.reader.close()
+                return True
+            except Exception as inst:
+                if self.reader:
+                    self.reader.close()
+                self.print('Problem on run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
