@@ -215,7 +215,7 @@ class LogsProcess(multiprocessing.Process):
                         ts = flow.get('timestamp','').split()
                         # print(f"flow: {flow}\n\n")
                         # discard the seconds and milliseconds in ts
-                        ts = f'{ts[0]}  {ts[1][0:4]}'
+                        ts = f'{ts[0]}  {ts[1][0:5]}'
                         dport_name = flow.get('dport_name','')
                         preposition = flow.get('preposition','')
                         daddr = flow.get('daddr','')
@@ -225,7 +225,8 @@ class LogsProcess(multiprocessing.Process):
                         state = flow.get('state','')
                         critical_warning = flow.get('critical warning','')
                         trusted = flow.get('Trusted','')
-                        to_print += f'{ts}:\n\t{dport_name} {preposition} {daddr} {dport} {critical_warning} {state}'
+                        if state == 'notestablished': state ='not established'
+                        to_print += f'{ts} : {dport_name} {preposition} {daddr} {dport} {critical_warning} {state}'
                         if query: to_print+= f' query: {query}'
                         if ans: to_print += f' answers: {ans}'
                         if 'No' in trusted:  to_print += f', not trusted.'
