@@ -312,17 +312,26 @@ class ProfilerProcess(multiprocessing.Process):
         defined_datetime: datetime = None
         if self.timeformat:
             if self.timeformat == 'unixtimestamp':
-                # The format of time is in seconds.
-                # get the datetime according to the current timezone
+                # The format of time is in epoch unix timestamp.
+                # Correct datetime according to the current timezone
                 defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
             else:
                 try:
-                    # The format of time is a complete date.
-
+                    # The format of time is a complete date. 
+                    # Dont modify it, since 
+                    # 1) The time is a string, so we dont know the original timezone
+                    # 2) the python call datetime.fromtimestamp uses by default
+                    # the local zone when nothing is specified.
+                    # https://docs.python.org/3/library/datetime.html#datetime.timezone
                     # convert epoch to datetime obj and use the current timezone
-                    defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
+                    #self.print(time)
+                    #self.print(self.local_timezone)
+                    #defined_datetime = datetime.strptime(time, self.timeformat)#.astimezone(self.local_timezone)
+                    #defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
+                    #defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
                     # convert dt obj to user specified tiemformat
-                    defined_datetime = defined_datetime.strftime(self.timeformat)
+                    #defined_datetime = defined_datetime.strftime(self.timeformat)
+                    defined_datetime = time
                 except ValueError:
                     defined_datetime = None
         else:
@@ -1270,7 +1279,9 @@ class ProfilerProcess(multiprocessing.Process):
         A flow has two IP addresses, so treat both of them correctly.
         """
         try:
+
             # Define which type of flows we are going to process
+            
             if not self.column_values:
                 return True
             elif not 'ssh' in self.column_values['type'] \
@@ -1287,6 +1298,7 @@ class ProfilerProcess(multiprocessing.Process):
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
+
             try:
                 # seconds.
                 # make sure starttime is a datetime obj (not a str) so we can get the timestamp
