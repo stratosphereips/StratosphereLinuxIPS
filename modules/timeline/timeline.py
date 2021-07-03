@@ -38,15 +38,7 @@ class Module(Module, multiprocessing.Process):
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
         self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         # Wait a little so we give time to have something to print
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            self.timeout = None
+        self.timeout = None
 
     def read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """

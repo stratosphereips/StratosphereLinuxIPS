@@ -1734,4 +1734,19 @@ class Database(object):
         else:
             data = ''
         return data
+
+    def set_asn_cache(self, asn, asn_range) -> None:
+        """
+        Stores the range of asn in cached_asn hash
+        :param asn: str
+        :param asn_range: str
+        """
+        self.rcache.hset('cached_asn', asn, asn_range)
+
+    def get_asn_cache(self):
+        """
+        Returns cached asn of ip if present, or False.
+        """
+        return self.rcache.hgetall('cached_asn')
+
 __database__ = Database()

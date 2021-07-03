@@ -54,16 +54,7 @@ class Module(Module, multiprocessing.Process):
         # Pool manager to make HTTP requests with urllib3
         # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            #??
-            self.timeout = None
+        self.timeout = None
         # start the queue thread
         self.api_calls_thread = threading.Thread(target=self.API_calls_thread,
                          daemon=True)
@@ -107,17 +98,19 @@ class Module(Module, multiprocessing.Process):
         It also set passive dns retrieved from VirusTotal.
         """
         vt_scores, passive_dns, as_owner = self.get_ip_vt_data(ip)
+        ts = time.time()
         vtdata = {"URL": vt_scores[0],
                   "down_file": vt_scores[1],
                   "ref_file": vt_scores[2],
                   "com_file": vt_scores[3],
-                  "timestamp": time.time()}
+                  "timestamp": ts}
         data = {}
         data["VirusTotal"] = vtdata
 
         # Add asn if it is unknown or not in the IP info
-        if cached_data and ('asn' not in cached_data or cached_data['asn'] == 'Unknown'):
-            data['asn'] = as_owner
+        if cached_data and ('asn' not in cached_data or cached_data['asn']['asnorg'] == 'Unknown'):
+            data['asn'] = {'asnorg': as_owner,
+                           'timestamp': ts}
 
         __database__.setInfoForIPs(ip, data)
         __database__.set_passive_dns(ip, passive_dns)

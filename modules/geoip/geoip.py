@@ -29,15 +29,7 @@ class Module(Module, multiprocessing.Process):
             self.print('Error opening the geolite2 db in ./GeoLite2-Country_20190402/GeoLite2-Country.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            self.timeout = None
-        else:
-            #??
-            self.timeout = None
+        self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -68,8 +60,11 @@ class Module(Module, multiprocessing.Process):
                     # The first message comes with data=1
                     if type(ip) == str:
                         data = __database__.getIPData(ip)
-                        ip_addr = ipaddress.ip_address(ip)
-
+                        try:
+                            ip_addr = ipaddress.ip_address(ip)
+                        except ValueError:
+                            # not a valid ip, skip
+                            continue
                         # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
                         if (not data or 'geocountry' not in data) and not ip_addr.is_multicast:
                             geoinfo = self.reader.get(ip)

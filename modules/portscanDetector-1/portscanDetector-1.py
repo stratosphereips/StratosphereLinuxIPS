@@ -33,15 +33,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         # Retrieve malicious/benigh labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            self.timeout = None
-        else:
-            #??
-            self.timeout = None
+        self.timeout = None
         self.separator = '_'
 
     def print(self, text, verbose=1, debug=0):
