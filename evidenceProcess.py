@@ -247,8 +247,24 @@ class EvidenceProcess(multiprocessing.Process):
             # it's probably one of the following:  'sip', 'dip', 'sport'
             data_type = 'ip'
 
+        # Check that the srcip of the flow that generated this alert is whitelisted
+        is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
+        ip = srcip
+        if ip in whitelisted_IPs:
+            # Check if we should ignore src or dst alerts from this ip
+            # from_ can be: src, dst, both
+            # what_to_ignore can be: alerts or flows or both
+            from_ = whitelisted_IPs[ip]['from']
+            what_to_ignore = whitelisted_IPs[ip]['what_to_ignore']
+            ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+            ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
+            if ignore_alerts_from_ip:
+                self.print(f'Whitelisting src IP {srcip} for generating an alert related to {data} in {description}')
+                return True
+
         # Check IPs
         if data_type is 'ip':
+            # Check that the IP in the content of the alert is whitelisted
             # Was the evidence coming as a src or dst?
             is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
             is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple')
@@ -263,7 +279,7 @@ class EvidenceProcess(multiprocessing.Process):
                 ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
                 ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
                 if ignore_alerts_from_ip or ignore_alerts_to_ip:
-                    #self.print(f'Whitelisting src IP {srcip} for evidence about {ip}, due to a connection related to {data} in {description}')
+                    self.print(f'Whitelisting src IP {srcip} for evidence about {ip}, due to a connection related to {data} in {description}')
                     return True
 
         # Check domains
@@ -272,7 +288,6 @@ class EvidenceProcess(multiprocessing.Process):
             is_dstdomain = type_detection in ('dstdomain')
             domain = data
             # is domain in whitelisted domains?
-            self.print(f'Evidence about domain {domain}. The evidence is due to {data} {description}.')
             for domain_in_whitelist in whitelisted_domains:
                 # We go one by one so we can match substrings in the domains
                 sub_domain = domain[-len(domain_in_whitelist):]
@@ -289,20 +304,23 @@ class EvidenceProcess(multiprocessing.Process):
                         return True
 
         # Check orgs
-        # Did the user specify any whitelisted orgs??
         if whitelisted_orgs:
-            # Check if ip belongs to a whitelisted organization
-            for org in whitelisted_orgs:
-                from_ =  whitelisted_orgs[org]['from']
-                what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
-                ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
-                ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
-                ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
-                if ignore_alerts_from_ip or ignore_alerts_to_ip:
-                    # now we know for sure we need to whitelist this alert
-                    try:
-                        # method 1: using asn
-                        # first check if ip has asn info in the db
+            # Check if the IP in the alert belongs to a whitelisted organization
+            if data_type is 'ip':
+                is_srcorg = type_detection in ('sip', 'srcip', 'sport', 'inTuple', 'srcdomain')
+                is_dstorg = type_detection in ('dip', 'dstip', 'dport', 'outTuple', 'dstdomain')
+                ip = data
+                for org in whitelisted_orgs:
+                    from_ =  whitelisted_orgs[org]['from']
+                    what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
+                    self.print(f'Checking org {from_} {org}. Ignore {what_to_ignore}')
+                    ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                    ignore_alerts_from_org = ignore_alerts and is_srcorg and ('src' in from_ or 'both' in from_)
+                    ignore_alerts_to_org = ignore_alerts and is_dstorg and ('dst' in from_ or 'both' in from_)
+                    
+                    if ignore_alerts_from_org or ignore_alerts_to_org:
+                        # Method 1: using asn
+                        # Check if the IP in the content of the alert has ASN info in the db
                         ip_data = __database__.getIPData(ip)
                         ip_asn = ip_data['asn']
                         # make sure the asn field contains a value
@@ -310,22 +328,29 @@ class EvidenceProcess(multiprocessing.Process):
                                 and (org.lower() in ip_asn.lower()
                                         or ip_asn in whitelisted_orgs[org]['asn'])):
                             # this ip belongs to a whitelisted org, ignore alert
+                            self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
                             return True
-                    except (KeyError, TypeError):
+
                         # method 2 using the organization's list of ips
                         # ip doesn't have asn info, search in the list of organization IPs
                         try:
                             org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
                             ip = ipaddress.ip_address(ip)
+                            self.print(f'Checking subnets')
                             for network in org_subnets:
+                                self.print(f'Subnet: {network}')
                                 # check if ip belongs to this network
                                 if ip in ipaddress.ip_network(network):
+                                    self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
                                     return True
                         except (KeyError,TypeError):
                             # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
                             # and ip doesn't have asn info.
                             # so we don't know how to link this ip to the whitelisted org!
                             pass
+            # Check if the domain in the alert belongs to a whitelisted organization
+            # We are not doing this for now, since you can whitelist a domain.
+            # And all the domains of organiztions are not well known
         return False
 
     def run(self):
