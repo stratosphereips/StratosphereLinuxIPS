@@ -244,35 +244,28 @@ class EvidenceProcess(multiprocessing.Process):
                 # not coming from portscan module , data is a dport, do nothing
                 pass
         else:
-            # it's probably one of the following:  'sip', 'dip', 'sport', 'dport'
+            # it's probably one of the following:  'sip', 'dip', 'sport'
             data_type = 'ip'
 
-        # Check domains
-        if data_type is 'domain':
-            # is domain in whitelisted domains?
-            if data in whitelisted_domains:
-                # ignore flows or alerts?
-                what_to_ignore = whitelisted_domains[data] # alerts or flows
-                ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
-                if ignore_alerts:
-                    return True
-            # domain not in whitelisted domains.
-
         # Check IPs
-        # Is it a srcip or a dstip??
-        is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
-        is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple', 'domain')
-        ip = data
-        if data_type is 'ip' and ip in whitelisted_IPs:
-            # Check if we should ignore src or dst alerts from this ip
-            # from_ can be: src, dst, both
-            # what_to_ignore can be: alerts or flows or both
-            from_, what_to_ignore = whitelisted_IPs[ip]
-            ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
-            ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
-            ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
-            if ignore_alerts_from_ip or ignore_alerts_to_ip:
-                return True
+        if data_type is 'ip':
+            # Was the evidence coming as a src or dst?
+            is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
+            is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple')
+            ip = data
+            if ip in whitelisted_IPs:
+                # Check if we should ignore src or dst alerts from this ip
+                # from_ can be: src, dst, both
+                # what_to_ignore can be: alerts or flows or both
+                from_ = whitelisted_IPs[ip]['from']
+                what_to_ignore = whitelisted_IPs[ip]['what_to_ignore']
+                ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
+                ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
+                if ignore_alerts_from_ip or ignore_alerts_to_ip:
+                    #self.print(f'Whitelisting src IP {srcip} for evidence about {ip}, due to a connection related to {data} in {description}')
+                    return True
+
 
         # Check orgs
         # Did the user specify any whitelisted orgs??
