@@ -79,7 +79,7 @@ class Module(Module, multiprocessing.Process):
         confidence = 1
         description = domain_description
 
-        __database__.setEvidence(type_detection,detection_info, type_evidence,
+        __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def print(self, text, verbose=1, debug=0):
