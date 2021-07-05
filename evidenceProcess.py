@@ -267,7 +267,7 @@ class EvidenceProcess(multiprocessing.Process):
                     return True
 
         # Check domains
-        if data_type is 'domain':
+        elif data_type is 'domain':
             is_srcdomain = type_detection in ('srcdomain')
             is_dstdomain = type_detection in ('dstdomain')
             domain = data
