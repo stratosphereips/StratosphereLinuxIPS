@@ -47,7 +47,7 @@ def timeit(method):
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
     """ A class to create the profiles for IPs and the rest of data """
-    def __init__(self, inputqueue, outputqueue, config):
+    def __init__(self, inputqueue, outputqueue, verbose, debug, config):
         self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
