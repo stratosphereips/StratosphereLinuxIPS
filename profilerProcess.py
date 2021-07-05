@@ -1640,7 +1640,12 @@ class ProfilerProcess(multiprocessing.Process):
 
                         # Check if src IP belongs to a whitelisted organization range
                         for network in org_subnets:
-                            if ipaddress.ip_address(self.column_values['saddr']) in ipaddress.ip_network(network):
+                            try:
+                                ip = ipaddress.ip_address(self.column_values['saddr']) 
+                            except ValueError:
+                                # Some flows don't have IPs, but mac address or just - in some cases
+                                return False
+                            if ip in ipaddress.ip_network(network):
                                 #self.print(f"The src IP {self.column_values['saddr']} is in the range {network} or org {org}. Whitelisted.")
                                 return True
                         # Check if the ASN of this src IP is any of these organizations
@@ -1658,7 +1663,12 @@ class ProfilerProcess(multiprocessing.Process):
                     if 'dst' in from_ or 'both' in from_:
                         # Check if dst IP belongs to a whitelisted organization range
                         for network in org_subnets:
-                            if ipaddress.ip_address(self.column_values['daddr']) in ipaddress.ip_network(network):
+                            try:
+                                ip = ipaddress.ip_address(self.column_values['daddr']) 
+                            except ValueError:
+                                # Some flows don't have IPs, but mac address or just - in some cases
+                                return False
+                            if ip in ipaddress.ip_network(network):
                                 #self.print(f"The dst IP {self.column_values['daddr']} is in the range {network} or org {org}. Whitelisted.")
                                 return True
                         # Check if the ASN of this dst IP is any of these organizations
