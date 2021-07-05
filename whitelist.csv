@@ -1,18 +1,29 @@
 # A whitelist of IPs that should be completely ignored.
 #
-# Supported IoCTypes: ip,domain,organization
-# Direction: can be src, dst or both
-# supported organizations: google, microsoft, apple, facebook, twitter...
-# IgnoreType: either alerts or flows (plural) or both
-# ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
-# ignore flows: the flow will be completely discarded.
+# Column IoCType
+#   Supported IoCTypes: ip, domain, organization
+# Column IoCValue
+#  Supported organizations: google, microsoft, apple, facebook, twitter.
+# Column Direction
+#  Direction: src, dst or both
+#   Src: Check if the IoCValue is the source
+#   Dst: Check if the IoCValue is the destination
+#   Both: Check if the IoCValue is the source or destination
+# Column IgnoreType
+#  IgnoreType: alerts or flows or both
+#   Ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
+#   Ignore flows: the flow will be completely discarded.
 #
 # Examples
-#
-# ip,1.2.3.4,both,alerts
-# domain,google.com,src,flows
-# organization,twitter,dst,both
-#
+#ip,1.2.3.4,both,alerts
+#domain,google.com,src,flows
+#domain,apple.com,both,both
+#ip,94.23.253.72,both,alerts
+#ip,91.121.83.118,both,alerts
+#organization,microsoft,both,both
+#organization,facebook,both,both
+#organization,google,both,both
+#organization,apple,both,both
+#organization,twitter,both,both
 "IoCType","IoCValue","Direction","IgnoreType"
-ip,94.23.253.72,both,alerts
-ip,91.121.83.118,both,alerts
+ip,10.0.2.15,both,alerts
