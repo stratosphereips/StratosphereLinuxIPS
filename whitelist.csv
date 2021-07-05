@@ -26,4 +26,3 @@
 #organization,apple,both,both
 #organization,twitter,both,both
 "IoCType","IoCValue","Direction","IgnoreType"
-ip,10.0.2.15,both,alerts
