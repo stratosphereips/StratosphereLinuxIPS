@@ -192,15 +192,16 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-    def is_whitelisted(self, data, type_detection, description) -> bool:
+    def is_whitelisted(self, srcip: str, data, type_detection, description) -> bool:
         """
         Checks if IP is whitelisted
-        :param data: (detection_info) can be ip, domain, tuple(ip:port:proto)
+        :param srcip: Src IP that generated the evidence
+        :param data: This is what was detected in the evidence. (detection_info) can be ip, domain, tuple(ip:port:proto).
         :param type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
         :param description: may contain IPs if the evidence is coming from portscan module
         """
 
-        self.print(f'Checking the whitelist of {data} {type_detection} {description} ')
+        self.print(f'Checking the whitelist of {srcip}: {data} {type_detection} {description} ')
 
         whitelist = __database__.get_whitelist()
         max_tries = 10
