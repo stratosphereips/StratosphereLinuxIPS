@@ -256,14 +256,8 @@ class EvidenceProcess(multiprocessing.Process):
                 if ignore_alerts:
                     return True
             # domain not in whitelisted domains.
-            # resolve this domain and check if it's in whitelisted ips or whitelisted orgs
-            try:
-                resolved_domain = socket.gethostbyname(data)
-                data = resolved_domain
-                data_type = 'ip'
-            except socket.gaierror:
-                # the given host name is invalid
-                return False
+
+        # Check IPs
         # Is it a srcip or a dstip??
         is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
         is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple', 'domain')
