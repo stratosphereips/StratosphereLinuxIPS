@@ -367,7 +367,7 @@ if __name__ == '__main__':
     # Create the queue for the profile thread
     profilerProcessQueue = Queue()
     # Create the profile thread and start it
-    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, config)
+    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
 

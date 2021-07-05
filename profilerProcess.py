@@ -67,6 +67,8 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.setOutputQueue(self.outputqueue)
         # 1st. Get the data from the interpreted columns
         self.id_separator = __database__.getFieldSeparator()
+        self.verbose = verbose
+        self.debug = debug
 
     def print(self, text, verbose=1, debug=0):
         """
