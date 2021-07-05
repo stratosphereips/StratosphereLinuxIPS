@@ -197,8 +197,10 @@ class EvidenceProcess(multiprocessing.Process):
         Checks if IP is whitelisted
         :param data: (detection_info) can be ip, domain, tuple(ip:port:proto)
         :param type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
-        :param description: may contain IPs if te evidence is coming from portscan module
+        :param description: may contain IPs if the evidence is coming from portscan module
         """
+
+        self.print(f'Checking the whitelist of {data} {type_detection} {description} ')
 
         whitelist = __database__.get_whitelist()
         max_tries = 10
@@ -243,7 +245,8 @@ class EvidenceProcess(multiprocessing.Process):
         else:
             # it's probably one of the following:  'sip', 'dip', 'sport', 'dport'
             data_type = 'ip'
-        #---------------------------------------- Check domains
+
+        # Check domains
         if data_type is 'domain':
             # is domain in whitelisted domains?
             if data in whitelisted_domains:
@@ -263,7 +266,7 @@ class EvidenceProcess(multiprocessing.Process):
                 return False
         # Is it a srcip or a dstip??
         is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
-        is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple','domain')
+        is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple', 'domain')
         ip = data
         if data_type is 'ip' and ip in whitelisted_IPs:
             # Check if we should ignore src or dst alerts from this ip
@@ -275,9 +278,10 @@ class EvidenceProcess(multiprocessing.Process):
             ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
             if ignore_alerts_from_ip or ignore_alerts_to_ip:
                 return True
-        #---------------------------------------- Check orgs
+
+        # Check orgs
         # Did the user specify any whitelisted orgs??
-        elif whitelisted_orgs:
+        if whitelisted_orgs:
             # Check if ip belongs to a whitelisted organization
             for org in whitelisted_orgs:
                 from_ =  whitelisted_orgs[org]['from']
@@ -340,12 +344,14 @@ class EvidenceProcess(multiprocessing.Process):
                     # evidence data
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
+
                     # Ignore alert if ip is whitelisted
                     if self.is_whitelisted(detection_info, type_detection, description):
-                        # All evidence are added to the db and to kalipso because before reaching this module
-                        # Remove evidence from db so it will be completely ignored from kalipso and the terminal
+                        # Modules add evidence to the db before reaching this point, so
+                        # remove evidence from db so it will be completely ignored
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
+
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
                                                           ip,
@@ -375,7 +381,6 @@ class EvidenceProcess(multiprocessing.Process):
                         # self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
-                        # CONTINUE HERE
                         ip = profileid.split(self.separator)[1]
                         for key in evidence:
                             # Deserialize key data
