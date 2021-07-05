@@ -1528,6 +1528,7 @@ class ProfilerProcess(multiprocessing.Process):
         if self.whitelisted_domains:
             #self.print('Check the domains')
             # Domain names are stored in different zeek files using different names.
+
             # Try to get the domain from each file.
             domains_to_check = []
             ssl_domain = self.column_values.get('server_name','') # ssl.log
@@ -1537,6 +1538,7 @@ class ProfilerProcess(multiprocessing.Process):
             notice_domain = self.column_values.get('sub','').replace("CN=","") # in notice.log
             domains_to_check.append(notice_domain)
 
+            # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
             domains_to_check_src = []
             domains_to_check_dst = []
             try:
@@ -1569,31 +1571,34 @@ class ProfilerProcess(multiprocessing.Process):
             for domain in list(self.whitelisted_domains.keys()):
                 what_to_ignore = self.whitelisted_domains[domain]['what_to_ignore']
                 # Here we iterate over all the domains to check so we can find
-                # subdomains. If slack.com was whitelisted, then tes.slack.com 
-                # should be ignored too.
+                # subdomains. If slack.com was whitelisted, then test.slack.com 
+                # should be ignored too. But not 'slack.com.test'
                 for domain_to_check in domains_to_check:
-                    if domain in domain_to_check:
+                    main_domain = domain_to_check[-len(domain):]
+                    if domain in main_domain:
                         # We can ignore flows or alerts, what is it?
                         if 'flows' in what_to_ignore or 'both' in what_to_ignore:
-                            #self.print(f'Whitelisting the domain {domain}')
+                            #self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
                             return True
     
                 # Now check the related domains of the src IP
                 from_ = self.whitelisted_domains[domain]['from']
                 if 'src' in from_ or 'both' in from_:
                     for domain_to_check in domains_to_check_src:
-                        if domain in domain_to_check:
+                        main_domain = domain_to_check[-len(domain):]
+                        if domain in main_domain:
                             # We can ignore flows or alerts, what is it?
                             if 'flows' in what_to_ignore or 'both' in what_to_ignore:
-                                #self.print(f"Whitelisting the domain {domain} because is related to src IP {self.column_values['saddr']}")
+                                #self.print(f"Whitelisting the domain {domain_to_check} because is related to domain {domain} of src IP {self.column_values['saddr']}")
                                 return True
                 # Now check the related domains of the dst IP
                 if 'dst' in from_ or 'both' in from_:
                     for domain_to_check in domains_to_check_dst:
-                        if domain in domain_to_check:
+                        main_domain = domain_to_check[-len(domain):]
+                        if domain in main_domain:
                             # We can ignore flows or alerts, what is it?
                             if 'flows' in what_to_ignore or 'both' in what_to_ignore:
-                                #self.print(f"Whitelisting the domain {domain} because is related to dst IP {self.column_values['daddr']}")
+                                #self.print(f"Whitelisting the domain {domain_to_check} because is related to domain {domain} of dst IP {self.column_values['daddr']}")
                                 return True
 
         # Check if the IPs are whitelisted
