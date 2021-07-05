@@ -201,7 +201,7 @@ class EvidenceProcess(multiprocessing.Process):
         :param description: may contain IPs if the evidence is coming from portscan module
         """
 
-        self.print(f'Checking the whitelist of {srcip}: {data} {type_detection} {description} ')
+        #self.print(f'Checking the whitelist of {srcip}: {data} {type_detection} {description} ')
 
         whitelist = __database__.get_whitelist()
         max_tries = 10
@@ -259,7 +259,7 @@ class EvidenceProcess(multiprocessing.Process):
             ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
             ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
             if ignore_alerts_from_ip:
-                self.print(f'Whitelisting src IP {srcip} for generating an alert related to {data} in {description}')
+                #self.print(f'Whitelisting src IP {srcip} for generating an alert related to {data} in {description}')
                 return True
 
         # Check IPs
@@ -279,7 +279,7 @@ class EvidenceProcess(multiprocessing.Process):
                 ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
                 ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
                 if ignore_alerts_from_ip or ignore_alerts_to_ip:
-                    self.print(f'Whitelisting src IP {srcip} for evidence about {ip}, due to a connection related to {data} in {description}')
+                    #self.print(f'Whitelisting src IP {srcip} for evidence about {ip}, due to a connection related to {data} in {description}')
                     return True
 
         # Check domains
@@ -300,7 +300,7 @@ class EvidenceProcess(multiprocessing.Process):
                     ignore_alerts_from_domain = ignore_alerts and is_srcdomain and ('src' in from_ or 'both' in from_)
                     ignore_alerts_to_domain = ignore_alerts and is_dstdomain and ('dst' in from_ or 'both' in from_)
                     if ignore_alerts_from_domain or ignore_alerts_to_domain:
-                        self.print(f'Whitelisting evidence about {domain_in_whitelist}, due to a connection related to {data} in {description}')
+                        #self.print(f'Whitelisting evidence about {domain_in_whitelist}, due to a connection related to {data} in {description}')
                         return True
 
         # Check orgs
@@ -313,7 +313,6 @@ class EvidenceProcess(multiprocessing.Process):
                 for org in whitelisted_orgs:
                     from_ =  whitelisted_orgs[org]['from']
                     what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
-                    self.print(f'Checking org {from_} {org}. Ignore {what_to_ignore}')
                     ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
                     ignore_alerts_from_org = ignore_alerts and is_srcorg and ('src' in from_ or 'both' in from_)
                     ignore_alerts_to_org = ignore_alerts and is_dstorg and ('dst' in from_ or 'both' in from_)
@@ -328,7 +327,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 and (org.lower() in ip_asn.lower()
                                         or ip_asn in whitelisted_orgs[org]['asn'])):
                             # this ip belongs to a whitelisted org, ignore alert
-                            self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
+                            #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
                             return True
 
                         # method 2 using the organization's list of ips
@@ -336,12 +335,10 @@ class EvidenceProcess(multiprocessing.Process):
                         try:
                             org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
                             ip = ipaddress.ip_address(ip)
-                            self.print(f'Checking subnets')
                             for network in org_subnets:
-                                self.print(f'Subnet: {network}')
                                 # check if ip belongs to this network
                                 if ip in ipaddress.ip_network(network):
-                                    self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
+                                    #self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
                                     return True
                         except (KeyError,TypeError):
                             # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
