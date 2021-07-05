@@ -5,6 +5,7 @@ from typing import Tuple, Dict, Set, Callable
 import configparser
 import traceback
 from datetime import datetime
+import ipaddress
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -990,11 +991,14 @@ class Database(object):
         """	
         Return information about this IP	
         Returns a dictionary or False if there is no IP in the database	
+        ip: a string
         We need to separate these three cases:	
         1- IP is in the DB without data. Return empty dict.	
         2- IP is in the DB with data. Return dict.	
         3- IP is not in the DB. Return False	
         """
+        if type(ip) == ipaddress.IPv4Address or type(ip) == ipaddress.IPv6Address:
+            ip = str(ip)
         data = self.rcache.hget('IPsInfo', ip)
         if data:
             # This means the IP was in the database, with or without data
