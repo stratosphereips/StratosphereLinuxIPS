@@ -177,9 +177,9 @@ class ProfilerProcess(multiprocessing.Process):
                 try:
                     if ('ip' in type_ and
                         (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
-                        self.whitelisted_IPs[data] = [from_, what_to_ignore]
+                        self.whitelisted_IPs[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
                     elif 'domain' in type_ and validators.domain(data):
-                        self.whitelisted_domains[data] = what_to_ignore
+                        self.whitelisted_domains[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
                     elif 'org' in type_:
                         #organizations dicts look something like this:
                         #  {'google': {'from':'dst',
