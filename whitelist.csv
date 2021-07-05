@@ -20,9 +20,9 @@
 #domain,apple.com,both,both
 #ip,94.23.253.72,both,alerts
 #ip,91.121.83.118,both,alerts
+"IoCType","IoCValue","Direction","IgnoreType"
 #organization,microsoft,both,both
 #organization,facebook,both,both
 #organization,google,both,both
 #organization,apple,both,both
 #organization,twitter,both,both
-"IoCType","IoCValue","Direction","IgnoreType"
