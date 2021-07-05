@@ -266,6 +266,27 @@ class EvidenceProcess(multiprocessing.Process):
                     #self.print(f'Whitelisting src IP {srcip} for evidence about {ip}, due to a connection related to {data} in {description}')
                     return True
 
+        # Check domains
+        if data_type is 'domain':
+            is_srcdomain = type_detection in ('srcdomain')
+            is_dstdomain = type_detection in ('dstdomain')
+            domain = data
+            # is domain in whitelisted domains?
+            self.print(f'Evidence about domain {domain}. The evidence is due to {data} {description}.')
+            for domain_in_whitelist in whitelisted_domains:
+                # We go one by one so we can match substrings in the domains
+                sub_domain = domain[-len(domain_in_whitelist):]
+                if domain_in_whitelist in sub_domain:
+                    # Ignore src or dst
+                    from_ = whitelisted_domains[sub_domain]['from']
+                    # Ignore flows or alerts?
+                    what_to_ignore = whitelisted_domains[sub_domain]['what_to_ignore'] # alerts or flows
+                    ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                    ignore_alerts_from_domain = ignore_alerts and is_srcdomain and ('src' in from_ or 'both' in from_)
+                    ignore_alerts_to_domain = ignore_alerts and is_dstdomain and ('dst' in from_ or 'both' in from_)
+                    if ignore_alerts_from_domain or ignore_alerts_to_domain:
+                        self.print(f'Whitelisting evidence about {domain_in_whitelist}, due to a connection related to {data} in {description}')
+                        return True
 
         # Check orgs
         # Did the user specify any whitelisted orgs??
@@ -334,7 +355,7 @@ class EvidenceProcess(multiprocessing.Process):
                     description = evidence_data.get('description')
 
                     # Ignore alert if ip is whitelisted
-                    if self.is_whitelisted(detection_info, type_detection, description):
+                    if self.is_whitelisted(ip, detection_info, type_detection, description):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
                         __database__.deleteEvidence(profileid, twid, key)
