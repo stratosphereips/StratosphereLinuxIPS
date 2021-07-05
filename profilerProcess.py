@@ -1590,7 +1590,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # Now check the related domains of the dst IP
                 if 'dst' in from_ or 'both' in from_:
                     for domain_to_check in domains_to_check_dst:
-                        if domain in domain_to_check_dst:
+                        if domain in domain_to_check:
                             # We can ignore flows or alerts, what is it?
                             if 'flows' in what_to_ignore or 'both' in what_to_ignore:
                                 #self.print(f"Whitelisting the domain {domain} because is related to dst IP {self.column_values['daddr']}")
