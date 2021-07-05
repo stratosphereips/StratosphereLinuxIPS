@@ -442,11 +442,12 @@ class Module(Module, multiprocessing.Process):
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_description = json.loads(ip_description)
                             ip_source = ip_description['source'] # this is a .csv file
+                            # Set the evidence on this detection
                             self.set_evidence_ip(ip, ip_source, profileid, twid, ip_state)
                             # set malicious IP in IPInfo
-                            self.set_maliciousIP_to_IPInfo(ip,ip_description)
+                            self.set_maliciousIP_to_IPInfo(ip, ip_description)
                             # set malicious IP in MaliciousIPs
-                            self.set_maliciousIP_to_MaliousIPs(ip,profileid,twid)
+                            self.set_maliciousIP_to_MaliousIPs(ip, profileid,twid)
 
                     if domain:
                         # Search for this domain in our database of IoC
