@@ -24,7 +24,9 @@ import platform
 from colorama import init
 from os import path
 from colorama import Fore, Back, Style
-
+import validators
+import ipaddress
+import socket
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -205,6 +207,163 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
+    def is_whitelisted(self, srcip: str, data, type_detection, description) -> bool:
+        """
+        Checks if IP is whitelisted
+        :param srcip: Src IP that generated the evidence
+        :param data: This is what was detected in the evidence. (detection_info) can be ip, domain, tuple(ip:port:proto).
+        :param type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
+        :param description: may contain IPs if the evidence is coming from portscan module
+        """
+
+        #self.print(f'Checking the whitelist of {srcip}: {data} {type_detection} {description} ')
+
+        whitelist = __database__.get_whitelist()
+        max_tries = 10
+        # if this module is loaded before profilerProcess or before we're done processing the whitelist in general
+        # the database won't return the whitelist
+        # so we need to try several times until the db returns the populated whitelist
+        # empty dicts evaluate to False
+        while bool(whitelist) is False and max_tries!=0:
+            # try max 10 times to get the whitelist, if it's still empty then it's not empty by mistake
+            max_tries -=1
+            whitelist = __database__.get_whitelist()
+        if max_tries is 0:
+            # we tried 10 times to get the whitelist, it's probably empty.
+            return False
+
+        try:
+            # Convert each list from str to dict
+            whitelisted_IPs = json.loads(whitelist['IPs'])
+            whitelisted_domains = json.loads(whitelist['domains'])
+            whitelisted_orgs = json.loads(whitelist['organizations'])
+        except IndexError:
+            pass
+
+        # Set data type
+        if 'domain' in type_detection:
+            data_type = 'domain'
+        elif 'outTuple' in type_detection:
+            # for example: ip:port:proto
+            # get the ip
+            data = data.split(":")[0]
+            data_type = 'ip'
+        elif 'dport' in type_detection:
+            # is coming from portscan module
+            try:
+                # data coming from portscan module contains the port and not the ip, we need to extract
+                # the ip from the description
+                data = description.split('. Tot')[0].split(': ')[1]
+                data_type = 'ip'
+            except (IndexError,ValueError):
+                # not coming from portscan module , data is a dport, do nothing
+                pass
+        else:
+            # it's probably one of the following:  'sip', 'dip', 'sport'
+            data_type = 'ip'
+
+        # Check that the srcip of the flow that generated this alert is whitelisted
+        is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
+        ip = srcip
+        if ip in whitelisted_IPs:
+            # Check if we should ignore src or dst alerts from this ip
+            # from_ can be: src, dst, both
+            # what_to_ignore can be: alerts or flows or both
+            from_ = whitelisted_IPs[ip]['from']
+            what_to_ignore = whitelisted_IPs[ip]['what_to_ignore']
+            ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+            ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
+            if ignore_alerts_from_ip:
+                #self.print(f'Whitelisting src IP {srcip} for generating an alert related to {data} in {description}')
+                return True
+
+        # Check IPs
+        if data_type is 'ip':
+            # Check that the IP in the content of the alert is whitelisted
+            # Was the evidence coming as a src or dst?
+            is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
+            is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple')
+            ip = data
+            if ip in whitelisted_IPs:
+                # Check if we should ignore src or dst alerts from this ip
+                # from_ can be: src, dst, both
+                # what_to_ignore can be: alerts or flows or both
+                from_ = whitelisted_IPs[ip]['from']
+                what_to_ignore = whitelisted_IPs[ip]['what_to_ignore']
+                ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
+                ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
+                if ignore_alerts_from_ip or ignore_alerts_to_ip:
+                    #self.print(f'Whitelisting src IP {srcip} for evidence about {ip}, due to a connection related to {data} in {description}')
+                    return True
+
+        # Check domains
+        elif data_type is 'domain':
+            is_srcdomain = type_detection in ('srcdomain')
+            is_dstdomain = type_detection in ('dstdomain')
+            domain = data
+            # is domain in whitelisted domains?
+            for domain_in_whitelist in whitelisted_domains:
+                # We go one by one so we can match substrings in the domains
+                sub_domain = domain[-len(domain_in_whitelist):]
+                if domain_in_whitelist in sub_domain:
+                    # Ignore src or dst
+                    from_ = whitelisted_domains[sub_domain]['from']
+                    # Ignore flows or alerts?
+                    what_to_ignore = whitelisted_domains[sub_domain]['what_to_ignore'] # alerts or flows
+                    ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                    ignore_alerts_from_domain = ignore_alerts and is_srcdomain and ('src' in from_ or 'both' in from_)
+                    ignore_alerts_to_domain = ignore_alerts and is_dstdomain and ('dst' in from_ or 'both' in from_)
+                    if ignore_alerts_from_domain or ignore_alerts_to_domain:
+                        #self.print(f'Whitelisting evidence about {domain_in_whitelist}, due to a connection related to {data} in {description}')
+                        return True
+
+        # Check orgs
+        if whitelisted_orgs:
+            # Check if the IP in the alert belongs to a whitelisted organization
+            if data_type is 'ip':
+                is_srcorg = type_detection in ('sip', 'srcip', 'sport', 'inTuple', 'srcdomain')
+                is_dstorg = type_detection in ('dip', 'dstip', 'dport', 'outTuple', 'dstdomain')
+                ip = data
+                for org in whitelisted_orgs:
+                    from_ =  whitelisted_orgs[org]['from']
+                    what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
+                    ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                    ignore_alerts_from_org = ignore_alerts and is_srcorg and ('src' in from_ or 'both' in from_)
+                    ignore_alerts_to_org = ignore_alerts and is_dstorg and ('dst' in from_ or 'both' in from_)
+                    
+                    if ignore_alerts_from_org or ignore_alerts_to_org:
+                        # Method 1: using asn
+                        # Check if the IP in the content of the alert has ASN info in the db
+                        ip_data = __database__.getIPData(ip)
+                        ip_asn = ip_data['asn']
+                        # make sure the asn field contains a value
+                        if (ip_asn not in ('','Unknown')
+                                and (org.lower() in ip_asn.lower()
+                                        or ip_asn in whitelisted_orgs[org]['asn'])):
+                            # this ip belongs to a whitelisted org, ignore alert
+                            #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
+                            return True
+
+                        # method 2 using the organization's list of ips
+                        # ip doesn't have asn info, search in the list of organization IPs
+                        try:
+                            org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
+                            ip = ipaddress.ip_address(ip)
+                            for network in org_subnets:
+                                # check if ip belongs to this network
+                                if ip in ipaddress.ip_network(network):
+                                    #self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
+                                    return True
+                        except (KeyError,TypeError):
+                            # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
+                            # and ip doesn't have asn info.
+                            # so we don't know how to link this ip to the whitelisted org!
+                            pass
+            # Check if the domain in the alert belongs to a whitelisted organization
+            # We are not doing this for now, since you can whitelist a domain.
+            # And all the domains of organiztions are not well known
+        return False
 
     def run(self):
         try:
@@ -225,12 +384,20 @@ class EvidenceProcess(multiprocessing.Process):
                     twid = data.get('twid')
                     # Key data
                     key = data.get('key')
-                    type_detection = key.get('type_detection')
-                    detection_info = key.get('detection_info')
-                    type_evidence = key.get('type_evidence')
+                    type_detection = key.get('type_detection') # example: dstip srcip dport sport dstdomain
+                    detection_info = key.get('detection_info') # example: ip, port, inTuple, outTuple, domain
+                    type_evidence = key.get('type_evidence') # example: PortScan, ThreatIntelligence, etc..
                     # evidence data
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
+
+                    # Ignore alert if ip is whitelisted
+                    if self.is_whitelisted(ip, detection_info, type_detection, description):
+                        # Modules add evidence to the db before reaching this point, so
+                        # remove evidence from db so it will be completely ignored
+                        __database__.deleteEvidence(profileid, twid, key)
+                        continue
+
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
                                                           ip,
@@ -259,7 +426,6 @@ class EvidenceProcess(multiprocessing.Process):
                         # self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
-                        # CONTINUE HERE
                         ip = profileid.split(self.separator)[1]
                         for key in evidence:
                             # Deserialize key data

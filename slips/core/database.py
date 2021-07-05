@@ -5,6 +5,7 @@ from typing import Tuple, Dict, Set, Callable
 import configparser
 import traceback
 from datetime import datetime
+import ipaddress
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -890,7 +891,6 @@ class Database(object):
         # Set evidence in the database.
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
-
         evidence_to_send = {
             'profileid': str(profileid),
             'twid': str(twid),
@@ -900,6 +900,21 @@ class Database(object):
         }
         evidence_to_send = json.dumps(evidence_to_send)
         self.publish('evidence_added', evidence_to_send)
+
+    def deleteEvidence(self,profileid, twid, key):
+        """ Delete evidence from the database """
+
+        current_evidence = self.getEvidenceForTW(profileid, twid)
+        if current_evidence:
+            current_evidence = json.loads(current_evidence)
+        else:
+            current_evidence = {}
+        key_json = json.dumps(key)
+        # Delete the key regardless of whether it is in the dictionary
+        current_evidence.pop(key_json, None)
+        current_evidence_json = json.dumps(current_evidence)
+        self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
+        self.r.hset('evidence'+profileid, twid, current_evidence_json)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -981,14 +996,17 @@ class Database(object):
         return data
 
     def getIPData(self, ip):
+        """	
+        Return information about this IP	
+        Returns a dictionary or False if there is no IP in the database	
+        ip: a string
+        We need to separate these three cases:	
+        1- IP is in the DB without data. Return empty dict.	
+        2- IP is in the DB with data. Return dict.	
+        3- IP is not in the DB. Return False	
         """
-        Return information about this IP
-        Returns a dictionary or False if there is no IP in the database
-        We need to separate these three cases:
-        1- IP is in the DB without data. Return empty dict.
-        2- IP is in the DB with data. Return dict.
-        3- IP is not in the DB. Return False
-        """
+        if type(ip) == ipaddress.IPv4Address or type(ip) == ipaddress.IPv6Address:
+            ip = str(ip)
         data = self.rcache.hget('IPsInfo', ip)
         if data:
             # This means the IP was in the database, with or without data
@@ -1762,5 +1780,17 @@ class Database(object):
     def get_PIDs(self):
         """ returns a dict with module names as keys and pids as values """
         return self.r.hgetall('PIDs')
+
+    def set_whitelist(self,whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
+        """ Store a dict of whitelisted IPs, domains and organizations in the db """
+
+        self.r.hset("whitelist" , "IPs", json.dumps(whitelisted_IPs))
+        self.r.hset("whitelist" , "domains", json.dumps(whitelisted_domains))
+        self.r.hset("whitelist" , "organizations", json.dumps(whitelisted_organizations))
+
+    def get_whitelist(self):
+        """ Return dict of 3 keys: IPs, domains and organizations"""
+        return self.r.hgetall('whitelist')
+
 
 __database__ = Database()
