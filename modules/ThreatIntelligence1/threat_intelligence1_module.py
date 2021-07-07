@@ -412,8 +412,6 @@ class Module(Module, multiprocessing.Process):
 
         # Main loop function
         while True:
-            print("*****************")
-            print(self.get_hash_from_file('slips-kalipso.gif'))
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time
