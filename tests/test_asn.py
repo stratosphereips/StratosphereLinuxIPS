@@ -14,6 +14,7 @@ def create_asn_instance(outputQueue):
     asn = Module(outputQueue, config)
     # override the self.print function to avoid broken pipes
     asn.print = do_nothing
+    asn.stop_queues = do_nothing
     return asn
 
 def test_get_asn_info_from_geolite(outputQueue, database):
