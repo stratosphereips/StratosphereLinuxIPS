@@ -1,7 +1,7 @@
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 
 # Your imports
@@ -31,15 +31,7 @@ class Module(Module, multiprocessing.Process):
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
-
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            self.timeout = None
-        else:
-            self.timeout = None
+        self.timeout = None
         self.__read_configuration()
 
     def __read_configuration(self):
@@ -52,7 +44,7 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_local_threat_intelligence_data = 'modules/ThreatIntelligence1/local_data_files/'
 
-    def set_evidence_ip(self, ip, ip_description='', profileid='', twid='', ip_state='ip'):
+    def set_evidence_ip(self, ip, uid, ip_description='', profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
         '''
@@ -65,9 +57,9 @@ class Module(Module, multiprocessing.Process):
         description = ip_description
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                                 threat_level, confidence, description, profileid=profileid, twid=twid,uid=uid)
 
-    def set_evidence_domain(self, domain, domain_description='', profileid='', twid=''):
+    def set_evidence_domain(self, domain,uid, domain_description='', profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
         '''
@@ -79,8 +71,8 @@ class Module(Module, multiprocessing.Process):
         confidence = 1
         description = domain_description
 
-        __database__.setEvidence(type_detection,detection_info, type_evidence,
-                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                 threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -98,14 +90,13 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def __get_hash_from_file(self, filename):
+    def get_hash_from_file(self, filename):
         """
-        Compute the hash of a local file
+        Compute the sha256 hash of a local file
         """
         try:
             # The size of each read from the file
             BLOCK_SIZE = 65536
-
             # Create the hash object, can use something other
             # than `.sha256()` if you wish
             file_hash = hashlib.sha256()
@@ -119,26 +110,27 @@ class Module(Module, multiprocessing.Process):
                     file_hash.update(fb)
                     # Read the next block from the file
                     fb = f.read(BLOCK_SIZE)
-
             return file_hash.hexdigest()
         except Exception as inst:
-            self.print('Problem on __get_hash_from_file()', 0, 0)
+            self.print('Problem on get_hash_from_file()', 0, 0)
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
+            return False
 
-    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> None:
+    def load_malicious_datafile(self, malicious_data_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
         This also helps in having unique ioc accross files
         Returns nothing, but the dictionary should be filled
+        :param malicious_data_path: path_to local threat intel files/localfile
         """
         try:
+            data_file_name = malicious_data_path.split('/')[-1]
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
-
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
 
                 # Remove comments and find the description column if possible
@@ -248,10 +240,11 @@ class Module(Module, multiprocessing.Process):
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
+            return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            self.print('Problem on the __load_malicious_datafile()', 0, 1)
+            self.print('Problem on the load_malicious_datafile()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -308,7 +301,7 @@ class Module(Module, multiprocessing.Process):
                     old_hash = ''
                 # In the case of the local file, we dont store the e-tag but
                 # the hash
-                new_hash = self.__get_hash_from_file(path_to_files + '/' + localfile)
+                new_hash = self.get_hash_from_file(path_to_files + '/' + localfile)
                 if old_hash == new_hash:
                     # The 2 hashes are identical. File is up to date.
                     self.print(f'File {localfile} is up to date.', 3, 0)
@@ -321,7 +314,7 @@ class Module(Module, multiprocessing.Process):
                         # Delete previous data of this file.
                         self.__delete_old_source_data_from_database(localfile)
                     # Load updated data to the database
-                    self.__load_malicious_datafile(path_to_files + '/' + localfile, localfile)
+                    self.load_malicious_datafile(path_to_files + '/' + localfile)
 
                     # Store the new etag and time of file in the database
                     malicious_file_info = {}
@@ -333,7 +326,6 @@ class Module(Module, multiprocessing.Process):
                     # Something failed. Do not download
                     self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 1)
                     return False
-
 
         except Exception as inst:
             self.print('Problem on __load_malicious_local_files()', 0, 0)
@@ -410,14 +402,24 @@ class Module(Module, multiprocessing.Process):
             # The remote files are being loaded by the UpdateManager
             if not self.load_malicious_local_files(self.path_to_local_threat_intelligence_data):
                 self.print(f'Could not load the local file of TI data {self.path_to_local_threat_intelligence_data}')
+        except Exception as inst:
+            self.print('Problem on the run()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            self.print(traceback.format_exc())
+            return True
 
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time
                 # (see at logsProcess.py), we will stop slips automatically.
                 # The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
@@ -427,6 +429,7 @@ class Module(Module, multiprocessing.Process):
                     # Extract data from dict
                     profileid = data.get('profileid')
                     twid = data.get('twid')
+                    uid = data.get('uid')
                     ip_state = data.get('ip_state') # ip state is either 'srcip' or 'dstip'
                     protocol = data.get('proto')
                     # Data should contain either an ip or a domain so one of them will be None
@@ -442,28 +445,30 @@ class Module(Module, multiprocessing.Process):
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_description = json.loads(ip_description)
                             ip_source = ip_description['source'] # this is a .csv file
-                            self.set_evidence_ip(ip, ip_source, profileid, twid, ip_state)
+                            # Set the evidence on this detection
+                            self.set_evidence_ip(ip, uid, ip_source, profileid, twid, ip_state)
                             # set malicious IP in IPInfo
-                            self.set_maliciousIP_to_IPInfo(ip,ip_description)
+                            self.set_maliciousIP_to_IPInfo(ip, ip_description)
                             # set malicious IP in MaliciousIPs
-                            self.set_maliciousIP_to_MaliousIPs(ip,profileid,twid)
+                            self.set_maliciousIP_to_MaliousIPs(ip, profileid, twid)
 
                     if domain:
                         # Search for this domain in our database of IoC
                         domain_description = __database__.search_Domain_in_IoC(domain)
                         if domain_description != False: # Dont change this condition. This is the only way it works
                             # If the domain is in the blacklist of IoC. Set an evidence
-                            self.set_evidence_domain(domain, domain_description, profileid, twid)
+                            self.set_evidence_domain(domain, uid, domain_description, profileid, twid)
                             # set malicious domain in DomainInfo
                             self.set_maliciousDomain_to_DomainInfo(domain, domain_description)
                             # set malicious domain in MaliciousDomains
                             self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            self.print(traceback.format_exc())
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc())
+                return True
