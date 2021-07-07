@@ -1,7 +1,6 @@
-""" Unit test for modules/ThreatIntelligence1/threatintelligence-1.py """
-from ..modules.ThreatIntelligence1.threatintelligence-1 import Module
+""" Unit test for modules/ThreatIntelligence1/threat_intelligence1_module.py """
+from ..modules.ThreatIntelligence1.threat_intelligence1_module import Module
 import configparser
-
 
 def do_nothing(*args):
     """ Used to override the print function because using the self.print causes broken pipes """
@@ -19,4 +18,4 @@ def create_threatintel_instance(outputQueue):
 def test_get_hash_from_file(outputQueue, database):
     threatintel = create_threatintel_instance(outputQueue)
     # a file that we know doesn't change
-    assert threatintel.__get_hash_from_file('../modules/template/__init__.py') == '2d12747a3369505a4d3b722a0422f8ffc8af5514355cdb0eb18178ea7071b8d0'
+    assert threatintel.get_hash_from_file('modules/template/__init__.py') == '2d12747a3369505a4d3b722a0422f8ffc8af5514355cdb0eb18178ea7071b8d0'
