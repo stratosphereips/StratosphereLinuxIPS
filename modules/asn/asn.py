@@ -1,15 +1,18 @@
 # Module to load and find the ASN of each IP
 
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 
 # Your imports
 import time
 import maxminddb
 import ipaddress
+import ipwhois
+import json
+#todo add to conda env
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -34,16 +37,10 @@ class Module(Module, multiprocessing.Process):
             self.print('Error opening the geolite2 db in ./GeoLite2-Country_20190402/GeoLite2-Country.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            #??
-            self.timeout = None
+        self.timeout = None
+        # update asn every 1 month
+        self.update_period = 2592000
+
 
     def print(self, text, verbose=1, debug=0):
         """ 
@@ -61,10 +58,83 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def run(self):
+    def get_cached_asn(self, ip):
+        """
+        If this ip belongs to a cached ip range, return the cached asn info of it
+        :param ip: str
+        """
+        cached_asn = __database__.get_asn_cache()
         try:
-            # Main loop function
-            while True:
+            for asn,asn_range in cached_asn.items():
+                # convert to objects
+                ip_range = ipaddress.ip_network(asn_range)
+                try:
+                    ip = ipaddress.ip_address(ip)
+                except ValueError:
+                    # not a valid ip
+                    break
+                if ip in ip_range:
+                    return asn
+        except AttributeError:
+            # cached_asn is not found
+            return False
+
+    def update_asn(self, cached_data) -> bool:
+        """
+        Returns True if
+        - no asn data is found in the db OR ip has no cached info
+        - OR month has passed since we last updated asn info in the db
+        :param cached_data: ip cached info from the database, dict
+        """
+        try:
+            update =  (time.time() - cached_data['asn']['timestamp']) > self.update_period
+            return update
+        except (KeyError, TypeError):
+            # no there's no cached asn info,or no timestamp, or cached_data is None
+            # we should update
+            return True
+
+    def get_asn_info_from_geolite(self, ip) -> bool:
+        """
+        Get ip info from geolite database
+        :param ip: str
+        """
+        asninfo = self.reader.get(ip)
+        data = {}
+        try:
+            # found info in geolite
+            asnorg = asninfo['autonomous_system_organization']
+            data['asn'] = {'asnorg': asnorg}
+        except KeyError:
+            # asn info not found in geolite
+            data['asn'] ={'asnorg': 'Unknown'}
+        except TypeError:
+            # geolite returned nothing at all for this ip
+            data['asn'] = {'asnorg': 'Unknown'}
+        return data
+
+    def cache_ip_range(self, ip) -> bool:
+        """ caches the asn of current ip range """
+        try:
+            # Cache the range of this ip
+            whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
+            asnorg = whois_info.get('asn_description', False)
+            asn_cidr = whois_info.get('asn_cidr', False)
+            if asnorg and asn_cidr not in ('' , 'NA'):
+                __database__.set_asn_cache(asnorg, asn_cidr)
+            return True
+        except (ipwhois.exceptions.IPDefinedError,ipwhois.exceptions.HTTPLookupError):
+            # private ip or RDAP lookup failed. don't cache
+            return False
+        except ipwhois.exceptions.ASNRegistryError:
+            # ASN lookup failed with no more methods to try
+            pass
+
+
+    def run(self):
+        # Main loop function
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
