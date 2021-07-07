@@ -92,7 +92,7 @@ class Module(Module, multiprocessing.Process):
 
     def __get_hash_from_file(self, filename):
         """
-        Compute the hash of a local file
+        Compute the sha256 hash of a local file
         """
         try:
             # The size of each read from the file
