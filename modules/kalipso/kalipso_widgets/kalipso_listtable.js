@@ -104,8 +104,17 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
           ip_info_dict['VirusTotal']['ref'] = String(this.round(ipInfo_json['VirusTotal']['ref_file'],5))
           ip_info_dict['VirusTotal']['com'] = String(this.round(ipInfo_json['VirusTotal']['com_file'],5))
         }
+        else{
+          ip_info_dict['VirusTotal']['URL'] = '-'
+          ip_info_dict['VirusTotal']['down'] = '-'
+          ip_info_dict['VirusTotal']['ref'] = '-'
+          ip_info_dict['VirusTotal']['com'] = '-'
+        }
         if(ipInfo_json.hasOwnProperty('asn')){
           ip_info_dict['asn'] = ipInfo_json['asn']
+        }
+        else{
+            ip_info_dict['asn'] = '-'
         }
         if(ipInfo_json.hasOwnProperty('geocountry')){
          ip_info_dict['geo'] = this.country_code[ipInfo_json['geocountry']]}
@@ -115,6 +124,10 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
 
         if(ipInfo_json.hasOwnProperty('reverse_dns')){
             this.widget.setLabel(ipInfo_json['reverse_dns'])}
+        else{
+            this.widget.setLabel('-')
+
+        }
 
         ipInfo_data.push([ip_info_dict['asn'], ip_info_dict['geo'], ip_info_dict['VirusTotal']['URL'], ip_info_dict['VirusTotal']['down'],ip_info_dict['VirusTotal']['ref'],ip_info_dict['VirusTotal']['com']])
         this.setDataIPInfo(ipInfo_data)
