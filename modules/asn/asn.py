@@ -91,6 +91,42 @@ class Module(Module, multiprocessing.Process):
             # we should update
             return True
 
+    def get_asn_info_from_geolite(self, ip) -> bool:
+        """
+        Get ip info from geolite database
+        :param ip: str
+        """
+        asninfo = self.reader.get(ip)
+        data = {}
+        try:
+            # found info in geolite
+            asnorg = asninfo['autonomous_system_organization']
+            data['asn'] = {'asnorg': asnorg}
+        except KeyError:
+            # asn info not found in geolite
+            data['asn'] ={'asnorg': 'Unknown'}
+        except TypeError:
+            # geolite returned nothing at all for this ip
+            data['asn'] = {'asnorg': 'Unknown'}
+        return data
+
+    def cache_ip_range(self, ip) -> bool:
+        """ caches the asn of current ip range """
+        try:
+            # Cache the range of this ip
+            whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
+            asnorg = whois_info.get('asn_description', False)
+            asn_cidr = whois_info.get('asn_cidr', False)
+            if asnorg and asn_cidr not in ('' , 'NA'):
+                __database__.set_asn_cache(asnorg, asn_cidr)
+            return True
+        except ipwhois.exceptions.IPDefinedError:
+            # private ip. don't cache
+            return False
+        except ipwhois.exceptions.ASNRegistryError:
+            # ASN lookup failed with no more methods to try
+            pass
+
     def run(self):
         # Main loop function
         while True:
@@ -120,32 +156,9 @@ class Module(Module, multiprocessing.Process):
                         # do we have asn cached for this range?
                         cached_asn = self.get_cached_asn(ip)
                         if not cached_asn:
-                            # we don't have it cached get asn info from geolite db
-                            asninfo = self.reader.get(ip)
-                            try:
-                                # found info in geolite
-                                asnorg = asninfo['autonomous_system_organization']
-                                data['asn'] = {'asnorg': asnorg}
-                            except KeyError:
-                                # asn info not found in geolite
-                                data['asn'] ={'asnorg': 'Unknown'}
-                            except TypeError:
-                                # geolite returned nothing at all for this ip
-                                data['asn'] = {'asnorg': 'Unknown'}
-                            try:
-                                # Cache the range of this ip
-                                whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
-                                asnorg = whois_info.get('asn_description', False)
-                                asn_cidr = whois_info.get('asn_cidr', False)
-                                if asnorg and asn_cidr not in ('' , 'NA'):
-                                    __database__.set_asn_cache(asnorg, asn_cidr)
-                            except ipwhois.exceptions.IPDefinedError:
-                                # private ip. don't cache
-                                pass
-                            except ipwhois.exceptions.ASNRegistryError:
-                                # ASN lookup failed with no more methods to try
-                                pass
-
+                            # we don't have it cached
+                            data = self.get_asn_info_from_geolite(ip)
+                            self.cache_ip_range(ip)
                         else:
                             # found cached asn for this ip's range, store it
                             data['asn'] = {'asnorg': cached_asn}
