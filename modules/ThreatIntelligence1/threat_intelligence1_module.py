@@ -90,14 +90,13 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def __get_hash_from_file(self, filename):
+    def get_hash_from_file(self, filename):
         """
         Compute the sha256 hash of a local file
         """
         try:
             # The size of each read from the file
             BLOCK_SIZE = 65536
-
             # Create the hash object, can use something other
             # than `.sha256()` if you wish
             file_hash = hashlib.sha256()
@@ -111,13 +110,13 @@ class Module(Module, multiprocessing.Process):
                     file_hash.update(fb)
                     # Read the next block from the file
                     fb = f.read(BLOCK_SIZE)
-
             return file_hash.hexdigest()
         except Exception as inst:
-            self.print('Problem on __get_hash_from_file()', 0, 0)
+            self.print('Problem on get_hash_from_file()', 0, 0)
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
+            return False
 
     def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> None:
         """
@@ -300,7 +299,7 @@ class Module(Module, multiprocessing.Process):
                     old_hash = ''
                 # In the case of the local file, we dont store the e-tag but
                 # the hash
-                new_hash = self.__get_hash_from_file(path_to_files + '/' + localfile)
+                new_hash = self.get_hash_from_file(path_to_files + '/' + localfile)
                 if old_hash == new_hash:
                     # The 2 hashes are identical. File is up to date.
                     self.print(f'File {localfile} is up to date.', 3, 0)
@@ -412,6 +411,8 @@ class Module(Module, multiprocessing.Process):
 
         # Main loop function
         while True:
+            print("*****************")
+            print(self.get_hash_from_file('slips-kalipso.gif'))
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time
