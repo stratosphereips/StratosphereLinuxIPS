@@ -59,6 +59,10 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def get_cached_asn(self, ip):
+        """
+        If this ip belongs to a cached ip range, return the cached asn info of it
+        :param ip: str
+        """
         cached_asn = __database__.get_asn_cache()
         try:
             for asn,asn_range in cached_asn.items():
@@ -73,8 +77,7 @@ class Module(Module, multiprocessing.Process):
                     return asn
         except AttributeError:
             # cached_asn is not found
-            pass
-        return False
+            return False
 
     def update_asn(self, cached_data) -> bool:
         """

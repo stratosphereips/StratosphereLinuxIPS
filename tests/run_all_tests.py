@@ -1,2 +1,2 @@
 import os
-os.system('pytest -p no:warnings -v')
+os.system('python3 -m pytest tests/ -p no:warnings -v')
