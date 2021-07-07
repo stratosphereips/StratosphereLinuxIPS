@@ -155,7 +155,6 @@ class Module(Module, multiprocessing.Process):
                     # Check if a month has passed since last time we updated asn
                     update_asn = self.update_asn(data)
                     if not ip_addr.is_multicast and update_asn:
-                        data = {}
                         # do we have asn cached for this range?
                         cached_asn = self.get_cached_asn(ip)
                         if not cached_asn:
