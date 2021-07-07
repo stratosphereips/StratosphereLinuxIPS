@@ -36,7 +36,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 
 Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.
 
-Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/latest/
+Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/develop/
 
 ### If you want to share files between your host and the docker, you can do:
 
@@ -81,3 +81,12 @@ All contributors are welcomed! How you can help?
 - Run Slips and report bugs and needed features, and suggest ideas
 - Pull requests with a solved GitHub issue and new feature
 - Pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
+
+## Acknowledgments
+Slips was funded by the following organizations.
+
+- NlNet Foundation. https://nlnet.nl/
+- AIC Group, Czech Technical University in Prague. https://www.aic.fel.cvut.cz/
+- Avast Software. https://www.avast.com/
+- CESNET. https://www.cesnet.cz/
+

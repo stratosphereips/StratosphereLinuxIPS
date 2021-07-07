@@ -31,15 +31,7 @@ class Module(Module, multiprocessing.Process):
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
-
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            self.timeout = None
-        else:
-            self.timeout = None
+        self.timeout = None
         self.__read_configuration()
 
     def __read_configuration(self):
@@ -79,7 +71,7 @@ class Module(Module, multiprocessing.Process):
         confidence = 1
         description = domain_description
 
-        __database__.setEvidence(type_detection,detection_info, type_evidence,
+        __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def print(self, text, verbose=1, debug=0):
@@ -410,14 +402,24 @@ class Module(Module, multiprocessing.Process):
             # The remote files are being loaded by the UpdateManager
             if not self.load_malicious_local_files(self.path_to_local_threat_intelligence_data):
                 self.print(f'Could not load the local file of TI data {self.path_to_local_threat_intelligence_data}')
+        except Exception as inst:
+            self.print('Problem on the run()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            self.print(traceback.format_exc())
+            return True
 
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time
                 # (see at logsProcess.py), we will stop slips automatically.
                 # The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
@@ -442,11 +444,12 @@ class Module(Module, multiprocessing.Process):
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_description = json.loads(ip_description)
                             ip_source = ip_description['source'] # this is a .csv file
+                            # Set the evidence on this detection
                             self.set_evidence_ip(ip, ip_source, profileid, twid, ip_state)
                             # set malicious IP in IPInfo
-                            self.set_maliciousIP_to_IPInfo(ip,ip_description)
+                            self.set_maliciousIP_to_IPInfo(ip, ip_description)
                             # set malicious IP in MaliciousIPs
-                            self.set_maliciousIP_to_MaliousIPs(ip,profileid,twid)
+                            self.set_maliciousIP_to_MaliousIPs(ip, profileid,twid)
 
                     if domain:
                         # Search for this domain in our database of IoC
@@ -458,12 +461,13 @@ class Module(Module, multiprocessing.Process):
                             self.set_maliciousDomain_to_DomainInfo(domain, domain_description)
                             # set malicious domain in MaliciousDomains
                             self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            self.print(traceback.format_exc())
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc())
+                return True
