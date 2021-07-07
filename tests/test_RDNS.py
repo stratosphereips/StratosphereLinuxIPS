@@ -12,10 +12,8 @@ def create_RDNS_instance(outputQueue):
         needed by every other test in this file  """
     config = configparser.ConfigParser()
     RDNS = Module(outputQueue, config)
-    RDNS.bro_timeout=1
     # override the self.print function to avoid broken pipes
     RDNS.print = do_nothing
-    RDNS.stop_queues = do_nothing
     return RDNS
 
 def test_get_rdns(outputQueue, database):
