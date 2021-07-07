@@ -118,18 +118,19 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst), 0, 0)
             return False
 
-    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> None:
+    def load_malicious_datafile(self, malicious_data_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
         This also helps in having unique ioc accross files
         Returns nothing, but the dictionary should be filled
+        :param malicious_data_path: path_to local threat intel files/localfile
         """
         try:
+            data_file_name = malicious_data_path.split('/')[-1]
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
-
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
 
                 # Remove comments and find the description column if possible
@@ -239,10 +240,11 @@ class Module(Module, multiprocessing.Process):
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
+            return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            self.print('Problem on the __load_malicious_datafile()', 0, 1)
+            self.print('Problem on the load_malicious_datafile()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -312,7 +314,7 @@ class Module(Module, multiprocessing.Process):
                         # Delete previous data of this file.
                         self.__delete_old_source_data_from_database(localfile)
                     # Load updated data to the database
-                    self.__load_malicious_datafile(path_to_files + '/' + localfile, localfile)
+                    self.load_malicious_datafile(path_to_files + '/' + localfile)
 
                     # Store the new etag and time of file in the database
                     malicious_file_info = {}
@@ -324,7 +326,6 @@ class Module(Module, multiprocessing.Process):
                     # Something failed. Do not download
                     self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 1)
                     return False
-
 
         except Exception as inst:
             self.print('Problem on __load_malicious_local_files()', 0, 0)
@@ -411,8 +412,6 @@ class Module(Module, multiprocessing.Process):
 
         # Main loop function
         while True:
-            print("*****************")
-            print(self.get_hash_from_file('slips-kalipso.gif'))
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time
@@ -451,7 +450,7 @@ class Module(Module, multiprocessing.Process):
                             # set malicious IP in IPInfo
                             self.set_maliciousIP_to_IPInfo(ip, ip_description)
                             # set malicious IP in MaliciousIPs
-                            self.set_maliciousIP_to_MaliousIPs(ip, profileid,twid)
+                            self.set_maliciousIP_to_MaliousIPs(ip, profileid, twid)
 
                     if domain:
                         # Search for this domain in our database of IoC
