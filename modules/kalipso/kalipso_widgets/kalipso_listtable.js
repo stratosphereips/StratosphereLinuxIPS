@@ -110,12 +110,14 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
           ip_info_dict['VirusTotal']['ref'] = '-'
           ip_info_dict['VirusTotal']['com'] = '-'
         }
+
         if(ipInfo_json.hasOwnProperty('asn')){
-          ip_info_dict['asn'] = ipInfo_json['asn']
+          ip_info_dict['asn'] = ipInfo_json['asn']['asnorg']
         }
         else{
             ip_info_dict['asn'] = '-'
         }
+
         if(ipInfo_json.hasOwnProperty('geocountry')){
          ip_info_dict['geo'] = this.country_code[ipInfo_json['geocountry']]}
         if(typeof ip_info_dict['geo']  == 'undefined'){
@@ -126,7 +128,6 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
             this.widget.setLabel(ipInfo_json['reverse_dns'])}
         else{
             this.widget.setLabel('-')
-
         }
 
         ipInfo_data.push([ip_info_dict['asn'], ip_info_dict['geo'], ip_info_dict['VirusTotal']['URL'], ip_info_dict['VirusTotal']['down'],ip_info_dict['VirusTotal']['ref'],ip_info_dict['VirusTotal']['com']])
@@ -134,7 +135,8 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
         this.screen.render()
       })
     }
-    catch (err){console.log(err)}
+    catch (err){
+        console.log(err)}
   }
 
   chunkString(str, len) {
