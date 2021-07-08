@@ -174,7 +174,10 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
             }
 
             if(ipInfo_json.hasOwnProperty('asn')){
-              ip_info_dict['asn'] = ipInfo_json['asn']
+              ip_info_dict['asn'] = ipInfo_json['asn']['asnorg']
+            }
+            else{
+                ip_info_dict['asn'] = '-'
             }
 
             if(ipInfo_json.hasOwnProperty('geocountry')){
@@ -186,6 +189,9 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
 
             if(ipInfo_json.hasOwnProperty('SNI')){
               ip_info_dict['SNI'] = ipInfo_json['SNI']
+            }
+            else{
+                ip_info_dict['SNI'] = '-'
             }
             resolve(ip_info_dict)
           }
