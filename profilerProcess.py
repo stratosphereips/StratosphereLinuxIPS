@@ -21,7 +21,7 @@ from datetime import datetime
 from datetime import timedelta
 import sys
 import configparser
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import time
 import ipaddress
 import traceback
@@ -222,7 +222,7 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             # Each file is named after the organization's name followed by _asn
             org_asn =[]
-            file = f'slips/organizations_info/{org}_asn'
+            file = f'slips_files/organizations_info/{org}_asn'
             with open(file,'r') as f:
                 line = f.readline()
                 while line:
@@ -245,7 +245,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Each file is named after the organization's name
             # Each line of the file containes an ip range, for example: 34.64.0.0/10
             org_subnets = []
-            file = f'slips/organizations_info/{org}'
+            file = f'slips_files/organizations_info/{org}'
             with open(file,'r') as f:
                 line = f.readline()
                 while line:
