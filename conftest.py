@@ -35,7 +35,7 @@ def profilerQueue():
 
 @pytest.fixture
 def database():
-    from slips.core.database import __database__
+    from slips_files.core.database import __database__
     return __database__
 
 

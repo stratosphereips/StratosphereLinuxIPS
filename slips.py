@@ -33,8 +33,8 @@ import pkgutil
 import inspect
 import modules
 import importlib
-from slips.common.abstracts import Module
-from slips.common.argparse import ArgumentParser
+from slips_files.common.abstracts import Module
+from slips_files.common.argparse import ArgumentParser
 
 version = '0.7.3'
 
@@ -377,7 +377,7 @@ if __name__ == '__main__':
     ##########################
     # Creation of the threads
     ##########################
-    from slips.core.database import __database__
+    from slips_files.core.database import __database__
     # Output thread. This thread should be created first because it handles
     # the output of the rest of the threads.
     # Create the queue

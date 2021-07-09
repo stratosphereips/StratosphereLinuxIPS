@@ -1,9 +1,9 @@
 # Module to load and find the ASN of each IP
 
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 
 # Your imports
