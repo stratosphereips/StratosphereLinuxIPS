@@ -146,7 +146,7 @@ class ProfilerProcess(multiprocessing.Process):
             # By default
             self.label = 'unknown'
 
-    def read_whitelist(self) -> int:
+    def read_whitelist(self, whitelist_path="whitelist.conf") -> int:
         """
         Reads the content of whitelist.conf and stores information about each ip/org/domain in the database
         returns number of lines read
@@ -155,7 +155,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.whitelisted_IPs = {}
         self.whitelisted_domains = {}
         self.whitelisted_orgs = {}
-        with open("whitelist.conf") as whitelist:
+        with open(whitelist_path) as whitelist:
             # Ignore comments
             while True:
                 line = whitelist.readline()
