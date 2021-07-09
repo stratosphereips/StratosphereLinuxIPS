@@ -22,7 +22,7 @@ import os
 from datetime import datetime
 from watchdog.observers import Observer
 from filemonitor import FileEventHandler
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import configparser
 import time
 import json

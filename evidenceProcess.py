@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import json
 from datetime import datetime
 import configparser

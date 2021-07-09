@@ -1,7 +1,7 @@
 import configparser
 import time
 import os
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import json
 import ipaddress
 import validators
