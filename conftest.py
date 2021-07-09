@@ -6,8 +6,6 @@ import pytest
 import os,sys,inspect
 from multiprocessing import Queue
 
-
-
 # add parent dir to path for imports to work
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_dir = os.path.dirname(current_dir)
