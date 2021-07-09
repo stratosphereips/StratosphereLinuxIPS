@@ -1,7 +1,7 @@
 """ Unit test for modules/UpdateManager/UpdateManager.py """
 from ..modules.UpdateManager.update_file_manager import UpdateFileManager
 import configparser
-
+import pytest
 
 def do_nothing(*args):
     """ Used to override the print function because using the self.print causes broken pipes """
@@ -16,19 +16,26 @@ def create_update_manager_instance(outputQueue):
     update_manager.print = do_nothing
     return update_manager
 
-def test_get_e_tag_from_web(outputQueue):
-    update_manager = create_update_manager_instance(outputQueue)
-    file_to_download = 'https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv'
-    # returns an etag
-    assert update_manager.get_e_tag_from_web(file_to_download) != False
 
-def test_download_file(outputQueue):
+
+@pytest.mark.parametrize('file,etag', [('https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/master/modules/template/__init__.py','c53b10ca5dc87b9dd21a6618940553ac09e8213c22b2c11ad31e997970d70a11')])
+def test_get_e_tag_from_web(outputQueue, file, etag):
     update_manager = create_update_manager_instance(outputQueue)
-    url = 'https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv'
+    assert update_manager.get_e_tag_from_web(file) == etag
+
+@pytest.mark.parametrize('url', ['https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv'])
+def test_download_file(outputQueue, url):
+    update_manager = create_update_manager_instance(outputQueue)
     filepath = '.'
     assert update_manager.download_file(url,filepath) == True
 
 
-
+@pytest.mark.parametrize('url,etag', [('https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/master/modules/template/__init__.py','c53b10ca5dc87b9dd21a6618940553ac09e8213c22b2c11ad31e997970d70a11'), ('https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/master/modules/template/__init__.py','c53b10ca5dc87b9dd21a6618940553ac09e8213c22b2c11ad31e997970d70a11***')])
+def test_download_malicious_file(outputQueue, database,url, etag):
+    update_manager = create_update_manager_instance(outputQueue)
+    # we're tetsing 2 conditions
+    # old_e_tag != new_e_tag  and old_e_tag == new_e_tag
+    database.set_malicious_file_info(url,{'e-tag':etag})
+    assert update_manager.download_malicious_file(url) == True
 
 
