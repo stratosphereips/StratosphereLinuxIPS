@@ -22,13 +22,19 @@ def outputQueue():
     outputQueue.put = do_nothing
     return Queue()
 
+@pytest.fixture
+def outputQueue():
+    """ This outputqueue will be passed to all module constructors that need it """
+    outputQueue = Queue()
+    outputQueue.put = do_nothing
+    return Queue()
 
 @pytest.fixture
-def profilerQueue():
-    """ This profilerqueue will be passed to all module constructors that need it """
-    profilerqueue = Queue()
-    profilerqueue.put = do_nothing
-    return profilerqueue
+def inputQueue():
+    """ This inputQueue will be passed to all module constructors that need it """
+    inputQueue = Queue()
+    inputQueue.put = do_nothing
+    return inputQueue
 
 
 @pytest.fixture
