@@ -35,6 +35,7 @@ import modules
 import importlib
 from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
+import errno
 
 version = '0.7.3'
 
@@ -71,8 +72,12 @@ def create_folder_for_logs():
     Create a folder for logs if logs are enabled
     '''
     logs_folder = datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
-    if not os.path.exists(logs_folder):
+    try:
         os.makedirs(logs_folder)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            # doesn't exist and can't create
+            return False
     return logs_folder
 
 def update_malicious_file(outputqueue, config):
@@ -102,6 +107,7 @@ def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> s
     rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=1, charset="utf-8",
                                decode_responses=True)
     rcache.flushdb()
+    return True
 
 
 def check_zeek_or_bro():
@@ -127,8 +133,8 @@ def load_modules(to_ignore):
     Import modules and loads the modules from the 'modules' folder. Is very relative to the starting position of slips
     """
 
-    plugins = dict()
-
+    plugins = {}
+    failed_to_load_modules = 0
     # Walk recursively through all modules and packages found on the . folder.
     # __path__ is the current path of this python program
     for loader, module_name, ispkg in pkgutil.walk_packages(modules.__path__, modules.__name__ + '.'):
@@ -156,7 +162,7 @@ def load_modules(to_ignore):
                 if issubclass(member_object, Module) and member_object is not Module:
                     plugins[member_object.name] = dict(obj=member_object, description=member_object.description)
 
-    return plugins
+    return plugins,failed_to_load_modules
 
 def get_cwd():
     # Can't use os.getcwd() because slips directory name won't always be Slips plus this way requires less parsing
@@ -217,9 +223,9 @@ def shutdown_gracefully():
         profilerProcessQueue.put('stop_process')
         inputProcess.terminate()
         os._exit(-1)
-        return
+        return True
     except KeyboardInterrupt:
-        return
+        return False
 
 ####################
 # Main
@@ -410,7 +416,7 @@ if __name__ == '__main__':
             to_ignore.append('blocking')
         try:
             # This 'imports' all the modules somehow, but then we ignore some
-            modules_to_call = load_modules(to_ignore)
+            modules_to_call = load_modules(to_ignore)[0]
             for module_name in modules_to_call:
                 if not module_name in to_ignore:
                     module_class = modules_to_call[module_name]['obj']
