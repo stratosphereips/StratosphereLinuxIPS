@@ -217,9 +217,15 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
         var keys = Object.keys(json_outTuples)
         async.each(keys,(key, callback)=>{
           var tuple_info = json_outTuples[key];
-          var outTuple_ip = key.split(':')[0];
-          var outTuple_port = key.split(':')[1];
-          var outTuple_protocol = key.split(':')[2]
+          var split_tuple = key.split(':')
+
+          var outTuple_port = split_tuple[split_tuple.length-2];
+          var outTuple_protocol = split_tuple[split_tuple.length -1]
+          if(split_tuple.length > 3){
+            var outTuple_ip = split_tuple.slice(0,split_tuple.length-2).join(':')
+          }
+          else{
+                var outTuple_ip = split_tuple[0]}
           var letters_string = tuple_info[0].substr(0, this.limit_letter_outtuple)
 
           // Get the information about the IPinfo and DNSResolution of the IP.
@@ -286,7 +292,15 @@ return new Promise((resolve, reject)=>{ fs.readFile('countries.json', 'utf8', (e
           async.each(keys,(key, callback)=>{
             var row = [];
             var tuple_info = json_outTuples[key];
-            var outTuple_ip = key.split(':')[0];
+            var split_tuple = key.split(':')
+            var outTuple_port = split_tuple[split_tuple.length-2];
+            var outTuple_protocol = split_tuple[split_tuple.length -1]
+            if(split_tuple.length > 3){
+                var outTuple_ip = split_tuple.slice(0,split_tuple.length-2).join(':')
+            }
+            else{
+                var outTuple_ip = split_tuple[0]}
+
             var letters_string = tuple_info[0].substr(0, this.limit_letter_outtuple)
             this.getIPInfo_dict(outTuple_ip)
             .then(ip_info_dict=>{
