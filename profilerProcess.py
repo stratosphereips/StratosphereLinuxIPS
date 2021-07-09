@@ -146,13 +146,16 @@ class ProfilerProcess(multiprocessing.Process):
             # By default
             self.label = 'unknown'
 
-    def read_whitelist(self):
-        """ Reads the content of whitelist.csv and stores information about each ip/org/domain in the database """
+    def read_whitelist(self) -> int:
+        """
+        Reads the content of whitelist.conf and stores information about each ip/org/domain in the database
+        returns number of lines read
+        """
 
         self.whitelisted_IPs = {}
         self.whitelisted_domains = {}
         self.whitelisted_orgs = {}
-        with open("whitelist.csv") as whitelist:
+        with open("whitelist.conf") as whitelist:
             # Ignore comments
             while True:
                 line = whitelist.readline()
@@ -174,7 +177,7 @@ class ProfilerProcess(multiprocessing.Process):
                     type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
                 except IndexError:
                     # line is missing a column, ignore it.
-                    self.print(f"Line {line_number} in whitelist.csv is missing a column. Skipping.")
+                    self.print(f"Line {line_number} in whitelist.conf is missing a column. Skipping.")
                     line = whitelist.readline()
                     continue
                 # Validate the type before processing
@@ -194,7 +197,7 @@ class ProfilerProcess(multiprocessing.Process):
                     else:
                         self.print(f"{data} is not a valid {type_}.",1,0)
                 except:
-                    self.print(f"Line {line_number} in whitelist.csv is invalid. Skipping.")
+                    self.print(f"Line {line_number} in whitelist.conf is invalid. Skipping.")
                 line = whitelist.readline()
         # after we're done reading the file, process organizations info
         # If the user specified an org in the whitelist, load the info about it only to the db and to memory
@@ -212,6 +215,7 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.set_whitelist(self.whitelisted_IPs,
                                    self.whitelisted_domains,
                                    self.whitelisted_orgs)
+        return line_number
 
     def load_org_asn(self, org) -> list :
         """
