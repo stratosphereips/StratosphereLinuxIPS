@@ -306,13 +306,14 @@ class ProfilerProcess(multiprocessing.Process):
             else:
                 # data is a str
                 try:
+                    # data is a serialized json dict
                     # suricata lines have 'event_type' key, either flow, dns, etc..
                     data = json.loads(data)
                     if data['event_type']:
                         # found the key, is suricata
                         self.input_type = 'suricata'
                 except ValueError:
-                    # not suricata
+                    # not suricata, data is a tab or comma separated str
                     nr_commas = len(data.split(','))
                     nr_tabs = len(data.split('   '))
                     if nr_commas > nr_tabs:
@@ -396,7 +397,6 @@ class ProfilerProcess(multiprocessing.Process):
                     continue
                 temp_dict[i] = self.column_idx[i]
             self.column_idx = temp_dict
-            print(self.column_idx)
             return self.column_idx
         except Exception as inst:
             self.print('\tProblem in define_columns()', 0, 1)
