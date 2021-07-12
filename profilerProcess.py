@@ -306,10 +306,13 @@ class ProfilerProcess(multiprocessing.Process):
             else:
                 # data is a str
                 try:
+                    # suricata lines have 'event_type' key, either flow, dns, etc..
                     data = json.loads(data)
-                    if data['event_type'] == 'flow':
+                    if data['event_type']:
+                        # found the key, is suricata
                         self.input_type = 'suricata'
                 except ValueError:
+                    # not suricata
                     nr_commas = len(data.split(','))
                     nr_tabs = len(data.split('   '))
                     if nr_commas > nr_tabs:
@@ -449,8 +452,8 @@ class ProfilerProcess(multiprocessing.Process):
                 defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
             else:
                 try:
-                    # The format of time is a complete date. 
-                    # Dont modify it, since 
+                    # The format of time is a complete date.
+                    # Dont modify it, since
                     # 1) The time is a string, so we dont know the original timezone
                     # 2) the python call datetime.fromtimestamp uses by default
                     # the local zone when nothing is specified.
@@ -1207,9 +1210,21 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             pass
 
-    def process_suricata_input(self, line: str) -> None:
+    def process_suricata_input(self, line) -> None:
         """ Read suricata json input """
-        line = json.loads(line)
+
+        # convert to dict if it's not a dict already
+        if type(line)== str:
+            # lien is the actual data
+            line = json.loads(line)
+        else:
+            # line is a dict with data and type as keys
+            try:
+                line = json.loads(line['data'])
+            except KeyError:
+                # can't find the line!
+                return True
+
 
         self.column_values: dict = {}
         try:
@@ -1457,7 +1472,7 @@ class ProfilerProcess(multiprocessing.Process):
             for domain in list(self.whitelisted_domains.keys()):
                 what_to_ignore = self.whitelisted_domains[domain]['what_to_ignore']
                 # Here we iterate over all the domains to check so we can find
-                # subdomains. If slack.com was whitelisted, then test.slack.com 
+                # subdomains. If slack.com was whitelisted, then test.slack.com
                 # should be ignored too. But not 'slack.com.test'
                 for domain_to_check in domains_to_check:
                     main_domain = domain_to_check[-len(domain):]
@@ -1466,7 +1481,7 @@ class ProfilerProcess(multiprocessing.Process):
                         if 'flows' in what_to_ignore or 'both' in what_to_ignore:
                             #self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
                             return True
-    
+
                 # Now check the related domains of the src IP
                 from_ = self.whitelisted_domains[domain]['from']
                 if 'src' in from_ or 'both' in from_:
@@ -1527,7 +1542,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Check if src IP belongs to a whitelisted organization range
                         for network in org_subnets:
                             try:
-                                ip = ipaddress.ip_address(self.column_values['saddr']) 
+                                ip = ipaddress.ip_address(self.column_values['saddr'])
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
                                 return False
@@ -1550,7 +1565,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Check if dst IP belongs to a whitelisted organization range
                         for network in org_subnets:
                             try:
-                                ip = ipaddress.ip_address(self.column_values['daddr']) 
+                                ip = ipaddress.ip_address(self.column_values['daddr'])
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
                                 return False
@@ -1581,7 +1596,7 @@ class ProfilerProcess(multiprocessing.Process):
         try:
 
             # Define which type of flows we are going to process
-            
+
             if not self.column_values:
                 return True
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp'):
@@ -2292,9 +2307,11 @@ class ProfilerProcess(multiprocessing.Process):
                         # This line will be discarded because
                         self.define_type(line)
                         # We should do this before checking the type of input so we don't lose the first line of input
-
                     # What type of input do we have?
-                    if self.input_type == 'zeek':
+                    if not self.input_type:
+                        # can't definee the type of input
+                        self.print("Can't determine input type.",5,6)
+                    elif self.input_type == 'zeek':
                         # self.print('Zeek line')
                         self.process_zeek_input(line)
                         # Add the flow to the profile
@@ -2330,6 +2347,8 @@ class ProfilerProcess(multiprocessing.Process):
                     elif self.input_type == 'nfdump':
                         self.process_nfdump_input(line)
                         self.add_flow_to_profile()
+                    else:
+                        self.print("Can't recognize input file type.")
         except KeyboardInterrupt:
             self.print("Received {} lines.".format(rec_lines), 0, 1)
             return True

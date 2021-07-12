@@ -28,7 +28,6 @@ from datetime import datetime
 import socket
 import warnings
 from modules.UpdateManager.update_file_manager import UpdateFileManager
-import json
 import pkgutil
 import inspect
 import modules
@@ -36,6 +35,7 @@ import importlib
 from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
 import errno
+import subprocess
 
 version = '0.7.3'
 
@@ -248,13 +248,9 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--debug', metavar='<debuglevel>',action='store', required=False, type=int,
                         help='amount of debugging. This shows inner information about the program.')
     parser.add_argument('-f', '--filepath',metavar='<file>', action='store',required=False,
-                        help='read an Argus binetflow or a Zeek folder.')
+                        help='read a Zeek folder, Argus binetflow, pcapfile or nfdump.')
     parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
                         help='read packets from an interface.')
-    parser.add_argument('-r', '--pcapfile',metavar='<file>', action='store', required=False,
-                        help='read a PCAP - Packet Capture.')
-    parser.add_argument('-b', '--nfdump', metavar='<file>',action='store',required=False,
-                        help='read an NFDUMP - netflow dump. ')
     parser.add_argument('-l','--nologfiles',action='store_true',required=False,
                         help='do not create log files with all the traffic info and detections.')
     parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
@@ -286,10 +282,46 @@ if __name__ == '__main__':
     if check_redis_database() is False:
         terminate_slips()
 
+    # Check the type of input
+    if args.interface:
+        input_information = args.interface
+        input_type = 'interface'
+    elif args.filepath:
+        input_information = args.filepath
+        # default value
+        input_type = 'file'
+        # Get the type of file
+        command = 'file ' + input_information
+        # Execute command
+        cmd_result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+        # Get command output
+        cmd_result = cmd_result.stdout.decode('utf-8')
+
+        if 'pcap' in cmd_result:
+            input_type = 'pcap'
+        elif 'dBase' in cmd_result:
+            input_type = 'nfdump'
+        elif 'CSV' in cmd_result:
+            input_type = 'binetflow'
+        elif 'directory'in cmd_result:
+            input_type = 'zeek_folder'
+        else:
+            # is a json file, is it a zeek log file or suricata?
+            # use first line to determine
+            with open(input_information,'r') as f:
+                first_line = f.readline()
+            if 'flow_id' in first_line:
+                input_type = 'suricata'
+            else:
+                input_type = 'zeek_log_file'
+    else:
+        print('You need to define an input source.')
+        sys.exit(-1)
+
     # If we need zeek (bro), test if we can run it.
     # Need to be assign to something because we pass it to inputProcess later
     zeek_bro = None
-    if args.pcapfile or args.interface:
+    if input_type == 'pcap' or args.interface:
         zeek_bro = check_zeek_or_bro()
         if zeek_bro is False:
             # If we do not have bro or zeek, terminate Slips.
@@ -297,7 +329,7 @@ if __name__ == '__main__':
             terminate_slips()
 
     # See if we have the nfdump, if we need it according to the input type
-    if args.nfdump and shutil.which('nfdump') is None:
+    if input_type == 'nfdump' and shutil.which('nfdump') is None:
         # If we do not have nfdump, terminate Slips.
         terminate_slips()
 
@@ -363,22 +395,7 @@ if __name__ == '__main__':
     if args.debug < 0:
         args.debug = 0
 
-    # Check the type of input
-    if args.interface:
-        input_information = args.interface
-        input_type = 'interface'
-    elif args.pcapfile:
-        input_information = args.pcapfile
-        input_type = 'pcap'
-    elif args.filepath:
-        input_information = args.filepath
-        input_type = 'file'
-    elif args.nfdump:
-        input_information = args.nfdump
-        input_type = 'nfdump'
-    else:
-        print('You need to define an input source.')
-        sys.exit(-1)
+
 
     ##########################
     # Creation of the threads
