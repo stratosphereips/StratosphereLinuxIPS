@@ -133,9 +133,12 @@ def test_define_columns(outputQueue, inputQueue,file,separator,expected_value):
 #     assert profilerProcess.define_type(line) == 'zeek'
 
 
-@pytest.mark.parametrize("file,type_",
-                         [('dataset/sample_zeek_files/dns.log','dns')])
-#todo add more types
+@pytest.mark.parametrize("file,type_",[
+    ('dataset/sample_zeek_files/dns.log','dns'),
+    ('dataset/sample_zeek_files/conn.log','conn'),
+    ('dataset/sample_zeek_files/http.log','http'),
+    ('dataset/sample_zeek_files/ssl.log','ssl'),
+    ('dataset/sample_zeek_files/notice.log','notice')])
 def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
     # we're testing another functionality here
@@ -153,5 +156,9 @@ def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
     # get the uid of the current flow
     uid = profilerProcess.column_values['uid']
     # make sure it's added
-    assert database.get_altflow_from_uid(profileid, twid, uid ) != None
+    if type_ == 'conn':
+        added_flow = database.get_flow(profileid,twid,uid)[uid]
+    else:
+        added_flow =  database.get_altflow_from_uid(profileid, twid, uid ) != None
+    assert added_flow != None
 
