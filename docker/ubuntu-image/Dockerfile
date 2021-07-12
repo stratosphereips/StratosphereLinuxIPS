@@ -35,6 +35,12 @@ RUN pip3 install sklearn
 RUN pip3 install urllib3
 RUN pip3 install scipy
 RUN pip3 install watchdog
+RUN pip3 install slackclient
+RUN pip3 install stix2
+RUN pip3 install cabby
+RUN pip3 install ipwhois
+RUN pip3 install --ignore-installed six
+RUN pip3 install tzlocal
 RUN pip3 install --upgrade tensorflow==2.1.0
 
 # Download and unpack Slips.
@@ -44,7 +50,7 @@ RUN cd StratosphereLinuxIPS && git checkout develop && chmod 774 slips.py
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_10.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
-RUN npm install async fs blessed blessed-contrib clipboardy chalk strip-ansi redis sorted-array-async yargs
+RUN npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 
 # Switch to Slips installation dir when login.
 WORKDIR /StratosphereLinuxIPS

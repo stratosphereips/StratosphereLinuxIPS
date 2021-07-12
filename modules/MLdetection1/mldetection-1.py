@@ -47,16 +47,7 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
         # To know when to retrain. We store the number of labels when we last retrain
         self.retrain = 0
-
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # ??
-            self.timeout = None
+        self.timeout = None
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -106,17 +97,30 @@ class Module(Module, multiprocessing.Process):
                     self.print(
                         'There is no RF model stored. You need to train first with at least two different labels.')
                     return False
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            # Stop the timer
+            self.print('Error in run()')
+            self.print(type(inst))
+            self.print(inst)
+            return True
 
-            while True:
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
 
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 """
                 message = self.c1.get_message(timeout=-1)
                 #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 elif message['channel'] == 'new_flow' and message['data'] != 1:
                     mdata = message['data']
@@ -166,14 +170,16 @@ class Module(Module, multiprocessing.Process):
                             pred = self.detect()
                             self.print('Prediction of flow {}: {}'.format(json_flow, pred[0]), 0, 0)
                 """
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            # Stop the timer
-            self.print('Error in run()')
-            self.print(type(inst))
-            self.print(inst)
-            return True
+
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                # Stop the timer
+                self.print('Error in run()')
+                self.print(type(inst))
+                self.print(inst)
+                return True
 
     def train(self):
         """ 
