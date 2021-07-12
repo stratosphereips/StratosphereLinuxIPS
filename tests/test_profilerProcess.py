@@ -39,3 +39,38 @@ def test_load_org_IPs(org,outputQueue, inputQueue, subnet):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
     assert profilerProcess.load_org_IPs(org) != False
     assert subnet in profilerProcess.load_org_IPs(org)
+
+@pytest.mark.parametrize("file,expected_value",[('dataset/sample_zeek_files-2/conn.log','zeek-tabs'),
+                                                ('dataset/dataset/hide-and-seek-short.pcap','zeek'),
+                                                ('dataset/suricata-flows.json','suricata'),
+                                                ('dataset/test.nfdump','nfdump'),
+                                                ])
+def test_define_type(outputQueue, inputQueue, file, expected_value):
+    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
+    with open(file) as f:
+        sample_flow = f.readline()
+    # sample_flow is always a str, try to convert to a dict
+    try:
+        sample_flow = dict(sample_flow)
+    except ValueError:
+        # if it's not a dict , eg zeek tab separated line, leave it as it is
+        pass
+    sample_flow = {'data': sample_flow,
+                   'type': expected_value}
+    assert profilerProcess.define_type(sample_flow) == expected_value
+
+
+@pytest.mark.parametrize("file,separator,expected_value",[('dataset/sample_zeek_files-2/conn.log','	',{'starttime': 1})])
+def test_define_columns(outputQueue, inputQueue,file,separator,expected_value):
+    # define_columns is called on header lines
+    # line = '#fields ts      uid     id.orig_h       id.orig_p       id.resp_h       id.resp_p       proto   service duration        orig_bytes      resp_bytes       conn_state      local_orig      local_resp      missed_bytes    history orig_pkts       orig_ip_bytes   resp_pkts       resp_ip_bytes   tunnel_parents'
+    with open(file) as f:
+        while True:
+            # read from the file until you find the header
+            line = f.readline()
+            if line.startswith('#types'):
+                break
+    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
+    line = {'data': line}
+    profilerProcess.separator = separator
+    assert profilerProcess.define_columns(line) == expected_value

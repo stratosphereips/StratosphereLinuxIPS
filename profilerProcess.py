@@ -292,7 +292,6 @@ class ProfilerProcess(multiprocessing.Process):
                 self.print('\tData did not arrived in json format from the input', 0, 1)
                 self.print('\tProblem in define_type()', 0, 1)
                 return False
-
             # In the case of Zeek from an interface or pcap,
             # the structure is a JSON
             # So try to convert into a dict
@@ -303,7 +302,9 @@ class ProfilerProcess(multiprocessing.Process):
                     self.input_type = 'zeek-tabs'
                 except KeyError:
                     self.input_type = 'zeek'
+                return self.input_type
             else:
+                # data is a str
                 try:
                     data = json.loads(data)
                     if data['event_type'] == 'flow':
@@ -318,12 +319,12 @@ class ProfilerProcess(multiprocessing.Process):
                             self.input_type = 'nfdump'
                         else:
                             self.input_type = 'argus'
-
                     elif nr_tabs >= nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
                         self.separator = '	'
                         self.input_type = 'zeek-tabs'
+                return self.input_type
         except Exception as inst:
             self.print('\tProblem in define_type()', 0, 1)
             self.print(str(type(inst)), 0, 1)
@@ -391,6 +392,8 @@ class ProfilerProcess(multiprocessing.Process):
                     continue
                 temp_dict[i] = self.column_idx[i]
             self.column_idx = temp_dict
+            print(self.column_idx)
+            return self.column_idx
         except Exception as inst:
             self.print('\tProblem in define_columns()', 0, 1)
             self.print(str(type(inst)), 0, 1)
