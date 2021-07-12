@@ -1924,6 +1924,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.print('Features going in')
                         store_features_going_in(rev_profileid, rev_twid, starttime)
             """
+            return profileid,twid
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print("Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
