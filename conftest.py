@@ -5,6 +5,8 @@ for example: setting up the database, inputqueue, outputqueue, etc..
 import pytest
 import os,sys,inspect
 from multiprocessing import Queue
+import configparser
+
 
 # add parent dir to path for imports to work
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -14,13 +16,6 @@ sys.path.insert(0, parent_dir)
 def do_nothing(*arg):
     """ Used to override the print function because using the self.print causes broken pipes """
     pass
-
-@pytest.fixture
-def outputQueue():
-    """ This outputqueue will be passed to all module constructors that need it """
-    outputQueue = Queue()
-    outputQueue.put = do_nothing
-    return Queue()
 
 @pytest.fixture
 def outputQueue():
@@ -40,8 +35,9 @@ def inputQueue():
 @pytest.fixture
 def database():
     from slips_files.core.database import __database__
+    config = configparser.ConfigParser()
+    __database__.start(config)
     return __database__
-
 
 
 
