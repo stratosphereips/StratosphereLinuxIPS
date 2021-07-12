@@ -133,4 +133,25 @@ def test_define_columns(outputQueue, inputQueue,file,separator,expected_value):
 #     assert profilerProcess.define_type(line) == 'zeek'
 
 
+@pytest.mark.parametrize("file,type_",
+                         [('dataset/sample_zeek_files/dns.log','dns')])
+#todo add more types
+def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
+    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
+    # we're testing another functionality here
+    profilerProcess.is_whitelisted =  do_nothing
+    # get zeek flow
+    with open(file) as f:
+        sample_flow = f.readline().replace('\n','')
+    sample_flow = json.loads(sample_flow)
+    sample_flow = {'data': sample_flow,
+                   'type': type_}
+    # process it
+    profilerProcess.process_zeek_input(sample_flow)
+    # add to profile
+    profileid, twid = profilerProcess.add_flow_to_profile()
+    # get the uid of the current flow
+    uid = profilerProcess.column_values['uid']
+    # make sure it's added
+    assert database.get_altflow_from_uid(profileid, twid, uid ) != None
 
