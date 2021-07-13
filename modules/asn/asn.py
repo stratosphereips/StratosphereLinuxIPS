@@ -123,8 +123,8 @@ class Module(Module, multiprocessing.Process):
             if asnorg and asn_cidr not in ('' , 'NA'):
                 __database__.set_asn_cache(asnorg, asn_cidr)
             return True
-        except ipwhois.exceptions.IPDefinedError:
-            # private ip. don't cache
+        except (ipwhois.exceptions.IPDefinedError,ipwhois.exceptions.HTTPLookupError):
+            # private ip or RDAP lookup failed. don't cache
             return False
 
     def run(self):
