@@ -521,8 +521,8 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dur'] = float(line[8])
             except (IndexError, ValueError):
                 self.column_values['dur'] = 0
-            self.column_values['endtime'] = str(self.column_values['starttime']) + timedelta(
-                seconds=self.column_values['dur'])
+            self.column_values['endtime'] = str(self.column_values['starttime']) + str(timedelta(
+                seconds=self.column_values['dur']))
             self.column_values['proto'] = line[6]
             try:
                 self.column_values['appproto'] = line[7]
