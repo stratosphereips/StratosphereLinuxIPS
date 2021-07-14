@@ -145,7 +145,9 @@ Before pushing, run the unit tests by:
 Slips uses ```pytest``` as the main testing framework, You can add your own unit tests by:
 
 1- create a file called ```test_module_name.py``` in the ```tests``` dir
+
 2- every function should start with ```test_```
+
 3- go to the main slips dir and run ```python3 tests/run_all_tests.py``` and every test file in the ```tests/``` dir will run
 
 ### Conclusion
