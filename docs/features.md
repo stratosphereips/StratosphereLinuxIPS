@@ -27,7 +27,7 @@ The output process collects output from the modules and handles the display of i
 - log files in a folder _current-date-time_ - separates the traffic into files according to a profile and timewindow and summarize the traffic according to each profile and timewindow.
 
 ## Whitelisting
-Slips allows you to whitelist some pieces of data in order to avoid its processing. In particular you can whitelist an IP address, a domain, or a complete organization. You can choose to whitelist what is going _to_ them and what is coming _from_ them. You can also choose to whitelist the flows, so they are not processed, or the alerts, so you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid processing any communication to or from these pieces of data, not to avoid any packet that contains that piece of data. For example, if you whitelist the domain slack.com, then a DNS request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
+Slips allows you to whitelist some pieces of data in order to avoid its processing. In particular you can whitelist an IP address, a domain, or a complete organization. You can choose to whitelist what is going __to__ them and what is coming __from__ them. You can also choose to whitelist the flows, so they are not processed, or the alerts, so you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid processing any communication to or from these pieces of data, not to avoid any packet that contains that piece of data. For example, if you whitelist the domain slack.com, then a DNS request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
 ## Flows Whitelist
 If you whitelist an IP address, Slips will check all flows and see if you are whitelisting to them or from them.
@@ -55,6 +55,39 @@ If you whitelist some piece of data not to generate alerts, the process is the f
 - If you whitelisted an organization
     - We check that the ASN of the IP in the alert belongs to that organization.
     - We check that the range of the IP in the alert belongs to that organization.
+
+## Whitelisting Example
+You can modify the file ```whitelist.csv``` file with this content:
+
+
+    "IoCType","IoCValue","Direction","IgnoreType"
+    ip,1.2.3.4,both,alerts
+    domain,google.com,src,flows
+    domain,apple.com,both,both
+    ip,94.23.253.72,both,alerts
+    ip,91.121.83.118,both,alerts
+    organization,microsoft,both,both
+    organization,facebook,both,both
+    organization,google,both,both
+    organization,apple,both,both
+    organization,twitter,both,both
+
+The values for each column are the following:
+
+    Column IoCType
+        - Supported IoCTypes: ip, domain, organization
+    Column IoCValue
+        - Supported organizations: google, microsoft, apple, facebook, twitter.
+    Column Direction
+        - Direction: src, dst or both
+            - Src: Check if the IoCValue is the source
+            - Dst: Check if the IoCValue is the destination
+            - Both: Check if the IoCValue is the source or destination
+    Column IgnoreType
+        - IgnoreType: alerts or flows or both
+            - Ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
+            - Ignore flows: the flow will be completely discarded.
+
 	
 
 ## Detection Modules
