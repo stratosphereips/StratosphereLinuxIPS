@@ -55,6 +55,22 @@ If you whitelist some piece of data not to generate alerts, the process is the f
 - If you whitelisted an organization
     - We check that the ASN of the IP in the alert belongs to that organization.
     - We check that the range of the IP in the alert belongs to that organization.
+
+## Whitelisting Example
+You can modify the file ```whitelist.csv``` file with this content:
+
+    "IoCType","IoCValue","Direction","IgnoreType"
+    ip,1.2.3.4,both,alerts
+    domain,google.com,src,flows
+    domain,apple.com,both,both
+    ip,94.23.253.72,both,alerts
+    ip,91.121.83.118,both,alerts
+    organization,microsoft,both,both
+    organization,facebook,both,both
+    organization,google,both,both
+    organization,apple,both,both
+    organization,twitter,both,both
+
 	
 
 ## Detection Modules
