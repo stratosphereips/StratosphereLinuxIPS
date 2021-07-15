@@ -430,6 +430,9 @@ if __name__ == '__main__':
         guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
         guiProcessThread.start()
         outputProcessQueue.put('quiet')
+    # By default, don't log unless specified in slips.conf and -l isn't provided
+    logs_folder = False
+    # if there is no -l
     if not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
         do_logs = read_configuration(config, 'parameters', 'create_log_files')
@@ -442,10 +445,7 @@ if __name__ == '__main__':
             logsProcessThread.start()
             outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
             __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
-
     # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
-    else:
-        logs_folder = False
 
     # Evidence thread
     # Create the queue for the evidence thread
