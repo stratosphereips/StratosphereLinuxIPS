@@ -103,7 +103,6 @@ def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> s
                                decode_responses=True)
     rcache.flushdb()
 
-
 def check_zeek_or_bro():
     """
     Check if we have zeek or bro
@@ -114,13 +113,11 @@ def check_zeek_or_bro():
         return 'bro'
     return False
 
-
 def terminate_slips():
     """
     Do all necessary stuff to stop process any clear any files.
     """
     sys.exit(-1)
-
 
 def load_modules(to_ignore):
     """
@@ -313,6 +310,16 @@ if __name__ == '__main__':
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
+    try:
+        # can be daemonized or interactive
+        working_mode = int(config.get('modes', 'slips_mode'))
+    except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError):
+        #todo make it daemonized by default
+        working_mode = 'interactive'
+
+    if working_mode == 'daemonized':
+        #todo
+        pass
     # If the user wants to blocks, the user needs to give a permission to modify iptables
     # Also check if the user blocks on interface, does not make sense to block on files
     if args.interface and args.blocking:
