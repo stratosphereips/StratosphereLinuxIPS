@@ -299,6 +299,7 @@ if __name__ == '__main__':
     if args.clearcache:
         print('Deleting Cache DB in Redis.')
         clear_redis_cache_database()
+        terminate_slips()
 
     # Remove default folder for alerts, if exists
     if os.path.exists(alerts_default_path):
