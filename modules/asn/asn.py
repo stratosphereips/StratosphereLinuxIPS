@@ -142,6 +142,10 @@ class Module(Module, multiprocessing.Process):
                             except ipwhois.exceptions.IPDefinedError:
                                 # private ip. don't cache
                                 pass
+                            except ipwhois.exceptions.ASNRegistryError:
+                                # ASN lookup failed with no more methods to try
+                                pass
+
                         else:
                             # found cached asn for this ip's range, store it
                             data['asn'] = {'asnorg': cached_asn}
