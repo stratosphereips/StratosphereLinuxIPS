@@ -220,7 +220,7 @@ def prepare_zeek_scripts():
     with open(zeek_scripts_dir + '/slips-conf.zeek', 'r') as slips_conf:
         if 'local_nets' in slips_conf.read():
             is_local_nets_defined = True
-        
+
     if not is_local_nets_defined:
         with open(zeek_scripts_dir + '/slips-conf.zeek', 'a') as slips_conf:
             # update home network
