@@ -99,7 +99,10 @@ class ProfilerProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.home_net = False
-        self.whitelist_path = self.config.get('parameters', 'whitelist_path')
+        try:
+            self.whitelist_path = self.config.get('parameters', 'whitelist_path')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            self.whitelist_path = 'whitelist.conf'
 
         # Get the time window width, if it was not specified as a parameter
         try:
