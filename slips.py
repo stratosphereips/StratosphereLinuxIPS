@@ -681,7 +681,16 @@ if __name__ == '__main__':
             args.output = args.output + '/'
         if not os.path.exists(args.output):
             os.makedirs(args.output)
+        try:
+            # can be daemonized or interactive
+            working_mode = int(config.get('modes', 'slips_mode'))
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError):
+            #todo make it daemonized by default
+            working_mode = 'interactive'
 
+        if working_mode == 'daemonized':
+            #todo
+            pass
         # Also check if the user blocks on interface, does not make sense to block on files
         if args.interface and args.blocking and os.geteuid() != 0:
             # If the user wants to blocks,we need permission to modify iptables
