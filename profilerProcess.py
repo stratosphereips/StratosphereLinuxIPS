@@ -99,6 +99,7 @@ class ProfilerProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.home_net = False
+        self.whitelist_path = self.config.get('parameters', 'whitelist_path')
 
         # Get the time window width, if it was not specified as a parameter
         try:
@@ -146,59 +147,63 @@ class ProfilerProcess(multiprocessing.Process):
             # By default
             self.label = 'unknown'
 
-    def read_whitelist(self, whitelist_path="whitelist.conf") -> int:
-        """
-        Reads the content of whitelist.conf and stores information about each ip/org/domain in the database
-        returns number of lines read
-        """
+    def read_whitelist(self):
+        """ Reads the content of whitelist.conf and stores information about each ip/org/domain in the database """
 
         self.whitelisted_IPs = {}
         self.whitelisted_domains = {}
         self.whitelisted_orgs = {}
-        with open(whitelist_path) as whitelist:
-            # Ignore comments
-            while True:
-                line = whitelist.readline()
-                # break while statement if it is not a comment line
-                # i.e. does not startwith #
-                if not line.startswith('#') and not line.startswith('"IoCType"'):
-                    break
-            # Process lines after comments
-            line_number = 0
-            while line:
-                line_number+=1
-                # ignore comments
-                if line.startswith('#'):
+        try:
+            with open(self.whitelist_path) as whitelist:
+                # Ignore comments
+                while True:
                     line = whitelist.readline()
-                    continue
-                # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
-                line = line.replace("\n","").replace(" ","").split(",")
-                try:
-                    type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
-                except IndexError:
-                    # line is missing a column, ignore it.
-                    self.print(f"Line {line_number} in whitelist.conf is missing a column. Skipping.")
+                    # break while statement if it is not a comment line
+                    # i.e. does not startwith #
+                    if not line.startswith('#') and not line.startswith('"IoCType"'):
+                        break
+                # Process lines after comments
+                line_number = 0
+                while line:
+                    line_number+=1
+                    # ignore comments
+                    if line.startswith('#'):
+                        line = whitelist.readline()
+                        continue
+                    # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
+                    line = line.replace("\n","").replace(" ","").split(",")
+                    try:
+                        type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
+                    except IndexError:
+                        # line is missing a column, ignore it.
+                        self.print(f"Line {line_number} in whitelist.conf is missing a column. Skipping.")
+                        line = whitelist.readline()
+                        continue
+                    # Validate the type before processing
+                    try:
+                        if ('ip' in type_ and
+                            (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
+                            self.whitelisted_IPs[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                        elif 'domain' in type_ and validators.domain(data):
+                            self.whitelisted_domains[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                        elif 'org' in type_:
+                            #organizations dicts look something like this:
+                            #  {'google': {'from':'dst',
+                            #               'what_to_ignore': 'alerts'
+                            #               'IPs': {'34.64.0.0/10': subnet}}
+                            self.whitelisted_orgs[data] = {'from': from_,
+                                                           'what_to_ignore': what_to_ignore}
+                        else:
+                            self.print(f"{data} is not a valid {type_}.",1,0)
+                    except:
+                        self.print(f"Line {line_number} in whitelist.conf is invalid. Skipping.")
                     line = whitelist.readline()
-                    continue
-                # Validate the type before processing
-                try:
-                    if ('ip' in type_ and
-                        (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
-                        self.whitelisted_IPs[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
-                    elif 'domain' in type_ and validators.domain(data):
-                        self.whitelisted_domains[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
-                    elif 'org' in type_:
-                        #organizations dicts look something like this:
-                        #  {'google': {'from':'dst',
-                        #               'what_to_ignore': 'alerts'
-                        #               'IPs': {'34.64.0.0/10': subnet}}
-                        self.whitelisted_orgs[data] = {'from': from_,
-                                                       'what_to_ignore': what_to_ignore}
-                    else:
-                        self.print(f"{data} is not a valid {type_}.",1,0)
-                except:
-                    self.print(f"Line {line_number} in whitelist.conf is invalid. Skipping.")
-                line = whitelist.readline()
+        except FileNotFoundError:
+            self.print(f"Can't find {self.whitelisted_path}, using slips default whitelist.conf instead")
+            self.whitelisted_path = 'whitelist.conf'
+            self.read_whitelist()
+
+
         # after we're done reading the file, process organizations info
         # If the user specified an org in the whitelist, load the info about it only to the db and to memory
         for org in self.whitelisted_orgs:
