@@ -886,20 +886,24 @@ class Database(object):
         data['description'] = description
         # key uses dictionary format, so it needs to be converted to json to work as a dict key.
         key_json = json.dumps(key)
+        # It is done to ignore repetition of the same evidence sent.
+        if key_json not in current_evidence.keys():
+            evidence_to_send = {
+                'profileid': str(profileid),
+                'twid': str(twid),
+                'key': key,
+                'data': data,
+                'description': description
+            }
+            evidence_to_send = json.dumps(evidence_to_send)
+            self.publish('evidence_added', evidence_to_send)
+
         current_evidence[key_json] = data
         current_evidence_json = json.dumps(current_evidence)
         # Set evidence in the database.
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
-        evidence_to_send = {
-            'profileid': str(profileid),
-            'twid': str(twid),
-            'key': key,
-            'data': data,
-            'description': description
-        }
-        evidence_to_send = json.dumps(evidence_to_send)
-        self.publish('evidence_added', evidence_to_send)
+
 
     def deleteEvidence(self,profileid, twid, key):
         """ Delete evidence from the database """
