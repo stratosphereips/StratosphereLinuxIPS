@@ -69,10 +69,28 @@ class Daemon():
         with open(self.logsfile,'a') as f:
             f.write(f'{text}\n')
 
+    def setup_std_streams(self):
+        """ Create standard steam files and dirs and clear log file """
+        # Clear logs file
+        open(self.logsfile, 'w').close()
+
+        slips_dirs = ['/var/log/slips','/etc/slips' ]
+        # todo these files will be growing wayy too fast we need to solve that!!
+        # this is where we'll be storing stdout, stderr, and pidfile
+        for dir in slips_dirs:
+            if not os.path.exists(dir):
+                os.mkdir(dir)
+
+        std_streams = [self.stderr, self.stdout, self.logsfile]
+        # create files if they don't exist
+        for file in std_streams:
+            if not os.path.exists(file):
+                open(file,'w').close()
+
     def read_configuration(self):
-        """ Read the configuration file for what we need """
+        """ Read the configuration file to get stdout,stderr, logsfile path."""
         try:
-            self.stdout = self.config.get('modes', 'stdin')
+            self.stdout = self.config.get('modes', 'stdout')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.stdout = '/dev/null' # todo should the default output file be dev null or a specific file in slips dir?
@@ -97,28 +115,9 @@ class Daemon():
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.logsfile = '/var/log/slips'
 
-        # todo these files will be growing wayy too fast we need to solve that!!
-        # this is where we'll be storing stdout, stderr, and pidfile
-        try:
-            # create the dir
-            os.mkdir('/etc/slips')
-        except FileExistsError:
-            pass
-
-        # create stderr if it doesn't exist
-        if not os.path.exists(self.stderr):
-            open(self.stderr,'w').close()
-
-        # create stdout if it doesn't exist
-        if not os.path.exists(self.stdout):
-            open(self.stdout,'w').close()
-
-        # create stdout if it doesn't exist
-        if not os.path.exists(self.logsfile):
-            open(self.logsfile,'w').close()
-
         # we don't use it anyway
         self.stdin='/dev/null'
+        self.setup_std_streams()
         self.print("Done reading configuration and setting up files.")
 
     def on_termination(self):
@@ -194,7 +193,7 @@ class Daemon():
         self.daemonize()
         self.print(f"Slips Daemon starting [PID {self.pid}]")
         # start slips normally
-        slips.start(mode='daemonized')
+        slips.start(mode='daemonized',daemon_instance=self)
 
     def stop(self):
         """Stop the daemon"""
@@ -230,6 +229,8 @@ class Daemon():
         self.print("Daemon restarting...")
         self.stop()
         self.start()
+
+    #todo make Main() class close the daemon in shutdown_gracefully()
 
 class Main():
     def __init__(self):
@@ -460,7 +461,7 @@ class Main():
             pass
         return self.config
 
-    def start(self, mode=''):
+    def start(self, mode='', daemon_instance=None):
 
         print('Slips. Version {}'.format(version))
         print('https://stratosphereips.org\n')
