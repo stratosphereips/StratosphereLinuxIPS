@@ -221,8 +221,8 @@ class Daemon():
             self.pid = None
 
         if self.pid:
-            sys.stderr.write(f"pidfile {self.pid} already exist. Daemon already running?\n")
-            self.print(f"pidfile {self.pid} already exist. Daemon already running?")
+            sys.stderr.write(f"pidfile {self.pid} already exists. Daemon already running?\n")
+            self.print(f"pidfile {self.pid} already exists. Daemon already running?")
             sys.exit(1)
 
         # Start the daemon
@@ -266,9 +266,11 @@ class Daemon():
         self.stop()
         self.start()
 
-    #todo make Main() class close the daemon in shutdown_gracefully()
+    # todo make Main() class close the daemon in shutdown_gracefully()
     # todo add restart and stop usage to argparser
     # todo limit printing to stdout file as possible
+    # todo clear stdout and stderr files on restart
+    # todo fix rm pidfile not working!!
 
 class Main():
     def __init__(self):
@@ -1202,7 +1204,6 @@ if __name__ == '__main__':
         slips.start(mode='interactive')
     else:
         daemon = Daemon(slips)
+        print("Slips daemon is running.")
         daemon.start()
-        with open(daemon.pidfile,'r') as pidfile:
-            pid = int(pidfile.read().strip())
-        print(f"Slips daemon has started [PID {pid}]")
+
