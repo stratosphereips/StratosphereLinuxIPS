@@ -6,7 +6,9 @@ import configparser
 import platform
 
 # Your imports
-import sys, os, atexit
+import sys, os, atexit, time
+from signal import SIGTERM
+
 
 class Module(Module, multiprocessing.Process):
     name = 'daemon'
@@ -156,4 +158,34 @@ class Module(Module, multiprocessing.Process):
         self.daemonize()
         self.run()
 
+    def stop(self):
+        """Stop the daemon"""
+        # Get the pid from the pidfile
+        try:
+            with open(self.pidfile,'r') as pidfile:
+                pid = int(pidfile.read().strip())
+        except IOError:
+            pid = None
 
+        if not pid:
+            sys.stderr.write(f"pidfile {pid} doesn't exist. Daemon not running?")
+            return
+
+        # Try killing the daemon process
+        try:
+            while 1:
+                os.kill(pid, SIGTERM)
+                time.sleep(0.1)
+        except (OSError) as e:
+            e = str(e)
+            if e.find("No such process") > 0:
+                if os.path.exists(self.pidfile):
+                    os.remove(self.pidfile)
+                else:
+                    print(str(e))
+                    sys.exit(1)
+
+    def restart(self):
+        """Restart the daemon"""
+        self.stop()
+        self.start()
