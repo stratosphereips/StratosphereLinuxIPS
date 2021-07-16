@@ -25,6 +25,8 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         self.timeout = None
         self.read_configuration()
+        # this file is used to store the pid of the daemon and is deleted when the daemon stops
+        self.pidfile = '/etc/slips/pidfile'
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -46,7 +48,6 @@ class Module(Module, multiprocessing.Process):
 
         # we don't use it anyway
         self.stdin='/dev/null'
-
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -84,7 +85,8 @@ class Module(Module, multiprocessing.Process):
                 return True
 
     def on_termination(self):
-        pass
+        """ deletes the pidfile to mark the daemon as closed """
+        os.remove(self.pidfile)
 
     def daemonize(self):
         """
@@ -130,9 +132,28 @@ class Module(Module, multiprocessing.Process):
             os.dup2(stdout.fileno(), sys.stdout.fileno())
             os.dup2(stderr.fileno(), sys.stderr.fileno())
 
-        # Register a function to be executed if sys.exit() is called or the main module’s execution completes
-        atexit.register(self.on_termination())
+        # write the pid of the daemon to a file so we can check if it's already opened before re-opening
         pid = str(os.getpid())
         with open(self.pidfile,'w+') as pidfile:
             pidfile.write(pid+'\n')
+
+        # Register a function to be executed if sys.exit() is called or the main module’s execution completes
+        atexit.register(self.on_termination)
+
+    def start(self):
+        """Start the daemon"""
+        # Check for a pidfile to see if the daemon is already running
+        try:
+            with open(self.pidfile,'r') as pidfile:
+                pid = int(pidfile.read().strip())
+        except (IOError,ValueError):
+                pid = None
+
+        if pid:
+            sys.stderr.write(f"pidfile {pid} already exist. Daemon already running?")
+            sys.exit(1)
+        # Start the daemon
+        self.daemonize()
+        self.run()
+
 
