@@ -462,12 +462,14 @@ class Main():
                             help='block IPs that connect to the computer. Supported only on Linux.')
         parser.add_argument('-o', '--output', action='store', required=False, default=self.alerts_default_path,
                             help='store alerts.json and alerts.txt in the provided folder.')
+        parser.add_argument('-I', '--interactive',required=False, default=False, action='store_true',
+                            help="run slips in interactive mode - don't daemonize")
         parser.add_argument("-h", "--help", action="help", help="command line help")
 
         self.args = parser.parse_args()
 
     def run(self):
-            
+
         self.parse_arguments()
         # Read the config file name given from the parameters
         # don't use '%' for interpolation.
@@ -484,7 +486,7 @@ class Main():
         # Check if redis server running
         if self.check_redis_database() is False:
             self.terminate_slips()
-    
+
         # If we need zeek (bro), test if we can run it.
         # Need to be assign to something because we pass it to inputProcess later
         zeek_bro = None
@@ -494,18 +496,18 @@ class Main():
                 # If we do not have bro or zeek, terminate Slips.
                 print('no zeek nor bro')
                 self.terminate_slips()
-    
+
         # See if we have the nfdump, if we need it according to the input type
         if self.args.nfdump and shutil.which('nfdump') is None:
             # If we do not have nfdump, terminate Slips.
             self.terminate_slips()
-    
+
         # Clear cache if the parameter was included
         if self.args.clearcache:
             print('Deleting Cache DB in Redis.')
             self.clear_redis_cache_database()
             self.terminate_slips()
-    
+
         # Remove default folder for alerts, if exists
         if os.path.exists(self.alerts_default_path):
             try:
@@ -513,11 +515,11 @@ class Main():
             except OSError :
                 # Directory not empty (may contain hidden non-deletable files), don't delete dir
                 pass
-    
+
         # Create output folder for alerts.txt and alerts.json if they do not exist
         if not os.path.exists(self.args.output):
             os.makedirs(self.args.output)
-    
+
         try:
             # can be daemonized or interactive
             working_mode = self.config.get('modes', 'slips_mode')
@@ -530,7 +532,7 @@ class Main():
         if self.args.interface and self.args.blocking:
             print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
             os.system('sudo iptables -N slipsBlocking')
-    
+
         """
         Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
         """
@@ -541,7 +543,7 @@ class Main():
         from guiProcess import GuiProcess
         from logsProcess import LogsProcess
         from evidenceProcess import EvidenceProcess
-    
+
         # Any verbosity passed as parameter overrides the configuration. Only check its value
         if self.args.verbose == None:
             # Read the verbosity from the config
@@ -551,11 +553,11 @@ class Main():
                 # There is a conf, but there is no option, or no section or no configuration file specified
                 # By default, 1
                 self.args.verbose = 1
-    
+
         # Limit any verbosity to > 0
         if self.args.verbose < 1:
             self.args.verbose = 1
-    
+
         # Any debuggsity passed as parameter overrides the configuration. Only check its value
         if self.args.debug == None:
             # Read the debug from the config
@@ -565,11 +567,11 @@ class Main():
                 # There is a conf, but there is no option, or no section or no configuration file specified
                 # By default, 0
                 self.args.debug = 0
-    
+
         # Limit any debuggisity to > 0
         if self.args.debug < 0:
             self.args.debug = 0
-    
+
         # Check the type of input
         if self.args.interface:
             input_information = self.args.interface
@@ -586,7 +588,7 @@ class Main():
         else:
             print('You need to define an input source.')
             sys.exit(-1)
-    
+
         ##########################
         # Creation of the threads
         ##########################
@@ -598,7 +600,7 @@ class Main():
         # Create the output thread and start it
         outputProcessThread = OutputProcess(self.outputProcessQueue, self.args.verbose, self.args.debug, self.config)
         outputProcessThread.start()
-    
+
         # Before starting update malicious file
         self.update_malicious_file(self.outputProcessQueue, self.config)
         # Print the PID of the main slips process. We do it here because we needed the queue to the output process
@@ -606,7 +608,7 @@ class Main():
         # Output pid
         self.outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
         __database__.store_process_PID('outputProcess',int(outputProcessThread.pid))
-    
+
         # Start each module in the folder modules
         self.outputProcessQueue.put('01|main|[main] Starting modules')
         to_ignore = self.read_configuration(self.config, 'modules', 'disable')
@@ -621,7 +623,7 @@ class Main():
             # Disable blocking if was not asked and if it is not interface
             if not self.args.blocking or not self.args.interface:
                 to_ignore.append('blocking')
-    
+
             try:
                 # This 'imports' all the modules somehow, but then we ignore some
                 self.modules_to_call = self.load_modules(to_ignore)
@@ -635,7 +637,7 @@ class Main():
             except TypeError:
                 # There are not modules in the configuration to ignore?
                 print('No modules are ignored')
-    
+
         # Get the type of output from the parameters
         # Several combinations of outputs should be able to be used
         if self.args.gui:
@@ -660,7 +662,7 @@ class Main():
                 self.outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
                 __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
         # If self.args.nologfiles is False, then we don't want log files, independently of what the conf says.
-    
+
         # Evidence thread
         # Create the queue for the evidence thread
         evidenceProcessQueue = Queue()
@@ -669,8 +671,8 @@ class Main():
         evidenceProcessThread.start()
         self.outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
         __database__.store_process_PID('evidenceProcess', int(evidenceProcessThread.pid))
-    
-    
+
+
         # Profile thread
         # Create the queue for the profile thread
         self.profilerProcessQueue = Queue()
@@ -679,14 +681,14 @@ class Main():
         profilerProcessThread.start()
         self.outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
         __database__.store_process_PID('profilerProcess', int(profilerProcessThread.pid))
-    
+
         # Input process
         # Create the input process and start it
         self.inputProcess = InputProcess(self.outputProcessQueue, self.profilerProcessQueue, input_type, input_information, self.config, self.args.pcapfilter, zeek_bro)
         self.inputProcess.start()
         self.outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(self.inputProcess.pid))
         __database__.store_process_PID('inputProcess', int(self.inputProcess.pid))
-    
+
         self.c1 = __database__.subscribe('finished_modules')
 
         # Store the host IP address if input type is interface
@@ -700,7 +702,7 @@ class Main():
                     print("Not Connected to the internet. Reconnecting in 10s.")
                     time.sleep(10)
                     hostIP = self.recognize_host_ip()
-    
+
         # As the main program, keep checking if we should stop slips or not
         # This is not easy since we need to be sure all the modules are stopped
         # Each interval of checking is every 5 seconds
@@ -728,10 +730,10 @@ class Main():
                 # How many profiles we have?
                 profilesLen = str(__database__.getProfilesLen())
                 self.outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
-    
+
                 # Check if we need to close some TW
                 __database__.check_TW_to_close()
-    
+
                 # In interface we keep track of the host IP. If there was no
                 # modified TWs in the host NotIP, we check if the network was changed.
                 # Dont try to stop slips if its catpurting from an interface
@@ -744,7 +746,7 @@ class Main():
                         # True if there was a modified TW in the host IP
                         if hostIP == profileIP:
                             modifiedTW_hostIP = True
-    
+
                     # If there was no modified TW in the host IP
                     # then start counting down
                     # After count down we update the host IP, to check if the
@@ -758,9 +760,9 @@ class Main():
                         minimum_intervals_to_wait -= 1
                     else:
                         minimum_intervals_to_wait = limit_minimum_intervals_to_wait
-    
+
                 # ---------------------------------------- Stopping slips
-    
+
                 # When running Slips in the file.
                 # If there were no modified TW in the last timewindow time,
                 # then start counting down
@@ -774,7 +776,7 @@ class Main():
                         minimum_intervals_to_wait -= 1
                     else:
                         minimum_intervals_to_wait = limit_minimum_intervals_to_wait
-    
+
         except KeyboardInterrupt:
             self.shutdown_gracefully()
 
@@ -785,4 +787,13 @@ class Main():
 if __name__ == '__main__':
     print('Slips. Version {}'.format(version))
     print('https://stratosphereips.org\n')
+
+    slips = Main()
+    slips.parse_arguments()
+
+    if slips.args.interactive:
+        slips.start()
+    else:
+        daemon = Daemon(slips)
+
 
