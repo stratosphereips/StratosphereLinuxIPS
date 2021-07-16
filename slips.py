@@ -79,7 +79,7 @@ class Daemon():
         # Clear logs file
         open(self.logsfile, 'w').close()
 
-        slips_dirs = ['/var/log/slips','/etc/slips' ]
+        slips_dirs = ['/var/log/','/etc/slips/' ]
         # todo these files will be growing wayy too fast we need to solve that!!
         # this is where we'll be storing stdout, stderr, and pidfile
         for dir in slips_dirs:
@@ -94,6 +94,14 @@ class Daemon():
 
     def read_configuration(self):
         """ Read the configuration file to get stdout,stderr, logsfile path."""
+
+        try:
+            # this file is used to store the pid of the daemon and is deleted when the daemon stops
+            self.logsfile = self.config.get('modes', 'logsfile')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.logsfile = '/var/log/slips'
+
         try:
             self.stdout = self.config.get('modes', 'stdout')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
@@ -143,6 +151,7 @@ class Daemon():
         # we don't use it anyway
         self.stdin='/dev/null'
         self.setup_std_streams()
+        self.print(f"Logsfile: {self.logsfile}\nstdin : {self.stdin}\nstdout: {self.stdout}\nstderr: {self.stderr}\n")
         self.print("Done reading configuration and setting up files.")
 
     def on_termination(self):
@@ -212,11 +221,13 @@ class Daemon():
             self.pid = None
 
         if self.pid:
-            sys.stderr.write(f"pidfile {self.pid} already exist. Daemon already running?")
+            sys.stderr.write(f"pidfile {self.pid} already exist. Daemon already running?\n")
+            self.print(f"pidfile {self.pid} already exist. Daemon already running?")
             sys.exit(1)
+
         # Start the daemon
         self.daemonize()
-        self.print(f"Slips Daemon starting [PID {self.pid}]")
+        self.print(f"Slips Daemon is running. [PID {self.pid}]")
         # start slips normally
         slips.start(mode='daemonized',daemon_instance=self)
 
@@ -256,6 +267,8 @@ class Daemon():
         self.start()
 
     #todo make Main() class close the daemon in shutdown_gracefully()
+    # todo add restart and stop usage to argparser
+    # todo limit printing to stdout file as possible
 
 class Main():
     def __init__(self):
@@ -1189,6 +1202,7 @@ if __name__ == '__main__':
         slips.start(mode='interactive')
     else:
         daemon = Daemon(slips)
+        daemon.start()
         with open(daemon.pidfile,'r') as pidfile:
             pid = int(pidfile.read().strip())
         print(f"Slips daemon has started [PID {pid}]")
