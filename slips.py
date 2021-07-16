@@ -62,22 +62,12 @@ from slips.core.database import __database__
 import sys, os, atexit, time
 from signal import SIGTERM
 
-class Daemon(Module, multiprocessing.Process):
+class Daemon():
     description = 'This module runs when slips is in daemonized mode'
 
     def __init__(self, slips):
-        # start slips normally
-        slips.start()
-        multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
-        self.outputqueue = slips.outputqueue
-        self.config = slips.config
-        # Start the DB
-        __database__.start(self.config)
-        self.timeout = None
+        self.config = slips.read_conf_file()
         self.read_configuration()
-        self.run()
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -118,40 +108,6 @@ class Daemon(Module, multiprocessing.Process):
 
         # we don't use it anyway
         self.stdin='/dev/null'
-
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by
-        taking all the prcocesses into account
-
-        Input
-         verbose: is the minimum verbosity level required for this text to
-         be printed
-         debug: is the minimum debugging level required for this text to be
-         printed
-         text: text to print. Can include format like 'Test {}'.format('here')
-
-        If not specified, the minimum verbosity level required is 1, and the
-        minimum debugging level is 0
-        """
-
-        vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
-
-    def run(self):
-        while True:
-            try:
-                self.print(f"Daemon is running, stdout: {self.stdout} stderr: {self.stderr}")
-            except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
-            except Exception as inst:
-                self.print('Problem on the run()', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
 
     def on_termination(self):
         """ deletes the pidfile to mark the daemon as closed """
@@ -216,14 +172,16 @@ class Daemon(Module, multiprocessing.Process):
             with open(self.pidfile,'r') as pidfile:
                 pid = int(pidfile.read().strip())
         except (IOError,ValueError):
-                pid = None
+            pid = None
 
         if pid:
             sys.stderr.write(f"pidfile {pid} already exist. Daemon already running?")
             sys.exit(1)
         # Start the daemon
         self.daemonize()
-        self.run()
+        # start slips normally
+        slips.start()
+
 
     def stop(self):
         """Stop the daemon"""
@@ -256,7 +214,6 @@ class Daemon(Module, multiprocessing.Process):
         """Restart the daemon"""
         self.stop()
         self.start()
-
 
 class Main():
     def __init__(self):
@@ -600,9 +557,9 @@ class Main():
 
 
             # save redis database if '-s' is specified
-            if args.save:
+            if self.args.save:
                 # Create a new dir to store backups
-                backups_dir = get_cwd() + 'redis_backups' + '/'
+                backups_dir = self.get_cwd() + 'redis_backups' + '/'
                 try:
                     os.mkdir(backups_dir)
                 except FileExistsError:
@@ -705,8 +662,21 @@ class Main():
 
         args = parser.parse_args()
 
+    def read_conf_file(self):
+        # Read the config file name given from the parameters
+        # don't use '%' for interpolation.
+        self.config = configparser.ConfigParser(interpolation=None)
+        try:
+            with open(self.args.config) as source:
+                self.config.read_file(source)
+        except IOError:
+            pass
+        except TypeError:
+            # No conf file provided
+            pass
+        return self.config
 
-    def run(self):
+    def start(self):
         try:
             # Before the argparse, we need to set up the default path fr alerts.log
             # and alerts.json. In our case, it is output folder.
@@ -726,20 +696,7 @@ class Main():
 
             alerts_default_path = 'output/'
             self.parse_arguments()
-            # Read the config file name given from the parameters
-            # don't use '%' for interpolation.
-            # comment_prefixes are the characters that if found at the beginning
-            # of the line, the line is completely ignored by configparses, by default they are # and ;
-            # set them to # only to support removing commented ti files from the cache db
-            config = configparser.ConfigParser(interpolation=None, comment_prefixes="#")
-            try:
-                with open(self.args.config) as source:
-                    config.read_file(source)
-            except IOError:
-                pass
-            except TypeError:
-                # No conf file provided
-                pass
+            self.read_conf_file()
 
             if (self.args.verbose and int(self.args.verbose) > 3) or (self.args.debug and int(self.args.debug) > 3):
                 print("Debug and verbose values range from 0 to 3.")
@@ -891,16 +848,7 @@ class Main():
                 self.args.output = self.args.output + '/'
             if not os.path.exists(self.args.output):
                 os.makedirs(self.args.output)
-            try:
-                # can be daemonized or interactive
-                working_mode = self.config.get('modes', 'slips_mode')
-            except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError):
-                #todo make it daemonized by default
-                working_mode = 'interactive'
 
-            if working_mode == 'daemonized':
-                #todo
-                pass
             # Also check if the user blocks on interface, does not make sense to block on files
             if self.args.interface and self.args.blocking:
                 print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
@@ -1196,9 +1144,6 @@ class Main():
 # Main
 ####################
 if __name__ == '__main__':
-    print('Slips. Version {}'.format(version))
-    print('https://stratosphereips.org\n')
-
     slips = Main()
     slips.parse_arguments()
 
@@ -1206,4 +1151,6 @@ if __name__ == '__main__':
         slips.start()
     else:
         daemon = Daemon(slips)
-
+        with open(daemon.pidfile,'r') as pidfile:
+            pid = int(pidfile.read().strip())
+        print(f"Slips daemon has started [PID {pid}]")
