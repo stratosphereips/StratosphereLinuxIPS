@@ -69,6 +69,11 @@ class Daemon():
         self.config = slips.read_conf_file()
         self.read_configuration()
 
+    def print(self, text):
+        """ Prints output to logsfile specified in slips.conf"""
+        with open(self.logsfile,'a') as f:
+            f.write(f'{text}\n')
+
     def read_configuration(self):
         """ Read the configuration file for what we need """
         try:
@@ -90,6 +95,13 @@ class Daemon():
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.pidfile = '/etc/slips/pidfile'
 
+        try:
+            # this file is used to store the pid of the daemon and is deleted when the daemon stops
+            self.logsfile = self.config.get('modes', 'logsfile')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.logsfile = '/var/log/slips'
+
         # todo these files will be growing wayy too fast we need to solve that!!
         # this is where we'll be storing stdout, stderr, and pidfile
         try:
@@ -106,20 +118,26 @@ class Daemon():
         if not os.path.exists(self.stdout):
             open(self.stdout,'w').close()
 
+        # create stdout if it doesn't exist
+        if not os.path.exists(self.logsfile):
+            open(self.logsfile,'w').close()
+
         # we don't use it anyway
         self.stdin='/dev/null'
+        self.print("Done reading configuration and setting up files.")
 
     def on_termination(self):
         """ deletes the pidfile to mark the daemon as closed """
         os.remove(self.pidfile)
+        self.print(f"Daemon Terminated [PID {self.pid}]")
 
     def daemonize(self):
         """
         Does the Unix double-fork to create a daemon
         """
         try:
-            pid = os.fork()
-            if pid > 0:
+            self.pid = os.fork()
+            if self.pid > 0:
                 # exit first parent
                 sys.exit(0)
         except OSError as e:
@@ -135,8 +153,8 @@ class Daemon():
         # If you want to prevent a process from acquiring a tty, the process shouldn't be the session leader
         # fork again so that the second child is no longer a session leader
         try:
-            pid = os.fork()
-            if pid > 0:
+            self.pid = os.fork()
+            if self.pid > 0:
                 # exit from second parent (aka first child)
                 sys.exit(0)
         except OSError as e:
@@ -158,48 +176,48 @@ class Daemon():
             os.dup2(stderr.fileno(), sys.stderr.fileno())
 
         # write the pid of the daemon to a file so we can check if it's already opened before re-opening
-        pid = str(os.getpid())
+        self.pid = str(os.getpid())
         with open(self.pidfile,'w+') as pidfile:
-            pidfile.write(pid+'\n')
+            pidfile.write(self.pid+'\n')
 
         # Register a function to be executed if sys.exit() is called or the main module’s execution completes
-        # atexit.register(self.on_termination)
+        atexit.register(self.on_termination)
 
     def start(self):
         """Start the daemon"""
         # Check for a pidfile to see if the daemon is already running
         try:
             with open(self.pidfile,'r') as pidfile:
-                pid = int(pidfile.read().strip())
+                self.pid = int(pidfile.read().strip())
         except (IOError,ValueError):
-            pid = None
+            self.pid = None
 
-        if pid:
-            sys.stderr.write(f"pidfile {pid} already exist. Daemon already running?")
+        if self.pid:
+            sys.stderr.write(f"pidfile {self.pid} already exist. Daemon already running?")
             sys.exit(1)
         # Start the daemon
         self.daemonize()
+        self.print(f"Slips Daemon starting [PID {self.pid}]")
         # start slips normally
-        slips.start()
-
+        slips.start(mode='daemonized')
 
     def stop(self):
         """Stop the daemon"""
         # Get the pid from the pidfile
         try:
             with open(self.pidfile,'r') as pidfile:
-                pid = int(pidfile.read().strip())
+                self.pid = int(pidfile.read().strip())
         except IOError:
-            pid = None
+            self.pid = None
 
-        if not pid:
-            sys.stderr.write(f"pidfile {pid} doesn't exist. Daemon not running?")
+        if not self.pid:
+            sys.stderr.write(f"pidfile {self.pid} doesn't exist. Daemon not running?")
             return
 
         # Try killing the daemon process
         try:
             while 1:
-                os.kill(pid, SIGTERM)
+                os.kill(self.pid, SIGTERM)
                 time.sleep(0.1)
         except (OSError) as e:
             e = str(e)
@@ -209,9 +227,12 @@ class Daemon():
                 else:
                     print(str(e))
                     sys.exit(1)
+                self.print("No such process, daemon already killed.")
+            self.print("Daemon successfully killed.")
 
     def restart(self):
         """Restart the daemon"""
+        self.print("Daemon restarting...")
         self.stop()
         self.start()
 
@@ -676,7 +697,7 @@ class Main():
             pass
         return self.config
 
-    def start(self):
+    def start(self, mode=''):
         try:
             # Before the argparse, we need to set up the default path fr alerts.log
             # and alerts.json. In our case, it is output folder.
@@ -1148,7 +1169,7 @@ if __name__ == '__main__':
     slips.parse_arguments()
 
     if slips.args.interactive:
-        slips.start()
+        slips.start(mode='interactive')
     else:
         daemon = Daemon(slips)
         with open(daemon.pidfile,'r') as pidfile:
