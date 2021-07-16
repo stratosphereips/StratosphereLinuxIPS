@@ -338,9 +338,9 @@ class EvidenceProcess(multiprocessing.Process):
                         ip_data = __database__.getIPData(ip)
                         ip_asn = ip_data['asn']
                         # make sure the asn field contains a value
-                        if (ip_asn not in ('','Unknown')
-                                and (org.lower() in ip_asn.lower()
-                                        or ip_asn in whitelisted_orgs[org]['asn'])):
+                        if (ip_asn['asnorg'] not in ('','Unknown')
+                                and (org.lower() in ip_asn['asnorg'].lower()
+                                        or ip_asn['asnorg'] in whitelisted_orgs[org]['asn'])):
                             # this ip belongs to a whitelisted org, ignore alert
                             #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
                             return True

@@ -1531,7 +1531,7 @@ class ProfilerProcess(multiprocessing.Process):
                         ip_data = __database__.getIPData(self.column_values['saddr'])
                         try:
                             ip_asn = ip_data['asn']
-                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in self.whitelisted_orgs[org]['asn']):
+                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn['asnorg'].lower() or ip_asn in self.whitelisted_orgs[org]['asn']):
                                 # this ip belongs to a whitelisted org, ignore flow
                                 #self.print(f"The ASN {ip_asn} of IP {self.column_values['saddr']} is in the values of org {org}. Whitelisted.")
                                 return True
@@ -1554,7 +1554,7 @@ class ProfilerProcess(multiprocessing.Process):
                         ip_data = __database__.getIPData(self.column_values['daddr'])
                         try:
                             ip_asn = ip_data['asn']
-                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in self.whitelisted_orgs[org]['asn']):
+                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn['asnorg'].lower() or ip_asn in self.whitelisted_orgs[org]['asn']):
                                 # this ip belongs to a whitelisted org, ignore flow
                                 #self.print(f"The ASN {ip_asn} of IP {self.column_values['daddr']} is in the values of org {org}. Whitelisted.")
                                 return True
