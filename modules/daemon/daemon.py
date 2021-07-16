@@ -27,8 +27,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         self.timeout = None
         self.read_configuration()
-        # this file is used to store the pid of the daemon and is deleted when the daemon stops
-        self.pidfile = '/etc/slips/pidfile'
+
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -44,9 +43,28 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.stderr = '/dev/null' # todo should the default stderr file be dev null or a specific file in slips dir?
 
+        try:
+            # this file is used to store the pid of the daemon and is deleted when the daemon stops
+            self.pidfile = self.config.get('modes', 'pidfile')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.pidfile = '/etc/slips/pidfile'
+
+        # todo these files will be growing wayy too fast we need to solve that!!
+        # this is where we'll be storing stdout, stderr, and pidfile
+        try:
+            # create the dir
+            os.mkdir('/etc/slips')
+        except FileExistsError:
+            pass
+
         # create stderr if it doesn't exist
-        if not os.path.exists(self.stdout):
+        if not os.path.exists(self.stderr):
             open(self.stderr,'w').close()
+
+        # create stdout if it doesn't exist
+        if not os.path.exists(self.stdout):
+            open(self.stdout,'w').close()
 
         # we don't use it anyway
         self.stdin='/dev/null'
@@ -72,10 +90,10 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def run(self):
-        # Main loop function
         while True:
             try:
-                print("**********all gooodd")
+                self.print(f"Daemon is running, stdout: {self.stdout} stderr: {self.stderr}")
+
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
