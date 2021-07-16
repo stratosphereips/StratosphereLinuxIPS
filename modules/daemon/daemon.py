@@ -2,18 +2,18 @@
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
+import configparser
 import platform
 
 # Your imports
 import sys, os, atexit
 
 class Module(Module, multiprocessing.Process):
-    # Name: short name of the module. Do not use spaces
-    name = 'Daemon'
+    name = 'daemon'
     description = 'This module runs when slips is in daemonized mode'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config, pidfile, stdin='/dev/null', stdout='/dev/null', stderr='/dev/null' ):
+    def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
@@ -24,10 +24,29 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.timeout = None
-        self.stdin = stdin
-        self.stdout = stdout
-        self.stderr = stderr
-        self.pidfile = pidfile
+        self.read_configuration()
+
+    def read_configuration(self):
+        """ Read the configuration file for what we need """
+        try:
+            self.stdout = self.config.get('modes', 'stdin')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.stdout = '/dev/null' # todo should the default output file be dev null or a specific file in slips dir?
+
+        try:
+            self.stderr = self.config.get('modes', 'stderr')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.stderr = '/dev/null' # todo should the default stderr file be dev null or a specific file in slips dir?
+
+        # create stderr if it doesn't exist
+        if not os.path.exists(self.stdout):
+            open(self.stderr,'w').close()
+
+        # we don't use it anyway
+        self.stdin='/dev/null'
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -53,7 +72,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                pass
+                print("**********all gooodd")
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
@@ -63,6 +82,9 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
                 return True
+
+    def on_termination(self):
+        pass
 
     def daemonize(self):
         """
@@ -108,8 +130,8 @@ class Module(Module, multiprocessing.Process):
             os.dup2(stdout.fileno(), sys.stdout.fileno())
             os.dup2(stderr.fileno(), sys.stderr.fileno())
 
-        # write pidfile
-        atexit.register(self.delpid)
+        # Register a function to be executed if sys.exit() is called or the main module’s execution completes
+        atexit.register(self.on_termination())
         pid = str(os.getpid())
         with open(self.pidfile,'w+') as pidfile:
             pidfile.write(pid+'\n')
