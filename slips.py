@@ -154,8 +154,9 @@ class Daemon():
         self.print(f"Logsfile: {self.logsfile}\nstdin : {self.stdin}\nstdout: {self.stdout}\nstderr: {self.stderr}\n")
         self.print("Done reading configuration and setting up files.")
 
-    def on_termination(self):
+    def terminate(self):
         """ deletes the pidfile to mark the daemon as closed """
+        self.print("Calling terminate...")
         os.remove(self.pidfile)
         self.print(f"Daemon Terminated [PID {self.pid}]")
 
@@ -163,6 +164,9 @@ class Daemon():
         """
         Does the Unix double-fork to create a daemon
         """
+        # double fork explaination
+        # https://stackoverflow.com/questions/881388/what-is-the-reason-for-performing-a-double-fork-when-creating-a-daemon
+
         try:
             self.pid = os.fork()
             if self.pid > 0:
@@ -209,10 +213,10 @@ class Daemon():
             pidfile.write(self.pid+'\n')
 
         # Register a function to be executed if sys.exit() is called or the main module’s execution completes
-        atexit.register(self.on_termination)
+        atexit.register(self.terminate)
 
     def start(self):
-        """Start the daemon"""
+        """ Main function, Starts the daemon."""
         # Check for a pidfile to see if the daemon is already running
         try:
             with open(self.pidfile,'r') as pidfile:
@@ -228,8 +232,10 @@ class Daemon():
         # Start the daemon
         self.daemonize()
         self.print(f"Slips Daemon is running. [PID {self.pid}]")
+        # tell Main class that we're running in daemonized mode
+        slips.set_mode('daemonized', daemon=self)
         # start slips normally
-        slips.start(mode='daemonized',daemon_instance=self)
+        slips.start()
 
     def stop(self):
         """Stop the daemon"""
@@ -271,11 +277,13 @@ class Daemon():
     # todo limit printing to stdout file as possible
     # todo clear stdout and stderr files on restart
     # todo fix rm pidfile not working!!
+    # todo when the daemon is killed , does it execute the registered function??
 
 class Main():
     def __init__(self):
         # Set up the default path for alerts.log and alerts.json. In our case, it is output folder.
         self.alerts_default_path = 'output/'
+        self.mode = 'interactive'
 
     def read_configuration(self, config, section, name):
         """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
@@ -733,7 +741,18 @@ class Main():
             pass
         return self.config
 
-    def start(self, mode='', daemon_instance=None):
+    def set_mode(self, mode, daemon=''):
+        """
+        Slips has 2 modes, daemonized and interactive, this function sets up the mode so that slips knows in which mode it's operating
+        :param mode: daemonized of interavtive
+        :param daemon: Daemon() instance
+        """
+        self.mode = mode
+        self.daemon = daemon
+
+
+    def start(self):
+        """ Main Slips Function """
             slips_version =  f'Slips. Version {version}'
             from slips_files.common.slips_utils import utils
             branch_info = utils.get_branch_info()
@@ -1201,7 +1220,7 @@ if __name__ == '__main__':
     slips.parse_arguments()
 
     if slips.args.interactive:
-        slips.start(mode='interactive')
+        slips.start()
     else:
         daemon = Daemon(slips)
         print("Slips daemon is running.")
