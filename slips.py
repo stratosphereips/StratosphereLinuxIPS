@@ -68,6 +68,12 @@ class Daemon():
     def __init__(self, slips):
         self.config = slips.read_conf_file()
         self.read_configuration()
+        # Get the pid from pidfile
+        try:
+            with open(self.pidfile,'r') as pidfile:
+                self.pid = int(pidfile.read().strip())
+        except IOError:
+            self.pid = None
 
     def print(self, text):
         """ Prints output to logsfile specified in slips.conf"""
@@ -155,10 +161,11 @@ class Daemon():
         self.print("Done reading configuration and setting up files.\n")
 
     def terminate(self):
-        """ deletes the pidfile to mark the daemon as closed """
-        self.print("Calling terminate...")
-        os.remove(self.pidfile)
-        self.print(f"Daemon Terminated [PID {self.pid}]")
+        """ Deletes the pidfile to mark the daemon as closed """
+        if os.path.exists(self.pidfile):
+            self.print("Deleting pidfile...")
+            os.remove(self.pidfile)
+            self.print(f"Daemon killed [PID {self.pid}]")
 
     def daemonize(self):
         """
@@ -173,7 +180,8 @@ class Daemon():
                 # exit first parent
                 sys.exit(0)
         except OSError as e:
-            sys.stderr.write("fork #1 failed: %d (%s)\n" % (e.errno, e.strerror))
+            sys.stderr.write(f"Fork #1 failed: {e.errno} {e.strerror}\n")
+            self.print(f"Fork #1 failed: {e.errno} {e.strerror}\n")
             sys.exit(1)
 
         # os.chdir("/")
@@ -190,7 +198,8 @@ class Daemon():
                 # exit from second parent (aka first child)
                 sys.exit(0)
         except OSError as e:
-            sys.stderr.write("fork #2 failed: %d (%s)\n" % (e.errno, e.strerror))
+            sys.stderr.write(f"Fork #2 failed: {e.errno} {e.strerror}\n")
+            self.print(f"Fork #2 failed: {e.errno} {e.strerror}\n")
             sys.exit(1)
 
         # Now this code is run from the daemon
@@ -216,14 +225,11 @@ class Daemon():
         # atexit.register(self.terminate)
 
     def start(self):
-        """ Main function, Starts the daemon."""
-        # Check for a pidfile to see if the daemon is already running
-        try:
-            with open(self.pidfile,'r') as pidfile:
-                self.pid = int(pidfile.read().strip())
-        except (IOError,ValueError):
-            self.pid = None
+        """ Main function, Starts the daemon and starts slips normally."""
 
+        self.print("Daemon starting...")
+
+        # Check for a pidfile to see if the daemon is already running
         if self.pid:
             sys.stderr.write(f"pidfile {self.pid} already exists. Daemon already running?\n")
             self.print(f"pidfile {self.pid} already exists. Daemon already running?")
@@ -231,6 +237,8 @@ class Daemon():
 
         # Start the daemon
         self.daemonize()
+
+        # any code run after daemonizing will be run inside the daemon
         self.print(f"Slips Daemon is running. [PID {self.pid}]")
         # tell Main class that we're running in daemonized mode
         slips.set_mode('daemonized', daemon=self)
@@ -239,15 +247,10 @@ class Daemon():
 
     def stop(self):
         """Stop the daemon"""
-        # Get the pid from the pidfile
-        try:
-            with open(self.pidfile,'r') as pidfile:
-                self.pid = int(pidfile.read().strip())
-        except IOError:
-            self.pid = None
 
         if not self.pid:
             sys.stderr.write(f"pidfile {self.pid} doesn't exist. Daemon not running?")
+            self.print(f"pidfile {self.pid} doesn't exist. Daemon not running?")
             return
 
         # Try killing the daemon process
@@ -258,22 +261,16 @@ class Daemon():
         except (OSError) as e:
             e = str(e)
             if e.find("No such process") > 0:
-                if os.path.exists(self.pidfile):
-                    os.remove(self.pidfile)
-                else:
-                    print(str(e))
-                    sys.exit(1)
-                self.print("No such process, daemon already killed.")
-            self.print("Daemon successfully killed.")
+                # delete the pid file
+                self.terminate()
 
     def restart(self):
         """Restart the daemon"""
         self.print("Daemon restarting...")
         self.stop()
+        self.pid = None
         self.start()
 
-    # todo make Main() class close the daemon in shutdown_gracefully()
-    # todo add restart and stop usage to argparser
     # todo limit printing to stdout file as possible
     # todo clear stdout and stderr files on restart
     # todo fix rm pidfile not working!!
@@ -725,6 +722,12 @@ class Main():
                             help='To Save redis db to disk. Requires root access.')
         parser.add_argument('-d', '--db', action='store', required=False,
                             help='To read a redis (rdb) saved file. Requires root access.')
+        parser.add_argument('-I', '--interactive',required=False, default=False, action='store_true',
+                            help="run slips in interactive mode - don't daemonize")
+        parser.add_argument('-S', '--stopdaemon',required=False, default=False, action='store_true',
+                            help="stop slips daemon")
+        parser.add_argument('-R', '--restartdaemon',required=False, default=False, action='store_true',
+                            help="restart slips daemon")
         parser.add_argument("-h", "--help", action="help", help="command line help")
 
         args = parser.parse_args()
@@ -751,7 +754,6 @@ class Main():
         """
         self.mode = mode
         self.daemon = daemon
-
 
     def start(self):
         """ Main Slips Function """
@@ -1222,9 +1224,19 @@ if __name__ == '__main__':
     slips.parse_arguments()
 
     if slips.args.interactive:
+        # -I is provided
         slips.start()
+        sys.exit()
+
+    daemon = Daemon(slips)
+    if slips.args.stopdaemon:
+        # -s is provided
+        daemon.terminate()
+    elif slips.args.restartdaemon:
+        # -s is provided
+        daemon.restart()
     else:
-        daemon = Daemon(slips)
-        print("Slips daemon is running.")
+        # Default mode (daemonized)
+        print("Slips daemon started.")
         daemon.start()
 
