@@ -90,8 +90,9 @@ This is the default mode, it doesn't require any special flags
  
 **Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
  
- Run slips with ```-I```to start slips in interactive mode.
+Run slips with ```-I```to start slips in interactive mode.
 
+Output files are stored in ```Slips/daemon/``` dir, By default you don't need root to run slips, but if you changed the default output files to files placed in a dir owned by root, you will need to run Slips using sudo. 
 
 ## Reading the output
 
