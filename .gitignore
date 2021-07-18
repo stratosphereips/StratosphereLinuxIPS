@@ -15,6 +15,9 @@ api_key_secret
 # Ignore the secret slack bot token of exporting_alerts module
 slack_bot_token_secret
 
+# Ignore daemon output files
+daemon/
+
 # Ignore the results folders
 2019-
 2020-
