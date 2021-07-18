@@ -357,10 +357,12 @@ class Module(Module, multiprocessing.Process):
                             twid = data['twid']
                             ip = flow['daddr']
                             server_name = flow.get('server_name') # returns None if not found
-                            if server_name is not None:
-                                description = 'Self-signed certificate. Destination: {}. IP: {}'.format(server_name,ip)
-                            else:
+                            # if server_name is not None or not empty
+                            if not server_name:
                                 description = 'Self-signed certificate. Destination IP: {}'.format(ip)
+                            else:
+                                description = 'Self-signed certificate. Destination IP: {}, SNI: {}'.format(ip, server_name)
+
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
                             self.print(description, 3, 0)
             except KeyboardInterrupt:
