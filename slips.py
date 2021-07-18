@@ -498,7 +498,6 @@ class Main():
         print('Slips. Version {}'.format(version))
         print('https://stratosphereips.org\n')
 
-        self.parse_arguments()
         self.read_conf_file()
 
         # Check if redis server running
@@ -809,9 +808,11 @@ if __name__ == '__main__':
     daemon = Daemon(slips)
     if slips.args.stopdaemon:
         # -S is provided
+        print("Daemon stopped.")
         daemon.terminate()
     elif slips.args.restartdaemon:
         # -R is provided
+        print("Daemon restarted.")
         daemon.restart()
     else:
         # Default mode (daemonized)
