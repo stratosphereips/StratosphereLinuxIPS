@@ -66,7 +66,6 @@ class Daemon():
     description = 'This module runs when slips is in daemonized mode'
 
     def __init__(self, slips):
-        self.config = slips.read_conf_file()
         self.read_configuration()
         # Get the pid from pidfile
         try:
@@ -85,22 +84,25 @@ class Daemon():
         # Clear logs file
         open(self.logsfile, 'w').close()
 
-        slips_dirs = ['/var/log/','/etc/slips/' ]
         # todo these files will be growing wayy too fast we need to solve that!!
         # this is where we'll be storing stdout, stderr, and pidfile
-        for dir in slips_dirs:
-            if not os.path.exists(dir):
-                os.mkdir(dir)
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
+        slips_dirs = []
         # create files if they don't exist
         for file in std_streams:
             # create the file if it doesn't exist or clear it if it exists
             open(file,'w').close()
+            # get the dirs where slips files will be
+            slips_dirs.append(os.path.dirname(file))
+
+        for dir in set(slips_dirs):
+            if not os.path.exists(dir):
+                os.mkdir(dir)
 
     def read_configuration(self):
         """ Read the configuration file to get stdout,stderr, logsfile path."""
-
+        self.config = slips.read_conf_file()
         try:
             # this file is used to store the pid of the daemon and is deleted when the daemon stops
             self.logsfile = self.config.get('modes', 'logsfile')
@@ -157,7 +159,11 @@ class Daemon():
         # we don't use it anyway
         self.stdin='/dev/null'
         self.setup_std_streams()
-        self.print(f"Logsfile: {self.logsfile}\nstdin : {self.stdin}\nstdout: {self.stdout}\nstderr: {self.stderr}\n")
+        self.print(f"Logsfile: {self.logsfile}\n"
+                   f"pidfile:{self.pidfile}\n"
+                   f"stdin : {self.stdin}\n"
+                   f"stdout: {self.stdout}\n"
+                   f"stderr: {self.stderr}\n")
         self.print("Done reading configuration and setting up files.\n")
 
     def terminate(self):
@@ -228,10 +234,8 @@ class Daemon():
         """ Main function, Starts the daemon and starts slips normally."""
 
         self.print("Daemon starting...")
-
         # Check for a pidfile to see if the daemon is already running
         if self.pid:
-            sys.stderr.write(f"pidfile {self.pid} already exists. Daemon already running?\n")
             self.print(f"pidfile {self.pid} already exists. Daemon already running?")
             sys.exit(1)
 
@@ -247,10 +251,8 @@ class Daemon():
 
     def stop(self):
         """Stop the daemon"""
-
         if not self.pid:
-            sys.stderr.write(f"pidfile {self.pid} doesn't exist. Daemon not running?")
-            self.print(f"pidfile {self.pid} doesn't exist. Daemon not running?")
+            self.print(f"Trying to stop Slips daemon. PID {self.pid} doesn't exist. Daemon not running.")
             return
 
         # Try killing the daemon process
@@ -268,13 +270,8 @@ class Daemon():
         """Restart the daemon"""
         self.print("Daemon restarting...")
         self.stop()
-        self.pid = None
+        self.pid = False
         self.start()
-
-    # todo limit printing to stdout file as possible
-    # todo clear stdout and stderr files on restart
-    # todo fix rm pidfile not working!!
-    # todo when the daemon is killed , does it execute the registered function??
 
 class Main():
     def __init__(self):
@@ -1149,18 +1146,19 @@ class Main():
                 while True:
                     # Sleep some time to do rutine checks
                     time.sleep(check_time_sleep)
-                    slips_internal_time = float(__database__.getSlipsInternalTime())+1
-                    # Get the amount of modified profiles since we last checked
-                    modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(slips_internal_time)
-                    amount_of_modified = len(modified_profiles)
-                    # Get the time of last modified timewindow and set it as a new
-                    if last_modified_tw_time != 0:
-                        __database__.setSlipsInternalTime(last_modified_tw_time)
-                    # How many profiles we have?
-                    profilesLen = str(__database__.getProfilesLen())
-                    print(f'Total Number of Profiles in DB so far: {profilesLen}. '
-                          f'Modified Profiles in the last TW: {amount_of_modified}. '
-                          f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})', end='\r')
+                    if self.mode != 'daemonized':
+                        slips_internal_time = float(__database__.getSlipsInternalTime())+1
+                        # Get the amount of modified profiles since we last checked
+                        modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(slips_internal_time)
+                        amount_of_modified = len(modified_profiles)
+                        # Get the time of last modified timewindow and set it as a new
+                        if last_modified_tw_time != 0:
+                            __database__.setSlipsInternalTime(last_modified_tw_time)
+                        # How many profiles we have?
+                        profilesLen = str(__database__.getProfilesLen())
+                        print(f'Total Number of Profiles in DB so far: {profilesLen}. '
+                              f'Modified Profiles in the last TW: {amount_of_modified}. '
+                              f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})', end='\r')
 
                     # Check if we need to close some TW
                     __database__.check_TW_to_close()
@@ -1230,10 +1228,10 @@ if __name__ == '__main__':
 
     daemon = Daemon(slips)
     if slips.args.stopdaemon:
-        # -s is provided
+        # -S is provided
         daemon.terminate()
     elif slips.args.restartdaemon:
-        # -s is provided
+        # -R is provided
         daemon.restart()
     else:
         # Default mode (daemonized)
