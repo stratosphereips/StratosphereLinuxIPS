@@ -84,7 +84,6 @@ class Daemon():
         # Clear logs file
         open(self.logsfile, 'w').close()
 
-        # todo these files will be growing wayy too fast we need to solve that!!
         # this is where we'll be storing stdout, stderr, and pidfile
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
@@ -114,13 +113,13 @@ class Daemon():
             self.stdout = self.config.get('modes', 'stdout')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stdout = '/dev/null' # todo should the default output file be dev null or a specific file in slips dir?
+            self.stdout = '/etc/slips/stdout' # todo should the default output file be dev null or a specific file in slips dir?
 
         try:
             self.stderr = self.config.get('modes', 'stderr')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stderr = '/dev/null' # todo should the default stderr file be dev null or a specific file in slips dir?
+            self.stderr = '/etc/slips/stderr' # todo should the default stderr file be dev null or a specific file in slips dir?
 
         try:
             # this file is used to store the pid of the daemon and is deleted when the daemon stops
@@ -134,7 +133,7 @@ class Daemon():
             self.logsfile = self.config.get('modes', 'logsfile')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.logsfile = '/var/log/slips'
+            self.logsfile = '/etc/slips/slips.log'
 
         # todo these files will be growing wayy too fast we need to solve that!!
         # this is where we'll be storing stdout, stderr, and pidfile
