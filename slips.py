@@ -80,9 +80,7 @@ class Daemon():
             f.write(f'{text}\n')
 
     def setup_std_streams(self):
-        """ Create standard steam files and dirs and clear log file """
-        # Clear logs file
-        open(self.logsfile, 'w').close()
+        """ Create standard steam files and dirs and clear logs file """
 
         # this is where we'll be storing stdout, stderr, and pidfile
 
@@ -91,13 +89,14 @@ class Daemon():
         # create files if they don't exist
         for file in std_streams:
             # create the file if it doesn't exist or clear it if it exists
-            open(file,'w').close()
+            try:
+                open(file,'w').close()
+            except FileNotFoundError:
+                os.mkdir(os.path.dirname(file))
+                open(file,'w').close()
             # get the dirs where slips files will be
             slips_dirs.append(os.path.dirname(file))
 
-        for dir in set(slips_dirs):
-            if not os.path.exists(dir):
-                os.mkdir(dir)
 
     def read_configuration(self):
         """ Read the configuration file to get stdout,stderr, logsfile path."""
