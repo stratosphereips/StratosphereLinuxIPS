@@ -766,9 +766,7 @@ class Main():
             print('https://stratosphereips.org')
             print('-'*27)
 
-            alerts_default_path = 'output/'
-            self.parse_arguments()
-            self.read_conf_file()
+        self.read_conf_file()
 
             if (self.args.verbose and int(self.args.verbose) > 3) or (self.args.debug and int(self.args.debug) > 3):
                 print("Debug and verbose values range from 0 to 3.")
