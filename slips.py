@@ -54,7 +54,7 @@ from slips.core.database import __database__
 # import platform
 #
 # Your imports
-import sys, os, atexit, time
+import sys, os, time
 from signal import SIGTERM
 
 class Daemon():
@@ -84,8 +84,8 @@ class Daemon():
         std_streams = [self.stderr, self.stdout, self.logsfile]
         # create files if they don't exist
         for file in std_streams:
-            if not os.path.exists(file):
-                open(file,'w').close()
+            # create the file if it doesn't exist or clear it if it exists
+            open(file,'w').close()
 
     def read_configuration(self):
         """ Read the configuration file to get stdout,stderr, logsfile path."""
@@ -127,7 +127,7 @@ class Daemon():
         self.stdin='/dev/null'
         self.setup_std_streams()
         self.print(f"Logsfile: {self.logsfile}\nstdin : {self.stdin}\nstdout: {self.stdout}\nstderr: {self.stderr}\n")
-        self.print("Done reading configuration and setting up files.")
+        self.print("Done reading configuration and setting up files.\n")
 
     def terminate(self):
         """ deletes the pidfile to mark the daemon as closed """
@@ -188,7 +188,7 @@ class Daemon():
             pidfile.write(self.pid+'\n')
 
         # Register a function to be executed if sys.exit() is called or the main module’s execution completes
-        atexit.register(self.terminate)
+        # atexit.register(self.terminate)
 
     def start(self):
         """ Main function, Starts the daemon."""
@@ -429,7 +429,8 @@ class Main():
             self.outputProcessQueue.put('stop_process')
             self.profilerProcessQueue.put('stop_process')
             self.inputProcess.terminate()
-
+            if self.mode == 'daemonized':
+                self.daemon.terminate()
             os._exit(-1)
             return
         except KeyboardInterrupt:
