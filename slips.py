@@ -119,14 +119,6 @@ class Daemon():
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.stderr = '/etc/slips/stderr' # todo should the default stderr file be dev null or a specific file in slips dir?
-
-        try:
-            # this file is used to store the pid of the daemon and is deleted when the daemon stops
-            self.pidfile = self.config.get('modes', 'pidfile')
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.pidfile = '/etc/slips/pidfile'
-
         try:
             # this file is used to store the pid of the daemon and is deleted when the daemon stops
             self.logsfile = self.config.get('modes', 'logsfile')
@@ -134,26 +126,7 @@ class Daemon():
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.logsfile = '/etc/slips/slips.log'
 
-        # todo these files will be growing wayy too fast we need to solve that!!
-        # this is where we'll be storing stdout, stderr, and pidfile
-        try:
-            # create the dir
-            os.mkdir('/etc/slips')
-        except FileExistsError:
-            pass
-
-        # create stderr if it doesn't exist
-        if not os.path.exists(self.stderr):
-            open(self.stderr,'w').close()
-
-        # create stdout if it doesn't exist
-        if not os.path.exists(self.stdout):
-            open(self.stdout,'w').close()
-
-        # create stdout if it doesn't exist
-        if not os.path.exists(self.logsfile):
-            open(self.logsfile,'w').close()
-
+        self.pidfile = 'daemon/pidfile'
         # we don't use it anyway
         self.stdin='/dev/null'
         self.setup_std_streams()
@@ -1006,7 +979,7 @@ class Main():
             outputProcessQueue.put('10|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
 
             # Start each module in the folder modules
-            outputProcessQueue.put('01|main|Starting modules')
+            self.outputProcessQueue.put('01|main|Starting modules')
             to_ignore = self.read_configuration(config, 'modules', 'disable')
             use_p2p = self.read_configuration(config, 'P2P', 'use_p2p')
 
