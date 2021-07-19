@@ -72,7 +72,7 @@ Now that pip3 is upgraded, we can proceed to install all required packages via p
 
 _Note: for those using a different base image, you need to also install tensorflow==2.2.0 via pip3._
 
-As we mentioned before, the GUI of Slips known as Kalipso relies on ns. For it to work we will install the following npm packages:
+As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs. Make sure to use NodeJs greater than version 12. For Kalipso to work, we will install the following npm packages:
 
 	npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 
