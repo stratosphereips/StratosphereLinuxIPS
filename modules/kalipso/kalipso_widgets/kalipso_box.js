@@ -53,21 +53,22 @@ class Box{
           return this.setData(evidence_data)
         }
         var evidence_json = JSON.parse(redis_evidence_data);
-        var evidence_keys = Object.keys(evidence_json); 
+        var evidence_keys = Object.keys(evidence_json);
         async.each(evidence_keys, (key,callback)=>{
           var key_dict = JSON.parse(key)
           var key_values = Object.values(key_dict).join(':')
           if ((key_dict['type_evidence'] == 'ThreatIntelligenceBlacklistIP') || (key_dict['type_evidence'] == 'ThreatIntelligenceBlacklistDomain')){
-            evidence_data = '{bold}'+color.green('Detected '+key_dict['type_detection']+ ' ' +key_dict['detection_info'])+'{/bold}'+". Blacklisted in "+evidence_json[key]["description"]+'\n'
+            evidence_data = evidence_data + '{bold}'+color.green('Detected '+key_dict['type_detection']+ ' ' +key_dict['detection_info'])+'{/bold}'+". Blacklisted in "+evidence_json[key]["description"]+'\n'
 
           }
           else{
-          evidence_data = '{bold}'+color.green('Detected '+key_dict['type_detection']+ ' ' +key_dict['detection_info'])+'{/bold}'+". "+evidence_json[key]["description"]+'\n'
+                evidence_data = evidence_data + '{bold}'+color.green('Detected '+key_dict['type_detection']+ ' ' +key_dict['detection_info'])+'{/bold}'+". "+evidence_json[key]["description"]+'\n'
           }
           callback();
           }, (err)=>{
             if(err){console.log(err)}
-            else{return this.setData(evidence_data)}
+            else{
+            return this.setData(evidence_data)}
         });
         });
     }
