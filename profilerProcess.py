@@ -1326,14 +1326,19 @@ class ProfilerProcess(multiprocessing.Process):
                 client_addr = self.column_values['client_addr']
                 profileid = get_rev_profile(starttime, client_addr)[0]
                 MAC_info = {'MAC': mac_addr}
-                # Try to get the vendor of the mac address
-                command = f'curl https://api.macvendors.com/{mac_addr}'
-                # Execute command
-                result = subprocess.run(command.split(), stdout=subprocess.PIPE)
-                # Get command output
-                vendor = result.stdout.decode('utf-8')
-                # response may contain errors such as 'Too Many Requests'
-                if 'errors' not in vendor:
+                oui = mac_addr[:8].upper()
+                with open('databases/macaddress-db.json','r') as db:
+                    line = db.readline()
+                    while line:
+                        if oui in line:
+                            break
+                        line = db.readline()
+                    else:
+                        # comes here if it doesn't find info about this mac addr
+                        line = False
+                if line:
+                    line = json.loads(line)
+                    vendor = line['companyName']
                     MAC_info.update({'Vendor': vendor})
                 # Store info in the db
                 MAC_info = json.dumps(MAC_info)
