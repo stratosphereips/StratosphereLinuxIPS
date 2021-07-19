@@ -106,25 +106,20 @@ class Daemon():
             self.logsfile = self.config.get('modes', 'logsfile')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.logsfile = '/var/log/slips'
+            self.logsfile = 'daemon/debugging'
 
         try:
             self.stdout = self.config.get('modes', 'stdout')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stdout = '/etc/slips/stdout' # todo should the default output file be dev null or a specific file in slips dir?
+            self.stdout = 'daemon/debugging'
 
         try:
             self.stderr = self.config.get('modes', 'stderr')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stderr = '/etc/slips/stderr' # todo should the default stderr file be dev null or a specific file in slips dir?
-        try:
-            # this file is used to store the pid of the daemon and is deleted when the daemon stops
-            self.logsfile = self.config.get('modes', 'logsfile')
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.logsfile = '/etc/slips/slips.log'
+            self.stderr = 'daemon/debugging'
+
 
         self.pidfile = 'daemon/pidfile'
         # we don't use it anyway
