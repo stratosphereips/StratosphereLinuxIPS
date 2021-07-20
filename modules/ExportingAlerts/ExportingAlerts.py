@@ -37,7 +37,7 @@ class Module(Module, multiprocessing.Process):
     You need to have the token in your environment variables to use this module
     """
     name = 'ExportingAlerts'
-    description = 'Module to export alerts to slack and STIX'
+    description = 'Module to export alerts to slack, STIX and suricata format.'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):
@@ -306,6 +306,9 @@ class Module(Module, multiprocessing.Process):
             else:
                 self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.")
 
+    def export_to_suricata(self, evidence, description):
+        pass
+
     def run(self):
         # Main loop function
         while True:
@@ -341,6 +344,9 @@ class Module(Module, multiprocessing.Process):
                             exported_to_stix = self.export_to_STIX(msg_to_send)
                             if not exported_to_stix:
                                 self.print("Problem in export_to_STIX()", 6, 6)
+                        if 'suricata' in self.export_to:
+                            self.export_to_suricata(evidence, description)
+
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
