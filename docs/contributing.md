@@ -138,7 +138,8 @@ In case that the module is started, but does not receive any messages from the c
 
 Before pushing, run the unit tests by:
 1- Make sure you're in slips main dir (the one with kalipso.sh)
-2- Run ```python3 tests/run_all_tests.py``` 
+2- Clear database cache by running ```./slips.py -c slips.conf -cc```
+3- Run all tests ```python3 tests/run_all_tests.py``` 
 
 ### Adding your own unit tests
 
