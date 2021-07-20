@@ -29,6 +29,7 @@ import time
 import _thread
 import sys
 import validators
+import datetime
 
 
 class Module(Module, multiprocessing.Process):
@@ -96,6 +97,9 @@ class Module(Module, multiprocessing.Process):
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
         self.timeout = None
+        # flag to open suricata file only once
+        self.is_suricata_file_opened = False
+        self.suricata_file_handle = False
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -306,8 +310,58 @@ class Module(Module, multiprocessing.Process):
             else:
                 self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.")
 
-    def export_to_suricata(self, evidence, description):
-        pass
+    def export_to_suricata(self, evidence):
+        #---------------SLIPS EVIDENCE
+        # evidencce: {'profileid': 'profile_192.168.2.16',
+        # 'twid': 'timewindow1',
+        # 'key': {'type_detection': 'outTuple', 'detection_info': '19.88.175.47:28856:tcp', 'type_evidence': 'C&C channels detection'},
+        # 'data': {'confidence': 0.03, 'threat_level': 100, 'description': "RNN C&C channels detection, score: 0.98035514, tuple ID:'19.88.175.47:28856:tcp'"}, 'description': "RNN C&C channels detection, score: 0.98035514, tuple ID:'19.88.175.47:28856:tcp'"}
+
+
+        # suricata sample todo do we export without flowid and pcap_cnt?
+        # todo how to validate the slips generated file
+        #--------------------SURICATA ALERT
+        #{"timestamp":"2021-06-06T17:18:26.896307+0200","flow_id":612706734484787,"pcap_cnt":11307,"event_type":"alert","src_ip":"78.128.113.250","src_port":41435,"dest_ip":"192.168.1.129","dest_port":3725,"proto":"TCP",
+        #
+        # "alert":{"action":"allowed","gid":1,"signature_id":2403388,"rev":66418,"signature":"ET CINS Active Threat Intelligence Poor Reputation IP group 89","category":"Misc Attack","severity":2,
+        #       "metadata":{"affected_product":["Any"],"attack_target":["Any"],"created_at":["2013_10_08"],"deployment":["Perimeter"],"signature_severity":["Major"],"tag":["CINS"],"updated_at":["2021_06_07"]}},
+        #
+        # "flow":{"pkts_toserver":1,"pkts_toclient":0,"bytes_toserver":60,"bytes_toclient":0,"start":"2021-06-06T17:18:26.896307+0200"},"host":"stratosphere.org"}
+
+    #-------------SLIPS FLOW
+
+        # flow: {"ts": 1520629120.800453, "dur": 0, "saddr": "192.168.2.16", "sport": 48185, "daddr": "220.46.248.83", "dport": 23, "proto": "tcp", "origstate": "S0", "state": "NotEstablished", "pkts": 1, "allbytes": 0, "spkts": 1, "sbytes": 0, "appproto": "", "label": "unknown", "module_labels": {"flowalerts-long-connection": "normal"}}
+
+        # todo what is "alert" ??
+        #
+
+        profileid= evidence['profileid']
+        twid= evidence['twid']
+        uid= evidence['uid']
+        # get the original fllow that triggered this evidence
+        flow = __database__.get_flow(profileid,twid,uid)[uid]
+        # portscans aren't associated with 1 flow, so we don't have a uid or a flow for this alert, ignore #todo
+        if flow:
+            # suricata ts format: Date+T+Time
+            # toddo take the original timestamp or the current tiemstamp?
+            timestamp =  str(datetime.datetime.now()).replace(' ','T')
+            line = {'timestamp': timestamp,
+                    'flow_id' : uid,
+                    'src_ip': flow.get('saddr'),
+                    'src_port': flow.get('sport'),
+                    'dest_ip': flow.get('daddr'),
+                    'dest_port': flow.get('dport'),
+                    'proto': flow.get('proto'),
+                    'alert': {"action":"allowed",
+                              "gid":1,
+                              "category":"Misc Attack",
+
+                              }
+                    'event_type': 'alert'
+                    'flow' : {}
+                    }
+            line = json.dumps(line)
+            self.suricata_file_handle.write(f'{line}\n')
 
     def run(self):
         # Main loop function
@@ -319,6 +373,9 @@ class Module(Module, multiprocessing.Process):
                     # We need to publish to taxii server before stopping
                     if 'stix' in self.export_to:
                         self.push_to_TAXII_server()
+
+                    if self.suricata_file_handle:
+                        self.suricata_file_handle.close()
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
@@ -345,7 +402,10 @@ class Module(Module, multiprocessing.Process):
                             if not exported_to_stix:
                                 self.print("Problem in export_to_STIX()", 6, 6)
                         if 'suricata' in self.export_to:
-                            self.export_to_suricata(evidence, description)
+                            if not self.is_suricata_file_opened:
+                                self.suricata_file_handle = open('suricata_alerts.json','a')
+                                self.is_suricata_file_opened = True
+                            self.export_to_suricata(evidence)
 
 
             except KeyboardInterrupt:
