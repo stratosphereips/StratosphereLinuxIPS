@@ -38,7 +38,7 @@ class Module(Module, multiprocessing.Process):
     You need to have the token in your environment variables to use this module
     """
     name = 'ExportingAlerts'
-    description = 'Module to export alerts to slack, STIX and suricata format.'
+    description = 'Module to export alerts to slack, STIX and json format.'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):
@@ -97,9 +97,9 @@ class Module(Module, multiprocessing.Process):
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
         self.timeout = None
-        # flag to open suricata file only once
-        self.is_suricata_file_opened = False
-        self.suricata_file_handle = False
+        # flag to open json file only once
+        self.is_josn_file_opened = False
+        self.json_file_handle = False
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -311,6 +311,8 @@ class Module(Module, multiprocessing.Process):
                 self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.")
 
     def export_to_json(self, evidence):
+        """ Export alerts and flows to exported_alerts.json, a suricata like json format. """
+
         profileid= evidence['profileid']
         twid= evidence['twid']
         uid= evidence['uid']
@@ -338,7 +340,9 @@ class Module(Module, multiprocessing.Process):
             if flow.get('label') != 'unknown':
                 line.update({'label': flow.get('label') })
             line = str(line)
-            self.suricata_file_handle.write(f'{line}\n')
+            self.json_file_handle.write(f'{line}\n')
+            return True
+        return False
 
     def run(self):
         # Main loop function
@@ -351,8 +355,8 @@ class Module(Module, multiprocessing.Process):
                     if 'stix' in self.export_to:
                         self.push_to_TAXII_server()
 
-                    if self.suricata_file_handle:
-                        self.suricata_file_handle.close()
+                    if self.json_file_handle:
+                        self.json_file_handle.close()
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
@@ -378,13 +382,11 @@ class Module(Module, multiprocessing.Process):
                             exported_to_stix = self.export_to_STIX(msg_to_send)
                             if not exported_to_stix:
                                 self.print("Problem in export_to_STIX()", 6, 6)
-                        if 'suricata' in self.export_to:
-                            if not self.is_suricata_file_opened:
-                                self.suricata_file_handle = open('suricata_alerts.json','a')
-                                self.is_suricata_file_opened = True
-                            self.export_to_suricata(evidence)
-
-
+                        if 'json' in self.export_to:
+                            if not self.is_josn_file_opened:
+                                self.json_file_handle = open('exported_alerts.json','a')
+                                self.is_josn_file_opened = True
+                            self.export_to_json(evidence)
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
