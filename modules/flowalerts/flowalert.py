@@ -89,7 +89,7 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def set_evidence_ssh_successful(self, profileid, twid, saddr, daddr, size, by, ip_state='ip'):
+    def set_evidence_ssh_successful(self, profileid, twid, saddr, daddr, size, uid, by='', ip_state='ip'):
         """
         Set an evidence for a successful SSH login.
         This is not strictly a detection, but we don't have
@@ -106,9 +106,9 @@ class Module(Module, multiprocessing.Process):
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                                 threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_long_connection(self, ip, duration, profileid, twid, ip_state='ip'):
+    def set_evidence_long_connection(self, ip, duration, profileid, twid, uid, ip_state='ip'):
         '''
         Set an evidence for a long connection.
         '''
@@ -120,9 +120,10 @@ class Module(Module, multiprocessing.Process):
         description = 'Long Connection ' + str(duration)
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_self_signed_certificates(self, profileid, twid, ip, description,  ip_state='ip'):
+    def set_evidence_self_signed_certificates(self, profileid, twid, ip, description, uid,  ip_state='ip'):
         '''
         Set evidence for self signed certificates.
         '''
@@ -133,9 +134,10 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                 description, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description):
+    def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description, uid):
         '''
         Set evidence for Invalid SSL certificates.
         '''
@@ -146,7 +148,8 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
 
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
         """
@@ -265,7 +268,7 @@ class Module(Module, multiprocessing.Process):
                             daddr = ssh_flow_dict['daddr']
                             saddr = ssh_flow_dict['saddr']
                             size = ssh_flow_dict['allbytes']
-                            self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Zeek')
+                            self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, by='Zeek')
                     else:
                         # Try Slips method to detect if SSH was successful.
                         # time.sleep(10) # This logic should be fixed, it stops the whole module.
@@ -280,7 +283,7 @@ class Module(Module, multiprocessing.Process):
                                 # Set the evidence because there is no
                                 # easier way to show how Slips detected
                                 # the successful ssh and not Zeek
-                                self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Slips')
+                                self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, by='Slips')
                             else:
                                 # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
                                 pass
@@ -303,6 +306,7 @@ class Module(Module, multiprocessing.Process):
                         flow = data['flow']
                         # Convert flow to a dict
                         flow = json.loads(flow)
+                        uid = flow['uid']
                         msg = flow['msg']
                         note = flow['note']
                         # We're looking for self signed certs in notice.log in the 'msg' field
@@ -315,7 +319,7 @@ class Module(Module, multiprocessing.Process):
                             type_evidence = 'SelfSignedCertificate'
                             detection_info = ip
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                     threat_level, confidence, description, profileid=profileid, twid=twid)
+                                                     threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
 
                         # We're looking for port scans in notice.log in the note field
@@ -330,7 +334,7 @@ class Module(Module, multiprocessing.Process):
                             type_detection = 'dstip'
                             detection_info = flow.get('scanning_ip','')
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                                                 threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
                         if 'SSL certificate validation failed' in msg:
                             profileid = data['profileid']
@@ -338,7 +342,7 @@ class Module(Module, multiprocessing.Process):
                             ip = flow['daddr']
                             # get the description inside parenthesis
                             description = msg + ' Destination IP: {}'.format(ip)
-                            self.set_evidence_for_invalid_certificates(profileid,twid, ip, description)
+                            self.set_evidence_for_invalid_certificates(profileid,twid, ip, description, uid)
                             self.print(description, 3, 0)
 
                         if 'Address_Scan' in note:
@@ -350,7 +354,7 @@ class Module(Module, multiprocessing.Process):
                             type_detection = 'dport'
                             detection_info = flow.get('scanned_port','')
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                                                 threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
 
                 # ---------------------------- new_ssl channel
@@ -369,6 +373,7 @@ class Module(Module, multiprocessing.Process):
                         flow = data['flow']
                         # Convert flow to a dict
                         flow = json.loads(flow)
+                        uid = flow['uid']
                         if 'self signed' in flow['validation_status']:
                             profileid = data['profileid']
                             twid = data['twid']
@@ -380,7 +385,7 @@ class Module(Module, multiprocessing.Process):
                             else:
                                 description = 'Self-signed certificate. Destination IP: {}, SNI: {}'.format(ip, server_name)
 
-                            self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
+                            self.set_evidence_self_signed_certificates(profileid,twid, ip, description, uid)
                             self.print(description, 3, 0)
             except KeyboardInterrupt:
                 return True
