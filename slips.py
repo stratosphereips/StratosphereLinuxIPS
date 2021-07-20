@@ -403,7 +403,7 @@ if __name__ == '__main__':
         to_ignore = to_ignore.replace("[","").replace("]","").replace(" ","").split(",")
         # Ignore exporting alerts module if export_to is empty
         export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ","").lower()
-        if 'stix' not in export_to and 'slack' not in export_to and 'suricata' not in export_to:
+        if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
             to_ignore.append('ExportingAlerts')
         # Disable blocking if was not asked and if it is not interface
         if not args.blocking or not args.interface:
