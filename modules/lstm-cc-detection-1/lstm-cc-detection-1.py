@@ -68,7 +68,7 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def set_evidence(self, score, confidence, tupleid='', profileid='', twid=''):
+    def set_evidence(self, score, confidence, uid, tupleid='', profileid='', twid=''):
         '''
         Set an evidence for malicious Tuple
         '''
@@ -79,7 +79,7 @@ class Module(Module, multiprocessing.Process):
         description = 'RNN C&C channels detection, score: ' + str(score) + ', tuple ID:\'' + str(tupleid) +'\''
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                                 threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
 
     def convert_input_for_module(self, pre_behavioral_model):
         """
@@ -151,6 +151,8 @@ class Module(Module, multiprocessing.Process):
                     profileid = data[1]
                     twid = data[2]
                     tupleid = data[3]
+                    uid = data[4]
+
                     if 'tcp' in tupleid.lower():
                         # Define why this threshold
                         threshold = 0.7
@@ -168,7 +170,7 @@ class Module(Module, multiprocessing.Process):
                                 confidence = 1
                             else:
                                 confidence = len(pre_behavioral_model)/threshold_confidence
-                            self.set_evidence(score,confidence, tupleid, profileid, twid)
+                            self.set_evidence(score,confidence, uid, tupleid, profileid, twid)
                     """
                     elif 'udp' in tupleid.lower():
                         # Define why this threshold

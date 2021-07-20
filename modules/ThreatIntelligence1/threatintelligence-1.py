@@ -44,7 +44,7 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_local_threat_intelligence_data = 'modules/ThreatIntelligence1/local_data_files/'
 
-    def set_evidence_ip(self, ip, ip_description='', profileid='', twid='', ip_state='ip'):
+    def set_evidence_ip(self, ip, uid, ip_description='', profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
         '''
@@ -57,9 +57,9 @@ class Module(Module, multiprocessing.Process):
         description = ip_description
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                                 threat_level, confidence, description, profileid=profileid, twid=twid,uid=uid)
 
-    def set_evidence_domain(self, domain, domain_description='', profileid='', twid=''):
+    def set_evidence_domain(self, domain,uid, domain_description='', profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
         '''
@@ -72,7 +72,7 @@ class Module(Module, multiprocessing.Process):
         description = domain_description
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                                 threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -429,6 +429,7 @@ class Module(Module, multiprocessing.Process):
                     # Extract data from dict
                     profileid = data.get('profileid')
                     twid = data.get('twid')
+                    uid = data.get('uid')
                     ip_state = data.get('ip_state') # ip state is either 'srcip' or 'dstip'
                     protocol = data.get('proto')
                     # Data should contain either an ip or a domain so one of them will be None
@@ -445,7 +446,7 @@ class Module(Module, multiprocessing.Process):
                             ip_description = json.loads(ip_description)
                             ip_source = ip_description['source'] # this is a .csv file
                             # Set the evidence on this detection
-                            self.set_evidence_ip(ip, ip_source, profileid, twid, ip_state)
+                            self.set_evidence_ip(ip, uid, ip_source, profileid, twid, ip_state)
                             # set malicious IP in IPInfo
                             self.set_maliciousIP_to_IPInfo(ip, ip_description)
                             # set malicious IP in MaliciousIPs
@@ -456,7 +457,7 @@ class Module(Module, multiprocessing.Process):
                         domain_description = __database__.search_Domain_in_IoC(domain)
                         if domain_description != False: # Dont change this condition. This is the only way it works
                             # If the domain is in the blacklist of IoC. Set an evidence
-                            self.set_evidence_domain(domain, domain_description, profileid, twid)
+                            self.set_evidence_domain(domain, uid, domain_description, profileid, twid)
                             # set malicious domain in DomainInfo
                             self.set_maliciousDomain_to_DomainInfo(domain, domain_description)
                             # set malicious domain in MaliciousDomains
