@@ -848,7 +848,7 @@ class Database(object):
         return self.separator
 
     def setEvidence(self, type_detection, detection_info, type_evidence,
-                    threat_level, confidence, description, profileid='', twid='',):
+                    threat_level, confidence, description, profileid='', twid='',uid=''):
         """
         Set the evidence for this Profile and Timewindow.
         Parameters:
@@ -860,6 +860,7 @@ class Database(object):
         type_evidence: determine the type of evidenc. E.g. PortScan, ThreatIntelligence
         threat_level: determine the importance of the evidence.
         confidence: determine the confidence of the detection. (How sure you are that this is what you say it is.)
+        uid: needed to get the flow from the database
         Example:
         The evidence is stored as a dict.
         {
@@ -893,7 +894,8 @@ class Database(object):
                 'twid': str(twid),
                 'key': key,
                 'data': data,
-                'description': description
+                'description': description,
+                'uid' : uid
             }
             evidence_to_send = json.dumps(evidence_to_send)
             self.publish('evidence_added', evidence_to_send)
