@@ -1695,7 +1695,7 @@ class ProfilerProcess(multiprocessing.Process):
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
                     # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
                     # Add the out tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime, uid)
                     # Add the dstip
                     __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, role)
                     # Add the dstport
@@ -1744,7 +1744,8 @@ class ProfilerProcess(multiprocessing.Process):
                                                  self.column_values['note'],\
                                                  self.column_values['msg'],\
                                                  self.column_values['scanned_port'],\
-                                                 self.column_values['scanning_ip']
+                                                 self.column_values['scanning_ip'],
+                                                 self.column_values['uid']
                                                  )
 
             def store_features_going_in(profileid, twid, starttime):

@@ -413,6 +413,7 @@ class Database(object):
             daddr = columns['daddr']
             saddr = columns['saddr']
             starttime = columns['starttime']
+            uid = columns['uid']
             # Depending if the traffic is going out or not, we are Client or Server
             # Set the type of ip as Dst if we are a client, or Src if we are a server
             if role == 'Client':
@@ -436,7 +437,8 @@ class Database(object):
                 'profileid' : str(profileid),
                 'twid' :  str(twid),
                 'proto' : str(proto),
-                'ip_state' : 'dstip'
+                'ip_state' : 'dstip',
+                'uid': uid
             }
             data_to_send = json.dumps(data_to_send)
             self.publish('give_threat_intelligence',data_to_send)
@@ -446,7 +448,8 @@ class Database(object):
                 'profileid' : str(profileid),
                 'twid' :  str(twid),
                 'proto' : str(proto),
-                'ip_state' : 'srcip'
+                'ip_state' : 'srcip',
+                'uid': uid
             }
             data_to_send = json.dumps(data_to_send)
             self.publish('give_threat_intelligence',data_to_send)
@@ -548,7 +551,7 @@ class Database(object):
         outtuples = self.getOutTuplesfromProfileTW()
         intuples = self.getInTuplesfromProfileTW()
 
-    def add_tuple(self, profileid, twid, tupleid, data_tuple, role, starttime):
+    def add_tuple(self, profileid, twid, tupleid, data_tuple, role, starttime, uid):
         """
         Add the tuple going in or out for this profile
         role: 'Client' or 'Server'
@@ -582,7 +585,7 @@ class Database(object):
                 new_data = (new_symbol, previous_two_timestamps)
                 # analyze behavioral model with lstm model if the length is divided by 3 - so we send when there is 3 more characters added
                 if len(new_symbol) % 3 == 0:
-                    self.publish('new_letters', new_symbol + '-' + profileid + '-' + twid + '-' + str(tupleid))
+                    self.publish('new_letters', new_symbol + '-' + profileid + '-' + twid + '-' + str(tupleid) +'-' + uid)
                 data[tupleid] = new_data
                 self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol), 0, 6)
                 data = json.dumps(data)
@@ -1306,7 +1309,8 @@ class Database(object):
             data_to_send = {
                 'server_name' : server_name,
                 'profileid' : str(profileid),
-                'twid': str(twid)
+                'twid': str(twid),
+                'uid':uid
             }
             data_to_send = json.dumps(data_to_send)
             self.publish('give_threat_intelligence',data_to_send)
@@ -1345,7 +1349,8 @@ class Database(object):
         data_to_send = {
                 'host': host,
                 'profileid' : str(profileid),
-                'twid' :  str(twid)
+                'twid' :  str(twid),
+                'uid':uid
             }
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence',data_to_send)
@@ -1382,13 +1387,14 @@ class Database(object):
         to_send['profileid'] = profileid
         to_send['twid'] = twid
         to_send['flow'] = data
+        to_send['uid'] = uid
         to_send = json.dumps(to_send)
         # publish a dns with its flow
         self.publish('new_ssh', to_send)
         self.print('Adding SSH flow to DB: {}'.format(data), 5, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
 
-    def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg, scanned_port, scanning_ip):
+    def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg, scanned_port, scanning_ip, uid):
         """" Send notice.log data to new_notice channel to look for self-signed certificates """
         data = {
             'daddr' :  daddr,
@@ -1404,6 +1410,7 @@ class Database(object):
         to_send['profileid'] = profileid
         to_send['twid'] = twid
         to_send['flow'] = data
+        to_send['uid'] = uid
         to_send = json.dumps(to_send)
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 5, 0)
@@ -1441,6 +1448,7 @@ class Database(object):
                 'query': str(query),
                 'profileid' : str(profileid),
                 'twid' :  str(twid),
+                'uid': uid
             }
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence',data_to_send)
