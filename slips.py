@@ -281,6 +281,12 @@ if __name__ == '__main__':
     if check_redis_database() is False:
         terminate_slips()
 
+    # Clear cache if the parameter was included
+    if args.clearcache:
+        print('Deleting Cache DB in Redis.')
+        clear_redis_cache_database()
+        terminate_slips()
+
     # Check the type of input
     if args.interface:
         input_information = args.interface
@@ -332,10 +338,7 @@ if __name__ == '__main__':
         # If we do not have nfdump, terminate Slips.
         terminate_slips()
 
-    # Clear cache if the parameter was included
-    if args.clearcache:
-        print('Deleting Cache DB in Redis.')
-        clear_redis_cache_database()
+
 
     # Remove default folder for alerts, if exists
     if os.path.exists(alerts_default_path):
