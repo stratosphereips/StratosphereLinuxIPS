@@ -28,6 +28,8 @@ import time
 import json
 import traceback
 import subprocess
+import re
+import threading
 
 # Input Process
 class InputProcess(multiprocessing.Process):
@@ -56,6 +58,9 @@ class InputProcess(multiprocessing.Process):
         self.event_observer = None
         # number of lines read
         self.lines = 0
+        # create the remover thread
+        self.remover_thread = threading.Thread(target=self.remove_old_zeek_files, daemon=True)
+
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -107,6 +112,7 @@ class InputProcess(multiprocessing.Process):
         if not self.nfdump_output:
             # The nfdump command returned nothing
             self.print("Error reading nfdump output ", 1, 3)
+            lines =0
         else:
             lines = len(self.nfdump_output.splitlines())
             for nfdump_line in self.nfdump_output.splitlines():
@@ -122,10 +128,43 @@ class InputProcess(multiprocessing.Process):
 
         return lines
 
+    def remove_old_zeek_files(self):
+        """
+        This thread operates every 1h since zeek log files are changed every 1h,
+        it deletes old zeek.log files and clears slips' open handles and sleeps again
+        """
+        lock = threading.Lock()
+        while True:
+            # wait 1h until zeek changes the log files
+            #todo make it 1h
+            time.sleep(30)
+
+            # don't allow inputPRoc to access the following variables until this thread sleeps again
+            lock.acquire()
+            print("[acquired a lock]")
+
+            # close slips' open handles
+            for file, handle in self.open_file_handlers.items():
+                self.print('Closing file {}'.format(file), 3, 0)
+                handle.close()
+            print("[closed all handles]")
+            # old .log files have a timestamp in their name.
+            pattern = '^.*.[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}.log$'
+            for log_file in os.listdir('zeek_files/'):
+                # remove old files
+                if re.search(pattern, log_file):
+                    os.remove(f'zeek_files/{log_file}')
+                else:
+                    # file isn't old, replace our old handle of this file
+                    log_file = f'zeek_files/{log_file}'
+                    self.open_file_handlers[log_file] = open(log_file,'r')
+
+            lock.release()
+
     def read_zeek_files(self) -> int:
         # Get the zeek files in the folder now
         zeek_files = __database__.get_all_zeek_file()
-        open_file_handlers = {}
+        self.open_file_handlers = {}
         time_last_lines = {}
         cache_lines = {}
         # Try to keep track of when was the last update so we stop this reading
@@ -137,7 +176,7 @@ class InputProcess(multiprocessing.Process):
             for filename in zeek_files:
                 # Update which files we know about
                 try:
-                    file_handler = open_file_handlers[filename]
+                    file_handler = self.open_file_handlers[filename]
                     # We already opened this file
                     # self.print(f'Old File found {filename}', 0, 6)
                 except KeyError:
@@ -145,10 +184,10 @@ class InputProcess(multiprocessing.Process):
                     # Ignore the files that do not contain data.
                     if ('capture_loss' in filename or 'loaded_scripts' in filename
                             or 'packet_filter' in filename or 'stats' in filename
-                            or 'weird' in filename or 'reporter' in filename):
+                            or 'weird' in filename or 'reporter' in filename or 'ntp' in filename):
                         continue
                     file_handler = open(filename + '.log', 'r')
-                    open_file_handlers[filename] = file_handler
+                    self.open_file_handlers[filename] = file_handler
                     # self.print(f'New File found {filename}', 0, 6)
 
                 # Only read the next line if the previous line was sent
@@ -255,14 +294,14 @@ class InputProcess(multiprocessing.Process):
 
         # We reach here after the break produced if no zeek files are being updated.
         # No more files to read. Close the files
-        for file, handle in open_file_handlers.items():
+        for file, handle in self.open_file_handlers.items():
             self.print('Closing file {}'.format(file), 3, 0)
             handle.close()
         return lines
 
 
     def read_zeek_folder(self):
-        # This is the case that a folder full of zeek files is passed with -f. Read them all
+        """ Only called when a folder full of zeek files is passed with -f """
         for file in os.listdir(self.given_path):
             # Remove .log extension and add file name to database.
             extension = file[-4:]
@@ -325,6 +364,7 @@ class InputProcess(multiprocessing.Process):
         return True
 
     def handle_zeek_log_file(self):
+        """ Called when a log file is passed with -f """
         try:
             file_name_without_extension = self.given_path[:self.given_path.index('.')]
         except IndexError:
@@ -388,13 +428,13 @@ class InputProcess(multiprocessing.Process):
             command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null"
             os.system(command)
 
-                # Run zeek on the pcap or interface. The redef is to have json files
-                # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-                zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
-                command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} {self.tcp_inactivity_timeout} local -f {self.packet_filter} {zeek_scripts_dir} 2>&1 > /dev/null &'
-                self.print(f'Zeek command: {command}', 3, 0)
-                # Run zeek.
-                os.system(command)
+            # Run zeek on the pcap or interface. The redef is to have json files
+            # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
+            zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
+            command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} {self.tcp_inactivity_timeout} local -f {self.packet_filter} {zeek_scripts_dir} 2>&1 > /dev/null &'
+            self.print(f'Zeek command: {command}', 3, 0)
+            # Run zeek.
+            os.system(command)
 
         # Give Zeek some time to generate at least 1 file.
         time.sleep(3)
@@ -413,6 +453,8 @@ class InputProcess(multiprocessing.Process):
 
     def run(self):
         try:
+            # start the remover thread
+            self.remover_thread.start()
             # Process the file that was given
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
             if not self.given_path or self.given_path is '-':
