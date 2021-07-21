@@ -87,6 +87,10 @@ Slips has 2 modes, interactive and daemonized.
 In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and ```logsfile``` files specified in slips.conf 
  
 This is the default mode, it doesn't require any special flags
+
+To stop the daemon run slips with ```-S```, for example ```./slips.py -c slips.conf -S```
+
+To restart the daemon run slips with ```-R```, for example ```./slips.py -c slips.conf -R```
  
 **Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
  
