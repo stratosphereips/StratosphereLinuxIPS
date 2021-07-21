@@ -1200,9 +1200,9 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             pass
 
-    def process_suricata_input(self, line: str) -> None:
+    def process_suricata_input(self, line: dict) -> None:
         """ Read suricata json input """
-        line = json.loads(line)
+        line = json.loads(line['data'])
 
         self.column_values: dict = {}
         try:

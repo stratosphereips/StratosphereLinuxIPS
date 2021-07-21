@@ -28,13 +28,14 @@ from datetime import datetime
 import socket
 import warnings
 from modules.UpdateManager.update_file_manager import UpdateFileManager
-import json
 import pkgutil
 import inspect
 import modules
 import importlib
 from slips.common.abstracts import Module
 from slips.common.argparse import ArgumentParser
+import errno
+import subprocess
 
 version = '0.7.3'
 
@@ -71,8 +72,12 @@ def create_folder_for_logs():
     Create a folder for logs if logs are enabled
     '''
     logs_folder = datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
-    if not os.path.exists(logs_folder):
+    try:
         os.makedirs(logs_folder)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            # doesn't exist and can't create
+            return False
     return logs_folder
 
 def update_malicious_file(outputqueue, config):
@@ -102,6 +107,7 @@ def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> s
     rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=1, charset="utf-8",
                                decode_responses=True)
     rcache.flushdb()
+    return True
 
 
 def check_zeek_or_bro():
@@ -127,8 +133,8 @@ def load_modules(to_ignore):
     Import modules and loads the modules from the 'modules' folder. Is very relative to the starting position of slips
     """
 
-    plugins = dict()
-
+    plugins = {}
+    failed_to_load_modules = 0
     # Walk recursively through all modules and packages found on the . folder.
     # __path__ is the current path of this python program
     for loader, module_name, ispkg in pkgutil.walk_packages(modules.__path__, modules.__name__ + '.'):
@@ -140,9 +146,9 @@ def load_modules(to_ignore):
 
         # Try to import the module, otherwise skip.
         try:
-            # "level specifies whether to use absolute or relative imports. The default is -1 which 
-            # indicates both absolute and relative imports will be attempted. 0 means only perform 
-            # absolute imports. Positive values for level indicate the number of parent 
+            # "level specifies whether to use absolute or relative imports. The default is -1 which
+            # indicates both absolute and relative imports will be attempted. 0 means only perform
+            # absolute imports. Positive values for level indicate the number of parent
             # directories to search relative to the directory of the module calling __import__()."
             module = importlib.import_module(module_name)
         except ImportError as e:
@@ -156,7 +162,7 @@ def load_modules(to_ignore):
                 if issubclass(member_object, Module) and member_object is not Module:
                     plugins[member_object.name] = dict(obj=member_object, description=member_object.description)
 
-    return plugins
+    return plugins,failed_to_load_modules
 
 def get_cwd():
     # Can't use os.getcwd() because slips directory name won't always be Slips plus this way requires less parsing
@@ -217,9 +223,9 @@ def shutdown_gracefully():
         profilerProcessQueue.put('stop_process')
         inputProcess.terminate()
         os._exit(-1)
-        return
+        return True
     except KeyboardInterrupt:
-        return
+        return False
 
 ####################
 # Main
@@ -242,13 +248,9 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--debug', metavar='<debuglevel>',action='store', required=False, type=int,
                         help='amount of debugging. This shows inner information about the program.')
     parser.add_argument('-f', '--filepath',metavar='<file>', action='store',required=False,
-                        help='read an Argus binetflow or a Zeek folder.')
+                        help='read a Zeek folder, Argus binetflow, pcapfile, nfdump or suricata.')
     parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
                         help='read packets from an interface.')
-    parser.add_argument('-r', '--pcapfile',metavar='<file>', action='store', required=False,
-                        help='read a PCAP - Packet Capture.')
-    parser.add_argument('-b', '--nfdump', metavar='<file>',action='store',required=False,
-                        help='read an NFDUMP - netflow dump. ')
     parser.add_argument('-l','--nologfiles',action='store_true',required=False,
                         help='do not create log files with all the traffic info and detections.')
     parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
@@ -280,10 +282,52 @@ if __name__ == '__main__':
     if check_redis_database() is False:
         terminate_slips()
 
+    # Clear cache if the parameter was included
+    if args.clearcache:
+        print('Deleting Cache DB in Redis.')
+        clear_redis_cache_database()
+        terminate_slips()
+
+    # Check the type of input
+    if args.interface:
+        input_information = args.interface
+        input_type = 'interface'
+    elif args.filepath:
+        input_information = args.filepath
+        # default value
+        input_type = 'file'
+        # Get the type of file
+        command = 'file ' + input_information
+        # Execute command
+        cmd_result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+        # Get command output
+        cmd_result = cmd_result.stdout.decode('utf-8')
+
+        if 'pcap' in cmd_result:
+            input_type = 'pcap'
+        elif 'dBase' in cmd_result:
+            input_type = 'nfdump'
+        elif 'CSV' in cmd_result:
+            input_type = 'binetflow'
+        elif 'directory'in cmd_result:
+            input_type = 'zeek_folder'
+        else:
+            # is a json file, is it a zeek log file or suricata?
+            # use first line to determine
+            with open(input_information,'r') as f:
+                first_line = f.readline()
+            if 'flow_id' in first_line:
+                input_type = 'suricata'
+            else:
+                input_type = 'zeek_log_file'
+    else:
+        print('You need to define an input source.')
+        sys.exit(-1)
+
     # If we need zeek (bro), test if we can run it.
     # Need to be assign to something because we pass it to inputProcess later
     zeek_bro = None
-    if args.pcapfile or args.interface:
+    if input_type == 'pcap' or args.interface:
         zeek_bro = check_zeek_or_bro()
         if zeek_bro is False:
             # If we do not have bro or zeek, terminate Slips.
@@ -305,14 +349,11 @@ if __name__ == '__main__':
                         f.write(f'\n@load ./{file_name}')
 
     # See if we have the nfdump, if we need it according to the input type
-    if args.nfdump and shutil.which('nfdump') is None:
+    if input_type == 'nfdump' and shutil.which('nfdump') is None:
         # If we do not have nfdump, terminate Slips.
         terminate_slips()
 
-    # Clear cache if the parameter was included
-    if args.clearcache:
-        print('Deleting Cache DB in Redis.')
-        clear_redis_cache_database()
+
 
     # Remove default folder for alerts, if exists
     if os.path.exists(alerts_default_path):
@@ -371,22 +412,7 @@ if __name__ == '__main__':
     if args.debug < 0:
         args.debug = 0
 
-    # Check the type of input
-    if args.interface:
-        input_information = args.interface
-        input_type = 'interface'
-    elif args.pcapfile:
-        input_information = args.pcapfile
-        input_type = 'pcap'
-    elif args.filepath:
-        input_information = args.filepath
-        input_type = 'file'
-    elif args.nfdump:
-        input_information = args.nfdump
-        input_type = 'nfdump'
-    else:
-        print('You need to define an input source.')
-        sys.exit(-1)
+
 
     ##########################
     # Creation of the threads
@@ -424,7 +450,7 @@ if __name__ == '__main__':
             to_ignore.append('blocking')
         try:
             # This 'imports' all the modules somehow, but then we ignore some
-            modules_to_call = load_modules(to_ignore)
+            modules_to_call = load_modules(to_ignore)[0]
             for module_name in modules_to_call:
                 if not module_name in to_ignore:
                     module_class = modules_to_call[module_name]['obj']
@@ -578,5 +604,3 @@ if __name__ == '__main__':
 
     except KeyboardInterrupt:
         shutdown_gracefully()
-
-
