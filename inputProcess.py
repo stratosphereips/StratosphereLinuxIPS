@@ -135,8 +135,8 @@ class InputProcess(multiprocessing.Process):
         """
         lock = threading.Lock()
         while True:
-            # wait 1h until zeek changes the log files
-            time.sleep(60*60)
+            # wait 1h until zeek changes the log files + 30 mins until all types of log files are generated
+            time.sleep(5400)
             # don't allow inputPRoc to access the following variables until this thread sleeps again
             lock.acquire()
             # close slips' open handles
