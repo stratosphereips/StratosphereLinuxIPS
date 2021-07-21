@@ -1681,6 +1681,15 @@ class Database(object):
         else:
             return ip_description
 
+    def get_flow_timestamp(self, profileid, twid, uid):
+        """
+        Return the timestamp of the flow
+        """
+        flow_information = self.r.hget(profileid + "_" + twid + "_flows", uid)
+        flow_information = json.loads(flow_information)
+        timestamp = flow_information.get("ts")
+        return timestamp
+
     def search_Domain_in_IoC(self, domain: str) -> str:
         """
         Search in the dB of malicious domainss and return a
