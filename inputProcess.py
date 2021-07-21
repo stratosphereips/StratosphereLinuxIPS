@@ -60,7 +60,7 @@ class InputProcess(multiprocessing.Process):
         self.lines = 0
         # create the remover thread
         self.remover_thread = threading.Thread(target=self.remove_old_zeek_files, daemon=True)
-
+        self.open_file_handlers = {}
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -136,16 +136,12 @@ class InputProcess(multiprocessing.Process):
         lock = threading.Lock()
         while True:
             # wait 1h until zeek changes the log files
-            #todo make it 1h
-            time.sleep(60)
+            time.sleep(60*60)
             # don't allow inputPRoc to access the following variables until this thread sleeps again
             lock.acquire()
-            print("[acquired a lock]")
-
             # close slips' open handles
             for file, handle in self.open_file_handlers.items():
                 handle.close()
-            print("[closed all handles]")
             self.open_file_handlers = {}
             # list of new files currently in zeek_files to add to the db
             to_process = []
