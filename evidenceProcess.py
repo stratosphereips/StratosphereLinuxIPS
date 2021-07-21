@@ -390,6 +390,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # evidence data
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
+                    uid = data.get('uid')
 
                     # Ignore alert if ip is whitelisted
                     if self.is_whitelisted(ip, detection_info, type_detection, description):
@@ -398,6 +399,10 @@ class EvidenceProcess(multiprocessing.Process):
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
 
+                    timestamp = __database__.get_flow_timestamp(profileid, twid, uid)
+                    flow_datetime = datetime.fromtimestamp(timestamp)
+                    flow_datetime = flow_datetime.strftime('%Y-%m-%d %H:%M:%S')
+
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
                                                           ip,
@@ -405,18 +410,16 @@ class EvidenceProcess(multiprocessing.Process):
                                                           type_detection,
                                                           detection_info,
                                                           description)
-                    # timestamp
-                    now = datetime.now()
-                    current_time = now.strftime('%Y-%m-%d %H:%M:%S')
 
-                    evidence_dict = {'timestamp': current_time,
+                    evidence_dict = {'timestamp': flow_datetime,
                                      'detected_ip': ip,
                                      'detection_module':type_evidence,
                                      'detection_info':str(type_detection) + ' ' + str(detection_info),
                                      'description':description}
 
-                    self.addDataToLogFile(current_time + ' ' + evidence_to_log)
+                    self.addDataToLogFile(flow_datetime + ' ' + evidence_to_log)
                     self.addDataToJSONFile(evidence_dict)
+
                     evidence = __database__.getEvidenceForTW(profileid, twid)
                     # Important! It may happen that the evidence is not related to a profileid and twid.
                     # For example when the evidence is on some src IP attacking our home net, and we are not creating
