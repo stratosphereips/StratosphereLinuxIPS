@@ -246,7 +246,7 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--debug', metavar='<debuglevel>',action='store', required=False, type=int,
                         help='amount of debugging. This shows inner information about the program.')
     parser.add_argument('-f', '--filepath',metavar='<file>', action='store',required=False,
-                        help='read a Zeek folder, Argus binetflow, pcapfile or nfdump.')
+                        help='read an Argus binetflow or a Zeek folder.')
     parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
                         help='read packets from an interface.')
     parser.add_argument('-l','--nologfiles',action='store_true',required=False,
