@@ -22,6 +22,7 @@ import redis
 from slips_files.core.database import __database__
 
 class FileEventHandler(RegexMatchingEventHandler):
+    """ Adds newly generated zeek log files in zeek_files/ dir to the database for processing """
     REGEX = [r".*\.log$"]
 
     def __init__(self, config):
