@@ -38,15 +38,7 @@ class Module(Module, multiprocessing.Process):
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
         self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         # Wait a little so we give time to have something to print
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            self.timeout = None
+        self.timeout = None
 
     def read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -349,16 +341,18 @@ class Module(Module, multiprocessing.Process):
             return True
 
     def run(self):
-        try:
-            # Main loop function
-            #time.sleep(10)
-            while True:
+        # Main loop function
+        #time.sleep(10)
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
-                elif message['channel'] == 'new_flow' and message['data'] != 1:
+                elif message['channel'] == 'new_flow' and type(message['data']) != int :
                     mdata = message['data']
                     # Convert from json to dict
                     mdata = json.loads(mdata)
@@ -371,14 +365,12 @@ class Module(Module, multiprocessing.Process):
                     flow = json.loads(flow)
                     # Process the flow
                     return_value = self.process_flow(profileid, twid, flow, timestamp)
-                    # This is to try to kill the timeline when the user press CTRL-C.
-                    if return_value:
-                        return True
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

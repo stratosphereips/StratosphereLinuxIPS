@@ -6,7 +6,7 @@ Slips v0.7.3
 
 The tool is available on GitHub `here <https://github.com/stratosphereips/StratosphereLinuxIPS/tree/master>`_.
 
-**Stratosphere Linux IPS**, shortly **Slips**, is a Python-based intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, to detect of command and control channelsi, and to provide good visualisation for the analyst. Slips is able to analyze real live traffic from the device and the large network captures in the type of a pcap files, Suricata, Zeek/Bro and Argus flows. As a result, Slips highlights suspicious behaviour and connections that needs to be deeper analyzed.
+**Slips** is a Python-based intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, to detect of command and control channelsi, and to provide good visualisation for the analyst. Slips is able to analyze real live traffic from the device and the large network captures in the type of a pcap files, Suricata, Zeek/Bro and Argus flows. As a result, Slips highlights suspicious behaviour and connections that needs to be deeper analyzed.
 
 This documentation gives an overview how Slips works, how to use it and how to help. To be specific, that table of contents goes as follows:
 
@@ -19,6 +19,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Architecture**. Internal architecture of Slips (profiles, timewindows), the use of Zeek and connection to Redis. See :doc:`Architecture <architecture>`.
   
+- **Contributing**. Explanation how to contribute to Slips, and instructions how to implement new detection module in Slips. See :doc:`Contributing <contributing>`. 
 
 
 
@@ -32,3 +33,4 @@ This documentation gives an overview how Slips works, how to use it and how to h
    usage
    detection_modules
    architecture
+   contributing

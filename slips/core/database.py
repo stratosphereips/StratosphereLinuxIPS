@@ -5,6 +5,7 @@ from typing import Tuple, Dict, Set, Callable
 import configparser
 import traceback
 from datetime import datetime
+import ipaddress
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -55,7 +56,9 @@ class Database(object):
         # Create the connection to redis
         if not hasattr(self, 'r'):
             try:
+                # db 0 changes everytime we run slips
                 self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+                # db 1 is cache, delete it using -cc flag
                 self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True) #password='password')
                 if self.deletePrevdb:
                     self.r.flushdb()
@@ -883,21 +886,39 @@ class Database(object):
         data['description'] = description
         # key uses dictionary format, so it needs to be converted to json to work as a dict key.
         key_json = json.dumps(key)
+        # It is done to ignore repetition of the same evidence sent.
+        if key_json not in current_evidence.keys():
+            evidence_to_send = {
+                'profileid': str(profileid),
+                'twid': str(twid),
+                'key': key,
+                'data': data,
+                'description': description
+            }
+            evidence_to_send = json.dumps(evidence_to_send)
+            self.publish('evidence_added', evidence_to_send)
+
         current_evidence[key_json] = data
         current_evidence_json = json.dumps(current_evidence)
         # Set evidence in the database.
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
 
-        evidence_to_send = {
-            'profileid': str(profileid),
-            'twid': str(twid),
-            'key': key,
-            'data': data,
-            'description': description
-        }
-        evidence_to_send = json.dumps(evidence_to_send)
-        self.publish('evidence_added', evidence_to_send)
+
+    def deleteEvidence(self,profileid, twid, key):
+        """ Delete evidence from the database """
+
+        current_evidence = self.getEvidenceForTW(profileid, twid)
+        if current_evidence:
+            current_evidence = json.loads(current_evidence)
+        else:
+            current_evidence = {}
+        key_json = json.dumps(key)
+        # Delete the key regardless of whether it is in the dictionary
+        current_evidence.pop(key_json, None)
+        current_evidence_json = json.dumps(current_evidence)
+        self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
+        self.r.hset('evidence'+profileid, twid, current_evidence_json)
 
     def getEvidenceForTW(self, profileid, twid):
         """ Get the evidence for this TW for this Profile """
@@ -979,14 +1000,17 @@ class Database(object):
         return data
 
     def getIPData(self, ip):
+        """	
+        Return information about this IP	
+        Returns a dictionary or False if there is no IP in the database	
+        ip: a string
+        We need to separate these three cases:	
+        1- IP is in the DB without data. Return empty dict.	
+        2- IP is in the DB with data. Return dict.	
+        3- IP is not in the DB. Return False	
         """
-        Return information about this IP
-        Returns a dictionary or False if there is no IP in the database
-        We need to separate these three cases:
-        1- IP is in the DB without data. Return empty dict.
-        2- IP is in the DB with data. Return dict.
-        3- IP is not in the DB. Return False
-        """
+        if type(ip) == ipaddress.IPv4Address or type(ip) == ipaddress.IPv6Address:
+            ip = str(ip)
         data = self.rcache.hget('IPsInfo', ip)
         if data:
             # This means the IP was in the database, with or without data
@@ -1124,7 +1148,7 @@ class Database(object):
         pubsub = self.r.pubsub()
         supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
                     'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
-                    'new_blocking', 'new_ssh','new_notice']
+                    'new_blocking', 'new_ssh','new_notice', 'finished_modules']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 pubsub.subscribe(channel)
@@ -1362,7 +1386,7 @@ class Database(object):
         self.print('Adding SSH flow to DB: {}'.format(data), 5, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
 
-    def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg):
+    def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg, scanned_port, scanning_ip):
         """" Send notice.log data to new_notice channel to look for self-signed certificates """
         data = {
             'daddr' :  daddr,
@@ -1370,8 +1394,10 @@ class Database(object):
             'dport' :  dport,
             'note'  :  note,
             'msg'   :  msg,
+            'scanned_port' : scanned_port,
+            'scanning_ip'  : scanning_ip
         }
-        data = json.dumps(data) # this is going to be sent inside another dict
+        data = json.dumps(data) # this is going to be sent insidethe to_send dict
         to_send = {}
         to_send['profileid'] = profileid
         to_send['twid'] = twid
@@ -1732,4 +1758,43 @@ class Database(object):
         else:
             data = ''
         return data
+
+    def set_asn_cache(self, asn, asn_range) -> None:
+        """
+        Stores the range of asn in cached_asn hash
+        :param asn: str
+        :param asn_range: str
+        """
+        self.rcache.hset('cached_asn', asn, asn_range)
+
+    def get_asn_cache(self):
+        """
+        Returns cached asn of ip if present, or False.
+        """
+        return self.rcache.hgetall('cached_asn')
+    
+    def store_process_PID(self, process, pid):
+        """
+        Stores each started process or module with it's PID
+        :param pid: int
+        :param process: str
+        """
+        self.r.hset('PIDs', process, pid)
+
+    def get_PIDs(self):
+        """ returns a dict with module names as keys and pids as values """
+        return self.r.hgetall('PIDs')
+
+    def set_whitelist(self,whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
+        """ Store a dict of whitelisted IPs, domains and organizations in the db """
+
+        self.r.hset("whitelist" , "IPs", json.dumps(whitelisted_IPs))
+        self.r.hset("whitelist" , "domains", json.dumps(whitelisted_domains))
+        self.r.hset("whitelist" , "organizations", json.dumps(whitelisted_organizations))
+
+    def get_whitelist(self):
+        """ Return dict of 3 keys: IPs, domains and organizations"""
+        return self.r.hgetall('whitelist')
+
+
 __database__ = Database()

@@ -33,15 +33,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         # Retrieve malicious/benigh labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            self.timeout = None
-        else:
-            #??
-            self.timeout = None
+        self.timeout = None
         self.separator = '_'
 
     def print(self, text, verbose=1, debug=0):
@@ -61,12 +53,14 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def run(self):
-        try:
-            while True:
+        while True:
+            try:
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=self.timeout)
                 #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 elif message['channel'] == 'tw_modified':
                     # Get the profileid and twid
@@ -80,7 +74,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         # 1. Vertical port scan:
                         # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
                         # 2. Horizontal port scan:
-                        # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip. 
+                        # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip.
                         # 3. Too many connections???:
                         # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
                         # 4. Slow port scan. Same as the others but distributed in multiple time windows
@@ -121,7 +115,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                                     confidence = totalpkts / 10.0
                                 __database__.setEvidence(profileid, twid, type_evidence, threat_level, confidence)
                                 self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
-
+    
                             """
                             ### PortScan Type 2. Direction OUT
                             dstips = data[dport]['dstips']
@@ -145,10 +139,10 @@ class PortScanProcess(Module, multiprocessing.Process):
                             # Compute the confidence
                             pkts_sent = 0
                             # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dips per port.
-                            # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more. 
+                            # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
                             cache_key = profileid + ':' + twid + ':' + key
                             try:
-                                prev_amount_dips = self.cache_det_thresholds[cache_key] 
+                                prev_amount_dips = self.cache_det_thresholds[cache_key]
                             except KeyError:
                                 prev_amount_dips = 0
                             #self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
@@ -196,7 +190,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             # Threat level
                             threat_level = 25
                             # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dports per dip.
-                            # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more. 
+                            # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
                             cache_key = profileid + ':' + twid + ':' + key
                             try:
                                 prev_amount_dports = self.cache_det_thresholds[cache_key]
@@ -227,12 +221,10 @@ class PortScanProcess(Module, multiprocessing.Process):
                     except AttributeError:
                         # When the channel is created the data '1' is sent
                         continue
-
-
-        except KeyboardInterrupt:
-            self.print('Stopping the process', 0, 1)
-            return True
-        except Exception as inst:
-            self.print('Error in run() of {}'.format(inst), 0, 1)
-            self.print(type(inst), 0, 1)
-            self.print(inst, 0, 1)
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                self.print('Error in run() of {}'.format(inst), 0, 1)
+                self.print(type(inst), 0, 1)
+                self.print(inst, 0, 1)

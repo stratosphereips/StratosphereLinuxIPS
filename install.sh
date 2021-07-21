@@ -8,12 +8,12 @@ echo "[+] Executing 'sudo apt-get -y install curl git redis python3.7-minimal py
 sudo apt-get -y install curl git redis python3.7-minimal python3-redis python3-pip python3-watchdog nodejs npm
 echo "[+] Executing 'python3 -m pip install --upgrade pip'"
 python3 -m pip install --upgrade pip
-echo "[+] Executing 'pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1 slackclient stix2 cabby'"
-pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1 slackclient stix2 cabby
+echo "[+] Executing 'pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1 netaddr slackclient stix2 cabby ipwhois tzlocal'"
+pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1 netaddr slackclient stix2 cabby ipwhois tzlocal
 echo "[+] Executing pip3 install --ignore-installed six"
 pip3 install --ignore-installed six
-echo "[+] Executing 'sudo npm install blessed blessed-contrib redis async chalk strip-ansi clipboardy fs sorted-array-async'"
-sudo npm install blessed blessed-contrib redis async chalk strip-ansi clipboardy fs sorted-array-async
+echo "[+] Executing 'sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs'"
+sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 
 # Installing zeek
 echo "[+] Installing zeek ..."

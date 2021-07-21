@@ -44,20 +44,7 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_blocking')
-        # Set the timeout based on the platform. This is because the
-        # pyredis lib does not have officially recognized the
-        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            self.platform_system = 'Darwin'
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            self.platform_system = 'Linux'
-            # linux
-            self.timeout = None
-        else:
-            # Other systems
-            self.timeout = None
+        self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -93,6 +80,8 @@ class Module(Module, multiprocessing.Process):
                         os.system('sudo iptables -X slipsBlocking')
                     elif self.platform_system == 'Darwin':
                         self.print('Mac OS blocking is not supported yet.')
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message['channel'] == 'new_blocking':
                     ip_to_block = message['data']

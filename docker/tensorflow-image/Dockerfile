@@ -35,8 +35,10 @@ RUN pip3 install scipy
 RUN pip3 install watchdog
 RUN pip3 install stix2
 RUN pip3 install cabby
+RUN pip3 install ipwhois
 RUN pip3 install --ignore-installed six
 RUN pip3 install slackclient
+RUN pip3 install tzlocal
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git

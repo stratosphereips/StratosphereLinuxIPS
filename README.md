@@ -16,7 +16,7 @@ Slips documentation is [here](https://stratospherelinuxips.readthedocs.io/en/dev
 
 ## Features
 
-Stratosphere Linux IPS, shortly Slips, is a Python-based intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, to detect of command and control channels and to provide good visualisation for the analyst. Slips is able to analyze real live traffic from the device and the large network captures in the type of a pcap files, Suricata, Zeek/Bro and Argus flows. As a result, Slips highlights suspicious behaviour and connections that needs to be deeper analyzed. 
+Slips is a Python-based intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, to detect of command and control channels and to provide good visualisation for the analyst. Slips is able to analyze real live traffic from the device and the large network captures in the type of a pcap files, Suricata, Zeek/Bro and Argus flows. As a result, Slips highlights suspicious behaviour and connections that needs to be deeper analyzed. 
 
 Slips is a modular software. Each module is designed to perform a specific detection in the network traffic. Current version of Slips contains following modules:
 
@@ -36,24 +36,25 @@ Slips is a modular software. Each module is designed to perform a specific detec
 
 Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.
 
-Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/latest/
+Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/develop/
 
-### If you want to share files between your host and the docker, you can do:
+## Installation
 
-	mkdir ~/dataset
-	cp <some-place>/myfile.pcap ~/dataset
-	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
-	./slips.py -c slips.conf -f dataset/myfile.pcap
+The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but it is not able to analyze real live traffic.
 
+## How to use Slips docker from DockerHub and share files between the host and the docker:
 
-## Build the docker from the Dockerfile
+        mkdir ~/dataset
+        cp <some-place>/myfile.pcap ~/dataset
+        docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+        ./slips.py -c slips.conf -f dataset/myfile.pcap
 
-The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but it is not able to analyze real live traffic. How to use Slips docker from DockerHub:
+## How to build Slips docker from Dockerfile:
 
-	cd docker
-	docker build --no-cache -t slips -f Dockerfile .
-	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
-	./slips.py -c slips.conf -f dataset/test3.binetflow
+        cd dockeri/ubuntu-image
+        docker build --no-cache -t slips -f Dockerfile .
+        docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
+        ./slips.py -c slips.conf -f dataset/test3.binetflow
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
 
@@ -81,3 +82,12 @@ All contributors are welcomed! How you can help?
 - Run Slips and report bugs and needed features, and suggest ideas
 - Pull requests with a solved GitHub issue and new feature
 - Pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
+
+## Acknowledgments
+Slips was funded by the following organizations.
+
+- NlNet Foundation. https://nlnet.nl/
+- AIC Group, Czech Technical University in Prague. https://www.aic.fel.cvut.cz/
+- Avast Software. https://www.avast.com/
+- CESNET. https://www.cesnet.cz/
+
