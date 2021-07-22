@@ -306,7 +306,7 @@ class Module(Module, multiprocessing.Process):
                         flow = data['flow']
                         # Convert flow to a dict
                         flow = json.loads(flow)
-                        uid = flow['uid']
+                        uid = data['uid']
                         msg = flow['msg']
                         note = flow['note']
                         # We're looking for self signed certs in notice.log in the 'msg' field
