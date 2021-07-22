@@ -25,6 +25,10 @@ If you cloned Slips in '~/code/StratosphereLinuxIPS', then you can build the Doc
 	docker build --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f dataset/test3.binetflow
+
+If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
+
+	docker build --network=host --no-cache -t slips -f Dockerfile .
 	
 You can also put your own files in the /dataset/ folder and analyze them with Slips:
 

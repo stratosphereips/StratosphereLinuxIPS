@@ -38,22 +38,23 @@ Slips has its own console graphical user interface called Kalipso. Kalipso summa
 
 Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/develop/
 
-### If you want to share files between your host and the docker, you can do:
+## Installation
 
-	mkdir ~/dataset
-	cp <some-place>/myfile.pcap ~/dataset
-	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
-	./slips.py -c slips.conf -f dataset/myfile.pcap
+The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but it is not able to analyze real live traffic.
 
+## How to use Slips docker from DockerHub and share files between the host and the docker:
 
-## Build the docker from the Dockerfile
+        mkdir ~/dataset
+        cp <some-place>/myfile.pcap ~/dataset
+        docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+        ./slips.py -c slips.conf -f dataset/myfile.pcap
 
-The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but it is not able to analyze real live traffic. How to use Slips docker from DockerHub:
+## How to build Slips docker from Dockerfile:
 
-	cd docker
-	docker build --no-cache -t slips -f Dockerfile .
-	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
-	./slips.py -c slips.conf -f dataset/test3.binetflow
+        cd docker/ubuntu-image
+        docker build --no-cache -t slips -f Dockerfile .
+        docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
+        ./slips.py -c slips.conf -f dataset/test3.binetflow
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
 
