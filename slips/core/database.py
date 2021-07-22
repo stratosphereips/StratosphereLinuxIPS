@@ -1691,13 +1691,15 @@ class Database(object):
         """
         Return the timestamp of the flow
         """
+        timestamp = ''
         if uid:
-            time.sleep(0.01) # it takes time for the binetflow to put the flow into the database
-            flow_information = self.r.hget(profileid + "_" + twid + "_flows", uid)
-            flow_information = json.loads(flow_information)
-            timestamp = flow_information.get("ts")
-        else:
-            timestamp = ''
+            try:
+                time.sleep(3) # it takes time for the binetflow to put the flow into the database
+                flow_information = self.r.hget(profileid + "_" + twid + "_flows", uid)
+                flow_information = json.loads(flow_information)
+                timestamp = flow_information.get("ts")
+            except:
+                pass
         return timestamp
 
     def search_Domain_in_IoC(self, domain: str) -> str:
