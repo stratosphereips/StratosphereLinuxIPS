@@ -70,3 +70,26 @@ def test_clear_redis_cache_database():
 def test_check_zeek_or_bro():
     main = create_Main_instance()
     assert main.check_zeek_or_bro() != False
+
+# Daemon tests
+def create_Daemon_instance():
+    """ returns an instance of Daemon() class in slips.py"""
+    slips = create_Main_instance()
+    return Daemon(slips)
+
+def test_setup_std_streams():
+    daemon = create_Daemon_instance()
+    # __init__ calls read_configuration which calls setu_std_streams
+    # we need to make sure that the files are there and empty
+    assert os.path.exists(daemon.logsfile)
+    assert os.path.exists(daemon.stdout)
+    assert os.path.exists(daemon.stderr)
+    assert os.path.exists(daemon.stdin)
+    assert os.path.exists(daemon.pidfile)
+
+def test_print():
+    daemon = create_Daemon_instance()
+    daemon.print("Test")
+    with open(daemon.logsfile, 'r') as f:
+        assert "Test" in f.read()
+
