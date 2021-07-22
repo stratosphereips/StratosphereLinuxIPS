@@ -1,10 +1,14 @@
 import ipaddress
 import redis
+import os
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
 test_ip = '192.168.1.1'
+# clear the database
+os.system('./slips.py -c slips.conf -cc')
+
 
 def test_getProfileIdFromIP(database):
     """ unit test for addProfile and getProfileIdFromIP """
