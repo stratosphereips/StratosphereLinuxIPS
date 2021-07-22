@@ -67,9 +67,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                     try:
                         profileid = message['data'].split(':')[0]
                         twid = message['data'].split(':')[1]
-
                         # Start of the port scan detection
                         self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 6, 0)
+
                         # For port scan detection, we will measure different things:
                         # 1. Vertical port scan:
                         # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
@@ -149,7 +149,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             if amount_of_dips % 3 == 0 and prev_amount_dips < amount_of_dips:
                                 for dip in dstips:
                                     # Get the total amount of pkts sent to the same port to all IPs
-                                    pkts_sent += dstips[dip]
+                                    pkts_sent += dstips[dip]['pkts']
                                 if pkts_sent > 10:
                                     confidence = 1
                                 else:
@@ -157,8 +157,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                                     confidence = pkts_sent / 10.0
                                 # Description
                                 description = 'New horizontal port scan detected to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
+                                uid = next(iter(dstips.values()))['uid'] # first uid in the dictionary
                                 __database__.setEvidence(type_detection, detection_info,type_evidence,
-                                                         threat_level, confidence, description, profileid=profileid, twid=twid)
+                                                         threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
                                 # Set 'malicious' label in the detected profile
                                 __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                                 self.print(description, 3, 0)
@@ -210,8 +211,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                                     confidence = pkts_sent / 10.0
                                 # Description
                                 description = 'New vertical port scan detected to IP {} from {}. Total {} dst ports. Not Estab TCP. Tot pkts sent all ports: {}'.format(dstip, profileid.split(self.fieldseparator)[1], amount_of_dports, pkts_sent, confidence)
+                                uid = data[dstip]['uid']
                                 __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                         threat_level, confidence, description, profileid=profileid, twid=twid)
+                                                         threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
                                 # Set 'malicious' label in the detected profile
                                 __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                                 self.print(description, 3, 0)
