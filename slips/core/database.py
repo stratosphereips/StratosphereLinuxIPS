@@ -523,6 +523,7 @@ class Database(object):
                 innerdata['totalflows'] = 1
                 innerdata['totalpkt'] = int(pkts)
                 innerdata['totalbytes'] = int(totbytes)
+                innerdata['uid'] = uid
                 temp_dstports = {}
                 temp_dstports[str(dport)] = int(pkts)
                 innerdata['dstports'] = temp_dstports
@@ -628,6 +629,7 @@ class Database(object):
             daddr = columns['daddr']
             saddr = columns['saddr']
             starttime = columns['starttime']
+            uid = columns['uid']
             # Choose which port to use based if we were asked Dst or Src
             if port_type == 'Dst':
                 port = str(dport)
@@ -653,9 +655,11 @@ class Database(object):
                 innerdata['totalbytes'] += int(totbytes)
                 temp_dstips = innerdata[ip_key]
                 try:
-                    temp_dstips[str(ip_address)] += int(pkts)
+                    temp_dstips[str(ip_address)]['pkts'] += int(pkts)
                 except KeyError:
-                    temp_dstips[str(ip_address)] = int(pkts)
+                    temp_dstips[str(ip_address)] = {}
+                    temp_dstips[str(ip_address)]['pkts'] = int(pkts)
+                    temp_dstips[str(ip_address)]['uid'] = uid
                 innerdata[ip_key] = temp_dstips
                 prev_data[port] = innerdata
                 self.print('add_port(): Adding this new info about port {} for {}. Key: {}. NewData: {}'.format(port, profileid, key_name, innerdata), 0, 3)
@@ -666,7 +670,9 @@ class Database(object):
                 innerdata['totalpkt'] = int(pkts)
                 innerdata['totalbytes'] = int(totbytes)
                 temp_dstips = {}
-                temp_dstips[str(ip_address)] = int(pkts)
+                temp_dstips[str(ip_address)] = {}
+                temp_dstips[str(ip_address)]['pkts'] = int(pkts)
+                temp_dstips[str(ip_address)]['uid'] = uid
                 innerdata[ip_key] = temp_dstips
                 prev_data[port] = innerdata
                 self.print('add_port(): First time for port {} for {}. Key: {}. Data: {}'.format(port, profileid, key_name, innerdata), 0, 3)
@@ -851,7 +857,7 @@ class Database(object):
         return self.separator
 
     def setEvidence(self, type_detection, detection_info, type_evidence,
-                    threat_level, confidence, description, profileid='', twid='',uid=''):
+                    threat_level, confidence, description, profileid='', twid='', uid=''):
         """
         Set the evidence for this Profile and Timewindow.
         Parameters:
