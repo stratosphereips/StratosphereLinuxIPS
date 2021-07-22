@@ -234,8 +234,8 @@ class Module(Module, multiprocessing.Process):
                     # saddr is a  multicast.
                     if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
-                        if dport:
-                            self.check_unknown_port(dport, proto, daddr, profileid, twid, uid)
+                    if dport:
+                        self.check_unknown_port(dport, proto, daddr, profileid, twid, uid)
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
