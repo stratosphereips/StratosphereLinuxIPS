@@ -112,13 +112,15 @@ class Daemon():
         self.pidfile = 'daemon/pidfile'
         # we don't use it anyway
         self.stdin='/dev/null'
-        self.setup_std_streams()
-        self.print(f"Logsfile: {self.logsfile}\n"
-                   f"pidfile:{self.pidfile}\n"
-                   f"stdin : {self.stdin}\n"
-                   f"stdout: {self.stdout}\n"
-                   f"stderr: {self.stderr}\n")
-        self.print("Done reading configuration and setting up files.\n")
+        if '-S' not in sys.argv:
+            # we don't want to clear the logfile when we stop the daemon
+            self.setup_std_streams()
+            self.print(f"Logsfile: {self.logsfile}\n"
+                       f"pidfile:{self.pidfile}\n"
+                       f"stdin : {self.stdin}\n"
+                       f"stdout: {self.stdout}\n"
+                       f"stderr: {self.stderr}\n")
+            self.print("Done reading configuration and setting up files.\n")
 
     def terminate(self):
         """ Deletes the pidfile to mark the daemon as closed """
