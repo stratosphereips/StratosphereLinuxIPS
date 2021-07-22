@@ -2,13 +2,23 @@
 import os
 
 from ..slips  import *
-import os
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
+def do_nothing(*args):
+    """ Used to override the print function because using the self.print causes broken pipes """
+    pass
+
+
+# Main Class tests
+
+def create_Main_instance():
+    """ returns an instance of Main() class in slips.py"""
+    return Main()
 
 def test_load_modules():
-    failed_to_load_modules = load_modules(['template' , 'mldetection-1', 'ensembling'])[1]
+    main = create_Main_instance()
+    failed_to_load_modules = main.load_modules(['template' , 'mldetection-1', 'ensembling'])[1]
     assert failed_to_load_modules == 0
 
 #
@@ -42,17 +52,21 @@ def test_load_modules():
 #     assert 'CDm47v3jrYL8lx0cOh' in str(x)
 
 def test_recognize_host_ip():
-    assert recognize_host_ip() != None
+    main = create_Main_instance()
+    assert main.recognize_host_ip() != None
 
 def test_create_folder_for_logs():
-    assert create_folder_for_logs() != False
+    main = create_Main_instance()
+    assert main.create_folder_for_logs() != False
 
 def test_check_redis_database():
-    assert check_redis_database() == True
+    main = create_Main_instance()
+    assert main.check_redis_database() == True
 
 def test_clear_redis_cache_database():
-    assert clear_redis_cache_database() == True
+    main = create_Main_instance()
+    assert main.clear_redis_cache_database() == True
 
 def test_check_zeek_or_bro():
-    assert check_zeek_or_bro() != False
-
+    main = create_Main_instance()
+    assert main.check_zeek_or_bro() != False
