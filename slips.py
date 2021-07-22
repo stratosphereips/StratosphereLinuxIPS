@@ -59,8 +59,6 @@ class Daemon():
     description = 'This module runs when slips is in daemonized mode'
 
     def __init__(self, slips):
-        # to use read_configurations defined in Main
-        self.slips = slips
         self.read_configuration()
         # Get the pid from pidfile
         try:
@@ -75,87 +73,65 @@ class Daemon():
             f.write(f'{text}\n')
 
     def setup_std_streams(self):
-        """ Create standard steam files and dirs and clear them """
+        """ Create standard steam files and dirs and clear logs file """
+
+        # this is where we'll be storing stdout, stderr, and pidfile
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
+        slips_dirs = []
+        # create files if they don't exist
         for file in std_streams:
-            # we don't want to clear the logfile when we stop the daemon using -S
-            if '-S' in sys.argv and file == self.stdout:
-                continue
             # create the file if it doesn't exist or clear it if it exists
             try:
                 open(file,'w').close()
-            except (FileNotFoundError,NotADirectoryError):
+            except FileNotFoundError:
                 os.mkdir(os.path.dirname(file))
                 open(file,'w').close()
-
-    def read_configuration(self):
-        """ Read the configuration file to get stdout,stderr, logsfile path."""
-        self.config = self.slips.read_conf_file()
-
-        try:
-            # output dir to store running.log and error.log
-            self.output_dir = self.config.get('modes', 'output_dir')
-            if not self.output_dir.endswith('/'): self.output_dir = self.output_dir+'/'
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.output_dir = '/var/log/slips/'
-
-        try:
-            # this file has info about the daemon, started, ended, pid , etc.. by default it's the same as stdout
-            self.logsfile = self.config.get('modes', 'logsfile')
-            self.logsfile = self.output_dir + self.logsfile
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.logsfile = '/var/log/slips/running.log'
-
-        try:
-            self.stdout = self.config.get('modes', 'stdout')
-            self.stdout = self.output_dir + self.stdout
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stdout = '/var/log/slips/running.log'
-
-        try:
-            self.stderr = self.config.get('modes', 'stderr')
-            self.stderr  = self.output_dir + self.stderr
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stderr = '/var/log/slips/errors.log'
-
-        # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
-        self.pidfile = '/etc/slips/pidfile'
-        # we don't use it anyway
-        self.stdin='/dev/null'
-
-        # this is where alerts.log and alerts.json are stored, in interactive mode
-        # they're stored in output/ dir in slips main dir
-        # in daemonized mode they're stored in the same dir as running.log and error.log
-        self.slips.alerts_default_path = self.output_dir
-
-        self.setup_std_streams()
-        # when stoppng the daemon don't log this info again
-        if '-S' not in sys.argv:
-            self.print(f"Logsfile: {self.logsfile}\n"
-                       f"pidfile:{self.pidfile}\n"
-                       f"stdin : {self.stdin}\n"
-                       f"stdout: {self.stdout}\n"
-                       f"stderr: {self.stderr}\n")
-            self.print("Done reading configuration and setting up files.\n")
-
-    def terminate(self):
-        """ Deletes the pidfile to mark the daemon as closed """
+            # get the dirs where slips files will be
+            slips_dirs.append(os.path.dirname(file))
 
         self.print("Deleting pidfile...")
 
+    def read_configuration(self):
+        """ Read the configuration file to get stdout,stderr, logsfile path."""
+        self.config = slips.read_conf_file()
+        try:
+            # this file is used to store the pid of the daemon and is deleted when the daemon stops
+            self.logsfile = self.config.get('modes', 'logsfile')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.logsfile = 'daemon/debugging'
+
+        try:
+            self.stdout = self.config.get('modes', 'stdout')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.stdout = 'daemon/debugging'
+
+        try:
+            self.stderr = self.config.get('modes', 'stderr')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.stderr = 'daemon/debugging'
+
+
+        self.pidfile = 'daemon/pidfile'
+        # we don't use it anyway
+        self.stdin='/dev/null'
+        self.setup_std_streams()
+        self.print(f"Logsfile: {self.logsfile}\n"
+                   f"pidfile:{self.pidfile}\n"
+                   f"stdin : {self.stdin}\n"
+                   f"stdout: {self.stdout}\n"
+                   f"stderr: {self.stderr}\n")
+        self.print("Done reading configuration and setting up files.\n")
+
+    def terminate(self):
+        """ Deletes the pidfile to mark the daemon as closed """
         if os.path.exists(self.pidfile):
+            self.print("Deleting pidfile...")
             os.remove(self.pidfile)
-            self.print("pidfile deleted.")
-        else:
-            self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
-            # if an error occured it will be written in logsfile
-            self.print("Either Daemon stopped normally or an error occurred.")
-            self.print("pidfile needs to be deleted before running Slips again.")
+            self.print(f"Daemon killed [PID {self.pid}]")
 
     def daemonize(self):
         """
@@ -209,13 +185,14 @@ class Daemon():
         # write the pid of the daemon to a file so we can check if it's already opened before re-opening
         self.pid = str(os.getpid())
         with open(self.pidfile,'w+') as pidfile:
-            pidfile.write(self.pid)
+            pidfile.write(self.pid+'\n')
 
         # Register a function to be executed if sys.exit() is called or the main module’s execution completes
         # atexit.register(self.terminate)
 
     def start(self):
         """ Main function, Starts the daemon and starts slips normally."""
+
         self.print("Daemon starting...")
         # Check for a pidfile to see if the daemon is already running
         if self.pid:
@@ -228,9 +205,9 @@ class Daemon():
         # any code run after daemonizing will be run inside the daemon
         self.print(f"Slips Daemon is running. [PID {self.pid}]")
         # tell Main class that we're running in daemonized mode
-        self.slips.set_mode('daemonized', daemon=self)
+        slips.set_mode('daemonized', daemon=self)
         # start slips normally
-        self.slips.start()
+        slips.start()
 
     def stop(self):
         """Stop the daemon"""
@@ -240,17 +217,14 @@ class Daemon():
 
         # Try killing the daemon process
         try:
-            # delete the pid file
-            self.terminate()
-            self.print(f"Daemon killed [PID {self.pid}]")
             while 1:
-                os.kill(int(self.pid), SIGTERM)
+                os.kill(self.pid, SIGTERM)
                 time.sleep(0.1)
-        except OSError as e:
+        except (OSError) as e:
             e = str(e)
-            if e.find("No such process") <= 0:
-                # some error occured, print it
-                self.print(e)
+            if e.find("No such process") > 0:
+                # delete the pid file
+                self.terminate()
 
     def restart(self):
         """Restart the daemon"""
@@ -1217,6 +1191,7 @@ class Main():
 if __name__ == '__main__':
     slips = Main()
     slips.parse_arguments()
+
     if slips.args.interactive:
         # -I is provided
         slips.start()
@@ -1226,12 +1201,12 @@ if __name__ == '__main__':
     if slips.args.stopdaemon:
         # -S is provided
         print("Daemon stopped.")
-        daemon.stop()
+        daemon.terminate()
     elif slips.args.restartdaemon:
         # -R is provided
+        print("Daemon restarted.")
         daemon.restart()
     else:
         # Default mode (daemonized)
         print("Slips daemon started.")
         daemon.start()
-

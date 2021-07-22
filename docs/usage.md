@@ -41,44 +41,61 @@ tr:nth-child(even) {
 </style>
 
 
-
 <table>
-	<tr>
-		<th>File/interface</th>
-		<th>Slips Argument</th>
-		<th>Example command</th>
-	</tr>
-	<tr>
-		<td>Network interface (*)</td>
-		<td>-i</td>
-		<td>./slips.py -c slips.conf -i en0</td>
-	</tr>
-	<tr>
-		<td>pcap</td>
-		<td>-f</td>
-		<td>./slips.py -c slips.conf -f test.pcap</td>
-	</tr>
-	<tr>
-		<td>Argus binetflow</td>
-		<td>-f</td>
-		<td>./slips.py -c slips.conf -f test.binetflow</td>
-	</tr>
-	<tr>
-		<td>Zeek/Bro folder/log</td>
-		<td>-f</td>
-		<td>./slips.py -c slips.conf -f zeek_files</td>
-	</tr>
-	<tr>
-		<td>Nfdump flow</td>
-		<td>-f</td>
-		<td>./slips.py -c slips.conf -f test.nfdump </td>
-	</tr>
-</table>
+  <tr>
+    <th>File/interface</th>
+    <th>Slips Argument</th>
+    <th>Example command</th>
+  </tr>
+  <tr>
+    <td>Network interface (*)</td>
+    <td>-i</td>
+    <td>./slips.py -c slips.conf -i en0</td>
+  </tr>
+  <tr>
+    <td>pcap</td>
+    <td>-r</td>
+    <td>./slips.py -c slips.conf -r test.pcap</td>
+  </tr>
+  <tr>
+    <td>Argus binetflow</td>
+    <td>-f</td>
+    <td>./slips.py -c slips.conf -f test.binetflow</td>
+  </tr>
+  <tr>
+    <td>Zeek/Bro folder/log</td>
+    <td>-f</td>
+    <td>./slips.py -c slips.conf -f zeek_files</td>
+  </tr>
+  <tr>
+    <td>Nfdump flow</td>
+    <td>-b</td>
+    <td>./slips.py -c slips.conf -b test.nfdump </td>
+  </tr>
+  </table>
 
 (*) To find the interface in Linux, you can use the command ```ifconfig```.
 
 
 There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models separately. Configuration of the **slips.conf** is described [here](#modifying-the-configuration-file).
+
+Slips has 2 modes, interactive and daemonized.
+
+**Daemonized** : means , output, logs and alerts are written in files.
+
+In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and ```logsfile``` files specified in slips.conf 
+ 
+This is the default mode, it doesn't require any special flags
+
+To stop the daemon run slips with ```-S```, for example ```./slips.py -c slips.conf -S```
+
+To restart the daemon run slips with ```-R```, for example ```./slips.py -c slips.conf -R```
+ 
+**Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
+ 
+Run slips with ```-I```to start slips in interactive mode.
+
+Output files are stored in ```Slips/daemon/``` dir, By default you don't need root to run slips, but if you changed the default output files to files placed in a dir owned by root, you will need to run Slips using sudo. 
 
 Slips has 2 modes, interactive and daemonized.
 
