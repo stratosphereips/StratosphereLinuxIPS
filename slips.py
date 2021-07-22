@@ -35,9 +35,12 @@ import modules
 import importlib
 from slips.common.abstracts import Module
 from slips.common.argparse import ArgumentParser
-
-#---------------------
-
+import errno
+import subprocess
+from slips.common.abstracts import Module
+from slips.core.database import __database__
+import sys, os, time
+from signal import SIGTERM
 version = '0.7.3'
 
 # Ignore warnings on CPU from tensorflow
@@ -46,21 +49,13 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 warnings.filterwarnings('ignore')
 #---------------------
 
-# # Must imports
-# from slips.common.abstracts import Module
-import multiprocessing
-from slips.core.database import __database__
-# import configparser
-# import platform
-#
-# Your imports
-import sys, os, time
-from signal import SIGTERM
 
 class Daemon():
     description = 'This module runs when slips is in daemonized mode'
 
     def __init__(self, slips):
+        # to use read_configurations defined in Main
+        self.slips = slips
         self.read_configuration()
         # Get the pid from pidfile
         try:
@@ -78,7 +73,6 @@ class Daemon():
         """ Create standard steam files and dirs and clear them """
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
-        # create files if they don't exist
         for file in std_streams:
             # create the file if it doesn't exist or clear it if it exists
             try:
@@ -87,10 +81,9 @@ class Daemon():
                 os.mkdir(os.path.dirname(file))
                 open(file,'w').close()
 
-
     def read_configuration(self):
         """ Read the configuration file to get stdout,stderr, logsfile path."""
-        self.config = slips.read_conf_file()
+        self.config = self.slips.read_conf_file()
         try:
             # this file is used to store the pid of the daemon and is deleted when the daemon stops
             self.logsfile = self.config.get('modes', 'logsfile')
@@ -124,10 +117,17 @@ class Daemon():
 
     def terminate(self):
         """ Deletes the pidfile to mark the daemon as closed """
+
+        self.print("Deleting pidfile...")
+
         if os.path.exists(self.pidfile):
-            self.print("Deleting pidfile...")
             os.remove(self.pidfile)
-            self.print(f"Daemon killed [PID {self.pid}]")
+            self.print("pidfile deleted.")
+        else:
+            self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
+            # if an error occured it will be written in logsfile
+            self.print("Either Daemon stopped normally or an error occurred.")
+            self.print("pidfile needs to be deleted before running Slips again.")
 
     def daemonize(self):
         """
@@ -181,14 +181,13 @@ class Daemon():
         # write the pid of the daemon to a file so we can check if it's already opened before re-opening
         self.pid = str(os.getpid())
         with open(self.pidfile,'w+') as pidfile:
-            pidfile.write(self.pid+'\n')
+            pidfile.write(self.pid)
 
         # Register a function to be executed if sys.exit() is called or the main module’s execution completes
         # atexit.register(self.terminate)
 
     def start(self):
         """ Main function, Starts the daemon and starts slips normally."""
-
         self.print("Daemon starting...")
         # Check for a pidfile to see if the daemon is already running
         if self.pid:
@@ -213,14 +212,17 @@ class Daemon():
 
         # Try killing the daemon process
         try:
+            # delete the pid file
+            self.terminate()
+            self.print(f"Daemon killed [PID {self.pid}]")
             while 1:
-                os.kill(self.pid, SIGTERM)
+                os.kill(int(self.pid), SIGTERM)
                 time.sleep(0.1)
-        except (OSError) as e:
+        except OSError as e:
             e = str(e)
-            if e.find("No such process") > 0:
-                # delete the pid file
-                self.terminate()
+            if e.find("No such process") <= 0:
+                # some error occured, print it
+                self.print(e)
 
     def restart(self):
         """Restart the daemon"""
@@ -293,6 +295,7 @@ class Main():
         rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=1, charset="utf-8",
                                    decode_responses=True)
         rcache.flushdb()
+        return True
 
     def check_zeek_or_bro(self):
         """
@@ -308,6 +311,8 @@ class Main():
         """
         Do all necessary stuff to stop process any clear any files.
         """
+        if self.mode == 'daemonized':
+            self.daemon.stop()
         sys.exit(-1)
 
     def load_modules(self, to_ignore):
@@ -316,7 +321,7 @@ class Main():
         """
 
         plugins = dict()
-
+        failed_to_load_modules = 0
         # Walk recursively through all modules and packages found on the . folder.
         # __path__ is the current path of this python program
         for loader, module_name, ispkg in pkgutil.walk_packages(modules.__path__, modules.__name__ + '.'):
@@ -344,7 +349,7 @@ class Main():
                     if issubclass(member_object, Module) and member_object is not Module:
                         plugins[member_object.name] = dict(obj=member_object, description=member_object.description)
 
-        return plugins
+        return plugins,failed_to_load_modules
 
     def get_cwd(self):
         # Can't use os.getcwd() because slips directory name won't always be Slips plus this way requires less parsing
@@ -405,26 +410,32 @@ class Main():
             self.profilerProcessQueue.put('stop_process')
             self.inputProcess.terminate()
             if self.mode == 'daemonized':
-                self.daemon.terminate()
+                profilesLen = str(__database__.getProfilesLen())
+                print(f"Total Number of Profiles in DB: {profilesLen}.")
+                self.daemon.stop()
             os._exit(-1)
             return
         except KeyboardInterrupt:
             return
 
     def parse_arguments(self):
-        slips_conf_path = self.get_cwd() + 'slips.conf'
+        slips_conf_path = str(self.get_cwd()) + 'slips.conf'
         parser = ArgumentParser(usage = "./slips.py -c <configfile> [options] [file ...]",
                                 add_help=False)
-        parser.add_argument('-c','--config', metavar='<configfile>',action='store',required=False,
+        parser.add_argument('-c','--config', metavar='<configfile>',action='store',default=slips_conf_path,required=False,
                             help='path to the Slips config file.')
         parser.add_argument('-v', '--verbose',metavar='<verbositylevel>',action='store', required=False, type=int,
                             help='amount of verbosity. This shows more info about the results.')
         parser.add_argument('-e', '--debug', metavar='<debuglevel>',action='store', required=False, type=int,
                             help='amount of debugging. This shows inner information about the program.')
         parser.add_argument('-f', '--filepath',metavar='<file>', action='store',required=False,
-                            help='read an Argus binetflow, suricata, nfdump, PCAP, or a Zeek folder.')
+                            help='read an Argus binetflow or a Zeek folder.')
         parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
                             help='read packets from an interface.')
+        parser.add_argument('-r', '--pcapfile',metavar='<file>', action='store', required=False,
+                            help='read a PCAP - Packet Capture.')
+        parser.add_argument('-b', '--nfdump', metavar='<file>',action='store',required=False,
+                            help='read an NFDUMP - netflow dump.')
         parser.add_argument('-l','--nologfiles',action='store_true',required=False,
                             help='do not create log files with all the traffic info and detections.')
         parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
@@ -443,6 +454,7 @@ class Main():
         parser.add_argument('-R', '--restartdaemon',required=False, default=False, action='store_true',
                             help="restart slips daemon")
         parser.add_argument("-h", "--help", action="help", help="command line help")
+
         self.args = parser.parse_args()
 
     def read_conf_file(self):
@@ -480,10 +492,33 @@ class Main():
         if self.check_redis_database() is False:
             self.terminate_slips()
 
+        # Clear cache if the parameter was included
+        if self.args.clearcache:
+            print('Deleting Cache DB in Redis.')
+            self.clear_redis_cache_database()
+            self.terminate_slips()
+
+        # Check the type of input
+        if self.args.interface:
+            input_information = self.args.interface
+            input_type = 'interface'
+        elif self.args.pcapfile:
+            input_information = self.args.pcapfile
+            input_type = 'pcap'
+        elif self.args.filepath:
+            input_information = self.args.filepath
+            input_type = 'file'
+        elif self.args.nfdump:
+            input_information = self.args.nfdump
+            input_type = 'nfdump'
+        else:
+            print('You need to define an input source.')
+            sys.exit(-1)
+
         # If we need zeek (bro), test if we can run it.
         # Need to be assign to something because we pass it to inputProcess later
         zeek_bro = None
-        if self.args.pcapfile or self.args.interface:
+        if input_type == 'pcap' or self.args.interface:
             zeek_bro = self.check_zeek_or_bro()
             if zeek_bro is False:
                 # If we do not have bro or zeek, terminate Slips.
@@ -491,14 +526,8 @@ class Main():
                 self.terminate_slips()
 
         # See if we have the nfdump, if we need it according to the input type
-        if self.args.nfdump and shutil.which('nfdump') is None:
+        if input_type == 'nfdump' and shutil.which('nfdump') is None:
             # If we do not have nfdump, terminate Slips.
-            self.terminate_slips()
-
-        # Clear cache if the parameter was included
-        if self.args.clearcache:
-            print('Deleting Cache DB in Redis.')
-            self.clear_redis_cache_database()
             self.terminate_slips()
 
         # Remove default folder for alerts, if exists
@@ -512,7 +541,6 @@ class Main():
         # Create output folder for alerts.txt and alerts.json if they do not exist
         if not os.path.exists(self.args.output):
             os.makedirs(self.args.output)
-
 
         # If the user wants to blocks, the user needs to give a permission to modify iptables
         # Also check if the user blocks on interface, does not make sense to block on files
@@ -559,22 +587,7 @@ class Main():
         if self.args.debug < 0:
             self.args.debug = 0
 
-        # Check the type of input
-        if self.args.interface:
-            input_information = self.args.interface
-            input_type = 'interface'
-        elif self.args.pcapfile:
-            input_information = self.args.pcapfile
-            input_type = 'pcap'
-        elif self.args.filepath:
-            input_information = self.args.filepath
-            input_type = 'file'
-        elif self.args.nfdump:
-            input_information = self.args.nfdump
-            input_type = 'nfdump'
-        else:
-            print('You need to define an input source.')
-            sys.exit(-1)
+
 
         ##########################
         # Creation of the threads
@@ -612,7 +625,7 @@ class Main():
                 to_ignore.append('blocking')
             try:
                 # This 'imports' all the modules somehow, but then we ignore some
-                self.modules_to_call = self.load_modules(to_ignore)
+                self.modules_to_call = self.load_modules(to_ignore)[0]
                 for module_name in self.modules_to_call:
                     if not module_name in to_ignore:
                         module_class = self.modules_to_call[module_name]['obj']
@@ -648,7 +661,8 @@ class Main():
                 self.outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
                 __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
         # If self.args.nologfiles is False, then we don't want log files, independently of what the conf says.
-
+        else:
+            logs_folder = False
         # Evidence thread
         # Create the queue for the evidence thread
         evidenceProcessQueue = Queue()
@@ -774,7 +788,6 @@ class Main():
 if __name__ == '__main__':
     slips = Main()
     slips.parse_arguments()
-
     if slips.args.interactive:
         # -I is provided
         slips.start()
