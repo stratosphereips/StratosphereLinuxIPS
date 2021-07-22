@@ -1697,7 +1697,7 @@ class Database(object):
             flow_information = json.loads(flow_information)
             timestamp = flow_information.get("ts")
         else:
-            timestamp = time.time()
+            timestamp = ''
         return timestamp
 
     def search_Domain_in_IoC(self, domain: str) -> str:

@@ -401,8 +401,11 @@ class EvidenceProcess(multiprocessing.Process):
                         continue
 
                     timestamp = __database__.get_flow_timestamp(profileid, twid, uid)
-                    flow_datetime = datetime.fromtimestamp(timestamp)
-                    flow_datetime = flow_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                    flow_datetime = ""
+                    if timestamp:
+                        flow_datetime = datetime.fromtimestamp(timestamp)
+                        flow_datetime = flow_datetime.strftime('%Y-%m-%d %H:%M:%S')
+
 
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
