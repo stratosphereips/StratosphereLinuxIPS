@@ -1479,12 +1479,18 @@ class Database(object):
         data = self.r.zrange(key, 0, -1)
         return data
 
-    def set_port_info(self, portproto, name):
-        """ Save in the DB a port with its description """
+    def set_port_info(self, portproto: str, name):
+        """
+        Save in the DB a port with its description
+        :param portproto: portnumber + / + protocol
+        """
         self.r.hset('portinfo', portproto, name)
 
-    def get_port_info(self, portproto):
-        """ Retrive the name of a port """
+    def get_port_info(self, portproto: str):
+        """
+        Retrieve the name of a port
+        :param portproto: portnumber + / + protocol
+        """
         return self.r.hget('portinfo', portproto)
 
     def add_zeek_file(self, filename):
