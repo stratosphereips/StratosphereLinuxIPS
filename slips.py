@@ -652,7 +652,7 @@ class Main():
 
     def parse_arguments(self):
         # Parse the parameters
-        slips_conf_path = get_cwd() + 'slips.conf'
+        slips_conf_path = self.get_cwd() + 'slips.conf'
         parser = ArgumentParser(usage="./slips.py -c <configfile> [options] [file ...]",
                                 add_help=False)
         parser.add_argument('-c', '--config', metavar='<configfile>',
@@ -693,7 +693,7 @@ class Main():
                             help="restart slips daemon")
         parser.add_argument("-h", "--help", action="help", help="command line help")
 
-        args = parser.parse_args()
+        self.args = parser.parse_args()
 
     def read_conf_file(self):
         # Read the config file name given from the parameters
