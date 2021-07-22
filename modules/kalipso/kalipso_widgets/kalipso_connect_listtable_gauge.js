@@ -58,9 +58,9 @@ class combine_Listtable_Gauge{
         var dst_ips_connections = Object.values(key_info['dstips'])
         async.forEachOf(dst_ips,(dst_ip_counter, dst_ip_index,callback)=>{
           var row = []
-          data_listtable.push([tcp_or_udp+'/'+key,String(dst_ip_counter),String(dst_ips_connections[dst_ip_index])])
+          data_listtable.push([tcp_or_udp+'/'+key,String(dst_ip_counter),String(dst_ips_connections[dst_ip_index]['pkts'])])
           data_listtable.push([])
-          data_gaugeList.push({stack:[this.round(Math.log(dst_ips_connections[dst_ip_index]),0)]})
+          data_gaugeList.push({stack:[this.round(Math.log(dst_ips_connections[dst_ip_index]['pkts']),0)]})
           callback()
         },(err)=>{
           if(err){console.log(err)}
