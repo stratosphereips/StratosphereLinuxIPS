@@ -41,7 +41,10 @@ import subprocess
 import re
 from collections import OrderedDict
 from distutils.dir_util import copy_tree
+from slips_files.core.database import __database__
 import asyncio
+from signal import SIGTERM
+import multiprocessing
 
 version = '0.9.0'
 
@@ -51,21 +54,13 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 warnings.filterwarnings('ignore')
 #---------------------
 
-# # Must imports
-# from slips.common.abstracts import Module
-import multiprocessing
-from slips.core.database import __database__
-# import configparser
-# import platform
-#
-# Your imports
-import sys, os, time
-from signal import SIGTERM
 
 class Daemon():
     description = 'This module runs when slips is in daemonized mode'
 
     def __init__(self, slips):
+        # to use read_configurations defined in Main
+        self.slips = slips
         self.read_configuration()
         # Get the pid from pidfile
         try:
@@ -83,7 +78,6 @@ class Daemon():
         """ Create standard steam files and dirs and clear them """
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
-        # create files if they don't exist
         for file in std_streams:
             # create the file if it doesn't exist or clear it if it exists
             try:
@@ -92,10 +86,9 @@ class Daemon():
                 os.mkdir(os.path.dirname(file))
                 open(file,'w').close()
 
-
     def read_configuration(self):
         """ Read the configuration file to get stdout,stderr, logsfile path."""
-        self.config = slips.read_conf_file()
+        self.config = self.slips.read_conf_file()
         try:
             # this file is used to store the pid of the daemon and is deleted when the daemon stops
             self.logsfile = self.config.get('modes', 'logsfile')
@@ -129,10 +122,17 @@ class Daemon():
 
     def terminate(self):
         """ Deletes the pidfile to mark the daemon as closed """
+
+        self.print("Deleting pidfile...")
+
         if os.path.exists(self.pidfile):
-            self.print("Deleting pidfile...")
             os.remove(self.pidfile)
-            self.print(f"Daemon killed [PID {self.pid}]")
+            self.print("pidfile deleted.")
+        else:
+            self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
+            # if an error occured it will be written in logsfile
+            self.print("Either Daemon stopped normally or an error occurred.")
+            self.print("pidfile needs to be deleted before running Slips again.")
 
     def daemonize(self):
         """
@@ -186,14 +186,13 @@ class Daemon():
         # write the pid of the daemon to a file so we can check if it's already opened before re-opening
         self.pid = str(os.getpid())
         with open(self.pidfile,'w+') as pidfile:
-            pidfile.write(self.pid+'\n')
+            pidfile.write(self.pid)
 
         # Register a function to be executed if sys.exit() is called or the main module’s execution completes
         # atexit.register(self.terminate)
 
     def start(self):
         """ Main function, Starts the daemon and starts slips normally."""
-
         self.print("Daemon starting...")
         # Check for a pidfile to see if the daemon is already running
         if self.pid:
@@ -218,14 +217,17 @@ class Daemon():
 
         # Try killing the daemon process
         try:
+            # delete the pid file
+            self.terminate()
+            self.print(f"Daemon killed [PID {self.pid}]")
             while 1:
-                os.kill(self.pid, SIGTERM)
+                os.kill(int(self.pid), SIGTERM)
                 time.sleep(0.1)
-        except (OSError) as e:
+        except OSError as e:
             e = str(e)
-            if e.find("No such process") > 0:
-                # delete the pid file
-                self.terminate()
+            if e.find("No such process") <= 0:
+                # some error occured, print it
+                self.print(e)
 
     def restart(self):
         """Restart the daemon"""
@@ -312,7 +314,6 @@ class Main():
         rcache.flushdb()
         return True
 
-
     def check_zeek_or_bro(self):
         """
         Check if we have zeek or bro
@@ -328,6 +329,8 @@ class Main():
         """
         Do all necessary stuff to stop process any clear any files.
         """
+        if self.mode == 'daemonized':
+            self.daemon.stop()
         sys.exit(-1)
 
 
@@ -633,7 +636,9 @@ class Main():
                     now = datetime.now()
                     f.write(f'Slips end date: {now}\n')
             if self.mode == 'daemonized':
-                self.daemon.terminate()
+                profilesLen = str(__database__.getProfilesLen())
+                print(f"Total Number of Profiles in DB: {profilesLen}.")
+                self.daemon.stop()
             os._exit(-1)
             return True
         except KeyboardInterrupt:
@@ -860,20 +865,24 @@ class Main():
                 else:
                     self.prepare_zeek_scripts()
 
-            # See if we have the nfdump, if we need it according to the input type
-            if input_type == 'nfdump' and shutil.which('nfdump') is None:
-                # If we do not have nfdump, terminate Slips.
-                print("[Main] nfdump is not installed. Stopping Slips.")
-                self.terminate_slips()
+        # See if we have the nfdump, if we need it according to the input type
+        if self.args.nfdump and shutil.which('nfdump') is None:
+            # If we do not have nfdump, terminate Slips.
+            self.terminate_slips()
 
-            # Remove default folder for alerts, if exists
-            if os.path.exists(self.args.output):
-                try:
-                    os.remove(self.args.output + 'alerts.log')
-                    os.remove(self.args.output + 'alerts.json')
-                except OSError:
-                    # Directory not empty (may contain hidden non-deletable files), don't delete dir
-                    pass
+        # Clear cache if the parameter was included
+        if self.args.clearcache:
+            print('Deleting Cache DB in Redis.')
+            self.clear_redis_cache_database()
+            self.terminate_slips()
+
+        # Remove default folder for alerts, if exists
+        if os.path.exists(self.alerts_default_path):
+            try:
+                shutil.rmtree(self.alerts_default_path)
+            except OSError :
+                # Directory not empty (may contain hidden non-deletable files), don't delete dir
+                pass
 
             # Create output folder for alerts.txt and alerts.json if they do not exist
             if not self.args.output.endswith('/'):
@@ -1039,6 +1048,7 @@ class Main():
                 outputProcessQueue.put('10|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
                 __database__.store_process_PID('logsProcess', int(logsProcessThread.pid))
             else:
+                # If self.args.nologfiles is False, then we don't want log files, independently of what the conf says.
                 logs_folder = False
 
             # Evidence thread
@@ -1179,7 +1189,6 @@ class Main():
 if __name__ == '__main__':
     slips = Main()
     slips.parse_arguments()
-
     if slips.args.interactive:
         # -I is provided
         slips.start()
