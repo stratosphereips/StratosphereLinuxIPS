@@ -224,6 +224,8 @@ class Module(Module, multiprocessing.Process):
                     dur = flow_dict['dur']
                     saddr = flow_dict['saddr']
                     daddr = flow_dict['daddr']
+                    origstate = flow_dict['origstate']
+                    dport = flow_dict['dport']
                     # stime = flow_dict['ts']
                     # sport = flow_dict['sport']
                     # timestamp = data['stime']
@@ -239,6 +241,18 @@ class Module(Module, multiprocessing.Process):
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
                     if dport:
                         self.check_unknown_port(dport, proto, daddr, profileid, twid, uid)
+
+                    # Reconnection attempts
+                    key = saddr + '-' + daddr + ':' + str(dport)
+                    if dport != 0 and origstate == 'REJ':
+                        current_reconnections = __database__.getReconnectionsForTW(profileid,twid)
+                        current_reconnections[key] = current_reconnections.get(key, 0) + 1
+                        __database__.setReconnections(profileid, twid, current_reconnections)
+                        for key, count_reconnections in current_reconnections.items():
+                            if count_reconnections > 1:
+                                print('A LOT OF RECONNECTIONS', key, count_reconnections)
+
+
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
