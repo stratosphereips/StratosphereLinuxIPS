@@ -417,7 +417,6 @@ class Main():
             return
 
     def parse_arguments(self):
-        # Parse the parameters
         slips_conf_path = self.get_cwd() + 'slips.conf'
         parser = ArgumentParser(usage = "./slips.py -c <configfile> [options] [file ...]",
                                 add_help=False)
@@ -428,13 +427,9 @@ class Main():
         parser.add_argument('-e', '--debug', metavar='<debuglevel>',action='store', required=False, type=int,
                             help='amount of debugging. This shows inner information about the program.')
         parser.add_argument('-f', '--filepath',metavar='<file>', action='store',required=False,
-                            help='read an Argus binetflow or a Zeek folder.')
+                            help='read an Argus binetflow, suricata, nfdump, PCAP, or a Zeek folder.')
         parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
                             help='read packets from an interface.')
-        parser.add_argument('-r', '--pcapfile',metavar='<file>', action='store', required=False,
-                            help='read a PCAP - Packet Capture.')
-        parser.add_argument('-b', '--nfdump', metavar='<file>',action='store',required=False,
-                            help='read an NFDUMP - netflow dump. ')
         parser.add_argument('-l','--nologfiles',action='store_true',required=False,
                             help='do not create log files with all the traffic info and detections.')
         parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
@@ -453,7 +448,6 @@ class Main():
         parser.add_argument('-R', '--restartdaemon',required=False, default=False, action='store_true',
                             help="restart slips daemon")
         parser.add_argument("-h", "--help", action="help", help="command line help")
-
         self.args = parser.parse_args()
 
     def read_conf_file(self):
