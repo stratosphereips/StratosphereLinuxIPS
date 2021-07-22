@@ -59,6 +59,8 @@ class Daemon():
     description = 'This module runs when slips is in daemonized mode'
 
     def __init__(self, slips):
+        # to use read_configurations defined in Main
+        self.slips = slips
         self.read_configuration()
         # Get the pid from pidfile
         try:
@@ -75,10 +77,7 @@ class Daemon():
     def setup_std_streams(self):
         """ Create standard steam files and dirs and clear logs file """
 
-        # this is where we'll be storing stdout, stderr, and pidfile
-
         std_streams = [self.stderr, self.stdout, self.logsfile]
-        # create files if they don't exist
         for file in std_streams:
             # create the file if it doesn't exist or clear it if it exists
             try:
@@ -87,11 +86,10 @@ class Daemon():
                 os.mkdir(os.path.dirname(file))
                 open(file,'w').close()
 
-        self.print("Deleting pidfile...")
 
     def read_configuration(self):
         """ Read the configuration file to get stdout,stderr, logsfile path."""
-        self.config = slips.read_conf_file()
+        self.config = self.slips.read_conf_file()
         try:
             # this file is used to store the pid of the daemon and is deleted when the daemon stops
             self.logsfile = self.config.get('modes', 'logsfile')
@@ -125,10 +123,15 @@ class Daemon():
 
     def terminate(self):
         """ Deletes the pidfile to mark the daemon as closed """
+
+        self.print("Deleting pidfile...")
+
         if os.path.exists(self.pidfile):
-            self.print("Deleting pidfile...")
             os.remove(self.pidfile)
-            self.print(f"Daemon killed [PID {self.pid}]")
+            self.print("pidfile deleted.")
+        else:
+            self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
+            self.print("pidfile needs to be deleted before running Slips again.")
 
     def daemonize(self):
         """
@@ -182,14 +185,13 @@ class Daemon():
         # write the pid of the daemon to a file so we can check if it's already opened before re-opening
         self.pid = str(os.getpid())
         with open(self.pidfile,'w+') as pidfile:
-            pidfile.write(self.pid+'\n')
+            pidfile.write(self.pid)
 
         # Register a function to be executed if sys.exit() is called or the main module’s execution completes
         # atexit.register(self.terminate)
 
     def start(self):
         """ Main function, Starts the daemon and starts slips normally."""
-
         self.print("Daemon starting...")
         # Check for a pidfile to see if the daemon is already running
         if self.pid:
@@ -214,14 +216,17 @@ class Daemon():
 
         # Try killing the daemon process
         try:
+            # delete the pid file
+            self.terminate()
+            self.print(f"Daemon killed [PID {self.pid}]")
             while 1:
-                os.kill(self.pid, SIGTERM)
+                os.kill(int(self.pid), SIGTERM)
                 time.sleep(0.1)
-        except (OSError) as e:
+        except OSError as e:
             e = str(e)
-            if e.find("No such process") > 0:
-                # delete the pid file
-                self.terminate()
+            if e.find("No such process") <= 0:
+                # some error occured, print it
+                self.print(e)
 
     def restart(self):
         """Restart the daemon"""
@@ -630,8 +635,6 @@ class Main():
                     now = datetime.now()
                     f.write(f'Slips end date: {now}\n')
             if self.mode == 'daemonized':
-                profilesLen = str(__database__.getProfilesLen())
-                print(f"Total Number of Profiles in DB: {profilesLen}.")
                 self.daemon.stop()
             os._exit(-1)
             return True
@@ -862,12 +865,6 @@ class Main():
         # See if we have the nfdump, if we need it according to the input type
         if self.args.nfdump and shutil.which('nfdump') is None:
             # If we do not have nfdump, terminate Slips.
-            self.terminate_slips()
-
-        # Clear cache if the parameter was included
-        if self.args.clearcache:
-            print('Deleting Cache DB in Redis.')
-            self.clear_redis_cache_database()
             self.terminate_slips()
 
 
