@@ -81,6 +81,7 @@ RUN pip3 install pytest
 RUN pip3 install --ignore-installed six
 RUN pip3 install tzlocal
 RUN pip3 install --upgrade tensorflow==2.1.0
+RUN pip3 install pytest
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git

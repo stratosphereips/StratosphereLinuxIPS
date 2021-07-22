@@ -131,6 +131,8 @@ class Daemon():
             self.print("pidfile deleted.")
         else:
             self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
+            # if an error occured it will be written in logsfile
+            self.print("Either Daemon stopped normally or an error occurred.")
             self.print("pidfile needs to be deleted before running Slips again.")
 
     def daemonize(self):
