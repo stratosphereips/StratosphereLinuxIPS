@@ -257,6 +257,7 @@ class EvidenceProcess(multiprocessing.Process):
                 data_type = 'ip'
             except (IndexError,ValueError):
                 # not coming from portscan module , data is a dport, do nothing
+                data_type = ''
                 pass
         else:
             # it's probably one of the following:  'sip', 'dip', 'sport'
