@@ -137,6 +137,20 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                  description, profileid=profileid, twid=twid, uid=uid)
 
+    def set_evidence_for_multiple_reconnection_attempts(self,profileid, twid, ip, description, uid):
+        '''
+        Set evidence for Reconnection Attempts.
+        '''
+        confidence = 0.5
+        threat_level = 20
+        type_detection  = 'dstip'
+        type_evidence = 'MultipleReconnectionAttempts'
+        detection_info = ip
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
+
     def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description, uid):
         '''
         Set evidence for Invalid SSL certificates.
@@ -250,7 +264,8 @@ class Module(Module, multiprocessing.Process):
                         __database__.setReconnections(profileid, twid, current_reconnections)
                         for key, count_reconnections in current_reconnections.items():
                             if count_reconnections > 1:
-                                print('A LOT OF RECONNECTIONS', key, count_reconnections)
+                                description = "Multiple reconnection attempts to the Destination IP: {}".format(daddr)
+                                self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid)
 
 
                 # ---------------------------- new_ssh channel
