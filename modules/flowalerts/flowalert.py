@@ -183,10 +183,10 @@ class Module(Module, multiprocessing.Process):
             # we don't have info about this port
             confidence = 1
             threat_level = 20
-            type_detection  = 'dstport'
+            type_detection  = 'dport'
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
-            description = f'Unknown port {dport}. Destination IP: {daddr}'
+            description = f'Unknown destination port {dport} to destination IP {daddr}'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
