@@ -90,7 +90,6 @@ class Daemon():
         """ Read the configuration file to get stdout,stderr, logsfile path."""
         self.config = self.slips.read_conf_file()
         try:
-            # this file is used to store the pid of the daemon and is deleted when the daemon stops
             self.logsfile = self.config.get('modes', 'logsfile')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -108,12 +107,12 @@ class Daemon():
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.stderr = 'daemon/debugging'
 
-
-        self.pidfile = 'daemon/pidfile'
+        # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
+        self.pidfile = '/etc/slips/pidfile'
         # we don't use it anyway
         self.stdin='/dev/null'
+        # we don't want to clear the logfile when we stop the daemon
         if '-S' not in sys.argv:
-            # we don't want to clear the logfile when we stop the daemon
             self.setup_std_streams()
             self.print(f"Logsfile: {self.logsfile}\n"
                        f"pidfile:{self.pidfile}\n"
