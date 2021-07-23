@@ -552,23 +552,10 @@ class Main():
             # If we do not have nfdump, terminate Slips.
             self.terminate_slips()
 
-
-        # Remove default alerts files, if exists, don't remove if we're stopping the daemon
-        if os.path.exists(self.alerts_default_path) and not self.args.stopdaemon:
-            try:
-                os.remove(self.alerts_default_path + 'alerts.log')
-                os.remove(self.alerts_default_path + 'alerts.json')
-            except OSError :
-                # they weren't crreated in the first place, don't delete
-                pass
-
-        # set alerts.log and alrts.json default paths
+        # set alerts.log and alerts.json default paths,
+        # using argparse default= will cause files to be stored in output/ dir even in daemonized mode
         if not self.args.output:
             self.args.output = self.alerts_default_path
-
-        # Create output folder for alerts.log and alerts.json if they do not exist
-        if not os.path.exists(self.args.output):
-            os.makedirs(self.args.output)
 
         # If the user wants to blocks, the user needs to give a permission to modify iptables
         # Also check if the user blocks on interface, does not make sense to block on files
