@@ -901,6 +901,9 @@ class Main():
 
 
         # Remove default alerts files, if exists, don't remove if we're stopping the daemon
+        # set alerts.log and alerts.json default paths,
+        # using argparse default= will cause files to be stored in output/ dir even in daemonized mode
+
         if os.path.exists(self.alerts_default_path) and not self.args.stopdaemon:
             try:
                 os.remove(self.alerts_default_path + 'alerts.log')
