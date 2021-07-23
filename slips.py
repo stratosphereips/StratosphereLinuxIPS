@@ -82,30 +82,42 @@ class Daemon():
             # create the file if it doesn't exist or clear it if it exists
             try:
                 open(file,'w').close()
-            except FileNotFoundError:
+            except (FileNotFoundError,NotADirectoryError):
                 os.mkdir(os.path.dirname(file))
                 open(file,'w').close()
 
     def read_configuration(self):
         """ Read the configuration file to get stdout,stderr, logsfile path."""
         self.config = self.slips.read_conf_file()
+
         try:
-            self.logsfile = self.config.get('modes', 'logsfile')
+            # output dir to store running.log and error.log
+            self.output_dir = self.config.get('modes', 'output_dir')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.logsfile = 'daemon/debugging'
+            self.output_dir = '/var/log/slips/'
+
+        try:
+            # this file has info about the daemon, started, ended, pid , etc.. by default it's the same as stdout
+            self.logsfile = self.config.get('modes', 'logsfile')
+            self.logsfile = self.output_dir + self.logsfile
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.logsfile = '/var/log/slips/running.log'
 
         try:
             self.stdout = self.config.get('modes', 'stdout')
+            self.stdout = self.output_dir + self.stdout
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stdout = 'daemon/debugging'
+            self.stdout = '/var/log/slips/running.log'
 
         try:
             self.stderr = self.config.get('modes', 'stderr')
+            self.stderr  = self.output_dir + self.stderr
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stderr = 'daemon/debugging'
+            self.stderr = '/var/log/slips/errors.log'
 
         # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
         self.pidfile = '/etc/slips/pidfile'
