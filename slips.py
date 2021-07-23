@@ -79,6 +79,9 @@ class Daemon():
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
         for file in std_streams:
+            # we don't want to clear the logfile when we stop the daemon using -S
+            if '-S' in sys.argv and file == self.stdout:
+                continue
             # create the file if it doesn't exist or clear it if it exists
             try:
                 open(file,'w').close()
@@ -93,6 +96,7 @@ class Daemon():
         try:
             # output dir to store running.log and error.log
             self.output_dir = self.config.get('modes', 'output_dir')
+            if not self.output_dir.endswith('/'): self.output_dir = self.output_dir+'/'
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.output_dir = '/var/log/slips/'
@@ -123,9 +127,15 @@ class Daemon():
         self.pidfile = '/etc/slips/pidfile'
         # we don't use it anyway
         self.stdin='/dev/null'
-        # we don't want to clear the logfile when we stop the daemon
+
+        # this is where alerts.log and alerts.json are stored, in interactive mode
+        # they're stored in output/ dir in slips main dir
+        # in daemonized mode they're stored in the same dir as running.log and error.log
+        self.slips.alerts_default_path = self.output_dir
+
+        self.setup_std_streams()
+        # when stoppng the daemon don't log this info again
         if '-S' not in sys.argv:
-            self.setup_std_streams()
             self.print(f"Logsfile: {self.logsfile}\n"
                        f"pidfile:{self.pidfile}\n"
                        f"stdin : {self.stdin}\n"
@@ -218,9 +228,9 @@ class Daemon():
         # any code run after daemonizing will be run inside the daemon
         self.print(f"Slips Daemon is running. [PID {self.pid}]")
         # tell Main class that we're running in daemonized mode
-        slips.set_mode('daemonized', daemon=self)
+        self.slips.set_mode('daemonized', daemon=self)
         # start slips normally
-        slips.start()
+        self.slips.start()
 
     def stop(self):
         """Stop the daemon"""
@@ -889,12 +899,14 @@ class Main():
             self.clear_redis_cache_database()
             self.terminate_slips()
 
-        # Remove default folder for alerts, if exists
-        if os.path.exists(self.alerts_default_path):
+
+        # Remove default alerts files, if exists, don't remove if we're stopping the daemon
+        if os.path.exists(self.alerts_default_path) and not self.args.stopdaemon:
             try:
-                shutil.rmtree(self.alerts_default_path)
+                os.remove(self.alerts_default_path + 'alerts.log')
+                os.remove(self.alerts_default_path + 'alerts.json')
             except OSError :
-                # Directory not empty (may contain hidden non-deletable files), don't delete dir
+                # they weren't crreated in the first place, don't delete
                 pass
 
             # Create output folder for alerts.txt and alerts.json if they do not exist
@@ -1210,7 +1222,8 @@ if __name__ == '__main__':
     daemon = Daemon(slips)
     if slips.args.stopdaemon:
         # -S is provided
-        daemon.terminate()
+        print("Daemon stopped.")
+        daemon.stop()
     elif slips.args.restartdaemon:
         # -R is provided
         daemon.restart()
