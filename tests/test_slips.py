@@ -138,14 +138,13 @@ def test_stop():
         pid = int(f.read())
     # run the daemon stop function
     os.system("sudo ./slips.py -S")
-    # assert taht pid is not there after stopping
+    # assert that pid is not there after stopping
     process_killed = False
     try:
         os.kill(pid, 0)
         process_killed = True
     except OSError as e:
-        e = str(e)
-        if e.find("No such process") <= 0:
+        if str(e).find("No such process") > 0:
             # some error occured
-            process_killed = False
+            process_killed = True
     assert process_killed
