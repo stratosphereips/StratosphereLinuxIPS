@@ -22,7 +22,7 @@ from datetime import datetime
 import configparser
 import platform
 from colorama import init
-from os import path
+from os import path, makedirs
 from colorama import Fore, Back, Style
 import validators
 import ipaddress
@@ -48,6 +48,9 @@ class EvidenceProcess(multiprocessing.Process):
         self.read_configuration()
         # Subscribe to channel 'tw_modified'
         self.c1 = __database__.subscribe('evidence_added')
+        # Create output folder for alerts.log and alerts.json
+        if not path.exists(output_folder):
+            makedirs(output_folder)
         self.logfile = self.clean_evidence_log_file(output_folder)
         self.jsonfile = self.clean_evidence_json_file(output_folder)
         # If logs enabled, write alerts to the log folder as well
@@ -57,16 +60,7 @@ class EvidenceProcess(multiprocessing.Process):
         else:
             self.logs_logfile = False
             self.logs_jsonfile = False
-
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # now linux also needs to be non-negative
-            self.timeout = None
-        else:
-            self.timeout = None
+        self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """

@@ -70,46 +70,67 @@ class Daemon():
             f.write(f'{text}\n')
 
     def setup_std_streams(self):
-        """ Create standard steam files and dirs and clear logs file """
+        """ Create standard steam files and dirs and clear them """
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
         for file in std_streams:
+            # we don't want to clear the logfile when we stop the daemon using -S
+            if '-S' in sys.argv and file == self.stdout:
+                continue
             # create the file if it doesn't exist or clear it if it exists
             try:
                 open(file,'w').close()
-            except FileNotFoundError:
+            except (FileNotFoundError,NotADirectoryError):
                 os.mkdir(os.path.dirname(file))
                 open(file,'w').close()
 
     def read_configuration(self):
         """ Read the configuration file to get stdout,stderr, logsfile path."""
         self.config = self.slips.read_conf_file()
+
         try:
-            # this file is used to store the pid of the daemon and is deleted when the daemon stops
-            self.logsfile = self.config.get('modes', 'logsfile')
+            # output dir to store running.log and error.log
+            self.output_dir = self.config.get('modes', 'output_dir')
+            if not self.output_dir.endswith('/'): self.output_dir = self.output_dir+'/'
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.logsfile = 'daemon/debugging'
+            self.output_dir = '/var/log/slips/'
+
+        try:
+            # this file has info about the daemon, started, ended, pid , etc.. by default it's the same as stdout
+            self.logsfile = self.config.get('modes', 'logsfile')
+            self.logsfile = self.output_dir + self.logsfile
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.logsfile = '/var/log/slips/running.log'
 
         try:
             self.stdout = self.config.get('modes', 'stdout')
+            self.stdout = self.output_dir + self.stdout
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stdout = 'daemon/debugging'
+            self.stdout = '/var/log/slips/running.log'
 
         try:
             self.stderr = self.config.get('modes', 'stderr')
+            self.stderr  = self.output_dir + self.stderr
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stderr = 'daemon/debugging'
+            self.stderr = '/var/log/slips/errors.log'
 
-
-        self.pidfile = 'daemon/pidfile'
+        # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
+        self.pidfile = '/etc/slips/pidfile'
         # we don't use it anyway
         self.stdin='/dev/null'
+
+        # this is where alerts.log and alerts.json are stored, in interactive mode
+        # they're stored in output/ dir in slips main dir
+        # in daemonized mode they're stored in the same dir as running.log and error.log
+        self.slips.alerts_default_path = self.output_dir
+
+        self.setup_std_streams()
+        # when stoppng the daemon don't log this info again
         if '-S' not in sys.argv:
-            # we don't want to clear the logfile when we stop the daemon
-            self.setup_std_streams()
             self.print(f"Logsfile: {self.logsfile}\n"
                        f"pidfile:{self.pidfile}\n"
                        f"stdin : {self.stdin}\n"
@@ -202,9 +223,9 @@ class Daemon():
         # any code run after daemonizing will be run inside the daemon
         self.print(f"Slips Daemon is running. [PID {self.pid}]")
         # tell Main class that we're running in daemonized mode
-        slips.set_mode('daemonized', daemon=self)
+        self.slips.set_mode('daemonized', daemon=self)
         # start slips normally
-        slips.start()
+        self.slips.start()
 
     def stop(self):
         """Stop the daemon"""
@@ -412,6 +433,8 @@ class Main():
             self.profilerProcessQueue.put('stop_process')
             self.inputProcess.terminate()
             if self.mode == 'daemonized':
+                profilesLen = str(__database__.getProfilesLen())
+                print(f"Total Number of Profiles in DB: {profilesLen}.")
                 self.daemon.stop()
             os._exit(-1)
             return
@@ -545,17 +568,10 @@ class Main():
             # If we do not have nfdump, terminate Slips.
             self.terminate_slips()
 
-        # Remove default folder for alerts, if exists
-        if os.path.exists(self.alerts_default_path):
-            try:
-                shutil.rmtree(self.alerts_default_path)
-            except OSError :
-                # Directory not empty (may contain hidden non-deletable files), don't delete dir
-                pass
-
-        # Create output folder for alerts.txt and alerts.json if they do not exist
-        if not os.path.exists(self.args.output):
-            os.makedirs(self.args.output)
+        # set alerts.log and alerts.json default paths,
+        # using argparse default= will cause files to be stored in output/ dir even in daemonized mode
+        if not self.args.output:
+            self.args.output = self.alerts_default_path
 
         # If the user wants to blocks, the user needs to give a permission to modify iptables
         # Also check if the user blocks on interface, does not make sense to block on files
@@ -812,7 +828,7 @@ if __name__ == '__main__':
     if slips.args.stopdaemon:
         # -S is provided
         print("Daemon stopped.")
-        daemon.terminate()
+        daemon.stop()
     elif slips.args.restartdaemon:
         # -R is provided
         print("Daemon restarted.")
