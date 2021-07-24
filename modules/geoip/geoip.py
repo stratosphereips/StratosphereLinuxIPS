@@ -11,7 +11,7 @@ import ipaddress
 
 class Module(Module, multiprocessing.Process):
     name = 'geoip'
-    description = 'Module to find the cCountry and geolocaiton information of an IP address'
+    description = 'Module to find the country and geolocaiton information of an IP address'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
