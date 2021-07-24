@@ -267,6 +267,27 @@ class Module(Module, multiprocessing.Process):
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid)
 
+                    # Connection to multiple ports
+                    if proto == 'tcp' and state == 'Established':
+                        try:
+                            dport_name = flow_dict['appproto'].upper()
+                        except (KeyError, AttributeError):
+                            dport_name = __database__.get_port_info(str(dport) + '/' + proto.lower())
+                        # Consider only unknown services
+                        if dport_name:
+                           pass
+                        else:
+                            direction = 'Dst'
+                            state = 'Established'
+                            protocol = 'TCP'
+                            role = 'Client'
+                            type_data = 'IPs'
+                            dst_IPs_ports = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
+                            dstports = list(dst_IPs_ports[daddr]['dstports'])
+                            if len(dstports) > 1:
+                                description = "Connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
+                                self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid)
+
 
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
