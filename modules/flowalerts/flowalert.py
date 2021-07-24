@@ -224,10 +224,11 @@ class Module(Module, multiprocessing.Process):
                     daddr = flow_dict['daddr']
                     origstate = flow_dict['origstate']
                     dport = flow_dict['dport']
+                    proto = flow_dict['proto']
+                    state = flow_dict['state']
                     # stime = flow_dict['ts']
                     # sport = flow_dict['sport']
                     # timestamp = data['stime']
-                    # proto = flow_dict['proto']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
 
@@ -236,7 +237,7 @@ class Module(Module, multiprocessing.Process):
                     if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
-                    # Reconnection attempts
+                    # Multiple Reconnection attempts
                     key = saddr + '-' + daddr + ':' + str(dport)
                     if dport != 0 and origstate == 'REJ':
                         current_reconnections = __database__.getReconnectionsForTW(profileid,twid)
