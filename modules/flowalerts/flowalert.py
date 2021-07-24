@@ -137,6 +137,20 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                  description, profileid=profileid, twid=twid, uid=uid)
 
+    def set_evidence_for_multiple_reconnection_attempts(self,profileid, twid, ip, description, uid):
+        '''
+        Set evidence for Reconnection Attempts.
+        '''
+        confidence = 0.5
+        threat_level = 20
+        type_detection  = 'dstip'
+        type_evidence = 'MultipleReconnectionAttempts'
+        detection_info = ip
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
+
     def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description, uid):
         '''
         Set evidence for Invalid SSL certificates.
@@ -208,12 +222,12 @@ class Module(Module, multiprocessing.Process):
                     dur = flow_dict['dur']
                     saddr = flow_dict['saddr']
                     daddr = flow_dict['daddr']
+                    origstate = flow_dict['origstate']
+                    dport = flow_dict['dport']
                     # stime = flow_dict['ts']
                     # sport = flow_dict['sport']
                     # timestamp = data['stime']
-                    # dport = flow_dict['dport']
                     # proto = flow_dict['proto']
-                    # state = flow_dict['state']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
 
@@ -221,6 +235,18 @@ class Module(Module, multiprocessing.Process):
                     # saddr is a  multicast.
                     if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
+
+                    # Reconnection attempts
+                    key = saddr + '-' + daddr + ':' + str(dport)
+                    if dport != 0 and origstate == 'REJ':
+                        current_reconnections = __database__.getReconnectionsForTW(profileid,twid)
+                        current_reconnections[key] = current_reconnections.get(key, 0) + 1
+                        __database__.setReconnections(profileid, twid, current_reconnections)
+                        for key, count_reconnections in current_reconnections.items():
+                            if count_reconnections > 1:
+                                description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
+                                self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid)
+
 
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
