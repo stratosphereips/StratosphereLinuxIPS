@@ -151,6 +151,21 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, profileid=profileid, twid=twid, uid=uid)
 
+
+    def set_evidence_for_connection_to_multiple_ports(self,profileid, twid, ip, description, uid):
+        '''
+        Set evidence for connection to multiple ports.
+        '''
+        confidence = 0.5
+        threat_level = 20
+        type_detection  = 'dstip'
+        type_evidence = 'ConnectionToMultiplePorts'
+        detection_info = ip
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
+
     def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description, uid):
         '''
         Set evidence for Invalid SSL certificates.
