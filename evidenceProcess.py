@@ -475,6 +475,21 @@ class EvidenceProcess(multiprocessing.Process):
                                 # Differentiate the type of evidence for different detections
                                 evidence_to_print = self.print_evidence(profileid, twid, ip, type_evidence, type_detection,detection_info, description)
                                 self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
+                                # Set an alert about the evidence being blocked
+                                alert_to_log = self.print_alert(profileid,
+                                                                      twid,
+                                                                      accumulated_threat_level
+                                                                      )
+
+                                alert_dict = {'type':'alert',
+                                              'profileid': profileid,
+                                              'twid': twid,
+                                              'threat_level':accumulated_threat_level
+                                                }
+
+                                self.addDataToLogFile(alert_to_log)
+                                self.addDataToJSONFile(alert_dict)
+
                                 __database__.publish('new_blocking', ip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
