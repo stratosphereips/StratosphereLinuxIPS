@@ -121,6 +121,14 @@ class EvidenceProcess(multiprocessing.Process):
             self.detection_threshold = 2
         self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)')
 
+    def print_alert(self, profileid, twid, score):
+        '''
+        Function to print alert about the blocked profileid and twid
+        '''
+        alert_to_print = "{} {} is blocked with a score: {}.".format(profileid, twid, score)
+        alert_to_print = f'{Fore.RED}{alert_to_print}{Style.RESET_ALL}'
+        return alert_to_print
+
     def print_evidence(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
         '''
         Function to display evidence according to the detection module.
@@ -134,18 +142,18 @@ class EvidenceProcess(multiprocessing.Process):
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
             if detection_type == 'dstip':
-                evidence_string = f'Infected IP {ip} connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
+                evidence_string = f'{profileid}_{twid}: Infected IP {ip} connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
 
             elif detection_type == 'srcip':
-                evidence_string = f'Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}. '
+                evidence_string = f'{profileid}_{twid}: Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}. '
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-            evidence_string = f'Detected domain {detection_info} due to {description}.'
+            evidence_string = f'{profileid}_{twid}: Detected domain {detection_info} due to {description}.'
 
         elif detection_module == 'SSHSuccessful':
-            evidence_string = f'IP {ip} did a successful SSH. {description}.'
+            evidence_string = f'{profileid}_{twid}: IP {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'Detected IP {ip} {dns_resolution_ip_final} due to {description}.'
+            evidence_string = f'{profileid}_{twid}: Detected IP {ip} {dns_resolution_ip_final} due to {description}.'
 
         return evidence_string
 
@@ -414,7 +422,10 @@ class EvidenceProcess(multiprocessing.Process):
                                                           detection_info,
                                                           description)
 
-                    evidence_dict = {'timestamp': flow_datetime,
+                    evidence_dict = {'type': 'evidence',
+                                     'profileid': profileid,
+                                     'twid': twid,
+                                     'timestamp': flow_datetime,
                                      'detected_ip': ip,
                                      'detection_module':type_evidence,
                                      'detection_info':str(type_detection) + ' ' + str(detection_info),
@@ -463,6 +474,21 @@ class EvidenceProcess(multiprocessing.Process):
                                 # Differentiate the type of evidence for different detections
                                 evidence_to_print = self.print_evidence(profileid, twid, ip, type_evidence, type_detection,detection_info, description)
                                 self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
+                                # Set an alert about the evidence being blocked
+                                alert_to_log = self.print_alert(profileid,
+                                                                      twid,
+                                                                      accumulated_threat_level
+                                                                      )
+
+                                alert_dict = {'type':'alert',
+                                              'profileid': profileid,
+                                              'twid': twid,
+                                              'threat_level':accumulated_threat_level
+                                                }
+
+                                self.addDataToLogFile(alert_to_log)
+                                self.addDataToJSONFile(alert_dict)
+
                                 __database__.publish('new_blocking', ip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
