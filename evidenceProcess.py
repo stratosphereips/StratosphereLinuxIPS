@@ -121,6 +121,14 @@ class EvidenceProcess(multiprocessing.Process):
             self.detection_threshold = 2
         self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)')
 
+    def print_alert(self, profileid, twid, score):
+        '''
+        Function to print alert about the blocked profileid and twid
+        '''
+        alert_to_print = "{} {} is blocked with a score: {}.".format(profileid, twid, score)
+        alert_to_print = f'{Fore.RED}{alert_to_print}{Style.RESET_ALL}'
+        return alert_to_print
+
     def print_evidence(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
         '''
         Function to display evidence according to the detection module.
