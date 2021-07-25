@@ -1409,7 +1409,10 @@ class Database(object):
         return data
 
     def get_labels(self):
-        """ Return the amount of each label so far """
+        """ 
+        Return the amount of each label so far in the DB
+        Used to know how many labels are available during training
+        """
         return self.r.zrange('labels', 0, -1, withscores=True)
 
     def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='',
