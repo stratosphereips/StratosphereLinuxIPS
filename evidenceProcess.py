@@ -142,18 +142,18 @@ class EvidenceProcess(multiprocessing.Process):
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
             if detection_type == 'dstip':
-                evidence_string = f'Infected IP {ip} connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
+                evidence_string = f'{profileid}_{twid}: Infected IP {ip} connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
 
             elif detection_type == 'srcip':
-                evidence_string = f'Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}. '
+                evidence_string = f'{profileid}_{twid}: Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}. '
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-            evidence_string = f'Detected domain {detection_info} due to {description}.'
+            evidence_string = f'{profileid}_{twid}: Detected domain {detection_info} due to {description}.'
 
         elif detection_module == 'SSHSuccessful':
-            evidence_string = f'IP {ip} did a successful SSH. {description}.'
+            evidence_string = f'{profileid}_{twid}: IP {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'Detected IP {ip} {dns_resolution_ip_final} due to {description}.'
+            evidence_string = f'{profileid}_{twid}: Detected IP {ip} {dns_resolution_ip_final} due to {description}.'
 
         return evidence_string
 
@@ -422,7 +422,10 @@ class EvidenceProcess(multiprocessing.Process):
                                                           detection_info,
                                                           description)
 
-                    evidence_dict = {'timestamp': flow_datetime,
+                    evidence_dict = {'type': 'evidence',
+                                     'profileid': profileid,
+                                     'twid': twid,
+                                     'timestamp': flow_datetime,
                                      'detected_ip': ip,
                                      'detection_module':type_evidence,
                                      'detection_info':str(type_detection) + ' ' + str(detection_info),
