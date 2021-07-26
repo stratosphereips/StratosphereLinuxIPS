@@ -837,6 +837,15 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['scanning_ip'] = self.column_values['saddr']
             self.column_values['scanned_port'] =  self.column_values['dport']
             self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
+        elif '/files' in new_line['type']:
+            for count, value in enumerate(line):
+                print(f'{count, value}')
+            self.column_values['type'] = 'files'
+            self.column_values['uid'] = line[4]
+            self.column_values['saddr'] = line[2]
+            self.column_values['daddr'] = line[3] #rx_hosts
+            self.column_values['size'] = line[13]
+            self.column_values['md5'] = line[19]
 
     def process_zeek_input(self, new_line: dict):
         """
@@ -1017,10 +1026,9 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['uid'] = line.get('conn_uids',[''])[0]
             self.column_values['saddr'] = line.get('tx_hosts',[''])[0]
             self.column_values['daddr'] = line.get('rx_hosts',[''])[0]
-            self.column_values['size'] = line.get('seen_bytes', '') # downloaded file size
+            self.column_values['size'] = line.get('total_bytes', '') # downloaded file size
             self.column_values['md5'] = line.get('md5', '')
             # self.column_values['sha1'] = line.get('sha1','')
-            #todo process zeek tabs files.log
 
     def process_argus_input(self, new_line):
         """
