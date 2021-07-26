@@ -173,6 +173,11 @@ class Module(Module, multiprocessing.Process):
                 # try to query. the ip will be added back to the queue if the api call isn't successfull
                 self.api_query_(ip)
 
+    def get_file_score(self, md5):
+        """ returns the vt scores for the specified md5 """
+        pass
+
+
     def run(self):
         try:
             if self.key is None:
@@ -253,7 +258,14 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
                 if message_c3 and message_c3['channel'] == 'new_downloaded_file' and message_c3["type"] == "message":
-                    file_info = message_c3['data']
+                    file_info = json.loads(message_c3['data'])
+                    uid = file_info['uid']
+                    daddr = file_info['daddr']
+                    saddr = file_info['saddr']
+                    size = file_info['size']
+                    md5 = file_info['md5']
+                    self.get_file_score(md5)
+
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
