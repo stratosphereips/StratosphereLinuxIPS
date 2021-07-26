@@ -1037,8 +1037,9 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
             self.column_values['scanned_port'] = line.get('p', '')
             self.column_values['scanning_ip'] = line.get('src', '')
-        elif 'files' in file_type:
+        elif '/files' in file_type:
             """ Parse the fields we're interested in in the files.log file """
+            # the slash before files to distinguish between 'files' in the dir name and file.log
             self.column_values['type'] = 'files'
             self.column_values['uid'] = line.get('conn_uids',[''])[0]
             self.column_values['saddr'] = line.get('tx_hosts',[''])[0]
