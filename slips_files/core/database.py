@@ -1210,7 +1210,7 @@ class Database(object):
         pubsub = self.r.pubsub()
         supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
                     'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
-                    'new_blocking', 'new_ssh','new_notice', 'finished_modules']
+                    'new_blocking', 'new_ssh','new_notice', 'finished_modules', 'new_downloaded_file']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 pubsub.subscribe(channel)
@@ -1487,6 +1487,17 @@ class Database(object):
         to_send = json.dumps(to_send)
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 5, 0)
+
+    def add_out_file(self, profileid, twid, uid, daddr, saddr, size, md5):
+        """" Send files.log data to new_downloaded_file channel in vt module to see if it's malicious """
+        to_send = {
+            'daddr' :  daddr,
+            'saddr' :  saddr,
+            'size' : size,
+            'md5' : md5
+        }
+        to_send = json.dumps(to_send)
+        self.publish('new_downloaded_file', to_send)
 
     def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """

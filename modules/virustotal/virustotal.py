@@ -36,6 +36,7 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_dns_flow')
+        self.c3 = __database__.subscribe('new_downloaded_file')
         # VT api URL for querying IPs
         self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
         # Read the conf file
@@ -245,6 +246,14 @@ class Module(Module, multiprocessing.Process):
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_domain_data_in_DomainInfo(domain, cached_data)
+
+                message_c3 = self.c3.get_message(timeout=0.01)
+                if message_c3 and message_c3['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
+                    return True
+                if message_c3 and message_c3['channel'] == 'new_downloaded_file' and message_c3["type"] == "message":
+                    file_info = message_c3['data']
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
