@@ -1421,6 +1421,10 @@ class Database(object):
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 5, 0)
 
+    def add_out_file(self, profileid, twid,uid, daddr, saddr, size, md5):
+        pass
+
+
     def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """
         Store in the DB a DNS request
