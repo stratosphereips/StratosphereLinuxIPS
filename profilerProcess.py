@@ -1037,6 +1037,16 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
             self.column_values['scanned_port'] = line.get('p', '')
             self.column_values['scanning_ip'] = line.get('src', '')
+        elif 'files' in file_type:
+            """ Parse the fields we're interested in in the files.log file """
+            self.column_values['type'] = 'files'
+            self.column_values['uid'] = line.get('conn_uids',[''])[0]
+            self.column_values['saddr'] = line.get('tx_hosts',[''])[0]
+            self.column_values['daddr'] = line.get('rx_hosts',[''])[0]
+            self.column_values['size'] = line.get('seen_bytes', '') # downloaded file size
+            self.column_values['md5'] = line.get('md5', '')
+            # self.column_values['sha1'] = line.get('sha1','')
+            #todo process zeek tabs files.log
         return True
 
     def process_argus_input(self, new_line):
@@ -1806,6 +1816,13 @@ class ProfilerProcess(multiprocessing.Process):
                                                  self.column_values['scanning_ip'],
                                                  self.column_values['uid']
                                                  )
+                elif flow_type == 'files':
+                    __database__.add_out_file(profileid,twid,
+                                                 self.column_values['uid'],\
+                                                 self.column_values['daddr'],\
+                                                 self.column_values['saddr'],\
+                                                 self.column_values['size'],\
+                                                 self.column_values['md5'])
 
             def store_features_going_in(profileid, twid, starttime):
                 """
