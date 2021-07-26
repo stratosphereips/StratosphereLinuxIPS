@@ -1488,17 +1488,6 @@ class Database(object):
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 5, 0)
 
-    def add_out_file(self, profileid, twid, uid, daddr, saddr, size, md5):
-        """" Send files.log data to new_downloaded_file channel in vt module to see if it's malicious """
-        to_send = {
-            'daddr' :  daddr,
-            'saddr' :  saddr,
-            'size' : size,
-            'md5' : md5
-        }
-        to_send = json.dumps(to_send)
-        self.publish('new_downloaded_file', to_send)
-
     def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """
         Store in the DB a DNS request
