@@ -862,8 +862,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['scanned_port'] =  self.column_values['dport']
             self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
         elif '/files' in new_line['type']:
-            for count, value in enumerate(line):
-                print(f'{count, value}')
             self.column_values['type'] = 'files'
             self.column_values['uid'] = line[4]
             self.column_values['saddr'] = line[2]
