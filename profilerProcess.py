@@ -1765,12 +1765,16 @@ class ProfilerProcess(multiprocessing.Process):
                                                  self.column_values['uid']
                                                  )
                 elif flow_type == 'files':
-                    __database__.add_out_file(profileid,twid,
-                                                 self.column_values['uid'],\
-                                                 self.column_values['daddr'],\
-                                                 self.column_values['saddr'],\
-                                                 self.column_values['size'],\
-                                                 self.column_values['md5'])
+                    """" Send files.log data to new_downloaded_file channel in vt module to see if it's malicious """
+                    to_send = {
+                        'uid' : self.column_values['uid'],
+                        'daddr': self.column_values['daddr'],
+                        'saddr': self.column_values['saddr'],
+                        'size' : self.column_values['size'],
+                        'md5':  self.column_values['md5']
+                    }
+                    to_send = json.dumps(to_send)
+                    __database__.publish('new_downloaded_file', to_send)
 
             def store_features_going_in(profileid, twid, starttime):
                 """
