@@ -7,7 +7,7 @@ import sys
 import configparser
 import time
 from sklearn.ensemble import RandomForestClassifier
-#from sklearn.ensemble import RandomForestReggresor
+from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 import pickle
 import pandas as pd
@@ -25,7 +25,7 @@ warnings.warn = warn
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'rfdetection'
-    description = 'Module to train or test a RandomForest to detect malicious flows.'
+    description = 'Module to train or test a Machine Learning model to detect malicious flows.'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
@@ -95,22 +95,19 @@ class Module(Module, multiprocessing.Process):
 
             #self.print(X_flow)
 
-            # Create th RF model. Warm_start is to incrementallly train with new flows inside a previously trained model.
-            self.clf = RandomForestClassifier(n_estimators=3, criterion='entropy', warm_start=True)
+            # Train 
             self.clf.fit(X_flow, y_flow)
+
+            # Error in train()
+            # <class 'ValueError'>
+            # The number of classes has to be greater than one; got 1 class
+
+            # See score so far in training
             score = self.clf.score(X_flow, y_flow)
             self.print('	Training Score: {}'.format(score))
 
             # Store the models on disk
-            # f = open('./modules/MLdetection1/RFscaler.bin', 'wb')
-            # data = pickle.dumps(sc)
-            # f.write(data)
-            # f.close()
-
-            f = open('./modules/RFdetection/RFmodel.bin', 'wb')
-            data = pickle.dumps(self.clf)
-            f.write(data)
-            f.close()
+            self.store_model()
 
         except Exception as inst:
             # Stop the timer
@@ -252,29 +249,39 @@ class Module(Module, multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
+
+    def store_model(self):
+        """
+        Store the trained model on disk
+        """
+        self.print(f'Storing the trained model on disk.')
+        f = open('./modules/RFdetection/RFmodel.bin', 'wb')
+        data = pickle.dumps(self.clf)
+        f.write(data)
+        f.close()
+
+    def read_model(self):
+        """
+        Read the trained model from disk
+        """
+        try:
+            self.print(f'Reading the trained model from disk.')
+            f = open('./modules/RFdetection/RFmodel.bin', 'rb')
+            self.clf = pickle.load(f)
+            f.close()
+        except FileNotFoundError:
+            # If there is no model, create one empty
+            #self.clf = RandomForestClassifier(n_estimators=30, criterion='entropy', warm_start=True)
+            self.clf = SGDClassifier(warm_start=True)
+        except EOFError:
+            self.print('Error')
+            self.clf = SGDClassifier(warm_start=True)
+
     def run(self):
         # Load the model first
         try:
-            # Load the models only once, depending the mode
-            # This should be done here and not in __init__ because the python does not finish correctly then
-            if self.mode == 'train':
-                # Load the old model if there is one
-                try:
-                    f = open('./modules/RFDetection/RFmodel.bin', 'rb')
-                    self.print('Found a previous RFmodel.bin file. Trying to load it to update the training', 2, 0)
-                    self.clf = pickle.load(f)
-                    f.close()
-                except FileNotFoundError:
-                    pass
-            elif self.mode == 'test':
-                # Load the model from disk
-                try:
-                    f = open('./modules/RFDetection/RFmodel.bin', 'rb')
-                    self.clf = pickle.load(f)
-                    f.close()
-                except FileNotFoundError:
-                    self.print('ERROR. There is no RF model stored. You need to train first with at least two different labels.')
-                    return False
+            # Load the model
+            self.read_model()
 
             while True:
                 try:
@@ -282,12 +289,7 @@ class Module(Module, multiprocessing.Process):
 
                     if message['data'] == 'stop_process':
                         # Confirm that the module is done processing
-                        __database__.publish('finished_modules', self.name)
-                        return True
-                    #self.print('Message received from channel {} with data {}'.format(message['channel'], message['data']), 0, 1)
-                    # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                    if message['data'] == 'stop_process':
-                        # Confirm that the module is done processing
+                        self.store_model()
                         __database__.publish('finished_modules', self.name)
                         return True
                     elif message['channel'] == 'new_flow' and message['data'] != 1:
@@ -324,22 +326,12 @@ class Module(Module, multiprocessing.Process):
                                 self.process_flows()
                                 # Train an algorithm
                                 self.train()
-                            # Test
-                            #self.process_flow()
-                            # Predict
-                            #pred = self.detect()
-                            #self.print('Test Prediction of flow {}: {}'.format(json_flow, pred[0]), 2, 0)
                         elif self.mode == 'test':
-                            # Process the flow
-                            # If the flow is icmp or arp, just ignore it
                             if not 'icmp' in self.flow_dict['proto'] and not 'arp' in self.flow_dict['proto']:
                                 self.process_flow()
                                 # Predict
                                 pred = self.detect()
                                 self.print(f'Prediction {pred[0]} for label {self.flow_dict["label"]} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
-                except KeyboardInterrupt:
-                    # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                    continue
                 except Exception as inst:
                     # Stop the timer
                     self.print('Error in run()')
@@ -348,6 +340,7 @@ class Module(Module, multiprocessing.Process):
                     return True
 
         except KeyboardInterrupt:
+            self.store_model()
             return True
         except Exception as inst:
             # Stop the timer
