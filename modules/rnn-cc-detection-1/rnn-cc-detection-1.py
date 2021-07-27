@@ -153,23 +153,27 @@ class Module(Module, multiprocessing.Process):
                     uid = data[4]
 
                     if 'tcp' in tupleid.lower():
-                        # Define why this threshold
-                        threshold = 0.7
-                        # function to convert each letter of behavioral model to ascii
-                        behavioral_model = self.convert_input_for_module(pre_behavioral_model)
-                        # predict the score of behavioral model being c&c channel
-                        self.print(f'predicting the sequence: {pre_behavioral_model}', 4, 0)
-                        score = tcpmodel.predict(behavioral_model)
-                        self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 5, 0)
-                        # get a float instead of numpy array
-                        score = score[0][0]
-                        if score > threshold:
-                            threshold_confidence = 100
-                            if len(pre_behavioral_model) >= threshold_confidence:
-                                confidence = 1
-                            else:
-                                confidence = len(pre_behavioral_model)/threshold_confidence
-                            self.set_evidence(score,confidence, uid, tupleid, profileid, twid)
+
+                        #skip short strings (less than 3 letters)
+                        if len(pre_behavioral_model) >= 3:
+                            # Define why this threshold
+                            threshold = 0.7
+                            # function to convert each letter of behavioral model to ascii
+                            behavioral_model = self.convert_input_for_module(pre_behavioral_model)
+                            # predict the score of behavioral model being c&c channel
+                            if len()
+                            self.print(f'predicting the sequence: {pre_behavioral_model}', 4, 0)
+                            score = tcpmodel.predict(behavioral_model)
+                            self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 5, 0)
+                            # get a float instead of numpy array
+                            score = score[0][0]
+                            if score > threshold:
+                                threshold_confidence = 100
+                                if len(pre_behavioral_model) >= threshold_confidence:
+                                    confidence = 1
+                                else:
+                                    confidence = len(pre_behavioral_model)/threshold_confidence
+                                self.set_evidence(score,confidence, uid, tupleid, profileid, twid)
                     """
                     elif 'udp' in tupleid.lower():
                         # Define why this threshold
