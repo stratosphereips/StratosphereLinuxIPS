@@ -3,8 +3,6 @@ import configparser
 from slips.common.abstracts import Module
 import multiprocessing
 from slips.core.database import __database__
-import platform
-
 # Your imports
 import json
 import urllib3
@@ -12,7 +10,7 @@ import certifi
 import time
 import ipaddress
 import threading
-
+import validators
 
 class Module(Module, multiprocessing.Process):
     name = 'virustotal'
@@ -36,9 +34,8 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_dns_flow')
-        self.c3 = __database__.subscribe('new_downloaded_file')
-        # VT api URL for querying IPs
-        self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
+        self.c3 = __database__.subscribe('new_url')
+        self.c4 = __database__.subscribe('new_downloaded_file')
         # Read the conf file
         self.__read_configuration()
         self.key = None
@@ -115,6 +112,36 @@ class Module(Module, multiprocessing.Process):
 
         __database__.setInfoForIPs(ip, data)
         __database__.set_passive_dns(ip, passive_dns)
+
+    def get_url_vt_data(self,url):
+        """
+        Function to perform API call to VirusTotal and return the score for the URL.
+        Response is cached in a dictionary.
+        :param url: url to check
+        :return: URL ratio
+        """
+        response = self.api_query_(url)
+        # Can't get url report
+        if response.get('response_code','') is -1:
+            self.print(f"VT API returned an Error - {response['verbose_msg']}")
+            return 0
+        try:
+            score = int(response['positives']) / int(response['total'])
+        except:
+            score = 0
+        self.counter += 1
+        return score
+
+    def set_url_data_in_URLInfo(self,url,cached_data):
+        """
+        Function to set VirusTotal data of the URL in the URLInfo.
+        """
+        score = self.get_url_vt_data(url)
+        # Score of this url didn't change
+        vtdata = {"URL" : score,
+                  "timestamp": time.time()}
+        data = {"VirusTotal" : vtdata}
+        __database__.setInfoForURLs(url, data)
 
     def set_domain_data_in_DomainInfo(self, domain, cached_data):
         """
@@ -234,11 +261,35 @@ class Module(Module, multiprocessing.Process):
 
                 message_c3 = self.c3.get_message(timeout=0.01)
                 if message_c3 and message_c3['data'] == 'stop_process':
+                    return True
+                if message_c3 and message_c3['channel'] == 'new_url' and message_c3["type"] == "message":
+                    data = message_c3["data"]
+                    # The first message comes with data=1
+                    if type(data) == str:
+                        data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        flow_data = json.loads(data['flow'])
+                        url = flow_data['host'] + flow_data.get('uri','')
+                        cached_data = __database__.getURLData(url)
+                        # If VT data of this domain is not in the DomainInfo, ask VT
+                        # If 'Virustotal' key is not in the DomainInfo
+                        if not cached_data or 'VirusTotal' not in cached_data:
+                            # cached data is either False or {}
+                            self.set_url_data_in_URLInfo(url,cached_data)
+                        elif cached_data and 'VirusTotal' in cached_data:
+                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                            if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
+                                self.set_url_data_in_URLInfo(url, cached_data)
+
+
+                message_c4 = self.c4.get_message(timeout=0.01)
+                if message_c4 and message_c4['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                if message_c3 and message_c3['channel'] == 'new_downloaded_file' and message_c3["type"] == "message":
-                    file_info = json.loads(message_c3['data'])
+                if message_c4 and message_c4['channel'] == 'new_downloaded_file' and message_c4["type"] == "message":
+                    file_info = json.loads(message_c4['data'])
                     uid = file_info['uid']
                     daddr = file_info['daddr']
                     saddr = file_info['saddr']
@@ -328,15 +379,49 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-    def api_query_(self, ip, save_data=False):
+    def get_ioc_type(self, ioc):
+        """ Check the type of ioc, returns url, ip or domain"""
+        try:
+            # Is IPv4
+            ip_address = ipaddress.IPv4Address(ioc)
+            return 'ip'
+        except ipaddress.AddressValueError:
+            # Is it ipv6?
+            try:
+                ip_address = ipaddress.IPv6Address(ioc)
+                return 'ip'
+            except ipaddress.AddressValueError:
+                # It does not look as IP address.
+                if validators.domain(ioc):
+                    return 'domain'
+                elif validators.url(ioc):
+                    return 'url'
+                else:
+                    # 192.168.1.1/wpad.dat combinations like this are treated as a url
+                    return 'url'
+
+    def api_query_(self, ioc, save_data=False):
         """
         Create request and perform API call
-        :param ip: IP address to check
+        :param ip: IP address or domain to check
+        :param url: URL to check
         :param save_data: False by default. Set to True to save each request json in a file named ip.txt
         :return: Response object
         """
-
-        params = {'apikey': self.key, 'ip': ip}
+        params = {'apikey': self.key}
+        ioc_type = self.get_ioc_type(ioc)
+        if ioc_type is 'ip':
+            # VT api URL for querying IPs
+            self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
+            params.update({'ip': ioc})
+        elif ioc_type is 'domain':
+             # VT api URL for querying domains
+            self.url = 'https://www.virustotal.com/vtapi/v2/domain/report'
+            params.update({'domain': ioc})
+        elif ioc_type is 'url':
+             # VT api URL for querying URLS
+            self.url = 'https://www.virustotal.com/vtapi/v2/url/report'
+            params.update({'resource': ioc})
 
         # wait for network
         while True:
@@ -351,8 +436,9 @@ class Module(Module, multiprocessing.Process):
             # 204 means Request rate limit exceeded. You are making more requests
             # than allowed. You have exceeded one of your quotas (minute, daily or monthly).
             if response.status == 204:
-                # Add to the queue of api calls in case of api limit reached.
-                self.api_call_queue.append(ip)
+                if ioc_type is 'ip': #todo adding urls and domains to queue
+                    # Add to the queue of api calls in case of api limit reached.
+                    self.api_call_queue.append(ioc)
             # 403 means you don't have enough privileges to make the request or wrong API key
             elif response.status == 403:
                 # don't add to the api call queue because the user will have to restart slips anyway
@@ -377,12 +463,11 @@ class Module(Module, multiprocessing.Process):
             # query successful
             data = json.loads(response.data)
             # optionally, save data to file
-            if save_data:
-                filename = ip + ".txt"
+            if save_data and ioc_type is 'ip':
+                filename = ioc + ".txt"
                 if filename:
                     with open(filename, 'w') as f:
                         json.dump(data, f)
-
         return data
 
 
