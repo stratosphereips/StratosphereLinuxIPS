@@ -164,7 +164,7 @@ class Module(Module, multiprocessing.Process):
 
     def API_calls_thread(self):
         """
-        This thread starts if there's an API calls queue,
+         This thread starts if there's an API calls queue,
          it operates every minute, and executes 4 api calls
          from the queue then sleeps again.
         """
@@ -176,9 +176,9 @@ class Module(Module, multiprocessing.Process):
             time.sleep(60)
             while self.api_call_queue:
                 # get the first element in the queue
-                ip = self.api_call_queue.pop(0)
+                ioc = self.api_call_queue.pop(0)
                 # try to query. the ip will be added back to the queue if the api call isn't successfull
-                self.api_query_(ip)
+                self.api_query_(ioc)
 
     def get_file_score(self, md5):
         """ returns the vt scores for the specified md5 """
@@ -403,8 +403,7 @@ class Module(Module, multiprocessing.Process):
     def api_query_(self, ioc, save_data=False):
         """
         Create request and perform API call
-        :param ip: IP address or domain to check
-        :param url: URL to check
+        :param ioc: IP address, domain, or URL to check
         :param save_data: False by default. Set to True to save each request json in a file named ip.txt
         :return: Response object
         """
@@ -436,9 +435,8 @@ class Module(Module, multiprocessing.Process):
             # 204 means Request rate limit exceeded. You are making more requests
             # than allowed. You have exceeded one of your quotas (minute, daily or monthly).
             if response.status == 204:
-                if ioc_type is 'ip': #todo adding urls and domains to queue
-                    # Add to the queue of api calls in case of api limit reached.
-                    self.api_call_queue.append(ioc)
+                # Add to the queue of api calls in case of api limit reached.
+                self.api_call_queue.append(ioc)
             # 403 means you don't have enough privileges to make the request or wrong API key
             elif response.status == 403:
                 # don't add to the api call queue because the user will have to restart slips anyway
