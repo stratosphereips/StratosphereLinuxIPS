@@ -199,13 +199,36 @@ class Module(Module, multiprocessing.Process):
             while self.api_call_queue:
                 # get the first element in the queue
                 ioc = self.api_call_queue.pop(0)
-                # try to query. the ip will be added back to the queue if the api call isn't successfull
-                self.api_query_(ioc)
+                ioc_type = self.get_ioc_type(ioc)
+                if ioc_type is 'ip':
+                    self.set_vt_data_in_IPInfo(ioc)
+                    cached_data = __database__.getIPData(ioc)
+                    # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
+                    ip_addr = ipaddress.ip_address(ioc)
+                    # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
+                    # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
+                    if (not cached_data or 'VirusTotal' not in cached_data) and not ip_addr.is_multicast:
+                        self.set_vt_data_in_IPInfo(ioc, cached_data)
+
+                elif ioc_type is 'domain':
+                    cached_data = __database__.getDomainData(ioc)
+                    if not cached_data or 'VirusTotal' not in cached_data:
+                        self.set_domain_data_in_DomainInfo(ioc, cached_data)
+
+                elif ioc_type is 'url':
+                    cached_data = __database__.getURLData(ioc)
+                    # If VT data of this domain is not in the DomainInfo, ask VT
+                    # If 'Virustotal' key is not in the DomainInfo
+                    if not cached_data or 'VirusTotal' not in cached_data:
+                        # cached data is either False or {}
+                        self.set_url_data_in_URLInfo(ioc,cached_data)
+
+                elif ioc_type is 'md5':
+                    pass #todo
 
     def get_file_score(self, md5):
         """ returns the vt scores for the specified md5 """
         pass
-
 
     def run(self):
         try:
@@ -402,7 +425,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst), 0, 1)
 
     def get_ioc_type(self, ioc):
-        """ Check the type of ioc, returns url, ip or domain"""
+        """ Check the type of ioc, returns url, ip, domain or hash type"""
         try:
             # Is IPv4
             ip_address = ipaddress.IPv4Address(ioc)
@@ -418,6 +441,8 @@ class Module(Module, multiprocessing.Process):
                     return 'domain'
                 elif validators.url(ioc):
                     return 'url'
+                elif len(ioc)==32:
+                    return 'md5'
                 else:
                     # 192.168.1.1/wpad.dat combinations like this are treated as a url
                     return 'url'
@@ -442,6 +467,10 @@ class Module(Module, multiprocessing.Process):
         elif ioc_type is 'url':
              # VT api URL for querying URLS
             self.url = 'https://www.virustotal.com/vtapi/v2/url/report'
+            params.update({'resource': ioc})
+        elif ioc_type is 'md5':
+            # VT api URL for querying files
+            self.url = 'https://www.virustotal.com/vtapi/v2/file/report'
             params.update({'resource': ioc})
 
         # wait for network
