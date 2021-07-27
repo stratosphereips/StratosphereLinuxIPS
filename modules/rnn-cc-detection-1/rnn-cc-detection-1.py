@@ -31,9 +31,9 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'lstm-cc-detection-1'
+    name = 'rnn-cc-detection-1'
     description = 'Detect C&C channels based on behavioral letters'
-    authors = ['Sebastian Garcia', 'Kamila Babayeva']
+    authors = ['Sebastian Garcia', 'Kamila Babayeva', 'Ondrej Lukas']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -101,7 +101,6 @@ class Module(Module, multiprocessing.Process):
         max_length = 500
 
         # Convert each of the stratosphere letters to an integer. There are 50
-        #vocabulary = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', ',', '.', '+', '*']
         vocabulary = list("abcdefghiABCDEFGHIrstuvwxyzRSTUVWXYZ1234567890,.+*")
         int_of_letters = {}
         for i, letter in enumerate(vocabulary):
