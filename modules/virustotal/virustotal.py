@@ -55,6 +55,7 @@ class Module(Module, multiprocessing.Process):
         # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
         self.timeout = None
+        self.counter = 0
         # start the queue thread
         self.api_calls_thread = threading.Thread(target=self.API_calls_thread,
                          daemon=True)
@@ -184,6 +185,35 @@ class Module(Module, multiprocessing.Process):
             data['asn'] = as_owner
         __database__.setInfoForDomains(domain, data)
 
+    def scan_file(self, md5, saddr, size, profileid, twid, uid):
+        """
+        Function to set VirusTotal data of the domain in the FileInfo.
+        """
+        response = self.api_query_(md5)
+
+        positives = int(response.get('positives','0'))
+        total = response.get('total',0)
+        score = str(positives) + '/' + total
+        if positives >=3:
+            # consider it malicious and alert
+            type_detection = 'file'
+            detection_info = md5
+            type_evidence = "MaliciousDownloadedFile"
+            threat_level = 0.8
+            confidence = 1
+            description =  f'Malicious downloaded file {md5} size: {size} from IP: {saddr}. Score: {score}.'
+            if not twid:
+                twid = ''
+            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                     threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
+        self.counter += 1
+
+        data = {}
+        data["VirusTotal"] =  {'score': score,
+                  "timestamp": time.time()}
+
+        # __database__.setInfoForFile(md5, data)
+
     def API_calls_thread(self):
         """
          This thread starts if there's an API calls queue,
@@ -221,13 +251,24 @@ class Module(Module, multiprocessing.Process):
                     # If 'Virustotal' key is not in the DomainInfo
                     if not cached_data or 'VirusTotal' not in cached_data:
                         # cached data is either False or {}
-                        self.set_url_data_in_URLInfo(ioc,cached_data)
+                        self.set_url_data_in_URLInfo(ioc, cached_data)
 
                 elif ioc_type is 'md5':
-                    pass #todo
+                    self.scan_file(ioc)
+                    pass #todo fix this
 
     def get_file_score(self, md5):
         """ returns the vt scores for the specified md5 """
+        vt_scores, passive_dns, as_owner = self.get_vt_data_of_file(md5)
+        ts = time.time()
+        data = {}
+        data["VirusTotal"] = {"md5": vt_scores[0],
+                  "down_file": vt_scores[1],
+                  "ref_file": vt_scores[2],
+                  "com_file": vt_scores[3],
+                  "timestamp": ts}
+
+        __database__.setInfoForFile(md5, data)
         pass
 
     def run(self):
@@ -339,9 +380,10 @@ class Module(Module, multiprocessing.Process):
                     daddr = file_info['daddr']
                     saddr = file_info['saddr']
                     size = file_info['size']
+                    profileid = file_info['profileid']
+                    twid = file_info['twid']
                     md5 = file_info['md5']
-                    self.get_file_score(md5)
-
+                    self.scan_file(md5, saddr, size, profileid, twid, uid)
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
