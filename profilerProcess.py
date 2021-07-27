@@ -1830,7 +1830,9 @@ class ProfilerProcess(multiprocessing.Process):
                         'daddr': self.column_values['daddr'],
                         'saddr': self.column_values['saddr'],
                         'size' : self.column_values['size'],
-                        'md5':  self.column_values['md5']
+                        'md5':  self.column_values['md5'],
+                        'profileid' : profileid,
+                        'twid' : twid
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish('new_downloaded_file', to_send)

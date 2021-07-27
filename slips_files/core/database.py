@@ -1253,6 +1253,19 @@ class Database(object):
             newdata_str = json.dumps(data)
             self.rcache.hset('IPsInfo', ip, newdata_str)
 
+    def setInfoForFile(self, md5: str, filedata: dict):
+        """
+        Store information for this file (only if it's malicious)
+        We receive a dictionary, such as {'virustotal': score} that we are
+        going to store for this IP.
+        If it was not there before we store it. If it was there before, we
+        overwrite it
+        """
+
+        file_info = json.dumps(filedata)
+        self.rcache.hset('FileInfo', md5, file_info)
+
+
     def setInfoForURLs(self, url: str, urldata: dict):
         """
         Store information for this URL
