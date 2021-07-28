@@ -1,8 +1,8 @@
 # Must imports
 import configparser
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 
 # Your imports
@@ -90,6 +90,26 @@ class Module(Module, multiprocessing.Process):
 
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+
+    def count_positives(self, response: dict, response_key: str, positive_key, total_key):
+        """
+        Count positive checks and total checks in the response, for the given category. To compute ratio of downloaded
+        samples, sum results for both detected and undetected dicts: "undetected_downloaded_samples" and
+        "detected_downloaded_samples".
+        :param response: json dictionary with response data
+        :param response_key: category to count, eg "undetected_downloaded_samples"
+        :param positive_key: key to use inside of the category for successful detections (usually its "positives")
+        :param total_key: key to use inside of the category to sum all checks (usually its "total")
+        :return: number of positive tests, number of total tests run
+        """
+        detections = 0
+        total = 0
+        if response_key in response.keys():
+            for item in response[response_key]:
+                detections += item[positive_key]
+                total += item[total_key]
+        return detections, total
+
 
     def set_vt_data_in_IPInfo(self, ip, cached_data):
         """
@@ -277,7 +297,7 @@ class Module(Module, multiprocessing.Process):
             response = self.api_query_(ip)
             as_owner = self.get_as_owner(response)
             passive_dns = self.get_passive_dns(response)
-            scores = interpret_response(response)
+            scores = self.interpret_response(response)
             self.counter += 1
             return scores, passive_dns, as_owner
         except Exception as inst:
@@ -298,7 +318,7 @@ class Module(Module, multiprocessing.Process):
             # for unknown address, do the query
             response = self.api_query_(domain)
             as_owner = self.get_as_owner(response)
-            scores = interpret_response(response)
+            scores = self.interpret_response(response)
             self.counter += 1
             return scores, as_owner
         except Exception as inst:
@@ -364,110 +384,91 @@ class Module(Module, multiprocessing.Process):
 
         return data
 
+    def interpret_response(self, response: dict):
+        """
+        Read the dictionary and compute ratio for each category.
 
-def interpret_response(response: dict):
-    """
-    Read the dictionary and compute ratio for each category.
-    
-    The ratio is computed as follows:
-    For each IP, VT API returns data about four categories: URLs that resolved to the IP, samples (files) downloaded
-    from the IP, samples (files) that contain the given IP, and samples (programs) that contact the IP. The structure of
-    the data is same for all four categories.
-    
-    For each sample in a category, VT asks the antivirus engines and counts how many of them find the sample malicious.
-    For example, if VT asked 27 engines and four of them found the sample malicious, the sample would be given score
-    4/27, where 4 is the number of successful detections, and 27 is the total number of engines used.
-    
-    The response has two fields for each category. These are the "detected_<category>" field, which contains list of
-    samples that were found malicious by at least one engine, and the "undetected_<category>" field, which contains all 
-    the samples that none of the engines found malicious (all samples in undetected have score 0/x). This means that the
-    response has 8 fields with scores - two (detected and undetected) for each of the four categories. Some fields may
-    be missing if data for the category is not present.
-    
-    To compute the ratio for a category, scores across the two fields are summed together. A global number of detections
-    is computed (sum of all positive detections across all samples in the detected field) and the global number of tests
-    is computed (sum of all "total" values in both detected and undetected sample lists). Now we have detections for a 
-    category and total for a category. The ratio for a category is detections/total. If no tests were run (the field is
-    empty and total=0), this would be undefined, so the ratio is set to 0.
-    
-    Ratio is computed separately for each category.
-    
-    :param response: dictionary (json data from the response)
-    :return: four floats: url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
-    """
+        The ratio is computed as follows:
+        For each IP, VT API returns data about four categories: URLs that resolved to the IP, samples (files) downloaded
+        from the IP, samples (files) that contain the given IP, and samples (programs) that contact the IP. The structure of
+        the data is same for all four categories.
 
-    # compute how many tests were run on the undetected samples. This will return tuple (0, total)
-    # the numbers 2 and 3 are keys to the dictionary, which is in this only case (probably by mistake) a list
-    undetected_url_score = count_positives(response, "undetected_urls", 2, 3)
+        For each sample in a category, VT asks the antivirus engines and counts how many of them find the sample malicious.
+        For example, if VT asked 27 engines and four of them found the sample malicious, the sample would be given score
+        4/27, where 4 is the number of successful detections, and 27 is the total number of engines used.
 
-    # compute how many tests were run on the detected samples. This will return tuple (detections, total)
-    detected_url_score = count_positives(response, "detected_urls", "positives", "total")
+        The response has two fields for each category. These are the "detected_<category>" field, which contains list of
+        samples that were found malicious by at least one engine, and the "undetected_<category>" field, which contains all
+        the samples that none of the engines found malicious (all samples in undetected have score 0/x). This means that the
+        response has 8 fields with scores - two (detected and undetected) for each of the four categories. Some fields may
+        be missing if data for the category is not present.
 
-    # sum the previous results, to get the sum of detections and sum of total tests
-    url_detections = undetected_url_score[0] + detected_url_score[0]
-    url_total = undetected_url_score[1] + detected_url_score[1]
+        To compute the ratio for a category, scores across the two fields are summed together. A global number of detections
+        is computed (sum of all positive detections across all samples in the detected field) and the global number of tests
+        is computed (sum of all "total" values in both detected and undetected sample lists). Now we have detections for a
+        category and total for a category. The ratio for a category is detections/total. If no tests were run (the field is
+        empty and total=0), this would be undefined, so the ratio is set to 0.
 
-    # compute the score for the category
-    if url_total:
-        url_ratio = url_detections/url_total
-    else:
-        url_ratio = 0
+        Ratio is computed separately for each category.
 
-    # following categories are computed in the same way
-    undetected_download_score = count_positives(response, "undetected_downloaded_samples", "positives", "total")
-    detected_download_score = count_positives(response, "detected_downloaded_samples", "positives", "total")
-    down_file_detections = undetected_download_score[0] + detected_download_score[0]
-    down_file_total = undetected_download_score[1] + detected_download_score[1]
+        :param response: dictionary (json data from the response)
+        :return: four floats: url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
+        """
 
-    if down_file_total:
-        down_file_ratio = down_file_detections/down_file_total
-    else:
-        down_file_ratio = 0
+        # compute how many tests were run on the undetected samples. This will return tuple (0, total)
+        # the numbers 2 and 3 are keys to the dictionary, which is in this only case (probably by mistake) a list
+        undetected_url_score = self.count_positives(response, "undetected_urls", 2, 3)
 
-    undetected_ref_score = count_positives(response, "undetected_referrer_samples", "positives", "total")
-    detected_ref_score = count_positives(response, "detected_referrer_samples", "positives", "total")
-    ref_file_detections = undetected_ref_score[0] + detected_ref_score[0]
-    ref_file_total = undetected_ref_score[1] + detected_ref_score[1]
+        # compute how many tests were run on the detected samples. This will return tuple (detections, total)
+        detected_url_score = self.count_positives(response, "detected_urls", "positives", "total")
 
-    if ref_file_total:
-        ref_file_ratio = ref_file_detections/ref_file_total
-    else:
-        ref_file_ratio = 0
+        # sum the previous results, to get the sum of detections and sum of total tests
+        url_detections = undetected_url_score[0] + detected_url_score[0]
+        url_total = undetected_url_score[1] + detected_url_score[1]
 
-    undetected_com_score = count_positives(response, "undetected_communicating_samples", "positives", "total")
-    detected_com_score = count_positives(response, "detected_communicating_samples", "positives", "total")
-    com_file_detections = undetected_com_score[0] + detected_com_score[0]
-    com_file_total = undetected_com_score[1] + detected_com_score[1]
+        # compute the score for the category
+        if url_total:
+            url_ratio = url_detections/url_total
+        else:
+            url_ratio = 0
 
-    if com_file_total:
-        com_file_ratio = com_file_detections/com_file_total
-    else:
-        com_file_ratio = 0
+        # following categories are computed in the same way
+        undetected_download_score = self.count_positives(response, "undetected_downloaded_samples", "positives", "total")
+        detected_download_score = self.count_positives(response, "detected_downloaded_samples", "positives", "total")
+        down_file_detections = undetected_download_score[0] + detected_download_score[0]
+        down_file_total = undetected_download_score[1] + detected_download_score[1]
 
-    # Convert the values into percentages before returning
-    url_ratio = url_ratio * 100
-    down_file_ratio = down_file_ratio * 100
-    ref_file_ratio = ref_file_ratio * 100
-    com_file_ratio = com_file_ratio * 100
+        if down_file_total:
+            down_file_ratio = down_file_detections/down_file_total
+        else:
+            down_file_ratio = 0
 
-    return url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
+        undetected_ref_score = self.count_positives(response, "undetected_referrer_samples", "positives", "total")
+        detected_ref_score = self.count_positives(response, "detected_referrer_samples", "positives", "total")
+        ref_file_detections = undetected_ref_score[0] + detected_ref_score[0]
+        ref_file_total = undetected_ref_score[1] + detected_ref_score[1]
+
+        if ref_file_total:
+            ref_file_ratio = ref_file_detections/ref_file_total
+        else:
+            ref_file_ratio = 0
+
+        undetected_com_score = self.count_positives(response, "undetected_communicating_samples", "positives", "total")
+        detected_com_score = self.count_positives(response, "detected_communicating_samples", "positives", "total")
+        com_file_detections = undetected_com_score[0] + detected_com_score[0]
+        com_file_total = undetected_com_score[1] + detected_com_score[1]
+
+        if com_file_total:
+            com_file_ratio = com_file_detections/com_file_total
+        else:
+            com_file_ratio = 0
+
+        # Convert the values into percentages before returning
+        url_ratio = url_ratio * 100
+        down_file_ratio = down_file_ratio * 100
+        ref_file_ratio = ref_file_ratio * 100
+        com_file_ratio = com_file_ratio * 100
+
+        return url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
 
 
-def count_positives(response: dict, response_key: str, positive_key, total_key):
-    """
-    Count positive checks and total checks in the response, for the given category. To compute ratio of downloaded
-    samples, sum results for both detected and undetected dicts: "undetected_downloaded_samples" and
-    "detected_downloaded_samples".
-    :param response: json dictionary with response data
-    :param response_key: category to count, eg "undetected_downloaded_samples"
-    :param positive_key: key to use inside of the category for successful detections (usually its "positives")
-    :param total_key: key to use inside of the category to sum all checks (usually its "total")
-    :return: number of positive tests, number of total tests run
-    """
-    detections = 0
-    total = 0
-    if response_key in response.keys():
-        for item in response[response_key]:
-            detections += item[positive_key]
-            total += item[total_key]
-    return detections, total

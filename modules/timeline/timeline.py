@@ -1,7 +1,7 @@
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 import traceback
 
@@ -62,12 +62,13 @@ class Module(Module, multiprocessing.Process):
                 proto = line.split(',')[2]
                 # descr = line.split(',')[3]
                 __database__.set_port_info(str(port)+'/'+proto, name)
+                return True
         except Exception as inst:
             self.print('Problem on load_ports()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
-            return True
+            return False
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -233,7 +234,6 @@ class Module(Module, multiprocessing.Process):
                     if not dns_resolution:
                         dns_resolution = '????'
                     activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to','dns_resolution':dns_resolution, 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human,'Duration': dur, 'critical warning': critical_warning_dport_name}
-
                 elif 'ICMP' in proto:
                     if type(sport) == int:
                         # zeek puts the number

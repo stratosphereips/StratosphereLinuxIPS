@@ -1,7 +1,7 @@
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 
 # Your imports
@@ -47,6 +47,29 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def get_geocountry_info(self, ip) -> dict:
+        """
+        Get ip geocountry from geolite database
+        :param ip: str
+        """
+        geoinfo = self.reader.get(ip)
+        if geoinfo:
+            try:
+                countrydata = geoinfo['country']
+                countryname = countrydata['names']['en']
+                data = {'geocountry': countryname}
+            except KeyError:
+                data = {'geocountry': 'Unknown'}
+
+        elif ipaddress.ip_address(ip).is_private:
+            # Try to find if it is a local/private IP
+            data = {'geocountry': 'Private'}
+        else:
+            data = {'geocountry': 'Unknown'}
+        __database__.setInfoForIPs(ip, data)
+        return data
+
+
     def run(self):
         # Main loop function
         while True:
@@ -71,24 +94,7 @@ class Module(Module, multiprocessing.Process):
                             continue
                         # Check that there is data in the DB, and that the data is not empty, and that our key is not there yet
                         if (not data or 'geocountry' not in data) and not ip_addr.is_multicast:
-                            geoinfo = self.reader.get(ip)
-                            if geoinfo:
-                                try:
-                                    countrydata = geoinfo['country']
-                                    countryname = countrydata['names']['en']
-                                    data = {}
-                                    data['geocountry'] = countryname
-                                except KeyError:
-                                    data = {}
-                                    data['geocountry'] = 'Unknown'
-                            elif ipaddress.ip_address(ip).is_private:
-                                # Try to find if it is a local/private IP
-                                data = {}
-                                data['geocountry'] = 'Private'
-                            else:
-                                data = {}
-                                data['geocountry'] = 'Unknown'
-                            __database__.setInfoForIPs(ip, data)
+                            self.get_geocountry_info(ip)
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue

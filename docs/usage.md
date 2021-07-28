@@ -35,38 +35,39 @@ tr:nth-child(even) {
 </style>
 
 
+
 <table>
-  <tr>
-    <th>File/interface</th>
-    <th>Slips Argument</th>
-    <th>Example command</th>
-  </tr>
-  <tr>
-    <td>Network interface (*)</td>
-    <td>-i</td>
-    <td>./slips.py -c slips.conf -i en0</td>
-  </tr>
-  <tr>
-    <td>pcap</td>
-    <td>-r</td>
-    <td>./slips.py -c slips.conf -r test.pcap</td>
-  </tr>
-  <tr>
-    <td>Argus binetflow</td>
-    <td>-f</td>
-    <td>./slips.py -c slips.conf -f test.binetflow</td>
-  </tr>
-  <tr>
-    <td>Zeek/Bro folder/log</td>
-    <td>-f</td>
-    <td>./slips.py -c slips.conf -f zeek_files</td>
-  </tr>
-  <tr>
-    <td>Nfdump flow</td>
-    <td>-b</td>
-    <td>./slips.py -c slips.conf -b test.nfdump </td>
-  </tr>
-  </table>
+	<tr>
+		<th>File/interface</th>
+		<th>Slips Argument</th>
+		<th>Example command</th>
+	</tr>
+	<tr>
+		<td>Network interface (*)</td>
+		<td>-i</td>
+		<td>./slips.py -c slips.conf -i en0</td>
+	</tr>
+	<tr>
+		<td>pcap</td>
+		<td>-f</td>
+		<td>./slips.py -c slips.conf -f test.pcap</td>
+	</tr>
+	<tr>
+		<td>Argus binetflow</td>
+		<td>-f</td>
+		<td>./slips.py -c slips.conf -f test.binetflow</td>
+	</tr>
+	<tr>
+		<td>Zeek/Bro folder/log</td>
+		<td>-f</td>
+		<td>./slips.py -c slips.conf -f zeek_files</td>
+	</tr>
+	<tr>
+		<td>Nfdump flow</td>
+		<td>-f</td>
+		<td>./slips.py -c slips.conf -f test.nfdump </td>
+	</tr>
+</table>
 
 (*) To find the interface in Linux, you can use the command ```ifconfig```.
 
@@ -207,3 +208,10 @@ inbox_path = /services/inbox-a
 ```jwt_auth_url```: auth url if JWT based authentication is used.
 
 If running on a file not an interface, Slips will export to server after analysis is done. 
+
+# Unit testing
+To test your changes to Slips, please run all the unit tests. Fromn the main folder where slips is installed:
+
+    tests/run_all_tests.py
+
+    

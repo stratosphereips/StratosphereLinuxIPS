@@ -12,9 +12,9 @@
 # 7. The name of the class MUST be 'Module', do not change it.
 
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 
 # Your imports
@@ -81,6 +81,29 @@ class Module(Module, multiprocessing.Process):
             return socket.AF_INET6
         return socket.AF_INET
 
+    def get_rdns(self, ip):
+        """
+        get reverse DNS of an ip
+        returns RDNS of the given ip or False if not found
+        :param ip: str
+        """
+        data = {}
+        try:
+            # works with both ipv4 and ipv6
+            reverse_dns = socket.gethostbyaddr(ip)[0]
+            # if there's no reverse dns record for this ip, reverse_dns will be an ip.
+            try:
+                # reverse_dns is an ip and there's no reverse dns, don't store
+                socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
+                return False
+            except socket.error:
+                # all good, store it
+                data['reverse_dns'] = reverse_dns
+        except (socket.gaierror, socket.herror, OSError):
+            # not an ip or multicast, can't get the reverse dns record of it
+            return False
+        return data
+
     def run(self):
         # Main loop function
         while True:
@@ -93,20 +116,9 @@ class Module(Module, multiprocessing.Process):
                             and message['type'] == "message"
                             and type(message['data']) == str):
                     ip = message['data']
-                    data = {}
-                    try:
-                        # works with both ipv4 and ipv6
-                        reverse_dns = socket.gethostbyaddr(ip)[0]
-                        # if there's no reverse dns record for this ip, reverse_dns will be an ip.
-                        try:
-                            # reverse_dns is an ip and there's no reverse dns, don't store
-                            socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
-                            continue
-                        except socket.error:
-                            # all good, store it
-                            data['reverse_dns'] = reverse_dns
-                    except (socket.gaierror, socket.herror, OSError):
-                        # not an ip or multicast, can't get the reverse dns record of it
+                    data  = self.get_rdns(ip)
+                    if not data :
+                        # cant get RDNS of current ip
                         continue
                     # Store in the db
                     __database__.setInfoForIPs(ip, data)

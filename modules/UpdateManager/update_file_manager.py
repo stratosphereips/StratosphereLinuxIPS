@@ -1,7 +1,7 @@
 import configparser
 import time
 import os
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import json
 import ipaddress
 import validators
@@ -79,7 +79,7 @@ class UpdateFileManager:
             return True
         return False
 
-    def __get_e_tag_from_web(self, file_to_download) -> str:
+    def get_e_tag_from_web(self, file_to_download) -> str:
         try:
             # We use a command in os because if we use urllib or requests the process complains!:w
             # If the webpage does not answer in 10 seconds, continue
@@ -91,14 +91,14 @@ class UpdateFileManager:
             except IndexError:
                 return False
         except Exception as inst:
-            self.print('Error with __get_e_tag_from_web()', 0, 1)
+            self.print('Error with get_e_tag_from_web()', 0, 1)
             self.print('{}'.format(type(inst)), 0, 1)
             self.print('{}'.format(inst), 0, 1)
             return False
 
-    def __download_file(self, url: str, filepath: str) -> bool:
+    def download_file(self, url: str, filepath: str) -> bool:
         """
-        Download file from the location specified in the url
+        Download file from the location specified in the url and save to filepath
         """
         try:
             # This replaces are to be sure that a user can not inject commands in curl
@@ -117,7 +117,7 @@ class UpdateFileManager:
             self.print(f'Error: {e}', 0, 1)
             return False
 
-    def __download_malicious_file(self, file_to_download: str) -> bool:
+    def download_malicious_file(self, file_to_download: str) -> bool:
         try:
             # Check that the folder exist
             if not os.path.isdir(self.path_to_threat_intelligence_data):
@@ -132,13 +132,12 @@ class UpdateFileManager:
                 old_e_tag = ''
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
-            new_e_tag = self.__get_e_tag_from_web(file_to_download)
+            new_e_tag = self.get_e_tag_from_web(file_to_download)
             if new_e_tag and old_e_tag != new_e_tag:
                 # Our malicious file is old. Download new one.
                 self.print(f'Trying to download the file {file_name_to_download}', 3, 0)
-                if not self.__download_file(file_to_download, self.path_to_threat_intelligence_data + '/' + file_name_to_download):
+                if not self.download_file(file_to_download, self.path_to_threat_intelligence_data + '/' + file_name_to_download):
                     return False
-
                 if old_e_tag:
                     # File is updated and was in database. Delete previous IPs of this file.
                     self.__delete_old_source_data_from_database(file_name_to_download)
@@ -168,7 +167,7 @@ class UpdateFileManager:
                 return False
 
         except Exception as inst:
-            self.print('Problem on __download_malicious_file()', 0, 0)
+            self.print('Problem on download_malicious_file()', 0, 0)
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
@@ -197,7 +196,7 @@ class UpdateFileManager:
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
                 self.print(f'We should update the remote file {file_to_download}', 1, 0)
-                if self.__download_malicious_file(file_to_download):
+                if self.download_malicious_file(file_to_download):
                     self.print(f'Successfully updated remote file {file_to_download}.', 1, 0)
                 else:
                     self.print(f'An error occured during downloading file {file_to_download}. Updating was aborted.', 0, 1)

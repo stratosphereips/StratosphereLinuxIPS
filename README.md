@@ -62,12 +62,9 @@ You can now put pcap files or other flow files in the ./dataset/ folder and anal
 
 **Founder:** Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
 
-**Main authors:** Sebastian Garcia, Kamila Babayeva 
+**Main authors:** Sebastian Garcia, Kamila Babayeva, Ondrej Lukas, Alya Gomaa
 
 **Contributors:**
-
-- Ondrej Lukas
-- Alya Gomaa
 - Veronica Valeros
 - Frantisek Strasak
 - Dita Hollmannova
@@ -90,4 +87,3 @@ Slips was funded by the following organizations.
 - AIC Group, Czech Technical University in Prague. https://www.aic.fel.cvut.cz/
 - Avast Software. https://www.avast.com/
 - CESNET. https://www.cesnet.cz/
-
