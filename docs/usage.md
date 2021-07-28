@@ -208,3 +208,10 @@ inbox_path = /services/inbox-a
 ```jwt_auth_url```: auth url if JWT based authentication is used.
 
 If running on a file not an interface, Slips will export to server after analysis is done. 
+
+# Unit testing
+To test your changes to Slips, please run all the unit tests. Fromn the main folder where slips is installed:
+
+    tests/run_all_tests.py
+
+    
