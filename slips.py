@@ -28,7 +28,6 @@ from datetime import datetime
 import socket
 import warnings
 from modules.UpdateManager.update_file_manager import UpdateFileManager
-import json
 import pkgutil
 import inspect
 import modules

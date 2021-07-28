@@ -331,7 +331,6 @@ class ProfilerProcess(multiprocessing.Process):
                             self.input_type = 'nfdump'
                         else:
                             self.input_type = 'argus'
-
                     elif nr_tabs >= nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
@@ -2322,7 +2321,6 @@ class ProfilerProcess(multiprocessing.Process):
                         # This line will be discarded because
                         self.define_type(line)
                         # We should do this before checking the type of input so we don't lose the first line of input
-
                     # What type of input do we have?
                     if not self.input_type:
                         # can't definee the type of input
