@@ -6,7 +6,6 @@ import pytest
 import json
 
 
-#todo: make this a fixture
 def do_nothing(*args):
     """ Used to override the print function because using the self.print causes broken pipes """
     pass
@@ -149,10 +148,11 @@ def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
         sample_flow = f.readline().replace('\n','')
     sample_flow = json.loads(sample_flow)
     sample_flow = {'data': sample_flow,
-                   'type': type_}
+                   'type': type_,}
     # process it
-    profilerProcess.process_zeek_input(sample_flow)
+    assert profilerProcess.process_zeek_input(sample_flow) == True
     # add to profile
+    assert profilerProcess.add_flow_to_profile() != False
     profileid, twid = profilerProcess.add_flow_to_profile()
     # get the uid of the current flow
     uid = profilerProcess.column_values['uid']

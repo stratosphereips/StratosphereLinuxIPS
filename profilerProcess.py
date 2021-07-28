@@ -1030,6 +1030,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
             self.column_values['scanned_port'] = line.get('p', '')
             self.column_values['scanning_ip'] = line.get('src', '')
+        return True
 
     def process_argus_input(self, new_line):
         """
@@ -1685,6 +1686,7 @@ class ProfilerProcess(multiprocessing.Process):
                 direction = self.column_values['dir']
                 dpkts = self.column_values['dpkts']
                 dbytes = self.column_values['dbytes']
+
             elif 'dns' in flow_type:
                 query = self.column_values['query']
                 qclass_name = self.column_values['qclass_name']
@@ -1792,7 +1794,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # Compute symbols.
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
                     # Add the src tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime)
+                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime, uid)
                     # Add the srcip
                     __database__.add_ips(profileid, twid, saddr_as_obj, self.column_values, role)
                     # Add the dstport
@@ -1941,6 +1943,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.print("Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
             self.print("{}".format((type(inst))), 0, 1)
             self.print("{}".format(inst), 0, 1)
+            return False
 
     def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size, tuple_key: str):
         """
