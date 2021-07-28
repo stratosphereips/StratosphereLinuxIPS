@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Slips. A machine-learning Intrusion Detection System
+# Stratosphere Linux IPS. A machine-learning Intrusion Detection System
 # Copyright (C) 2021 Sebastian Garcia
 
 # This program is free software; you can redistribute it and/or
@@ -120,13 +120,11 @@ def check_zeek_or_bro():
         return 'bro'
     return False
 
-
 def terminate_slips():
     """
     Do all necessary stuff to stop process any clear any files.
     """
     sys.exit(-1)
-
 
 def load_modules(to_ignore):
     """

@@ -31,6 +31,13 @@ def inputQueue():
     inputQueue.put = do_nothing
     return inputQueue
 
+@pytest.fixture
+def profilerQueue():
+    """ This profilerQueue will be passed to all module constructors that need it """
+    profilerQueue = Queue()
+    profilerQueue.put = do_nothing
+    return profilerQueue
+
 
 @pytest.fixture
 def database(outputQueue):
