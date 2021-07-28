@@ -164,23 +164,31 @@ class Module(Module, multiprocessing.Process):
             data['asn'] = as_owner
         __database__.setInfoForDomains(domain, data)
 
-    def scan_file(self, md5, saddr, size, profileid, twid, uid):
+    def scan_file(self, file_info: dict):
         """
-        Function to set VirusTotal data of the domain in the FileInfo.
+        Function to scan the md5 of the file with vt and set evidence if malicious
         """
+        uid = file_info['uid']
+        daddr = file_info['daddr']
+        saddr = file_info['saddr']
+        size = file_info['size']
+        profileid = file_info['profileid']
+        twid = file_info['twid']
+        md5 = file_info['md5']
+
         response = self.api_query_(md5)
 
         positives = int(response.get('positives','0'))
         total = response.get('total',0)
-        score = str(positives) + '/' + total
-        if positives >=3:
+        score = f'{positives}/{total}'
+        if positives >= 3:
             # consider it malicious and alert
             type_detection = 'file'
             detection_info = md5
             type_evidence = "MaliciousDownloadedFile"
-            threat_level = 0.8
+            threat_level = 80
             confidence = 1
-            description =  f'Malicious downloaded file {md5} size: {size} from IP: {saddr}. Score: {score}.'
+            description =  f'Malicious downloaded file {md5} size: {size} from IP: {daddr} Score: {score}'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence,
@@ -208,10 +216,15 @@ class Module(Module, multiprocessing.Process):
             while self.api_call_queue:
                 # get the first element in the queue
                 ioc = self.api_call_queue.pop(0)
+                if type(ioc) == dict:
+                    # this is a file
+                    self.scan_file(self.file_info)
+                    continue
+
                 ioc_type = self.get_ioc_type(ioc)
                 if ioc_type is 'ip':
-                    self.set_vt_data_in_IPInfo(ioc)
                     cached_data = __database__.getIPData(ioc)
+                    self.set_vt_data_in_IPInfo(ioc,cached_data)
                     # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
                     ip_addr = ipaddress.ip_address(ioc)
                     # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
@@ -232,9 +245,7 @@ class Module(Module, multiprocessing.Process):
                         # cached data is either False or {}
                         self.set_url_data_in_URLInfo(ioc, cached_data)
 
-                elif ioc_type is 'md5':
-                    self.scan_file(ioc)
-                    pass #todo fix this
+
 
     def get_file_score(self, md5):
         """ returns the vt scores for the specified md5 """
@@ -354,15 +365,9 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
                 if message_c4 and message_c4['channel'] == 'new_downloaded_file' and message_c4["type"] == "message":
-                    file_info = json.loads(message_c4['data'])
-                    uid = file_info['uid']
-                    daddr = file_info['daddr']
-                    saddr = file_info['saddr']
-                    size = file_info['size']
-                    profileid = file_info['profileid']
-                    twid = file_info['twid']
-                    md5 = file_info['md5']
-                    self.scan_file(md5, saddr, size, profileid, twid, uid)
+                    self.file_info = json.loads(message_c4['data'])
+                    file_info = self.file_info.copy()
+                    self.scan_file(file_info)
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
@@ -508,7 +513,10 @@ class Module(Module, multiprocessing.Process):
             # than allowed. You have exceeded one of your quotas (minute, daily or monthly).
             if response.status == 204:
                 # Add to the queue of api calls in case of api limit reached.
-                self.api_call_queue.append(ioc)
+                if ioc_type == 'md5':
+                    # we need to add the entire dict to the queue because we'll be using it to setEvidence later
+                    self.api_call_queue.append(self.file_info)
+                else: self.api_call_queue.append(ioc)
             # 403 means you don't have enough privileges to make the request or wrong API key
             elif response.status == 403:
                 # don't add to the api call queue because the user will have to restart slips anyway
@@ -538,6 +546,7 @@ class Module(Module, multiprocessing.Process):
                 if filename:
                     with open(filename, 'w') as f:
                         json.dump(data, f)
+
         return data
 
 
