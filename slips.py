@@ -349,6 +349,7 @@ if __name__ == '__main__':
             pass
 
     # Create output folder for alerts.txt and alerts.json if they do not exist
+    if not args.output.endswith('/'): args.output = args.output + '/'
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
