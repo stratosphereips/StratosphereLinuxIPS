@@ -7,6 +7,8 @@ Slips can read the packets directly from the **network interface** of the host m
 - Zeek/Bro folder with logs, or logs separately 
 - Nfdump flows
 
+It's recommended to use PCAPs.
+
 After Slips was run on the traffic, the Slips output can be analyzed with Kalipso GUI interface. In this section, we will explain how to execute each type of file in Slips, and the output can be analyzed with Kalipso.
 
 Either you are [running Slips in docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-and-running-slips-inside-a-docker) or [locally](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-in-your-own-computer), you can run Slips using the same below commands and configurations.
