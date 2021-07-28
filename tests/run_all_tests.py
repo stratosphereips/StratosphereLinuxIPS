@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 # clear the database
 os.system('./slips.py -c slips.conf -cc')
