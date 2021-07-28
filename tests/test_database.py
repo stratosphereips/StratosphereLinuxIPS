@@ -1,6 +1,6 @@
 import ipaddress
 import redis
-
+import os
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
@@ -27,6 +27,8 @@ def test_timewindows(database):
 
 def test_TW_modification(database):
     """ tests markProfileTWAsModified,getModifiedTWSinceTime,check_TW_to_close   """
+    # clear the database before running this test
+    os.system('./slips.py -c slips.conf -cc')
     # add a profile
     database.addProfile(profileid,'00:00','1')
     # add a tw to that profile (first tw)
