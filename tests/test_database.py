@@ -55,6 +55,7 @@ def test_add_ips(database):
               'bytes':30,
               'spkts':70,
               'state':'notestablished',
+              'uid' : '1234',
               'proto':'TCP',
               'saddr': '8.8.8.8',
               'daddr': test_ip,
@@ -78,6 +79,7 @@ def test_add_port(database):
               'proto':'TCP',
               'saddr': '8.8.8.8',
               'daddr': test_ip,
+              'uid' : '1234',
               'starttime': '20.0'}
     database.add_port(profileid, twid, test_ip, columns, 'Server','Dst')
     hash_key = profileid + '_' + twid
