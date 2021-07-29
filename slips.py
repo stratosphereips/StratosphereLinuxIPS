@@ -19,6 +19,7 @@
 
 import configparser
 import argparse
+import json
 import sys
 import redis
 import os
@@ -36,6 +37,7 @@ from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
 import errno
 import subprocess
+import re
 
 version = '0.7.3'
 
@@ -317,7 +319,21 @@ if __name__ == '__main__':
             if 'flow_id' in first_line:
                 input_type = 'suricata'
             else:
-                input_type = 'zeek_log_file'
+                #this is a text file , it can be binetflow or zeek_log_file
+                with open(args.filepath,'r') as f:
+                    line = f.readline().replace('\n','')
+                try:
+                    #is it a json log file
+                    json.loads(line)
+                    input_type = 'zeek_log_file'
+                except json.decoder.JSONDecodeError:
+                    # is it a tab separated file?
+                    line = re.split(r'\s{2,}', line)
+                    if len(line) > 2:
+                        input_type = 'zeek_log_file'
+                    else:
+                        input_type = 'binetflow'
+                        #todo solve this  We did not find right time format. Please set the time format in the configuration file.
     else:
         print('You need to define an input source.')
         sys.exit(-1)
