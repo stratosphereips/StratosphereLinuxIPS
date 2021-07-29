@@ -265,10 +265,11 @@ class Module(Module, multiprocessing.Process):
 
                     # Connection to multiple ports
                     if proto == 'tcp' and state == 'Established':
-                        try:
-                            dport_name = flow_dict['appproto'].upper()
-                        except (KeyError, AttributeError):
+                        dport_name = flow_dict.get('appproto','').upper()
+                        if not dport_name:
                             dport_name = __database__.get_port_info(str(dport) + '/' + proto.lower())
+                            if dport_name:
+                                dport_name = dport_name.upper()
                         # Consider only unknown services
                         if dport_name:
                            pass
