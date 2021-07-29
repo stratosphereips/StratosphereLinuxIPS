@@ -62,7 +62,7 @@ class Module(Module, multiprocessing.Process):
                 proto = line.split(',')[2]
                 # descr = line.split(',')[3]
                 __database__.set_port_info(str(port)+'/'+proto, name)
-                return True
+            return True
         except Exception as inst:
             self.print('Problem on load_ports()', 0, 1)
             self.print(str(type(inst)), 0, 1)
