@@ -133,36 +133,45 @@ class InputProcess(multiprocessing.Process):
 
     def remove_old_zeek_files(self):
         """
-        This thread operates every 1h since zeek log files are changed every 1h,
+        This thread waits for filemonitor.py to tell it that zeek changed the files,
         it deletes old zeek.log files and clears slips' open handles and sleeps again
         """
-        lock = threading.Lock()
+
         while True:
-            # wait 1h until zeek changes the log files + 10 mins until all types of log files are generated
-            time.sleep(4200)
-            # don't allow inputPRoc to access the following variables until this thread sleeps again
-            lock.acquire()
-            # close slips' open handles
-            for file, handle in self.open_file_handlers.items():
-                handle.close()
-            self.open_file_handlers = {}
-            # list of new files currently in zeek_files to add to the db
-            to_process = []
-            # old .log files have a timestamp in their name.
-            pattern = '^.*.[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}.log$'
-            for log_file in os.listdir('zeek_files/'):
-                # remove old files
-                if re.search(pattern, log_file):
-                    os.remove(f'zeek_files/{log_file}')
-                    # remove file from the db
-                    __database__.del_zeek_file(f'./zeek_files/{log_file[:log_file.index(".")]}')
-                else:
-                    # file isn't old, replace our old handle of this file
-                    log_file = f'./zeek_files/{log_file}'
-                    self.open_file_handlers[log_file] = open(log_file,'r')
-                    to_process.append(log_file[:-4])
-            for file in to_process: __database__.add_zeek_file(file)
-            lock.release()
+            # start the remover thread
+            message_c1 = self.c1.get_message(timeout=self.timeout)
+            # Check that the message is for you. Probably unnecessary...
+            if message_c1['data'] == 'stop_process':
+                # Confirm that the module is done processing
+                __database__.publish('finished_modules', self.name)
+                return True
+            if message_c1['channel'] == 'remove_old_files' and type(message_c1['data']) == str:
+                pass
+            # # wait 1h until zeek changes the log files + 10 mins until all types of log files are generated
+            # lock = threading.Lock()
+            # # don't allow inputPRoc to access the following variables until this thread sleeps again
+            # lock.acquire()
+            # # close slips' open handles
+            # for file, handle in self.open_file_handlers.items():
+            #     handle.close()
+            # self.open_file_handlers = {}
+            # # list of new files currently in zeek_files to add to the db
+            # to_process = []
+            # # old .log files have a timestamp in their name.
+            # pattern = '^.*.[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}.log$'
+            # for log_file in os.listdir('zeek_files/'):
+            #     # remove old files
+            #     if re.search(pattern, log_file):
+            #         os.remove(f'zeek_files/{log_file}')
+            #         # remove file from the db
+            #         __database__.del_zeek_file(f'./zeek_files/{log_file[:log_file.index(".")]}')
+            #     else:
+            #         # file isn't old, replace our old handle of this file
+            #         log_file = f'./zeek_files/{log_file}'
+            #         self.open_file_handlers[log_file] = open(log_file,'r')
+            #         to_process.append(log_file[:-4])
+            # for file in to_process: __database__.add_zeek_file(file)
+            # lock.release()
 
 
     def read_zeek_files(self) -> int:
@@ -474,80 +483,63 @@ class InputProcess(multiprocessing.Process):
         return True
 
     def run(self):
-        while True:
-            try:
-                # start the remover thread
-                message_c1 = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. Probably unnecessary...
-                if message_c1['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
-                    return True
-                if message_c1['channel'] == 'remove_old_files' and type(message_c1['data']) == bool:
-                    # comes here if we received a msg from filemonitor that zeek is done changing files
-                    self.remover_thread.start()
-
-                if not self.is_first_run:
-                    # this flag is used to execute the below code only once when slips starts, after that keep looping to get msgs in
-                    # the channel only
-                    continue
-
-                # Process the file that was given
-                # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
-                if not self.given_path or self.given_path is '-':
-                    self.read_from_stdin()
-                elif self.input_type is 'zeek_folder':
-                    # is a zeek folder
-                    self.read_zeek_folder()
-                elif self.input_type is 'zeek_log_file':
-                    # Is a zeek.log file
-                    file_name = self.given_path.split('/')[-1]
-                    if 'log' in file_name:
-                        self.handle_zeek_log_file()
-                    else:
-                        return False
-                elif self.input_type is 'nfdump':
-                    # binary nfdump file
-                    self.handle_nfdump()
-                elif self.input_type is 'binetflow':
-                    # argus or binetflow
-                    self.handle_binetflow()
-                # Process the pcap files
-                elif (self.input_type is 'pcap'
-                      or self.input_type is 'interface'):
-                    self.handle_pcap_and_interface()
-                elif self.input_type is 'suricata':
-                    self.handle_suricata()
+        try:
+            self.remover_thread.start()
+            # Process the file that was given
+            # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
+            if not self.given_path or self.given_path is '-':
+                self.read_from_stdin()
+            elif self.input_type is 'zeek_folder':
+                # is a zeek folder
+                self.read_zeek_folder()
+            elif self.input_type is 'zeek_log_file':
+                # Is a zeek.log file
+                file_name = self.given_path.split('/')[-1]
+                if 'log' in file_name:
+                    self.handle_zeek_log_file()
                 else:
-                    # if self.input_type is 'file':
-                    # default value
-                    self.print('Unrecognized file type. Stopping.')
                     return False
-                self.is_first_run = False
-                return True
+            elif self.input_type is 'nfdump':
+                # binary nfdump file
+                self.handle_nfdump()
+            elif self.input_type is 'binetflow':
+                # argus or binetflow
+                self.handle_binetflow()
+            # Process the pcap files
+            elif (self.input_type is 'pcap'
+                  or self.input_type is 'interface'):
+                self.handle_pcap_and_interface()
+            elif self.input_type is 'suricata':
+                self.handle_suricata()
+            else:
+                # if self.input_type is 'file':
+                # default value
+                self.print('Unrecognized file type. Stopping.')
+                return False
+            return True
 
-            except KeyboardInterrupt:
-                self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(self.lines))
-                try:
-                    self.event_observer.stop()
-                    self.event_observer.join()
-                except AttributeError:
-                    # In the case of nfdump, there is no observer
-                    pass
-                except NameError:
-                    pass
-                return True
-            except Exception as inst:
-                self.print("Problem with Input Process.", 0, 1)
-                self.print("Stopping input process. Sent {} lines".format(self.lines), 0, 1)
-                self.print(type(inst), 0, 1)
-                self.print(inst.args, 0, 1)
-                self.print(inst, 0, 1)
-                try:
-                    self.event_observer.stop()
-                    self.event_observer.join()
-                except AttributeError:
-                    # In the case of nfdump, there is no observer
-                    pass
-                self.print(traceback.format_exc())
-                sys.exit(1)
+        except KeyboardInterrupt:
+            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(self.lines))
+            try:
+                self.event_observer.stop()
+                self.event_observer.join()
+            except AttributeError:
+                # In the case of nfdump, there is no observer
+                pass
+            except NameError:
+                pass
+            return True
+        except Exception as inst:
+            self.print("Problem with Input Process.", 0, 1)
+            self.print("Stopping input process. Sent {} lines".format(self.lines), 0, 1)
+            self.print(type(inst), 0, 1)
+            self.print(inst.args, 0, 1)
+            self.print(inst, 0, 1)
+            try:
+                self.event_observer.stop()
+                self.event_observer.join()
+            except AttributeError:
+                # In the case of nfdump, there is no observer
+                pass
+            self.print(traceback.format_exc())
+            sys.exit(1)

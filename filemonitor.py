@@ -37,7 +37,7 @@ class FileEventHandler(RegexMatchingEventHandler):
     def on_moved(self, event):
         """ this will be triggered everytime zeek renames all log files"""
         # tell inputProcess to delete old files
-        __database__.publish("remove_old_files",True)
+        __database__.publish("remove_old_files",'True')
 
 
     def process(self, event):
