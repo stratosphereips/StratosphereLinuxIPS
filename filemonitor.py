@@ -26,13 +26,19 @@ class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r".*\.log$"]
 
     def __init__(self, config):
-        super().__init__(self.REGEX)
+        super().__init__()
         self.config = config
         # Start the DB
         __database__.start(self.config)
 
     def on_created(self, event):
         self.process(event)
+
+    def on_moved(self, event):
+        """ this will be triggered everytime zeek renames all log files"""
+        # tell inputProcess to delete old files
+        __database__.publish("remove_old_files",True)
+
 
     def process(self, event):
         filename, ext = os.path.splitext(event.src_path)

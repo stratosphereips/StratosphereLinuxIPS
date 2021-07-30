@@ -61,6 +61,9 @@ class InputProcess(multiprocessing.Process):
         # create the remover thread
         self.remover_thread = threading.Thread(target=self.remove_old_zeek_files, daemon=True)
         self.open_file_handlers = {}
+        self.c1 = __database__.subscribe('remove_old_files')
+        self.is_first_run = True
+        self.timeout = None
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -471,64 +474,80 @@ class InputProcess(multiprocessing.Process):
         return True
 
     def run(self):
-        try:
-            # start the remover thread
-            self.remover_thread.start()
-            # Process the file that was given
-            # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
-            if not self.given_path or self.given_path is '-':
-                self.read_from_stdin()
-            elif self.input_type is 'zeek_folder':
-                # is a zeek folder
-                self.read_zeek_folder()
-            elif self.input_type is 'zeek_log_file':
-                # Is a zeek.log file
-                file_name = self.given_path.split('/')[-1]
-                if 'log' in file_name:
-                    self.handle_zeek_log_file()
-                else:
-                    return False
-            elif self.input_type is 'nfdump':
-                # binary nfdump file
-                self.handle_nfdump()
-            elif self.input_type is 'binetflow':
-                # argus or binetflow
-                self.handle_binetflow()
-            # Process the pcap files
-            elif (self.input_type is 'pcap'
-                  or self.input_type is 'interface'):
-                self.handle_pcap_and_interface()
-            elif self.input_type is 'suricata':
-                self.handle_suricata()
-            else:
-                # if self.input_type is 'file':
-                # default value
-                self.print('Unrecognized file type. Stopping.')
-                return False
-            return True
+        while True:
+            try:
+                # start the remover thread
+                message_c1 = self.c1.get_message(timeout=self.timeout)
+                # Check that the message is for you. Probably unnecessary...
+                if message_c1['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
+                    return True
+                if message_c1['channel'] == 'remove_old_files' and type(message_c1['data']) == bool:
+                    # comes here if we received a msg from filemonitor that zeek is done changing files
+                    self.remover_thread.start()
 
-        except KeyboardInterrupt:
-            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(self.lines))
-            try:
-                self.event_observer.stop()
-                self.event_observer.join()
-            except AttributeError:
-                # In the case of nfdump, there is no observer
-                pass
-            except NameError:
-                pass
-            return True
-        except Exception as inst:
-            self.print("Problem with Input Process.", 0, 1)
-            self.print("Stopping input process. Sent {} lines".format(self.lines), 0, 1)
-            self.print(type(inst), 0, 1)
-            self.print(inst.args, 0, 1)
-            self.print(inst, 0, 1)
-            try:
-                self.event_observer.stop()
-                self.event_observer.join()
-            except AttributeError:
-                # In the case of nfdump, there is no observer
-                pass
-            self.print(traceback.format_exc())
-            sys.exit(1)
+                if not self.is_first_run:
+                    # this flag is used to execute the below code only once when slips starts, after that keep looping to get msgs in
+                    # the channel only
+                    continue
+
+                # Process the file that was given
+                # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
+                if not self.given_path or self.given_path is '-':
+                    self.read_from_stdin()
+                elif self.input_type is 'zeek_folder':
+                    # is a zeek folder
+                    self.read_zeek_folder()
+                elif self.input_type is 'zeek_log_file':
+                    # Is a zeek.log file
+                    file_name = self.given_path.split('/')[-1]
+                    if 'log' in file_name:
+                        self.handle_zeek_log_file()
+                    else:
+                        return False
+                elif self.input_type is 'nfdump':
+                    # binary nfdump file
+                    self.handle_nfdump()
+                elif self.input_type is 'binetflow':
+                    # argus or binetflow
+                    self.handle_binetflow()
+                # Process the pcap files
+                elif (self.input_type is 'pcap'
+                      or self.input_type is 'interface'):
+                    self.handle_pcap_and_interface()
+                elif self.input_type is 'suricata':
+                    self.handle_suricata()
+                else:
+                    # if self.input_type is 'file':
+                    # default value
+                    self.print('Unrecognized file type. Stopping.')
+                    return False
+                self.is_first_run = False
+                return True
+
+            except KeyboardInterrupt:
+                self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(self.lines))
+                try:
+                    self.event_observer.stop()
+                    self.event_observer.join()
+                except AttributeError:
+                    # In the case of nfdump, there is no observer
+                    pass
+                except NameError:
+                    pass
+                return True
+            except Exception as inst:
+                self.print("Problem with Input Process.", 0, 1)
+                self.print("Stopping input process. Sent {} lines".format(self.lines), 0, 1)
+                self.print(type(inst), 0, 1)
+                self.print(inst.args, 0, 1)
+                self.print(inst, 0, 1)
+                try:
+                    self.event_observer.stop()
+                    self.event_observer.join()
+                except AttributeError:
+                    # In the case of nfdump, there is no observer
+                    pass
+                self.print(traceback.format_exc())
+                sys.exit(1)
