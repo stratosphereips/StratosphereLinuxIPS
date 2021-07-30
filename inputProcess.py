@@ -136,44 +136,29 @@ class InputProcess(multiprocessing.Process):
         This thread waits for filemonitor.py to tell it that zeek changed the files,
         it deletes old zeek.log files and clears slips' open handles and sleeps again
         """
-        lock = threading.Lock()
+
         while True:
             message_c1 = self.c1.get_message(timeout=self.timeout)
             if message_c1['data'] == 'stop_process':
-                # Confirm that the module is done processing
-                # __database__.publish('finished_modules', self.name)
-                # todo handle   File "./slips.py", line 202, in shutdown_gracefully
-                # PIDs.pop(module_name)
-                # KeyError: 'input'
-
                 return True
             if message_c1['channel'] == 'remove_old_files' and type(message_c1['data']) == str:
-                pass
-            # # wait 1h until zeek changes the log files + 10 mins until all types of log files are generated
-            # lock = threading.Lock()
-            # # don't allow inputPRoc to access the following variables until this thread sleeps again
-            # lock.acquire()
-            # # close slips' open handles
-            # for file, handle in self.open_file_handlers.items():
-            #     handle.close()
-            # self.open_file_handlers = {}
-            # # list of new files currently in zeek_files to add to the db
-            # to_process = []
-            # # old .log files have a timestamp in their name.
-            # pattern = '^.*.[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}.log$'
-            # for log_file in os.listdir('zeek_files/'):
-            #     # remove old files
-            #     if re.search(pattern, log_file):
-            #         os.remove(f'zeek_files/{log_file}')
-            #         # remove file from the db
-            #         __database__.del_zeek_file(f'./zeek_files/{log_file[:log_file.index(".")]}')
-            #     else:
-            #         # file isn't old, replace our old handle of this file
-            #         log_file = f'./zeek_files/{log_file}'
-            #         self.open_file_handlers[log_file] = open(log_file,'r')
-            #         to_process.append(log_file[:-4])
-            # for file in to_process: __database__.add_zeek_file(file)
-            # lock.release()
+                # this channel receives renamed zeek log files, we can safely delete them and close their handle
+                renamed_file = message_c1['data'][:-4]
+                # renamed_file_without_ext = message_c1['data'][:-4]
+                # don't allow inputPRoc to access the following variables until this thread sleeps again
+                lock = threading.Lock()
+                lock.acquire()
+                try:
+                    # close slips' open handles
+                    self.open_file_handlers[renamed_file].close()
+                    # delete cached filename
+                    del self.open_file_handlers[renamed_file]
+                    os.system(f'sudo rm {renamed_file}.*.log')
+                    lock.release()
+                except KeyError:
+                    # we don't have a handle for that file, we probably don't need it in slips, ex: loaded_scripts.log, stats.log etc..
+                    pass
+            continue
 
 
     def read_zeek_files(self) -> int:

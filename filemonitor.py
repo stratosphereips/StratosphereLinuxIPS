@@ -20,6 +20,7 @@ import os
 from watchdog.events import RegexMatchingEventHandler
 import redis
 from slips_files.core.database import __database__
+import time
 
 class FileEventHandler(RegexMatchingEventHandler):
     """ Adds newly generated zeek log files in zeek_files/ dir to the database for processing """
@@ -37,8 +38,10 @@ class FileEventHandler(RegexMatchingEventHandler):
     def on_moved(self, event):
         """ this will be triggered everytime zeek renames all log files"""
         # tell inputProcess to delete old files
-        __database__.publish("remove_old_files",'True')
-
+        if event.src_path != 'True':
+            __database__.publish("remove_old_files",event.src_path)
+            # give inputProc.py time to close the handle and delete the file
+            time.sleep(3)
 
     def process(self, event):
         filename, ext = os.path.splitext(event.src_path)
