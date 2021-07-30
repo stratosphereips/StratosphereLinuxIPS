@@ -136,14 +136,16 @@ class InputProcess(multiprocessing.Process):
         This thread waits for filemonitor.py to tell it that zeek changed the files,
         it deletes old zeek.log files and clears slips' open handles and sleeps again
         """
-
+        lock = threading.Lock()
         while True:
-            # start the remover thread
             message_c1 = self.c1.get_message(timeout=self.timeout)
-            # Check that the message is for you. Probably unnecessary...
             if message_c1['data'] == 'stop_process':
                 # Confirm that the module is done processing
-                __database__.publish('finished_modules', self.name)
+                # __database__.publish('finished_modules', self.name)
+                # todo handle   File "./slips.py", line 202, in shutdown_gracefully
+                # PIDs.pop(module_name)
+                # KeyError: 'input'
+
                 return True
             if message_c1['channel'] == 'remove_old_files' and type(message_c1['data']) == str:
                 pass
@@ -462,7 +464,7 @@ class InputProcess(multiprocessing.Process):
         # Run zeek on the pcap or interface. The redef is to have json files
         zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
         # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-        command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} {self.tcp_inactivity_timeout} local -f {self.packet_filter} {zeek_scripts_dir}'
+        command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} {self.tcp_inactivity_timeout} local -f {self.packet_filter} {zeek_scripts_dir} 2>&1 > /dev/null &'
         self.print(f'Zeek command: {command}', 3, 0)
         # Run zeek.
         os.system(command)
