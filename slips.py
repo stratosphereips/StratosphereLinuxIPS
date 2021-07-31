@@ -239,7 +239,7 @@ if __name__ == '__main__':
     slips_conf_path = get_cwd() + 'slips.conf'
     parser = ArgumentParser(usage = "./slips.py -c <configfile> [options] [file ...]",
                             add_help=False)
-    parser.add_argument('-c','--config', metavar='<configfile>',action='store',required=False,
+    parser.add_argument('-c','--config', metavar='<configfile>',action='store',required=False, default=slips_conf_path,
                         help='path to the Slips config file.')
     parser.add_argument('-v', '--verbose',metavar='<verbositylevel>',action='store', required=False, type=int,
                         help='amount of verbosity. This shows more info about the results.')
