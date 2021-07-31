@@ -166,6 +166,16 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
+    <td>RDNS</td>
+    <td>module to get and store the reverse DNS info about IPs</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>ExportingAlerts</td>
+    <td>module to export alerts to slack, STIX or suricata format</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>blocking</td>
     <td>module to block malicious IPs connecting to the device</td>
     <td>⚠️</td>
