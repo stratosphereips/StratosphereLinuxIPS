@@ -336,12 +336,13 @@ class ProfilerProcess(multiprocessing.Process):
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
                         # probably a zeek tab file or a binetflow tab file
-                        if '.log' in file_type:
-                            self.separator = '	'
-                            self.input_type = 'zeek-tabs'
-                        else:
+                        if '->' in data or 'StartTime' in data:
                             self.separator = '\t'
                             self.input_type = 'argus-tabs'
+                        else:
+                            self.separator = '	'
+                            self.input_type = 'zeek-tabs'
+
                 return self.input_type
         except Exception as inst:
             self.print('\tProblem in define_type()', 0, 1)

@@ -315,8 +315,11 @@ if __name__ == '__main__':
             # is it a zeek log file or suricata, binetflow tabs , or binetflow comma separated file?
             # use first line to determine
             with open(input_information,'r') as f:
-                first_line = f.readline().replace('\n','')
-
+                while True:
+                    # get the first line that isn't a comment
+                    first_line = f.readline().replace('\n','')
+                    if not first_line.startswith('#'):
+                        break
             if 'flow_id' in first_line:
                 input_type = 'suricata'
             else:
@@ -326,17 +329,15 @@ if __name__ == '__main__':
                     json.loads(first_line)
                     input_type = 'zeek_log_file'
                 except json.decoder.JSONDecodeError:
-                    # space separated files are usually zeek log files
-                    line = re.split(r'\s{2,}', first_line)
-                    if len(line) > 2:
-                        # tab separated file, is it zeek log file , or binetflow file?
-                        input_type = 'zeek_log_file'
-                    else:
+                    # this is a tab separated file
+                    # is it zeek log file or binetflow file?
+                    # line = re.split(r'\s{2,}', first_line)[0]
+                    x= re.search('\s{1,}-\s{1,}', first_line)
+                    if '->' in first_line or 'StartTime' in first_line:
                         # tab separated files are usually binetflow tab files
-                        line = re.split(r'\t{2,}', first_line)
-                        if len(line) > 2 or 'StartTime' in first_line:
-                            input_type = 'binetflow-tabs'
-                            #todo solve this  We did not find right time format. Please set the time format in the configuration file.
+                        input_type = 'binetflow-tabs'
+                    elif re.search('\s{1,}-\s{1,}', first_line):
+                        input_type = 'zeek_log_file'
     else:
         print('You need to define an input source.')
         sys.exit(-1)
