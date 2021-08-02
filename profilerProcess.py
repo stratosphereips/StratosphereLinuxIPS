@@ -336,11 +336,12 @@ class ProfilerProcess(multiprocessing.Process):
                     elif nr_tabs >= nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
-                        self.separator = '	'
                         # probably a zeek tab file or a binetflow tab file
                         if '.log' in file_type:
+                            self.separator = '	'
                             self.input_type = 'zeek-tabs'
                         else:
+                            self.separator = '\t'
                             self.input_type = 'argus-tabs'
                 return self.input_type
         except Exception as inst:
@@ -399,7 +400,6 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_idx['bytes'] = nline.index(field)
                 elif 'srcbytes' in field.lower():
                     self.column_idx['sbytes'] = nline.index(field)
-
             # Some of the fields were not found probably,
             # so just delete them from the index if their value is False.
             # If not we will believe that we have data on them
@@ -2336,7 +2336,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.process_zeek_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
-                    elif self.input_type == 'argus':
+                    elif self.input_type == 'argus' or self.input_type == 'argus-tabs':
                         # self.print('Argus line')
                         # Argus puts the definition of the columns on the first line only
                         # So read the first line and define the columns

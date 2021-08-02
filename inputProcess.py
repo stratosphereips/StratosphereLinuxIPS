@@ -294,15 +294,26 @@ class InputProcess(multiprocessing.Process):
 
     def handle_binetflow(self):
         self.lines =0
+        self.read_lines_delay = 0.02
         with open(self.given_path) as file_stream:
             line = {'type': 'argus'}
             # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
             # self.profilerqueue.put(fake)
-            self.read_lines_delay = 0.02
+
+            # read first line to determine the type of line, tab or comma separated
+            t_line = file_stream.readline()
+            if '\t' in t_line:
+                # this is the header line
+                line['type'] = 'argus-tabs'
+                line['data'] = t_line
+                self.profilerqueue.put(line)
+                self.lines += 1
+
+            # go through the rst of the file
             for t_line in file_stream:
                 time.sleep(self.read_lines_delay)
                 line['data'] = t_line
-                self.print(f'	> Sent Line: {line}', 0, 3)
+                # argus files are either tab separated orr comma separated
                 if len(t_line.strip()) != 0:
                     self.profilerqueue.put(line)
                 self.lines += 1
@@ -428,10 +439,9 @@ class InputProcess(multiprocessing.Process):
             elif self.input_type is 'nfdump':
                 # binary nfdump file
                 self.handle_nfdump()
-            elif self.input_type is 'binetflow':
+            elif self.input_type is 'binetflow' or 'binetflow-tabs' in self.input_type:
                 # argus or binetflow
                 self.handle_binetflow()
-            # Process the pcap files
             elif (self.input_type is 'pcap'
                   or self.input_type is 'interface'):
                 self.handle_pcap_and_interface()
@@ -440,7 +450,7 @@ class InputProcess(multiprocessing.Process):
             else:
                 # if self.input_type is 'file':
                 # default value
-                self.print('Unrecognized file type. Stopping.')
+                self.print(f'Unrecognized file type {self.input_type}. Stopping.')
                 return False
             return True
 

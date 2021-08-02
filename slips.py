@@ -316,28 +316,31 @@ if __name__ == '__main__':
         elif 'directory'in cmd_result:
             input_type = 'zeek_folder'
         else:
-            # is a json file, is it a zeek log file or suricata?
+            # is it a zeek log file or suricata, binetflow tabs , or binetflow comma separated file?
             # use first line to determine
             with open(input_information,'r') as f:
-                first_line = f.readline()
+                first_line = f.readline().replace('\n','')
+
             if 'flow_id' in first_line:
                 input_type = 'suricata'
             else:
                 #this is a text file , it can be binetflow or zeek_log_file
-                with open(args.filepath,'r') as f:
-                    line = f.readline().replace('\n','')
                 try:
                     #is it a json log file
-                    json.loads(line)
+                    json.loads(first_line)
                     input_type = 'zeek_log_file'
                 except json.decoder.JSONDecodeError:
-                    # is it a tab separated file?
-                    line = re.split(r'\s{2,}', line)
+                    # space separated files are usually zeek log files
+                    line = re.split(r'\s{2,}', first_line)
                     if len(line) > 2:
+                        # tab separated file, is it zeek log file , or binetflow file?
                         input_type = 'zeek_log_file'
                     else:
-                        input_type = 'binetflow'
-                        #todo solve this  We did not find right time format. Please set the time format in the configuration file.
+                        # tab separated files are usually binetflow tab files
+                        line = re.split(r'\t{2,}', first_line)
+                        if len(line) > 2 or 'StartTime' in first_line:
+                            input_type = 'binetflow-tabs'
+                            #todo solve this  We did not find right time format. Please set the time format in the configuration file.
     else:
         print('You need to define an input source.')
         sys.exit(-1)
