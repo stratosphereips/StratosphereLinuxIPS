@@ -31,6 +31,8 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | rnn-cc-detection | detects command and control channels using recurrent neural network and the stratosphere behavioral letters |✅|
 | VirusTotal | module to lookup IP address on VirusTotal |✅|
 | flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
+| RDNS | module to get and store the reverse DNS info about IPs  |✅|
+| ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|
 | blocking | module to block malicious IPs connecting to the device |⚠️|
 
 

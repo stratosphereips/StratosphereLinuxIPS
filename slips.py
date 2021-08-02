@@ -201,15 +201,18 @@ def shutdown_gracefully():
                     # remove module from the list of opened pids
                     PIDs.pop(module_name)
                     modules_left = len(set(loaded_modules) - set(finished_modules))
-                    print(f"\033[1;32;40m{module_name}\033[00m Stopped... \033[1;32;40m{modules_left}\033[00m left.")
+                    # to vertically align them when printing
+                    module_name = module_name+' '*(20-len(module_name))
+                    print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
             max_loops -=1
         # kill processes that didn't stop after timeout
         for unstopped_proc,pid in PIDs.items():
+            unstopped_proc = unstopped_proc+' '*(20-len(unstopped_proc))
             try:
                 os.kill(int(pid), 9)
-                print(f'\033[1;32;40m{unstopped_proc}\033[00m Killed.')
+                print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tKilled.')
             except ProcessLookupError:
-                print(f'\033[1;32;40m{unstopped_proc}\033[00m Already exited.')
+                print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready exited.')
         # Send manual stops to the process not using channels
         try:
             logsProcessQueue.put('stop_process')
@@ -239,7 +242,7 @@ if __name__ == '__main__':
     slips_conf_path = get_cwd() + 'slips.conf'
     parser = ArgumentParser(usage = "./slips.py -c <configfile> [options] [file ...]",
                             add_help=False)
-    parser.add_argument('-c','--config', metavar='<configfile>',action='store',required=False,
+    parser.add_argument('-c','--config', metavar='<configfile>',action='store',required=False, default=slips_conf_path,
                         help='path to the Slips config file.')
     parser.add_argument('-v', '--verbose',metavar='<verbositylevel>',action='store', required=False, type=int,
                         help='amount of verbosity. This shows more info about the results.')
@@ -348,6 +351,7 @@ if __name__ == '__main__':
             pass
 
     # Create output folder for alerts.txt and alerts.json if they do not exist
+    if not args.output.endswith('/'): args.output = args.output + '/'
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
