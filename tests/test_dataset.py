@@ -26,7 +26,8 @@ def test_pcap(database, pcap_path):
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence", [
      ('dataset/test2.binetflow',4,'New horizontal port scan detected to port 443'),
     ('dataset/test3.binetflow',20,'New horizontal port scan detected to port 3389'),
-    ('dataset/test4.binetflow',2,'"New horizontal port scan detected to port 81')])
+    ('dataset/test4.binetflow',2,'New horizontal port scan detected to port 81'),
+    ('dataset/test5.binetflow',4,'RNN C&C channels detection')])
 def test_binetflow(database, binetflow_path, expected_profiles, expected_evidence):
     command = f'{sudo} ./slips.py -l -c slips.conf -f {binetflow_path}'
     # this function returns when slips is done
