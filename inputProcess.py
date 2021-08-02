@@ -260,7 +260,6 @@ class InputProcess(multiprocessing.Process):
             handle.close()
         return lines
 
-
     def read_zeek_folder(self):
         # This is the case that a folder full of zeek files is passed with -f. Read them all
         for file in os.listdir(self.given_path):

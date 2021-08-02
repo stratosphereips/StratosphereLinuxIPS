@@ -291,12 +291,12 @@ class ProfilerProcess(multiprocessing.Process):
             try:
                 # Did data came with the json format?
                 data = line['data']
-                # For now we dont use the file type, but is handy for the future
                 file_type = line['type']
                 # Yes
             except KeyError:
                 # No
                 data = line
+                file_type = ''
                 self.print('\tData did not arrived in json format from the input', 0, 1)
                 self.print('\tProblem in define_type()', 0, 1)
                 return False
@@ -330,12 +330,17 @@ class ProfilerProcess(multiprocessing.Process):
                         if nr_commas > 40:
                             self.input_type = 'nfdump'
                         else:
+                            # comma separated argus file
                             self.input_type = 'argus'
                     elif nr_tabs >= nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
                         self.separator = '	'
-                        self.input_type = 'zeek-tabs'
+                        # probably a zeek tab file or a binetflow tab file
+                        if '.log' in file_type:
+                            self.input_type = 'zeek-tabs'
+                        else:
+                            self.input_type = 'argus-tabs'
                 return self.input_type
         except Exception as inst:
             self.print('\tProblem in define_type()', 0, 1)
