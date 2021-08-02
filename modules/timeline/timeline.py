@@ -111,12 +111,13 @@ class Module(Module, multiprocessing.Process):
             daddr = flow_dict['daddr']
             dport = flow_dict['dport']
             proto = flow_dict['proto'].upper()
-
-            dport_name = flow_dict.get('appproto', '').upper()
+            dport_name = flow_dict.get('appproto', '')
             if not dport_name:
                 dport_name = __database__.get_port_info(str(dport) + '/' + proto.lower())
                 if dport_name:
                     dport_name = dport_name.upper()
+            else:
+                dport_name = dport_name.upper()
             state = flow_dict['state']
             pkts = flow_dict['pkts']
             allbytes = flow_dict['allbytes']
