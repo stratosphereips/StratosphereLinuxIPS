@@ -450,7 +450,7 @@ class InputProcess(multiprocessing.Process):
             else:
                 # if self.input_type is 'file':
                 # default value
-                self.print(f'Unrecognized file type {self.input_type}. Stopping.')
+                self.print(f'Unrecognized file type "{self.input_type}". Stopping.')
                 return False
             return True
 
