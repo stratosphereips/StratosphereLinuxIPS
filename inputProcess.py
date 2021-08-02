@@ -305,9 +305,9 @@ class InputProcess(multiprocessing.Process):
             if '\t' in t_line:
                 # this is the header line
                 line['type'] = 'argus-tabs'
-                line['data'] = t_line
-                self.profilerqueue.put(line)
-                self.lines += 1
+            line['data'] = t_line
+            self.profilerqueue.put(line)
+            self.lines += 1
 
             # go through the rst of the file
             for t_line in file_stream:
