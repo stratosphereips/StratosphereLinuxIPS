@@ -19,6 +19,7 @@
 
 import configparser
 import argparse
+import json
 import sys
 import redis
 import os
@@ -36,6 +37,7 @@ from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
 import errno
 import subprocess
+import re
 
 version = '0.7.3'
 
@@ -313,14 +315,32 @@ if __name__ == '__main__':
         elif 'directory'in cmd_result:
             input_type = 'zeek_folder'
         else:
-            # is a json file, is it a zeek log file or suricata?
+            # is it a zeek log file or suricata, binetflow tabs , or binetflow comma separated file?
             # use first line to determine
             with open(input_information,'r') as f:
-                first_line = f.readline()
+                while True:
+                    # get the first line that isn't a comment
+                    first_line = f.readline().replace('\n','')
+                    if not first_line.startswith('#'):
+                        break
             if 'flow_id' in first_line:
                 input_type = 'suricata'
             else:
-                input_type = 'zeek_log_file'
+                #this is a text file , it can be binetflow or zeek_log_file
+                try:
+                    #is it a json log file
+                    json.loads(first_line)
+                    input_type = 'zeek_log_file'
+                except json.decoder.JSONDecodeError:
+                    # this is a tab separated file
+                    # is it zeek log file or binetflow file?
+                    # line = re.split(r'\s{2,}', first_line)[0]
+                    x= re.search('\s{1,}-\s{1,}', first_line)
+                    if '->' in first_line or 'StartTime' in first_line:
+                        # tab separated files are usually binetflow tab files
+                        input_type = 'binetflow-tabs'
+                    elif re.search('\s{1,}-\s{1,}', first_line):
+                        input_type = 'zeek_log_file'
     else:
         print('You need to define an input source.')
         sys.exit(-1)
