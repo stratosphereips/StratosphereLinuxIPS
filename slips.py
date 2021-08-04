@@ -205,6 +205,9 @@ def shutdown_gracefully():
             max_loops -=1
         # kill processes that didn't stop after timeout
         for unstopped_proc,pid in PIDs.items():
+            if 'slips.py' in unstopped_proc:
+                # don't kill this process
+                continue
             try:
                 os.kill(int(pid), 9)
                 print(f'\033[1;32;40m{unstopped_proc}\033[00m Killed.')
@@ -494,6 +497,7 @@ if __name__ == '__main__':
     evidenceProcessThread.start()
     outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
     __database__.store_process_PID('evidenceProcess', int(evidenceProcessThread.pid))
+    __database__.store_process_PID('slips.py', int(os.getpid()))
 
 
     # Profile thread
