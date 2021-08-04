@@ -42,6 +42,27 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
+    def check_suspicious_user_agents(self, flow, profileid, twid):
+        '''Check unusual user agents and set evidence'''
+        user_agent = flow.get('user_agent')
+        suspicious_user_agents = ('httpsend', 'chm_msdn', 'pb')
+        if user_agent.lower() in suspicious_user_agents:
+            uid = flow['uid']
+            host = flow['host']
+            uri = flow['uri']
+            type_detection = 'user_agent'
+            detection_info = user_agent
+            type_evidence = 'SuspiciousUserAgent' # todo
+            threat_level = 20
+            confidence = 1
+            description = f'Suspicious user agent: {user_agent} from host {host}/{uri}'
+            if not twid:
+                twid = ''
+            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                     confidence, description, profileid=profileid, twid=twid, uid=uid)
+            return True
+        return False
+
     def run(self):
         # Main loop function
         while True:
@@ -55,9 +76,7 @@ class Module(Module, multiprocessing.Process):
                     profileid = message['profileid']
                     twid = message['twid']
                     flow = json.loads(message['flow'])
-# {'uid': 'CAeDWs37BipkfP21u9', 'type': 'http', 'method': 'GET', 'host': '147.32.80.7', 'uri': '/wpad.dat', 'version': '1.1', 'user_agent': '', 'request_body_len': 0, 'response_body_len': 593, 'status_code': 200, 'status_msg': 'OK', 'resp_mime_types': ['text/plain'], 'resp_fuids': ['FqhaAy4xsmJ3AR63A3']}
-                    user_agent = flow['user_agent']
-
+                    self.check_suspicious_user_agents(flow, profileid, twid)
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
