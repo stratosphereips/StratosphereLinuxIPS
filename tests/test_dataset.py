@@ -24,7 +24,7 @@ def test_pcap(database, pcap_path):
         assert expected_evidence in f.read()
 
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence", [
-     ('dataset/test2.binetflow',4,'New horizontal port scan detected to port 443'),
+     ('dataset/test2.binetflow',3,'New horizontal port scan detected to port 443'),
     ('dataset/test3.binetflow',20,'New horizontal port scan detected to port 3389'),
     ('dataset/test4.binetflow',2,'New horizontal port scan detected to port 81'),
     ('dataset/test5.binetflow',4,'RNN C&C channels detection')])
@@ -68,7 +68,7 @@ def test_suricata(database, suricata_path):
     os.system(command)
     profiles = database.getProfiles()
     expected_evidence = 'New vertical port scan detected to IP 192.168.1.129 from 193.46.255.92'
-    assert len(profiles) > 900
+    assert len(profiles) > 300
     with open(alerts_log_file, 'r') as f:
         assert expected_evidence in f.read()
 
