@@ -607,5 +607,7 @@ if __name__ == '__main__':
 
     except KeyboardInterrupt:
         shutdown_gracefully()
-
-
+    except InterruptedError:
+        # the EINTR error code happens if a signal occurred while the system call was in progress
+        # comes here if zeek terminates while slips is still working
+        shutdown_gracefully()

@@ -17,6 +17,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import os
+import signal
 from watchdog.events import RegexMatchingEventHandler
 import redis
 from slips_files.core.database import __database__
@@ -46,3 +47,24 @@ class FileEventHandler(RegexMatchingEventHandler):
     def process(self, event):
         filename, ext = os.path.splitext(event.src_path)
         __database__.add_zeek_file(filename)
+
+    def on_modified(self, event):
+        """ this will be triggered everytime zeek modifies a log file"""
+        # we only need to know modifications to reporter.log, so if zeek recieves a termination signal, slips would know about it
+        filename, ext = os.path.splitext(event.src_path)
+        if 'reporter' in filename:
+            # check if it's a temrination signal
+            # get the exact file name (a ts is appended to it)
+            for file in os.listdir('zeek_files/'):
+                if 'reporter' in file:
+                    with open(f'zeek_files/{file}','r') as f:
+                        line = f.readline()
+                        while line:
+                            if 'termination' in line:
+                                # to use shutdown gracefully we need to get slips.py PID and send it a sigint
+                                PIDs = __database__.get_PIDs()
+                                pid = PIDs['slips.py']
+                                os.kill(int(pid), signal.SIGINT)
+                                break
+                            line = f.readline()
+
