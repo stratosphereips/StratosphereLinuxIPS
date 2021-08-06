@@ -28,6 +28,7 @@ import time
 import json
 import traceback
 import subprocess
+import psutil
 
 # Input Process
 class InputProcess(multiprocessing.Process):
@@ -56,6 +57,8 @@ class InputProcess(multiprocessing.Process):
         self.event_observer = None
         # number of lines read
         self.lines = 0
+        # ctr to append to zeek_files dir if it's being used by another instance of slips
+        self.ctr = 0
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -357,11 +360,38 @@ class InputProcess(multiprocessing.Process):
         self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(self.lines))
         return True
 
+    def get_unused_zeek_dir(self):
+        """ Checks if current self.zeek_dir is being used by another instance of slips,
+         if so , returns a zeek dir path that is available to use"""
+        self.ctr +=1
+        for proc in psutil.process_iter():
+            for item in proc.open_files():
+                if self.zeek_folder[1:] in item.path:
+                    # folder is being used by another instance of slips
+                    # append a ctr to the dir name and see if it's being used
+                    self.zeek_folder = self.zeek_folder + str(self.ctr)
+                    self.get_unused_zeek_dir()
+        # dir isn't used
+        # create it if it's not there or clear it
+        if not os.path.exists(self.zeek_folder):
+            os.mkdir(self.zeek_folder)
+        else:
+            # clear the zeek folder of old .log files
+            # The rm should not be in background because we must wait until the folder is empty
+            command = "rm " + self.zeek_folder + "/*.log  > /dev/null 2>&1"
+            os.system(command)
+        return self.zeek_folder
+
     def handle_pcap_and_interface(self) -> int:
         """ Returns the number of zeek lines read """
         # Create zeek_folder if does not exist.
         if not os.path.exists(self.zeek_folder):
             os.makedirs(self.zeek_folder)
+
+        if len(os.listdir(self.zeek_folder)) > 0:
+            # check if this folder is being used by another instance of slips before clearing
+            self.zeek_folder = self.get_unused_zeek_dir()
+            self.print(f'Using {self.zeek_folder} to store zeek files.')
         # Now start the observer of new files. We need the observer because Zeek does not create all the files
         # at once, but when the traffic appears. That means that we need
         # some process to tell us which files to read in real time when they appear
@@ -392,11 +422,7 @@ class InputProcess(multiprocessing.Process):
             # This is for stoping the input if bro does not receive any new line while reading a pcap
             self.bro_timeout = 30
 
-        if len(os.listdir(self.zeek_folder)) > 0:
-            # First clear the zeek folder of old .log files
-            # The rm should not be in background because we must wait until the folder is empty
-            command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null"
-            os.system(command)
+
 
         # Run zeek on the pcap or interface. The redef is to have json files
         # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
@@ -404,7 +430,6 @@ class InputProcess(multiprocessing.Process):
         self.print(f'Zeek command: {command}', 3, 0)
         # Run zeek.
         os.system(command)
-
         # Give Zeek some time to generate at least 1 file.
         time.sleep(3)
 

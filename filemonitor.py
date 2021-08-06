@@ -18,7 +18,6 @@
 
 import os
 from watchdog.events import RegexMatchingEventHandler
-import redis
 from slips_files.core.database import __database__
 
 class FileEventHandler(RegexMatchingEventHandler):

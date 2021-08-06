@@ -3,7 +3,7 @@ import os
 import redis
 import time
 import json
-from typing import Tuple, Dict, Set, Callable
+from typing import Tuple
 import configparser
 import traceback
 from datetime import datetime
@@ -1006,7 +1006,7 @@ class Database(object):
         Add a module label to the flow
         """
         flow = self.get_flow(profileid, twid, uid)
-        if flow:
+        if flow and flow[uid]:
             data = json.loads(flow[uid])
             # here we dont care if add new module lablel or changing existing one
             data['module_labels'][module_name] = module_label
