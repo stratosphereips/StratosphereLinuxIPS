@@ -3,7 +3,7 @@ var stripAnsi = require('strip-ansi')
 var color = require('chalk')
 
 class Tree{
-	constructor(grid, blessed, contrib, redis_database, timeline_widget, screen, evidence_widget,ipinfo_widget){
+    constructor(grid, blessed, contrib, redis_database, timeline_widget, screen, evidence_widget,ipinfo_widget){
 		  this.contrib = contrib
 		  this.screen = screen
 		  this.blessed = blessed
@@ -22,17 +22,13 @@ class Tree{
 		  this.current_tw = ''
     }
 
+    /*Focus on the widget in the screen*/
     focus(){
-    	/*
-		Focus on widget
-    	*/
         this.widget.focus()
     }
 
+    /*Function to manipulate tree, timeline, evidence*/
     on(){
-    	/*
-		Funtion to manipulate tree, timeline and evidence.
-    	*/
         this.widget.on('select',node=>{
 		  	if(!node.name.includes('timewindow')){
 	    	  	var ip = node.name.replace(' (me)','')
@@ -54,30 +50,24 @@ class Tree{
 		    	}
 			});
     }
+
+    /*Hide widget in the screen.*/
     hide(){
-    	/*
-		Hide data in the widget
-    	*/
         this.widget.hide()
   	}
+
+  	/*Show widget in the screen*/
     show(){
-    	/*
-		Show data in the widget
-    	*/
 	    this.widget.show()
     }
 
+    /*Set data in the widget*/
     setData(data){
-    	/*
-		Set data in the widget
-    	*/
       	this.widget.setData({extended:true, children:data})
     }
 
+    /*Fill tree with Profile IPs and their timewindows, highlight blocked timewindows and the host*/
     setTree(values, blockedIPsTWs,hostIP){
-    	/*
-		Fill the tree with IPs of progiles and their timewindows, highlight blocked timewindows and the host
-    	*/
       	return new Promise(resolve=>{
       		var ips_tws = this.tree_data
       	    var result = {};
@@ -99,7 +89,7 @@ class Tree{
 
 	            callback();
 	            }, (err)=>{
-	            if(err)console.log(err)
+	            if(err)console.log('Check setTree in kalipso_tree.js. Error: ',err)
 		        if(Object.keys(blockedIPsTWs).includes(child))
 		        	{
 		        	if(this.current_ip.includes(child)){
@@ -115,20 +105,16 @@ class Tree{
 		          	    result[child] = { name:new_child, extended:false, children: tw[0]};
 		          	}
 		        	}
-		        resolve (result)	})
-		      	}
+		        resolve (result)})
+		    }
      	})
 	}
 
-
+    /*Function to sort timewindows in ascending order*/
 	sortTWs(blocked,tws_dict, ip){
-		/*
-		Function to sort timewindows in ascending order in the profile
-		*/
-	  
+
 		var blocked_tws = blocked[ip];
-	    var keys = Object.keys(tws_dict); 
-		
+	    var keys = Object.keys(tws_dict);
 	    keys.sort(function(a,b){return(Number(a.match(/(\d+)/g)[0]) - Number((b.match(/(\d+)/g)[0])))}); 
 	    var temp_tws_dict = {};
 	    for (var i=0; i<keys.length; i++){ 
@@ -143,26 +129,18 @@ class Tree{
 	    return temp_tws_dict;
 	}
 
-
+    /*Reprocess the necessary data for the tree*/
 	fillTreeData(redis_keys){
-		/*
-		Reprocess the necessary data for the tree
-		*/
 		return Promise.all([redis_keys[0].map(key_redis =>this.getTreeData(key_redis)),this.getBlockedIPsTWs(redis_keys[1]), redis_keys[2]]).then(values=>{this.setTree(values[0],values[1],values[2]).then(values=>{this.setData(values); this.screen.render()})}) 
-		}
+    }
 
+    /*Prepare needed data from Redis to fill the tree and call the next function to format data*/
 	getTreeDataFromDatabase(){
-		/*
-		Prepare needed data from redis to fill the tree and call the next function to format received data
-		*/
 		return Promise.all([this.redis_database.getAllKeys(),this.redis_database.getBlockedIPsTWs(), this.redis_database.getHostIP()]).then(values=>{this.fillTreeData(values)})
-		
 	}
 
-	getBlockedIPsTWs(reply_blockedIPsTWs){ 
-		/*
-		Get profiles and their timewindows that are blocked (have evidence)
-		*/
+    /*Get profiles and timewindows that are blocked*/
+	getBlockedIPsTWs(reply_blockedIPsTWs){
 		return new Promise((resolve, reject)=>{
 			var blockedIPsTWs = {};
 			async.each(reply_blockedIPsTWs,(blockedIPTW_line,callback)=>{
@@ -175,17 +153,14 @@ class Tree{
 				else{blockedIPsTWs[blockedIPTW_list[1]].push(blockedIPTW_list[2])}
 				callback()
 			},(err)=>{
-			if(err){reject(err);}
+			if(err){console.log('Check getBlockedIPsTWs in kalipso_tree.js. Error: ', err); reject(err);}
 			else{ resolve(blockedIPsTWs)}
 			})
 		})
 	}
 
+    /*Get tree nodes. Node is an IP of profile*/
 	getTreeData(redis_key){
-		/*
-		Get tree nodes. Node is an IP of profile
-		*/
-		
 		if(redis_key.includes('timeline')){
 	        var redis_key_list = redis_key.split('_')
 	        if(!Object.keys(this.tree_data).includes(redis_key_list[1]))
@@ -201,6 +176,6 @@ class Tree{
   		  	
 		}
 	}
-
 }
+
 module.exports = Tree
