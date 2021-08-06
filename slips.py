@@ -20,6 +20,7 @@
 import configparser
 import argparse
 import json
+import signal
 import sys
 import redis
 import os
@@ -209,12 +210,15 @@ def shutdown_gracefully():
             max_loops -=1
         # kill processes that didn't stop after timeout
         for unstopped_proc,pid in PIDs.items():
+            # don't kill this proc
+            if 'slips.py' in unstopped_proc: continue
             unstopped_proc = unstopped_proc+' '*(20-len(unstopped_proc))
             try:
                 os.kill(int(pid), 9)
                 print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tKilled.')
             except ProcessLookupError:
                 print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready exited.')
+
         # Send manual stops to the process not using channels
         try:
             logsProcessQueue.put('stop_process')
@@ -222,13 +226,23 @@ def shutdown_gracefully():
             # The logsProcessQueue is not there because we
             # didnt started the logs files (used -l)
             pass
-        outputProcessQueue.put('stop_process')
-        profilerProcessQueue.put('stop_process')
-        inputProcess.terminate()
-        # Only close the redis server if it's opened by slips, don't close the default one
+        try:
+            outputProcessQueue.put('stop_process')
+        except NameError:
+            pass
+        try:
+            profilerProcessQueue.put('stop_process')
+        except NameError:
+            pass
+        try:
+            inputProcess.terminate()
+        except NameError:
+            pass
+        # clear primary db
         __database__.r.flushdb()
         port = __database__.port
         if port != 6379:
+            # Only close the redis server if it's opened by slips, don't close the default one
             command = f'redis-cli -h 127.0.0.1 -p {port} shutdown'
             os.system(command)
 
@@ -242,7 +256,7 @@ def shutdown_gracefully():
 ####################
 if __name__ == '__main__':
     # Before the argparse, we need to set up the default path fr alerts.log and alerts.json. In our case, it is output folder.
-    alerts_default_path = 'output/'
+    alerts_default_path = 'output'
 
     print('Slips. Version {}'.format(version))
     print('https://stratosphereips.org\n')
@@ -367,20 +381,37 @@ if __name__ == '__main__':
         # If we do not have nfdump, terminate Slips.
         terminate_slips()
 
-
+    # since we can run multiple instances of slips, we need to name the output dir using the name of the file/interface being used
+    # todo now we can't run multiple instances of slips on the same interface or the same
+    #todo document this
+    if args.output == alerts_default_path:
+        # Create output folder for alerts.txt and alerts.json if they do not exist
+        try:
+            os.mkdir(args.output)
+        except FileExistsError:
+            pass
+        if args.filepath:
+            args.output = f'output/{os.path.basename(args.filepath)}_{args.output}/'
+        elif args.interface:
+            args.output = f'output/{args.interface}_{args.output}/'
+        print(f"[Main] Using {args.output} to store alert logs.")
+    else:
+        # user specified -o, leave it as it is
+         if not args.output.endswith('/'):
+            args.output = args.output +'/'
 
     # Remove default folder for alerts, if exists
-    if os.path.exists(alerts_default_path):
+    if os.path.exists(args.output):
         try:
-            shutil.rmtree(alerts_default_path)
+            os.remove(args.output + 'alerts.log')
+            os.remove(args.output + 'alerts.json')
         except OSError :
             # Directory not empty (may contain hidden non-deletable files), don't delete dir
             pass
-
-    # Create output folder for alerts.txt and alerts.json if they do not exist
-    if not args.output.endswith('/'): args.output = args.output + '/'
-    if not os.path.exists(args.output):
+    else:
         os.makedirs(args.output)
+
+
 
     # If the user wants to blocks, the user needs to give a permission to modify iptables
     # Also check if the user blocks on interface, does not make sense to block on files
@@ -433,12 +464,20 @@ if __name__ == '__main__':
     # Creation of the threads
     ##########################
     from slips_files.core.database import __database__
+
     # Output thread. This thread should be created first because it handles
     # the output of the rest of the threads.
     # Create the queue
     outputProcessQueue = Queue()
+    # if stdout it redirected to a file, tell outputProcess.py to redirect it's output as well
+    current_stdout = os.readlink(f"/proc/{os.getpid()}/fd/1")
+    #  /dev/pts/2 is the terminal
+    if '/dev/pts' in current_stdout:
+        # stdout is not redirected , default value is '' where slips doesn't do any redirection
+        current_stdout = ''
     # Create the output thread and start it
-    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
+    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config, stdout=current_stdout)
+    # this process starts the db
     outputProcessThread.start()
 
     # Before starting update malicious file
@@ -448,6 +487,7 @@ if __name__ == '__main__':
     # Output pid
     outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
     __database__.store_process_PID('outputProcess',int(outputProcessThread.pid))
+    __database__.store_process_PID('slips.py',int(os.getpid()))
 
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
@@ -470,12 +510,15 @@ if __name__ == '__main__':
                 if not module_name in to_ignore:
                     module_class = modules_to_call[module_name]['obj']
                     ModuleProcess = module_class(outputProcessQueue, config)
+                    # this is multiprocessing.Process.start(), The run() method is automatically called in the new process when start() is called
                     ModuleProcess.start()
                     outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
                     __database__.store_process_PID(module_name, int(ModuleProcess.pid))
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
+
+    c1 = __database__.subscribe('finished_modules')
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
@@ -528,8 +571,6 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
     __database__.store_process_PID('inputProcess', int(inputProcess.pid))
 
-
-    c1 = __database__.subscribe('finished_modules')
 
     # Store the host IP address if input type is interface
     if input_type == 'interface':
