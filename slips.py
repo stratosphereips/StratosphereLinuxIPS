@@ -225,6 +225,13 @@ def shutdown_gracefully():
         outputProcessQueue.put('stop_process')
         profilerProcessQueue.put('stop_process')
         inputProcess.terminate()
+        # Only close the redis server if it's opened by slips, don't close the default one
+        __database__.r.flushdb()
+        port = __database__.port
+        if port != 6379:
+            command = f'redis-cli -h 127.0.0.1 -p {port} shutdown'
+            os.system(command)
+
         os._exit(-1)
         return True
     except KeyboardInterrupt:

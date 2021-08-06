@@ -1,3 +1,5 @@
+import os
+
 import redis
 import time
 import json
@@ -6,6 +8,9 @@ import configparser
 import traceback
 from datetime import datetime
 import ipaddress
+import sys
+import socket
+import random
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -25,6 +30,14 @@ class Database(object):
         self.normal_label = 'normal'
         self.malicious_label = 'malicious'
 
+    def connect_to_redis_server(self, port):
+        # start the redis server
+        os.system(f'redis-server --port {port} --daemonize yes > /dev/null 2>&1')
+        # connect to the redis server
+        # db 0 changes everytime we run slips
+        self.r = redis.StrictRedis(host='localhost', port=port, db=0, charset="utf-8", decode_responses=True) #password='password')
+        # db 1 is cache, delete it using -cc flag
+        self.rcache = redis.StrictRedis(host='localhost', port=port, db=1, charset="utf-8", decode_responses=True) #password='password')
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
         self.config = config
@@ -53,17 +66,32 @@ class Database(object):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.width = 3600
+        # set the default redis port
+        port = 6379
         # Create the connection to redis
         if not hasattr(self, 'r'):
             try:
-                # db 0 changes everytime we run slips
-                self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
-                # db 1 is cache, delete it using -cc flag
-                self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True) #password='password')
-                if self.deletePrevdb:
-                    self.r.flushdb()
+                self.connect_to_redis_server(port)
+                # check if server is being used by another instance of slips
+                if len(list(__database__.r.scan_iter())) > 2:
+                    # its being used
+                    while True:
+                        # generate another unused port
+                        port = random.randint(32768, 65535)
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                            if s.connect_ex(('localhost', port)) != 0:
+                                try:
+                                    self.connect_to_redis_server(port)
+                                    break
+                                except redis.exceptions.ConnectionError:
+                                    # unable to connect to this port, try another one
+                                    continue
+                # if self.deletePrevdb:
+                #     self.r.flushdb()
             except redis.exceptions.ConnectionError:
                 print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
+        # we'll be using this to close the server slips started
+        self.port = port
         # Even if the DB is not deleted. We need to delete some temp data
         # Zeek_files
         self.r.delete('zeekfiles')
