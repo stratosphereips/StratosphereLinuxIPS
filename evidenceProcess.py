@@ -398,7 +398,6 @@ class EvidenceProcess(multiprocessing.Process):
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
                     uid = data.get('uid')
-
                     # Ignore alert if ip is whitelisted
                     if self.is_whitelisted(ip, detection_info, type_detection, description):
                         # Modules add evidence to the db before reaching this point, so
