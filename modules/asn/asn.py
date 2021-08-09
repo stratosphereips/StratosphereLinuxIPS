@@ -128,7 +128,7 @@ class Module(Module, multiprocessing.Process):
             return False
         except ipwhois.exceptions.ASNRegistryError:
             # ASN lookup failed with no more methods to try
-            pass
+            return False
 
     def run(self):
         # Main loop function
