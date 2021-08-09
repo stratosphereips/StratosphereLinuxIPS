@@ -37,6 +37,17 @@ def get_profiles(output_dir):
             f.seek(-bytes_read, 2)
             continue
 
+def is_evidence_present(log_file, expected_evidence):
+    """ Function to read the log file line by line and returns when it finds the expected evidence """
+    with open(log_file, 'r') as f:
+        line = f.readline()
+        while line:
+            if expected_evidence in line:
+                return True
+            line = f.readline()
+        # evidence not found in any line
+        return False
+
 
 @pytest.mark.parametrize("pcap_path, output_dir", [('dataset/hide-and-seek-short.pcap','pcap/')])
 def test_pcap(pcap_path, database, output_dir):
@@ -51,8 +62,7 @@ def test_pcap(pcap_path, database, output_dir):
     assert profiles > 15
     expected_evidence = 'New horizontal port scan detected to port 23'
     log_file = output_dir + alerts_file
-    with open(log_file, 'r') as f:
-        assert expected_evidence in f.read()
+    assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [

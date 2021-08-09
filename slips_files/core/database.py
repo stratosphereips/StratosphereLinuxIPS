@@ -94,8 +94,6 @@ class Database(object):
                                 except redis.exceptions.ConnectionError:
                                     # unable to connect to this port, try another one
                                     continue
-                # if self.deletePrevdb:
-                #     self.r.flushdb()
             except redis.exceptions.ConnectionError:
                 print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
 
