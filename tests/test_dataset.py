@@ -28,7 +28,7 @@ def get_profiles(output_dir):
             # we reached the beginning of a line, read the line to the right
             line = f.readline().decode()
             # check if this line has the number of profiles we need
-            if 'Total' in line:
+            if 'Total Number' in line:
                 line = line.split('.')[0] # Number of Profiles in DB so far: 2
                 profiles = line[line.index(": ")+1:].strip()
                 return int(profiles)
