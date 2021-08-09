@@ -1907,5 +1907,12 @@ class Database(object):
         """ Return dict of 3 keys: IPs, domains and organizations"""
         return self.r.hgetall('whitelist')
 
+    def store_zeek_path(self, path):
+        """ used to store the path of zeek log files slips is currently using """
+        self.r.set('zeek_path', path)
+
+    def get_zeek_path(self)-> str:
+        """ return the path of zeek log files slips is currently using """
+        return self.r.get('zeek_path')
 
 __database__ = Database()
