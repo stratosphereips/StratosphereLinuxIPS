@@ -412,7 +412,7 @@ class Database(object):
             proto = columns['proto'].upper()
             daddr = columns['daddr']
             saddr = columns['saddr']
-            starttime = columns['starttime']
+            starttime = str(columns['starttime'])
             uid = columns['uid']
             # Depending if the traffic is going out or not, we are Client or Server
             # Set the type of ip as Dst if we are a client, or Src if we are a server
@@ -438,6 +438,7 @@ class Database(object):
                 'twid' :  str(twid),
                 'proto' : str(proto),
                 'ip_state' : 'dstip',
+                'stime':starttime,
                 'uid': uid
             }
             data_to_send = json.dumps(data_to_send)
@@ -449,6 +450,7 @@ class Database(object):
                 'twid' :  str(twid),
                 'proto' : str(proto),
                 'ip_state' : 'srcip',
+                'stime': starttime,
                 'uid': uid
             }
             data_to_send = json.dumps(data_to_send)
@@ -523,6 +525,7 @@ class Database(object):
                 innerdata['totalflows'] = 1
                 innerdata['totalpkt'] = int(pkts)
                 innerdata['totalbytes'] = int(totbytes)
+                innerdata['stime'] = starttime
                 innerdata['uid'] = uid
                 temp_dstports = {}
                 temp_dstports[str(dport)] = int(pkts)
@@ -588,7 +591,16 @@ class Database(object):
                 new_data = (new_symbol, previous_two_timestamps)
                 # analyze behavioral model with lstm model if the length is divided by 3 - so we send when there is 3 more characters added
                 if len(new_symbol) % 3 == 0:
-                    self.publish('new_letters', new_symbol + '-' + profileid + '-' + twid + '-' + str(tupleid) +'-' + uid)
+                    to_send = {
+                                'new_symbol':new_symbol,
+                                'profileid':profileid,
+                                'twid':twid,
+                                'tupleid':str(tupleid),
+                                'uid':uid,
+                                'stime': starttime
+                    }
+                    to_send = json.dumps(to_send)
+                    self.publish('new_letters', to_send)
                 data[tupleid] = new_data
                 self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol), 0, 6)
                 data = json.dumps(data)
@@ -630,7 +642,7 @@ class Database(object):
             proto = columns['proto'].upper()
             daddr = columns['daddr']
             saddr = columns['saddr']
-            starttime = columns['starttime']
+            starttime = str(columns['starttime'])
             uid = columns['uid']
             # Choose which port to use based if we were asked Dst or Src
             if port_type == 'Dst':
@@ -661,6 +673,7 @@ class Database(object):
                 except KeyError:
                     temp_dstips[str(ip_address)] = {}
                     temp_dstips[str(ip_address)]['pkts'] = int(pkts)
+                    temp_dstips[str(ip_address)]['stime'] = str(starttime)
                     temp_dstips[str(ip_address)]['uid'] = uid
                 innerdata[ip_key] = temp_dstips
                 prev_data[port] = innerdata
@@ -674,6 +687,7 @@ class Database(object):
                 temp_dstips = {}
                 temp_dstips[str(ip_address)] = {}
                 temp_dstips[str(ip_address)]['pkts'] = int(pkts)
+                temp_dstips[str(ip_address)]['stime'] = starttime
                 temp_dstips[str(ip_address)]['uid'] = uid
                 innerdata[ip_key] = temp_dstips
                 prev_data[port] = innerdata
@@ -859,7 +873,7 @@ class Database(object):
         return self.separator
 
     def setEvidence(self, type_detection, detection_info, type_evidence,
-                    threat_level, confidence, description, profileid='', twid='', uid=''):
+                    threat_level, confidence, description, timestamp, profileid='', twid='', uid=''):
         """
         Set the evidence for this Profile and Timewindow.
         Parameters:
@@ -906,6 +920,7 @@ class Database(object):
                 'key': key,
                 'data': data,
                 'description': description,
+                'stime': timestamp,
                 'uid' : uid
             }
             evidence_to_send = json.dumps(evidence_to_send)
@@ -1271,7 +1286,7 @@ class Database(object):
         # means repeated flow
         return False
 
-    def add_out_ssl(self, profileid, twid, daddr_as_obj, dport, flowtype, uid,
+    def add_out_ssl(self, profileid, twid, stime, daddr_as_obj, dport, flowtype, uid,
                     version, cipher, resumed, established, cert_chain_fuids,
                     client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
         """
@@ -1295,6 +1310,7 @@ class Database(object):
         data['server_name'] = server_name
         data['daddr'] = str(daddr_as_obj)
         data['dport'] = dport
+        data['stime'] = stime
         # Convert to json string
         data = json.dumps(data)
         self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
@@ -1302,6 +1318,7 @@ class Database(object):
         to_send['profileid'] = profileid
         to_send['twid'] = twid
         to_send['flow'] = data
+        to_send['stime'] = stime
         to_send = json.dumps(to_send)
         self.publish('new_ssl', to_send)
         self.print('Adding SSL flow to DB: {}'.format(data), 5, 0)
@@ -1326,12 +1343,13 @@ class Database(object):
                 'server_name' : server_name,
                 'profileid' : str(profileid),
                 'twid': str(twid),
+                'stime': stime,
                 'uid':uid
             }
             data_to_send = json.dumps(data_to_send)
             self.publish('give_threat_intelligence',data_to_send)
 
-    def add_out_http(self, profileid, twid, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
+    def add_out_http(self, profileid, twid, stime, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
         """
         Store in the DB a http request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
@@ -1351,6 +1369,7 @@ class Database(object):
         data['status_msg'] = status_msg
         data['resp_mime_types'] = resp_mime_types
         data['resp_fuids'] = resp_fuids
+        data['stime'] = stime
         # Convert to json string
         data = json.dumps(data)
         self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
@@ -1358,6 +1377,7 @@ class Database(object):
         to_send['profileid'] = profileid
         to_send['twid'] = twid
         to_send['flow'] = data
+        to_send['stime'] = stime
         to_send = json.dumps(to_send)
         self.publish('new_http', to_send)
         self.print('Adding HTTP flow to DB: {}'.format(data), 5, 0)
@@ -1366,12 +1386,13 @@ class Database(object):
                 'host': host,
                 'profileid' : str(profileid),
                 'twid' :  str(twid),
+                'stime': stime,
                 'uid':uid
             }
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence',data_to_send)
 
-    def add_out_ssh(self, profileid, twid, flowtype, uid, ssh_version, auth_attempts, auth_success, client, server, cipher_alg, mac_alg, compression_alg, kex_alg, host_key_alg, host_key):
+    def add_out_ssh(self, profileid, twid, stime, flowtype, uid, ssh_version, auth_attempts, auth_success, client, server, cipher_alg, mac_alg, compression_alg, kex_alg, host_key_alg, host_key):
         """
         Store in the DB a SSH request
         All the type of flows that are not netflows are stored in a
@@ -1394,6 +1415,7 @@ class Database(object):
         data['kex_alg'] = kex_alg
         data['host_key_alg'] = host_key_alg
         data['host_key'] = host_key
+        data['stime'] = stime
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
@@ -1403,6 +1425,7 @@ class Database(object):
         to_send['profileid'] = profileid
         to_send['twid'] = twid
         to_send['flow'] = data
+        to_send['stime'] = stime
         to_send['uid'] = uid
         to_send = json.dumps(to_send)
         # publish a dns with its flow
@@ -1410,7 +1433,7 @@ class Database(object):
         self.print('Adding SSH flow to DB: {}'.format(data), 5, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
 
-    def add_out_notice(self,profileid, twid, daddr, sport, dport, note, msg, scanned_port, scanning_ip, uid):
+    def add_out_notice(self,profileid, twid, stime, daddr, sport, dport, note, msg, scanned_port, scanning_ip, uid):
         """" Send notice.log data to new_notice channel to look for self-signed certificates """
         data = {
             'daddr' :  daddr,
@@ -1419,19 +1442,21 @@ class Database(object):
             'note'  :  note,
             'msg'   :  msg,
             'scanned_port' : scanned_port,
-            'scanning_ip'  : scanning_ip
+            'scanning_ip'  : scanning_ip,
+            'stime' : stime
         }
         data = json.dumps(data) # this is going to be sent insidethe to_send dict
         to_send = {}
         to_send['profileid'] = profileid
         to_send['twid'] = twid
         to_send['flow'] = data
+        to_send['stime'] = stime
         to_send['uid'] = uid
         to_send = json.dumps(to_send)
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 5, 0)
 
-    def add_out_dns(self, profileid, twid, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
+    def add_out_dns(self, profileid, twid, stime, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """
         Store in the DB a DNS request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
@@ -1446,6 +1471,7 @@ class Database(object):
         data['rcode_name'] = rcode_name
         data['answers'] = answers
         data['ttls'] = ttls
+        data['stime'] = stime
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
@@ -1455,6 +1481,7 @@ class Database(object):
         to_send['profileid'] = profileid
         to_send['twid'] = twid
         to_send['flow'] = data
+        to_send['stime'] = stime
         to_send = json.dumps(to_send)
         #publish a dns with its flow
         self.publish('new_dns_flow', to_send)
@@ -1464,6 +1491,7 @@ class Database(object):
                 'query': str(query),
                 'profileid' : str(profileid),
                 'twid' :  str(twid),
+                'stime': stime,
                 'uid': uid
             }
         data_to_send = json.dumps(data_to_send)
