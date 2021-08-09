@@ -397,7 +397,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # evidence data
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
-                    uid = data.get('uid')
+                    timestamp = data.get('stime')
 
                     # Ignore alert if ip is whitelisted
                     if self.is_whitelisted(ip, detection_info, type_detection, description):
@@ -406,11 +406,11 @@ class EvidenceProcess(multiprocessing.Process):
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
 
-                    timestamp = __database__.get_flow_timestamp(profileid, twid, uid)
-                    flow_datetime = ""
-                    if timestamp:
+                    if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
                         flow_datetime = datetime.fromtimestamp(timestamp)
                         flow_datetime = flow_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        flow_datetime = timestamp
 
 
                     evidence_to_log = self.print_evidence(profileid,
