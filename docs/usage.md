@@ -14,7 +14,7 @@ After Slips was run on the traffic, the Slips output can be analyzed with Kalips
 Either you are [running Slips in docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-and-running-slips-inside-a-docker) or [locally](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-in-your-own-computer), you can run Slips using the same below commands and configurations.
 
 
-## Reading the input
+## Running Slips
 
 The table below shows the commands Slips uses for different inputs. The first part of the command **./slips.py -c slips.conf** is same, the second part changes depending on the input type. Also, the user can execute **./slips.py --help** to find correct argument to run Slips on each type of the file.
 
@@ -75,6 +75,11 @@ tr:nth-child(even) {
 
 
 There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models separately. Configuration of the **slips.conf** is described [here](#modifying-a-configuration-file).
+
+
+You can run several instances of slips at the same, and the output of each instance will be stored in ```output/```  directory. 
+
+Each instance of slips uses it's own redis server.
 
 ## Reading the output
 The output process collects output from the modules and handles the display of information on screen. Currently, Slips' analysis and detected malicious behaviour can be analyzed as following:
