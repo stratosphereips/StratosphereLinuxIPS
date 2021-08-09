@@ -289,6 +289,11 @@ class ListTable{
           )
           })
         }
+                catch(err){
+            console.log('Check setInTuples in kalipso_listtable.js. Error: ', err)
+            reject(err)
+        }
+
   }
 
 
