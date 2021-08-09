@@ -55,7 +55,7 @@ def test_pcap(pcap_path, database, output_dir):
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    command = f'./slips.py -c slips.conf -l -f {pcap_path} -o {output_dir} > {output_dir}slips_output.txt 2>&1'
+    command = f'./slips.py -c slips.conf -l -f ../../{pcap_path} -o {output_dir} > {output_dir}slips_output.txt 2>&1'
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
