@@ -50,7 +50,7 @@ class Module(Module, multiprocessing.Process):
             uid = flow['uid']
             host = flow['host']
             uri = flow['uri']
-            timestamp = flow['stime']
+            timestamp = flow.get('stime','')
             type_detection = 'user_agent'
             detection_info = user_agent
             type_evidence = 'SuspiciousUserAgent' # todo
