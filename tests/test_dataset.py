@@ -1,5 +1,5 @@
 """
-This file tests all kinds of input in our datasert/
+This file tests all kinds of input in our dataset/
 It checks a random evidence and the total number of profiles in every file
 """
 import os
@@ -81,8 +81,7 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
     profiles = get_profiles(output_dir)
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
-    with open(log_file, 'r') as f:
-        assert expected_evidence in f.read()
+    assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
 
@@ -102,9 +101,7 @@ def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,
     profiles = get_profiles(output_dir)
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
-    with open(log_file, 'r') as f:
-        alerts = f.read()
-        assert expected_evidence in alerts
+    assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize("conn_log_path, expected_profiles, expected_evidence,  output_dir",
@@ -121,8 +118,7 @@ def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evid
     profiles = get_profiles(output_dir)
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
-    with open(log_file, 'r') as f:
-        assert expected_evidence in f.read()
+    assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize('suricata_path,  output_dir',[('dataset/suricata-flows.json','suricata/')])
@@ -138,8 +134,7 @@ def test_suricata(database, suricata_path,  output_dir):
     expected_evidence = 'New vertical port scan detected to IP 192.168.1.129 from 193.46.255.92'
     assert profiles > 90
     log_file = output_dir + alerts_file
-    with open(log_file, 'r') as f:
-        assert expected_evidence in f.read()
+    assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize('nfdump_path,  output_dir',[('dataset/test.nfdump', 'nfdump/')])
@@ -156,7 +151,5 @@ def test_nfdump(database, nfdump_path,  output_dir):
     # make sure slips generated profiles for this file (can't the number of profiles exactly because slips doesn't generate a const number of profiles per file)
     assert profiles > 0
     log_file = output_dir + alerts_file
-    with open(log_file, 'r') as f:
-        evidence = f.read()
-        assert expected_evidence in evidence
+    assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
