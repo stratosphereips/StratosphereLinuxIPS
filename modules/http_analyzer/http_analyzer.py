@@ -50,6 +50,7 @@ class Module(Module, multiprocessing.Process):
             uid = flow['uid']
             host = flow['host']
             uri = flow['uri']
+            timestamp = flow['stime']
             type_detection = 'user_agent'
             detection_info = user_agent
             type_evidence = 'SuspiciousUserAgent' # todo
@@ -59,7 +60,7 @@ class Module(Module, multiprocessing.Process):
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                     confidence, description, profileid=profileid, twid=twid, uid=uid)
+                                     confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
             return True
         return False
 
