@@ -566,7 +566,7 @@ if __name__ == '__main__':
 
     # Input process
     # Create the input process and start it
-    inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
+    inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro, store_zeek=args.output )
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
     __database__.store_process_PID('inputProcess', int(inputProcess.pid))

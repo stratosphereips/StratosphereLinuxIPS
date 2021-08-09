@@ -34,7 +34,7 @@ import psutil
 class InputProcess(multiprocessing.Process):
     """ A class process to run the process of the flows """
     def __init__(self, outputqueue, profilerqueue, input_type,
-                 input_information, config, packet_filter, zeek_or_bro):
+                 input_information, config, packet_filter, zeek_or_bro, store_zeek=''):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
@@ -43,7 +43,7 @@ class InputProcess(multiprocessing.Process):
         __database__.start(self.config)
         self.input_type = input_type
         self.given_path = input_information
-        self.zeek_folder = './zeek_files'
+        self.zeek_folder = 'zeek_files'
         self.name = 'input'
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
@@ -59,6 +59,8 @@ class InputProcess(multiprocessing.Process):
         self.lines = 0
         # ctr to append to zeek_files dir if it's being used by another instance of slips
         self.ctr = 0
+        # this is where slips will be placing zeek_files dir so we associate every instance of slips with it's own zeek files
+        self.zeek_files_path = store_zeek
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -360,38 +362,17 @@ class InputProcess(multiprocessing.Process):
         self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(self.lines))
         return True
 
-    def get_unused_zeek_dir(self):
-        """ Checks if current self.zeek_dir is being used by another instance of slips,
-         if so , returns a zeek dir path that is available to use"""
-        self.ctr +=1
-        for proc in psutil.process_iter():
-            for item in proc.open_files():
-                if self.zeek_folder[1:] in item.path:
-                    # folder is being used by another instance of slips
-                    # append a ctr to the dir name and see if it's being used
-                    self.zeek_folder = self.zeek_folder + str(self.ctr)
-                    self.get_unused_zeek_dir()
-        # dir isn't used
-        # create it if it's not there or clear it
-        if not os.path.exists(self.zeek_folder):
-            os.mkdir(self.zeek_folder)
-        else:
-            # clear the zeek folder of old .log files
-            # The rm should not be in background because we must wait until the folder is empty
-            command = "rm " + self.zeek_folder + "/*.log  > /dev/null 2>&1"
-            os.system(command)
-        return self.zeek_folder
-
     def handle_pcap_and_interface(self) -> int:
         """ Returns the number of zeek lines read """
+
+        # every instance of slips creates a new dir in output/ dir
+        # place zeek_files in it.
+        self.zeek_folder = self.zeek_files_path + self.zeek_folder
         # Create zeek_folder if does not exist.
         if not os.path.exists(self.zeek_folder):
             os.makedirs(self.zeek_folder)
 
-        if len(os.listdir(self.zeek_folder)) > 0:
-            # check if this folder is being used by another instance of slips before clearing
-            self.zeek_folder = self.get_unused_zeek_dir()
-            self.print(f'Using {self.zeek_folder} to store zeek files.')
+        self.print(f'Using {self.zeek_folder} to store zeek files.')
         # Now start the observer of new files. We need the observer because Zeek does not create all the files
         # at once, but when the traffic appears. That means that we need
         # some process to tell us which files to read in real time when they appear
@@ -417,8 +398,8 @@ class InputProcess(multiprocessing.Process):
                 # If absolute, do nothing
                 bro_parameter = '-r "' + self.given_path + '"'
             else:
-                # If relative, add ../ since we will move into a special folder
-                bro_parameter = '-r "../' + self.given_path + '"'
+                # If relative, add ../../../ since we will move into a special folder
+                bro_parameter = '-r "../../../' + self.given_path + '"'
             # This is for stoping the input if bro does not receive any new line while reading a pcap
             self.bro_timeout = 30
 
