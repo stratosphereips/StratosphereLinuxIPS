@@ -95,8 +95,9 @@ def test_setEvidence(database):
     threat_level = 0.01
     confidence = 0.5
     description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip
+    timestamp = ''
     database.setEvidence(type_detection, detection_info, type_evidence,
-                             threat_level, confidence, description, profileid=profileid, twid=twid)
+                             threat_level, confidence, description, timestamp, profileid=profileid, twid=twid)
 
     added_evidence = database.r.hget('evidence'+profileid, twid)
     added_evidence2 = database.r.hget(profileid + '_' + twid, 'Evidence')
