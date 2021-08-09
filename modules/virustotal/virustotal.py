@@ -55,7 +55,6 @@ class Module(Module, multiprocessing.Process):
         # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
         self.timeout = None
-        self.counter = 0
         # start the queue thread
         self.api_calls_thread = threading.Thread(target=self.API_calls_thread,
                          daemon=True)
@@ -196,7 +195,7 @@ class Module(Module, multiprocessing.Process):
         profileid = file_info['profileid']
         twid = file_info['twid']
         md5 = file_info['md5']
-
+        ts = file_info['ts']
         response = self.api_query_(md5)
 
         positives = int(response.get('positives','0'))
@@ -213,14 +212,11 @@ class Module(Module, multiprocessing.Process):
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                     threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
+                                     threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+            return 'malicious'
         self.counter += 1
+        return 'benign'
 
-        data = {}
-        data["VirusTotal"] =  {'score': score,
-                  "timestamp": time.time()}
-
-        # __database__.setInfoForFile(md5, data)
 
     def API_calls_thread(self):
         """

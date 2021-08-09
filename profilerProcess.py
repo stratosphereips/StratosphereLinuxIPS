@@ -1053,6 +1053,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['md5'] = line.get('md5', '')
             # self.column_values['sha1'] = line.get('sha1','')
             #todo process zeek tabs files.log
+        else:
+            return False
         return True
 
     def process_argus_input(self, new_line):
@@ -1635,6 +1637,7 @@ class ProfilerProcess(multiprocessing.Process):
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files'):
                 # Not a supported type
                 return True
+
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
@@ -1831,7 +1834,8 @@ class ProfilerProcess(multiprocessing.Process):
                         'size' : self.column_values['size'],
                         'md5':  self.column_values['md5'],
                         'profileid' : profileid,
-                        'twid' : twid
+                        'twid' : twid,
+                        'ts' : starttime
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish('new_downloaded_file', to_send)
