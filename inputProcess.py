@@ -178,7 +178,7 @@ class InputProcess(multiprocessing.Process):
                         # All bro files have a field 'ts' with the timestamp.
                         # So we are safe here not checking the type of line
                         try:
-                            timestamp = nline['ts']
+                            timestamp = float(nline['ts'])
                         except KeyError:
                             # In some Zeek files there may not be a ts field
                             # Like in some weird smb files
@@ -199,7 +199,7 @@ class InputProcess(multiprocessing.Process):
                         line['type'] = filename
                         line['data'] = nline
                         # Get timestamp
-                        timestamp = nline.split('\t')[0]
+                        timestamp = float(nline.split('\t')[0])
 
                     time_last_lines[filename] = timestamp
 
@@ -223,7 +223,7 @@ class InputProcess(multiprocessing.Process):
                     # It has been 10 seconds without any file being updated. So stop the while
                     # Get out of the while and stop Zeek
                     break
-
+            print(f'**********************{time_last_lines}')
             # Now read lines in order. The line with the smallest timestamp first
             file_sorted_time_last_lines = sorted(time_last_lines, key=time_last_lines.get)
             # self.print('Sorted times: {}'.format(str(file_sorted_time_last_lines)))
