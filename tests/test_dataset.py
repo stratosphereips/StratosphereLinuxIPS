@@ -66,7 +66,7 @@ def test_pcap(pcap_path, database, output_dir):
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [
-     ('dataset/test2.binetflow',1,'New horizontal port scan detected to port 443','test2/'),
+     ('dataset/test2.binetflow',1,'RNN C&C channels detection','test2/'),
     ('dataset/test3.binetflow',20,'New horizontal port scan detected to port 3389','test3/'),
       ('dataset/test4.binetflow',2,'New horizontal port scan detected to port 81','test4/'),
      ('dataset/test5.binetflow',4,'RNN C&C channels detection','test5/')])
