@@ -394,7 +394,7 @@ class InputProcess(multiprocessing.Process):
             self.bro_timeout = 9999999999999999
         elif self.input_type is 'pcap':
             # Find if the pcap file name was absolute or relative
-            if self.given_path[0] == '/':
+            if self.given_path[0] == '/' or self.given_path.startswith('../../'):
                 # If absolute, do nothing
                 bro_parameter = '-r "' + self.given_path + '"'
             else:
