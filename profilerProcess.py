@@ -1749,19 +1749,19 @@ class ProfilerProcess(multiprocessing.Process):
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
                                           spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
                 elif 'dns' in flow_type:
-                    __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
+                    __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                     # Add DNS resolution if there are answers for the query
                     if answers:
                         __database__.set_dns_resolution(query, answers)
                 elif flow_type == 'http':
-                    __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'],
+                    __database__.add_out_http(profileid, twid, starttime, flow_type, uid, self.column_values['method'],
                                               self.column_values['host'], self.column_values['uri'],
                                               self.column_values['httpversion'], self.column_values['user_agent'],
                                               self.column_values['request_body_len'], self.column_values['response_body_len'],
                                               self.column_values['status_code'], self.column_values['status_msg'],
                                               self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
                 elif flow_type == 'ssl':
-                    __database__.add_out_ssl(profileid, twid, daddr_as_obj,self.column_values['dport'],
+                    __database__.add_out_ssl(profileid, twid, starttime, daddr_as_obj,self.column_values['dport'],
                                              flow_type, uid, self.column_values['sslversion'],
                                              self.column_values['cipher'], self.column_values['resumed'],
                                              self.column_values['established'], self.column_values['cert_chain_fuids'],
@@ -1769,7 +1769,7 @@ class ProfilerProcess(multiprocessing.Process):
                                              self.column_values['issuer'], self.column_values['validation_status'],
                                              self.column_values['curve'], self.column_values['server_name'])
                 elif flow_type == 'ssh':
-                    __database__.add_out_ssh(profileid, twid, flow_type, uid, self.column_values['version'],
+                    __database__.add_out_ssh(profileid, twid, starttime, flow_type, uid, self.column_values['version'],
                                              self.column_values['auth_attempts'], self.column_values['auth_success'],
                                              self.column_values['client'], self.column_values['server'],
                                              self.column_values['cipher_alg'], self.column_values['mac_alg'],
@@ -1777,6 +1777,7 @@ class ProfilerProcess(multiprocessing.Process):
                                              self.column_values['host_key_alg'], self.column_values['host_key'])
                 elif flow_type == 'notice':
                      __database__.add_out_notice(profileid,twid,\
+                                                 starttime,\
                                                  self.column_values['daddr'],\
                                                  self.column_values['sport'],\
                                                  self.column_values['dport'],\
