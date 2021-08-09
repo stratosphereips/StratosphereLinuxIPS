@@ -6,9 +6,7 @@ import os
 import pytest
 import  shutil
 alerts_file = 'alerts.json'
-# clear the database before starting
-command = './slips.py -cc'
-os.system(command)
+
 
 def get_profiles(output_dir):
     """ This function parses stdout of slips and determines the total number of profiles
@@ -57,17 +55,17 @@ def test_pcap(pcap_path, database, output_dir):
         assert expected_evidence in f.read()
     shutil.rmtree(output_dir)
 
-@pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence,db0, db1, output_dir", [
-     ('dataset/test2.binetflow',1,'New horizontal port scan detected to port 443','2','3','test2/'),
-    ('dataset/test3.binetflow',20,'New horizontal port scan detected to port 3389','4','5','test3/'),
-      ('dataset/test4.binetflow',2,'New horizontal port scan detected to port 81','6','7','test4/'),
-     ('dataset/test5.binetflow',4,'RNN C&C channels detection','8','9','test5/')])
-def test_binetflow(database, binetflow_path, expected_profiles, expected_evidence, db0, db1, output_dir ):
+@pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [
+     ('dataset/test2.binetflow',1,'New horizontal port scan detected to port 443','test2/'),
+    ('dataset/test3.binetflow',20,'New horizontal port scan detected to port 3389','test3/'),
+      ('dataset/test4.binetflow',2,'New horizontal port scan detected to port 81','test4/'),
+     ('dataset/test5.binetflow',4,'RNN C&C channels detection','test5/')])
+def test_binetflow(database, binetflow_path, expected_profiles, expected_evidence,  output_dir ):
     try:
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    command = f'./slips.py -l -c slips.conf -o {output_dir} -f {binetflow_path} -db {db0} {db1} > {output_dir}slips_output.txt 2>&1'
+    command = f'./slips.py -l -c slips.conf -o {output_dir} -f {binetflow_path}  > {output_dir}slips_output.txt 2>&1'
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
@@ -78,17 +76,17 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
     shutil.rmtree(output_dir)
 
 
-@pytest.mark.parametrize("zeek_dir_path,expected_profiles, expected_evidence, db0, db1, output_dir",
-     [('dataset/sample_zeek_files',4,'SSL certificate validation failed with (certificate is not yet valid)','8','9','sample_zeek_files/'),
-      ('dataset/sample_zeek_files-2',20,'Horizontal port scan','10','11','sample_zeek_files-2/')])
-def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence, db0, db1, output_dir):
+@pytest.mark.parametrize("zeek_dir_path,expected_profiles, expected_evidence,  output_dir",
+     [('dataset/sample_zeek_files',4,'SSL certificate validation failed with (certificate is not yet valid)','sample_zeek_files/'),
+      ('dataset/sample_zeek_files-2',20,'Horizontal port scan','sample_zeek_files-2/')])
+def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,  output_dir):
     import time
     time.sleep(3)
     try:
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    command = f'./slips.py -c slips.conf -l -f {zeek_dir_path} -db {db0} {db1} -o {output_dir} > {output_dir}slips_output.txt 2>&1'
+    command = f'./slips.py -c slips.conf -l -f {zeek_dir_path}  -o {output_dir} > {output_dir}slips_output.txt 2>&1'
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
@@ -99,15 +97,15 @@ def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,
         assert expected_evidence in alerts
     shutil.rmtree(output_dir)
 
-@pytest.mark.parametrize("conn_log_path, expected_profiles, expected_evidence, db0, db1, output_dir",
-     [('dataset/sample_zeek_files/conn.log',4,'RNN C&C channels detection','12','13','conn_log/'),
-      ('dataset/sample_zeek_files-2/conn.log',5,'RNN C&C channels detection','14','15','conn_log-2/')])
-def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evidence, db0, db1, output_dir):
+@pytest.mark.parametrize("conn_log_path, expected_profiles, expected_evidence,  output_dir",
+     [('dataset/sample_zeek_files/conn.log',4,'RNN C&C channels detection','conn_log/'),
+      ('dataset/sample_zeek_files-2/conn.log',5,'RNN C&C channels detection','conn_log-2/')])
+def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evidence,  output_dir):
     try:
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    command = f'./slips.py -l -c slips.conf -f {conn_log_path} -db {db0} {db1} -o {output_dir} > {output_dir}slips_output.txt 2>&1'
+    command = f'./slips.py -l -c slips.conf -f {conn_log_path}  -o {output_dir} > {output_dir}slips_output.txt 2>&1'
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
@@ -117,16 +115,13 @@ def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evid
         assert expected_evidence in f.read()
     shutil.rmtree(output_dir)
 
-@pytest.mark.parametrize('suricata_path, db0, db1, output_dir',[('dataset/suricata-flows.json','0','1','suricata/')])
-def test_suricata(database, suricata_path, db0, db1, output_dir):
+@pytest.mark.parametrize('suricata_path,  output_dir',[('dataset/suricata-flows.json','suricata/')])
+def test_suricata(database, suricata_path,  output_dir):
     try:
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    # clear cache first because we'll be using a db that's been used before
-    command = "./slips.py -c slips.conf -cc"
-    os.system(command)
-    command = f'./slips.py -c slips.conf -l -f {suricata_path} -db {db0} {db1} -o {output_dir} > {output_dir}slips_output.txt 2>&1'
+    command = f'./slips.py -c slips.conf -l -f {suricata_path} -o {output_dir} > {output_dir}slips_output.txt 2>&1'
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
@@ -137,16 +132,13 @@ def test_suricata(database, suricata_path, db0, db1, output_dir):
         assert expected_evidence in f.read()
     shutil.rmtree(output_dir)
 
-@pytest.mark.parametrize('nfdump_path, db0, db1, output_dir',[('dataset/test.nfdump', '2','3','nfdump/')])
-def test_nfdump(database, nfdump_path, db0, db1, output_dir):
+@pytest.mark.parametrize('nfdump_path,  output_dir',[('dataset/test.nfdump', 'nfdump/')])
+def test_nfdump(database, nfdump_path,  output_dir):
     try:
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    # clear cache first because we'll be using a db that's been used before
-    command = "./slips.py -c slips.conf -cc"
-    os.system(command)
-    command = f'./slips.py -c slips.conf -l -f {nfdump_path} -db {db0} {db1} -o {output_dir} > {output_dir}slips_output.txt 2>&1'
+    command = f'./slips.py -c slips.conf -l -f {nfdump_path}  -o {output_dir} > {output_dir}slips_output.txt 2>&1'
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)

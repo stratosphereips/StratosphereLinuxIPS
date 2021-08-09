@@ -38,6 +38,7 @@ class Database(object):
         self.r = redis.StrictRedis(host='localhost', port=port, db=0, charset="utf-8", decode_responses=True) #password='password')
         # db 1 is cache, delete it using -cc flag
         self.rcache = redis.StrictRedis(host='localhost', port=port, db=1, charset="utf-8", decode_responses=True) #password='password')
+
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
         self.config = config
@@ -82,6 +83,13 @@ class Database(object):
                             if s.connect_ex(('localhost', port)) != 0:
                                 try:
                                     self.connect_to_redis_server(port)
+                                    # we'll be using this to close the server slips started
+                                    self.port = port
+                                    # Even if the DB is not deleted. We need to delete some temp data
+                                    # Zeek_files
+                                    self.r.delete('zeekfiles')
+                                    # By default the slips internal time is 0 until we receive something
+                                    self.setSlipsInternalTime(0)
                                     break
                                 except redis.exceptions.ConnectionError:
                                     # unable to connect to this port, try another one
@@ -90,13 +98,7 @@ class Database(object):
                 #     self.r.flushdb()
             except redis.exceptions.ConnectionError:
                 print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
-        # we'll be using this to close the server slips started
-        self.port = port
-        # Even if the DB is not deleted. We need to delete some temp data
-        # Zeek_files
-        self.r.delete('zeekfiles')
-        # By default the slips internal time is 0 until we receive something
-        self.setSlipsInternalTime(0)
+
 
     def print(self, text, verbose=1, debug=0):
         """
