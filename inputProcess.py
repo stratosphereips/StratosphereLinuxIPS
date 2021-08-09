@@ -368,6 +368,9 @@ class InputProcess(multiprocessing.Process):
         # every instance of slips creates a new dir in output/ dir
         # place zeek_files in it.
         self.zeek_folder = self.zeek_files_path + self.zeek_folder
+        # store this path in the db because we might need to delete it later
+        __database__.store_zeek_path(self.zeek_folder)
+
         # Create zeek_folder if does not exist.
         if not os.path.exists(self.zeek_folder):
             os.makedirs(self.zeek_folder)

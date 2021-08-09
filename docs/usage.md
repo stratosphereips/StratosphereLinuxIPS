@@ -79,6 +79,8 @@ There is also a configuration file **slips.conf** where the user can set up para
 
 You can run several instances of slips at the same, and the output of each instance will be stored in ```output/```  directory. 
 
+You can't run multiple instances of slips on the same interface
+
 Each instance of slips uses it's own redis server.
 
 ## Reading the output
@@ -125,11 +127,18 @@ Each IP address that appears in the network traffic of the input is represented 
 ```time_window_width```
 
 **Log files.**
-To disable the creation of log files, there are two options:
+
+To disable the creation of Slips log files, there are two options:
 1. Running Slips with ```-l``` flag. 
 2. Setting ```create_log_files``` to ```no```.
 
 You can also change how often Slips creates log files using the ```log_report_time``` variable.
+
+**Zeek files.**
+
+Zeek creates log files in ```output/filename/zeek_files```. All the log files zeek creates are deleted by default when slips stops.
+
+You can set the ```delete_zeek_files``` to ```no``` if you want to keep the log files after slips stops.
 
 ### Disabling module
 You can disable modules easily by appending the module name to the ```disable``` list.

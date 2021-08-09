@@ -238,6 +238,12 @@ def shutdown_gracefully():
             inputProcess.terminate()
         except NameError:
             pass
+
+        delete_zeek_files = config.get('parameters', 'delete_zeek_files')
+        if 'yes' in delete_zeek_files.lower():
+            output_dir = os.path.dirname(__database__.get_zeek_path())
+            os.system(f'cd {output_dir}; rm -r zeek_files 2>&1')
+
         # clear primary db
         __database__.r.flushdb()
         port = __database__.port
@@ -245,7 +251,6 @@ def shutdown_gracefully():
             # Only close the redis server if it's opened by slips, don't close the default one
             command = f'redis-cli -h 127.0.0.1 -p {port} shutdown'
             os.system(command)
-
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -382,8 +387,7 @@ if __name__ == '__main__':
         terminate_slips()
 
     # since we can run multiple instances of slips, we need to name the output dir using the name of the file/interface being used
-    # todo now we can't run multiple instances of slips on the same interface or the same
-    #todo document this
+    # todo when we run multiple instances of slips on the same interface, there will conflict in zeek_files and alerts logs
     if args.output == alerts_default_path:
         # Create output folder for alerts.txt and alerts.json if they do not exist
         try:
