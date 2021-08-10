@@ -88,4 +88,5 @@ dependencies:
   - pip:
     - maxminddb==2.0.3
     - redis==3.5.3
+    - pytest-xdist==2.3.0
 prefix: /Users/sebas/miniconda3/envs/slips

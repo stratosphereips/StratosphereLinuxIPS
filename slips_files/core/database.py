@@ -1,11 +1,16 @@
+import os
+
 import redis
 import time
 import json
-from typing import Tuple, Dict, Set, Callable
+from typing import Tuple
 import configparser
 import traceback
 from datetime import datetime
 import ipaddress
+import sys
+import socket
+import random
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -24,6 +29,15 @@ class Database(object):
         self.separator = '_'
         self.normal_label = 'normal'
         self.malicious_label = 'malicious'
+
+    def connect_to_redis_server(self, port):
+        # start the redis server
+        os.system(f'redis-server --port {port} --daemonize yes > /dev/null 2>&1')
+        # connect to the redis server
+        # db 0 changes everytime we run slips
+        self.r = redis.StrictRedis(host='localhost', port=port, db=0, charset="utf-8", decode_responses=True) #password='password')
+        # db 1 is cache, delete it using -cc flag
+        self.rcache = redis.StrictRedis(host='localhost', port=port, db=1, charset="utf-8", decode_responses=True) #password='password')
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -53,22 +67,36 @@ class Database(object):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.width = 3600
+        # set the default redis port
+        port = 6379
         # Create the connection to redis
         if not hasattr(self, 'r'):
             try:
-                # db 0 changes everytime we run slips
-                self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
-                # db 1 is cache, delete it using -cc flag
-                self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True) #password='password')
-                if self.deletePrevdb:
-                    self.r.flushdb()
+                self.connect_to_redis_server(port)
+                # check if server is being used by another instance of slips
+                if len(list(__database__.r.scan_iter())) > 2:
+                    # its being used
+                    while True:
+                        # generate another unused port
+                        port = random.randint(32768, 65535)
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                            if s.connect_ex(('localhost', port)) != 0:
+                                try:
+                                    self.connect_to_redis_server(port)
+                                    # we'll be using this to close the server slips started
+                                    self.port = port
+                                    # Even if the DB is not deleted. We need to delete some temp data
+                                    # Zeek_files
+                                    self.r.delete('zeekfiles')
+                                    # By default the slips internal time is 0 until we receive something
+                                    self.setSlipsInternalTime(0)
+                                    break
+                                except redis.exceptions.ConnectionError:
+                                    # unable to connect to this port, try another one
+                                    continue
             except redis.exceptions.ConnectionError:
                 print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
-        # Even if the DB is not deleted. We need to delete some temp data
-        # Zeek_files
-        self.r.delete('zeekfiles')
-        # By default the slips internal time is 0 until we receive something
-        self.setSlipsInternalTime(0)
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -113,10 +141,14 @@ class Database(object):
             self.outputqueue.put('00|database|{}'.format(type(inst)))
             self.outputqueue.put('00|database|{}'.format(inst))
 
-    def add_mac_addr_to_profile(self,profileid, mac_addr):
-        """ Used when mac adddr  """
-        # Add the MAC addr of this profile
-        self.r.hset(profileid,'MAC', mac_addr)
+    def add_mac_addr_to_profile(self,profileid, MAC_info):
+        """
+        Used when mac adddr
+        :param MAC_info: dict containing mac address and vendor info
+        """
+        MAC_info = json.loads(MAC_info)
+        # Add the MAC addr and vendor to this profile
+        self.r.hmset(profileid, MAC_info)
 
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
@@ -978,7 +1010,7 @@ class Database(object):
         Add a module label to the flow
         """
         flow = self.get_flow(profileid, twid, uid)
-        if flow:
+        if flow and flow[uid]:
             data = json.loads(flow[uid])
             # here we dont care if add new module lablel or changing existing one
             data['module_labels'][module_name] = module_label
@@ -1053,9 +1085,34 @@ class Database(object):
             # print(f'In the DB: IP {ip}, and data {data}')
         return data
 
+    def getURLData(self,url):
+        """
+        Return information about this URL
+        Returns a dictionary or False if there is no IP in the database
+        We need to separate these three cases:
+        1- IP is in the DB without data. Return empty dict.
+        2- IP is in the DB with data. Return dict.
+        3- IP is not in the DB. Return False
+        """
+        data = self.rcache.hget('URLsInfo', url)
+        if data:
+            # This means the URL was in the database, with or without data
+            # Convert the data
+            data = json.loads(data)
+        else:
+            # The IP was not in the DB
+            data = False
+        return data
+
     def getallIPs(self):
         """ Return list of all IPs in the DB """
         data = self.rcache.hgetall('IPsInfo')
+        # data = json.loads(data)
+        return data
+
+    def getallURLs(self):
+        """ Return list of all URLs in the DB """
+        data = self.rcache.hgetall('URLsInfo')
         # data = json.loads(data)
         return data
 
@@ -1096,9 +1153,33 @@ class Database(object):
             # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
 
+    def setNewURL(self, url: str):
+        """
+        1- Stores this new URL in the URLs hash
+        2- Publishes in the channels that there is a new URL, and that we want
+            data from the Threat Intelligence modules
+        """
+        data = self.getURLData(url)
+        if data is False:
+            # If there is no data about this URL
+            # Set this URL for the first time in the URLsInfo
+            # Its VERY important that the data of the first time we see a URL
+            # must be '{}', an empty dictionary! if not the logic breaks.
+            # We use the empty dictionary to find if an URL exists or not
+            self.rcache.hset('URLsInfo', url, '{}')
+
+
     def getIP(self, ip):
         """ Check if this ip is the hash of the profiles! """
         data = self.rcache.hget('IPsInfo', ip)
+        if data:
+            return True
+        else:
+            return False
+
+    def getURL(self,url):
+        """ Check if this url is the hash of the profiles! """
+        data = self.rcache.hget('URLsInfo', url)
         if data:
             return True
         else:
@@ -1172,13 +1253,64 @@ class Database(object):
             newdata_str = json.dumps(data)
             self.rcache.hset('IPsInfo', ip, newdata_str)
 
+    def setInfoForFile(self, md5: str, filedata: dict):
+        """
+        Store information for this file (only if it's malicious)
+        We receive a dictionary, such as {'virustotal': score} that we are
+        going to store for this IP.
+        If it was not there before we store it. If it was there before, we
+        overwrite it
+        """
+
+        file_info = json.dumps(filedata)
+        self.rcache.hset('FileInfo', md5, file_info)
+
+
+    def setInfoForURLs(self, url: str, urldata: dict):
+        """
+        Store information for this URL
+        We receive a dictionary, such as {'VirusTotal': {'URL':score}} that we are
+        going to store for this IP.
+        If it was not there before we store it. If it was there before, we
+        overwrite it
+        """
+        data = self.getURLData(url)
+        if data is False:
+            # This URL is not in the dictionary, add it first:
+            self.setNewURL(url)
+            # Now get the data, which should be empty, but just in case
+            data = self.getIPData(url)
+        # empty dicts evaluate to False
+        dict_has_keys = bool(data)
+        if dict_has_keys:
+            # loop through old data found in the db
+            for key in iter(data):
+                # Get the new data that has the same key
+                data_to_store = urldata[key]
+                # If there is data previously stored, check if we have this key already
+                try:
+                    # We modify value in any case, because there might be new info
+                    _ = data[key]
+                except KeyError:
+                    # There is no data for the key so far.
+                    pass
+                    # Publish the changes
+                    # self.r.publish('url_info_change', url)
+                data[key] = data_to_store
+                newdata_str = json.dumps(data)
+                self.rcache.hset('URLsInfo', url, newdata_str)
+        else:
+            # URL found in the database but has no keys , set the keys now
+            urldata = json.dumps(urldata)
+            self.rcache.hset('URLsInfo', url, urldata)
+
     def subscribe(self, channel):
         """ Subscribe to channel """
         # For when a TW is modified
         pubsub = self.r.pubsub()
         supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
                     'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
-                    'new_blocking', 'new_ssh','new_notice', 'finished_modules']
+                    'new_blocking', 'new_ssh','new_notice','new_url', 'finished_modules', 'new_downloaded_file']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 pubsub.subscribe(channel)
@@ -1380,6 +1512,7 @@ class Database(object):
         to_send['stime'] = stime
         to_send = json.dumps(to_send)
         self.publish('new_http', to_send)
+        self.publish('new_url', to_send)
         self.print('Adding HTTP flow to DB: {}'.format(data), 5, 0)
         # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         data_to_send = {
@@ -1879,5 +2012,12 @@ class Database(object):
         """ Return dict of 3 keys: IPs, domains and organizations"""
         return self.r.hgetall('whitelist')
 
+    def store_zeek_path(self, path):
+        """ used to store the path of zeek log files slips is currently using """
+        self.r.set('zeek_path', path)
+
+    def get_zeek_path(self)-> str:
+        """ return the path of zeek log files slips is currently using """
+        return self.r.get('zeek_path')
 
 __database__ = Database()
