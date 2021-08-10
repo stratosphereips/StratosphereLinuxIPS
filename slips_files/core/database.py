@@ -1057,9 +1057,34 @@ class Database(object):
             # print(f'In the DB: IP {ip}, and data {data}')
         return data
 
+    def getURLData(self,url):
+        """
+        Return information about this URL
+        Returns a dictionary or False if there is no IP in the database
+        We need to separate these three cases:
+        1- IP is in the DB without data. Return empty dict.
+        2- IP is in the DB with data. Return dict.
+        3- IP is not in the DB. Return False
+        """
+        data = self.rcache.hget('URLsInfo', url)
+        if data:
+            # This means the URL was in the database, with or without data
+            # Convert the data
+            data = json.loads(data)
+        else:
+            # The IP was not in the DB
+            data = False
+        return data
+
     def getallIPs(self):
         """ Return list of all IPs in the DB """
         data = self.rcache.hgetall('IPsInfo')
+        # data = json.loads(data)
+        return data
+
+    def getallURLs(self):
+        """ Return list of all URLs in the DB """
+        data = self.rcache.hgetall('URLsInfo')
         # data = json.loads(data)
         return data
 
@@ -1100,9 +1125,33 @@ class Database(object):
             # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
 
+    def setNewURL(self, url: str):
+        """
+        1- Stores this new URL in the URLs hash
+        2- Publishes in the channels that there is a new URL, and that we want
+            data from the Threat Intelligence modules
+        """
+        data = self.getURLData(url)
+        if data is False:
+            # If there is no data about this URL
+            # Set this URL for the first time in the URLsInfo
+            # Its VERY important that the data of the first time we see a URL
+            # must be '{}', an empty dictionary! if not the logic breaks.
+            # We use the empty dictionary to find if an URL exists or not
+            self.rcache.hset('URLsInfo', url, '{}')
+
+
     def getIP(self, ip):
         """ Check if this ip is the hash of the profiles! """
         data = self.rcache.hget('IPsInfo', ip)
+        if data:
+            return True
+        else:
+            return False
+
+    def getURL(self,url):
+        """ Check if this url is the hash of the profiles! """
+        data = self.rcache.hget('URLsInfo', url)
         if data:
             return True
         else:
@@ -1176,13 +1225,64 @@ class Database(object):
             newdata_str = json.dumps(data)
             self.rcache.hset('IPsInfo', ip, newdata_str)
 
+    def setInfoForFile(self, md5: str, filedata: dict):
+        """
+        Store information for this file (only if it's malicious)
+        We receive a dictionary, such as {'virustotal': score} that we are
+        going to store for this IP.
+        If it was not there before we store it. If it was there before, we
+        overwrite it
+        """
+
+        file_info = json.dumps(filedata)
+        self.rcache.hset('FileInfo', md5, file_info)
+
+
+    def setInfoForURLs(self, url: str, urldata: dict):
+        """
+        Store information for this URL
+        We receive a dictionary, such as {'VirusTotal': {'URL':score}} that we are
+        going to store for this IP.
+        If it was not there before we store it. If it was there before, we
+        overwrite it
+        """
+        data = self.getURLData(url)
+        if data is False:
+            # This URL is not in the dictionary, add it first:
+            self.setNewURL(url)
+            # Now get the data, which should be empty, but just in case
+            data = self.getIPData(url)
+        # empty dicts evaluate to False
+        dict_has_keys = bool(data)
+        if dict_has_keys:
+            # loop through old data found in the db
+            for key in iter(data):
+                # Get the new data that has the same key
+                data_to_store = urldata[key]
+                # If there is data previously stored, check if we have this key already
+                try:
+                    # We modify value in any case, because there might be new info
+                    _ = data[key]
+                except KeyError:
+                    # There is no data for the key so far.
+                    pass
+                    # Publish the changes
+                    # self.r.publish('url_info_change', url)
+                data[key] = data_to_store
+                newdata_str = json.dumps(data)
+                self.rcache.hset('URLsInfo', url, newdata_str)
+        else:
+            # URL found in the database but has no keys , set the keys now
+            urldata = json.dumps(urldata)
+            self.rcache.hset('URLsInfo', url, urldata)
+
     def subscribe(self, channel):
         """ Subscribe to channel """
         # For when a TW is modified
         pubsub = self.r.pubsub()
         supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
                     'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
-                    'new_blocking', 'new_ssh','new_notice', 'finished_modules']
+                    'new_blocking', 'new_ssh','new_notice','new_url', 'finished_modules', 'new_downloaded_file']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 pubsub.subscribe(channel)
@@ -1384,6 +1484,7 @@ class Database(object):
         to_send['stime'] = stime
         to_send = json.dumps(to_send)
         self.publish('new_http', to_send)
+        self.publish('new_url', to_send)
         self.print('Adding HTTP flow to DB: {}'.format(data), 5, 0)
         # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         data_to_send = {

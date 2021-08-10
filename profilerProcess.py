@@ -862,6 +862,13 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['scanning_ip'] = self.column_values['saddr']
             self.column_values['scanned_port'] =  self.column_values['dport']
             self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
+        elif '/files' in new_line['type']:
+            self.column_values['type'] = 'files'
+            self.column_values['uid'] = line[4]
+            self.column_values['saddr'] = line[2]
+            self.column_values['daddr'] = line[3] #rx_hosts
+            self.column_values['size'] = line[13]
+            self.column_values['md5'] = line[19]
 
     def process_zeek_input(self, new_line: dict):
         """
@@ -1036,6 +1043,19 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
             self.column_values['scanned_port'] = line.get('p', '')
             self.column_values['scanning_ip'] = line.get('src', '')
+        elif '/files' in file_type:
+            """ Parse the fields we're interested in in the files.log file """
+            # the slash before files to distinguish between 'files' in the dir name and file.log
+            self.column_values['type'] = 'files'
+            self.column_values['uid'] = line.get('conn_uids',[''])[0]
+            self.column_values['saddr'] = line.get('tx_hosts',[''])[0]
+            self.column_values['daddr'] = line.get('rx_hosts',[''])[0]
+            self.column_values['size'] = line.get('total_bytes', '') # downloaded file size
+            self.column_values['md5'] = line.get('md5', '')
+            # self.column_values['sha1'] = line.get('sha1','')
+            #todo process zeek tabs files.log
+        else:
+            return False
         return True
 
     def process_argus_input(self, new_line):
@@ -1615,7 +1635,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             if not self.column_values:
                 return True
-            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp'):
+            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -1805,6 +1825,20 @@ class ProfilerProcess(multiprocessing.Process):
                                                  self.column_values['scanning_ip'],
                                                  self.column_values['uid']
                                                  )
+                elif flow_type == 'files':
+                    """" Send files.log data to new_downloaded_file channel in vt module to see if it's malicious """
+                    to_send = {
+                        'uid' : self.column_values['uid'],
+                        'daddr': self.column_values['daddr'],
+                        'saddr': self.column_values['saddr'],
+                        'size' : self.column_values['size'],
+                        'md5':  self.column_values['md5'],
+                        'profileid' : profileid,
+                        'twid' : twid,
+                        'ts' : starttime
+                    }
+                    to_send = json.dumps(to_send)
+                    __database__.publish('new_downloaded_file', to_send)
 
             def store_features_going_in(profileid, twid, starttime):
                 """

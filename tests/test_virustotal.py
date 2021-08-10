@@ -54,3 +54,21 @@ def test_interpret_rsponse(outputQueue, ip):
     response = virustotal.api_query_(ip)
     for ratio in virustotal.interpret_response(response):
         assert type(ratio) == float
+
+def test_get_domain_vt_data(outputQueue):
+    virustotal = create_virustotal_instance(outputQueue)
+    assert virustotal.get_domain_vt_data('google.com') != False
+
+def test_scan_file(outputQueue, database):
+    virustotal = create_virustotal_instance(outputQueue)
+    # test this function with a hash we know is malicious
+    file_info = {'uid' : 123,
+    'daddr': '8.8.8.8',
+    'saddr': '8.8.8.8',
+    'size' : 123,
+    'profileid' : 'profile_192.168.1.1',
+    'twid' : 'timewindow0',
+    'md5' : '7c401bde8cafc5b745b9f65effbd588f',
+    'ts' :  ''
+    }
+    assert virustotal.scan_file(file_info) == 'malicious'

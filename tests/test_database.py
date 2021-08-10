@@ -25,19 +25,6 @@ def test_timewindows(database):
     assert database.getFirstTWforProfile(profileid) == [('timewindow1', 0.0)]
     assert database.getLastTWforProfile(profileid) == [('timewindow2', 5.0)]
 
-def test_TW_modification(database):
-    """ tests markProfileTWAsModified,getModifiedTWSinceTime,check_TW_to_close   """
-    # clear the database before running this test
-    os.system('./slips.py -c slips.conf -cc')
-    # add a profile
-    database.addProfile(profileid,'00:00','1')
-    # add a tw to that profile (first tw)
-    database.addNewTW(profileid, 0.0)
-    # add  a new tw (last tw)
-    database.addNewTW(profileid, 5.0)
-    database.markProfileTWAsModified(profileid,twid,20.0)
-    assert database.getModifiedTWSinceTime(0.0)[0][0] == 'profile_192.168.1.1_timewindow1'
-
 def getSlipsInternalTime():
     """ return a random time for testing"""
     return 50.0
