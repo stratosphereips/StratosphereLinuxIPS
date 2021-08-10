@@ -343,7 +343,7 @@ class EvidenceProcess(multiprocessing.Process):
                         # Method 1: using asn
                         # Check if the IP in the content of the alert has ASN info in the db
                         ip_data = __database__.getIPData(ip)
-                        ip_asn = ip_data['asn']
+                        ip_asn = ip_data.get('asn',{'asnorg':''})
                         # make sure the asn field contains a value
                         if (ip_asn['asnorg'] not in ('','Unknown')
                                 and (org.lower() in ip_asn['asnorg'].lower()
