@@ -1,4 +1,5 @@
 import configparser
+import re
 import time
 import os
 from slips_files.core.database import __database__
@@ -281,7 +282,14 @@ class UpdateFileManager:
 
                 # temp_line = malicious_file.readline()
                 data = line.replace("\n","").replace("\"","").split(",")
-                amount_of_columns = len(line.split(","))
+                if ',' in line:
+                    data = line.replace("\n","").replace("\"","").split(",")
+                    amount_of_columns = len(line.split(","))
+                else:
+                    data = line.replace("\n","").replace("\"","").split("\t")
+                    # lines are not comma separated like ipsum files, try tabs
+                    amount_of_columns = len(line.split('\t'))
+
                 if description_column is None:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
@@ -332,14 +340,21 @@ class UpdateFileManager:
                     # Separate the lines like CSV
                     # In the new format the ip is in the second position.
                     # And surronded by "
-                    data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
+                    if ',' in line:
+
+                        data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
+                    else:
+                        data = line.replace("\n", "").replace("\"", "").split("\t")[data_column].strip()
 
                     if '/' in data:
                         # this is probably a range of ips, we don't support that
                         continue
 
                     try:
-                        description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
+                        if ',' in line:
+                            description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
+                        else:
+                            description = line.replace("\n", "").replace("\"", "").split("\t")[description_column].strip()
                     except IndexError:
                         self.print(f'IndexError Description column: {description_column}. Line: {line}')
                     self.print('\tRead Data {}: {}'.format(data, description), 10, 0)
