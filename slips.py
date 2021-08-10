@@ -222,9 +222,18 @@ def shutdown_gracefully():
             # The logsProcessQueue is not there because we
             # didnt started the logs files (used -l)
             pass
-        outputProcessQueue.put('stop_process')
-        profilerProcessQueue.put('stop_process')
-        inputProcess.terminate()
+        try:
+            outputProcessQueue.put('stop_process')
+        except NameError:
+            pass
+        try:
+            profilerProcessQueue.put('stop_process')
+        except NameError:
+            pass
+        try:
+            inputProcess.terminate()
+        except NameError:
+            pass
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -363,9 +372,10 @@ if __name__ == '__main__':
 
 
     # Remove default folder for alerts, if exists
-    if os.path.exists(alerts_default_path):
+    if os.path.exists(args.output):
         try:
-            shutil.rmtree(alerts_default_path)
+            os.remove(args.output + 'alerts.log')
+            os.remove(args.output + 'alerts.json')
         except OSError :
             # Directory not empty (may contain hidden non-deletable files), don't delete dir
             pass
