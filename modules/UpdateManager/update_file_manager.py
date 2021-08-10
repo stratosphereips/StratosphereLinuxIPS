@@ -261,15 +261,17 @@ class UpdateFileManager:
                 description_column = None
                 while True:
                     line = malicious_file.readline()
-                    # break while statement if it is not a comment line
-                    # i.e. does not startwith #
-                    if line.startswith('#"type"'):
-                        # looks like the colums names, search where is the
+                    # some ioc files start with "first_seen_utc"
+                    if line.startswith('#"type"') or line.startswith('"first_seen_utc"'):
+                        # looks like the column names, search where is the
                         # description column
-                        for name_column in line.split(','):
-                            if name_column.lower().startswith('desc'):
-                                description_column = line.split(',').index(name_column)
-                    if not line.startswith('#') and not "type" in line.lower() and not line.isspace() and line not in ('\n',''):
+                        for column in line.split(','):
+                            # some files have the name of the malware ad the description of the ioc
+                            if column.lower().startswith('desc') or 'malware' in column :
+                                description_column = line.split(',').index(column)
+                    if not line.startswith('#') and not "type" in line.lower() and not "first_seen_utc" in line.lower() and not line.isspace() and line not in ('\n',''):
+                        # break while statement if it is not a comment line
+                        # i.e. does not startwith #
                         break
 
                 #
@@ -339,6 +341,9 @@ class UpdateFileManager:
                     # an IP or domain
                     # In the case of domains can be
                     # domain,www.netspy.net,NetSpy
+
+                    # skip comment lines
+                    if line.startswith('#'): continue
 
                     # Separate the lines like CSV, either by commas or tabs
                     # In the new format the ip is in the second position.
