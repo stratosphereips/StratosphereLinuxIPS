@@ -346,10 +346,9 @@ class Module(Module, multiprocessing.Process):
                         cached_data = __database__.getDomainData(domain)
                         # If VT data of this domain is not in the DomainInfo, ask VT
                         # If 'Virustotal' key is not in the DomainInfo
-                        if not cached_data or 'VirusTotal' not in cached_data:
+                        if domain and (not cached_data or 'VirusTotal' not in cached_data):
                             self.set_domain_data_in_DomainInfo(domain, cached_data)
-
-                        elif cached_data and 'VirusTotal' in cached_data:
+                        elif domain and cached_data and 'VirusTotal' in cached_data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_domain_data_in_DomainInfo(domain, cached_data)
@@ -455,7 +454,9 @@ class Module(Module, multiprocessing.Process):
         :param domain: Domain address to check
         :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
         """
-
+        if 'arpa' in domain or '.local' in domain:
+            # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
+            return (0, 0, 0, 0), ''
         try:
             # for unknown address, do the query
             response = self.api_query_(domain)
@@ -468,6 +469,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            return False
 
     def get_ioc_type(self, ioc):
         """ Check the type of ioc, returns url, ip, domain or hash type"""
