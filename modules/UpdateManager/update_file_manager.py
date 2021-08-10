@@ -281,7 +281,6 @@ class UpdateFileManager:
                 current_file_position = malicious_file.tell()
 
                 # temp_line = malicious_file.readline()
-                data = line.replace("\n","").replace("\"","").split(",")
                 if ',' in line:
                     data = line.replace("\n","").replace("\"","").split(",")
                     amount_of_columns = len(line.split(","))
@@ -317,11 +316,15 @@ class UpdateFileManager:
                                 data_column = column
                                 self.print(f'The data is on column {column} and is domain: {data[column]}', 0, 6)
                                 break
+                            elif "/" in data[column]:
+                                # this file contains one column that has network ranges and ips
+                                data_column = column
                             else:
                                 # Some string that is not a domain
                                 data_column = None
                                 pass
                 if data_column is None:
+                    # can't find a column that contains an ioc
                     self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 1, 1)
                     return False
 
@@ -337,17 +340,16 @@ class UpdateFileManager:
                     # In the case of domains can be
                     # domain,www.netspy.net,NetSpy
 
-                    # Separate the lines like CSV
+                    # Separate the lines like CSV, either by commas or tabs
                     # In the new format the ip is in the second position.
                     # And surronded by "
                     if ',' in line:
-
                         data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
                     else:
                         data = line.replace("\n", "").replace("\"", "").split("\t")[data_column].strip()
 
                     if '/' in data:
-                        # this is probably a range of ips, we don't support that
+                        # this is probably a range of ips, we don't support that, read the next line
                         continue
 
                     try:
