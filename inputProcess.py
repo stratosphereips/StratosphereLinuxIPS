@@ -223,7 +223,6 @@ class InputProcess(multiprocessing.Process):
                     # It has been 10 seconds without any file being updated. So stop the while
                     # Get out of the while and stop Zeek
                     break
-            print(f'**********************{time_last_lines}')
             # Now read lines in order. The line with the smallest timestamp first
             file_sorted_time_last_lines = sorted(time_last_lines, key=time_last_lines.get)
             # self.print('Sorted times: {}'.format(str(file_sorted_time_last_lines)))
