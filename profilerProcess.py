@@ -74,6 +74,8 @@ class ProfilerProcess(multiprocessing.Process):
         self.local_timezone = get_localzone()
         self.verbose = verbose
         self.debug = debug
+        self.timeout = None
+        self.c1 = __database__.subscribe('reload_whitelist')
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -154,9 +156,15 @@ class ProfilerProcess(multiprocessing.Process):
     def read_whitelist(self):
         """ Reads the content of whitelist.conf and stores information about each ip/org/domain in the database """
 
-        self.whitelisted_IPs = {}
-        self.whitelisted_domains = {}
-        self.whitelisted_orgs = {}
+        # since this function can be run when the user modifies whitelist.conf
+        # we need to check if the dicts are already there
+        if not hasattr(self,'whitelisted_IPs'):
+            self.whitelisted_IPs = {}
+        if not hasattr(self,'whitelisted_domains'):
+            self.whitelisted_domains = {}
+        if not hasattr(self,'whitelisted_orgs'):
+            self.whitelisted_orgs = {}
+
         try:
             with open(self.whitelist_path) as whitelist:
                 # Ignore comments
@@ -183,6 +191,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.print(f"Line {line_number} in whitelist.conf is missing a column. Skipping.")
                         line = whitelist.readline()
                         continue
+
                     # Validate the type before processing
                     try:
                         if ('ip' in type_ and
@@ -207,19 +216,24 @@ class ProfilerProcess(multiprocessing.Process):
             self.whitelisted_path = 'whitelist.conf'
             self.read_whitelist()
 
-
         # after we're done reading the file, process organizations info
         # If the user specified an org in the whitelist, load the info about it only to the db and to memory
         for org in self.whitelisted_orgs:
-            # Store the IPs of this org in the db
-            org_subnets = self.load_org_IPs(org)
-            org_asn = self.load_org_asn(org)
-            if org_subnets:
-                # Store the IPs of this org
-                self.whitelisted_orgs[org].update({'IPs' : json.dumps(org_subnets)})
-            if org_asn:
-                # Store the ASN of this org
-                self.whitelisted_orgs[org].update({'asn' : json.dumps(org_asn)})
+            # make sure you only load IPs and asn of an org once
+
+            if not 'IPs' in self.whitelisted_orgs:
+                # Store the IPs of this org in the db
+                org_subnets = self.load_org_IPs(org)
+                if org_subnets:
+                    # Store the IPs of this org
+                    self.whitelisted_orgs[org].update({'IPs' : json.dumps(org_subnets)})
+
+            if not 'asn' in self.whitelisted_orgs:
+                org_asn = self.load_org_asn(org)
+                if org_asn:
+                    # Store the ASN of this org
+                    self.whitelisted_orgs[org].update({'asn' : json.dumps(org_asn)})
+
         # store everything in the db because we'll be needing this info in the evidenceProcess
         __database__.set_whitelist(self.whitelisted_IPs,
                                    self.whitelisted_domains,
@@ -245,7 +259,7 @@ class ProfilerProcess(multiprocessing.Process):
                     line = f.readline()
             return org_asn
         except (FileNotFoundError, IOError):
-            self.print(f"Can't read slips/organizations_info/{org}_asn ... Aborting.",2,2)
+            self.print(f"Can't read slips_files/organizations_info/{org}_asn ... Aborting.",2,2)
             return False
 
     def load_org_IPs(self, org) -> list :
@@ -2422,6 +2436,19 @@ class ProfilerProcess(multiprocessing.Process):
                         self.add_flow_to_profile()
                     else:
                         self.print("Can't recognize input file type.")
+
+                    # listen on this channel in case whitelist.conf is changed, we need to process the new changes
+                    message = self.c1.get_message(timeout=self.timeout)
+                    if message['data'] == 'stop_process':
+                        # Confirm that the module is done processing
+                        __database__.publish('finished_modules', self.name)
+                        return True
+                    if message and message['channel'] == 'reload_whitelist' and type(message['data']) == str:
+                        # if whitelist.conf is edited using pycharm
+                        # a msg will be sent to this channel on every keypress, becausse pycharm saves file automatically
+                        # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
+                        self.read_whitelist()
+
         except KeyboardInterrupt:
             self.print("Received {} lines.".format(rec_lines), 0, 1)
             return True

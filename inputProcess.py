@@ -371,7 +371,7 @@ class InputProcess(multiprocessing.Process):
         # Create an observer
         self.event_observer = Observer()
         # Schedule the observer with the callback on the file handler
-        self.event_observer.schedule(self.event_handler, self.zeek_folder, recursive=True)
+        self.event_observer.schedule(self.event_handler, '.', recursive=True)
         # Start the observer
         self.event_observer.start()
 
@@ -395,7 +395,7 @@ class InputProcess(multiprocessing.Process):
         if len(os.listdir(self.zeek_folder)) > 0:
             # First clear the zeek folder of old .log files
             # The rm should not be in background because we must wait until the folder is empty
-            command = "rm " + self.zeek_folder + "/*.log 2>&1 > /dev/null"
+            command = "rm " + self.zeek_folder + "/*.log > /dev/null  2>&1"
             os.system(command)
 
         # Run zeek on the pcap or interface. The redef is to have json files
