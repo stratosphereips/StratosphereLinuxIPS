@@ -363,8 +363,8 @@ class UpdateFileManager:
                     else:
                         data = line.replace("\n", "").replace("\"", "").split("\t")[data_column].strip()
 
-                    if '/' in data:
-                        # this is probably a range of ips, we don't support that, read the next line
+                    if '/' in data or data in ('','\n'):
+                        # this is probably a range of ips or a new line, we don't support that. read the next line
                         continue
 
                     try:
