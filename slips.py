@@ -223,9 +223,18 @@ def shutdown_gracefully():
             # The logsProcessQueue is not there because we
             # didnt started the logs files (used -l)
             pass
-        outputProcessQueue.put('stop_process')
-        profilerProcessQueue.put('stop_process')
-        inputProcess.terminate()
+        try:
+            outputProcessQueue.put('stop_process')
+        except NameError:
+            pass
+        try:
+            profilerProcessQueue.put('stop_process')
+        except NameError:
+            pass
+        try:
+            inputProcess.terminate()
+        except NameError:
+            pass
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -364,9 +373,10 @@ if __name__ == '__main__':
 
 
     # Remove default folder for alerts, if exists
-    if os.path.exists(alerts_default_path):
+    if os.path.exists(args.output):
         try:
-            shutil.rmtree(alerts_default_path)
+            os.remove(args.output + 'alerts.log')
+            os.remove(args.output + 'alerts.json')
         except OSError :
             # Directory not empty (may contain hidden non-deletable files), don't delete dir
             pass
@@ -431,8 +441,15 @@ if __name__ == '__main__':
     # the output of the rest of the threads.
     # Create the queue
     outputProcessQueue = Queue()
+    # if stdout it redirected to a file, tell outputProcess.py to redirect it's output as well
+    current_stdout = os.readlink(f"/proc/{os.getpid()}/fd/1")
+    #  /dev/pts/2 is the terminal
+    if '/dev/pts' in current_stdout:
+        # stdout is not redirected , default value is '' where slips doesn't do any redirection
+        current_stdout = ''
     # Create the output thread and start it
-    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
+    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config, stdout=current_stdout)
+    # this process starts the db
     outputProcessThread.start()
 
     # Before starting update malicious file
