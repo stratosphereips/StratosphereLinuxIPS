@@ -196,6 +196,7 @@ class Module(Module, multiprocessing.Process):
         profileid = file_info['profileid']
         twid = file_info['twid']
         md5 = file_info['md5']
+        ts = file_info['ts']
 
         response = self.api_query_(md5)
 
@@ -213,14 +214,11 @@ class Module(Module, multiprocessing.Process):
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                     threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
+                                     threat_level, confidence, description, ts , profileid=profileid, twid=twid, uid=uid)
+            self.counter += 1
+            return 'malicious'
         self.counter += 1
-
-        data = {}
-        data["VirusTotal"] =  {'score': score,
-                  "timestamp": time.time()}
-
-        # __database__.setInfoForFile(md5, data)
+        return 'benign'
 
     def API_calls_thread(self):
         """
