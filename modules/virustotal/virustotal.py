@@ -432,7 +432,7 @@ class Module(Module, multiprocessing.Process):
         else:
             url_ratio = 0
 
-        # following categories are computed in the same way
+        # following categories  are computed in the same way
         undetected_download_score = self.count_positives(response, "undetected_downloaded_samples", "positives", "total")
         detected_download_score = self.count_positives(response, "detected_downloaded_samples", "positives", "total")
         down_file_detections = undetected_download_score[0] + detected_download_score[0]
