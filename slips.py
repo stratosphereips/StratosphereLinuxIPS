@@ -440,8 +440,15 @@ if __name__ == '__main__':
     # the output of the rest of the threads.
     # Create the queue
     outputProcessQueue = Queue()
+    # if stdout it redirected to a file, tell outputProcess.py to redirect it's output as well
+    current_stdout = os.readlink(f"/proc/{os.getpid()}/fd/1")
+    #  /dev/pts/2 is the terminal
+    if '/dev/pts' in current_stdout:
+        # stdout is not redirected , default value is '' where slips doesn't do any redirection
+        current_stdout = ''
     # Create the output thread and start it
-    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config)
+    outputProcessThread = OutputProcess(outputProcessQueue, args.verbose, args.debug, config, stdout=current_stdout)
+    # this process starts the db
     outputProcessThread.start()
 
     # Before starting update malicious file
