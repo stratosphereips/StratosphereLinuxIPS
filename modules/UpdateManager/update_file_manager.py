@@ -90,6 +90,7 @@ class UpdateFileManager:
                 new_e_tag = temp.split()[1].split('\n')[0].replace("\"",'')
                 return new_e_tag
             except IndexError:
+                self.print(f"File {file_to_download} doesn't have an e-tag")
                 return False
         except Exception as inst:
             self.print('Error with get_e_tag_from_web()', 0, 1)
@@ -281,9 +282,12 @@ class UpdateFileManager:
 
                 # Store the current position of the TI file
                 current_file_position = malicious_file.tell()
-
                 # temp_line = malicious_file.readline()
-                if ',' in line:
+                if '#' in line:
+                    # some files like alienvault.com/reputation.generic have comments next to ioc
+                    data = line.replace("\n","").replace("\"","").split("#")
+                    amount_of_columns =  len(line.split("#"))
+                elif ',' in line:
                     data = line.replace("\n","").replace("\"","").split(",")
                     amount_of_columns = len(line.split(","))
                 else:
@@ -348,7 +352,9 @@ class UpdateFileManager:
                     # Separate the lines like CSV, either by commas or tabs
                     # In the new format the ip is in the second position.
                     # And surronded by "
-                    if ',' in line:
+                    if '#' in line:
+                        data = line.replace("\n", "").replace("\"", "").split("#")[data_column].strip()
+                    elif ',' in line:
                         data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
                     else:
                         data = line.replace("\n", "").replace("\"", "").split("\t")[data_column].strip()
@@ -358,7 +364,9 @@ class UpdateFileManager:
                         continue
 
                     try:
-                        if ',' in line:
+                        if '#' in line:
+                            description = line.replace("\n", "").replace("\"", "").split("#")[description_column].strip()
+                        elif ',' in line:
                             description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
                         else:
                             description = line.replace("\n", "").replace("\"", "").split("\t")[description_column].strip()
