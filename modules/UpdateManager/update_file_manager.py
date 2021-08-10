@@ -268,7 +268,7 @@ class UpdateFileManager:
                         for name_column in line.split(','):
                             if name_column.lower().startswith('desc'):
                                 description_column = line.split(',').index(name_column)
-                    if not line.startswith('#') and not line.lower().strip().startswith('"type"') and not line.lower().strip().startswith('type'):
+                    if not line.startswith('#') and not "type" in line.lower() and not line.isspace() and line not in ('\n',''):
                         break
 
                 #
@@ -283,6 +283,7 @@ class UpdateFileManager:
                 data = line.replace("\n","").replace("\"","").split(",")
                 amount_of_columns = len(line.split(","))
                 if description_column is None:
+                    # assume it's the last column
                     description_column = amount_of_columns - 1
                 # Search the first column that is an IPv4, IPv6 or domain
                 for column in range(amount_of_columns):
@@ -332,6 +333,10 @@ class UpdateFileManager:
                     # In the new format the ip is in the second position.
                     # And surronded by "
                     data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
+
+                    if '/' in data:
+                        # this is probably a range of ips, we don't support that
+                        continue
 
                     try:
                         description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
