@@ -403,7 +403,7 @@ class Module(Module, multiprocessing.Process):
         response has 8 fields with scores - two (detected and undetected) for each of the four categories. Some fields may
         be missing if data for the category is not present.
 
-        To compute the ratio for a category, scores across the two fields are summed together. A global number of detections
+        To compute the ratio for a category , scores across the two fields are summed together. A global number of detections
         is computed (sum of all positive detections across all samples in the detected field) and the global number of tests
         is computed (sum of all "total" values in both detected and undetected sample lists). Now we have detections for a
         category and total for a category. The ratio for a category is detections/total. If no tests were run (the field is
