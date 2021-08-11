@@ -76,7 +76,7 @@ class Module(Module, multiprocessing.Process):
         type_detection = 'outTuple'
         detection_info = tupleid
         type_evidence = 'C&C channels detection'
-        threat_level = 100
+        threat_level = 30
         description = 'RNN C&C channels detection, score: ' + str(score) + ', tuple ID:\'' + str(tupleid) +'\''
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
