@@ -180,6 +180,27 @@ class ProfilerProcess(multiprocessing.Process):
                     line_number+=1
                     # ignore comments
                     if line.startswith('#'):
+                        # check if the user commented an org, ip or domain that was whitelisted
+                        if hasattr(self,'whitelisted_IPs'):
+                            for ip in self.whitelisted_IPs.keys():
+                                # make sure the user commmented the line they added exactly
+                                if ip in line and ip['from'] in line and ip['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_ips
+                                    self.whitelisted_IPs.pop(ip)
+                        if hasattr(self,'whitelisted_domains'):
+                            for domain in self.whitelisted_domains.keys():
+                                # make sure the user commmented the line they added exactly
+                                if domain in line and domain['from'] in line and domain['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_ips
+                                    self.whitelisted_domains.pop(domain)
+                        if hasattr(self,'whitelisted_orgs'):
+                            for org in self.whitelisted_orgs.keys():
+                                # make sure the user commmented the line they added exactly
+                                if org in line and org['from'] in line and org['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_ips
+                                    self.whitelisted_orgs.pop(org)
+                                    # todo if the user commented organization,facebook,both,both
+                                    # todo and added organization,facebook,src,src , the asn, domain and ips info about fb will be deleted and then reloaded again!!
                         line = whitelist.readline()
                         continue
                     # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
@@ -204,8 +225,13 @@ class ProfilerProcess(multiprocessing.Process):
                             #  {'google': {'from':'dst',
                             #               'what_to_ignore': 'alerts'
                             #               'IPs': {'34.64.0.0/10': subnet}}
-                            self.whitelisted_orgs[data] = {'from': from_,
-                                                           'what_to_ignore': what_to_ignore}
+                            try:
+                                # if we already have this org ips and domains loaded, just update the from and what_to_ignore keys if the user changed them
+                                self.whitelisted_orgs[data].update({'from' : from_, 'what_to_ignore' : what_to_ignore})
+                            except KeyError:
+                                # we don't have loaded info about this org, add new keys
+                                self.whitelisted_orgs[data] = {'from' : from_, 'what_to_ignore' : what_to_ignore}
+
                         else:
                             self.print(f"{data} is not a valid {type_}.",1,0)
                     except:
@@ -219,21 +245,21 @@ class ProfilerProcess(multiprocessing.Process):
         # after we're done reading the file, process organizations info
         # If the user specified an org in the whitelist, load the info about it only to the db and to memory
         for org in self.whitelisted_orgs:
-            # make sure you only load IPs and asn of an org once
-            if not 'domains' in self.whitelisted_orgs:
+            # make sure you only load IPs, asn and domains of an org once
+            if not 'domains' in self.whitelisted_orgs[org]:
                 org_domains = self.load_org_domains(org)
                 if org_domains:
                     # Store the ASN of this org
                     self.whitelisted_orgs[org].update({'domains' : json.dumps(org_domains)})
 
-            if not 'IPs' in self.whitelisted_orgs:
+            if not 'IPs' in self.whitelisted_orgs[org]:
                 # Store the IPs of this org in the db
                 org_subnets = self.load_org_IPs(org)
                 if org_subnets:
                     # Store the IPs of this org
                     self.whitelisted_orgs[org].update({'IPs' : json.dumps(org_subnets)})
 
-            if not 'asn' in self.whitelisted_orgs:
+            if not 'asn' in self.whitelisted_orgs[org]:
                 org_asn = self.load_org_asn(org)
                 if org_asn:
                     # Store the ASN of this org
