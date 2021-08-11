@@ -1,4 +1,5 @@
 import configparser
+import re
 import time
 import os
 from slips_files.core.database import __database__
@@ -89,6 +90,7 @@ class UpdateFileManager:
                 new_e_tag = temp.split()[1].split('\n')[0].replace("\"",'')
                 return new_e_tag
             except IndexError:
+                self.print(f"File {file_to_download} doesn't have an e-tag")
                 return False
         except Exception as inst:
             self.print('Error with get_e_tag_from_web()', 0, 1)
@@ -260,15 +262,21 @@ class UpdateFileManager:
                 description_column = None
                 while True:
                     line = malicious_file.readline()
-                    # break while statement if it is not a comment line
-                    # i.e. does not startwith #
-                    if line.startswith('#"type"'):
-                        # looks like the colums names, search where is the
+                    # some ioc files start with "first_seen_utc"
+                    if line.startswith('#"type"') or line.startswith('"first_seen_utc"') or line.startswith('"ip_v4"'):
+                        # looks like the column names, search where is the
                         # description column
-                        for name_column in line.split(','):
-                            if name_column.lower().startswith('desc'):
-                                description_column = line.split(',').index(name_column)
-                    if not line.startswith('#') and not line.lower().strip().startswith('"type"') and not line.lower().strip().startswith('type'):
+                        for column in line.split(','):
+                            # some files have the name of the malware ad the description of the ioc
+                            if column.lower().startswith('desc') or 'malware' in column or 'tags_str' in column:
+                                description_column = line.split(',').index(column)
+                    if not line.startswith('#') and not "type" in line.lower() \
+                            and not "first_seen_utc" in line.lower() \
+                            and not "ip_v4" in line.lower() \
+                            and not line.isspace() \
+                            and line not in ('\n',''):
+                        # break while statement if it is not a comment line
+                        # i.e. does not startwith #
                         break
 
                 #
@@ -278,11 +286,21 @@ class UpdateFileManager:
 
                 # Store the current position of the TI file
                 current_file_position = malicious_file.tell()
-
                 # temp_line = malicious_file.readline()
-                data = line.replace("\n","").replace("\"","").split(",")
-                amount_of_columns = len(line.split(","))
+                if '#' in line:
+                    # some files like alienvault.com/reputation.generic have comments next to ioc
+                    data = line.replace("\n","").replace("\"","").split("#")
+                    amount_of_columns =  len(line.split("#"))
+                elif ',' in line:
+                    data = line.replace("\n","").replace("\"","").split(",")
+                    amount_of_columns = len(line.split(","))
+                else:
+                    data = line.replace("\n","").replace("\"","").split("\t")
+                    # lines are not comma separated like ipsum files, try tabs
+                    amount_of_columns = len(line.split('\t'))
+
                 if description_column is None:
+                    # assume it's the last column
                     description_column = amount_of_columns - 1
                 # Search the first column that is an IPv4, IPv6 or domain
                 for column in range(amount_of_columns):
@@ -308,11 +326,15 @@ class UpdateFileManager:
                                 data_column = column
                                 self.print(f'The data is on column {column} and is domain: {data[column]}', 0, 6)
                                 break
+                            elif "/" in data[column]:
+                                # this file contains one column that has network ranges and ips
+                                data_column = column
                             else:
                                 # Some string that is not a domain
                                 data_column = None
                                 pass
                 if data_column is None:
+                    # can't find a column that contains an ioc
                     self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 1, 1)
                     return False
 
@@ -328,13 +350,30 @@ class UpdateFileManager:
                     # In the case of domains can be
                     # domain,www.netspy.net,NetSpy
 
-                    # Separate the lines like CSV
+                    # skip comment lines
+                    if line.startswith('#'): continue
+
+                    # Separate the lines like CSV, either by commas or tabs
                     # In the new format the ip is in the second position.
                     # And surronded by "
-                    data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
+                    if '#' in line:
+                        data = line.replace("\n", "").replace("\"", "").split("#")[data_column].strip()
+                    elif ',' in line:
+                        data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
+                    else:
+                        data = line.replace("\n", "").replace("\"", "").split("\t")[data_column].strip()
+
+                    if '/' in data or data in ('','\n'):
+                        # this is probably a range of ips or a new line, we don't support that. read the next line
+                        continue
 
                     try:
-                        description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
+                        if '#' in line:
+                            description = line.replace("\n", "").replace("\"", "").split("#")[description_column].strip()
+                        elif ',' in line:
+                            description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
+                        else:
+                            description = line.replace("\n", "").replace("\"", "").split("\t")[description_column].strip()
                     except IndexError:
                         self.print(f'IndexError Description column: {description_column}. Line: {line}')
                     self.print('\tRead Data {}: {}'.format(data, description), 10, 0)

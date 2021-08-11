@@ -55,6 +55,13 @@ def test_interpret_rsponse(outputQueue, ip):
     for ratio in virustotal.interpret_response(response):
         assert type(ratio) == float
 
+<<<<<<< HEAD
+=======
+def test_get_domain_vt_data(outputQueue):
+    virustotal = create_virustotal_instance(outputQueue)
+    assert virustotal.get_domain_vt_data('google.com') != False
+
+>>>>>>> develop
 def test_scan_file(outputQueue, database):
     virustotal = create_virustotal_instance(outputQueue)
     # test this function with a hash we know is malicious

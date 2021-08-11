@@ -238,6 +238,7 @@ def shutdown_gracefully():
             inputProcess.terminate()
         except NameError:
             pass
+<<<<<<< HEAD
 
         delete_zeek_files = config.get('parameters', 'delete_zeek_files')
         if 'yes' in delete_zeek_files.lower():
@@ -254,6 +255,8 @@ def shutdown_gracefully():
             # Only close the redis server if it's opened by slips, don't close the default one
             command = f'redis-cli -h 127.0.0.1 -p {port} shutdown'
             os.system(command)
+=======
+>>>>>>> develop
         os._exit(-1)
         return True
     except KeyboardInterrupt:
