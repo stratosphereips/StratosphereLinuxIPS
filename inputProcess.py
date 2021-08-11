@@ -452,7 +452,6 @@ class InputProcess(multiprocessing.Process):
                 # default value
                 self.print(f'Unrecognized file type "{self.input_type}". Stopping.')
                 return False
-            return True
 
         except KeyboardInterrupt:
             self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(self.lines))
