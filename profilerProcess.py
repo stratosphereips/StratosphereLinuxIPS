@@ -74,7 +74,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.local_timezone = get_localzone()
         self.verbose = verbose
         self.debug = debug
-        self.timeout = None
+        self.timeout = 1
         self.c1 = __database__.subscribe('reload_whitelist')
 
     def print(self, text, verbose=1, debug=0):
@@ -220,6 +220,11 @@ class ProfilerProcess(multiprocessing.Process):
         # If the user specified an org in the whitelist, load the info about it only to the db and to memory
         for org in self.whitelisted_orgs:
             # make sure you only load IPs and asn of an org once
+            if not 'domains' in self.whitelisted_orgs:
+                org_domains = self.load_org_domains(org)
+                if org_domains:
+                    # Store the ASN of this org
+                    self.whitelisted_orgs[org].update({'domains' : json.dumps(org_domains)})
 
             if not 'IPs' in self.whitelisted_orgs:
                 # Store the IPs of this org in the db
@@ -259,7 +264,28 @@ class ProfilerProcess(multiprocessing.Process):
                     line = f.readline()
             return org_asn
         except (FileNotFoundError, IOError):
-            self.print(f"Can't read slips_files/organizations_info/{org}_asn ... Aborting.",2,2)
+            self.print(f"Can't read slips/organizations_info/{org}_asn ... Aborting.",2,2)
+            return False
+
+    def load_org_domains(self, org) -> list :
+        """
+        Reads the specified org's domains from slips/organizations_info and stores the info in the database
+        org: 'google', 'facebook', 'twitter', etc...
+        returns a list containing the org's domains
+        """
+        try:
+            # Each file is named after the organization's name followed by _asn
+            domains =[]
+            file = f'slips/organizations_info/{org}_domains'
+            with open(file,'r') as f:
+                line = f.readline()
+                while line:
+                    # each line will be something like this: 34.64.0.0/10
+                    line = line.replace("\n","").strip()
+                    domains.append(line)
+                    line = f.readline()
+            return domains
+        except (FileNotFoundError, IOError):
             return False
 
     def load_org_IPs(self, org) -> list :
@@ -1467,6 +1493,36 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['filesize'] = line['fileinfo']['size']
                 except KeyError:
                     self.column_values['filesize'] = ''
+    def get_domains_of_flow(self):
+        """ Returns the domains of each ip (src and dst) that appeard in this flow """
+        # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
+        domains_to_check_src = []
+        domains_to_check_dst = []
+        try:
+            #self.print(f"IPData of src IP {self.column_values['saddr']}: {__database__.getIPData(self.column_values['saddr'])}")
+            ip_data = __database__.getIPData(self.column_values['saddr'])
+            if ip_data:
+                sni_info = ip_data.get('SNI',[{}])[0]
+                if sni_info: domains_to_check_src.append(sni_info.get('server_name'))
+        except (KeyError, TypeError):
+            pass
+        try:
+            #self.print(f"DNS of src IP {self.column_values['saddr']}: {__database__.get_dns_resolution(self.column_values['saddr'])}")
+            src_dns_domains = __database__.get_dns_resolution(self.column_values['saddr'])
+            for dns_domain in src_dns_domains:
+                domains_to_check_src.append(dns_domain)
+        except (KeyError, TypeError):
+            pass
+        try:
+            # self.print(f"IPData of dst IP {self.column_values['daddr']}: {__database__.getIPData(self.column_values['daddr'])}")
+            ip_data = __database__.getIPData(self.column_values['daddr'])
+            if ip_data:
+                sni_info = ip_data.get('SNI',[{}])[0]
+                if sni_info : domains_to_check_dst.append(sni_info.get('server_name'))
+        except (KeyError, TypeError):
+            pass
+        return domains_to_check_dst, domains_to_check_src
+
 
     def is_whitelisted(self) -> bool:
         """
@@ -1489,26 +1545,8 @@ class ProfilerProcess(multiprocessing.Process):
             notice_domain = self.column_values.get('sub','').replace("CN=","") # in notice.log
             domains_to_check.append(notice_domain)
 
-            # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
-            domains_to_check_src = []
-            domains_to_check_dst = []
-            try:
-                #self.print(f"IPData of src IP {self.column_values['saddr']}: {__database__.getIPData(self.column_values['saddr'])}")
-                domains_to_check_src.append(__database__.getIPData(self.column_values['saddr'])['SNI'])
-            except (KeyError, TypeError):
-                pass
-            try:
-                #self.print(f"DNS of src IP {self.column_values['saddr']}: {__database__.get_dns_resolution(self.column_values['saddr'])}")
-                src_dns_domains = __database__.get_dns_resolution(self.column_values['saddr'])
-                for dns_domain in src_dns_domains:
-                    domains_to_check_src.append(dns_domain)
-            except (KeyError, TypeError):
-                pass
-            try:
-                #self.print(f"IPData of dst IP {self.column_values['daddr']}: {__database__.getIPData(self.column_values['daddr'])}")
-                domains_to_check_dst.append(__database__.getIPData(self.column_values['daddr'])['SNI'])
-            except (KeyError, TypeError):
-                pass
+            domains_to_check_dst, domains_to_check_src = self.get_domains_of_flow()
+
             try:
                 #self.print(f"DNS of dst IP {self.column_values['daddr']}: {__database__.get_dns_resolution(self.column_values['daddr'])}")
                 dst_dns_domains = __database__.get_dns_resolution(self.column_values['daddr'])
@@ -1549,7 +1587,7 @@ class ProfilerProcess(multiprocessing.Process):
                         if domain in main_domain:
                             # We can ignore flows or alerts, what is it?
                             if 'flows' in what_to_ignore or 'both' in what_to_ignore:
-                                #self.print(f"Whitelisting the domain {domain_to_check} because is related to domain {domain} of dst IP {self.column_values['daddr']}")
+                                # self.print(f"Whitelisting the domain {domain_to_check} because is related to domain {domain} of dst IP {self.column_values['daddr']}")
                                 return True
 
         # Check if the IPs are whitelisted
@@ -1583,27 +1621,35 @@ class ProfilerProcess(multiprocessing.Process):
                 what_to_ignore = self.whitelisted_orgs[org]['what_to_ignore'] # flows, alerts or both
                 #self.print(f'Checking {org}, from:{from_} type {what_to_ignore}')
 
+                # get the domains of this flow
+                domains_to_check_dst, domains_to_check_src = self.get_domains_of_flow()
                 if 'flows' in what_to_ignore or 'both' in what_to_ignore:
                     # We want to block flows from this org, continue
-
                     org_subnets = json.loads(self.whitelisted_orgs[org]['IPs'])
-                    if 'src' in from_ or 'both' in from_:
+                    org_domains = json.loads(self.whitelisted_orgs[org]['domains'])
+                    if 'both' in from_ : domains_to_check = domains_to_check_src + domains_to_check_dst
+                    elif 'src' in from_: domains_to_check = domains_to_check_src
+                    elif 'dst' in from_: domains_to_check = domains_to_check_dst
 
-                        # Check if src IP belongs to a whitelisted organization range
+
+                    if 'src' in from_ or 'both' in from_:
+                        # Method 1 Check if src IP belongs to a whitelisted organization range
                         for network in org_subnets:
                             try:
                                 ip = ipaddress.ip_address(self.column_values['saddr'])
+                                if ip in ipaddress.ip_network(network):
+                                    #self.print(f"The src IP {self.column_values['saddr']} is in the range {network} or org {org}. Whitelisted.")
+                                    return True
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
                                 return False
-                            if ip in ipaddress.ip_network(network):
-                                #self.print(f"The src IP {self.column_values['saddr']} is in the range {network} or org {org}. Whitelisted.")
-                                return True
-                        # Check if the ASN of this src IP is any of these organizations
+
+
+                        # Method 2 Check if the ASN of this src IP is any of these organizations
                         ip_data = __database__.getIPData(self.column_values['saddr'])
                         try:
-                            ip_asn = ip_data['asn']
-                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn['asnorg'].lower() or ip_asn in self.whitelisted_orgs[org]['asn']):
+                            ip_asn = ip_data['asn']['asnorg']
+                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in self.whitelisted_orgs[org]['asn']):
                                 # this ip belongs to a whitelisted org, ignore flow
                                 #self.print(f"The ASN {ip_asn} of IP {self.column_values['saddr']} is in the values of org {org}. Whitelisted.")
                                 return True
@@ -1611,28 +1657,41 @@ class ProfilerProcess(multiprocessing.Process):
                             # No asn data for src ip
                             pass
 
+                        # Method 3 Check if the domains of this flow belong to this org
+                        for domain in org_domains:
+                            if domain in domains_to_check_src:
+                                return True
+
                     if 'dst' in from_ or 'both' in from_:
-                        # Check if dst IP belongs to a whitelisted organization range
+                        # Method 1 Check if dst IP belongs to a whitelisted organization range
                         for network in org_subnets:
                             try:
                                 ip = ipaddress.ip_address(self.column_values['daddr'])
+                                if ip in ipaddress.ip_network(network):
+                                    #self.print(f"The dst IP {self.column_values['daddr']} is in the range {network} or org {org}. Whitelisted.")
+                                    return True
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
                                 return False
-                            if ip in ipaddress.ip_network(network):
-                                #self.print(f"The dst IP {self.column_values['daddr']} is in the range {network} or org {org}. Whitelisted.")
-                                return True
-                        # Check if the ASN of this dst IP is any of these organizations
+                        # Method 2 Check if the ASN of this dst IP is any of these organizations
                         ip_data = __database__.getIPData(self.column_values['daddr'])
                         try:
-                            ip_asn = ip_data['asn']
-                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn['asnorg'].lower() or ip_asn in self.whitelisted_orgs[org]['asn']):
+                            ip_asn = ip_data['asn']['asnorg']
+                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in self.whitelisted_orgs[org]['asn']):
                                 # this ip belongs to a whitelisted org, ignore flow
                                 #self.print(f"The ASN {ip_asn} of IP {self.column_values['daddr']} is in the values of org {org}. Whitelisted.")
                                 return True
                         except (KeyError, TypeError):
                             # No asn data for src ip
                             pass
+
+                        # Method 3 Check if the domains of this flow belong to this org
+                        for domain in org_domains:
+                            # domains to check are usually 1 or 2 domains
+                            for flow_domain in domains_to_check:
+                                # match subdomains too
+                                if domain in flow_domain:
+                                    return True
 
         return False
 
@@ -2437,17 +2496,18 @@ class ProfilerProcess(multiprocessing.Process):
                     else:
                         self.print("Can't recognize input file type.")
 
-                    # listen on this channel in case whitelist.conf is changed, we need to process the new changes
-                    message = self.c1.get_message(timeout=self.timeout)
-                    if message['data'] == 'stop_process':
-                        # Confirm that the module is done processing
-                        __database__.publish('finished_modules', self.name)
-                        return True
-                    if message and message['channel'] == 'reload_whitelist' and type(message['data']) == str:
-                        # if whitelist.conf is edited using pycharm
-                        # a msg will be sent to this channel on every keypress, becausse pycharm saves file automatically
-                        # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
-                        self.read_whitelist()
+                # listen on this channel in case whitelist.conf is changed, we need to process the new changes
+                message = self.c1.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
+                    return True
+                if message and message['channel'] == 'reload_whitelist' and type(message['data']) == str:
+                    # if whitelist.conf is edited using pycharm
+                    # a msg will be sent to this channel on every keypress, becausse pycharm saves file automatically
+                    # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
+                    self.read_whitelist()
+
 
         except KeyboardInterrupt:
             self.print("Received {} lines.".format(rec_lines), 0, 1)

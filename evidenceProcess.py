@@ -214,13 +214,40 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-    def is_whitelisted(self, srcip: str, data, type_detection, description) -> bool:
+    def get_domains_of_flow(self, flow:dict):
+        """ Returns the domains of each ip (src and dst) that appeard in this flow """
+        # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
+        flow = json.loads(list(flow.values())[0])
+        domains_to_check_src = []
+        domains_to_check_dst = []
+        try:
+            #self.print(f"IPData of src IP {self.column_values['saddr']}: {__database__.getIPData(self.column_values['saddr'])}")
+            domains_to_check_src.append(__database__.getIPData(flow['saddr']).get('SNI',[{}])[0].get('server_name'))
+        except (KeyError, TypeError):
+            pass
+        try:
+            #self.print(f"DNS of src IP {self.column_values['saddr']}: {__database__.get_dns_resolution(self.column_values['saddr'])}")
+            src_dns_domains = __database__.get_dns_resolution(flow['saddr'])
+            for dns_domain in src_dns_domains:
+                domains_to_check_src.append(dns_domain)
+        except (KeyError, TypeError):
+            pass
+        try:
+            # self.print(f"IPData of dst IP {self.column_values['daddr']}: {__database__.getIPData(self.column_values['daddr'])}")
+            domains_to_check_dst.append(__database__.getIPData(flow['daddr']).get('SNI',[{}])[0].get('server_name'))
+        except (KeyError, TypeError):
+            pass
+
+        return domains_to_check_dst, domains_to_check_src
+
+    def is_whitelisted(self, srcip: str, data, type_detection, description, flow: dict) -> bool:
         """
         Checks if IP is whitelisted
         :param srcip: Src IP that generated the evidence
         :param data: This is what was detected in the evidence. (detection_info) can be ip, domain, tuple(ip:port:proto).
         :param type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
         :param description: may contain IPs if the evidence is coming from portscan module
+        :param flow: used to get the domains associated with each flow
         """
 
         #self.print(f'Checking the whitelist of {srcip}: {data} {type_detection} {description} ')
@@ -242,7 +269,13 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             # Convert each list from str to dict
             whitelisted_IPs = json.loads(whitelist['IPs'])
+        except IndexError:
+            pass
+        try:
             whitelisted_domains = json.loads(whitelist['domains'])
+        except IndexError:
+            pass
+        try:
             whitelisted_orgs = json.loads(whitelist['organizations'])
         except IndexError:
             pass
@@ -344,6 +377,7 @@ class EvidenceProcess(multiprocessing.Process):
                         # Check if the IP in the content of the alert has ASN info in the db
                         ip_data = __database__.getIPData(ip)
                         ip_asn = ip_data.get('asn',{'asnorg':''})
+
                         # make sure the asn field contains a value
                         if (ip_asn['asnorg'] not in ('','Unknown')
                                 and (org.lower() in ip_asn['asnorg'].lower()
@@ -365,11 +399,27 @@ class EvidenceProcess(multiprocessing.Process):
                         except (KeyError,TypeError):
                             # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
                             # and ip doesn't have asn info.
+                            pass
+
+                        # Method 3 Check if the domains of this flow belong to this org
+                        domains_to_check_dst, domains_to_check_src = self.get_domains_of_flow(flow)
+                        # which list of the above should be used? src or dst or both?
+                        if ignore_alerts_to_org and ignore_alerts_from_org: domains_to_check = domains_to_check_src + domains_to_check_dst
+                        elif ignore_alerts_from_org : domains_to_check = domains_to_check_src
+                        elif ignore_alerts_to_org : domains_to_check = domains_to_check_dst
+                        try:
+                            org_domains = json.loads(whitelisted_orgs[org]['domains'])
+                            for domain in org_domains:
+                                # domains to check are usually 1 or 2 domains
+                                for flow_domain in domains_to_check:
+                                    # match subdomains too
+                                    if domain in flow_domain:
+                                        return True
+                        except (KeyError,TypeError):
+                            # comes here if the whitelisted org doesn't have domains in slips/organizations_info (not a famous org)
+                            # and ip doesn't have asn info.
                             # so we don't know how to link this ip to the whitelisted org!
                             pass
-            # Check if the domain in the alert belongs to a whitelisted organization
-            # We are not doing this for now, since you can whitelist a domain.
-            # And all the domains of organiztions are not well known
         return False
 
     def run(self):
@@ -398,9 +448,11 @@ class EvidenceProcess(multiprocessing.Process):
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
                     timestamp = data.get('stime')
+                    uid = data.get('uid')
 
                     # Ignore alert if ip is whitelisted
-                    if self.is_whitelisted(ip, detection_info, type_detection, description):
+                    flow = __database__.get_flow(profileid,twid,uid)
+                    if self.is_whitelisted(ip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
                         __database__.deleteEvidence(profileid, twid, key)
