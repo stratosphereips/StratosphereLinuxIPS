@@ -167,36 +167,32 @@ class ProfilerProcess(multiprocessing.Process):
 
         try:
             with open(self.whitelist_path) as whitelist:
-                # Ignore comments
-                while True:
-                    line = whitelist.readline()
-                    # break while statement if it is not a comment line
-                    # i.e. does not startwith #
-                    if not line.startswith('#') and not line.startswith('"IoCType"'):
-                        break
                 # Process lines after comments
                 line_number = 0
+                line = whitelist.readline()
                 while line:
                     line_number+=1
                     # ignore comments
-                    if line.startswith('#'):
+                    if line.startswith('#') and not line.startswith('"IoCType"'):
                         # check if the user commented an org, ip or domain that was whitelisted
                         if hasattr(self,'whitelisted_IPs'):
-                            for ip in self.whitelisted_IPs.keys():
+                            for ip in list(self.whitelisted_IPs):
                                 # make sure the user commmented the line they added exactly
-                                if ip in line and ip['from'] in line and ip['what_to_ignore'] in line:
+                                if ip in line and self.whitelisted_IPs[ip]['from'] in line and self.whitelisted_IPs[ip]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_ips
                                     self.whitelisted_IPs.pop(ip)
+
                         if hasattr(self,'whitelisted_domains'):
-                            for domain in self.whitelisted_domains.keys():
+                            for domain in list(self.whitelisted_domains):
                                 # make sure the user commmented the line they added exactly
-                                if domain in line and domain['from'] in line and domain['what_to_ignore'] in line:
+                                if domain in line and self.whitelisted_domains[domain]['from'] in line and self.whitelisted_domains[domain]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_ips
                                     self.whitelisted_domains.pop(domain)
+
                         if hasattr(self,'whitelisted_orgs'):
-                            for org in self.whitelisted_orgs.keys():
+                            for org in list(self.whitelisted_orgs):
                                 # make sure the user commmented the line they added exactly
-                                if org in line and org['from'] in line and org['what_to_ignore'] in line:
+                                if org in line and self.whitelisted_orgs[org]['from'] in line and self.whitelisted_orgs[org]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_ips
                                     self.whitelisted_orgs.pop(org)
                                     # todo if the user commented organization,facebook,both,both
