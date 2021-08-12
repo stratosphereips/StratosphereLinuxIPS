@@ -22,6 +22,7 @@ class Redis{
         this.udp_data_notest = this.redis.createClient()
         this.redis_resolved_dns = this.redis.createClient()
         this.all_profile_evidences = this.redis.createClient()
+        this.tw_starttime = this.redis.createClient()
   	}
 
     /*Get all the keys from the database.*/
@@ -144,6 +145,14 @@ class Redis{
                    else{resolve(reply);}
                })}
         )
+    }
+
+    /*Get starttime for the timewindow in the profile*/
+    getStarttimeForTW(ip, timewindow){
+      return new Promise ((resolve, reject)=>{this.tw_starttime.zscore("twsprofile_"+ip,timewindow,(err,reply)=>{
+        if(err){console.log("Error in getStarttimeForTW in kalipso_redis.js. Error: ",err); reject(err);}
+        else{resolve(reply);}
+      });})
     }
 }
 
