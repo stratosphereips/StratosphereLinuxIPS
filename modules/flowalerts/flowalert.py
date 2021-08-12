@@ -12,15 +12,15 @@
 # 7. The name of the class MUST be 'Module', do not change it.
 
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 
 # Your imports
 import json
 import configparser
-import ipaddress
+from ipaddress import ip_address
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -54,18 +54,7 @@ class Module(Module, multiprocessing.Process):
         self.c3 = __database__.subscribe('new_notice')
         self.c4 = __database__.subscribe('new_ssl')
         self.c6 = __database__.subscribe('tw_closed')
-        # Set the timeout based on the platform. This is because the
-        # pyredis lib does not have officially recognized the
-        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # Other systems
-            self.timeout = None
+        self.timeout = None
         # todo is there more ranges that i should ignore?
         # ignore default LAN IP address, loopback addr, dns servers, ...etc
         self.ignored_ips = ('192.168.0.1' ,'192.168.1.1', '127.0.0.1', '8.8.8.8', '8.8.4.4', '1.1.1.1', '1.0.0.1', '9.9.9.9', '149.112.112.112',
@@ -121,7 +110,7 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def set_evidence_ssh_successful(self, profileid, twid, saddr, daddr, size, by, ip_state='ip'):
+    def set_evidence_ssh_successful(self, profileid, twid, saddr, daddr, size, uid, by='', ip_state='ip'):
         """
         Set an evidence for a successful SSH login.
         This is not strictly a detection, but we don't have
@@ -138,9 +127,9 @@ class Module(Module, multiprocessing.Process):
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                                 threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_long_connection(self, ip, duration, profileid, twid, ip_state='ip'):
+    def set_evidence_long_connection(self, ip, duration, profileid, twid, uid, ip_state='ip'):
         '''
         Set an evidence for a long connection.
         '''
@@ -152,9 +141,10 @@ class Module(Module, multiprocessing.Process):
         description = 'Long Connection ' + str(duration)
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_self_signed_certificates(self, profileid, twid, ip, description,  ip_state='ip'):
+    def set_evidence_self_signed_certificates(self, profileid, twid, ip, description, uid,  ip_state='ip'):
         '''
         Set evidence for self signed certificates.
         '''
@@ -165,9 +155,39 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                 description, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description):
+    def set_evidence_for_multiple_reconnection_attempts(self,profileid, twid, ip, description, uid):
+        '''
+        Set evidence for Reconnection Attempts.
+        '''
+        confidence = 0.5
+        threat_level = 20
+        type_detection  = 'dstip'
+        type_evidence = 'MultipleReconnectionAttempts'
+        detection_info = ip
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
+
+
+    def set_evidence_for_connection_to_multiple_ports(self,profileid, twid, ip, description, uid):
+        '''
+        Set evidence for connection to multiple ports.
+        '''
+        confidence = 0.5
+        threat_level = 20
+        type_detection  = 'dstip'
+        type_evidence = 'ConnectionToMultiplePorts'
+        detection_info = ip
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
+
+    def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description, uid):
         '''
         Set evidence for Invalid SSL certificates.
         '''
@@ -178,7 +198,8 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
 
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
         """
@@ -207,6 +228,22 @@ class Module(Module, multiprocessing.Process):
                                                   uid,
                                                   module_name,
                                                   module_label)
+
+    def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid):
+        """ Checks dports that are not in our modules/timeline/services.csv file"""
+        port_info = __database__.get_port_info(f'{dport}/{proto}')
+        if not port_info:
+            # we don't have info about this port
+            confidence = 1
+            threat_level = 20
+            type_detection  = 'dport'
+            type_evidence = 'UnknownPort'
+            detection_info = str(dport)
+            description = f'Unknown destination port {dport} to destination IP {daddr}'
+            if not twid:
+                twid = ''
+            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                     confidence, description, profileid=profileid, twid=twid)
 
     def check_connection_without_dns(self, daddr, twid, profileid):
         """ Checks if there's a flow to a dstip that has no DNS answer """
@@ -273,13 +310,16 @@ class Module(Module, multiprocessing.Process):
             return
 
     def run(self):
-        try:
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
+
                 # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
+                    # confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_flow' and type(message['data']) is not int:
                     data = message['data']
@@ -298,28 +338,68 @@ class Module(Module, multiprocessing.Process):
                     dur = flow_dict['dur']
                     saddr = flow_dict['saddr']
                     daddr = flow_dict['daddr']
+                    origstate = flow_dict['origstate']
+                    dport = flow_dict['dport']
+                    proto = flow_dict['proto']
+                    state = flow_dict['state']
                     # stime = flow_dict['ts']
                     # sport = flow_dict['sport']
                     # timestamp = data['stime']
-                    # dport = flow_dict['dport']
-                    # proto = flow_dict['proto']
+                    dport = flow_dict.get('dport',None)
+                    proto = flow_dict.get('proto')
                     # state = flow_dict['state']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-                    # Do not check the duration of the flow if the daddr or
-                    daddr_obj = ipaddress.ip_address(daddr)
-                    saddr_obj = ipaddress.ip_address(saddr)
-                    # don't check for multicast IPs
-                    if not daddr_obj.is_multicast and not saddr_obj.is_multicast:
-                        self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
-                        # Check if daddr has a dns answer
-                        if not self.is_ignored_ip(daddr):
-                            self.check_connection_without_dns(daddr, twid, profileid)
+                    # Do not check the duration of the flow if the daddr or
+                    # saddr is a  multicast.
+                    if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
+                        self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
+                    if dport:
+                        self.check_unknown_port(dport, proto, daddr, profileid, twid, uid)
+
+                    # Multiple Reconnection attempts
+                    key = saddr + '-' + daddr + ':' + str(dport)
+                    if dport != 0 and origstate == 'REJ':
+                        current_reconnections = __database__.getReconnectionsForTW(profileid,twid)
+                        current_reconnections[key] = current_reconnections.get(key, 0) + 1
+                        __database__.setReconnections(profileid, twid, current_reconnections)
+                        for key, count_reconnections in current_reconnections.items():
+                            if count_reconnections > 1:
+                                description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
+                                self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid)
+
+                    # Check if daddr has a dns answer
+                    if not self.is_ignored_ip(daddr):
+                        self.check_connection_without_dns(daddr, twid, profileid)
+                    # Connection to multiple ports
+                    if proto == 'tcp' and state == 'Established':
+                        dport_name = flow_dict.get('appproto','')
+                        if not dport_name:
+                            dport_name = __database__.get_port_info(str(dport) + '/' + proto.lower())
+                            if dport_name:
+                                dport_name = dport_name.upper()
+                        else:
+                            dport_name = dport_name.upper()
+                        # Consider only unknown services
+                        if not dport_name:
+                            direction = 'Dst'
+                            state = 'Established'
+                            protocol = 'TCP'
+                            role = 'Client'
+                            type_data = 'IPs'
+                            dst_IPs_ports = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
+                            dstports = list(dst_IPs_ports[daddr]['dstports'])
+                            if len(dstports) > 1:
+                                description = "Connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
+                                self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid)
+
 
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
                     data = message['data']
@@ -344,7 +424,7 @@ class Module(Module, multiprocessing.Process):
                             daddr = ssh_flow_dict['daddr']
                             saddr = ssh_flow_dict['saddr']
                             size = ssh_flow_dict['allbytes']
-                            self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Zeek')
+                            self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, by='Zeek')
                     else:
                         # Try Slips method to detect if SSH was successful.
                         # time.sleep(10) # This logic should be fixed, it stops the whole module.
@@ -359,7 +439,7 @@ class Module(Module, multiprocessing.Process):
                                 # Set the evidence because there is no
                                 # easier way to show how Slips detected
                                 # the successful ssh and not Zeek
-                                self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, by='Slips')
+                                self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, by='Slips')
                             else:
                                 # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
                                 pass
@@ -368,25 +448,49 @@ class Module(Module, multiprocessing.Process):
                 # Check for self signed certificates in new_notice channel (notice.log)
                 message = self.c3.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_notice':
-                    """ Checks for self signed certificates in the notice data """
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
                         data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
                         # Get flow as a json
                         flow = data['flow']
                         # Convert flow to a dict
                         flow = json.loads(flow)
+                        uid = data['uid']
                         msg = flow['msg']
-                        # We're looking for self signed certs in the 'msg' field
+                        note = flow['note']
+                        # We're looking for self signed certs in notice.log in the 'msg' field
                         if 'self signed' in msg or 'self-signed' in msg:
-                            profileid = data['profileid']
-                            twid = data['twid']
                             ip = flow['daddr']
                             description = 'Self-signed certificate. Destination IP: {}'.format(ip)
-                            self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
+                            confidence = 0.5
+                            threat_level = 30
+                            type_detection = 'dstip'
+                            type_evidence = 'SelfSignedCertificate'
+                            detection_info = ip
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                     threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
+                            self.print(description, 3, 0)
+
+                        # We're looking for port scans in notice.log in the note field
+                        if 'Port_Scan' in note:
+                            # Vertical port scan
+                            # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
+                            confidence = 1
+                            threat_level = 60
+                            # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
+                            description = 'Zeek: Vertical port scan. ' + msg
+                            type_evidence = 'PortScanType1'
+                            type_detection = 'dstip'
+                            detection_info = flow.get('scanning_ip','')
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                 threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
                         if 'SSL certificate validation failed' in msg:
                             profileid = data['profileid']
@@ -394,11 +498,26 @@ class Module(Module, multiprocessing.Process):
                             ip = flow['daddr']
                             # get the description inside parenthesis
                             description = msg + ' Destination IP: {}'.format(ip)
-                            self.set_evidence_for_invalid_certificates(profileid,twid, ip, description)
+                            self.set_evidence_for_invalid_certificates(profileid,twid, ip, description, uid)
                             self.print(description, 3, 0)
+
+                        if 'Address_Scan' in note:
+                            # Horizontal port scan
+                            confidence = 1
+                            threat_level = 60
+                            description = 'Zeek: Horizontal port scan. ' + msg
+                            type_evidence = 'PortScanType2'
+                            type_detection = 'dport'
+                            detection_info = flow.get('scanned_port','')
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                 threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
+                            self.print(description, 3, 0)
+
                 # ---------------------------- new_ssl channel
                 message = self.c4.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'new_ssl':
                     # Check for self signed certificates in new_ssl channel (ssl.log)
@@ -410,16 +529,19 @@ class Module(Module, multiprocessing.Process):
                         flow = data['flow']
                         # Convert flow to a dict
                         flow = json.loads(flow)
+                        uid = flow['uid']
                         if 'self signed' in flow['validation_status']:
                             profileid = data['profileid']
                             twid = data['twid']
                             ip = flow['daddr']
                             server_name = flow.get('server_name') # returns None if not found
-                            if server_name is not None:
-                                description = 'Self-signed certificate. Destination: {}. IP: {}'.format(server_name,ip)
-                            else:
+                            # if server_name is not None or not empty
+                            if not server_name:
                                 description = 'Self-signed certificate. Destination IP: {}'.format(ip)
-                            self.set_evidence_self_signed_certificates(profileid,twid, ip, description)
+                            else:
+                                description = 'Self-signed certificate. Destination IP: {}, SNI: {}'.format(ip, server_name)
+
+                            self.set_evidence_self_signed_certificates(profileid,twid, ip, description, uid)
                             self.print(description, 3, 0)
                 # ---------------------------- tw_closed channel
                 message = self.c6.get_message(timeout=0.01)
