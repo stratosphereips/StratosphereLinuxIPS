@@ -43,6 +43,22 @@ class Table{
         this.widget.focus()
     }
 
+
+
+    timeConverter(UNIX_timestamp){
+        var a = new Date(UNIX_timestamp * 1000);
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var year = a.getFullYear();
+        var month = a.getMonth() + 1 < 10 ? '0' + (a.getMonth() + 1) : (a.getMonth() + 1) ;
+        var date = a.getDate() < 10 ? '0' + a.getDate() : a.getDate() ;
+        var hour =  a.getHours() < 10 ? '0' + a.getHours() : a.getHours() ;
+        var min =  a.getMinutes() < 10 ? '0' + a.getMinutes() : a.getMinutes();
+        var sec = a.getSeconds() < 10 ? '0' + a.getSeconds() : a.getSeconds() ;
+        //  var time = date + ' ' + month + ' ' + year + ' ' + hour + ':' + min + ':' + sec ;
+        var time = year + '/' + month  + '/' + date + ' ' + hour + ':' + min + ':' + sec;
+        return time;
+    }
+
     /*Round the number to specific number of decimals*/
     round(value, decimals) {
     return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
@@ -179,8 +195,12 @@ class Table{
               },(err)=>{
                 if(err) {console.log('Error in setTimeline() in kalipso_table.js. Error: ',err);}
                 else{
-                  this.setData([ip+" "+timewindow], timeline_data);
-                  this.screen.render()}
+                  this.redis_database.getStarttimeForTW(ip,timewindow).then(timewindow_starttime=>{
+                      this.setData([ip+" "+timewindow + " " + this.timeConverter(timewindow_starttime)], timeline_data);
+                      this.screen.render()
+
+                  })
+                  }
               });
             }
         })
