@@ -44,7 +44,7 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         # Remember to subscribe to this channel in database.py
-        self.c1 = __database__.subscribe('new_flow')
+        self.c1 = __database__.subscribe('new_arp')
         self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
@@ -78,24 +78,16 @@ class Module(Module, multiprocessing.Process):
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                elif message['channel'] == 'new_flow' and type(message['data'])==str:
+                elif message['channel'] == 'new_arp' and type(message['data'])==str:
+                    flow = message['data']
+                    # "uid": "MmZiNTY0ODNhOTVmZjZlMmI0", "daddr": "192.168.1.10", "saddr": "192.168.1.1", "src_mac": "50:78:b3:b0:08:ec", "dst_mac": "50:5b:c2:db:c3:17", "profileid": "profile_192.168.1.1", "twid": "timewindow1", "ts": 1628846748.311922}
                     # Get the profileid and twid
-                    profileid = message['data'].split(':')[0]
-                    twid = message['data'].split(':')[1]
-                    data = message['data']
-                    # Convert from json to dict
-                    data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    # Get flow as a json
-                    flow = data['flow']
-                    timestamp = data['stime']
-                    # Convert flow to a dict
-                    flow = json.loads(flow)
-                    flow =  json.loads(flow[list(flow.keys())[0]])
-                    protocol = flow['proto']
-                    if 'arp' in protocol.lower():
-                        pass
+                    profileid = flow['profileid']
+                    twid = flow['twid']
+                    timestamp = flow['ts']
+                    src_mac = flow['src_mac']
+                    dst_mac = flow['dst_mac']
+                    pass
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
