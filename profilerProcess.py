@@ -1852,9 +1852,9 @@ class ProfilerProcess(multiprocessing.Process):
                         'saddr': self.column_values['saddr'],
                         'src_mac': self.column_values['src_mac'] ,
                         'dst_mac': self.column_values['dst_mac'] ,
+                        'ts' : starttime,
                         'profileid' : profileid,
                         'twid' : twid,
-                        'ts' : starttime
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish('new_arp', to_send)

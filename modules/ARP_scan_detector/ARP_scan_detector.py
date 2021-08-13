@@ -46,6 +46,8 @@ class Module(Module, multiprocessing.Process):
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_arp')
         self.timeout = None
+        # this dict will categorize arp requests by profileid_twid
+        self.cache_arp_requests = {}
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -79,15 +81,46 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
                 elif message['channel'] == 'new_arp' and type(message['data'])==str:
-                    flow = message['data']
+                    flow = json.loads(message['data'])
                     # "uid": "MmZiNTY0ODNhOTVmZjZlMmI0", "daddr": "192.168.1.10", "saddr": "192.168.1.1", "src_mac": "50:78:b3:b0:08:ec", "dst_mac": "50:5b:c2:db:c3:17", "profileid": "profile_192.168.1.1", "twid": "timewindow1", "ts": 1628846748.311922}
-                    # Get the profileid and twid
+                    ts = flow['ts']
                     profileid = flow['profileid']
                     twid = flow['twid']
-                    timestamp = flow['ts']
                     src_mac = flow['src_mac']
                     dst_mac = flow['dst_mac']
-                    pass
+                    daddr = flow['daddr']
+                    saddr = flow['saddr']
+                    uid = flow['uid']
+                    try:
+                        # cached_requests is a list
+                        # if x sends more than 10 arp requests to y, then this is x scanning y
+                        # the key f'{profileid}_{twid}_{daddr} is used to group rquests fromthe samr saddr to the same daddr
+                        cached_requests = self.cache_arp_requests[f'{profileid}_{twid}_{daddr}']
+                        cached_requests.append({'uid' : uid,
+                                                'daddr': daddr,
+                                                'saddr': saddr,
+                                                'src_mac': src_mac ,
+                                                'dst_mac': dst_mac ,
+                                                'ts' : ts})
+                        if len(cached_requests) > 2:
+                            confidence = 1
+                            threat_level = 60
+                            description = f'ARP Scan Detected to distination address: {daddr}'
+                            type_evidence = 'ARPScan'
+                            type_detection = 'dstip'
+                            detection_info = daddr
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                            # after we set evidence, clear the dict so we can detect it again
+                            self.cache_arp_requests.pop(f'{profileid}_{twid}_{daddr}')
+                    except KeyError:
+                        # create the key if it doesn't exist
+                        self.cache_arp_requests[f'{profileid}_{twid}_{daddr}'] = [{'uid' : uid,
+                                                                            'daddr': daddr,
+                                                                            'saddr': saddr,
+                                                                            'src_mac': src_mac,
+                                                                            'dst_mac': dst_mac,
+                                                                            'ts' : ts}]
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
