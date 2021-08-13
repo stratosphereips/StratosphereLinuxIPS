@@ -275,16 +275,30 @@ class Module(Module, multiprocessing.Process):
                             dport_name = dport_name.upper()
                         # Consider only unknown services
                         if not dport_name:
-                            direction = 'Dst'
-                            state = 'Established'
-                            protocol = 'TCP'
-                            role = 'Client'
-                            type_data = 'IPs'
-                            dst_IPs_ports = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
-                            dstports = list(dst_IPs_ports[daddr]['dstports'])
-                            if len(dstports) > 1:
-                                description = "Connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
-                                self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
+                            # Connection to multiple ports to the destination IP
+                            if profileid.split('_')[1] == saddr:
+                                direction = 'Dst'
+                                state = 'Established'
+                                protocol = 'TCP'
+                                role = 'Client'
+                                type_data = 'IPs'
+                                dst_IPs_ports = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
+                                dstports = list(dst_IPs_ports[daddr]['dstports'])
+                                if len(dstports) > 1:
+                                    description = "Connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
+                                    self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
+                            # Connection to multiple port to the Source IP. Happens in the mode 'all'
+                            elif profileid.split('_')[1] == daddr:
+                                direction = 'Src'
+                                state = 'Established'
+                                protocol = 'TCP'
+                                role = 'Server'
+                                type_data = 'IPs'
+                                src_IPs_ports = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
+                                dstports = list(src_IPs_ports[saddr]['dstports'])
+                                if len(dstports) > 1:
+                                    description = "Connection to multiple ports {} of Source IP: {}".format(dstports, saddr)
+                                    self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
 
 
                 # ---------------------------- new_ssh channel
