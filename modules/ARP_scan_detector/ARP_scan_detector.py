@@ -19,6 +19,8 @@ import platform
 
 # Your imports
 import json
+import time
+import datetime
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -75,11 +77,11 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                elif message['channel'] == 'new_arp' and type(message['data'])==str:
+                elif message and message['channel'] == 'new_arp' and type(message['data'])==str:
                     flow = json.loads(message['data'])
                     ts = flow['ts']
                     profileid = flow['profileid']
@@ -90,30 +92,43 @@ class Module(Module, multiprocessing.Process):
                     saddr = flow['saddr']
                     uid = flow['uid']
                     try:
-                        # cached_requests is a list
-                        # if x sends more than 10 arp requests to y, then this is x scanning y
-                        # the key f'{profileid}_{twid}_{daddr} is used to group rquests fromthe samr saddr to the same daddr
-                        cached_requests = self.cache_arp_requests[f'{profileid}_{twid}_{daddr}']
+                        # cached_requests is a list, append this request to it
+                        # if ip x sends more than 10 arp requests to any ip within 1 min, then this is x doing arp scan
+                        # the key f'{profileid}_{twid} is used to group rquests fromthe same saddr
+                        cached_requests = self.cache_arp_requests[f'{profileid}_{twid}']
                         cached_requests.append({'uid' : uid,
                                                 'daddr': daddr,
                                                 'saddr': saddr,
                                                 'src_mac': src_mac ,
                                                 'dst_mac': dst_mac ,
                                                 'ts' : ts})
-                        if len(cached_requests) > 10:
-                            confidence = 1
-                            threat_level = 60
-                            description = f'ARP Scan Detected to destination address: {daddr}'
-                            type_evidence = 'ARPScan'
-                            type_detection = 'dstip'
-                            detection_info = daddr
-                            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
-                            # after we set evidence, clear the dict so we can detect it again
-                            self.cache_arp_requests.pop(f'{profileid}_{twid}_{daddr}')
+
+                        #todo do we need mac addresses?
+                        if len(cached_requests) >= 10:
+                            # check if these requests happened within 20 secs
+                            # get the first and the last request of the 10
+                            starttime = cached_requests[0]['ts']
+                            endtime = cached_requests[-1]['ts']
+                            # get the time of each one in seconds
+                            starttime = datetime.datetime.fromtimestamp(starttime)
+                            endtime = datetime.datetime.fromtimestamp(endtime)
+                            # get the difference between them in seconds
+                            diff = float(str(endtime - starttime).split(':')[-1])
+                            if diff > 20:
+                                # we are sure this is an arp scan
+                                confidence = 1
+                                threat_level = 60
+                                description = f'ARP Scan Detected to destination address: {daddr}'
+                                type_evidence = 'ARPScan'
+                                type_detection = 'dstip'
+                                detection_info = daddr
+                                __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                     threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                                # after we set evidence, clear the dict so we can detect if it does another scan
+                                self.cache_arp_requests.pop(f'{profileid}_{twid}_{daddr}')
                     except KeyError:
                         # create the key if it doesn't exist
-                        self.cache_arp_requests[f'{profileid}_{twid}_{daddr}'] = [{'uid' : uid,
+                        self.cache_arp_requests[f'{profileid}_{twid}'] = [{'uid' : uid,
                                                                             'daddr': daddr,
                                                                             'saddr': saddr,
                                                                             'src_mac': src_mac,
@@ -121,14 +136,17 @@ class Module(Module, multiprocessing.Process):
                                                                             'ts' : ts}]
 
                 # if the tw is closed, remove all its entries from the cache dict
-                message = self.c2.get_message(timeout=self.timeout)
-                if message['data'] == 'stop_process':
+                message = self.c2.get_message(timeout=0.5)
+                if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                elif message['channel'] == 'tw_modified' and type(message['data'])==str:
+                elif message and message['channel'] == 'tw_closed' and type(message['data'])==str:
                     profileid_tw = message['data']
-                    for key in self.cache_arp_requests:
+                    # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore
+                    # this copy is made to avoid dictionary changed size during iteration err
+                    cache_copy = self.cache_arp_requests.copy()
+                    for key in cache_copy:
                         if profileid_tw in key:
                             self.cache_arp_requests.pop(key)
                             # don't break , keep looking for more keys that belong to the same tw
