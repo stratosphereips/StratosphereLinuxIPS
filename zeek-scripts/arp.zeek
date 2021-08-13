@@ -9,11 +9,11 @@ type Info: record {
 				## The requestor's MAC address.
 				src_mac: string &log &optional;
         ## The responder's MAC address.
-				mac_dst: string &log &optional;
+				dst_mac: string &log &optional;
         ## Source Protocol Address
-        SPA:            addr        &log &optional;
+        orig_h:            addr        &log &optional;
         ## Source Hardware Address
-        TPA:            addr        &log &optional;
+        resp_h:            addr        &log &optional;
 };
 
 global log_sensato_combined: event(rec: Info);
@@ -38,14 +38,14 @@ function set_session(c: connection)
   }
 }
 
-event arp_request(mac_src: string, mac_dst: string, SPA: addr, SHA: string, TPA: addr, THA: string) &priority=5
+event arp_request(mac_src: string, dst_mac: string, orig_h: addr, SHA: string, resp_h: addr, THA: string) &priority=5
 {
     local info: Info;
 		info$ts        = network_time();
 		info$src_mac   = mac_src;
-		info$mac_dst   = mac_dst;
-		info$SPA       = SPA;
-		info$TPA       = TPA;
+		info$dst_mac   = dst_mac;
+		info$orig_h       = orig_h;
+		info$resp_h       = resp_h;
 {
     Log::write(ARP::LOG, info);
   }

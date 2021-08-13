@@ -1054,6 +1054,12 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['md5'] = line.get('md5', '')
             # self.column_values['sha1'] = line.get('sha1','')
             #todo process zeek tabs files.log
+        elif 'arp' in file_type:
+            self.column_values['type'] = 'arp'
+            self.column_values['src_mac'] = line.get('src_mac', '')
+            self.column_values['dst_mac'] = line.get('dst_mac', '')
+            self.column_values['saddr'] = line.get('orig_h','')
+            self.column_values['daddr'] = line.get('resp_h','')
         else:
             return False
         return True
@@ -1635,7 +1641,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             if not self.column_values:
                 return True
-            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files'):
+            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp', 'files', 'arp'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -1665,13 +1671,13 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print("{}".format((type(e))), 0, 1)
 
             # This uid check is for when we read things that are not zeek
-            try:
-                uid = self.column_values['uid']
-            except KeyError:
+            if not self.column_values['uid']:
                 # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
                 # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
                 self.column_values['uid'] = uid
+            else:
+                uid = self.column_values['uid']
 
             flow_type = self.column_values['type']
             self.saddr = self.column_values['saddr']
@@ -1839,6 +1845,19 @@ class ProfilerProcess(multiprocessing.Process):
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish('new_downloaded_file', to_send)
+                elif flow_type == 'arp':
+                    to_send = {
+                        'uid' : self.column_values['uid'],
+                        'daddr': self.column_values['daddr'],
+                        'saddr': self.column_values['saddr'],
+                        'src_mac': self.column_values['src_mac'] ,
+                        'dst_mac': self.column_values['dst_mac'] ,
+                        'profileid' : profileid,
+                        'twid' : twid,
+                        'ts' : starttime
+                    }
+                    to_send = json.dumps(to_send)
+                    __database__.publish('new_arp', to_send)
 
             def store_features_going_in(profileid, twid, starttime):
                 """
