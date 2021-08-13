@@ -24,7 +24,7 @@ class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'ARPScanDetector'
     description = 'Module to detect ARP scans.'
-    authors = ['Alya']
+    authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -45,6 +45,7 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_arp')
+        self.c2 = __database__.subscribe('tw_closed')
         self.timeout = None
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
@@ -73,16 +74,13 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=self.timeout)
-                #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
                 if message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
                 elif message['channel'] == 'new_arp' and type(message['data'])==str:
                     flow = json.loads(message['data'])
-                    # "uid": "MmZiNTY0ODNhOTVmZjZlMmI0", "daddr": "192.168.1.10", "saddr": "192.168.1.1", "src_mac": "50:78:b3:b0:08:ec", "dst_mac": "50:5b:c2:db:c3:17", "profileid": "profile_192.168.1.1", "twid": "timewindow1", "ts": 1628846748.311922}
                     ts = flow['ts']
                     profileid = flow['profileid']
                     twid = flow['twid']
@@ -102,10 +100,10 @@ class Module(Module, multiprocessing.Process):
                                                 'src_mac': src_mac ,
                                                 'dst_mac': dst_mac ,
                                                 'ts' : ts})
-                        if len(cached_requests) > 2:
+                        if len(cached_requests) > 10:
                             confidence = 1
                             threat_level = 60
-                            description = f'ARP Scan Detected to distination address: {daddr}'
+                            description = f'ARP Scan Detected to destination address: {daddr}'
                             type_evidence = 'ARPScan'
                             type_detection = 'dstip'
                             detection_info = daddr
@@ -122,12 +120,24 @@ class Module(Module, multiprocessing.Process):
                                                                             'dst_mac': dst_mac,
                                                                             'ts' : ts}]
 
+                # if the tw is closed, remove all its entries from the cache dict
+                message = self.c2.get_message(timeout=self.timeout)
+                if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
+                    return True
+                elif message['channel'] == 'tw_modified' and type(message['data'])==str:
+                    profileid_tw = message['data']
+                    for key in self.cache_arp_requests:
+                        if profileid_tw in key:
+                            self.cache_arp_requests.pop(key)
+                            # don't break , keep looking for more keys that belong to the same tw
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
-            # except Exception as inst:
-            #     self.print('Problem on the run()', 0, 1)
-            #     self.print(str(type(inst)), 0, 1)
-            #     self.print(str(inst.args), 0, 1)
-            #     self.print(str(inst), 0, 1)
-            #     return True
+            except Exception as inst:
+                self.print('Problem on the run()', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
