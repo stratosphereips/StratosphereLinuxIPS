@@ -1180,6 +1180,12 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['port_proto'] = line.get('port_proto', '')
             self.column_values['service'] = line.get('service', '')
 
+        elif 'arp' in file_type:
+            self.column_values['type'] = 'arp'
+            self.column_values['src_mac'] = line.get('src_mac', '')
+            self.column_values['dst_mac'] = line.get('dst_mac', '')
+            self.column_values['saddr'] = line.get('orig_h','')
+            self.column_values['daddr'] = line.get('resp_h','')
         else:
             return False
         return True
@@ -1800,7 +1806,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             if not self.column_values:
                 return True
-            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files', 'known_services'):
+            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files', 'known_services', 'arp'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -2021,6 +2027,19 @@ class ProfilerProcess(multiprocessing.Process):
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish("new_service",to_send)
+                elif flow_type == 'arp':
+                    to_send = {
+                        'uid' : self.column_values['uid'],
+                        'daddr': self.column_values['daddr'],
+                        'saddr': self.column_values['saddr'],
+                        'src_mac': self.column_values['src_mac'] ,
+                        'dst_mac': self.column_values['dst_mac'] ,
+                        'profileid' : profileid,
+                        'twid' : twid,
+                        'ts' : starttime
+                    }
+                    to_send = json.dumps(to_send)
+                    __database__.publish('new_arp', to_send)
 
             def store_features_going_in(profileid, twid, starttime):
                 """
