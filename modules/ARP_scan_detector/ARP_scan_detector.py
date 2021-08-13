@@ -22,7 +22,7 @@ import json
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'arp_scan_detector'
+    name = 'ARPScanDetector'
     description = 'Module to detect ARP scans.'
     authors = ['Alya']
 
