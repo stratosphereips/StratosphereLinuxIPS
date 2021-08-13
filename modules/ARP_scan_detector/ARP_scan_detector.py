@@ -18,7 +18,7 @@ from slips_files.core.database import __database__
 import platform
 
 # Your imports
-
+import json
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -44,7 +44,7 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         # Remember to subscribe to this channel in database.py
-        self.c1 = __database__.subscribe('tw_modified')
+        self.c1 = __database__.subscribe('new_flow')
         self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
@@ -78,16 +78,31 @@ class Module(Module, multiprocessing.Process):
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                elif message['channel'] == 'tw_modified' and type(message)==str:
+                elif message['channel'] == 'new_flow' and type(message['data'])==str:
                     # Get the profileid and twid
-                    pass
+                    profileid = message['data'].split(':')[0]
+                    twid = message['data'].split(':')[1]
+                    data = message['data']
+                    # Convert from json to dict
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    # Get flow as a json
+                    flow = data['flow']
+                    timestamp = data['stime']
+                    # Convert flow to a dict
+                    flow = json.loads(flow)
+                    flow =  json.loads(flow[list(flow.keys())[0]])
+                    protocol = flow['proto']
+                    if 'arp' in protocol.lower():
+                        pass
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
-            except Exception as inst:
-                self.print('Problem on the run()', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
+            # except Exception as inst:
+            #     self.print('Problem on the run()', 0, 1)
+            #     self.print(str(type(inst)), 0, 1)
+            #     self.print(str(inst.args), 0, 1)
+            #     self.print(str(inst), 0, 1)
+            #     return True
