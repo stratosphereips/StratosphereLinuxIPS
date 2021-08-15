@@ -88,8 +88,11 @@ class Table{
                 var evidence_data = [];
                 if(all_profile_evidences==null){this.setData(['twid','evidences'], evidence_data); this.screen.render()}
                 else{
-                    async.forEach(Object.entries(all_profile_evidences),([twid,tw_evidences], callback)=>{
-                    var tw_evidences_json = JSON.parse(tw_evidences);
+                    var temp_dict = Object.keys(all_profile_evidences)
+                    temp_dict.sort(function(a,b){return(Number(a.match(/(\d+)/g)[0]) - Number((b.match(/(\d+)/g)[0])))});
+
+                    async.forEach(temp_dict,(twid, callback)=>{
+                    var tw_evidences_json = JSON.parse(all_profile_evidences[twid]);
                         async.forEachOf(Object.entries(tw_evidences_json),([key, evidence], index)=>{
                             var row = []
                             if(index==0){row.push(twid)}
