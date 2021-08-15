@@ -161,8 +161,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                                     # Description
                                     description = 'New horizontal port scan detected to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
                                     uid = next(iter(dstips.values()))['uid'] # first uid in the dictionary
+                                    timestamp = next(iter(dstips.values()))['stime']
                                     __database__.setEvidence(type_detection, detection_info,type_evidence,
-                                                             threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
+                                                             threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                                     # Set 'malicious' label in the detected profile
                                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                                     self.print(description, 3, 0)
@@ -214,8 +215,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                                     # Description
                                     description = 'New vertical port scan detected to IP {} from {}. Total {} dst ports. Not Estab TCP. Tot pkts sent all ports: {}'.format(dstip, profileid.split(self.fieldseparator)[1], amount_of_dports, pkts_sent, confidence)
                                     uid = data[dstip]['uid']
+                                    timestamp = data[dstip]['stime']
                                     __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                             threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
+                                                             threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                                     # Set 'malicious' label in the detected profile
                                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                                     self.print(description, 3, 0)

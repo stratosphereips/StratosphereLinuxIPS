@@ -17,6 +17,7 @@ import multiprocessing
 from slips_files.core.database import __database__
 import platform
 import warnings
+import json
 # Your imports
 import numpy as np
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
@@ -68,18 +69,18 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def set_evidence(self, score, confidence, uid, tupleid='', profileid='', twid=''):
+    def set_evidence(self, score, confidence, uid, timestamp, tupleid='', profileid='', twid=''):
         '''
         Set an evidence for malicious Tuple
         '''
         type_detection = 'outTuple'
         detection_info = tupleid
         type_evidence = 'C&C channels detection'
-        threat_level = 100
+        threat_level = 30
         description = 'RNN C&C channels detection, score: ' + str(score) + ', tuple ID:\'' + str(tupleid) +'\''
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, profileid=profileid, twid=twid, uid=uid)
+                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def convert_input_for_module(self, pre_behavioral_model):
         """
@@ -146,12 +147,13 @@ class Module(Module, multiprocessing.Process):
                     return True
                 if message['channel'] == 'new_letters' and type(message['data']) is not int:
                     data = message['data']
-                    data = data.split('-')
-                    pre_behavioral_model = data[0]
-                    profileid = data[1]
-                    twid = data[2]
-                    tupleid = data[3]
-                    uid = data[4]
+                    data = json.loads(data)
+                    pre_behavioral_model = data['new_symbol']
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    tupleid = data['tupleid']
+                    uid = data['uid']
+                    stime = data['stime']
 
                     if 'tcp' in tupleid.lower():
                         # Define why this threshold
@@ -170,7 +172,7 @@ class Module(Module, multiprocessing.Process):
                                 confidence = 1
                             else:
                                 confidence = len(pre_behavioral_model)/threshold_confidence
-                            self.set_evidence(score,confidence, uid, tupleid, profileid, twid)
+                            self.set_evidence(score, confidence, uid, stime, tupleid, profileid, twid)
                     """
                     elif 'udp' in tupleid.lower():
                         # Define why this threshold

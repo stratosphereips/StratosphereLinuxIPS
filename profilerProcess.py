@@ -28,6 +28,7 @@ import traceback
 import os
 import binascii
 import base64
+import subprocess
 from re import split
 from tzlocal import get_localzone
 import validators
@@ -861,6 +862,13 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['scanning_ip'] = self.column_values['saddr']
             self.column_values['scanned_port'] =  self.column_values['dport']
             self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
+        elif '/files' in new_line['type']:
+            self.column_values['type'] = 'files'
+            self.column_values['uid'] = line[4]
+            self.column_values['saddr'] = line[2]
+            self.column_values['daddr'] = line[3] #rx_hosts
+            self.column_values['size'] = line[13]
+            self.column_values['md5'] = line[19]
 
     def process_zeek_input(self, new_line: dict):
         """
@@ -1035,6 +1043,19 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
             self.column_values['scanned_port'] = line.get('p', '')
             self.column_values['scanning_ip'] = line.get('src', '')
+        elif '/files' in file_type:
+            """ Parse the fields we're interested in in the files.log file """
+            # the slash before files to distinguish between 'files' in the dir name and file.log
+            self.column_values['type'] = 'files'
+            self.column_values['uid'] = line.get('conn_uids',[''])[0]
+            self.column_values['saddr'] = line.get('tx_hosts',[''])[0]
+            self.column_values['daddr'] = line.get('rx_hosts',[''])[0]
+            self.column_values['size'] = line.get('total_bytes', '') # downloaded file size
+            self.column_values['md5'] = line.get('md5', '')
+            # self.column_values['sha1'] = line.get('sha1','')
+            #todo process zeek tabs files.log
+        else:
+            return False
         return True
 
     def process_argus_input(self, new_line):
@@ -1614,7 +1635,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             if not self.column_values:
                 return True
-            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp'):
+            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -1702,9 +1723,26 @@ class ProfilerProcess(multiprocessing.Process):
             elif 'dhcp' in flow_type:
                 mac_addr = self.column_values['mac']
                 client_addr = self.column_values['client_addr']
-                if client_addr:
-                    profileid = get_rev_profile(starttime, client_addr)[0]
-                    __database__.add_mac_addr_to_profile(profileid,mac_addr)
+                profileid = get_rev_profile(starttime, client_addr)[0]
+                MAC_info = {'MAC': mac_addr}
+                oui = mac_addr[:8].upper()
+                with open('databases/macaddress-db.json','r') as db:
+                    line = db.readline()
+                    while line:
+                        if oui in line:
+                            break
+                        line = db.readline()
+                    else:
+                        # comes here if it doesn't find info about this mac addr
+                        line = False
+                if line:
+                    line = json.loads(line)
+                    vendor = line['companyName']
+                    MAC_info.update({'Vendor': vendor})
+                # Store info in the db
+                MAC_info = json.dumps(MAC_info)
+                __database__.add_mac_addr_to_profile(profileid, MAC_info)
+
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(self.saddr)
@@ -1749,19 +1787,19 @@ class ProfilerProcess(multiprocessing.Process):
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
                                           spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
                 elif 'dns' in flow_type:
-                    __database__.add_out_dns(profileid, twid, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
+                    __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                     # Add DNS resolution if there are answers for the query
                     if answers:
                         __database__.set_dns_resolution(query, answers)
                 elif flow_type == 'http':
-                    __database__.add_out_http(profileid, twid, flow_type, uid, self.column_values['method'],
+                    __database__.add_out_http(profileid, twid, starttime, flow_type, uid, self.column_values['method'],
                                               self.column_values['host'], self.column_values['uri'],
                                               self.column_values['httpversion'], self.column_values['user_agent'],
                                               self.column_values['request_body_len'], self.column_values['response_body_len'],
                                               self.column_values['status_code'], self.column_values['status_msg'],
                                               self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
                 elif flow_type == 'ssl':
-                    __database__.add_out_ssl(profileid, twid, daddr_as_obj,self.column_values['dport'],
+                    __database__.add_out_ssl(profileid, twid, starttime, daddr_as_obj,self.column_values['dport'],
                                              flow_type, uid, self.column_values['sslversion'],
                                              self.column_values['cipher'], self.column_values['resumed'],
                                              self.column_values['established'], self.column_values['cert_chain_fuids'],
@@ -1769,7 +1807,7 @@ class ProfilerProcess(multiprocessing.Process):
                                              self.column_values['issuer'], self.column_values['validation_status'],
                                              self.column_values['curve'], self.column_values['server_name'])
                 elif flow_type == 'ssh':
-                    __database__.add_out_ssh(profileid, twid, flow_type, uid, self.column_values['version'],
+                    __database__.add_out_ssh(profileid, twid, starttime, flow_type, uid, self.column_values['version'],
                                              self.column_values['auth_attempts'], self.column_values['auth_success'],
                                              self.column_values['client'], self.column_values['server'],
                                              self.column_values['cipher_alg'], self.column_values['mac_alg'],
@@ -1777,6 +1815,7 @@ class ProfilerProcess(multiprocessing.Process):
                                              self.column_values['host_key_alg'], self.column_values['host_key'])
                 elif flow_type == 'notice':
                      __database__.add_out_notice(profileid,twid,\
+                                                 starttime,\
                                                  self.column_values['daddr'],\
                                                  self.column_values['sport'],\
                                                  self.column_values['dport'],\
@@ -1786,6 +1825,20 @@ class ProfilerProcess(multiprocessing.Process):
                                                  self.column_values['scanning_ip'],
                                                  self.column_values['uid']
                                                  )
+                elif flow_type == 'files':
+                    """" Send files.log data to new_downloaded_file channel in vt module to see if it's malicious """
+                    to_send = {
+                        'uid' : self.column_values['uid'],
+                        'daddr': self.column_values['daddr'],
+                        'saddr': self.column_values['saddr'],
+                        'size' : self.column_values['size'],
+                        'md5':  self.column_values['md5'],
+                        'profileid' : profileid,
+                        'twid' : twid,
+                        'ts' : starttime
+                    }
+                    to_send = json.dumps(to_send)
+                    __database__.publish('new_downloaded_file', to_send)
 
             def store_features_going_in(profileid, twid, starttime):
                 """

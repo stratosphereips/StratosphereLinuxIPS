@@ -138,7 +138,8 @@ def test_define_columns(outputQueue, inputQueue,file,separator,expected_value):
     ('dataset/sample_zeek_files/conn.log','conn'),
     ('dataset/sample_zeek_files/http.log','http'),
     ('dataset/sample_zeek_files/ssl.log','ssl'),
-    ('dataset/sample_zeek_files/notice.log','notice')])
+    ('dataset/sample_zeek_files/notice.log','notice'),
+    ('dataset/sample_zeek_files/files.log','/files')])
 def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
     # we're testing another functionality here
@@ -148,7 +149,7 @@ def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
         sample_flow = f.readline().replace('\n','')
     sample_flow = json.loads(sample_flow)
     sample_flow = {'data': sample_flow,
-                   'type': type_,}
+                   'type': type_}
     # process it
     assert profilerProcess.process_zeek_input(sample_flow) == True
     # add to profile
