@@ -171,6 +171,11 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
+    <td>ARPScanDetector</td>
+    <td>module to check for ARP scans in ARP traffic</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>ExportingAlerts</td>
     <td>module to export alerts to slack, STIX or suricata format</td>
     <td>✅</td>

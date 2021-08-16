@@ -80,6 +80,11 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
+    <td>ARPScanDetector</td>
+    <td>module to check for ARP scans in ARP traffic</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>http_analyzer</td>
     <td>module to analyze HTTP traffic.</td>
     <td>✅</td>
