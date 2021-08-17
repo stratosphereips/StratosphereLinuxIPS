@@ -55,6 +55,8 @@ class Module(Module, multiprocessing.Process):
         self.c3 = __database__.subscribe('new_notice')
         self.c4 = __database__.subscribe('new_ssl')
         self.timeout = None
+        # this dict will store connections on port 0 {'srcips':[(ts,dstip)]}
+        self.scans = {}
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -209,6 +211,22 @@ class Module(Module, multiprocessing.Process):
                                                   module_name,
                                                   module_label)
 
+    def set_evidence_for_port_0_scanning(self, saddr, diff, profileid, twid, uid, timestamp):
+        confidence = 0.8
+        threat_level = 20
+        type_detection  = 'srcip'
+        type_evidence = 'Port0Scanning'
+        detection_info = saddr
+        # get a unique list of dstips:
+        dest_ips = []
+        for scan in self.scans[saddr]:
+            daddr = scan[1]
+            if daddr not in dest_ips: dest_ips.append(daddr)
+        description = f'Port 0 is scanned in the following destination IPs: {dest_ips}'
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
     def run(self):
         # Main loop function
         while True:
@@ -244,10 +262,9 @@ class Module(Module, multiprocessing.Process):
                     state = flow_dict['state']
                     timestamp = data['stime']
                     # stime = flow_dict['ts']
-                    # sport = flow_dict['sport']
+                    sport = flow_dict['sport']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-
                     # Do not check the duration of the flow if the daddr or
                     # saddr is a  multicast.
                     if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
@@ -263,15 +280,11 @@ class Module(Module, multiprocessing.Process):
                             if count_reconnections > 1:
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
-
-                    # this dict will store connections on port 0 {'srcips':[(ts,dstip)]}
-                    self.scans = []
-                    if dport == 0:
+                    if sport == 0:
                         # is this an ip scanning another one through port 0?
                         try:
                             self.scans[saddr].append((timestamp,daddr))
-                            #todo we don't need daddr do we?
-                            if self.scans[saddr] >=3:
+                            if len(self.scans[saddr]) >=3:
                                 # this is the same srcip scanning 1 or more daddr through port 0
                                 # is it in a short period of time?
                                 # get first and last tuples
@@ -283,9 +296,9 @@ class Module(Module, multiprocessing.Process):
                                 # get the difference between them in seconds
                                 diff = float(str(time_of_last_scan - time_of_first_scan).split(':')[-1])
                                 if diff >= 0.015:
-                                    self.set_evidence_for_port_0_scanning(saddr, profileid, twid, uid, timestamp)
+                                    self.set_evidence_for_port_0_scanning(saddr, diff, profileid, twid, uid, timestamp)
                         except KeyError:
-                            self.scans.update({ saddr : [(timestamp,daddr)] })
+                            self.scans[saddr] = [(timestamp,daddr)]
 
                     # Connection to multiple ports
                     if proto == 'tcp' and state == 'Established':
