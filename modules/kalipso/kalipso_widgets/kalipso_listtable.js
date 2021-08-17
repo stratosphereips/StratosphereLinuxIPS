@@ -163,7 +163,7 @@ class ListTable{
     /*Combine data for the outtuple hotkey - key, behavioral letters, asn, geo VT*/
     setOutTuples(ip, timewindow){
         this.redis_database.getOutTuples(ip, timewindow).then(redis_outTuples=>{
-            var data = [['key','string','dns_resolution','SNI','asn','geo','url','down','ref','com']]
+            var data = [['key','string','dns_resolution','SNI','RDNS','asn','geo','url','down','ref','com']]
             if(redis_outTuples==null){this.setData(data);this.screen.render(); return;}
             var json_outTuples = JSON.parse(redis_outTuples)
             var keys = Object.keys(json_outTuples)
@@ -205,12 +205,12 @@ class ListTable{
 
                 if(ind ==0){
                     row.push(key, temp_str, temp_dns_resolution,
-                              temp_sni, ip_info_dict['asn'].slice(0,20), ip_info_dict['geo'],
+                              temp_sni,ip_info_dict['reverse_dns'], ip_info_dict['asn'].slice(0,20), ip_info_dict['geo'],
                               ip_info_dict['url'], ip_info_dict['down'], ip_info_dict['ref'],
                               ip_info_dict['com'])}
                 else{
                     row.push('', temp_str, temp_dns_resolution,
-                              temp_sni, '','','','','','')}
+                              temp_sni, '', '','','','','','')}
                 data.push(row)
                 callback(null)
                 }, (err)=>{if(err){console.log('Check setOutTuple in kalipso_listtable.js. Error: ', err);}})
@@ -229,7 +229,7 @@ class ListTable{
         try{
 
             this.redis_database.getInTuples(ip, timewindow).then(redis_inTuples=>{
-            var data = [['key','string','dns_resolution','SNI','asn','geo','url','down','ref','com']]
+            var data = [['key','string','dns_resolution','SNI','RDNS','asn','geo','url','down','ref','com']]
             if(redis_inTuples==null){this.setData(data);this.screen.render(); return;}
             var json_inTuples = JSON.parse(redis_inTuples)
             var keys = Object.keys(json_inTuples)
@@ -271,12 +271,12 @@ class ListTable{
 
                 if(ind ==0){
                     row.push(key, temp_str, temp_dns_resolution,
-                              temp_sni, ip_info_dict['asn'].slice(0,20), ip_info_dict['geo'],
+                              temp_sni,ip_info_dict['reverse_dns'], ip_info_dict['asn'].slice(0,20), ip_info_dict['geo'],
                               ip_info_dict['url'], ip_info_dict['down'], ip_info_dict['ref'],
                               ip_info_dict['com'])}
                 else{
                     row.push('', temp_str, temp_dns_resolution,
-                              temp_sni, '','','','','','')}
+                              temp_sni, '','','','','','','')}
                 data.push(row)
                 callback(null)
                 }, (err)=>{if(err){console.log('Error in setInTuples in kalipso_listtable.js. Error:', err);}})
