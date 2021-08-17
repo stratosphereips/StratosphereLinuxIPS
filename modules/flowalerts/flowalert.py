@@ -420,7 +420,19 @@ class Module(Module, multiprocessing.Process):
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
-
+                        if 'Password_Guessing' in note:
+                            # Vertical port scan
+                            # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
+                            confidence = 1
+                            threat_level = 60
+                            # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
+                            description = 'Zeek: Password_Guessing. ' + msg
+                            type_evidence = 'Password_Guessing'
+                            type_detection = 'dstip'
+                            detection_info = flow.get('scanning_ip','')
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                            self.print(description, 3, 0)
                 # ---------------------------- new_ssl channel
                 message = self.c4.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
