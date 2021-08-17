@@ -21,6 +21,7 @@ import platform
 import json
 import configparser
 from ipaddress import ip_address
+import datetime
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -263,6 +264,29 @@ class Module(Module, multiprocessing.Process):
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
 
+                    # this dict will store connections on port 0 {'srcips':[(ts,dstip)]}
+                    self.scans = []
+                    if dport == 0:
+                        # is this an ip scanning another one through port 0?
+                        try:
+                            self.scans[saddr].append((timestamp,daddr))
+                            #todo we don't need daddr do we?
+                            if self.scans[saddr] >=3:
+                                # this is the same srcip scanning 1 or more daddr through port 0
+                                # is it in a short period of time?
+                                # get first and last tuples
+                                first_scan = self.scans[saddr][0]
+                                last_scan = self.scans[saddr][-1]
+                                # get first and last ts
+                                time_of_first_scan = datetime.datetime.fromtimestamp(first_scan[0])
+                                time_of_last_scan = datetime.datetime.fromtimestamp(last_scan[0])
+                                # get the difference between them in seconds
+                                diff = float(str(time_of_last_scan - time_of_first_scan).split(':')[-1])
+                                if diff >= 0.015:
+                                    self.set_evidence_for_port_0_scanning(saddr, profileid, twid, uid, timestamp)
+                        except KeyError:
+                            self.scans.update({ saddr : [(timestamp,daddr)] })
+
                     # Connection to multiple ports
                     if proto == 'tcp' and state == 'Established':
                         dport_name = flow_dict.get('appproto','')
@@ -449,7 +473,6 @@ class Module(Module, multiprocessing.Process):
                                 description = 'Self-signed certificate. Destination IP: {}'.format(ip)
                             else:
                                 description = 'Self-signed certificate. Destination IP: {}, SNI: {}'.format(ip, server_name)
-
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description, uid, timestamp)
                             self.print(description, 3, 0)
             except KeyboardInterrupt:
