@@ -227,6 +227,9 @@ class Module(Module, multiprocessing.Process):
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        # remove this saddr from the scans dict so the dict won't be growing forever
+        self.scans.pop(saddr)
+
     def run(self):
         # Main loop function
         while True:
@@ -280,6 +283,7 @@ class Module(Module, multiprocessing.Process):
                             if count_reconnections > 1:
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
+
                     if sport == 0:
                         # is this an ip scanning another one through port 0?
                         try:
@@ -295,7 +299,7 @@ class Module(Module, multiprocessing.Process):
                                 time_of_last_scan = datetime.datetime.fromtimestamp(last_scan[0])
                                 # get the difference between them in seconds
                                 diff = float(str(time_of_last_scan - time_of_first_scan).split(':')[-1])
-                                if diff >= 0.015:
+                                if diff <= 30.00:
                                     self.set_evidence_for_port_0_scanning(saddr, diff, profileid, twid, uid, timestamp)
                         except KeyError:
                             self.scans[saddr] = [(timestamp,daddr)]
