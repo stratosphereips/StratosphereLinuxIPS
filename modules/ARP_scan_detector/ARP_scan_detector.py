@@ -95,7 +95,7 @@ class Module(Module, multiprocessing.Process):
 
             #todo do we need mac addresses?
             if len(cached_requests) >= 10:
-                # check if these requests happened within 20 secs
+                # check if these requests happened within 30 secs
                 # get the first and the last request of the 10
                 starttime = cached_requests[0]['ts']
                 endtime = cached_requests[-1]['ts']
@@ -104,7 +104,7 @@ class Module(Module, multiprocessing.Process):
                 endtime = datetime.datetime.fromtimestamp(endtime)
                 # get the difference between them in seconds
                 self.diff = float(str(endtime - starttime).split(':')[-1])
-                if self.diff >= 0.015:
+                if self.diff <= 30.00:
                     # we are sure this is an arp scan
                     confidence = 1
                     threat_level = 60
