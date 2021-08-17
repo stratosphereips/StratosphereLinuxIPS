@@ -172,8 +172,11 @@ class ProfilerProcess(multiprocessing.Process):
                 line = whitelist.readline()
                 while line:
                     line_number+=1
+                    if line.startswith('"IoCType"'):
+                        line = whitelist.readline()
+                        continue
                     # ignore comments
-                    if line.startswith('#') and not line.startswith('"IoCType"'):
+                    if line.startswith('#'):
                         # check if the user commented an org, ip or domain that was whitelisted
                         if hasattr(self,'whitelisted_IPs'):
                             for ip in list(self.whitelisted_IPs):
