@@ -74,7 +74,8 @@ class ProfilerProcess(multiprocessing.Process):
         self.local_timezone = get_localzone()
         self.verbose = verbose
         self.debug = debug
-        self.timeout = 1
+        # there has to be a timeout or it will wait forever and never receive a new line
+        self.timeout = 0.00001
         self.c1 = __database__.subscribe('reload_whitelist')
 
     def print(self, text, verbose=1, debug=0):
@@ -2525,8 +2526,6 @@ class ProfilerProcess(multiprocessing.Process):
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
                 message = self.c1.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'reload_whitelist' and type(message['data']) == str:
                     # if whitelist.conf is edited using pycharm
