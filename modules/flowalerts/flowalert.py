@@ -92,7 +92,7 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def set_evidence_ssh_successful(self, profileid, twid, saddr, daddr, size, uid, timestamp, by='', ip_state='ip'):
+    def set_evidence_ssh_successful(self, profileid, twid, saddr, daddr, size, by, ip_state='ip'):
         """
         Set an evidence for a successful SSH login.
         This is not strictly a detection, but we don't have
@@ -126,7 +126,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_self_signed_certificates(self, profileid, twid, ip, description, uid, timestamp, ip_state='ip'):
+    def set_evidence_self_signed_certificates(self, profileid, twid, ip, description,  ip_state='ip'):
         '''
         Set evidence for self signed certificates.
         '''
@@ -137,39 +137,9 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                 description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
 
-    def set_evidence_for_multiple_reconnection_attempts(self,profileid, twid, ip, description, uid, timestamp):
-        '''
-        Set evidence for Reconnection Attempts.
-        '''
-        confidence = 0.5
-        threat_level = 20
-        type_detection  = 'dstip'
-        type_evidence = 'MultipleReconnectionAttempts'
-        detection_info = ip
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-
-
-    def set_evidence_for_connection_to_multiple_ports(self,profileid, twid, ip, description, uid, timestamp):
-        '''
-        Set evidence for connection to multiple ports.
-        '''
-        confidence = 0.5
-        threat_level = 20
-        type_detection  = 'dstip'
-        type_evidence = 'ConnectionToMultiplePorts'
-        detection_info = ip
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-
-    def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description, uid, timestamp):
+    def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description):
         '''
         Set evidence for Invalid SSL certificates.
         '''
@@ -180,8 +150,7 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
 
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
         """
@@ -210,25 +179,6 @@ class Module(Module, multiprocessing.Process):
                                                   uid,
                                                   module_name,
                                                   module_label)
-
-    def set_evidence_for_port_0_scanning(self, saddr, diff, profileid, twid, uid, timestamp):
-        confidence = 0.8
-        threat_level = 20
-        type_detection  = 'srcip'
-        type_evidence = 'Port0Scanning'
-        detection_info = saddr
-        # get a unique list of dstips:
-        dest_ips = []
-        for scan in self.scans[saddr]:
-            daddr = scan[1]
-            if daddr not in dest_ips: dest_ips.append(daddr)
-        description = f'Port 0 is scanned in the following destination IPs: {dest_ips}'
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-        # remove this saddr from the scans dict so the dict won't be growing forever
-        self.scans.pop(saddr)
 
     def run(self):
         # Main loop function
@@ -272,6 +222,8 @@ class Module(Module, multiprocessing.Process):
                     # saddr is a  multicast.
                     if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
+                    if dport:
+                        self.check_unknown_port(dport, proto, daddr, profileid, twid, uid)
 
                     # Multiple Reconnection attempts
                     key = saddr + '-' + daddr + ':' + str(dport)
