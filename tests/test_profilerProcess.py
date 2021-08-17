@@ -27,7 +27,7 @@ def test_read_whitelist(outputQueue, inputQueue, database):
     """
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
     # 9 is the number of lines read after the comment lines at th ebegging of the file
-    assert profilerProcess.read_whitelist() == 9
+    assert profilerProcess.read_whitelist() == 29
     assert '91.121.83.118' in profilerProcess.whitelisted_IPs.keys()
     assert 'apple.com' in profilerProcess.whitelisted_domains.keys()
     assert 'microsoft' in profilerProcess.whitelisted_orgs.keys()
