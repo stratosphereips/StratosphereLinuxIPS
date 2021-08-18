@@ -303,11 +303,26 @@ class Database(object):
         return self.r.zcard('tws' + profileid)
 
     def getModifiedTWSinceTime(self, time):
-        """ Return all the list of modified tw since a certain time"""
+        """ Return the list of modified timewindows since a certain time"""
         data = self.r.zrangebyscore('ModifiedTW', time, float('+inf'), withscores=True)
         if not data:
             return []
         return data
+
+    def getModifiedProfilesSinceTime(self,time):
+        """ Returns a set of modified profiles since a certain time and the time of the last modified profile"""
+        modified_tws = self.getModifiedTWSinceTime(time)
+        if not modified_tws:
+            # no modified tws, and no time_of_last_modified_tw
+            return [],0
+        # get the time of last modified tw
+        time_of_last_modified_tw = modified_tws[-1][-1]
+        # this list will store modified profiles without tws
+        profiles = []
+        for modified_tw in modified_tws:
+            profiles.append(modified_tw[0].split('_')[1])
+        # return a set of unique profiles
+        return set(profiles), time_of_last_modified_tw
 
     def getModifiedTW(self):
         """ Return all the list of modified tw """
