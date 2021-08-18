@@ -92,7 +92,7 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def set_evidence_ssh_successful(self, profileid, twid, saddr, daddr, size, by, ip_state='ip'):
+    def set_evidence_ssh_successful(self, profileid, twid, saddr, daddr, size, uid, timestamp, by='', ip_state='ip'):
         """
         Set an evidence for a successful SSH login.
         This is not strictly a detection, but we don't have
@@ -111,7 +111,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_long_connection(self, ip, duration, profileid, twid, uid, ip_state='ip'):
+    def set_evidence_long_connection(self, ip, duration, profileid, twid, uid, timestamp, ip_state='ip' ):
         '''
         Set an evidence for a long connection.
         '''
@@ -124,9 +124,9 @@ class Module(Module, multiprocessing.Process):
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
+                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_self_signed_certificates(self, profileid, twid, ip, description,  ip_state='ip'):
+    def set_evidence_self_signed_certificates(self, profileid, twid, ip, description, uid, timestamp, ip_state='ip'):
         '''
         Set evidence for self signed certificates.
         '''
@@ -137,9 +137,39 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                 description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description):
+    def set_evidence_for_multiple_reconnection_attempts(self,profileid, twid, ip, description, uid, timestamp):
+        '''
+        Set evidence for Reconnection Attempts.
+        '''
+        confidence = 0.5
+        threat_level = 20
+        type_detection  = 'dstip'
+        type_evidence = 'MultipleReconnectionAttempts'
+        detection_info = ip
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+
+
+    def set_evidence_for_connection_to_multiple_ports(self,profileid, twid, ip, description, uid, timestamp):
+        '''
+        Set evidence for connection to multiple ports.
+        '''
+        confidence = 0.5
+        threat_level = 20
+        type_detection  = 'dstip'
+        type_evidence = 'ConnectionToMultiplePorts'
+        detection_info = ip
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+
+    def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description, uid, timestamp):
         '''
         Set evidence for Invalid SSL certificates.
         '''
@@ -150,7 +180,8 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence, description, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
         """
@@ -180,21 +211,21 @@ class Module(Module, multiprocessing.Process):
                                                   module_name,
                                                   module_label)
 
-    def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid):
+    def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
         """ Checks dports that are not in our modules/timeline/services.csv file"""
         port_info = __database__.get_port_info(f'{dport}/{proto}')
         if not port_info:
             # we don't have info about this port
             confidence = 1
-            threat_level = 20
+            threat_level = 10
             type_detection  = 'dport'
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
-            description = f'Unknown destination port {dport} to destination IP {daddr}'
+            description = f'Unknown destination port {dport}/{proto.upper()} to destination IP {daddr}'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                     confidence, description, profileid=profileid, twid=twid)
+                                     confidence, description, timestamp, profileid=profileid, twid=twid)
 
 
     def run(self):
@@ -242,7 +273,7 @@ class Module(Module, multiprocessing.Process):
                     if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
                     if dport:
-                        self.check_unknown_port(dport, proto, daddr, profileid, twid, uid)
+                        self.check_unknown_port(dport, proto, daddr, profileid, twid, uid, timestamp)
 
                     # Multiple Reconnection attempts
                     key = saddr + '-' + daddr + ':' + str(dport)
@@ -477,9 +508,9 @@ class Module(Module, multiprocessing.Process):
                             self.print(description, 3, 0)
             except KeyboardInterrupt:
                 return True
-            except Exception as inst:
-                self.print('Problem on the run()', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
+            # except Exception as inst:
+            #     self.print('Problem on the run()', 0, 1)
+            #     self.print(str(type(inst)), 0, 1)
+            #     self.print(str(inst.args), 0, 1)
+            #     self.print(str(inst), 0, 1)
+            #     return True
