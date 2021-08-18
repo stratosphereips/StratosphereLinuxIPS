@@ -570,8 +570,8 @@ if __name__ == '__main__':
             time.sleep(check_time_sleep)
             slips_internal_time = __database__.getSlipsInternalTime()
             # Get the amount of modified profiles since we last checked
-            ProfilesModifiedforProfile, time_of_last_modified_tw  = __database__.getModifiedProfilesSinceTime(float(slips_internal_time) + 1)
-            amount_of_modified = len(ProfilesModifiedforProfile)
+            modified_profiles, time_of_last_modified_tw  = __database__.getModifiedProfilesSinceTime(float(slips_internal_time) + 1)
+            amount_of_modified = len(modified_profiles)
             # Get the time of last modified timewindow and set it as a new
             if time_of_last_modified_tw != 0:
                 __database__.setSlipsInternalTime(time_of_last_modified_tw)
@@ -588,8 +588,7 @@ if __name__ == '__main__':
                 # To check of there was a modified TW in the host IP. If not,
                 # count down.
                 modifiedTW_hostIP = False
-                for profileTW in TWModifiedforProfile:
-                    profileIP = profileTW[0].split(fieldseparator)[1]
+                for profileIP in modified_profiles:
                     # True if there was a modified TW in the host IP
                     if hostIP == profileIP:
                         modifiedTW_hostIP = True
