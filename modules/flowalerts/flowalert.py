@@ -180,6 +180,23 @@ class Module(Module, multiprocessing.Process):
                                                   module_name,
                                                   module_label)
 
+    def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid):
+        """ Checks dports that are not in our modules/timeline/services.csv file"""
+        port_info = __database__.get_port_info(f'{dport}/{proto}')
+        if not port_info:
+            # we don't have info about this port
+            confidence = 1
+            threat_level = 20
+            type_detection  = 'dport'
+            type_evidence = 'UnknownPort'
+            detection_info = str(dport)
+            description = f'Unknown destination port {dport} to destination IP {daddr}'
+            if not twid:
+                twid = ''
+            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                     confidence, description, profileid=profileid, twid=twid)
+
+
     def run(self):
         # Main loop function
         while True:
@@ -210,12 +227,14 @@ class Module(Module, multiprocessing.Process):
                     saddr = flow_dict['saddr']
                     daddr = flow_dict['daddr']
                     origstate = flow_dict['origstate']
-                    dport = flow_dict['dport']
-                    proto = flow_dict['proto']
                     state = flow_dict['state']
                     timestamp = data['stime']
                     # stime = flow_dict['ts']
                     sport = flow_dict['sport']
+                    # timestamp = data['stime']
+                    dport = flow_dict.get('dport',None)
+                    proto = flow_dict.get('proto')
+                    # state = flow_dict['state']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
                     # Do not check the duration of the flow if the daddr or
