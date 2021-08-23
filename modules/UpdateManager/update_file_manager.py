@@ -209,7 +209,30 @@ class UpdateFileManager:
 
     def update_riskiq_feed(self):
         """ Get and parse RiskIQ feed """
-        pass
+        try:
+            base_url = 'https://api.riskiq.net/pt'
+            path = '/v2/articles/indicators'
+            url = base_url + path
+            auth = (self.riskiq_email, self.riskiq_email)
+            # get all indicator starting from last week until today
+            today = datetime.date.today().strftime("%Y-%m-%d")
+            days_ago = datetime.timedelta(7)
+            a_week_ago = today - days_ago
+            data = {'startDateInclusive': a_week_ago,
+                    'endDateExclusive': today
+            }
+            # Important: Specifying json= here instead of data= ensures that the
+            # Content-Type header is application/json, which is necessary.
+            response = requests.get(url, auth=auth ,json=data).json()
+            #todo parse the response and store in the db
+
+            # Get the time of update
+            self.new_update_time = time.time()
+            return True
+        except Exception as e:
+            self.print(f'An error occurred while updating RiskIQ feed.', 0, 1)
+            self.print(f'Error: {e}', 0, 1)
+            return False
 
     def update(self) -> bool:
         """
