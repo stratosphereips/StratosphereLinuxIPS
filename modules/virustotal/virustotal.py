@@ -561,6 +561,9 @@ class Module(Module, multiprocessing.Process):
         else:
             # query successful
             data = json.loads(response.data)
+            if type(data) == list:
+                # this is an empty list, vt dometimes returns it with status code 200
+                data = {}
             # optionally, save data to file
             if save_data and ioc_type is 'ip':
                 filename = ioc + ".txt"
