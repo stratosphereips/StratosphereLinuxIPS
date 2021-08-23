@@ -46,7 +46,7 @@ class UpdateFileManager:
             self.list_of_urls = []
 
         try:
-            # Read the riskiq api key and username
+            # Read the riskiq username
             self.riskiq_email = self.config.get('threatintelligence', 'RiskIQ_email')
             if '@' not in self.riskiq_email:
                 raise NameError
@@ -55,13 +55,21 @@ class UpdateFileManager:
             self.riskiq_email = None
 
         try:
-            # Read the riskiq api key and username
+            # Read the riskiq api key
             self.riskiq_key = self.config.get('threatintelligence', 'RiskIQ_key')
             if len(self.riskiq_key) != 64:
                 raise NameError
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.riskiq_key = None
+
+        try:
+            # riskiq update period
+            self.riskiq_update_period = self.config.get('threatintelligence', 'update_period')
+            self.riskiq_update_period = float(self.riskiq_update_period)
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.riskiq_update_period = 604800 # 1 week
 
     def print(self, text, verbose=1, debug=0):
         """
