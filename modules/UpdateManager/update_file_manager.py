@@ -345,19 +345,23 @@ class UpdateFileManager:
                 while True:
                     line = malicious_file.readline()
                     # some ioc files start with "first_seen_utc"
-                    if line.startswith('#"type"') or line.startswith('"first_seen_utc"') or line.startswith('"ip_v4"'):
+                    if line.startswith('#"type"') \
+                            or line.startswith('"first_seen_utc"') \
+                            or line.startswith('"ip_v4"')\
+                            or line.startswith('"domain"'):
                         # looks like the column names, search where is the
                         # description column
                         for column in line.split(','):
                             # some files have the name of the malware ad the description of the ioc
-                            if column.lower().startswith('desc') or 'malware' in column or 'tags_str' in column:
+                            if column.lower().startswith('desc') or 'malware' in column or 'tags_str' in column or 'collect' in column:
                                 description_column = line.split(',').index(column)
                     if not line.startswith('#') and not "type" in line.lower() \
                             and not "first_seen_utc" in line.lower() \
                             and not "ip_v4" in line.lower() \
+                            and not "domain" in line.lower() \
                             and not line.isspace() \
                             and line not in ('\n',''):
-                        # break while statement if it is not a comment line
+                        # break while statement if it is not a comment or a header line
                         # i.e. does not startwith #
                         break
 
