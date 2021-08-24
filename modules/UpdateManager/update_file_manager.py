@@ -213,21 +213,32 @@ class UpdateFileManager:
             base_url = 'https://api.riskiq.net/pt'
             path = '/v2/articles/indicators'
             url = base_url + path
-            auth = (self.riskiq_email, self.riskiq_email)
-            # get all indicator starting from last week until today
-            today = datetime.date.today().strftime("%Y-%m-%d")
+            auth = (self.riskiq_email, self.riskiq_key)
+            today = datetime.date.today()
             days_ago = datetime.timedelta(7)
             a_week_ago = today - days_ago
-            data = {'startDateInclusive': a_week_ago,
-                    'endDateExclusive': today
-            }
-            # Important: Specifying json= here instead of data= ensures that the
+            data = {'startDateInclusive': a_week_ago.strftime("%Y-%m-%d"),
+                    'endDateExclusive': today.strftime("%Y-%m-%d")}
+            # Specifying json= here instead of data= ensures that the
             # Content-Type header is application/json, which is necessary.
             response = requests.get(url, auth=auth ,json=data).json()
-            #todo parse the response and store in the db
+            # extract domains only from the response
+            try:
+                response = response['indicators']
+                for indicator in response:
+                    # each indicator is a dict
+                    malicious_domains_dict = {}
+                    if indicator.get('type','') == 'domain':
+                        domain = indicator['value']
+                        malicious_domains_dict[domain] = json.dumps({'description': 'malicious domain detected by RiskIQ', 'source':url})
+                        __database__.add_domains_to_IoC(malicious_domains_dict)
+            except KeyError:
+                self.print(f'RiskIQ returned: {response["message"]}. Update Cancelled.')
+                return False
 
-            # Get the time of update
-            self.new_update_time = time.time()
+            # update the timestamp in the db
+            malicious_file_info = {'time': time.time()}
+            __database__.set_malicious_file_info('riskiq_domains', malicious_file_info)
             return True
         except Exception as e:
             self.print(f'An error occurred while updating RiskIQ feed.', 0, 1)
