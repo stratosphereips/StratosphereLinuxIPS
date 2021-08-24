@@ -569,18 +569,15 @@ if __name__ == '__main__':
             # Sleep some time to do rutine checks
             time.sleep(check_time_sleep)
             slips_internal_time = __database__.getSlipsInternalTime()
-            # Get the amount of modified time windows since we last checked
-            TWModifiedforProfile = __database__.getModifiedTWSinceTime(float(slips_internal_time) + 1)
-            # TWModifiedforProfile = __database__.getModifiedTW()
-            amount_of_modified = len(TWModifiedforProfile)
-            # Get th time of last modified timewindow and set it as a new
-            if amount_of_modified != 0:
-                time_last_modified_tw = TWModifiedforProfile[-1][-1]
-                __database__.setSlipsInternalTime(time_last_modified_tw)
+            # Get the amount of modified profiles since we last checked
+            modified_profiles, time_of_last_modified_tw  = __database__.getModifiedProfilesSinceTime(float(slips_internal_time) + 1)
+            amount_of_modified = len(modified_profiles)
+            # Get the time of last modified timewindow and set it as a new
+            if time_of_last_modified_tw != 0:
+                __database__.setSlipsInternalTime(time_of_last_modified_tw)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
             outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
-
             # Check if we need to close some TW
             __database__.check_TW_to_close()
 
@@ -591,8 +588,7 @@ if __name__ == '__main__':
                 # To check of there was a modified TW in the host IP. If not,
                 # count down.
                 modifiedTW_hostIP = False
-                for profileTW in TWModifiedforProfile:
-                    profileIP = profileTW[0].split(fieldseparator)[1]
+                for profileIP in modified_profiles:
                     # True if there was a modified TW in the host IP
                     if hostIP == profileIP:
                         modifiedTW_hostIP = True

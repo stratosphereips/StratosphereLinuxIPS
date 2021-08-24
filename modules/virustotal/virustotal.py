@@ -145,7 +145,7 @@ class Module(Module, multiprocessing.Process):
         """
         response = self.api_query_(url)
         # Can't get url report
-        if response.get('response_code','') is -1:
+        if type(response)== dict and response.get('response_code','') is -1:
             self.print(f"VT API returned an Error - {response['verbose_msg']}")
             return 0
         try:
@@ -561,6 +561,9 @@ class Module(Module, multiprocessing.Process):
         else:
             # query successful
             data = json.loads(response.data)
+            if type(data) == list:
+                # this is an empty list, vt dometimes returns it with status code 200
+                data = {}
             # optionally, save data to file
             if save_data and ioc_type is 'ip':
                 filename = ioc + ".txt"

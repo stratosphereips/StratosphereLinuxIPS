@@ -21,6 +21,7 @@ import platform
 import json
 import configparser
 from ipaddress import ip_address
+import datetime
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -54,6 +55,8 @@ class Module(Module, multiprocessing.Process):
         self.c3 = __database__.subscribe('new_notice')
         self.c4 = __database__.subscribe('new_ssl')
         self.timeout = None
+        # this dict will store connections on port 0 {'srcips':[(ts,dstip)]}
+        self.scans = {}
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -108,7 +111,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_long_connection(self, ip, duration, profileid, twid, uid, ip_state='ip'):
+    def set_evidence_long_connection(self, ip, duration, profileid, twid, uid, timestamp, ip_state='ip' ):
         '''
         Set an evidence for a long connection.
         '''
@@ -121,7 +124,7 @@ class Module(Module, multiprocessing.Process):
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, profileid=profileid, twid=twid, uid=uid)
+                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_self_signed_certificates(self, profileid, twid, ip, description, uid, timestamp, ip_state='ip'):
         '''
@@ -208,6 +211,23 @@ class Module(Module, multiprocessing.Process):
                                                   module_name,
                                                   module_label)
 
+    def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
+        """ Checks dports that are not in our modules/timeline/services.csv file"""
+        port_info = __database__.get_port_info(f'{dport}/{proto}')
+        if not port_info:
+            # we don't have info about this port
+            confidence = 1
+            threat_level = 10
+            type_detection  = 'dport'
+            type_evidence = 'UnknownPort'
+            detection_info = str(dport)
+            description = f'Unknown destination port {dport}/{proto.upper()} to destination IP {daddr}'
+            if not twid:
+                twid = ''
+            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                     confidence, description, timestamp, profileid=profileid, twid=twid)
+
+
     def run(self):
         # Main loop function
         while True:
@@ -238,19 +258,22 @@ class Module(Module, multiprocessing.Process):
                     saddr = flow_dict['saddr']
                     daddr = flow_dict['daddr']
                     origstate = flow_dict['origstate']
-                    dport = flow_dict['dport']
-                    proto = flow_dict['proto']
                     state = flow_dict['state']
                     timestamp = data['stime']
                     # stime = flow_dict['ts']
-                    # sport = flow_dict['sport']
+                    sport = flow_dict['sport']
+                    # timestamp = data['stime']
+                    dport = flow_dict.get('dport',None)
+                    proto = flow_dict.get('proto')
+                    # state = flow_dict['state']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-
                     # Do not check the duration of the flow if the daddr or
                     # saddr is a  multicast.
                     if not ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
+                    if dport:
+                        self.check_unknown_port(dport, proto, daddr, profileid, twid, uid, timestamp)
 
                     # Multiple Reconnection attempts
                     key = saddr + '-' + daddr + ':' + str(dport)
@@ -262,6 +285,26 @@ class Module(Module, multiprocessing.Process):
                             if count_reconnections > 1:
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
+
+                    if sport == 0:
+                        # is this an ip scanning another one through port 0?
+                        try:
+                            self.scans[saddr].append((timestamp,daddr))
+                            if len(self.scans[saddr]) >=3:
+                                # this is the same srcip scanning 1 or more daddr through port 0
+                                # is it in a short period of time?
+                                # get first and last tuples
+                                first_scan = self.scans[saddr][0]
+                                last_scan = self.scans[saddr][-1]
+                                # get first and last ts
+                                time_of_first_scan = datetime.datetime.fromtimestamp(first_scan[0])
+                                time_of_last_scan = datetime.datetime.fromtimestamp(last_scan[0])
+                                # get the difference between them in seconds
+                                diff = float(str(time_of_last_scan - time_of_first_scan).split(':')[-1])
+                                if diff <= 30.00:
+                                    self.set_evidence_for_port_0_scanning(saddr, diff, profileid, twid, uid, timestamp)
+                        except KeyError:
+                            self.scans[saddr] = [(timestamp,daddr)]
 
                     # Connection to multiple ports
                     if proto == 'tcp' and state == 'Established':
@@ -420,7 +463,19 @@ class Module(Module, multiprocessing.Process):
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
-
+                        if 'Password_Guessing' in note:
+                            # Vertical port scan
+                            # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
+                            confidence = 1
+                            threat_level = 60
+                            # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
+                            description = 'Zeek: Password_Guessing. ' + msg
+                            type_evidence = 'Password_Guessing'
+                            type_detection = 'dstip'
+                            detection_info = flow.get('scanning_ip','')
+                            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                            self.print(description, 3, 0)
                 # ---------------------------- new_ssl channel
                 message = self.c4.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
@@ -449,7 +504,6 @@ class Module(Module, multiprocessing.Process):
                                 description = 'Self-signed certificate. Destination IP: {}'.format(ip)
                             else:
                                 description = 'Self-signed certificate. Destination IP: {}, SNI: {}'.format(ip, server_name)
-
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description, uid, timestamp)
                             self.print(description, 3, 0)
             except KeyboardInterrupt:

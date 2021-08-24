@@ -303,11 +303,26 @@ class Database(object):
         return self.r.zcard('tws' + profileid)
 
     def getModifiedTWSinceTime(self, time):
-        """ Return all the list of modified tw since a certain time"""
+        """ Return the list of modified timewindows since a certain time"""
         data = self.r.zrangebyscore('ModifiedTW', time, float('+inf'), withscores=True)
         if not data:
             return []
         return data
+
+    def getModifiedProfilesSinceTime(self,time):
+        """ Returns a set of modified profiles since a certain time and the time of the last modified profile"""
+        modified_tws = self.getModifiedTWSinceTime(time)
+        if not modified_tws:
+            # no modified tws, and no time_of_last_modified_tw
+            return [],0
+        # get the time of last modified tw
+        time_of_last_modified_tw = modified_tws[-1][-1]
+        # this list will store modified profiles without tws
+        profiles = []
+        for modified_tw in modified_tws:
+            profiles.append(modified_tw[0].split('_')[1])
+        # return a set of unique profiles
+        return set(profiles), time_of_last_modified_tw
 
     def getModifiedTW(self):
         """ Return all the list of modified tw """
@@ -1282,7 +1297,7 @@ class Database(object):
         pubsub = self.r.pubsub()
         supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
                     'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
-                    'new_blocking', 'new_ssh','new_notice','new_url', 'finished_modules', 'new_downloaded_file']
+                    'new_blocking', 'new_ssh','new_notice','new_url', 'finished_modules', 'new_downloaded_file', 'reload_whitelist']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 pubsub.subscribe(channel)
@@ -1638,12 +1653,18 @@ class Database(object):
         data = self.r.zrange(key, 0, -1)
         return data
 
-    def set_port_info(self, portproto, name):
-        """ Save in the DB a port with its description """
+    def set_port_info(self, portproto: str, name):
+        """
+        Save in the DB a port with its description
+        :param portproto: portnumber + / + protocol
+        """
         self.r.hset('portinfo', portproto, name)
 
-    def get_port_info(self, portproto):
-        """ Retrive the name of a port """
+    def get_port_info(self, portproto: str):
+        """
+        Retrieve the name of a port
+        :param portproto: portnumber + / + protocol
+        """
         return self.r.hget('portinfo', portproto)
 
     def add_zeek_file(self, filename):
