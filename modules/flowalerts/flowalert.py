@@ -490,7 +490,28 @@ class Module(Module, multiprocessing.Process):
                     diff = float(str(time_of_last_flow - time_of_first_flow).split(':')[-1])
                     # we need the flows that happend in 1h span
                     if diff >= 3600:
-                        pass
+                    # if diff >= 20:
+                        contacted_daddrs= {}
+                        # get a dict of all contacted daddr in the past hour and how many times they were ccontacted
+                        for flow in all_flows:
+                            daddr = flow['daddr']
+                            try:
+                                contacted_daddrs[daddr] = contacted_daddrs[daddr]+1
+                            except:
+                                contacted_daddrs.update({daddr: 1})
+                        # get the most contacted daddr in the past hour
+                        most_cotacted_daddr = max(contacted_daddrs, key=contacted_daddrs.get)
+                        # get the sum of all bytes send to that ip in the past hour
+                        total_bytes = 0
+                        for flow in all_flows:
+                            daddr = flow['daddr']
+                            if daddr == most_cotacted_daddr:
+                                total_bytes = total_bytes + flow['sbytes']
+
+                        #todo is 700MB a good threshold?
+                        if total_bytes >= 700*(10**6):
+                            self.set_evidence_data_exfiltration()
+
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
