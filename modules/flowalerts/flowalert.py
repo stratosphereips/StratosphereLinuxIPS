@@ -228,13 +228,23 @@ class Module(Module, multiprocessing.Process):
                                      confidence, description, timestamp, profileid=profileid, twid=twid)
 
     def set_evidence_data_exfiltration(self, most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
-        pass
+        confidence = 0.6
+        threat_level = 60
+        type_detection  = 'dstip'
+        type_evidence = 'DataExfiltration'
+        detection_info = most_cotacted_daddr
+        bytes_sent_in_MB = total_bytes/(10**6)
+        description = f'Data exfiltration detected to IP: {most_cotacted_daddr} contacted {times_contacted} times in the past 1h. {bytes_sent_in_MB} MBs sent'
+        timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, timestamp, profileid=profileid, twid=twid)
 
     def run(self):
         # Main loop function
         while True:
             try:
-
                 # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
@@ -361,7 +371,6 @@ class Module(Module, multiprocessing.Process):
                     diff = float(str(time_of_last_flow - time_of_first_flow).split(':')[-1])
                     # we need the flows that happend in 1h span
                     if diff >= 3600:
-                    # if diff >= 20:
                         contacted_daddrs= {}
                         # get a dict of all contacted daddr in the past hour and how many times they were ccontacted
                         for flow in flows_list:
@@ -383,9 +392,10 @@ class Module(Module, multiprocessing.Process):
                         #todo is 700MB a good threshold?
                         if total_bytes >= 700*(10**6):
                             # get the first uid of these flows to use for setEvidence
-                            for uid, flow in all_flows:
-                                if flow['daddr'] == daddr:
-                                    break
+                            for flow_dict in all_flows:
+                                for uid, flow in flow_dict.items():
+                                    if flow['daddr'] == daddr:
+                                        break
                             self.set_evidence_data_exfiltration(most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # ---------------------------- new_ssh channel
