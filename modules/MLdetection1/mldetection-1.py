@@ -296,12 +296,7 @@ class Module(Module, multiprocessing.Process):
         Process all the flwos in the DB 
         Store the pandas df in self.flows
         """
-        flows = __database__.get_all_flows()
-        list_flows = []
-        for flowdict in flows:
-            for flow in flowdict:
-                dict_flow = json.loads(flowdict[flow])
-                list_flows.append(dict_flow)
+        list_flows = __database__.get_all_flows()
         # Convert the list to a pandas dataframe
         df_flows = pd.DataFrame(list_flows)
         # Process features
