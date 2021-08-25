@@ -56,7 +56,7 @@ class Module(Module, multiprocessing.Process):
             type_evidence = 'SuspiciousUserAgent' # todo
             threat_level = 20
             confidence = 1
-            description = f'Suspicious user agent: {user_agent} from host {host}/{uri}'
+            description = f'Suspicious user agent: {user_agent} from host {host}{uri}'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
