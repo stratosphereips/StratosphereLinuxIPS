@@ -1326,6 +1326,20 @@ class Database(object):
         if data:
             return data
 
+    def get_all_flows_in_profileid(self, profileid):
+        """
+        Return a list of all the flows in this profileid
+        """
+        profileid_flows= []
+        # get all tws in this profile
+        for twid, time in self.getTWsfromProfile(profileid):
+            flows = self.get_all_flows_in_profileid_twid(profileid, twid)
+            if flows:
+                for flow in flows:
+                    profileid_flows.append(flow)
+
+        return profileid_flows
+
     def get_all_flows(self) -> list:
         """
         Returns a list with all the flows in all profileids and twids
