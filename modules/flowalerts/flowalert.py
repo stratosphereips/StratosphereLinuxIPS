@@ -479,7 +479,18 @@ class Module(Module, multiprocessing.Process):
                                     description = "Connection to multiple ports {} of Source IP: {}".format(dstports, saddr)
                                     self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
 
-
+                    # Detect Data exfiltration
+                    # we’re looking for systems that are transferring large amount of data in 1h span
+                    all_flows = __database__.get_all_flows()
+                    # sort flows by ts
+                    all_flows = sorted(all_flows, key = lambda i: i['ts'])
+                    time_of_first_flow = datetime.datetime.fromtimestamp(all_flows[0]['ts'])
+                    time_of_last_flow = datetime.datetime.fromtimestamp(all_flows[-1]['ts'])
+                    # get the difference between them in seconds
+                    diff = float(str(time_of_last_flow - time_of_first_flow).split(':')[-1])
+                    # we need the flows that happend in 1h span
+                    if diff >= 3600:
+                        pass
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
