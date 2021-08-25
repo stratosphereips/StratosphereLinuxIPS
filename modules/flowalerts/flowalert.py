@@ -374,6 +374,8 @@ class Module(Module, multiprocessing.Process):
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+    def set_evidence_data_exfiltration(self, most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
+        pass
 
     def run(self):
         # Main loop function
@@ -481,11 +483,16 @@ class Module(Module, multiprocessing.Process):
 
                     # Detect Data exfiltration
                     # we’re looking for systems that are transferring large amount of data in 1h span
-                    all_flows = __database__.get_all_flows()
+                    all_flows = __database__.get_all_flows_in_profileid(profileid)
+                    # get a list of flows without uids
+                    flows_list =[]
+                    for flow_dict in all_flows:
+                        flows_list.append(list(flow_dict.items())[0][1])
                     # sort flows by ts
-                    all_flows = sorted(all_flows, key = lambda i: i['ts'])
-                    time_of_first_flow = datetime.datetime.fromtimestamp(all_flows[0]['ts'])
-                    time_of_last_flow = datetime.datetime.fromtimestamp(all_flows[-1]['ts'])
+                    flows_list = sorted(flows_list, key = lambda i: i['ts'])
+                    #get first and last flow ts
+                    time_of_first_flow = datetime.datetime.fromtimestamp(flows_list[0]['ts'])
+                    time_of_last_flow = datetime.datetime.fromtimestamp(flows_list[-1]['ts'])
                     # get the difference between them in seconds
                     diff = float(str(time_of_last_flow - time_of_first_flow).split(':')[-1])
                     # we need the flows that happend in 1h span
@@ -493,7 +500,7 @@ class Module(Module, multiprocessing.Process):
                     # if diff >= 20:
                         contacted_daddrs= {}
                         # get a dict of all contacted daddr in the past hour and how many times they were ccontacted
-                        for flow in all_flows:
+                        for flow in flows_list:
                             daddr = flow['daddr']
                             try:
                                 contacted_daddrs[daddr] = contacted_daddrs[daddr]+1
@@ -501,16 +508,21 @@ class Module(Module, multiprocessing.Process):
                                 contacted_daddrs.update({daddr: 1})
                         # get the most contacted daddr in the past hour
                         most_cotacted_daddr = max(contacted_daddrs, key=contacted_daddrs.get)
+                        times_contacted = contacted_daddrs[most_cotacted_daddr]
                         # get the sum of all bytes send to that ip in the past hour
                         total_bytes = 0
-                        for flow in all_flows:
+                        for flow in flows_list:
                             daddr = flow['daddr']
                             if daddr == most_cotacted_daddr:
                                 total_bytes = total_bytes + flow['sbytes']
 
                         #todo is 700MB a good threshold?
                         if total_bytes >= 700*(10**6):
-                            self.set_evidence_data_exfiltration()
+                            # get the first uid of these flows to use for setEvidence
+                            for uid, flow in all_flows:
+                                if flow['daddr'] == daddr:
+                                    break
+                            self.set_evidence_data_exfiltration(most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # ---------------------------- new_ssh channel
                 message = self.c2.get_message(timeout=0.01)

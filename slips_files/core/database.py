@@ -1356,15 +1356,15 @@ class Database(object):
     def get_all_flows_in_profileid(self, profileid):
         """
         Return a list of all the flows in this profileid
+        [{'uid':flow},...]
         """
         profileid_flows= []
         # get all tws in this profile
         for twid, time in self.getTWsfromProfile(profileid):
             flows = self.get_all_flows_in_profileid_twid(profileid, twid)
             if flows:
-                for flow in flows:
-                    profileid_flows.append(flow)
-
+                for uid, flow in list(flows.items()):
+                    profileid_flows.append({uid: json.loads(flow)})
         return profileid_flows
 
     def get_all_flows(self) -> list:
