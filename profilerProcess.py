@@ -1120,6 +1120,13 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['md5'] = line.get('md5', '')
             # self.column_values['sha1'] = line.get('sha1','')
             #todo process zeek tabs files.log
+        elif 'known_services' in file_type:
+            # {'ts': 1520628587.355994, 'host': '192.168.2.1', 'port_num': 67, 'port_proto': 'udp', 'service': ['DHCP']}
+            self.column_values['type'] = 'known_services'
+            self.column_values['host'] = line.get('host', '')
+            self.column_values['port_num'] = line.get('port_num', '')
+            self.column_values['port_proto'] = line.get('port_proto', '')
+            self.column_values['service'] = line.get('service', '')
         else:
             return False
         return True
@@ -1519,6 +1526,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['filesize'] = line['fileinfo']['size']
                 except KeyError:
                     self.column_values['filesize'] = ''
+
     def get_domains_of_flow(self):
         """ Returns the domains of each ip (src and dst) that appeard in this flow """
         # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
@@ -1548,7 +1556,6 @@ class ProfilerProcess(multiprocessing.Process):
         except (KeyError, TypeError):
             pass
         return domains_to_check_dst, domains_to_check_src
-
 
     def is_whitelisted(self) -> bool:
         """
