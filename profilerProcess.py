@@ -1121,12 +1121,14 @@ class ProfilerProcess(multiprocessing.Process):
             # self.column_values['sha1'] = line.get('sha1','')
             #todo process zeek tabs files.log
         elif 'known_services' in file_type:
-            # {'ts': 1520628587.355994, 'host': '192.168.2.1', 'port_num': 67, 'port_proto': 'udp', 'service': ['DHCP']}
             self.column_values['type'] = 'known_services'
-            self.column_values['host'] = line.get('host', '')
+            self.column_values['saddr'] = line.get('host', '')
+            # this file doesn't have a daddr field, but we need it in add_flow_to_profile
+            self.column_values['daddr'] = '0.0.0.0'
             self.column_values['port_num'] = line.get('port_num', '')
             self.column_values['port_proto'] = line.get('port_proto', '')
             self.column_values['service'] = line.get('service', '')
+
         else:
             return False
         return True
@@ -1741,7 +1743,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             if not self.column_values:
                 return True
-            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files'):
+            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files', 'known_services'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -1849,6 +1851,8 @@ class ProfilerProcess(multiprocessing.Process):
                 MAC_info = json.dumps(MAC_info)
                 __database__.add_mac_addr_to_profile(profileid, MAC_info)
 
+
+
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(self.saddr)
@@ -1945,6 +1949,20 @@ class ProfilerProcess(multiprocessing.Process):
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish('new_downloaded_file', to_send)
+                elif flow_type == 'known_services':
+                    # Send known_services.log data to new_service channel in flowalerts module
+                    to_send = {
+                        'uid' : self.column_values['uid'],
+                        'saddr': self.column_values['saddr'],
+                        'port_num' : self.column_values['port_num'],
+                        'port_proto':  self.column_values['port_proto'],
+                        'service':  self.column_values['service'],
+                        'profileid' : profileid,
+                        'twid' : twid,
+                        'ts' : starttime
+                    }
+                    to_send = json.dumps(to_send)
+                    __database__.publish("new_service",to_send)
 
             def store_features_going_in(profileid, twid, starttime):
                 """
