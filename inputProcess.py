@@ -240,7 +240,6 @@ class InputProcess(multiprocessing.Process):
             # SENT
             self.print("	> Sent Line: {}".format(line_to_send), 0, 3)
             self.profilerqueue.put(line_to_send)
-            if 'known' in line_to_send["type"] :print(f'**********************{line_to_send}')
             # Count the read lines
             lines += 1
             # Delete this line from the cache and the time list
