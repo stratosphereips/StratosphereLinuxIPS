@@ -1,2 +1,3 @@
 redef LogAscii::use_json=T;
-redef Log::default_rotation_interval=1hr;
+# known-services will only consider local networks.
+redef Site::local_nets += { 192.168.0.0/16 };
