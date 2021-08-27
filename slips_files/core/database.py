@@ -1049,14 +1049,14 @@ class Database(object):
         return data
 
     def getIPData(self, ip):
-        """	
-        Return information about this IP	
-        Returns a dictionary or False if there is no IP in the database	
+        """
+        Return information about this IP
+        Returns a dictionary or False if there is no IP in the database
         ip: a string
-        We need to separate these three cases:	
-        1- IP is in the DB without data. Return empty dict.	
-        2- IP is in the DB with data. Return dict.	
-        3- IP is not in the DB. Return False	
+        We need to separate these three cases:
+        1- IP is in the DB without data. Return empty dict.
+        2- IP is in the DB with data. Return dict.
+        3- IP is not in the DB. Return False
         """
         if type(ip) == ipaddress.IPv4Address or type(ip) == ipaddress.IPv6Address:
             ip = str(ip)
@@ -1968,6 +1968,34 @@ class Database(object):
             data = ''
         return data
 
+    def store_dns_answers(self, query, answers, profileid_twid):
+        """
+        Store DNS answers for each ip
+        :param query: str
+        :param answers: list
+        :param profileid_twid: str
+        """
+
+        try:
+            # to avoid duplicates, if key exists update it
+            stored_answers = self.get_dns_answers()
+            # try to get the results that are stored in this tw
+            answers_dict = json.loads(stored_answers[profileid_twid])
+            # found results, update them
+            answers_dict.update({query:answers})
+            answers_in_this_tw = json.dumps(answers_dict)
+        except KeyError:
+            # key doesn't exist
+            answers = json.dumps(answers)
+            answers_in_this_tw = json.dumps({query: answers})
+
+        self.rcache.hset('dns_answers', profileid_twid, answers_in_this_tw)
+
+    def get_dns_answers(self):
+        """ Returns dns_answers dict {profileid_twid : {query: serialized answers list}}"""
+        return self.rcache.hgetall('dns_answers')
+
+
     def set_asn_cache(self, asn, asn_range) -> None:
         """
         Stores the range of asn in cached_asn hash
@@ -1981,7 +2009,7 @@ class Database(object):
         Returns cached asn of ip if present, or False.
         """
         return self.rcache.hgetall('cached_asn')
-    
+
     def store_process_PID(self, process, pid):
         """
         Stores each started process or module with it's PID

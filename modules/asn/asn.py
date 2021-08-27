@@ -11,7 +11,6 @@ import time
 import maxminddb
 import ipaddress
 import ipwhois
-import json
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
@@ -129,6 +128,7 @@ class Module(Module, multiprocessing.Process):
         except ipwhois.exceptions.ASNRegistryError:
             # ASN lookup failed with no more methods to try
             pass
+
 
     def run(self):
         # Main loop function

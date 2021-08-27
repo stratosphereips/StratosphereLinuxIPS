@@ -203,6 +203,7 @@ class Module(Module, multiprocessing.Process):
         positives = int(response.get('positives','0'))
         total = response.get('total',0)
         score = f'{positives}/{total}'
+        self.counter += 1
         if positives >= 3:
             # consider it malicious and alert
             type_detection = 'file'
@@ -215,9 +216,7 @@ class Module(Module, multiprocessing.Process):
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                      threat_level, confidence, description, ts , profileid=profileid, twid=twid, uid=uid)
-            self.counter += 1
             return 'malicious'
-        self.counter += 1
         return 'benign'
 
     def API_calls_thread(self):
