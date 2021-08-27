@@ -1780,11 +1780,12 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query, answers):
+    def set_dns_resolution(self, query: str, answers: str):
         """
         Save in DB DNS name for each IP
         """
         for ans in answers:
+            # get stored DNS resolution from our db
             data = self.get_dns_resolution(ans)
             if query not in data:
                 data.append(query)
@@ -1968,31 +1969,34 @@ class Database(object):
             data = ''
         return data
 
-    def store_dns_answers(self, query, answers, profileid_twid):
+    def store_dns_answers(self, query, answers, profileid_twid, ts):
         """
         Store DNS answers for each ip
+        stored as {'query':[ts, answers]}
         :param query: str
         :param answers: list
         :param profileid_twid: str
+        :param ts: float epoch time
         """
-
         try:
             # to avoid duplicates, if key exists update it
             stored_answers = self.get_dns_answers()
             # try to get the results that are stored in this tw
             answers_dict = json.loads(stored_answers[profileid_twid])
             # found results, update them
-            answers_dict.update({query:answers})
+            answers_dict.update({query: [ts,answers]})
             answers_in_this_tw = json.dumps(answers_dict)
         except KeyError:
             # key doesn't exist
             answers = json.dumps(answers)
-            answers_in_this_tw = json.dumps({query: answers})
+            answers_in_this_tw = json.dumps({query: [ts,answers]})
 
+        # we're storing in dns_answers instead of 'DomainsInfo' because domainsInfo is stored in the cache,
+        # we need to check the resolved domains per tw
         self.rcache.hset('dns_answers', profileid_twid, answers_in_this_tw)
 
     def get_dns_answers(self):
-        """ Returns dns_answers dict {profileid_twid : {query: serialized answers list}}"""
+        """ Returns dns_answers dict {profileid_twid : {query: [ts,serialized answers list]}}"""
         return self.rcache.hgetall('dns_answers')
 
 

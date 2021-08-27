@@ -159,7 +159,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                                         # Between 3 and 10 pkts compute a kind of linear grow
                                         confidence = pkts_sent / 10.0
                                     # Description
-                                    description = 'New horizontal port scan detected to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
+                                    description = 'A New horizontal port scan to port {}. Not Estab TCP from IP: {}. Tot pkts sent all IPs: {}'.format(dport, profileid.split(self.fieldseparator)[1], pkts_sent, confidence)
                                     uid = next(iter(dstips.values()))['uid'] # first uid in the dictionary
                                     timestamp = next(iter(dstips.values()))['stime']
                                     __database__.setEvidence(type_detection, detection_info,type_evidence,

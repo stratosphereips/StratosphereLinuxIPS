@@ -399,8 +399,7 @@ class ProfilerProcess(multiprocessing.Process):
                         else:
                             # comma separated argus file
                             self.input_type = 'argus'
-
-                    elif nr_tabs > nr_commas:
+                    elif nr_tabs >= nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
                         # probably a zeek tab file or a binetflow tab file

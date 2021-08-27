@@ -43,13 +43,6 @@ class Module(Module, multiprocessing.Process):
         # Retrieve the labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        # To which channels do you wnat to subscribe? When a message
-        # arrives on the channel the module will wakeup
-        # The options change, so the last list is on the
-        # slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_ssh')
         self.c3 = __database__.subscribe('new_notice')
@@ -59,13 +52,14 @@ class Module(Module, multiprocessing.Process):
         # this dict will store connections on port 0 {'srcips':[(ts,dstip)]}
         self.scans = {}
         self.timeout = None
-        # ignore default LAN IP address, loopback addr, dns servers, ...etc
-        self.ignored_ips = ('192.168.0.1' ,'192.168.1.1', '127.0.0.1', '8.8.8.8', '8.8.4.4', '1.1.1.1', '1.0.0.1', '9.9.9.9', '149.112.112.112',
+        # ignore default no dns resolution alerts for LAN IP address, loopback addr, dns servers, ...etc
+        self.ignored_ips = ('127.0.0.1', '8.8.8.8', '8.8.4.4', '1.1.1.1', '1.0.0.1', '9.9.9.9', '149.112.112.112',
                             '208.67.222.222', '208.67.220.220', '185.228.168.9', '185.228.169.9','76.76.19.19', '76.223.122.150', '94.140.14.14',
                             '94.140.15.15','193.159.232.5', '82.103.129.72', '103.113.200.10','77.68.45.252', '117.53.46.10', '103.11.98.187',
                            '160.19.155.51', '31.204.180.44', '169.38.73.5', '104.152.211.99', '177.20.178.12', '185.43.51.84', '79.175.208.28',
                            '223.31.121.171','169.53.182.120')
-        self.ignored_ranges = ('172.16.0.0/12',)
+        # ignore private Address
+        self.ignored_ranges = ('172.16.0.0/12','192.168.0.0/16','10.0.0.0/8')
         # store them as network objects
         self.ignored_ranges = list(map(ipaddress.ip_network,self.ignored_ranges))
 
@@ -78,7 +72,6 @@ class Module(Module, multiprocessing.Process):
                 # ip found in one of the ranges, ignore it
                 return True
         return False
-
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -243,7 +236,7 @@ class Module(Module, multiprocessing.Process):
             type_detection  = 'dport'
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
-            description = f'Unknown destination port {dport}/{proto.upper()} to destination IP {daddr}'
+            description = f'Connection to unknown destination port {dport}/{proto.upper()} destination IP {daddr}'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
@@ -268,7 +261,7 @@ class Module(Module, multiprocessing.Process):
         # remove this saddr from the scans dict so the dict won't be growing forever
         self.scans.pop(saddr)
 
-    def check_connection_without_dns(self, daddr, twid, profileid):
+    def check_connection_without_dns(self, daddr, twid, profileid, timestamp):
         """ Checks if there's a flow to a dstip that has no DNS answer """
         resolved = False
         answers_dict = __database__.get_dns_answers()
@@ -278,8 +271,7 @@ class Module(Module, multiprocessing.Process):
             answer = json.loads(answer)
             if daddr in answer:
                 resolved = True
-                return
-
+                break
         # IP has no dns answer, alert.
         if not resolved:
             confidence = 1
@@ -287,11 +279,11 @@ class Module(Module, multiprocessing.Process):
             type_detection  = 'dstip'
             type_evidence = 'ConnectionWithoutDNS'
             detection_info = daddr
-            description = f'IP address connection without DNS resolution: {daddr}'
+            description = f'A connection without DNS resolution to IP: {daddr}'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                     description, profileid=profileid, twid=twid)
+                                     description, timestamp, profileid=profileid, twid=twid)
 
     def check_ununsed_DNS_resolution(self, contacted_ips, profileid, twid):
         """
@@ -300,12 +292,15 @@ class Module(Module, multiprocessing.Process):
         """
         if contacted_ips == []: return
         # Get an updated list of dns answers
+        # answers example {profileid_twid : {query: [ts,serialized answers list]}}
         answers = __database__.get_dns_answers()
-        # get dns resolutions thayt took place in this tw only
+        # get dns resolutions that took place in this tw only
         tw_answers = answers.get(f'{profileid}_{twid}' , False)
         if tw_answers:
             tw_answers = json.loads(tw_answers)
             for query,dns_answer in tw_answers.items():
+                timestamp = dns_answer[0]
+                dns_answer = dns_answer[1]
                 # every dns answer is a list of ip that correspond to a spicif query,
                 # one of these ips should be present in the contacted ips
                 for answer in dns_answer:
@@ -326,7 +321,7 @@ class Module(Module, multiprocessing.Process):
                         detection_info = query
                     description = f'Domain {query} resolved with no connection'
                     __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                         description, profileid=profileid, twid=twid)
+                                         description, timestamp, profileid=profileid, twid=twid)
         else:
             # this tw has no dns resolutions.
             return
@@ -411,7 +406,7 @@ class Module(Module, multiprocessing.Process):
 
                    # Check if daddr has a dns answer
                     if not self.is_ignored_ip(daddr):
-                        self.check_connection_without_dns(daddr, twid, profileid)
+                        self.check_connection_without_dns(daddr, twid, profileid, timestamp)
 
                     # Connection to multiple ports
                     if proto == 'tcp' and state == 'Established':
@@ -643,7 +638,6 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     return True
                 if message and message['channel'] == 'tw_closed' and type(message['data']) == str:
-                    pass
                     data = message["data"]
                     # data example: profile_192.168.1.1_timewindow1
                     data = data.split('_')
@@ -660,9 +654,11 @@ class Module(Module, multiprocessing.Process):
                         # append ipv4 addresses only to ths list
                         if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
                             contacted_ips.append(contacted_ip)
+
+                    # dns answers are processed and stored in virustotal.py in new_dns_flow channel
+                    # we simply need to check if we have an unused answer
                     # set evidence if we have an answer that isn't used in the contacted ips
                     self.check_ununsed_DNS_resolution(set(contacted_ips), profileid, twid )
-
 
             except KeyboardInterrupt:
                 return True

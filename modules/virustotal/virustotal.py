@@ -341,7 +341,14 @@ class Module(Module, multiprocessing.Process):
                         profileid = data['profileid']
                         twid = data['twid']
                         flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-                        domain = flow_data['query']
+
+                        # store the dns answers in our db to check for unused queries later in flowalerts.py
+                        domain = flow_data.get('query',False)
+                        answers = flow_data.get('answers', False)
+                        ts = flow_data.get('stime', '')
+                        if domain and answers:
+                            __database__.store_dns_answers(domain, answers, f'{profileid}_{twid}' ,ts)
+
                         cached_data = __database__.getDomainData(domain)
                         # If VT data of this domain is not in the DomainInfo, ask VT
                         # If 'Virustotal' key is not in the DomainInfo

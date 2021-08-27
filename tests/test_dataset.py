@@ -60,15 +60,15 @@ def test_pcap(pcap_path, database, output_dir):
     os.system(command)
     profiles = get_profiles(output_dir)
     assert profiles > 15
-    expected_evidence = 'New horizontal port scan detected to port 23'
+    expected_evidence = 'New horizontal port scan to port 23'
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [
      ('dataset/test2.binetflow',1,'RNN C&C channels detection','test2/'),
-    ('dataset/test3.binetflow',20,'New horizontal port scan detected to port 3389','test3/'),
-      ('dataset/test4.binetflow',2,'New horizontal port scan detected to port 81','test4/'),
+    ('dataset/test3.binetflow',20,'New horizontal port scan to port 3389','test3/'),
+      ('dataset/test4.binetflow',2,'New horizontal port scan to port 81','test4/'),
      ('dataset/test5.binetflow',4,'RNN C&C channels detection','test5/')])
 def test_binetflow(database, binetflow_path, expected_profiles, expected_evidence,  output_dir ):
     try:
