@@ -297,7 +297,6 @@ class Module(Module, multiprocessing.Process):
         """
          Checks if ip in cached DNS answers
         :param contacted_ips: list of ips used in a specific tw
-        :param answers: dict {query: serialized answers list}
         """
         if contacted_ips == []: return
         # Get an updated list of dns answers
@@ -373,7 +372,7 @@ class Module(Module, multiprocessing.Process):
 
                     # Do not check the duration of the flow if the daddr or
                     # saddr is a  multicast.
-                    if not ipaddress.ip_address(daddr).is_multicast and not ip_address(saddr).is_multicast:
+                    if not ipaddress.ip_address(daddr).is_multicast and not ipaddress.ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
                     if dport:
                         self.check_unknown_port(dport, proto, daddr, profileid, twid, uid, timestamp)
