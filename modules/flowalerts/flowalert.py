@@ -228,6 +228,24 @@ class Module(Module, multiprocessing.Process):
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                      confidence, description, timestamp, profileid=profileid, twid=twid)
 
+    def set_evidence_for_port_0_scanning(self, saddr, diff, profileid, twid, uid, timestamp):
+        confidence = 0.8
+        threat_level = 20
+        type_detection  = 'srcip'
+        type_evidence = 'Port0Scanning'
+        detection_info = saddr
+        # get a unique list of dstips:
+        dest_ips = []
+        for scan in self.scans[saddr]:
+            daddr = scan[1]
+            if daddr not in dest_ips: dest_ips.append(daddr)
+        description = f'Port 0 is scanned in the following destination IPs: {dest_ips}'
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        # remove this saddr from the scans dict so the dict won't be growing forever
+        self.scans.pop(saddr)
 
     def run(self):
         # Main loop function
@@ -508,7 +526,7 @@ class Module(Module, multiprocessing.Process):
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description, uid, timestamp)
                             self.print(description, 3, 0)
 
-                # ---------------------------- new_ssh channel
+                # ---------------------------- new_service channel
                 message = self.c5.get_message(timeout=0.01)
                 if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
