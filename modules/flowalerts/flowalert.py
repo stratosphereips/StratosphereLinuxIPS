@@ -310,9 +310,10 @@ class Module(Module, multiprocessing.Process):
             return
 
     def run(self):
-        # Main loop function
-        while True:
-            try:
+
+        try:
+            # Main loop function
+            while True:
 
                 # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=0.01)
