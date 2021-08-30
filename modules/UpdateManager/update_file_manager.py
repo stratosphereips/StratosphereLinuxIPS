@@ -380,6 +380,10 @@ class UpdateFileManager:
                 elif ',' in line:
                     data = line.replace("\n","").replace("\"","").split(",")
                     amount_of_columns = len(line.split(","))
+                elif '0.0.0.0 ' in line:
+                    # anudeepND/blacklist file
+                    data = [line[line.index(' ')+1:].replace("\n","")]
+                    amount_of_columns = 1
                 else:
                     data = line.replace("\n","").replace("\"","").split("\t")
                     # lines are not comma separated like ipsum files, try tabs
@@ -388,6 +392,7 @@ class UpdateFileManager:
                 if description_column is None:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
+
                 # Search the first column that is an IPv4, IPv6 or domain
                 for column in range(amount_of_columns):
                     # Check if ip is valid.
@@ -406,7 +411,7 @@ class UpdateFileManager:
                             self.print(f'The data is on column {column} and is ipv6: {ip_address}', 0, 6)
                             break
                         except ipaddress.AddressValueError:
-                            # It does not look as IP address.
+                            # It does not look like an IP address.
                             # So it should be a domain
                             if validators.domain(data[column].strip()):
                                 data_column = column
@@ -419,6 +424,7 @@ class UpdateFileManager:
                                 # Some string that is not a domain
                                 data_column = None
                                 pass
+
                 if data_column is None:
                     # can't find a column that contains an ioc
                     self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 1, 1)
@@ -446,11 +452,14 @@ class UpdateFileManager:
                         data = line.replace("\n", "").replace("\"", "").split("#")[data_column].strip()
                     elif ',' in line:
                         data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
+                    elif '0.0.0.0 ' in line:
+                        # anudeepND/blacklist file
+                        data = line[line.index(' ')+1:].replace("\n","")
                     else:
                         data = line.replace("\n", "").replace("\"", "").split("\t")[data_column].strip()
 
                     if '/' in data or data in ('','\n'):
-                        # this is probably a range of ips or a new line, we don't support that. read the next line
+                        # this is probably a range of ips (subnet) or a new line, we don't support that. read the next line
                         continue
 
                     try:
@@ -462,6 +471,7 @@ class UpdateFileManager:
                             description = line.replace("\n", "").replace("\"", "").split("\t")[description_column].strip()
                     except IndexError:
                         self.print(f'IndexError Description column: {description_column}. Line: {line}')
+
                     self.print('\tRead Data {}: {}'.format(data, description), 10, 0)
 
                     # Check if the data is a valid IPv4, IPv6 or domain
