@@ -291,6 +291,13 @@ class ProfilerProcess(multiprocessing.Process):
             return org_asn
         except (FileNotFoundError, IOError):
             # theres no slips/organizations_info/{org}_asn for this org
+            # see if the org has asn cached
+            asn_cache = __database__.get_asn_cache()
+            org_asn =[]
+            for asn in asn_cache:
+                if org in asn.lower():
+                    org_asn.append(org)
+            if org_asn != []: return org_asn
             return False
 
     def load_org_domains(self, org) -> list :
@@ -1660,8 +1667,8 @@ class ProfilerProcess(multiprocessing.Process):
                 domains_to_check_dst, domains_to_check_src = self.get_domains_of_flow()
                 if 'flows' in what_to_ignore or 'both' in what_to_ignore:
                     # We want to block flows from this org, continue
-                    org_subnets = json.loads(self.whitelisted_orgs[org]['IPs'])
-                    org_domains = json.loads(self.whitelisted_orgs[org]['domains'])
+                    org_subnets = json.loads(self.whitelisted_orgs[org].get('IPs','{}'))
+
                     if 'both' in from_ : domains_to_check = domains_to_check_src + domains_to_check_dst
                     elif 'src' in from_: domains_to_check = domains_to_check_src
                     elif 'dst' in from_: domains_to_check = domains_to_check_dst
@@ -1693,9 +1700,15 @@ class ProfilerProcess(multiprocessing.Process):
                             pass
 
                         # Method 3 Check if the domains of this flow belong to this org
-                        for domain in org_domains:
-                            if domain in domains_to_check_src:
+                        org_domains = json.loads(self.whitelisted_orgs[org].get('domains','{}'))
+                        # domains to check are usually 1 or 2 domains
+                        for flow_domain in domains_to_check:
+                            if org in flow_domain:
                                 return True
+                            for domain in org_domains:
+                                # match subdomains too
+                                if domain in flow_domain:
+                                    return True
 
                     if 'dst' in from_ or 'both' in from_:
                         # Method 1 Check if dst IP belongs to a whitelisted organization range
