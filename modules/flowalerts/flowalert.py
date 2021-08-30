@@ -405,7 +405,7 @@ class Module(Module, multiprocessing.Process):
                             self.scans[saddr] = [(timestamp,daddr)]
 
                    # Check if daddr has a dns answer
-                    if not self.is_ignored_ip(daddr):
+                    if not self.is_ignored_ip(daddr) and dport == 443:
                         self.check_connection_without_dns(daddr, twid, profileid, timestamp)
 
                     # Connection to multiple ports
