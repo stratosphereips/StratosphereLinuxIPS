@@ -33,6 +33,7 @@ from re import split
 from tzlocal import get_localzone
 import validators
 import socket
+import requests
 
 def timeit(method):
     def timed(*args, **kw):
@@ -291,7 +292,7 @@ class ProfilerProcess(multiprocessing.Process):
             return org_asn
         except (FileNotFoundError, IOError):
             # theres no slips/organizations_info/{org}_asn for this org
-            # see if the org has asn cached
+            # see if the org has asn cached in our db
             asn_cache = __database__.get_asn_cache()
             org_asn =[]
             for asn in asn_cache:
@@ -345,11 +346,28 @@ class ProfilerProcess(multiprocessing.Process):
                         # not a valid line, ignore it
                         pass
                     line = f.readline()
-            # Store them in the db as str
             return org_subnets
         except (FileNotFoundError, IOError):
             # there's no slips/organizations_info/{org} for this org
-            return False
+            org_subnets = []
+            # see if we can get asn about this org
+            try:
+                response = requests.get('http://asnlookup.com/api/lookup?org=' + org.replace('_', ' '), headers ={  'User-Agent': 'ASNLookup PY/Client'}, timeout = 10)
+            except requests.exceptions.ConnectionError:
+                # Connection reset by peer
+                return False
+            ip_space = json.loads(response.text)
+            if ip_space:
+                with open(f'slips/organizations_info/{org}','w') as f:
+                    for ip in ip_space:
+                        # get ipv4 only
+                        if ':' not in ip:
+                            f.write(ip + '\n')
+                            org_subnets.append(ip)
+                return org_subnets
+                # todo remember to parse the file correctly
+            else:
+                return False
 
     def define_type(self, line):
         """
