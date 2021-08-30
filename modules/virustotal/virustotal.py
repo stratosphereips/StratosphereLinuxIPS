@@ -340,6 +340,7 @@ class Module(Module, multiprocessing.Process):
                         data = json.loads(data)
                         profileid = data['profileid']
                         twid = data['twid']
+                        uid = data['uid']
                         flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
 
                         # store the dns answers in our db to check for unused queries later in flowalerts.py
@@ -347,7 +348,7 @@ class Module(Module, multiprocessing.Process):
                         answers = flow_data.get('answers', False)
                         ts = flow_data.get('stime', '')
                         if domain and answers:
-                            __database__.store_dns_answers(domain, answers, f'{profileid}_{twid}' ,ts)
+                            __database__.store_dns_answers(domain, answers, f'{profileid}_{twid}' ,ts, uid)
 
                         cached_data = __database__.getDomainData(domain)
                         # If VT data of this domain is not in the DomainInfo, ask VT

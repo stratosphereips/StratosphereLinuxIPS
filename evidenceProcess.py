@@ -339,7 +339,7 @@ class EvidenceProcess(multiprocessing.Process):
                     return True
 
         # Check domains
-        elif data_type is 'domain':
+        if data_type is 'domain':
             is_srcdomain = type_detection in ('srcdomain')
             is_dstdomain = type_detection in ('dstdomain')
             domain = data
@@ -381,8 +381,8 @@ class EvidenceProcess(multiprocessing.Process):
 
                         # make sure the asn field contains a value
                         if (ip_asn['asnorg'] not in ('','Unknown')
-                                and (org.lower() in ip_asn['asnorg'].lower()
-                                        or ip_asn['asnorg'] in whitelisted_orgs[org]['asn'])):
+                            and (org.lower() in ip_asn['asnorg'].lower()
+                                    or ip_asn['asnorg'] in whitelisted_orgs[org].get('asn',''))):
                             # this ip belongs to a whitelisted org, ignore alert
                             #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
                             return True

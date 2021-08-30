@@ -240,7 +240,7 @@ class Module(Module, multiprocessing.Process):
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                     confidence, description, timestamp, profileid=profileid, twid=twid)
+                                     confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_for_port_0_scanning(self, saddr, diff, profileid, twid, uid, timestamp):
         confidence = 0.8
@@ -261,14 +261,16 @@ class Module(Module, multiprocessing.Process):
         # remove this saddr from the scans dict so the dict won't be growing forever
         self.scans.pop(saddr)
 
-    def check_connection_without_dns(self, daddr, twid, profileid, timestamp):
-        """ Checks if there's a flow to a dstip that has no DNS answer """
+    def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
+        """ Checks if there's a flow to a dstip that has no cached DNS answer """
         resolved = False
         answers_dict = __database__.get_dns_answers()
-        # answers dict is a dict {profileid_tw: {query:serialized answers list}}
+        # answers dict is a dict {profileid_tw: {query:{ 'ts': .., 'answers':.., 'uid':... }  }}
         for answer in answers_dict.values():
-            # convert from str to list
+            # convert json dict  to dict
             answer = json.loads(answer)
+            # answer is  {query:{ 'ts': .., 'answers':.., 'uid':... } , we need to get 'answers'
+            answer = answer[list(answer.keys())[0]]['answers']
             if daddr in answer:
                 resolved = True
                 break
@@ -283,14 +285,14 @@ class Module(Module, multiprocessing.Process):
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                     description, timestamp, profileid=profileid, twid=twid)
+                                     description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def check_ununsed_DNS_resolution(self, contacted_ips, profileid, twid):
+    def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
-         Checks if ip in cached DNS answers
-        :param contacted_ips: list of ips used in a specific tw
+        Makes sure all cached DNS answers are used in contacted_ips
+        :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
-        if contacted_ips == []: return
+        if contacted_ips == {}: return
         # Get an updated list of dns answers
         # answers example {profileid_twid : {query: [ts,serialized answers list]}}
         answers = __database__.get_dns_answers()
@@ -299,8 +301,8 @@ class Module(Module, multiprocessing.Process):
         if tw_answers:
             tw_answers = json.loads(tw_answers)
             for query,dns_answer in tw_answers.items():
-                timestamp = dns_answer[0]
-                dns_answer = dns_answer[1]
+                timestamp = dns_answer['ts']
+                dns_answer = dns_answer['answers']
                 # every dns answer is a list of ip that correspond to a spicif query,
                 # one of these ips should be present in the contacted ips
                 for answer in dns_answer:
@@ -310,6 +312,7 @@ class Module(Module, multiprocessing.Process):
                         break
                 else:
                     # found a query without usage
+                    uid = dns_answer['uid']
                     confidence = 0.8
                     threat_level = 30
                     type_detection  = 'dstdomain'
@@ -321,7 +324,7 @@ class Module(Module, multiprocessing.Process):
                         detection_info = query
                     description = f'Domain {query} resolved with no connection'
                     __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                         description, timestamp, profileid=profileid, twid=twid)
+                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
         else:
             # this tw has no dns resolutions.
             return
@@ -406,7 +409,7 @@ class Module(Module, multiprocessing.Process):
 
                    # Check if daddr has a dns answer
                     if not self.is_ignored_ip(daddr) and dport == 443:
-                        self.check_connection_without_dns(daddr, twid, profileid, timestamp)
+                        self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
 
                     # Connection to multiple ports
                     if proto == 'tcp' and state == 'Established':
@@ -646,19 +649,21 @@ class Module(Module, multiprocessing.Process):
                     # get all flows in this tw
                     flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
                     # a list of contacte dips in this tw
-                    contacted_ips = []
+                    contacted_ips = {}
                     # flows is a dict of uids as keys and actual flows as values
                     for flow in flows.values():
                         flow = json.loads(flow)
                         contacted_ip = flow.get('daddr','')
+                        # this will be used in setEvidence if there's an ununsed_DNS_resolution
+                        uid = flow.get('uid','')
                         # append ipv4 addresses only to ths list
                         if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
-                            contacted_ips.append(contacted_ip)
+                            contacted_ips.update({contacted_ip: uid })
 
                     # dns answers are processed and stored in virustotal.py in new_dns_flow channel
                     # we simply need to check if we have an unused answer
                     # set evidence if we have an answer that isn't used in the contacted ips
-                    self.check_ununsed_DNS_resolution(set(contacted_ips), profileid, twid )
+                    self.check_dns_resolution_without_connection(contacted_ips, profileid, twid, uid)
 
             except KeyboardInterrupt:
                 return True

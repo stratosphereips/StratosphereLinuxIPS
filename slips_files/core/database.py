@@ -1602,6 +1602,7 @@ class Database(object):
         to_send['twid'] = twid
         to_send['flow'] = data
         to_send['stime'] = stime
+        to_send['uid'] = uid
         to_send = json.dumps(to_send)
         #publish a dns with its flow
         self.publish('new_dns_flow', to_send)
@@ -1969,14 +1970,11 @@ class Database(object):
             data = ''
         return data
 
-    def store_dns_answers(self, query, answers, profileid_twid, ts):
+    def store_dns_answers(self, query: str, answers: list, profileid_twid: str, ts: float, uid: str):
         """
         Store DNS answers for each ip
-        stored as {'query':[ts, answers]}
-        :param query: str
-        :param answers: list
-        :param profileid_twid: str
-        :param ts: float epoch time
+        stored as {'query':{ts: .. , 'answers': .. , 'uid':... ]}
+        :param ts: epoch time
         """
         try:
             # to avoid duplicates, if key exists update it
@@ -1984,20 +1982,28 @@ class Database(object):
             # try to get the results that are stored in this tw
             answers_dict = json.loads(stored_answers[profileid_twid])
             # found results, update them
-            answers_dict.update({query: [ts,answers]})
+            answers_dict.update(
+                            {query: {'ts':ts,
+                                     'answers': answers,
+                                     'uid': uid}}
+                                )
             answers_in_this_tw = json.dumps(answers_dict)
         except KeyError:
             # key doesn't exist
             answers = json.dumps(answers)
-            answers_in_this_tw = json.dumps({query: [ts,answers]})
+            answers_in_this_tw = json.dumps(
+                                    {query: {'ts':ts,
+                                             'answers': answers,
+                                             'uid': uid}}
+            )
 
         # we're storing in dns_answers instead of 'DomainsInfo' because domainsInfo is stored in the cache,
         # we need to check the resolved domains per tw
-        self.rcache.hset('dns_answers', profileid_twid, answers_in_this_tw)
+        self.r.hset('dns_answers', profileid_twid, answers_in_this_tw)
 
     def get_dns_answers(self):
         """ Returns dns_answers dict {profileid_twid : {query: [ts,serialized answers list]}}"""
-        return self.rcache.hgetall('dns_answers')
+        return self.r.hgetall('dns_answers')
 
 
     def set_asn_cache(self, asn, asn_range) -> None:

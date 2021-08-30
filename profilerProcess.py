@@ -290,7 +290,7 @@ class ProfilerProcess(multiprocessing.Process):
                     line = f.readline()
             return org_asn
         except (FileNotFoundError, IOError):
-            self.print(f"Can't read slips/organizations_info/{org}_asn ... Aborting.",2,2)
+            # theres no slips/organizations_info/{org}_asn for this org
             return False
 
     def load_org_domains(self, org) -> list :
@@ -341,7 +341,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Store them in the db as str
             return org_subnets
         except (FileNotFoundError, IOError):
-            self.print(f"Can't read slips/organizations_info/{org} ... Aborting.",2,2)
+            # there's no slips/organizations_info/{org} for this org
             return False
 
     def define_type(self, line):
