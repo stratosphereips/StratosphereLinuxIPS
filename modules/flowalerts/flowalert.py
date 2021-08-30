@@ -301,6 +301,9 @@ class Module(Module, multiprocessing.Process):
         if tw_answers:
             tw_answers = json.loads(tw_answers)
             for query,dns_answer in tw_answers.items():
+                if query.endswith(".arpa"):
+                    # Reverse DNS lookups for IPv4 addresses use the special domain in-addr.arpa.
+                    continue
                 timestamp = dns_answer['ts']
                 dns_answer = dns_answer['answers']
                 # every dns answer is a list of ip that correspond to a spicif query,
