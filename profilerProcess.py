@@ -33,6 +33,7 @@ from re import split
 from tzlocal import get_localzone
 import validators
 import socket
+import requests
 
 def timeit(method):
     def timed(*args, **kw):
@@ -273,7 +274,7 @@ class ProfilerProcess(multiprocessing.Process):
 
     def load_org_asn(self, org) -> list :
         """
-        Reads the specified org's asn from slips/organizations_info and stores the info in the database
+        Reads the specified org's asn from slips_files/organizations_info and stores the info in the database
         org: 'google', 'facebook', 'twitter', etc...
         returns a list containing the org's asn
         """
@@ -290,8 +291,8 @@ class ProfilerProcess(multiprocessing.Process):
                     line = f.readline()
             return org_asn
         except (FileNotFoundError, IOError):
-            # theres no slips/organizations_info/{org}_asn for this org
-            # see if the org has asn cached
+            # theres no slips_files/organizations_info/{org}_asn for this org
+            # see if the org has asn cached in our db
             asn_cache = __database__.get_asn_cache()
             org_asn =[]
             for asn in asn_cache:
@@ -302,14 +303,14 @@ class ProfilerProcess(multiprocessing.Process):
 
     def load_org_domains(self, org) -> list :
         """
-        Reads the specified org's domains from slips/organizations_info and stores the info in the database
+        Reads the specified org's domains from slips_files/organizations_info and stores the info in the database
         org: 'google', 'facebook', 'twitter', etc...
         returns a list containing the org's domains
         """
         try:
             # Each file is named after the organization's name followed by _asn
             domains =[]
-            file = f'slips/organizations_info/{org}_domains'
+            file = f'slips_files/organizations_info/{org}_domains'
             with open(file,'r') as f:
                 line = f.readline()
                 while line:
@@ -323,7 +324,8 @@ class ProfilerProcess(multiprocessing.Process):
 
     def load_org_IPs(self, org) -> list :
         """
-        Reads the specified org's info from slips/organizations_info and stores the info in the database
+        Reads the specified org's info from slips_files/organizations_info and stores the info in the database
+        if there's no file for this org, it get the IP ranges from asnlookup.com
         org: 'google', 'facebook', 'twitter', etc...
         returns a list of this organization's subnets
         """
@@ -345,11 +347,35 @@ class ProfilerProcess(multiprocessing.Process):
                         # not a valid line, ignore it
                         pass
                     line = f.readline()
-            # Store them in the db as str
+            print(f'********************** FOUND FILE')
             return org_subnets
         except (FileNotFoundError, IOError):
-            # there's no slips/organizations_info/{org} for this org
-            return False
+            # there's no slips_files/organizations_info/{org} for this org
+            org_subnets = []
+            # see if we can get asn about this org
+            try:
+                response = requests.get('http://asnlookup.com/api/lookup?org=' + org.replace('_', ' '), headers ={  'User-Agent': 'ASNLookup PY/Client'}, timeout = 10)
+            except requests.exceptions.ConnectionError:
+                # Connection reset by peer
+                return False
+            ip_space = json.loads(response.text)
+            if ip_space:
+                with open(f'slips_files/organizations_info/{org}','w') as f:
+                    for subnet in ip_space:
+                        # get ipv4 only
+                        if ':' not in subnet:
+                            try:
+                                # make sure this line is a valid network
+                                is_valid_line = ipaddress.ip_network(subnet)
+                                f.write(subnet + '\n')
+                                org_subnets.append(subnet)
+                            except ValueError:
+                                # not a valid line, ignore it
+                                continue
+                return org_subnets
+            else:
+                # can't get org IPs from asnlookup.com
+                return False
 
     def define_type(self, line):
         """
