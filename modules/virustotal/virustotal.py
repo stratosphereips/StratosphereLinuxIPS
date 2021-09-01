@@ -203,6 +203,7 @@ class Module(Module, multiprocessing.Process):
         positives = int(response.get('positives','0'))
         total = response.get('total',0)
         score = f'{positives}/{total}'
+        self.counter += 1
         if positives >= 3:
             # consider it malicious and alert
             type_detection = 'file'
@@ -210,14 +211,12 @@ class Module(Module, multiprocessing.Process):
             type_evidence = "MaliciousDownloadedFile"
             threat_level = 80
             confidence = 1
-            description =  f'Malicious downloaded file {md5} size: {size} from IP: {daddr} Score: {score}'
+            description =  f'Malicious downloaded file {md5} size: {size} from IP: {saddr} Score: {score}'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                      threat_level, confidence, description, ts , profileid=profileid, twid=twid, uid=uid)
-            self.counter += 1
             return 'malicious'
-        self.counter += 1
         return 'benign'
 
     def API_calls_thread(self):
@@ -341,8 +340,16 @@ class Module(Module, multiprocessing.Process):
                         data = json.loads(data)
                         profileid = data['profileid']
                         twid = data['twid']
+                        uid = data['uid']
                         flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-                        domain = flow_data['query']
+
+                        # store the dns answers in our db to check for unused queries later in flowalerts.py
+                        domain = flow_data.get('query',False)
+                        answers = flow_data.get('answers', False)
+                        ts = flow_data.get('stime', '')
+                        if domain and answers:
+                            __database__.store_dns_answers(domain, answers, f'{profileid}_{twid}' ,ts, uid)
+
                         cached_data = __database__.getDomainData(domain)
                         # If VT data of this domain is not in the DomainInfo, ask VT
                         # If 'Virustotal' key is not in the DomainInfo

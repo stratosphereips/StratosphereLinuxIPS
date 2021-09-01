@@ -1049,14 +1049,14 @@ class Database(object):
         return data
 
     def getIPData(self, ip):
-        """	
-        Return information about this IP	
-        Returns a dictionary or False if there is no IP in the database	
+        """
+        Return information about this IP
+        Returns a dictionary or False if there is no IP in the database
         ip: a string
-        We need to separate these three cases:	
-        1- IP is in the DB without data. Return empty dict.	
-        2- IP is in the DB with data. Return dict.	
-        3- IP is not in the DB. Return False	
+        We need to separate these three cases:
+        1- IP is in the DB without data. Return empty dict.
+        2- IP is in the DB with data. Return dict.
+        3- IP is not in the DB. Return False
         """
         if type(ip) == ipaddress.IPv4Address or type(ip) == ipaddress.IPv6Address:
             ip = str(ip)
@@ -1297,7 +1297,7 @@ class Database(object):
         pubsub = self.r.pubsub()
         supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
                     'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
-                    'new_blocking', 'new_ssh','new_notice','new_url', 'finished_modules', 'new_downloaded_file', 'reload_whitelist']
+                    'new_blocking', 'new_ssh','new_notice','new_url', 'finished_modules', 'new_downloaded_file', 'reload_whitelist', 'new_service']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 pubsub.subscribe(channel)
@@ -1602,6 +1602,7 @@ class Database(object):
         to_send['twid'] = twid
         to_send['flow'] = data
         to_send['stime'] = stime
+        to_send['uid'] = uid
         to_send = json.dumps(to_send)
         #publish a dns with its flow
         self.publish('new_dns_flow', to_send)
@@ -1780,11 +1781,12 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query, answers):
+    def set_dns_resolution(self, query: str, answers: str):
         """
         Save in DB DNS name for each IP
         """
         for ans in answers:
+            # get stored DNS resolution from our db
             data = self.get_dns_resolution(ans)
             if query not in data:
                 data.append(query)
@@ -1968,6 +1970,42 @@ class Database(object):
             data = ''
         return data
 
+    def store_dns_answers(self, query: str, answers: list, profileid_twid: str, ts: float, uid: str):
+        """
+        Store DNS answers for each ip
+        stored as {'query':{ts: .. , 'answers': .. , 'uid':... ]}
+        :param ts: epoch time
+        """
+        try:
+            # to avoid duplicates, if key exists update it
+            stored_answers = self.get_dns_answers()
+            # try to get the results that are stored in this tw
+            answers_dict = json.loads(stored_answers[profileid_twid])
+            # found results, update them
+            answers_dict.update(
+                            {query: {'ts':ts,
+                                     'answers': answers,
+                                     'uid': uid}}
+                                )
+            answers_in_this_tw = json.dumps(answers_dict)
+        except KeyError:
+            # key doesn't exist
+            answers = json.dumps(answers)
+            answers_in_this_tw = json.dumps(
+                                    {query: {'ts':ts,
+                                             'answers': answers,
+                                             'uid': uid}}
+            )
+
+        # we're storing in dns_answers instead of 'DomainsInfo' because domainsInfo is stored in the cache,
+        # we need to check the resolved domains per tw
+        self.r.hset('dns_answers', profileid_twid, answers_in_this_tw)
+
+    def get_dns_answers(self):
+        """ Returns dns_answers dict {profileid_twid : {query: [ts,serialized answers list]}}"""
+        return self.r.hgetall('dns_answers')
+
+
     def set_asn_cache(self, asn, asn_range) -> None:
         """
         Stores the range of asn in cached_asn hash
@@ -1981,7 +2019,7 @@ class Database(object):
         Returns cached asn of ip if present, or False.
         """
         return self.rcache.hgetall('cached_asn')
-    
+
     def store_process_PID(self, process, pid):
         """
         Stores each started process or module with it's PID

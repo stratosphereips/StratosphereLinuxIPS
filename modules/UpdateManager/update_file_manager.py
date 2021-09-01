@@ -7,7 +7,8 @@ import json
 import ipaddress
 import validators
 import traceback
-
+import requests
+import datetime
 class UpdateFileManager:
 
     def __init__(self, outputqueue, config):
@@ -31,7 +32,7 @@ class UpdateFileManager:
             self.update_period = float(self.update_period)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.update_period = 86400
+            self.update_period = 86400 # 1 day
         try:
             # Read the path to where to store and read the malicious files
             self.path_to_threat_intelligence_data = self.config.get('threatintelligence', 'download_path_for_remote_threat_intelligence')
@@ -44,6 +45,32 @@ class UpdateFileManager:
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.list_of_urls = []
+
+        try:
+            # Read the riskiq username
+            self.riskiq_email = self.config.get('threatintelligence', 'RiskIQ_email')
+            if '@' not in self.riskiq_email:
+                raise NameError
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.riskiq_email = None
+
+        try:
+            # Read the riskiq api key
+            self.riskiq_key = self.config.get('threatintelligence', 'RiskIQ_key')
+            if len(self.riskiq_key) != 64:
+                raise NameError
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.riskiq_key = None
+
+        try:
+            # riskiq update period
+            self.riskiq_update_period = self.config.get('threatintelligence', 'update_period')
+            self.riskiq_update_period = float(self.riskiq_update_period)
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.riskiq_update_period = 604800 # 1 week
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -75,7 +102,13 @@ class UpdateFileManager:
             last_update = float('-inf')
 
         now = time.time()
-        if last_update + self.update_period < now:
+        # check which update period to use based on the file
+        if 'risk' in file_to_download:
+            update_period = self.riskiq_update_period
+        else:
+            update_period = self.update_period
+
+        if last_update + update_period < now:
             # Update
             return True
         return False
@@ -174,6 +207,44 @@ class UpdateFileManager:
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
 
+    def update_riskiq_feed(self):
+        """ Get and parse RiskIQ feed """
+        try:
+            base_url = 'https://api.riskiq.net/pt'
+            path = '/v2/articles/indicators'
+            url = base_url + path
+            auth = (self.riskiq_email, self.riskiq_key)
+            today = datetime.date.today()
+            days_ago = datetime.timedelta(7)
+            a_week_ago = today - days_ago
+            data = {'startDateInclusive': a_week_ago.strftime("%Y-%m-%d"),
+                    'endDateExclusive': today.strftime("%Y-%m-%d")}
+            # Specifying json= here instead of data= ensures that the
+            # Content-Type header is application/json, which is necessary.
+            response = requests.get(url, auth=auth ,json=data).json()
+            # extract domains only from the response
+            try:
+                response = response['indicators']
+                for indicator in response:
+                    # each indicator is a dict
+                    malicious_domains_dict = {}
+                    if indicator.get('type','') == 'domain':
+                        domain = indicator['value']
+                        malicious_domains_dict[domain] = json.dumps({'description': 'malicious domain detected by RiskIQ', 'source':url})
+                        __database__.add_domains_to_IoC(malicious_domains_dict)
+            except KeyError:
+                self.print(f'RiskIQ returned: {response["message"]}. Update Cancelled.')
+                return False
+
+            # update the timestamp in the db
+            malicious_file_info = {'time': time.time()}
+            __database__.set_malicious_file_info('riskiq_domains', malicious_file_info)
+            return True
+        except Exception as e:
+            self.print(f'An error occurred while updating RiskIQ feed.', 0, 1)
+            self.print(f'Error: {e}', 0, 1)
+            return False
+
     def update(self) -> bool:
         """
         Main function. It tries to update the malicious file from a remote
@@ -206,6 +277,17 @@ class UpdateFileManager:
             else:
                 self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
                 continue
+
+        # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
+        # check if we have a username and api key and a week has passed since we last updated
+        if self.riskiq_email and self.riskiq_key and self.__check_if_update('riskiq_domains'):
+            self.print(f'We should update RiskIQ domains', 1, 0)
+            if self.update_riskiq_feed():
+                self.print('Successfully updated RiskIQ domains.', 1, 0)
+            else:
+                self.print(f'An error occured while updating RiskIQ domains. Updating was aborted.', 0, 1)
+
+        #todo
 
     def __delete_old_source_IPs(self, file):
         """
@@ -263,19 +345,23 @@ class UpdateFileManager:
                 while True:
                     line = malicious_file.readline()
                     # some ioc files start with "first_seen_utc"
-                    if line.startswith('#"type"') or line.startswith('"first_seen_utc"') or line.startswith('"ip_v4"'):
+                    if line.startswith('#"type"') \
+                            or line.startswith('"first_seen_utc"') \
+                            or line.startswith('"ip_v4"')\
+                            or line.startswith('"domain"'):
                         # looks like the column names, search where is the
                         # description column
                         for column in line.split(','):
                             # some files have the name of the malware ad the description of the ioc
-                            if column.lower().startswith('desc') or 'malware' in column or 'tags_str' in column:
+                            if column.lower().startswith('desc') or 'malware' in column or 'tags_str' in column or 'collect' in column:
                                 description_column = line.split(',').index(column)
                     if not line.startswith('#') and not "type" in line.lower() \
                             and not "first_seen_utc" in line.lower() \
                             and not "ip_v4" in line.lower() \
+                            and not "domain" in line.lower() \
                             and not line.isspace() \
                             and line not in ('\n',''):
-                        # break while statement if it is not a comment line
+                        # break while statement if it is not a comment or a header line
                         # i.e. does not startwith #
                         break
 
@@ -294,6 +380,10 @@ class UpdateFileManager:
                 elif ',' in line:
                     data = line.replace("\n","").replace("\"","").split(",")
                     amount_of_columns = len(line.split(","))
+                elif '0.0.0.0 ' in line:
+                    # anudeepND/blacklist file
+                    data = [line[line.index(' ')+1:].replace("\n","")]
+                    amount_of_columns = 1
                 else:
                     data = line.replace("\n","").replace("\"","").split("\t")
                     # lines are not comma separated like ipsum files, try tabs
@@ -302,6 +392,7 @@ class UpdateFileManager:
                 if description_column is None:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
+
                 # Search the first column that is an IPv4, IPv6 or domain
                 for column in range(amount_of_columns):
                     # Check if ip is valid.
@@ -320,7 +411,7 @@ class UpdateFileManager:
                             self.print(f'The data is on column {column} and is ipv6: {ip_address}', 0, 6)
                             break
                         except ipaddress.AddressValueError:
-                            # It does not look as IP address.
+                            # It does not look like an IP address.
                             # So it should be a domain
                             if validators.domain(data[column].strip()):
                                 data_column = column
@@ -333,6 +424,7 @@ class UpdateFileManager:
                                 # Some string that is not a domain
                                 data_column = None
                                 pass
+
                 if data_column is None:
                     # can't find a column that contains an ioc
                     self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 1, 1)
@@ -360,11 +452,14 @@ class UpdateFileManager:
                         data = line.replace("\n", "").replace("\"", "").split("#")[data_column].strip()
                     elif ',' in line:
                         data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
+                    elif '0.0.0.0 ' in line:
+                        # anudeepND/blacklist file
+                        data = line[line.index(' ')+1:].replace("\n","")
                     else:
                         data = line.replace("\n", "").replace("\"", "").split("\t")[data_column].strip()
 
                     if '/' in data or data in ('','\n'):
-                        # this is probably a range of ips or a new line, we don't support that. read the next line
+                        # this is probably a range of ips (subnet) or a new line, we don't support that. read the next line
                         continue
 
                     try:
@@ -376,6 +471,7 @@ class UpdateFileManager:
                             description = line.replace("\n", "").replace("\"", "").split("\t")[description_column].strip()
                     except IndexError:
                         self.print(f'IndexError Description column: {description_column}. Line: {line}')
+
                     self.print('\tRead Data {}: {}'.format(data, description), 10, 0)
 
                     # Check if the data is a valid IPv4, IPv6 or domain

@@ -152,7 +152,7 @@ class EvidenceProcess(multiprocessing.Process):
         elif detection_module == 'SSHSuccessful':
             evidence_string = f'{profileid}_{twid}: IP {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'{profileid}_{twid}: Detected IP {ip} {dns_resolution_ip_final} due to {description}.'
+            evidence_string = f'{profileid}_{twid}: IP {ip} detected {dns_resolution_ip_final} {description}.'
 
         return evidence_string
 
@@ -339,7 +339,7 @@ class EvidenceProcess(multiprocessing.Process):
                     return True
 
         # Check domains
-        elif data_type is 'domain':
+        if data_type is 'domain':
             is_srcdomain = type_detection in ('srcdomain')
             is_dstdomain = type_detection in ('dstdomain')
             domain = data
@@ -381,13 +381,13 @@ class EvidenceProcess(multiprocessing.Process):
 
                         # make sure the asn field contains a value
                         if (ip_asn['asnorg'] not in ('','Unknown')
-                                and (org.lower() in ip_asn['asnorg'].lower()
-                                        or ip_asn['asnorg'] in whitelisted_orgs[org]['asn'])):
+                            and (org.lower() in ip_asn['asnorg'].lower()
+                                    or ip_asn['asnorg'] in whitelisted_orgs[org].get('asn',''))):
                             # this ip belongs to a whitelisted org, ignore alert
                             #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
                             return True
 
-                        # method 2 using the organization's list of ips
+                        # Method 2 using the organization's list of ips
                         # ip doesn't have asn info, search in the list of organization IPs
                         try:
                             org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
@@ -402,17 +402,19 @@ class EvidenceProcess(multiprocessing.Process):
                             # and ip doesn't have asn info.
                             pass
 
-                        # Method 3 Check if the domains of this flow belong to this org
+                        # Method 3 Check if the domains of this flow belong to this org domains
                         domains_to_check_dst, domains_to_check_src = self.get_domains_of_flow(flow)
                         # which list of the above should be used? src or dst or both?
                         if ignore_alerts_to_org and ignore_alerts_from_org: domains_to_check = domains_to_check_src + domains_to_check_dst
                         elif ignore_alerts_from_org : domains_to_check = domains_to_check_src
                         elif ignore_alerts_to_org : domains_to_check = domains_to_check_dst
                         try:
-                            org_domains = json.loads(whitelisted_orgs[org]['domains'])
-                            for domain in org_domains:
-                                # domains to check are usually 1 or 2 domains
-                                for flow_domain in domains_to_check:
+                            org_domains = json.loads(whitelisted_orgs[org].get('domains','{}'))
+                            # domains to check are usually 1 or 2 domains
+                            for flow_domain in domains_to_check:
+                                if org in flow_domain:
+                                    return True
+                                for domain in org_domains:
                                     # match subdomains too
                                     if domain in flow_domain:
                                         return True

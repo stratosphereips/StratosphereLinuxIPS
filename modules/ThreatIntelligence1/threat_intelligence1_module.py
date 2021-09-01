@@ -289,6 +289,7 @@ class Module(Module, multiprocessing.Process):
         self.__delete_old_source_Domains(data_file)
 
     def load_malicious_local_files(self, path_to_files: str) -> bool:
+        """ Checks if a local malicious file was changed based on it's hash, if so, update its content and delete old data"""
         try:
             local_ti_files = os.listdir(path_to_files)
             for localfile in local_ti_files:

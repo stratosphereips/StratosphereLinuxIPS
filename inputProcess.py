@@ -142,11 +142,11 @@ class InputProcess(multiprocessing.Process):
                     # self.print(f'Old File found {filename}', 0, 6)
                 except KeyError:
                     # First time we opened this file.
-                    # Ignore the files that do not contain data.
-                    if ('capture_loss' in filename or 'loaded_scripts' in filename
-                            or 'packet_filter' in filename or 'stats' in filename
-                            or 'weird' in filename or 'reporter' in filename):
-                        continue
+                    # Ignore the files that do not contain data. These are the zeek log files that we don't use
+                    ignored_files = ['capture_loss','loaded_scripts','packet_filter', 'stats', 'weird', 'reporter']
+                    for file in ignored_files:
+                        if file in filename:
+                            continue
                     file_handler = open(filename + '.log', 'r')
                     open_file_handlers[filename] = file_handler
                     # self.print(f'New File found {filename}', 0, 6)
@@ -399,8 +399,8 @@ class InputProcess(multiprocessing.Process):
             os.system(command)
 
         # Run zeek on the pcap or interface. The redef is to have json files
-        # To add later the home net: "Site::local_nets += { 1.2.3.0/24, 5.6.7.0/24 }"
-        command = "cd " + self.zeek_folder + "; " + self.zeek_or_bro + " -C " + bro_parameter + "  " + self.tcp_inactivity_timeout + " local -e 'redef LogAscii::use_json=T;' -f " + self.packet_filter + " 2>&1 > /dev/null &"
+        zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
+        command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} {self.tcp_inactivity_timeout} local -f {self.packet_filter} {zeek_scripts_dir} 2>&1 > /dev/null &'
         self.print(f'Zeek command: {command}', 3, 0)
         # Run zeek.
         os.system(command)

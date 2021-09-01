@@ -290,7 +290,14 @@ class ProfilerProcess(multiprocessing.Process):
                     line = f.readline()
             return org_asn
         except (FileNotFoundError, IOError):
-            self.print(f"Can't read slips/organizations_info/{org}_asn ... Aborting.",2,2)
+            # theres no slips/organizations_info/{org}_asn for this org
+            # see if the org has asn cached
+            asn_cache = __database__.get_asn_cache()
+            org_asn =[]
+            for asn in asn_cache:
+                if org in asn.lower():
+                    org_asn.append(org)
+            if org_asn != []: return org_asn
             return False
 
     def load_org_domains(self, org) -> list :
@@ -341,7 +348,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Store them in the db as str
             return org_subnets
         except (FileNotFoundError, IOError):
-            self.print(f"Can't read slips/organizations_info/{org} ... Aborting.",2,2)
+            # there's no slips/organizations_info/{org} for this org
             return False
 
     def define_type(self, line):
@@ -1120,6 +1127,15 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['md5'] = line.get('md5', '')
             # self.column_values['sha1'] = line.get('sha1','')
             #todo process zeek tabs files.log
+        elif 'known_services' in file_type:
+            self.column_values['type'] = 'known_services'
+            self.column_values['saddr'] = line.get('host', '')
+            # this file doesn't have a daddr field, but we need it in add_flow_to_profile
+            self.column_values['daddr'] = '0.0.0.0'
+            self.column_values['port_num'] = line.get('port_num', '')
+            self.column_values['port_proto'] = line.get('port_proto', '')
+            self.column_values['service'] = line.get('service', '')
+
         else:
             return False
         return True
@@ -1519,6 +1535,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['filesize'] = line['fileinfo']['size']
                 except KeyError:
                     self.column_values['filesize'] = ''
+
     def get_domains_of_flow(self):
         """ Returns the domains of each ip (src and dst) that appeard in this flow """
         # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
@@ -1548,7 +1565,6 @@ class ProfilerProcess(multiprocessing.Process):
         except (KeyError, TypeError):
             pass
         return domains_to_check_dst, domains_to_check_src
-
 
     def is_whitelisted(self) -> bool:
         """
@@ -1651,8 +1667,8 @@ class ProfilerProcess(multiprocessing.Process):
                 domains_to_check_dst, domains_to_check_src = self.get_domains_of_flow()
                 if 'flows' in what_to_ignore or 'both' in what_to_ignore:
                     # We want to block flows from this org, continue
-                    org_subnets = json.loads(self.whitelisted_orgs[org]['IPs'])
-                    org_domains = json.loads(self.whitelisted_orgs[org]['domains'])
+                    org_subnets = json.loads(self.whitelisted_orgs[org].get('IPs','{}'))
+
                     if 'both' in from_ : domains_to_check = domains_to_check_src + domains_to_check_dst
                     elif 'src' in from_: domains_to_check = domains_to_check_src
                     elif 'dst' in from_: domains_to_check = domains_to_check_dst
@@ -1684,9 +1700,15 @@ class ProfilerProcess(multiprocessing.Process):
                             pass
 
                         # Method 3 Check if the domains of this flow belong to this org
-                        for domain in org_domains:
-                            if domain in domains_to_check_src:
+                        org_domains = json.loads(self.whitelisted_orgs[org].get('domains','{}'))
+                        # domains to check are usually 1 or 2 domains
+                        for flow_domain in domains_to_check:
+                            if org in flow_domain:
                                 return True
+                            for domain in org_domains:
+                                # match subdomains too
+                                if domain in flow_domain:
+                                    return True
 
                     if 'dst' in from_ or 'both' in from_:
                         # Method 1 Check if dst IP belongs to a whitelisted organization range
@@ -1734,7 +1756,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             if not self.column_values:
                 return True
-            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files'):
+            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files', 'known_services'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -1842,6 +1864,8 @@ class ProfilerProcess(multiprocessing.Process):
                 MAC_info = json.dumps(MAC_info)
                 __database__.add_mac_addr_to_profile(profileid, MAC_info)
 
+
+
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(self.saddr)
@@ -1938,6 +1962,20 @@ class ProfilerProcess(multiprocessing.Process):
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish('new_downloaded_file', to_send)
+                elif flow_type == 'known_services':
+                    # Send known_services.log data to new_service channel in flowalerts module
+                    to_send = {
+                        'uid' : self.column_values['uid'],
+                        'saddr': self.column_values['saddr'],
+                        'port_num' : self.column_values['port_num'],
+                        'port_proto':  self.column_values['port_proto'],
+                        'service':  self.column_values['service'],
+                        'profileid' : profileid,
+                        'twid' : twid,
+                        'ts' : starttime
+                    }
+                    to_send = json.dumps(to_send)
+                    __database__.publish("new_service",to_send)
 
             def store_features_going_in(profileid, twid, starttime):
                 """
