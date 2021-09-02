@@ -1407,7 +1407,7 @@ class Database(object):
 
     def add_out_ssl(self, profileid, twid, stime, daddr_as_obj, dport, flowtype, uid,
                     version, cipher, resumed, established, cert_chain_fuids,
-                    client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
+                    client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name, ja3, ja3s):
         """
         Store in the DB an ssl request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
@@ -1430,6 +1430,8 @@ class Database(object):
         data['daddr'] = str(daddr_as_obj)
         data['dport'] = dport
         data['stime'] = stime
+        data['ja3'] = ja3
+        data['ja3s'] = ja3s
         # Convert to json string
         data = json.dumps(data)
         self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)

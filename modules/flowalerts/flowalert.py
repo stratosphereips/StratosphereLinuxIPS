@@ -332,6 +332,9 @@ class Module(Module, multiprocessing.Process):
             # this tw has no dns resolutions.
             return
 
+    def set_evidence_malicious_JA3(self, profileid, twid, description, uid, timestamp):
+        pass
+
     def run(self):
         # Main loop function
         while True:
@@ -604,9 +607,12 @@ class Module(Module, multiprocessing.Process):
                         flow = json.loads(flow)
                         uid = flow['uid']
                         timestamp = flow['stime']
+                        ja3 = flow.get('ja3',False)
+                        ja3s = flow.get('ja3s',False)
+                        profileid = data['profileid']
+                        twid = data['twid']
+
                         if 'self signed' in flow['validation_status']:
-                            profileid = data['profileid']
-                            twid = data['twid']
                             ip = flow['daddr']
                             server_name = flow.get('server_name') # returns None if not found
                             # if server_name is not None or not empty
@@ -616,6 +622,23 @@ class Module(Module, multiprocessing.Process):
                                 description = 'Self-signed certificate. Destination IP: {}, SNI: {}'.format(ip, server_name)
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description, uid, timestamp)
                             self.print(description, 3, 0)
+
+                        if ja3 or ja3s:
+                            # get the dict of malicious ja3 stored in our db
+                            try:
+                                malicious_ja3_dict = json.loads(__database__.get_ja3_in_IoC())
+                                daddr = flow['daddr']
+
+                                if ja3 in malicious_ja3_dict:
+                                    description = f'Malicious JA3 detected: {ja3} to daddr {daddr}'
+                                if ja3s in malicious_ja3_dict:
+                                    description = f'Malicious JA3s detected (possible C&C server): {ja3s} to server {daddr}'
+
+                                self.set_evidence_malicious_JA3(profileid,twid, description, uid, timestamp)
+                            except TypeError:
+                                # there's no ja3 in our db
+                                pass
+
 
                 # ---------------------------- new_service channel
                 message = self.c5.get_message(timeout=0.01)

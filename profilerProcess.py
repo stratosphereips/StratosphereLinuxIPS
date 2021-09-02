@@ -1064,8 +1064,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['validation_status'] = line.get('validation_status','')
             self.column_values['curve'] = line.get('curve','')
             self.column_values['server_name'] = line.get('server_name','')
-            self.column_values['JA3'] = line.get('ja3','')
-            self.column_values['JA3s'] = line.get('ja3s','')
+            self.column_values['ja3'] = line.get('ja3','')
+            self.column_values['ja3s'] = line.get('ja3s','')
 
         elif 'ssh' in file_type:
             self.column_values['type'] = 'ssh'
@@ -1956,7 +1956,8 @@ class ProfilerProcess(multiprocessing.Process):
                                              self.column_values['established'], self.column_values['cert_chain_fuids'],
                                              self.column_values['client_cert_chain_fuids'], self.column_values['subject'],
                                              self.column_values['issuer'], self.column_values['validation_status'],
-                                             self.column_values['curve'], self.column_values['server_name'])
+                                             self.column_values['curve'], self.column_values['server_name'],
+                                             self.column_values['ja3'], self.column_values['ja3s'])
                 elif flow_type == 'ssh':
                     __database__.add_out_ssh(profileid, twid, starttime, flow_type, uid, self.column_values['version'],
                                              self.column_values['auth_attempts'], self.column_values['auth_success'],
