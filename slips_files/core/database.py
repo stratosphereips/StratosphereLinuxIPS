@@ -1730,6 +1730,14 @@ class Database(object):
         if domains_and_description:
             self.rcache.hmset('IoC_domains', domains_and_description)
 
+    def add_ja3_to_IoC(self, ja3_dict) -> None:
+        """
+        Store a group of ja3 in the db
+        :param ja3_dict: a json serialized dict {'ja3': {'description': .. , 'source': ...}}
+        """
+        if ja3_dict:
+            self.rcache.hmset('IoC_JA3', ja3_dict)
+
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
         """
         Store in the DB 1 IP we read from an IoC source  with its description
@@ -1834,6 +1842,13 @@ class Database(object):
         Get all Domains and their description from IoC_domains
         """
         data = self.rcache.hgetall('IoC_domains')
+        return data
+
+    def get_ja3_in_IoC(self):
+        """
+        Get all ja3 and their description from IoC_JA3
+        """
+        data = self.rcache.hgetall('IoC_JA3')
         return data
 
     def search_IP_in_IoC(self, ip: str) -> str:
