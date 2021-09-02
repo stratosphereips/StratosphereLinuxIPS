@@ -642,12 +642,12 @@ class Module(Module, multiprocessing.Process):
                             if ja3 in malicious_ja3_dict:
                                 description = json.loads(malicious_ja3_dict[ja3])['description']
                                 description = f'Malicious JA3 detected: {ja3} to daddr {daddr}, description: {description}'
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp)
 
                             if ja3s in malicious_ja3_dict:
                                 description = json.loads(malicious_ja3_dict[ja3s])['description']
                                 description = f'Malicious JA3s detected (possible C&C server): {ja3s} to server {daddr}, description: {description}'
-
-                            self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp)
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp)
 
                 # ---------------------------- new_service channel
                 message = self.c5.get_message(timeout=0.01)
