@@ -230,6 +230,7 @@ class UpdateFileManager:
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
 
+
     def update_riskiq_feed(self):
         """ Get and parse RiskIQ feed """
         try:
@@ -460,7 +461,7 @@ class UpdateFileManager:
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
         This also helps in having unique ioc accross files
-        Returns nothing, but the dictionary should be filled
+        Returns tru if all goes well and the dictionary is filled, or False  if an error occured
         """
 
         try:
