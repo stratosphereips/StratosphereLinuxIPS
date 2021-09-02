@@ -76,7 +76,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.verbose = verbose
         self.debug = debug
         # there has to be a timeout or it will wait forever and never receive a new line
-        self.timeout = 0.00001
+        self.timeout = 0.0000001
         self.c1 = __database__.subscribe('reload_whitelist')
 
     def print(self, text, verbose=1, debug=0):
