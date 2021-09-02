@@ -460,8 +460,7 @@ class UpdateFileManager:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
-        This also helps in having unique ioc accross files
-        Returns tru if all goes well and the dictionary is filled, or False  if an error occured
+        This also helps in having unique ioc across files
         """
 
         try:
