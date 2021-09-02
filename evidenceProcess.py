@@ -377,15 +377,16 @@ class EvidenceProcess(multiprocessing.Process):
                         # Method 1: using asn
                         # Check if the IP in the content of the alert has ASN info in the db
                         ip_data = __database__.getIPData(ip)
-                        ip_asn = ip_data.get('asn',{'asnorg':''})
+                        if ip_data:
+                            ip_asn = ip_data.get('asn',{'asnorg':''})
 
-                        # make sure the asn field contains a value
-                        if (ip_asn['asnorg'] not in ('','Unknown')
-                            and (org.lower() in ip_asn['asnorg'].lower()
-                                    or ip_asn['asnorg'] in whitelisted_orgs[org].get('asn',''))):
-                            # this ip belongs to a whitelisted org, ignore alert
-                            #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
-                            return True
+                            # make sure the asn field contains a value
+                            if (ip_asn['asnorg'] not in ('','Unknown')
+                                and (org.lower() in ip_asn['asnorg'].lower()
+                                        or ip_asn['asnorg'] in whitelisted_orgs[org].get('asn',''))):
+                                # this ip belongs to a whitelisted org, ignore alert
+                                #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
+                                return True
 
                         # Method 2 using the organization's list of ips
                         # ip doesn't have asn info, search in the list of organization IPs
@@ -455,7 +456,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
-                    if self.is_whitelisted(ip, detection_info, type_detection, description, flow):
+                    if flow and self.is_whitelisted(ip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
                         __database__.deleteEvidence(profileid, twid, key)
@@ -550,8 +551,8 @@ class EvidenceProcess(multiprocessing.Process):
             self.jsonfile.close()
             self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
             return True
-        except Exception as inst:
-            self.outputqueue.put('01|evidence|[Evidence] Error in the Evidence Process')
-            self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
-            self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
-            return True
+        # except Exception as inst:
+        #     self.outputqueue.put('01|evidence|[Evidence] Error in the Evidence Process')
+        #     self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
+        #     self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
+        #     return True
