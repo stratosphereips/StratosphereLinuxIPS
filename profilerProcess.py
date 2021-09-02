@@ -347,7 +347,6 @@ class ProfilerProcess(multiprocessing.Process):
                         # not a valid line, ignore it
                         pass
                     line = f.readline()
-            print(f'********************** FOUND FILE')
             return org_subnets
         except (FileNotFoundError, IOError):
             # there's no slips_files/organizations_info/{org} for this org

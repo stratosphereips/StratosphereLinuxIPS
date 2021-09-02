@@ -1737,8 +1737,7 @@ class Database(object):
         Store a group of ja3 in the db
         :param ja3_dict: a json serialized dict {'ja3': {'description': .. , 'source': ...}}
         """
-        if ja3_dict:
-            self.rcache.hmset('IoC_JA3', ja3_dict)
+        self.rcache.hmset('IoC_JA3', ja3_dict)
 
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
         """
