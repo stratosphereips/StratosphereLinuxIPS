@@ -196,7 +196,8 @@ class UpdateFileManager:
 
                 # is it a ti_file? load updated IPs to the database
                 if file_to_download in self.list_of_urls \
-                        and not self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download, file_name_to_download):
+                        and not self.__load_malicious_datafile(f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
+                    # an error occured
                     return False
 
                 # Store the new etag and time of file in the database
@@ -444,7 +445,7 @@ class UpdateFileManager:
         except KeyboardInterrupt:
             return False
         except Exception as inst:
-            self.print('Problem on the __load_malicious_datafile()', 0, 1)
+            self.print('Problem in parse_ja3_feed()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -452,13 +453,13 @@ class UpdateFileManager:
             return False
 
 
-    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> bool:
+    def __load_malicious_datafile(self, malicious_data_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
         This also helps in having unique ioc across files
         """
-        #todo remove data_file_name param
+
         try:
             malicious_ips_dict = {}
             malicious_domains_dict = {}
@@ -487,12 +488,10 @@ class UpdateFileManager:
                             and not "domain" in line.lower() \
                             and not line.isspace() \
                             and line not in ('\n',''):
-                        # break while statement if it is not a comment or a header line
-                        # i.e. does not startwith #
+                        # break while statement if it is not a comment(i.e. does not startwith #) or a header line
                         break
 
-                # Find in which column is the imporant info in this
-                # TI file (domain or ip)
+                # Find in which column is the imporant info in this TI file (domain or ip)
 
                 # Store the current position of the TI file
                 current_file_position = malicious_file.tell()
@@ -547,15 +546,13 @@ class UpdateFileManager:
                             else:
                                 # Some string that is not a domain
                                 data_column = None
-                                pass
 
                 if data_column is None:
                     # can't find a column that contains an ioc
                     self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 1, 1)
                     return False
 
-                # Now that we read the first line, go back so we
-                # can process it
+                # Now that we read the first line, go back so we can process it
                 malicious_file.seek(current_file_position)
 
                 for line in malicious_file:
@@ -598,6 +595,8 @@ class UpdateFileManager:
 
                     self.print('\tRead Data {}: {}'.format(data, description), 10, 0)
 
+                    data_file_name = malicious_data_path.split('/')[-1]
+
                     # Check if the data is a valid IPv4, IPv6 or domain
                     try:
                         ip_address = ipaddress.IPv4Address(data)
@@ -627,14 +626,11 @@ class UpdateFileManager:
             __database__.add_domains_to_IoC(malicious_domains_dict)
             return True
         except KeyboardInterrupt:
-            # todo this should be False
-            return True
+            return False
         except Exception as inst:
             self.print('Problem on the __load_malicious_datafile()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             print(traceback.format_exc())
-            # todo this should be False
-
-            return True
+            return False
