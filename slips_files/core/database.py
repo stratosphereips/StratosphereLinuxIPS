@@ -1354,7 +1354,9 @@ class Database(object):
         """ Return the amount of each label so far """
         return self.r.zrange('labels', 0, -1, withscores=True)
 
-    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto='', uid='', label=''):
+    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='',
+                 daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='',
+                 appproto='', uid='', label=''):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
         The profileid is the main profile that this flow is related too.

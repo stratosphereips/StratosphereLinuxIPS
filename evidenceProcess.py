@@ -217,7 +217,12 @@ class EvidenceProcess(multiprocessing.Process):
     def get_domains_of_flow(self, flow:dict):
         """ Returns the domains of each ip (src and dst) that appeard in this flow """
         # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
-        flow = json.loads(list(flow.values())[0])
+        try:
+            flow = json.loads(list(flow.values())[0])
+        except TypeError:
+            # sometimes this function is called before the flow is add to our database
+            # todo ??
+            return [],[]
         domains_to_check_src = []
         domains_to_check_dst = []
         try:
@@ -551,8 +556,8 @@ class EvidenceProcess(multiprocessing.Process):
             self.jsonfile.close()
             self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
             return True
-        # except Exception as inst:
-        #     self.outputqueue.put('01|evidence|[Evidence] Error in the Evidence Process')
-        #     self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
-        #     self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
-        #     return True
+        except Exception as inst:
+            self.outputqueue.put('01|evidence|[Evidence] Error in the Evidence Process')
+            self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
+            self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
+            return True

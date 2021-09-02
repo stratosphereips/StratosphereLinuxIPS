@@ -184,7 +184,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description, uid, timestamp):
+    def set_evidence_for_invalid_certificates(self, profileid, twid, ip, description, uid, timestamp):
         '''
         Set evidence for Invalid SSL certificates.
         '''
@@ -567,13 +567,12 @@ class Module(Module, multiprocessing.Process):
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
+
                         if 'SSL certificate validation failed' in msg:
-                            profileid = data['profileid']
-                            twid = data['twid']
                             ip = flow['daddr']
                             # get the description inside parenthesis
                             description = msg + ' Destination IP: {}'.format(ip)
-                            self.set_evidence_for_invalid_certificates(profileid,twid, ip, description, uid, timestamp)
+                            self.set_evidence_for_invalid_certificates(profileid, twid, ip, description, uid, timestamp)
                             self.print(description, 3, 0)
 
                         if 'Address_Scan' in note:
