@@ -16,6 +16,7 @@ def timing(f):
         print('[DB] Function took {:.3f} ms'.format((time2-time1)*1000.0))
         return ret
     return wrap
+
 class Database(object):
     """ Database object management """
     def __init__(self):
@@ -24,6 +25,10 @@ class Database(object):
         self.separator = '_'
         self.normal_label = 'normal'
         self.malicious_label = 'malicious'
+        # this list will store evidence that slips detected but can't
+        # alert for it before the flow of them is added to our db
+        self.pending_evidence = []
+
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -943,6 +948,17 @@ class Database(object):
                 'uid' : uid
             }
             evidence_to_send = json.dumps(evidence_to_send)
+            # check if flow is added to this profileid_tw_flows before adding the evidence
+            flow = self.get_flow(profileid,twid,uid)
+            if list(flow.values())[0] == None:
+                # this means the flow wasn't added, add to pending_evidence queue to add evidence later
+                evidence_details = (type_detection, detection_info, type_evidence,
+                    threat_level, confidence, description, timestamp, profileid, twid, uid)
+                self.pending_evidence.append(evidence_details)
+                #todo create a thread that tries to add this evidence later
+                # todo fix the way we pass args to this function
+                return False
+
             self.publish('evidence_added', evidence_to_send)
 
         current_evidence[key_json] = data
@@ -950,6 +966,7 @@ class Database(object):
         # Set evidence in the database.
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
+        return True
 
 
     def deleteEvidence(self,profileid, twid, key):
