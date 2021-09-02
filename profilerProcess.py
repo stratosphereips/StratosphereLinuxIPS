@@ -1064,6 +1064,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['validation_status'] = line.get('validation_status','')
             self.column_values['curve'] = line.get('curve','')
             self.column_values['server_name'] = line.get('server_name','')
+            self.column_values['JA3'] = line.get('ja3','')
+            self.column_values['JA3s'] = line.get('ja3s','')
 
         elif 'ssh' in file_type:
             self.column_values['type'] = 'ssh'

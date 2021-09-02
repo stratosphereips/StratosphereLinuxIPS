@@ -47,6 +47,13 @@ class UpdateFileManager:
             self.list_of_urls = []
 
         try:
+            # Read the list of ja3 feeds to download. Convert to list
+            self.ja3_feeds = self.config.get('threatintelligence', 'ja3_feeds').split(',')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.ja3_feeds = []
+
+        try:
             # Read the riskiq username
             self.riskiq_email = self.config.get('threatintelligence', 'RiskIQ_email')
             if '@' not in self.riskiq_email:
@@ -102,6 +109,7 @@ class UpdateFileManager:
             last_update = float('-inf')
 
         now = time.time()
+
         # check which update period to use based on the file
         if 'risk' in file_to_download:
             update_period = self.riskiq_update_period
@@ -133,7 +141,7 @@ class UpdateFileManager:
 
     def download_file(self, url: str, filepath: str) -> bool:
         """
-        Download file from the location specified in the url and save to filepath
+        Download file from the url and save to filepath
         """
         try:
             # This replaces are to be sure that a user can not inject commands in curl
@@ -153,13 +161,17 @@ class UpdateFileManager:
             return False
 
     def download_malicious_file(self, file_to_download: str) -> bool:
+        """
+        Compare the e-tag of file_to_download in our database with the e-tag of this file and download if they're different
+        Doesn't matter if it's a ti_feed or JA3 feed
+        """
         try:
             # Check that the folder exist
             if not os.path.isdir(self.path_to_threat_intelligence_data):
                 os.mkdir(self.path_to_threat_intelligence_data)
 
             file_name_to_download = file_to_download.split('/')[-1]
-            # Get what files are stored in cache db and their E-TAG to comapre with current files
+            # Get what files are stored in cache db and their E-TAG to compare with current files
             data = __database__.get_malicious_file_info(file_name_to_download)
             try:
                 old_e_tag = data['e-tag']
@@ -176,15 +188,22 @@ class UpdateFileManager:
                 if old_e_tag:
                     # File is updated and was in database. Delete previous IPs of this file.
                     self.__delete_old_source_data_from_database(file_name_to_download)
-                # Load updated IPs to the database
-                if not self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download, file_name_to_download):
+
+                # ja3 files and ti_files are parsed differently, check which file is this
+                # is it ja3 feed?
+                if file_to_download in self.ja3_feeds and not self.parse_ja3_feed(f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
                     return False
+
+                # is it a ti_file? load updated IPs to the database
+                if file_to_download in self.list_of_urls \
+                        and not self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download, file_name_to_download):
+                    return False
+
                 # Store the new etag and time of file in the database
                 malicious_file_info = {}
                 malicious_file_info['e-tag'] = new_e_tag
                 malicious_file_info['time'] = self.new_update_time
                 __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
-
                 return True
             elif new_e_tag and old_e_tag == new_e_tag:
                 self.print(f'File {file_to_download} is still the same. Not downloading the file', 3, 0)
@@ -206,6 +225,7 @@ class UpdateFileManager:
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
+
 
     def update_riskiq_feed(self):
         """ Get and parse RiskIQ feed """
@@ -265,7 +285,7 @@ class UpdateFileManager:
         self.print('Checking if we need to download TI files.')
         # Check if the remote file is newer than our own
         # For each file that we should update
-        for file_to_download in self.list_of_urls:
+        for file_to_download in self.list_of_urls + self.ja3_feeds:
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
                 self.print(f'We should update the remote file {file_to_download}', 1, 0)
@@ -277,7 +297,6 @@ class UpdateFileManager:
             else:
                 self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
                 continue
-
         # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
         # check if we have a username and api key and a week has passed since we last updated
         if self.riskiq_email and self.riskiq_key and self.__check_if_update('riskiq_domains'):
@@ -287,7 +306,6 @@ class UpdateFileManager:
             else:
                 self.print(f'An error occured while updating RiskIQ domains. Updating was aborted.', 0, 1)
 
-        #todo
 
     def __delete_old_source_IPs(self, file):
         """
@@ -326,12 +344,16 @@ class UpdateFileManager:
         self.__delete_old_source_IPs(data_file)
         self.__delete_old_source_Domains(data_file)
 
-    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> None:
+    def parse_ja3_feed(self, malicious_data_path: str) -> bool:
+        pass
+
+
+    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
         This also helps in having unique ioc accross files
-        Returns nothing, but the dictionary should be filled
+        Returns tru if all goes well and the dictionary is filled, or False  if an error occured
         """
         try:
             malicious_ips_dict = {}
