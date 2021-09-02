@@ -440,7 +440,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
                     profileid = data.get('profileid')
-                    ip = profileid.split(self.separator)[1]
+                    srcip = profileid.split(self.separator)[1]
                     twid = data.get('twid')
                     # Key data
                     key = data.get('key')
@@ -455,7 +455,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
-                    if self.is_whitelisted(ip, detection_info, type_detection, description, flow):
+                    if self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
                         __database__.deleteEvidence(profileid, twid, key)
@@ -470,7 +470,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
-                                                          ip,
+                                                          srcip,
                                                           type_evidence,
                                                           type_detection,
                                                           detection_info,
@@ -480,7 +480,7 @@ class EvidenceProcess(multiprocessing.Process):
                                      'profileid': profileid,
                                      'twid': twid,
                                      'timestamp': flow_datetime,
-                                     'detected_ip': ip,
+                                     'detected_ip': srcip,
                                      'detection_module':type_evidence,
                                      'detection_info':str(type_detection) + ' ' + str(detection_info),
                                      'description':description}
@@ -497,7 +497,7 @@ class EvidenceProcess(multiprocessing.Process):
                         # self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
-                        ip = profileid.split(self.separator)[1]
+                        srcip = profileid.split(self.separator)[1]
                         for key in evidence:
                             # Deserialize key data
                             key_json = json.loads(key)
@@ -526,7 +526,7 @@ class EvidenceProcess(multiprocessing.Process):
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
-                                evidence_to_print = self.print_evidence(profileid, twid, ip, type_evidence, type_detection,detection_info, description)
+                                evidence_to_print = self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
                                 self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 # Set an alert about the evidence being blocked
                                 alert_to_log = self.print_alert(profileid,
@@ -543,7 +543,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 self.addDataToLogFile(alert_to_log)
                                 self.addDataToJSONFile(alert_dict)
 
-                                __database__.publish('new_blocking', ip)
+                                __database__.publish('new_blocking', srcip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
             self.logfile.close()
