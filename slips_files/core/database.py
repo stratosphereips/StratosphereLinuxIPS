@@ -78,10 +78,6 @@ class Database(object):
         # By default the slips internal time is 0 until we receive something
         self.setSlipsInternalTime(0)
 
-        # create and start the evidence queue thread
-        self.thread = threading.Thread(target=self.evidence_thread, daemon=True)
-        self.thread.start()
-
     def evidence_thread(self):
         """
         This thread starts if there's an evidence queue,
@@ -981,20 +977,6 @@ class Database(object):
                 'uid' : uid
             }
             evidence_to_send = json.dumps(evidence_to_send)
-            # check if flow is added to this profileid_tw_flows before adding the evidence
-            flow = self.get_flow(profileid,twid,uid)
-            # to solve the problem of evidence being alerted before corresponding flows are added to the db
-            print(f'**********************just entered set evidence q has {len((self.r.smembers("pending_evidence")))}  pid : {os.getpid()}')
-            if list(flow.values())[0] == None:
-                # this means the flow os this evidence wasn't added,
-                # add evidence to pending_evidence queue and try again later
-                evidence_details = [type_detection, detection_info, type_evidence,
-                    threat_level, confidence, description, timestamp, profileid, twid, uid]
-                print(f'********************** +1 pending evidence -  q has {len((self.r.smembers("pending_evidence")))} - pid : {os.getpid()}')
-                self.r.sadd("pending_evidence",str(evidence_details)) #("[x,y,z]")
-                # todo fix the way we pass args to this function
-                return False
-            print(f'**********************outside thread: PUBLISHED eviddence q has {len((self.r.smembers("pending_evidence")))} pid : {os.getpid()}')
             self.publish('evidence_added', evidence_to_send)
 
         current_evidence[key_json] = data

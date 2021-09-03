@@ -215,13 +215,12 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(inst)
 
     def get_domains_of_flow(self, flow:dict):
-        """ Returns the domains of each ip (src and dst) that appeard in this flow """
+        """ Returns the domains of each ip (src and dst) that appeared in this flow """
         # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
         try:
             flow = json.loads(list(flow.values())[0])
         except TypeError:
             # sometimes this function is called before the flow is add to our database
-            # todo ??
             return [],[]
         domains_to_check_src = []
         domains_to_check_dst = []
