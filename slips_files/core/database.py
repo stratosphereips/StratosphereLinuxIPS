@@ -1,5 +1,4 @@
 import os
-
 import redis
 import time
 import json
@@ -9,7 +8,6 @@ import traceback
 from datetime import datetime
 import ipaddress
 import sys
-
 
 def timing(f):
     """ Function to measure the time another function takes."""
