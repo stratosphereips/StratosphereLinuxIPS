@@ -56,9 +56,8 @@ class Module(Module, multiprocessing.Process):
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
         self.timeout = None
         self.counter = 0
-        # start the queue thread
-        self.api_calls_thread = threading.Thread(target=self.API_calls_thread,
-                         daemon=True)
+        # create the queue thread
+        self.api_calls_thread = threading.Thread(target=self.API_calls_thread, daemon=True)
 
     def __read_configuration(self) -> str:
         """ Read the configuration file for what we need """
@@ -262,7 +261,6 @@ class Module(Module, multiprocessing.Process):
                     if not cached_data or 'VirusTotal' not in cached_data:
                         # cached data is either False or {}
                         self.set_url_data_in_URLInfo(ioc, cached_data)
-
 
 
     def get_file_score(self, md5):

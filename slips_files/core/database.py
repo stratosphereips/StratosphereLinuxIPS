@@ -1,3 +1,5 @@
+import os
+
 import redis
 import time
 import json
@@ -6,6 +8,9 @@ import configparser
 import traceback
 from datetime import datetime
 import ipaddress
+import threading
+import queue
+
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -27,8 +32,6 @@ class Database(object):
         self.malicious_label = 'malicious'
         # this list will store evidence that slips detected but can't
         # alert for it before the flow of them is added to our db
-        self.pending_evidence = []
-
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -74,6 +77,36 @@ class Database(object):
         self.r.delete('zeekfiles')
         # By default the slips internal time is 0 until we receive something
         self.setSlipsInternalTime(0)
+
+        # create and start the evidence queue thread
+        self.thread = threading.Thread(target=self.evidence_thread, daemon=True)
+        self.thread.start()
+
+    def evidence_thread(self):
+        """
+        This thread starts if there's an evidence queue,
+        it operates every 3 seconds, and tries to add the evidence in the que then sleeps again.
+        """
+        while True:
+            # wait until the queue is populated
+            pending_evidence = list(self.r.smembers('pending_evidence'))
+            if len(pending_evidence) == 0:
+                print(f'**********************no pending evidence , sleeping 10 secs')
+                time.sleep(5)
+            # wait 3 second before trying to add evidence again
+            time.sleep(3)
+            print(f'**********************THREAD STARTEDD************* {len(pending_evidence)} pending evidence**********************')
+            while len(pending_evidence):
+                # get the first evidence in the queue
+                # convert string to list
+                evidence = pending_evidence[0].strip('][').replace('"','').split(',')
+                print(f'**********************calling setevidence from inside thread pid: {os.getpid()}')
+                x= self.setEvidence(evidence[0],evidence[1],evidence[2],evidence[3],evidence[4],evidence[5],evidence[6],evidence[7],evidence[8],evidence[9])
+                if x: print("------------------------------------------- thread shghaaaaaaaaal -----------------")
+                # delete the evidence from the pending_evidence set if it's been added
+                self.r.srem('pending_evidence',str(evidence))
+                pending_evidence = list(self.r.smembers('pending_evidence'))
+                time.sleep(1) #**** remove this
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -950,15 +983,18 @@ class Database(object):
             evidence_to_send = json.dumps(evidence_to_send)
             # check if flow is added to this profileid_tw_flows before adding the evidence
             flow = self.get_flow(profileid,twid,uid)
+            # to solve the problem of evidence being alerted before corresponding flows are added to the db
+            print(f'**********************just entered set evidence q has {len((self.r.smembers("pending_evidence")))}  pid : {os.getpid()}')
             if list(flow.values())[0] == None:
-                # this means the flow wasn't added, add to pending_evidence queue to add evidence later
-                evidence_details = (type_detection, detection_info, type_evidence,
-                    threat_level, confidence, description, timestamp, profileid, twid, uid)
-                self.pending_evidence.append(evidence_details)
-                #todo create a thread that tries to add this evidence later
+                # this means the flow os this evidence wasn't added,
+                # add evidence to pending_evidence queue and try again later
+                evidence_details = [type_detection, detection_info, type_evidence,
+                    threat_level, confidence, description, timestamp, profileid, twid, uid]
+                print(f'********************** +1 pending evidence -  q has {len((self.r.smembers("pending_evidence")))} - pid : {os.getpid()}')
+                self.r.sadd("pending_evidence",str(evidence_details)) #("[x,y,z]")
                 # todo fix the way we pass args to this function
                 return False
-
+            print(f'**********************outside thread: PUBLISHED eviddence q has {len((self.r.smembers("pending_evidence")))} pid : {os.getpid()}')
             self.publish('evidence_added', evidence_to_send)
 
         current_evidence[key_json] = data
