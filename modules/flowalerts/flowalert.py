@@ -300,12 +300,13 @@ class Module(Module, multiprocessing.Process):
         tw_answers = answers.get(f'{profileid}_{twid}' , False)
         if tw_answers:
             tw_answers = json.loads(tw_answers)
-            for query,dns_answer in tw_answers.items():
+
+            for query,query_details in tw_answers.items():
                 if query.endswith(".arpa"):
                     # Reverse DNS lookups for IPv4 addresses use the special domain in-addr.arpa.
                     continue
-                timestamp = dns_answer['ts']
-                dns_answer = dns_answer['answers']
+                timestamp = query_details['ts']
+                dns_answer = query_details['answers']
                 # every dns answer is a list of ip that correspond to a spicif query,
                 # one of these ips should be present in the contacted ips
                 for answer in dns_answer:
@@ -315,7 +316,7 @@ class Module(Module, multiprocessing.Process):
                         break
                 else:
                     # found a query without usage
-                    uid = dns_answer['uid']
+                    uid = query_details['uid']
                     confidence = 0.8
                     threat_level = 30
                     type_detection  = 'dstdomain'

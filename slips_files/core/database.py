@@ -8,8 +8,6 @@ import configparser
 import traceback
 from datetime import datetime
 import ipaddress
-import threading
-import queue
 
 
 def timing(f):
@@ -77,32 +75,6 @@ class Database(object):
         self.r.delete('zeekfiles')
         # By default the slips internal time is 0 until we receive something
         self.setSlipsInternalTime(0)
-
-    def evidence_thread(self):
-        """
-        This thread starts if there's an evidence queue,
-        it operates every 3 seconds, and tries to add the evidence in the que then sleeps again.
-        """
-        while True:
-            # wait until the queue is populated
-            pending_evidence = list(self.r.smembers('pending_evidence'))
-            if len(pending_evidence) == 0:
-                print(f'**********************no pending evidence , sleeping 10 secs')
-                time.sleep(5)
-            # wait 3 second before trying to add evidence again
-            time.sleep(3)
-            print(f'**********************THREAD STARTEDD************* {len(pending_evidence)} pending evidence**********************')
-            while len(pending_evidence):
-                # get the first evidence in the queue
-                # convert string to list
-                evidence = pending_evidence[0].strip('][').replace('"','').split(',')
-                print(f'**********************calling setevidence from inside thread pid: {os.getpid()}')
-                x= self.setEvidence(evidence[0],evidence[1],evidence[2],evidence[3],evidence[4],evidence[5],evidence[6],evidence[7],evidence[8],evidence[9])
-                if x: print("------------------------------------------- thread shghaaaaaaaaal -----------------")
-                # delete the evidence from the pending_evidence set if it's been added
-                self.r.srem('pending_evidence',str(evidence))
-                pending_evidence = list(self.r.smembers('pending_evidence'))
-                time.sleep(1) #**** remove this
 
     def print(self, text, verbose=1, debug=0):
         """
