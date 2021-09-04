@@ -3,6 +3,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
 import platform
+import sys
 
 # Your imports
 import ipaddress
@@ -112,7 +113,8 @@ class Module(Module, multiprocessing.Process):
                     fb = f.read(BLOCK_SIZE)
             return file_hash.hexdigest()
         except Exception as inst:
-            self.print('Problem on get_hash_from_file()', 0, 0)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on get_hash_from_file() line {exception_line}', 0, 0)
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
@@ -244,7 +246,8 @@ class Module(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            self.print('Problem on the load_malicious_datafile()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on load_malicious_datafile() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -329,7 +332,8 @@ class Module(Module, multiprocessing.Process):
                     return False
 
         except Exception as inst:
-            self.print('Problem on __load_malicious_local_files()', 0, 0)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on __load_malicious_local_files() line {exception_line}', 0, 0)
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
@@ -404,7 +408,8 @@ class Module(Module, multiprocessing.Process):
             if not self.load_malicious_local_files(self.path_to_local_threat_intelligence_data):
                 self.print(f'Could not load the local file of TI data {self.path_to_local_threat_intelligence_data}')
         except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -468,7 +473,8 @@ class Module(Module, multiprocessing.Process):
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
             except Exception as inst:
-                self.print('Problem on the run()', 0, 1)
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)

@@ -8,6 +8,7 @@ import configparser
 import traceback
 from datetime import datetime
 import ipaddress
+import sys
 
 
 def timing(f):
@@ -204,7 +205,8 @@ class Database(object):
             except KeyError:
                 return False, False
         except Exception as e:
-            self.outputqueue.put('01|database|[DB] Error in getT2ForProfileTW in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in getT2ForProfileTW in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
             self.outputqueue.put('01|database|[DB] {}'.format(e))
             self.outputqueue.put("01|profiler|[Profile] {}".format(traceback.format_exc()))
@@ -569,7 +571,8 @@ class Database(object):
             self.markProfileTWAsModified(profileid, twid, starttime)
             return True
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_ips in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in add_ips in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             return False
@@ -643,7 +646,8 @@ class Database(object):
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, starttime)
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_tuple in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in add_tuple in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             self.outputqueue.put('01|database|[DB] {}'.format(traceback.format_exc()))
@@ -727,7 +731,8 @@ class Database(object):
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, starttime)
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_port in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in add_port in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
@@ -744,7 +749,8 @@ class Database(object):
                 value = portdata
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDataFromProfileTW in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in getDataFromProfileTW in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
@@ -888,7 +894,8 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Funcion getFinalStateFromFlags() We didnt catch the state. We should never be here')
             return None
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getFinalStateFromFlags() in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in getFinalStateFromFlags() in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             self.print(traceback.format_exc())
@@ -1936,7 +1943,8 @@ class Database(object):
                 self.print('There is no data for Key: {}. Profile {} TW {}'.format(key, profileid, twid), 5, 0)
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDataFromProfileTW database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in getDataFromProfileTW database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 

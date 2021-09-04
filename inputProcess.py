@@ -472,7 +472,8 @@ class InputProcess(multiprocessing.Process):
                 pass
             return True
         except Exception as inst:
-            self.print("Problem with Input Process.", 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f"Problem with Input Process. line {exception_line}", 0, 1)
             self.print("Stopping input process. Sent {} lines".format(self.lines), 0, 1)
             self.print(type(inst), 0, 1)
             self.print(inst.args, 0, 1)
