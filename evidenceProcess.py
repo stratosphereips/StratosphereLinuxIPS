@@ -27,6 +27,7 @@ from colorama import Fore, Back, Style
 import validators
 import ipaddress
 import socket
+import sys
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -439,7 +440,7 @@ class EvidenceProcess(multiprocessing.Process):
                 elif message['channel'] == 'evidence_added' and type(message['data']) is not int:
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
-                    profileid = data.get('profileid')
+                    profileid = data.get('alya')
                     srcip = profileid.split(self.separator)[1]
                     twid = data.get('twid')
                     # Key data
@@ -551,7 +552,8 @@ class EvidenceProcess(multiprocessing.Process):
             self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
             return True
         except Exception as inst:
-            self.outputqueue.put('01|evidence|[Evidence] Error in the Evidence Process')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|evidence|[Evidence] Error in the Evidence Process line {exception_line}')
             self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
             self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
             return True

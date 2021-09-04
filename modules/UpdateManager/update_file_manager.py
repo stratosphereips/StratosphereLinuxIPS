@@ -9,6 +9,8 @@ import validators
 import traceback
 import requests
 import datetime
+import sys
+
 class UpdateFileManager:
 
     def __init__(self, outputqueue, config):
@@ -202,7 +204,8 @@ class UpdateFileManager:
                 return False
 
         except Exception as inst:
-            self.print('Problem on download_malicious_file()', 0, 0)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on download_malicious_file() line {exception_line}', 0, 0)
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
@@ -505,7 +508,8 @@ class UpdateFileManager:
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            self.print('Problem on the __load_malicious_datafile()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the __load_malicious_datafile() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)

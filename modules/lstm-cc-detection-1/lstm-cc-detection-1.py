@@ -20,8 +20,10 @@ import warnings
 import json
 # Your imports
 import numpy as np
+import sys
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 from tensorflow.python.keras.models import load_model
+
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -127,7 +129,8 @@ class Module(Module, multiprocessing.Process):
             # Download lstm model
             tcpmodel = load_model(model_file)
         except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -193,7 +196,8 @@ class Module(Module, multiprocessing.Process):
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
             except Exception as inst:
-                self.print('Problem on the run()', 0, 1)
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)

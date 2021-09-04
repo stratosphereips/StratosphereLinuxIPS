@@ -445,7 +445,8 @@ class ProfilerProcess(multiprocessing.Process):
 
                 return self.input_type
         except Exception as inst:
-            self.print('\tProblem in define_type()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'\tProblem in define_type() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst), 0, 1)
             sys.exit(1)
@@ -512,7 +513,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_idx = temp_dict
             return self.column_idx
         except Exception as inst:
-            self.print('\tProblem in define_columns()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'\tProblem in define_columns() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst), 0, 1)
             sys.exit(1)
@@ -2601,8 +2603,9 @@ class ProfilerProcess(multiprocessing.Process):
             self.print("Received {} lines.".format(rec_lines), 0, 1)
             return True
         except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
             self.print("Error. Stopped Profiler Process. Received {} lines".format(rec_lines), 0, 1)
-            self.print("\tProblem with Profiler Process.", 0, 1)
+            self.print(f"\tProblem with Profiler Process. line {exception_line}", 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
