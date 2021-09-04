@@ -549,7 +549,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 self.addDataToLogFile(alert_to_log)
                                 self.addDataToJSONFile(alert_dict)
 
-                                __database__.publish('new_blocking', ip)
+                                __database__.publish('new_blocking', srcip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
             self.logfile.close()
