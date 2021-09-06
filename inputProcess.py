@@ -142,10 +142,13 @@ class InputProcess(multiprocessing.Process):
                 except KeyError:
                     # First time openning this file.
                     # Ignore the files that do not contain data. These are the zeek log files that we don't use
+                    should_be_ignored = False
                     ignored_files = ['capture_loss','loaded_scripts','packet_filter', 'stats', 'weird', 'reporter']
                     for file in ignored_files:
                         if file in filename:
-                            continue
+                            should_be_ignored = True
+                            break
+                    if should_be_ignored: continue
                     file_handler = open(filename + '.log', 'r')
                     open_file_handlers[filename] = file_handler
                     # self.print(f'New File found {filename}', 0, 6)
