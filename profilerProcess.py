@@ -239,9 +239,11 @@ class ProfilerProcess(multiprocessing.Process):
                         self.print(f"Line {line_number} in whitelist.conf is invalid. Skipping.")
                     line = whitelist.readline()
         except FileNotFoundError:
-            self.print(f"Can't find {self.whitelisted_path}, using slips default whitelist.conf instead")
-            self.whitelisted_path = 'whitelist.conf'
-            self.read_whitelist()
+            self.print(f"Can't find {self.whitelist_path}, using slips default whitelist.conf instead")
+            if self.whitelist_path != 'whitelist.conf':
+                self.whitelist_path = 'whitelist.conf'
+                self.read_whitelist()
+
 
         # after we're done reading the file, process organizations info
         # If the user specified an org in the whitelist, load the info about it only to the db and to memory
