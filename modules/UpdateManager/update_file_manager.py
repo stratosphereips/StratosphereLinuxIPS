@@ -567,7 +567,10 @@ class UpdateFileManager:
                     # domain,www.netspy.net,NetSpy
 
                     # skip comment lines
-                    if line.startswith('#'): continue
+                    if line.startswith('#')\
+                            or 'FILE_HASH' in line\
+                            or 'EMAIL' in line:
+                        continue
 
                     # Separate the lines like CSV, either by commas or tabs
                     # In the new format the ip is in the second position.
@@ -586,6 +589,7 @@ class UpdateFileManager:
                         # this is probably a range of ips (subnet) or a new line, we don't support that. read the next line
                         continue
 
+                    # get the description of this line
                     try:
                         if '#' in line:
                             description = line.replace("\n", "").replace("\"", "").split("#")[description_column].strip()
