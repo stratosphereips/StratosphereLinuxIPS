@@ -474,11 +474,12 @@ class UpdateFileManager:
                 description_column = None
                 while True:
                     line = malicious_file.readline()
-                    # some ioc files start with "first_seen_utc"
+                    # Try to find the line that has column names
                     if line.startswith('#"type"') \
                             or line.startswith('"first_seen_utc"') \
                             or line.startswith('"ip_v4"')\
-                            or line.startswith('"domain"'):
+                            or line.startswith('"domain"')\
+                            or line.startswith('#fields'):
                         # looks like the column names, search where is the
                         # description column
                         for column in line.split(','):
@@ -488,7 +489,6 @@ class UpdateFileManager:
                     if not line.startswith('#') and not "type" in line.lower() \
                             and not "first_seen_utc" in line.lower() \
                             and not "ip_v4" in line.lower() \
-                            and not "domain" in line.lower() \
                             and not line.isspace() \
                             and line not in ('\n',''):
                         # break while statement if it is not a comment(i.e. does not startwith #) or a header line
