@@ -49,6 +49,13 @@ class UpdateFileManager:
             self.list_of_urls = []
 
         try:
+            # Read the list of ja3 feeds to download. Convert to list
+            self.ja3_feeds = self.config.get('threatintelligence', 'ja3_feeds').split(',')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.ja3_feeds = []
+
+        try:
             # Read the riskiq username
             self.riskiq_email = self.config.get('threatintelligence', 'RiskIQ_email')
             if '@' not in self.riskiq_email:
@@ -104,6 +111,7 @@ class UpdateFileManager:
             last_update = float('-inf')
 
         now = time.time()
+
         # check which update period to use based on the file
         if 'risk' in file_to_download:
             update_period = self.riskiq_update_period
@@ -135,7 +143,7 @@ class UpdateFileManager:
 
     def download_file(self, url: str, filepath: str) -> bool:
         """
-        Download file from the location specified in the url and save to filepath
+        Download file from the url and save to filepath
         """
         try:
             # This replaces are to be sure that a user can not inject commands in curl
@@ -155,13 +163,17 @@ class UpdateFileManager:
             return False
 
     def download_malicious_file(self, file_to_download: str) -> bool:
+        """
+        Compare the e-tag of file_to_download in our database with the e-tag of this file and download if they're different
+        Doesn't matter if it's a ti_feed or JA3 feed
+        """
         try:
             # Check that the folder exist
             if not os.path.isdir(self.path_to_threat_intelligence_data):
                 os.mkdir(self.path_to_threat_intelligence_data)
 
             file_name_to_download = file_to_download.split('/')[-1]
-            # Get what files are stored in cache db and their E-TAG to comapre with current files
+            # Get what files are stored in cache db and their E-TAG to compare with current files
             data = __database__.get_malicious_file_info(file_name_to_download)
             try:
                 old_e_tag = data['e-tag']
@@ -178,15 +190,23 @@ class UpdateFileManager:
                 if old_e_tag:
                     # File is updated and was in database. Delete previous IPs of this file.
                     self.__delete_old_source_data_from_database(file_name_to_download)
-                # Load updated IPs to the database
-                if not self.__load_malicious_datafile(self.path_to_threat_intelligence_data + '/' + file_name_to_download, file_name_to_download):
+
+                # ja3 files and ti_files are parsed differently, check which file is this
+                # is it ja3 feed?
+                if file_to_download in self.ja3_feeds and not self.parse_ja3_feed(f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
                     return False
+
+                # is it a ti_file? load updated IPs to the database
+                if file_to_download in self.list_of_urls \
+                        and not self.__load_malicious_datafile(f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
+                    # an error occured
+                    return False
+
                 # Store the new etag and time of file in the database
                 malicious_file_info = {}
                 malicious_file_info['e-tag'] = new_e_tag
                 malicious_file_info['time'] = self.new_update_time
                 __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
-
                 return True
             elif new_e_tag and old_e_tag == new_e_tag:
                 self.print(f'File {file_to_download} is still the same. Not downloading the file', 3, 0)
@@ -209,6 +229,7 @@ class UpdateFileManager:
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
+
 
     def update_riskiq_feed(self):
         """ Get and parse RiskIQ feed """
@@ -268,7 +289,7 @@ class UpdateFileManager:
         self.print('Checking if we need to download TI files.')
         # Check if the remote file is newer than our own
         # For each file that we should update
-        for file_to_download in self.list_of_urls:
+        for file_to_download in self.list_of_urls + self.ja3_feeds:
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
                 self.print(f'We should update the remote file {file_to_download}', 1, 0)
@@ -280,7 +301,6 @@ class UpdateFileManager:
             else:
                 self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
                 continue
-
         # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
         # check if we have a username and api key and a week has passed since we last updated
         if self.riskiq_email and self.riskiq_key and self.__check_if_update('riskiq_domains'):
@@ -290,7 +310,6 @@ class UpdateFileManager:
             else:
                 self.print(f'An error occured while updating RiskIQ domains. Updating was aborted.', 0, 1)
 
-        #todo
 
     def __delete_old_source_IPs(self, file):
         """
@@ -329,13 +348,121 @@ class UpdateFileManager:
         self.__delete_old_source_IPs(data_file)
         self.__delete_old_source_Domains(data_file)
 
-    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> None:
+    def parse_ja3_feed(self, ja3_feed_path: str) -> bool:
+        """
+        Read all ja3 fingerprints in ja3_feed_path and store the info in our db
+        :param ja3_feed_path: the file path where a ja3 feed is download
+        """
+
+        try:
+            malicious_ja3_dict = {}
+
+            with open(ja3_feed_path) as ja3_feed:
+                # Ignore comments and find the description column if possible
+                description_column = None
+                while True:
+                    line = ja3_feed.readline()
+                    if line.startswith('# ja3_md5') :
+                        # looks like the line that contains column names, search where is the description column
+                        for column in line.split(','):
+                            # Listingreason is the description column in  abuse.ch Suricata JA3 Fingerprint Blacklist
+                            if 'Listingreason' in column.lower():
+                                description_column = line.split(',').index(column)
+                    if not line.startswith('#'):
+                        # break while statement if it is not a comment (i.e. does not startwith #) or a header line
+                        break
+
+                # Find in which column is the ja3 fingerprint in this file
+
+                # Store the current position of the TI file
+                current_file_position = ja3_feed.tell()
+                if ',' in line:
+                    data = line.replace("\n","").replace("\"","").split(",")
+                    amount_of_columns = len(line.split(","))
+
+                if description_column is None:
+                    # assume it's the last column
+                    description_column = amount_of_columns - 1
+
+                # Search the first column that is an IPv4, IPv6 or domain
+                for column in range(amount_of_columns):
+                    # Check if the ja3 fingerprint is valid.
+                    # assume this column is the ja3 field
+                    ja3 = data[column]
+                    # verify
+                    if len(ja3) != 32:
+                        ja3_column = None
+                    else:
+                        # we found the column that has ja3 info
+                        ja3_column = column
+                        break
+
+                if ja3_column is None:
+                    # can't find a column that contains an ioc
+                    self.print(f'Error while reading the ja3 file {ja3_feed_path}. Could not find a column with JA3 info', 1, 1)
+                    return False
+
+                # Now that we read the first line, go back so we can process it
+                ja3_feed.seek(current_file_position)
+
+                for line in ja3_feed:
+                    # The format of the file should be
+                    # 8f52d1ce303fb4a6515836aec3cc16b1,2017-07-15 19:05:11,2019-07-27 20:00:57,TrickBot
+
+                    # skip comment lines
+                    if line.startswith('#'): continue
+
+                    # Separate the lines like CSV, either by commas or tabs
+                    # In the new format the ip is in the second position.
+                    # And surronded by "
+
+                    # get the ja3 to store in our db
+                    if ',' in line:
+                        ja3 = line.replace("\n", "").replace("\"", "").split(",")[ja3_column].strip()
+
+                    # get the description of this ja3 to store in our db
+                    try:
+                        if ',' in line:
+                            description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
+                        else:
+                            description = line.replace("\n", "").replace("\"", "").split("\t")[description_column].strip()
+                    except IndexError:
+                        self.print(f'IndexError Description column: {description_column}. Line: {line}')
+
+                    # self.print('\tRead Data {}: {}'.format(ja3, description))
+
+                    filename = ja3_feed_path.split('/')[-1]
+
+                    # Check if the data is a valid IPv4, IPv6 or domain
+                    if len(ja3) == 32:
+                        # Store the ja3 in our local dict
+                        malicious_ja3_dict[ja3] = json.dumps({'description': description, 'source':filename})
+                    else:
+                        self.print('The data {} is not valid. It was found in {}.'.format(data, filename), 1, 1)
+                        continue
+
+            # Add all loaded malicious ja3 to the database
+            __database__.add_ja3_to_IoC(malicious_ja3_dict)
+            return True
+
+        except KeyboardInterrupt:
+            return False
+        except Exception as inst:
+            self.print('Problem in parse_ja3_feed()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            print(traceback.format_exc())
+            return False
+
+
+    def __load_malicious_datafile(self, malicious_data_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
-        This also helps in having unique ioc accross files
-        Returns nothing, but the dictionary should be filled
+        This also helps in having unique ioc across files
         """
+
         try:
             malicious_ips_dict = {}
             malicious_domains_dict = {}
@@ -364,14 +491,10 @@ class UpdateFileManager:
                             and not "domain" in line.lower() \
                             and not line.isspace() \
                             and line not in ('\n',''):
-                        # break while statement if it is not a comment or a header line
-                        # i.e. does not startwith #
+                        # break while statement if it is not a comment(i.e. does not startwith #) or a header line
                         break
 
-                #
-                # Find in which column is the imporant info in this
-                # TI file (domain or ip)
-                #
+                # Find in which column is the imporant info in this TI file (domain or ip)
 
                 # Store the current position of the TI file
                 current_file_position = malicious_file.tell()
@@ -426,15 +549,13 @@ class UpdateFileManager:
                             else:
                                 # Some string that is not a domain
                                 data_column = None
-                                pass
 
                 if data_column is None:
                     # can't find a column that contains an ioc
                     self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 1, 1)
                     return False
 
-                # Now that we read the first line, go back so we
-                # can process it
+                # Now that we read the first line, go back so we can process it
                 malicious_file.seek(current_file_position)
 
                 for line in malicious_file:
@@ -477,6 +598,8 @@ class UpdateFileManager:
 
                     self.print('\tRead Data {}: {}'.format(data, description), 10, 0)
 
+                    data_file_name = malicious_data_path.split('/')[-1]
+
                     # Check if the data is a valid IPv4, IPv6 or domain
                     try:
                         ip_address = ipaddress.IPv4Address(data)
@@ -506,7 +629,7 @@ class UpdateFileManager:
             __database__.add_domains_to_IoC(malicious_domains_dict)
             return True
         except KeyboardInterrupt:
-            return True
+            return False
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the __load_malicious_datafile() line {exception_line}', 0, 1)
@@ -514,4 +637,4 @@ class UpdateFileManager:
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             print(traceback.format_exc())
-            return True
+            return False

@@ -216,9 +216,13 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(inst)
 
     def get_domains_of_flow(self, flow:dict):
-        """ Returns the domains of each ip (src and dst) that appeard in this flow """
+        """ Returns the domains of each ip (src and dst) that appeared in this flow """
         # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
-        flow = json.loads(list(flow.values())[0])
+        try:
+            flow = json.loads(list(flow.values())[0])
+        except TypeError:
+            # sometimes this function is called before the flow is add to our database
+            return [],[]
         domains_to_check_src = []
         domains_to_check_dst = []
         try:
@@ -378,15 +382,16 @@ class EvidenceProcess(multiprocessing.Process):
                         # Method 1: using asn
                         # Check if the IP in the content of the alert has ASN info in the db
                         ip_data = __database__.getIPData(ip)
-                        ip_asn = ip_data.get('asn',{'asnorg':''})
+                        if ip_data:
+                            ip_asn = ip_data.get('asn',{'asnorg':''})
 
-                        # make sure the asn field contains a value
-                        if (ip_asn['asnorg'] not in ('','Unknown')
-                            and (org.lower() in ip_asn['asnorg'].lower()
-                                    or ip_asn['asnorg'] in whitelisted_orgs[org].get('asn',''))):
-                            # this ip belongs to a whitelisted org, ignore alert
-                            #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
-                            return True
+                            # make sure the asn field contains a value
+                            if (ip_asn['asnorg'] not in ('','Unknown')
+                                and (org.lower() in ip_asn['asnorg'].lower()
+                                        or ip_asn['asnorg'] in whitelisted_orgs[org].get('asn',''))):
+                                # this ip belongs to a whitelisted org, ignore alert
+                                #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
+                                return True
 
                         # Method 2 using the organization's list of ips
                         # ip doesn't have asn info, search in the list of organization IPs
@@ -440,7 +445,7 @@ class EvidenceProcess(multiprocessing.Process):
                 elif message['channel'] == 'evidence_added' and type(message['data']) is not int:
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
-                    profileid = data.get('alya')
+                    profileid = data.get('profileid')
                     srcip = profileid.split(self.separator)[1]
                     twid = data.get('twid')
                     # Key data
@@ -456,7 +461,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
-                    if self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
+                    if flow and self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
                         __database__.deleteEvidence(profileid, twid, key)

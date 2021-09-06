@@ -347,7 +347,6 @@ class ProfilerProcess(multiprocessing.Process):
                         # not a valid line, ignore it
                         pass
                     line = f.readline()
-            print(f'********************** FOUND FILE')
             return org_subnets
         except (FileNotFoundError, IOError):
             # there's no slips_files/organizations_info/{org} for this org
@@ -774,6 +773,14 @@ class ProfilerProcess(multiprocessing.Process):
             except IndexError:
                 self.column_values['cipher'] = ''
             try:
+                self.column_values['curve'] = line[8]
+            except IndexError:
+                self.column_values['curve'] = ''
+            try:
+                self.column_values['server_name'] = line[9]
+            except IndexError:
+                self.column_values['server_name'] = ''
+            try:
                 self.column_values['resumed'] = line[10]
             except IndexError:
                 self.column_values['resumed'] = ''
@@ -797,15 +804,20 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['issuer'] = line[17]
             except IndexError:
                 self.column_values['issuer'] = ''
-            self.column_values['validation_status'] = ''
             try:
-                self.column_values['curve'] = line[8]
+                self.column_values['validation_status'] = line[20]
             except IndexError:
-                self.column_values['curve'] = ''
+                self.column_values['validation_status'] = ''
+
             try:
-                self.column_values['server_name'] = line[9]
+                self.column_values['ja3'] = line[21]
             except IndexError:
-                self.column_values['server_name'] = ''
+                self.column_values['ja3'] = ''
+            try:
+                self.column_values['ja3s'] = line[22]
+            except IndexError:
+                self.column_values['ja3s'] = ''
+
         elif 'ssh' in new_line['type']:
             self.column_values['type'] = 'ssh'
             try:
@@ -1066,6 +1078,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['validation_status'] = line.get('validation_status','')
             self.column_values['curve'] = line.get('curve','')
             self.column_values['server_name'] = line.get('server_name','')
+            self.column_values['ja3'] = line.get('ja3','')
+            self.column_values['ja3s'] = line.get('ja3s','')
 
         elif 'ssh' in file_type:
             self.column_values['type'] = 'ssh'
@@ -1956,7 +1970,8 @@ class ProfilerProcess(multiprocessing.Process):
                                              self.column_values['established'], self.column_values['cert_chain_fuids'],
                                              self.column_values['client_cert_chain_fuids'], self.column_values['subject'],
                                              self.column_values['issuer'], self.column_values['validation_status'],
-                                             self.column_values['curve'], self.column_values['server_name'])
+                                             self.column_values['curve'], self.column_values['server_name'],
+                                             self.column_values['ja3'], self.column_values['ja3s'])
                 elif flow_type == 'ssh':
                     __database__.add_out_ssh(profileid, twid, starttime, flow_type, uid, self.column_values['version'],
                                              self.column_values['auth_attempts'], self.column_values['auth_success'],
