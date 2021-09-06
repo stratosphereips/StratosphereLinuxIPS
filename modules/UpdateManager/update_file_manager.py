@@ -539,6 +539,13 @@ class UpdateFileManager:
                         except ipaddress.AddressValueError:
                             # It does not look like an IP address.
                             # So it should be a domain
+                            # some ti files have / at the end of domains, remove it
+                            if data[column].endswith('/'):
+                                data[column] = data[column][:-1]
+                            domain =  data[column]
+                            if domain.startswith('http://'): data[column]= data[column][7:]
+                            if domain.startswith('https://'): data[column]= data[column][8:]
+
                             if validators.domain(data[column].strip()):
                                 data_column = column
                                 self.print(f'The data is on column {column} and is domain: {data[column]}', 0, 6)
@@ -569,7 +576,7 @@ class UpdateFileManager:
                     # skip comment lines
                     if line.startswith('#')\
                             or 'FILE_HASH' in line\
-                            or 'EMAIL' in line:
+                            or 'EMAIL' in line or 'URL' in line:
                         continue
 
                     # Separate the lines like CSV, either by commas or tabs
