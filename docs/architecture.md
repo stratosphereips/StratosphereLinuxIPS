@@ -13,7 +13,7 @@
 </style>
 
 <div class="zoom">
-<img src="../../images/slips_internal_architecture.jpg" title="Figure 1. The analysis of the network traffic by Slips.">
+<img src="images/slips_internal_architecture.jpg" title="Figure 1. The analysis of the network traffic by Slips.">
 <figcaption><b>Figure 1.</b> The analysis of the network traffic by Slips. Its input, internal structure and output.</figcaption>
 </div>
 <br>
