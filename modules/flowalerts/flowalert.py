@@ -230,7 +230,7 @@ class Module(Module, multiprocessing.Process):
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
         """ Checks dports that are not in our modules/timeline/services.csv file"""
         port_info = __database__.get_port_info(f'{dport}/{proto}')
-        if not port_info:
+        if not port_info and not 'icmp' in proto.lower():
             # we don't have info about this port
             confidence = 1
             threat_level = 10
