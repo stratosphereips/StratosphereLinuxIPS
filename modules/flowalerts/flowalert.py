@@ -264,29 +264,36 @@ class Module(Module, multiprocessing.Process):
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
-        resolved = False
-        answers_dict = __database__.get_dns_answers()
-        # answers dict is a dict {profileid_tw: {query:{ 'ts': .., 'answers':.., 'uid':... }  }}
-        for answer in answers_dict.values():
-            # convert json dict  to dict
-            answer = json.loads(answer)
-            # answer is  {query:{ 'ts': .., 'answers':.., 'uid':... } , we need to get 'answers'
-            answer = answer[list(answer.keys())[0]]['answers']
-            if daddr in answer:
-                resolved = True
-                break
-        # IP has no dns answer, alert.
-        if not resolved:
-            confidence = 1
-            threat_level = 30
-            type_detection  = 'dstip'
-            type_evidence = 'ConnectionWithoutDNS'
-            detection_info = daddr
-            description = f'A connection without DNS resolution to IP: {daddr}'
-            if not twid:
-                twid = ''
-            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                     description, timestamp, profileid=profileid, twid=twid, uid=uid)
+
+        # to avoid false positives don't alert ConnectionWithoutDNS until 2 minutes has passed after starting slips
+        start_time = __database__.get_slips_start_time()
+        now = datetime.datetime.now()
+        diff = now - start_time
+        diff = diff.seconds
+        if int(diff) >= 120:
+            resolved = False
+            answers_dict = __database__.get_dns_answers()
+            # answers dict is a dict {profileid_tw: {query:{ 'ts': .., 'answers':.., 'uid':... }  }}
+            for answer in answers_dict.values():
+                # convert json dict  to dict
+                answer = json.loads(answer)
+                # answer is  {query:{ 'ts': .., 'answers':.., 'uid':... } , we need to get 'answers'
+                answer = answer[list(answer.keys())[0]]['answers']
+                if daddr in answer:
+                    resolved = True
+                    break
+            # IP has no dns answer, alert.
+            if not resolved:
+                confidence = 1
+                threat_level = 30
+                type_detection  = 'dstip'
+                type_evidence = 'ConnectionWithoutDNS'
+                detection_info = daddr
+                description = f'A connection without DNS resolution to IP: {daddr}'
+                if not twid:
+                    twid = ''
+                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
