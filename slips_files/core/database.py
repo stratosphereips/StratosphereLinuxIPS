@@ -74,6 +74,8 @@ class Database(object):
         self.r.delete('zeekfiles')
         # By default the slips internal time is 0 until we receive something
         self.setSlipsInternalTime(0)
+        if self.get_slips_start_time() == None:
+            self.set_slips_start_time()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -87,6 +89,14 @@ class Database(object):
         """
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+
+    def set_slips_start_time(self):
+        """ store the time slips started (epoch) """
+        self.r.set('slips_start_time', time.time())
+
+    def get_slips_start_time(self):
+        """ get the time slips started (epoch) """
+        return self.r.get('slips_start_time')
 
     def setOutputQueue(self, outputqueue):
         """ Set the output queue"""
