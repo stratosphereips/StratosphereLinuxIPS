@@ -34,7 +34,7 @@ class FileEventHandler(RegexMatchingEventHandler):
 
     def process(self, event):
         filename, ext = os.path.splitext(event.src_path)
-        if not 'whitelist' in filename:
+        if 'log' in ext:
             __database__.add_zeek_file(filename)
 
     def on_modified(self, event):
