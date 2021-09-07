@@ -146,5 +146,4 @@ mysql,3306,tcp,MySQL database system
 mysql,3306,udp,MySQL database system
 vnc-server,5900,tcp,Apple Virtual Network Computing
 vnc-server,5900,udp,Apple Virtual Network Computing
-icmp,136,icmp,Neighbor solicitation and advertisement messages
-icmp,134,icmp,Router Solicitation message
+spotify-p2p-communication,57621,udp,Spotify
