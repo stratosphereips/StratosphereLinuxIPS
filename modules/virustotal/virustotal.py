@@ -4,6 +4,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
 import platform
+import sys
 
 # Your imports
 import json
@@ -56,9 +57,8 @@ class Module(Module, multiprocessing.Process):
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
         self.timeout = None
         self.counter = 0
-        # start the queue thread
-        self.api_calls_thread = threading.Thread(target=self.API_calls_thread,
-                         daemon=True)
+        # create the queue thread
+        self.api_calls_thread = threading.Thread(target=self.API_calls_thread, daemon=True)
 
     def __read_configuration(self) -> str:
         """ Read the configuration file for what we need """
@@ -264,7 +264,6 @@ class Module(Module, multiprocessing.Process):
                         self.set_url_data_in_URLInfo(ioc, cached_data)
 
 
-
     def get_file_score(self, md5):
         """ returns the vt scores for the specified md5 """
         vt_scores, passive_dns, as_owner = self.get_vt_data_of_file(md5)
@@ -286,7 +285,8 @@ class Module(Module, multiprocessing.Process):
                 return
             self.api_calls_thread.start()
         except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -398,7 +398,8 @@ class Module(Module, multiprocessing.Process):
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
             except Exception as inst:
-                self.print('Problem on the run()', 0, 1)
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
@@ -449,7 +450,8 @@ class Module(Module, multiprocessing.Process):
             self.counter += 1
             return scores, passive_dns, as_owner
         except Exception as inst:
-            self.print('Problem in the get_ip_vt_data()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem in the get_ip_vt_data() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -472,7 +474,8 @@ class Module(Module, multiprocessing.Process):
             self.counter += 1
             return scores, as_owner
         except Exception as inst:
-            self.print('Problem in the get_domain_vt_data()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem in the get_domain_vt_data() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)

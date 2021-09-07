@@ -27,6 +27,7 @@ from colorama import Fore, Back, Style
 import validators
 import ipaddress
 import socket
+import sys
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -152,7 +153,7 @@ class EvidenceProcess(multiprocessing.Process):
         elif detection_module == 'SSHSuccessful':
             evidence_string = f'{profileid}_{twid}: IP {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'{profileid}_{twid}: IP {ip} detected {dns_resolution_ip_final} {description}.'
+            evidence_string = f'{profileid}_{twid}: IP {ip} {dns_resolution_ip_final} detected {description}.'
 
         return evidence_string
 
@@ -215,9 +216,13 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(inst)
 
     def get_domains_of_flow(self, flow:dict):
-        """ Returns the domains of each ip (src and dst) that appeard in this flow """
+        """ Returns the domains of each ip (src and dst) that appeared in this flow """
         # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
-        flow = json.loads(list(flow.values())[0])
+        try:
+            flow = json.loads(list(flow.values())[0])
+        except TypeError:
+            # sometimes this function is called before the flow is add to our database
+            return [],[]
         domains_to_check_src = []
         domains_to_check_dst = []
         try:
@@ -377,15 +382,16 @@ class EvidenceProcess(multiprocessing.Process):
                         # Method 1: using asn
                         # Check if the IP in the content of the alert has ASN info in the db
                         ip_data = __database__.getIPData(ip)
-                        ip_asn = ip_data.get('asn',{'asnorg':''})
+                        if ip_data:
+                            ip_asn = ip_data.get('asn',{'asnorg':''})
 
-                        # make sure the asn field contains a value
-                        if (ip_asn['asnorg'] not in ('','Unknown')
-                            and (org.lower() in ip_asn['asnorg'].lower()
-                                    or ip_asn['asnorg'] in whitelisted_orgs[org].get('asn',''))):
-                            # this ip belongs to a whitelisted org, ignore alert
-                            #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
-                            return True
+                            # make sure the asn field contains a value
+                            if (ip_asn['asnorg'] not in ('','Unknown')
+                                and (org.lower() in ip_asn['asnorg'].lower()
+                                        or ip_asn['asnorg'] in whitelisted_orgs[org].get('asn',''))):
+                                # this ip belongs to a whitelisted org, ignore alert
+                                #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
+                                return True
 
                         # Method 2 using the organization's list of ips
                         # ip doesn't have asn info, search in the list of organization IPs
@@ -440,7 +446,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
                     profileid = data.get('profileid')
-                    ip = profileid.split(self.separator)[1]
+                    srcip = profileid.split(self.separator)[1]
                     twid = data.get('twid')
                     # Key data
                     key = data.get('key')
@@ -455,7 +461,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
-                    if self.is_whitelisted(ip, detection_info, type_detection, description, flow):
+                    if flow and self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
                         __database__.deleteEvidence(profileid, twid, key)
@@ -470,7 +476,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
-                                                          ip,
+                                                          srcip,
                                                           type_evidence,
                                                           type_detection,
                                                           detection_info,
@@ -480,7 +486,7 @@ class EvidenceProcess(multiprocessing.Process):
                                      'profileid': profileid,
                                      'twid': twid,
                                      'timestamp': flow_datetime,
-                                     'detected_ip': ip,
+                                     'detected_ip': srcip,
                                      'detection_module':type_evidence,
                                      'detection_info':str(type_detection) + ' ' + str(detection_info),
                                      'description':description}
@@ -497,7 +503,7 @@ class EvidenceProcess(multiprocessing.Process):
                         # self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
-                        ip = profileid.split(self.separator)[1]
+                        srcip = profileid.split(self.separator)[1]
                         for key in evidence:
                             # Deserialize key data
                             key_json = json.loads(key)
@@ -526,7 +532,7 @@ class EvidenceProcess(multiprocessing.Process):
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
-                                evidence_to_print = self.print_evidence(profileid, twid, ip, type_evidence, type_detection,detection_info, description)
+                                evidence_to_print = self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
                                 self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 # Set an alert about the evidence being blocked
                                 alert_to_log = self.print_alert(profileid,
@@ -543,7 +549,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 self.addDataToLogFile(alert_to_log)
                                 self.addDataToJSONFile(alert_dict)
 
-                                __database__.publish('new_blocking', ip)
+                                __database__.publish('new_blocking', srcip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
         except KeyboardInterrupt:
             self.logfile.close()
@@ -551,7 +557,8 @@ class EvidenceProcess(multiprocessing.Process):
             self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
             return True
         except Exception as inst:
-            self.outputqueue.put('01|evidence|[Evidence] Error in the Evidence Process')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|evidence|[Evidence] Error in the Evidence Process line {exception_line}')
             self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
             self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
             return True

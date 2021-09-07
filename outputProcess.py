@@ -89,7 +89,8 @@ class OutputProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            print('\tProblem with process line in OutputProcess()')
+            exception_line = sys.exc_info()[2].tb_lineno
+            print(f'\tProblem with process line in OutputProcess() line {exception_line}')
             print(type(inst))
             print(inst.args)
             print(inst)
@@ -128,7 +129,8 @@ class OutputProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            print('\tProblem with OutputProcess()')
+            exception_line = sys.exc_info()[2].tb_lineno
+            print(f'\tProblem with OutputProcess() line {exception_line}')
             print(type(inst))
             print(inst.args)
             print(inst)

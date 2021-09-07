@@ -1,3 +1,4 @@
+import os
 import redis
 import time
 import json
@@ -6,6 +7,7 @@ import configparser
 import traceback
 from datetime import datetime
 import ipaddress
+import sys
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -16,6 +18,7 @@ def timing(f):
         print('[DB] Function took {:.3f} ms'.format((time2-time1)*1000.0))
         return ret
     return wrap
+
 class Database(object):
     """ Database object management """
     def __init__(self):
@@ -24,6 +27,8 @@ class Database(object):
         self.separator = '_'
         self.normal_label = 'normal'
         self.malicious_label = 'malicious'
+        # this list will store evidence that slips detected but can't
+        # alert for it before the flow of them is added to our db
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -198,7 +203,8 @@ class Database(object):
             except KeyError:
                 return False, False
         except Exception as e:
-            self.outputqueue.put('01|database|[DB] Error in getT2ForProfileTW in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in getT2ForProfileTW in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
             self.outputqueue.put('01|database|[DB] {}'.format(e))
             self.outputqueue.put("01|profiler|[Profile] {}".format(traceback.format_exc()))
@@ -563,7 +569,8 @@ class Database(object):
             self.markProfileTWAsModified(profileid, twid, starttime)
             return True
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_ips in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in add_ips in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             return False
@@ -637,7 +644,8 @@ class Database(object):
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, starttime)
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_tuple in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in add_tuple in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             self.outputqueue.put('01|database|[DB] {}'.format(traceback.format_exc()))
@@ -721,7 +729,8 @@ class Database(object):
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, starttime)
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in add_port in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in add_port in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
@@ -738,7 +747,8 @@ class Database(object):
                 value = portdata
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDataFromProfileTW in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in getDataFromProfileTW in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
@@ -882,7 +892,8 @@ class Database(object):
             self.outputqueue.put('01|database|[DB] Funcion getFinalStateFromFlags() We didnt catch the state. We should never be here')
             return None
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getFinalStateFromFlags() in database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in getFinalStateFromFlags() in database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             self.print(traceback.format_exc())
@@ -950,6 +961,7 @@ class Database(object):
         # Set evidence in the database.
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
+        return True
 
 
     def deleteEvidence(self,profileid, twid, key):
@@ -1354,7 +1366,9 @@ class Database(object):
         """ Return the amount of each label so far """
         return self.r.zrange('labels', 0, -1, withscores=True)
 
-    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='', daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='', appproto='', uid='', label=''):
+    def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='',
+                 daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='',
+                 appproto='', uid='', label=''):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
@@ -1407,7 +1421,7 @@ class Database(object):
 
     def add_out_ssl(self, profileid, twid, stime, daddr_as_obj, dport, flowtype, uid,
                     version, cipher, resumed, established, cert_chain_fuids,
-                    client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name):
+                    client_cert_chain_fuids, subject, issuer, validation_status, curve, server_name, ja3, ja3s):
         """
         Store in the DB an ssl request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
@@ -1430,6 +1444,8 @@ class Database(object):
         data['daddr'] = str(daddr_as_obj)
         data['dport'] = dport
         data['stime'] = stime
+        data['ja3'] = ja3
+        data['ja3s'] = ja3s
         # Convert to json string
         data = json.dumps(data)
         self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
@@ -1730,6 +1746,13 @@ class Database(object):
         if domains_and_description:
             self.rcache.hmset('IoC_domains', domains_and_description)
 
+    def add_ja3_to_IoC(self, ja3_dict) -> None:
+        """
+        Store a group of ja3 in the db
+        :param ja3_dict: a json serialized dict {'ja3': {'description': .. , 'source': ...}}
+        """
+        self.rcache.hmset('IoC_JA3', ja3_dict)
+
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
         """
         Store in the DB 1 IP we read from an IoC source  with its description
@@ -1836,6 +1859,13 @@ class Database(object):
         data = self.rcache.hgetall('IoC_domains')
         return data
 
+    def get_ja3_in_IoC(self):
+        """
+        Get all ja3 and their description from IoC_JA3
+        """
+        data = self.rcache.hgetall('IoC_JA3')
+        return data
+
     def search_IP_in_IoC(self, ip: str) -> str:
         """
         Search in the dB of malicious IPs and return a
@@ -1911,7 +1941,8 @@ class Database(object):
                 self.print('There is no data for Key: {}. Profile {} TW {}'.format(key, profileid, twid), 5, 0)
             return value
         except Exception as inst:
-            self.outputqueue.put('01|database|[DB] Error in getDataFromProfileTW database.py')
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.outputqueue.put(f'01|database|[DB] Error in getDataFromProfileTW database.py line {exception_line}')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 

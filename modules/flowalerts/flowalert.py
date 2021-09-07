@@ -22,6 +22,7 @@ import json
 import configparser
 import ipaddress
 import datetime
+import sys
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -184,7 +185,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_for_invalid_certificates(self,profileid, twid, ip, description, uid, timestamp):
+    def set_evidence_for_invalid_certificates(self, profileid, twid, ip, description, uid, timestamp):
         '''
         Set evidence for Invalid SSL certificates.
         '''
@@ -300,12 +301,13 @@ class Module(Module, multiprocessing.Process):
         tw_answers = answers.get(f'{profileid}_{twid}' , False)
         if tw_answers:
             tw_answers = json.loads(tw_answers)
-            for query,dns_answer in tw_answers.items():
+
+            for query,query_details in tw_answers.items():
                 if query.endswith(".arpa"):
                     # Reverse DNS lookups for IPv4 addresses use the special domain in-addr.arpa.
                     continue
-                timestamp = dns_answer['ts']
-                dns_answer = dns_answer['answers']
+                timestamp = query_details['ts']
+                dns_answer = query_details['answers']
                 # every dns answer is a list of ip that correspond to a spicif query,
                 # one of these ips should be present in the contacted ips
                 for answer in dns_answer:
@@ -315,7 +317,7 @@ class Module(Module, multiprocessing.Process):
                         break
                 else:
                     # found a query without usage
-                    uid = dns_answer['uid']
+                    uid = query_details['uid']
                     confidence = 0.8
                     threat_level = 30
                     type_detection  = 'dstdomain'
@@ -331,6 +333,20 @@ class Module(Module, multiprocessing.Process):
         else:
             # this tw has no dns resolutions.
             return
+
+    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp):
+        confidence = 0.6
+        threat_level = 80
+        type_detection  = 'dstip'
+        if 'JA3s ' in description:
+            type_evidence = 'MaliciousJA3s'
+        else:
+            type_evidence = 'MaliciousJA3'
+        detection_info = daddr
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def run(self):
         # Main loop function
@@ -553,13 +569,12 @@ class Module(Module, multiprocessing.Process):
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
+
                         if 'SSL certificate validation failed' in msg:
-                            profileid = data['profileid']
-                            twid = data['twid']
                             ip = flow['daddr']
                             # get the description inside parenthesis
                             description = msg + ' Destination IP: {}'.format(ip)
-                            self.set_evidence_for_invalid_certificates(profileid,twid, ip, description, uid, timestamp)
+                            self.set_evidence_for_invalid_certificates(profileid, twid, ip, description, uid, timestamp)
                             self.print(description, 3, 0)
 
                         if 'Address_Scan' in note:
@@ -604,9 +619,12 @@ class Module(Module, multiprocessing.Process):
                         flow = json.loads(flow)
                         uid = flow['uid']
                         timestamp = flow['stime']
+                        ja3 = flow.get('ja3',False)
+                        ja3s = flow.get('ja3s',False)
+                        profileid = data['profileid']
+                        twid = data['twid']
+
                         if 'self signed' in flow['validation_status']:
-                            profileid = data['profileid']
-                            twid = data['twid']
                             ip = flow['daddr']
                             server_name = flow.get('server_name') # returns None if not found
                             # if server_name is not None or not empty
@@ -616,6 +634,21 @@ class Module(Module, multiprocessing.Process):
                                 description = 'Self-signed certificate. Destination IP: {}, SNI: {}'.format(ip, server_name)
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description, uid, timestamp)
                             self.print(description, 3, 0)
+
+                        if ja3 or ja3s:
+                            # get the dict of malicious ja3 stored in our db
+                            malicious_ja3_dict = __database__.get_ja3_in_IoC()
+                            daddr = flow['daddr']
+
+                            if ja3 in malicious_ja3_dict:
+                                description = json.loads(malicious_ja3_dict[ja3])['description']
+                                description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description}'
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp)
+
+                            if ja3s in malicious_ja3_dict:
+                                description = json.loads(malicious_ja3_dict[ja3s])['description']
+                                description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description}'
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp)
 
                 # ---------------------------- new_service channel
                 message = self.c5.get_message(timeout=0.01)
@@ -671,7 +704,8 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 return True
             except Exception as inst:
-                self.print('Problem on the run()', 0, 1)
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)

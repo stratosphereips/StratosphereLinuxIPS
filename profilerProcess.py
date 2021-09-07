@@ -33,6 +33,7 @@ from re import split
 from tzlocal import get_localzone
 import validators
 import socket
+import requests
 
 def timeit(method):
     def timed(*args, **kw):
@@ -75,7 +76,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.verbose = verbose
         self.debug = debug
         # there has to be a timeout or it will wait forever and never receive a new line
-        self.timeout = 0.00001
+        self.timeout = 0.0000001
         self.c1 = __database__.subscribe('reload_whitelist')
 
     def print(self, text, verbose=1, debug=0):
@@ -273,7 +274,7 @@ class ProfilerProcess(multiprocessing.Process):
 
     def load_org_asn(self, org) -> list :
         """
-        Reads the specified org's asn from slips/organizations_info and stores the info in the database
+        Reads the specified org's asn from slips_files/organizations_info and stores the info in the database
         org: 'google', 'facebook', 'twitter', etc...
         returns a list containing the org's asn
         """
@@ -290,8 +291,8 @@ class ProfilerProcess(multiprocessing.Process):
                     line = f.readline()
             return org_asn
         except (FileNotFoundError, IOError):
-            # theres no slips/organizations_info/{org}_asn for this org
-            # see if the org has asn cached
+            # theres no slips_files/organizations_info/{org}_asn for this org
+            # see if the org has asn cached in our db
             asn_cache = __database__.get_asn_cache()
             org_asn =[]
             for asn in asn_cache:
@@ -302,14 +303,14 @@ class ProfilerProcess(multiprocessing.Process):
 
     def load_org_domains(self, org) -> list :
         """
-        Reads the specified org's domains from slips/organizations_info and stores the info in the database
+        Reads the specified org's domains from slips_files/organizations_info and stores the info in the database
         org: 'google', 'facebook', 'twitter', etc...
         returns a list containing the org's domains
         """
         try:
             # Each file is named after the organization's name followed by _asn
             domains =[]
-            file = f'slips/organizations_info/{org}_domains'
+            file = f'slips_files/organizations_info/{org}_domains'
             with open(file,'r') as f:
                 line = f.readline()
                 while line:
@@ -323,7 +324,8 @@ class ProfilerProcess(multiprocessing.Process):
 
     def load_org_IPs(self, org) -> list :
         """
-        Reads the specified org's info from slips/organizations_info and stores the info in the database
+        Reads the specified org's info from slips_files/organizations_info and stores the info in the database
+        if there's no file for this org, it get the IP ranges from asnlookup.com
         org: 'google', 'facebook', 'twitter', etc...
         returns a list of this organization's subnets
         """
@@ -345,11 +347,34 @@ class ProfilerProcess(multiprocessing.Process):
                         # not a valid line, ignore it
                         pass
                     line = f.readline()
-            # Store them in the db as str
             return org_subnets
         except (FileNotFoundError, IOError):
-            # there's no slips/organizations_info/{org} for this org
-            return False
+            # there's no slips_files/organizations_info/{org} for this org
+            org_subnets = []
+            # see if we can get asn about this org
+            try:
+                response = requests.get('http://asnlookup.com/api/lookup?org=' + org.replace('_', ' '), headers ={  'User-Agent': 'ASNLookup PY/Client'}, timeout = 10)
+            except requests.exceptions.ConnectionError:
+                # Connection reset by peer
+                return False
+            ip_space = json.loads(response.text)
+            if ip_space:
+                with open(f'slips_files/organizations_info/{org}','w') as f:
+                    for subnet in ip_space:
+                        # get ipv4 only
+                        if ':' not in subnet:
+                            try:
+                                # make sure this line is a valid network
+                                is_valid_line = ipaddress.ip_network(subnet)
+                                f.write(subnet + '\n')
+                                org_subnets.append(subnet)
+                            except ValueError:
+                                # not a valid line, ignore it
+                                continue
+                return org_subnets
+            else:
+                # can't get org IPs from asnlookup.com
+                return False
 
     def define_type(self, line):
         """
@@ -419,7 +444,8 @@ class ProfilerProcess(multiprocessing.Process):
 
                 return self.input_type
         except Exception as inst:
-            self.print('\tProblem in define_type()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'\tProblem in define_type() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst), 0, 1)
             sys.exit(1)
@@ -486,7 +512,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_idx = temp_dict
             return self.column_idx
         except Exception as inst:
-            self.print('\tProblem in define_columns()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'\tProblem in define_columns() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst), 0, 1)
             sys.exit(1)
@@ -746,6 +773,14 @@ class ProfilerProcess(multiprocessing.Process):
             except IndexError:
                 self.column_values['cipher'] = ''
             try:
+                self.column_values['curve'] = line[8]
+            except IndexError:
+                self.column_values['curve'] = ''
+            try:
+                self.column_values['server_name'] = line[9]
+            except IndexError:
+                self.column_values['server_name'] = ''
+            try:
                 self.column_values['resumed'] = line[10]
             except IndexError:
                 self.column_values['resumed'] = ''
@@ -769,15 +804,20 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['issuer'] = line[17]
             except IndexError:
                 self.column_values['issuer'] = ''
-            self.column_values['validation_status'] = ''
             try:
-                self.column_values['curve'] = line[8]
+                self.column_values['validation_status'] = line[20]
             except IndexError:
-                self.column_values['curve'] = ''
+                self.column_values['validation_status'] = ''
+
             try:
-                self.column_values['server_name'] = line[9]
+                self.column_values['ja3'] = line[21]
             except IndexError:
-                self.column_values['server_name'] = ''
+                self.column_values['ja3'] = ''
+            try:
+                self.column_values['ja3s'] = line[22]
+            except IndexError:
+                self.column_values['ja3s'] = ''
+
         elif 'ssh' in new_line['type']:
             self.column_values['type'] = 'ssh'
             try:
@@ -1038,6 +1078,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['validation_status'] = line.get('validation_status','')
             self.column_values['curve'] = line.get('curve','')
             self.column_values['server_name'] = line.get('server_name','')
+            self.column_values['ja3'] = line.get('ja3','')
+            self.column_values['ja3s'] = line.get('ja3s','')
 
         elif 'ssh' in file_type:
             self.column_values['type'] = 'ssh'
@@ -1928,7 +1970,8 @@ class ProfilerProcess(multiprocessing.Process):
                                              self.column_values['established'], self.column_values['cert_chain_fuids'],
                                              self.column_values['client_cert_chain_fuids'], self.column_values['subject'],
                                              self.column_values['issuer'], self.column_values['validation_status'],
-                                             self.column_values['curve'], self.column_values['server_name'])
+                                             self.column_values['curve'], self.column_values['server_name'],
+                                             self.column_values['ja3'], self.column_values['ja3s'])
                 elif flow_type == 'ssh':
                     __database__.add_out_ssh(profileid, twid, starttime, flow_type, uid, self.column_values['version'],
                                              self.column_values['auth_attempts'], self.column_values['auth_success'],
@@ -2575,8 +2618,9 @@ class ProfilerProcess(multiprocessing.Process):
             self.print("Received {} lines.".format(rec_lines), 0, 1)
             return True
         except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
             self.print("Error. Stopped Profiler Process. Received {} lines".format(rec_lines), 0, 1)
-            self.print("\tProblem with Profiler Process.", 0, 1)
+            self.print(f"\tProblem with Profiler Process. line {exception_line}", 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
