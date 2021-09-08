@@ -63,6 +63,7 @@ class Module(Module, multiprocessing.Process):
         self.ignored_ranges = ('172.16.0.0/12','192.168.0.0/16','10.0.0.0/8')
         # store them as network objects
         self.ignored_ranges = list(map(ipaddress.ip_network,self.ignored_ranges))
+        self.p2p_daddrs = []
 
     def is_ignored_ip(self, ip) -> bool:
         ip_obj =  ipaddress.ip_address(ip)
@@ -227,10 +228,23 @@ class Module(Module, multiprocessing.Process):
                                                   module_name,
                                                   module_label)
 
+    def is_p2p(self, dport, proto, daddr):
+        """ P2P are define as following : proto is udp, port numbers are higher than 30000 at least 5 connections to different daddrs"""
+        if proto.lower() == 'udp' and int(dport)>30000:
+            if daddr not in self.p2p_daddrs:
+                self.p2p_daddrs.append(daddr)
+            if len(self.p2p_daddrs) == 5:
+                # this is another connection on port 3000+/udp and we already have 5 of them
+                # probably p2p
+                return True
+        # either not 3000+/udp port or our list of p2p_daddr doesn't have 5 different conncetions yet
+        return False
+
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
         """ Checks dports that are not in our modules/timeline/services.csv file"""
+
         port_info = __database__.get_port_info(f'{dport}/{proto}')
-        if not port_info and not 'icmp' in proto.lower():
+        if not port_info and not 'icmp' in proto.lower() and not self.is_p2p(dport, proto, daddr):
             # we don't have info about this port
             confidence = 1
             threat_level = 10
