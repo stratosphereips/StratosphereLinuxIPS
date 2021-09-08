@@ -70,11 +70,12 @@ def recognize_host_ip():
         return None
     return ipaddr_check
 
-def create_folder_for_logs():
+def create_folder_for_logs(logs_dir):
     '''
     Create a folder for logs if logs are enabled
+    :param logs_dir: where we want to create timeline files
     '''
-    logs_folder = datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
+    logs_folder = logs_dir +'/'+ datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
     try:
         os.makedirs(logs_folder)
     except OSError as e:
@@ -252,7 +253,8 @@ def shutdown_gracefully():
         port = __database__.port
         if port != 6379:
             # Only close the redis server if it's opened by slips, don't close the default one (the one we use for cache)
-            command = f'redis-cli -h 127.0.0.1 -p {port} shutdown'
+            command = f'redis-cli -h 127.0.0.1 -p {port} shutdown > /dev/null 2>&1'
+            #todo most of the times we can't close the server!
             os.system(command)
         os._exit(-1)
         return True
@@ -558,8 +560,8 @@ if __name__ == '__main__':
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
         do_logs = read_configuration(config, 'parameters', 'create_log_files')
         if do_logs == 'yes':
-            # Create a folder for logs
-            logs_folder = create_folder_for_logs()
+            # Create a folder for logs in the same dir as alerts.log and alerts.json of this run
+            logs_folder = create_folder_for_logs(args.output)
             # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
             logsProcessQueue = Queue()
             logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
