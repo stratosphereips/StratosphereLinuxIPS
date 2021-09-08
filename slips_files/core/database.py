@@ -70,6 +70,7 @@ class Database(object):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.width = 3600
+
         # generate a random port to use slips on
         self.port = random.randint(32768, 65535)
         # Create the connection to redis
@@ -86,20 +87,20 @@ class Database(object):
                             if s.connect_ex(('localhost', self.port)) != 0:
                                 try:
                                     self.connect_to_redis_server()
-                                    # Even if the DB is not deleted. We need to delete some temp data
-                                    # Zeek_files
-                                    self.r.delete('zeekfiles')
-                                    # By default the slips internal time is 0 until we receive something
-                                    self.setSlipsInternalTime(0)
-                                    while self.get_slips_start_time() == None:
-                                        self.set_slips_start_time()
                                     break
                                 except redis.exceptions.ConnectionError:
                                     # unable to connect to this port, try another one
                                     continue
-                self.print(f'Using redis server on port: {self.port}')
+                # Even if the DB is not deleted. We need to delete some temp data
+                # Zeek_files
+                self.r.delete('zeekfiles')
+                # By default the slips internal time is 0 until we receive something
+                self.setSlipsInternalTime(0)
+                while self.get_slips_start_time() == None:
+                    self.set_slips_start_time()
+                print(f'Using redis server on port: {self.port}')
             except redis.exceptions.ConnectionError:
-                self.print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
+                print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
 
 
     def print(self, text, verbose=1, debug=0):
