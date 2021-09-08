@@ -264,7 +264,6 @@ class Module(Module, multiprocessing.Process):
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
-
         # to avoid false positives don't alert ConnectionWithoutDNS until 2 minutes has passed after starting slips
         start_time = __database__.get_slips_start_time()
         now = datetime.datetime.now()
@@ -273,13 +272,13 @@ class Module(Module, multiprocessing.Process):
         if int(diff) >= 120:
             resolved = False
             answers_dict = __database__.get_dns_answers()
-            # answers dict is a dict {profileid_tw: {query:{ 'ts': .., 'answers':.., 'uid':... }  }}
-            for answer in answers_dict.values():
+            # answers dict is a dict  {query:{ 'ts': .., 'answers':.., 'uid':... }  }
+            for query in answers_dict.values():
                 # convert json dict  to dict
-                answer = json.loads(answer)
-                # answer is  {query:{ 'ts': .., 'answers':.., 'uid':... } , we need to get 'answers'
-                answer = answer[list(answer.keys())[0]]['answers']
-                if daddr in answer:
+                query = json.loads(query)
+                # query is  a dict { 'ts': .., 'answers':.., 'uid':... }, we need to get 'answers'
+                answers = query['answers']
+                if daddr in answers:
                     resolved = True
                     break
             # IP has no dns answer, alert.
