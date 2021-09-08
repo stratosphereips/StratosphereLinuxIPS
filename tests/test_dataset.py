@@ -64,8 +64,7 @@ def test_pcap(pcap_path, database, output_dir):
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -c slips.conf -l -f {pcap_path} -o {output_dir} > {output_file} 2>&1'
+    command = f'./slips.py -c slips.conf -l -f {pcap_path} -o {output_dir} > {output_dir}slips_output.txt 2>&1'
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
@@ -86,7 +85,7 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    output_file = f'{output_dir}slips_output.txt'    
+    output_file = f'{output_dir}slips_output.txt'
     command = f'./slips.py -l -c slips.conf -o {output_dir} -f {binetflow_path}  >  {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)

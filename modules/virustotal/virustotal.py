@@ -216,6 +216,7 @@ class Module(Module, multiprocessing.Process):
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                      threat_level, confidence, description, ts , profileid=profileid, twid=twid, uid=uid)
+            self.counter += 1
             return 'malicious'
         return 'benign'
 

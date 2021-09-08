@@ -1022,7 +1022,6 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dur'] = 0
             self.column_values['endtime'] = str(self.column_values['starttime']) + str(timedelta(seconds=self.column_values['dur']))
             self.column_values['proto'] = line['proto']
-
             self.column_values['appproto'] = line.get('service','')
             self.column_values['sport'] = line.get('id.orig_p','')
             self.column_values['dport'] = line.get('id.resp_p','')
@@ -1803,6 +1802,7 @@ class ProfilerProcess(multiprocessing.Process):
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files', 'known_services'):
                 # Not a supported type
                 return True
+
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True

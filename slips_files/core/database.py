@@ -1,13 +1,16 @@
 import os
+
 import redis
 import time
 import json
-from typing import Tuple, Dict, Set, Callable
+from typing import Tuple
 import configparser
 import traceback
 from datetime import datetime
 import ipaddress
 import sys
+import socket
+import random
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -29,6 +32,15 @@ class Database(object):
         self.malicious_label = 'malicious'
         # this list will store evidence that slips detected but can't
         # alert for it before the flow of them is added to our db
+
+    def connect_to_redis_server(self, port):
+        # start the redis server
+        os.system(f'redis-server --port {port} --daemonize yes > /dev/null 2>&1')
+        # connect to the redis server
+        # db 0 changes everytime we run slips
+        self.r = redis.StrictRedis(host='localhost', port=port, db=0, charset="utf-8", decode_responses=True) #password='password')
+        # db 1 is cache, delete it using -cc flag
+        self.rcache = redis.StrictRedis(host='localhost', port=port, db=1, charset="utf-8", decode_responses=True) #password='password')
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -58,24 +70,38 @@ class Database(object):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.width = 3600
+        # set the default redis port
+        port = 6379
         # Create the connection to redis
         if not hasattr(self, 'r'):
             try:
-                # db 0 changes everytime we run slips
-                self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
-                # db 1 is cache, delete it using -cc flag
-                self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True) #password='password')
-                if self.deletePrevdb:
-                    self.r.flushdb()
+                self.connect_to_redis_server(port)
+                # check if server is being used by another instance of slips
+                if len(list(__database__.r.scan_iter())) > 2:
+                    # its being used
+                    while True:
+                        # generate another unused port
+                        port = random.randint(32768, 65535)
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                            if s.connect_ex(('localhost', port)) != 0:
+                                try:
+                                    self.connect_to_redis_server(port)
+                                    # we'll be using this to close the server slips started
+                                    self.port = port
+                                    # Even if the DB is not deleted. We need to delete some temp data
+                                    # Zeek_files
+                                    self.r.delete('zeekfiles')
+                                    # By default the slips internal time is 0 until we receive something
+                                    self.setSlipsInternalTime(0)
+                                    while self.get_slips_start_time() == None:
+                                        self.set_slips_start_time()
+                                    break
+                                except redis.exceptions.ConnectionError:
+                                    # unable to connect to this port, try another one
+                                    continue
             except redis.exceptions.ConnectionError:
                 print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
-        # Even if the DB is not deleted. We need to delete some temp data
-        # Zeek_files
-        self.r.delete('zeekfiles')
-        # By default the slips internal time is 0 until we receive something
-        self.setSlipsInternalTime(0)
-        while self.get_slips_start_time() == None:
-            self.set_slips_start_time()
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -1024,7 +1050,7 @@ class Database(object):
         Add a module label to the flow
         """
         flow = self.get_flow(profileid, twid, uid)
-        if flow:
+        if flow and flow[uid]:
             data = json.loads(flow[uid])
             # here we dont care if add new module lablel or changing existing one
             data['module_labels'][module_name] = module_label
@@ -2062,7 +2088,7 @@ class Database(object):
         Returns cached asn of ip if present, or False.
         """
         return self.rcache.hgetall('cached_asn')
-
+    
     def store_process_PID(self, process, pid):
         """
         Stores each started process or module with it's PID
@@ -2086,5 +2112,12 @@ class Database(object):
         """ Return dict of 3 keys: IPs, domains and organizations"""
         return self.r.hgetall('whitelist')
 
+    def store_zeek_path(self, path):
+        """ used to store the path of zeek log files slips is currently using """
+        self.r.set('zeek_path', path)
+
+    def get_zeek_path(self)-> str:
+        """ return the path of zeek log files slips is currently using """
+        return self.r.get('zeek_path')
 
 __database__ = Database()

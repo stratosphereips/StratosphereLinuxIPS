@@ -28,12 +28,13 @@ import time
 import json
 import traceback
 import subprocess
+import psutil
 
 # Input Process
 class InputProcess(multiprocessing.Process):
     """ A class process to run the process of the flows """
     def __init__(self, outputqueue, profilerqueue, input_type,
-                 input_information, config, packet_filter, zeek_or_bro):
+                 input_information, config, packet_filter, zeek_or_bro, store_zeek=''):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
@@ -42,7 +43,7 @@ class InputProcess(multiprocessing.Process):
         __database__.start(self.config)
         self.input_type = input_type
         self.given_path = input_information
-        self.zeek_folder = './zeek_files'
+        self.zeek_folder = 'zeek_files'
         self.name = 'input'
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
@@ -56,6 +57,10 @@ class InputProcess(multiprocessing.Process):
         self.event_observer = None
         # number of lines read
         self.lines = 0
+        # ctr to append to zeek_files dir if it's being used by another instance of slips
+        self.ctr = 0
+        # this is where slips will be placing zeek_files dir so we associate every instance of slips with it's own zeek files
+        self.zeek_files_path = store_zeek
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -369,9 +374,18 @@ class InputProcess(multiprocessing.Process):
 
     def handle_pcap_and_interface(self) -> int:
         """ Returns the number of zeek lines read """
+
+        # every instance of slips creates a new dir in output/ dir
+        # place zeek_files in it.
+        self.zeek_folder = self.zeek_files_path + self.zeek_folder
+        # store this path in the db because we might need to delete it later
+        __database__.store_zeek_path(self.zeek_folder)
+
         # Create zeek_folder if does not exist.
         if not os.path.exists(self.zeek_folder):
             os.makedirs(self.zeek_folder)
+
+        self.print(f'Using {self.zeek_folder} to store zeek files.')
         # Now start the observer of new files. We need the observer because Zeek does not create all the files
         # at once, but when the traffic appears. That means that we need
         # some process to tell us which files to read in real time when they appear
@@ -393,20 +407,16 @@ class InputProcess(multiprocessing.Process):
             self.bro_timeout = 9999999999999999
         elif self.input_type is 'pcap':
             # Find if the pcap file name was absolute or relative
-            if self.given_path[0] == '/':
+            if self.given_path[0] == '/' or self.given_path.startswith('../../'):
                 # If absolute, do nothing
                 bro_parameter = '-r "' + self.given_path + '"'
             else:
-                # If relative, add ../ since we will move into a special folder
-                bro_parameter = '-r "../' + self.given_path + '"'
+                # If relative, add ../../../ since we will move into a special folder
+                bro_parameter = '-r "../../../' + self.given_path + '"'
             # This is for stoping the input if bro does not receive any new line while reading a pcap
             self.bro_timeout = 30
 
-        if len(os.listdir(self.zeek_folder)) > 0:
-            # First clear the zeek folder of old .log files
-            # The rm should not be in background because we must wait until the folder is empty
-            command = "rm " + self.zeek_folder + "/*.log > /dev/null  2>&1"
-            os.system(command)
+
 
         # Run zeek on the pcap or interface. The redef is to have json files
         zeek_scripts_dir = os.getcwd() + '/zeek-scripts'

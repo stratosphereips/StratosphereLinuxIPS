@@ -459,6 +459,8 @@ class EvidenceProcess(multiprocessing.Process):
                     timestamp = data.get('stime')
                     uid = data.get('uid')
 
+                    uid = data.get('uid')
+
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
                     if flow and self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
