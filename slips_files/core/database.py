@@ -95,6 +95,7 @@ class Database(object):
                                     self.setSlipsInternalTime(0)
                                     while self.get_slips_start_time() == None:
                                         self.set_slips_start_time()
+                                    print(f'Starting redis server on port: {self.port}')
                                     break
                                 except redis.exceptions.ConnectionError:
                                     # unable to connect to this port, try another one

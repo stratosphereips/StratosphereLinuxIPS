@@ -57,8 +57,6 @@ class InputProcess(multiprocessing.Process):
         self.event_observer = None
         # number of lines read
         self.lines = 0
-        # ctr to append to zeek_files dir if it's being used by another instance of slips
-        self.ctr = 0
         # this is where slips will be placing zeek_files dir so we associate every instance of slips with it's own zeek files
         self.zeek_files_path = store_zeek
 

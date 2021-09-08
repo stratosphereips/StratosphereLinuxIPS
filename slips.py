@@ -241,8 +241,9 @@ def shutdown_gracefully():
         delete_zeek_files = config.get('parameters', 'delete_zeek_files')
         if 'yes' in delete_zeek_files.lower():
             try:
-                output_dir = os.path.dirname(__database__.get_zeek_path())
-                os.system(f'cd {output_dir}; rm -r zeek_files 2>&1')
+                zeek_files_dir = os.path.dirname(__database__.get_zeek_path()) + '/zeek_files'
+                for file in os.listdir(zeek_files_dir):
+                    os.remove(os.path.join(zeek_files_dir, file))
             except TypeError:
                 # Slips didn't generate zeek log files
                 pass
