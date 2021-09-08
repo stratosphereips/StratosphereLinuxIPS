@@ -107,7 +107,7 @@ def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> s
     """
     Clear cache database
     """
-    rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=1, charset="utf-8",
+    rcache = redis.StrictRedis(host=redis_host, port=redis_port, db=0, charset="utf-8",
                                decode_responses=True)
     rcache.flushdb()
     return True
