@@ -251,7 +251,7 @@ def shutdown_gracefully():
         __database__.r.flushdb()
         port = __database__.port
         if port != 6379:
-            # Only close the redis server if it's opened by slips, don't close the default one
+            # Only close the redis server if it's opened by slips, don't close the default one (the one we use for cache)
             command = f'redis-cli -h 127.0.0.1 -p {port} shutdown'
             os.system(command)
         os._exit(-1)
