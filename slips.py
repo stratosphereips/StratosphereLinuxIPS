@@ -457,7 +457,7 @@ if __name__ == '__main__':
     # if stdout it redirected to a file, tell outputProcess.py to redirect it's output as well
     # lsof will provide a list of all open fds belonging to slips
     command = f'lsof -p {os.getpid()}'
-    result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+    result = subprocess.run(command.split(), capture_output=True)
     # Get command output
     output = result.stdout.decode('utf-8')
     # if stdout is being redirected we'll find '1w' in one of the lines 1 means stdout, w means write mode
