@@ -50,8 +50,6 @@ class Module(Module, multiprocessing.Process):
         self.c4 = __database__.subscribe('new_ssl')
         self.c5 = __database__.subscribe('new_service')
         self.c6 = __database__.subscribe('tw_closed')
-        # this dict will store connections on port 0 {'srcips':[(ts,dstip)]}
-        self.scans = {}
         self.timeout = None
         # ignore default no dns resolution alerts for LAN IP address, loopback addr, dns servers, ...etc
         self.ignored_ips = ('127.0.0.1', '8.8.8.8', '8.8.4.4', '1.1.1.1', '1.0.0.1', '9.9.9.9', '149.112.112.112',
@@ -268,24 +266,22 @@ class Module(Module, multiprocessing.Process):
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                      confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_for_port_0_scanning(self, saddr, diff, profileid, twid, uid, timestamp):
+    def set_evidence_for_port_0_scanning(self, saddr, daddr, direction, profileid, twid, uid, timestamp):
+        """ :param direction: 'source' or 'destination' """
         confidence = 0.8
         threat_level = 20
-        type_detection  = 'srcip'
+        type_detection  = 'srcip' if direction == 'source' else 'dstip'
         type_evidence = 'Port0Scanning'
-        detection_info = saddr
-        # get a unique list of dstips:
-        dest_ips = []
-        for scan in self.scans[saddr]:
-            daddr = scan[1]
-            if daddr not in dest_ips: dest_ips.append(daddr)
-        description = f'Port 0 is scanned in the following destination IPs: {dest_ips}'
+        detection_info = saddr if direction == 'source' else daddr
+        if direction == 'source':
+            description = f'Port 0 scanning: {saddr} is scanning {daddr}'
+        else:
+            description = f'Port 0 scanning: {daddr} is scanning {saddr}'
+
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-        # remove this saddr from the scans dict so the dict won't be growing forever
-        self.scans.pop(saddr)
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
@@ -437,25 +433,10 @@ class Module(Module, multiprocessing.Process):
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
 
                     # Port 0 Scanning
-                    if sport == 0:
-                        # is this an ip scanning another one through port 0?
-                        try:
-                            self.scans[saddr].append((timestamp,daddr))
-                            if len(self.scans[saddr]) >=3:
-                                # this is the same srcip scanning 1 or more daddr through port 0
-                                # is it in a short period of time?
-                                # get first and last tuples
-                                first_scan = self.scans[saddr][0]
-                                last_scan = self.scans[saddr][-1]
-                                # get first and last ts
-                                time_of_first_scan = datetime.datetime.fromtimestamp(first_scan[0])
-                                time_of_last_scan = datetime.datetime.fromtimestamp(last_scan[0])
-                                # get the difference between them in seconds
-                                diff = float(str(time_of_last_scan - time_of_first_scan).split(':')[-1])
-                                if diff <= 30.00:
-                                    self.set_evidence_for_port_0_scanning(saddr, diff, profileid, twid, uid, timestamp)
-                        except KeyError:
-                            self.scans[saddr] = [(timestamp,daddr)]
+                    if sport == '0' or dport == '0':
+                        direction = 'source' if sport==0 else 'destination'
+                        self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
+
 
                    # Check if daddr has a dns answer
                     if not self.is_ignored_ip(daddr) and dport == 443:
