@@ -63,7 +63,7 @@ class Module(Module, multiprocessing.Process):
         self.ignored_ranges = ('172.16.0.0/12','192.168.0.0/16','10.0.0.0/8')
         # store them as network objects
         self.ignored_ranges = list(map(ipaddress.ip_network,self.ignored_ranges))
-        self.p2p_daddrs = []
+        self.p2p_daddrs = {}
 
     def is_ignored_ip(self, ip) -> bool:
         ip_obj =  ipaddress.ip_address(ip)
@@ -229,15 +229,26 @@ class Module(Module, multiprocessing.Process):
                                                   module_label)
 
     def is_p2p(self, dport, proto, daddr):
-        """ P2P are define as following : proto is udp, port numbers are higher than 30000 at least 5 connections to different daddrs"""
+        """
+        P2P is defined as following : proto is udp, port numbers are higher than 30000 at least 5 connections to different daddrs
+        OR trying to connct to 1 ip on more than 5 unkown 30000+/udp ports
+        """
         if proto.lower() == 'udp' and int(dport)>30000:
-            if daddr not in self.p2p_daddrs:
-                self.p2p_daddrs.append(daddr)
+            try:
+                # trying to connct to 1 ip on more than 5 unknown ports
+                if self.p2p_daddrs[daddr] >= 6:
+                    return True
+                self.p2p_daddrs[daddr] = self.p2p_daddrs[daddr] +1
+                # now check if we have more than 4 different dst ips
+            except KeyError:
+                # first time seeing this daddr
+                self.p2p_daddrs[daddr] = 1
+
             if len(self.p2p_daddrs) == 5:
                 # this is another connection on port 3000+/udp and we already have 5 of them
                 # probably p2p
                 return True
-        # either not 3000+/udp port or our list of p2p_daddr doesn't have 5 different conncetions yet
+
         return False
 
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
