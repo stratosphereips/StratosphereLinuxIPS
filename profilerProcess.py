@@ -1671,13 +1671,13 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print("{}".format((type(e))), 0, 1)
 
             # This uid check is for when we read things that are not zeek
-            if not self.column_values['uid']:
+            try:
+                uid = self.column_values['uid']
+            except KeyError:
                 # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
                 # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
                 self.column_values['uid'] = uid
-            else:
-                uid = self.column_values['uid']
 
             flow_type = self.column_values['type']
             self.saddr = self.column_values['saddr']
