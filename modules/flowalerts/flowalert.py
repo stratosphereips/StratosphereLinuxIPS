@@ -71,6 +71,11 @@ class Module(Module, multiprocessing.Process):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ssh_succesful_detection_threshold = 4290
+        try:
+            self.data_exfiltration_threshold = int(self.config.get('flowalerts', 'data_exfiltration_threshold'))
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.data_exfiltration_threshold = 700
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -388,9 +393,8 @@ class Module(Module, multiprocessing.Process):
                             daddr = flow['daddr']
                             if daddr == most_cotacted_daddr:
                                 total_bytes = total_bytes + flow['sbytes']
-
-                        #todo is 700MB a good threshold?
-                        if total_bytes >= 700*(10**6):
+                        # print(f'total_bytes:{total_bytes} most_cotacted_daddr: {most_cotacted_daddr} times_contacted: {times_contacted} ')
+                        if total_bytes >= self.data_exfiltration_threshold*(10**6):
                             # get the first uid of these flows to use for setEvidence
                             for flow_dict in all_flows:
                                 for uid, flow in flow_dict.items():
