@@ -456,7 +456,7 @@ if __name__ == '__main__':
     outputProcessQueue = Queue()
     # if stdout it redirected to a file, tell outputProcess.py to redirect it's output as well
     # lsof will provide a list of all open fds belonging to slips
-    command = f'lsof -p {os.getpid()}  > /dev/null  2>&1'
+    command = f'lsof -p {os.getpid()}'
     result = subprocess.run(command.split(), stdout=subprocess.PIPE)
     # Get command output
     output = result.stdout.decode('utf-8')
