@@ -455,14 +455,19 @@ if __name__ == '__main__':
     # Create the queue
     outputProcessQueue = Queue()
     # if stdout it redirected to a file, tell outputProcess.py to redirect it's output as well
-    try:
-        current_stdout = os.readlink(f"/proc/{os.getpid()}/fd/1")
-        #  /dev/pts/ is the terminal
-        if '/dev/pts' in current_stdout:
-            # stdout is not redirected , default value is '' where slips doesn't do any redirection
-            current_stdout = ''
-    except:
-        # /proc/ isn't supported in macos, suppose we're not redirecting
+    # lsof will provide a list of all open fds belonging to slips
+    command = f'lsof -p {os.getpid()}'
+    result = subprocess.run(command.split(), capture_output=True)
+    # Get command output
+    output = result.stdout.decode('utf-8')
+    # if stdout is being redirected we'll find '1w' in one of the lines 1 means stdout, w means write mode
+    for line in output.splitlines():
+        if '1w' in line:
+            # stdout is redirected, get the file
+            current_stdout = line.split(' ')[-1]
+            break
+    else:
+        # stdout is not redirected
         current_stdout = ''
 
     # Create the output thread and start it

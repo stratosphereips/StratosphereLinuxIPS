@@ -74,6 +74,8 @@ class Database(object):
         self.r.delete('zeekfiles')
         # By default the slips internal time is 0 until we receive something
         self.setSlipsInternalTime(0)
+        while self.get_slips_start_time() == None:
+            self.set_slips_start_time()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -87,6 +89,19 @@ class Database(object):
         """
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+
+    def set_slips_start_time(self):
+        """ store the time slips started (datetime obj) """
+        now = datetime.now()
+        now = now.strftime("%d/%m/%Y %H:%M:%S")
+        self.r.set('slips_start_time', now)
+
+    def get_slips_start_time(self):
+        """ get the time slips started (datetime obj) """
+        start_time = self.r.get('slips_start_time')
+        if start_time:
+            start_time = datetime.strptime(start_time, "%d/%m/%Y %H:%M:%S")
+            return start_time
 
     def setOutputQueue(self, outputqueue):
         """ Set the output queue"""
@@ -2003,37 +2018,34 @@ class Database(object):
 
     def store_dns_answers(self, query: str, answers: list, profileid_twid: str, ts: float, uid: str):
         """
-        Store DNS answers for each ip
-        stored as {'query':{ts: .. , 'answers': .. , 'uid':... ]}
+        Cache DNS answers for each query
+        stored as {'query':{ts: .. , 'answers': .. , 'uid':... }}
         :param ts: epoch time
         """
         try:
             # to avoid duplicates, if key exists update it
             stored_answers = self.get_dns_answers()
-            # try to get the results that are stored in this tw
-            answers_dict = json.loads(stored_answers[profileid_twid])
-            # found results, update them
+            # try to get the results os this query
+            answers_dict = json.loads(stored_answers[query])
+            # found results for this query, update them
             answers_dict.update(
-                            {query: {'ts':ts,
-                                     'answers': answers,
-                                     'uid': uid}}
-                                )
-            answers_in_this_tw = json.dumps(answers_dict)
+                            {'ts':ts,
+                             'answers': answers,
+                             'uid': uid})
+            answers_dict = json.dumps(answers_dict)
         except KeyError:
             # key doesn't exist
             answers = json.dumps(answers)
-            answers_in_this_tw = json.dumps(
-                                    {query: {'ts':ts,
-                                             'answers': answers,
-                                             'uid': uid}}
-            )
+            answers_dict = json.dumps(
+                                    {'ts':ts,
+                                     'answers': answers,
+                                     'uid': uid})
 
         # we're storing in dns_answers instead of 'DomainsInfo' because domainsInfo is stored in the cache,
-        # we need to check the resolved domains per tw
-        self.r.hset('dns_answers', profileid_twid, answers_in_this_tw)
+        self.r.hset('dns_answers', query, answers_dict)
 
     def get_dns_answers(self):
-        """ Returns dns_answers dict {profileid_twid : {query: [ts,serialized answers list]}}"""
+        """ Returns dns_answers dict {query: {'ts':..,'answers':serialized answers list, 'uid':...}}"""
         return self.r.hgetall('dns_answers')
 
 

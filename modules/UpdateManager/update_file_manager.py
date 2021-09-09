@@ -438,7 +438,7 @@ class UpdateFileManager:
                         # Store the ja3 in our local dict
                         malicious_ja3_dict[ja3] = json.dumps({'description': description, 'source':filename})
                     else:
-                        self.print('The data {} is not valid. It was found in {}.'.format(data, filename), 1, 1)
+                        self.print('The data {} is not valid. It was found in {}.'.format(data, filename), 3, 3)
                         continue
 
             # Add all loaded malicious ja3 to the database
@@ -474,11 +474,12 @@ class UpdateFileManager:
                 description_column = None
                 while True:
                     line = malicious_file.readline()
-                    # some ioc files start with "first_seen_utc"
+                    # Try to find the line that has column names
                     if line.startswith('#"type"') \
                             or line.startswith('"first_seen_utc"') \
                             or line.startswith('"ip_v4"')\
-                            or line.startswith('"domain"'):
+                            or line.startswith('"domain"')\
+                            or line.startswith('#fields'):
                         # looks like the column names, search where is the
                         # description column
                         for column in line.split(','):
@@ -488,7 +489,6 @@ class UpdateFileManager:
                     if not line.startswith('#') and not "type" in line.lower() \
                             and not "first_seen_utc" in line.lower() \
                             and not "ip_v4" in line.lower() \
-                            and not "domain" in line.lower() \
                             and not line.isspace() \
                             and line not in ('\n',''):
                         # break while statement if it is not a comment(i.e. does not startwith #) or a header line
@@ -539,6 +539,13 @@ class UpdateFileManager:
                         except ipaddress.AddressValueError:
                             # It does not look like an IP address.
                             # So it should be a domain
+                            # some ti files have / at the end of domains, remove it
+                            if data[column].endswith('/'):
+                                data[column] = data[column][:-1]
+                            domain =  data[column]
+                            if domain.startswith('http://'): data[column]= data[column][7:]
+                            if domain.startswith('https://'): data[column]= data[column][8:]
+
                             if validators.domain(data[column].strip()):
                                 data_column = column
                                 self.print(f'The data is on column {column} and is domain: {data[column]}', 0, 6)
@@ -567,7 +574,10 @@ class UpdateFileManager:
                     # domain,www.netspy.net,NetSpy
 
                     # skip comment lines
-                    if line.startswith('#'): continue
+                    if line.startswith('#')\
+                            or 'FILE_HASH' in line\
+                            or 'EMAIL' in line or 'URL' in line:
+                        continue
 
                     # Separate the lines like CSV, either by commas or tabs
                     # In the new format the ip is in the second position.
@@ -586,6 +596,7 @@ class UpdateFileManager:
                         # this is probably a range of ips (subnet) or a new line, we don't support that. read the next line
                         continue
 
+                    # get the description of this line
                     try:
                         if '#' in line:
                             description = line.replace("\n", "").replace("\"", "").split("#")[description_column].strip()
@@ -621,7 +632,7 @@ class UpdateFileManager:
                                 # Store the ip in our local dict
                                 malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name})
                             else:
-                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 1, 1)
+                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
                                 continue
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)

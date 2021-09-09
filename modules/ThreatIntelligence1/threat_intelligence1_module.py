@@ -236,7 +236,7 @@ class Module(Module, multiprocessing.Process):
                                 # Store the ip in our local dict
                                 malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name})
                             else:
-                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 1, 1)
+                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
                                 continue
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)

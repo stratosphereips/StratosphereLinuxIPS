@@ -63,6 +63,7 @@ class Module(Module, multiprocessing.Process):
         self.ignored_ranges = ('172.16.0.0/12','192.168.0.0/16','10.0.0.0/8')
         # store them as network objects
         self.ignored_ranges = list(map(ipaddress.ip_network,self.ignored_ranges))
+        self.p2p_daddrs = {}
 
     def is_ignored_ip(self, ip) -> bool:
         ip_obj =  ipaddress.ip_address(ip)
@@ -227,10 +228,34 @@ class Module(Module, multiprocessing.Process):
                                                   module_name,
                                                   module_label)
 
+    def is_p2p(self, dport, proto, daddr):
+        """
+        P2P is defined as following : proto is udp, port numbers are higher than 30000 at least 5 connections to different daddrs
+        OR trying to connct to 1 ip on more than 5 unkown 30000+/udp ports
+        """
+        if proto.lower() == 'udp' and int(dport)>30000:
+            try:
+                # trying to connct to 1 ip on more than 5 unknown ports
+                if self.p2p_daddrs[daddr] >= 6:
+                    return True
+                self.p2p_daddrs[daddr] = self.p2p_daddrs[daddr] +1
+                # now check if we have more than 4 different dst ips
+            except KeyError:
+                # first time seeing this daddr
+                self.p2p_daddrs[daddr] = 1
+
+            if len(self.p2p_daddrs) == 5:
+                # this is another connection on port 3000+/udp and we already have 5 of them
+                # probably p2p
+                return True
+
+        return False
+
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
         """ Checks dports that are not in our modules/timeline/services.csv file"""
+
         port_info = __database__.get_port_info(f'{dport}/{proto}')
-        if not port_info:
+        if not port_info and not 'icmp' in proto.lower() and not self.is_p2p(dport, proto, daddr):
             # we don't have info about this port
             confidence = 1
             threat_level = 10
@@ -264,29 +289,35 @@ class Module(Module, multiprocessing.Process):
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
-        resolved = False
-        answers_dict = __database__.get_dns_answers()
-        # answers dict is a dict {profileid_tw: {query:{ 'ts': .., 'answers':.., 'uid':... }  }}
-        for answer in answers_dict.values():
-            # convert json dict  to dict
-            answer = json.loads(answer)
-            # answer is  {query:{ 'ts': .., 'answers':.., 'uid':... } , we need to get 'answers'
-            answer = answer[list(answer.keys())[0]]['answers']
-            if daddr in answer:
-                resolved = True
-                break
-        # IP has no dns answer, alert.
-        if not resolved:
-            confidence = 1
-            threat_level = 30
-            type_detection  = 'dstip'
-            type_evidence = 'ConnectionWithoutDNS'
-            detection_info = daddr
-            description = f'A connection without DNS resolution to IP: {daddr}'
-            if not twid:
-                twid = ''
-            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                     description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        # to avoid false positives don't alert ConnectionWithoutDNS until 2 minutes has passed after starting slips
+        start_time = __database__.get_slips_start_time()
+        now = datetime.datetime.now()
+        diff = now - start_time
+        diff = diff.seconds
+        if int(diff) >= 120:
+            resolved = False
+            answers_dict = __database__.get_dns_answers()
+            # answers dict is a dict  {query:{ 'ts': .., 'answers':.., 'uid':... }  }
+            for query in answers_dict.values():
+                # convert json dict  to dict
+                query = json.loads(query)
+                # query is  a dict { 'ts': .., 'answers':.., 'uid':... }, we need to get 'answers'
+                answers = query['answers']
+                if daddr in answers:
+                    resolved = True
+                    break
+            # IP has no dns answer, alert.
+            if not resolved:
+                confidence = 1
+                threat_level = 30
+                type_detection  = 'dstip'
+                type_evidence = 'ConnectionWithoutDNS'
+                detection_info = daddr
+                description = f'A connection without DNS resolution to IP: {daddr}'
+                if not twid:
+                    twid = ''
+                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
