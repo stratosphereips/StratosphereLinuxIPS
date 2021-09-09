@@ -73,6 +73,7 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def check_arp_scan(self, flow):
+        # to test this module run sudo arp-scan  --localnet
         ts = flow['ts']
         profileid = flow['profileid']
         twid = flow['twid']
@@ -136,16 +137,17 @@ class Module(Module, multiprocessing.Process):
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                elif message and message['channel'] == 'new_arp' and type(message['data'])==str:
+                if message and message['channel'] == 'new_arp' and type(message['data'])==str:
                     flow = json.loads(message['data'])
                     self.check_arp_scan(flow)
+
                 # if the tw is closed, remove all its entries from the cache dict
                 message = self.c2.get_message(timeout=0.5)
                 if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                elif message and message['channel'] == 'tw_closed' and type(message['data'])==str:
+                if message and message['channel'] == 'tw_closed' and type(message['data'])==str:
                     profileid_tw = message['data']
                     # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore
                     # this copy is made to avoid dictionary changed size during iteration err
