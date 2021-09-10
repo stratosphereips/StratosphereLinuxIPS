@@ -539,7 +539,8 @@ class EvidenceProcess(multiprocessing.Process):
                             confidence = data.get('confidence')
                             threat_level = data.get('threat_level')
                             description = data.get('description')
-
+                            # every evidence has a confidence, we alert on important evidence only
+                            alert = True if confidence > 0.5 else False
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
                             self.print('\t\tWeighted Threat Level: {}'.format(new_threat_level), 3, 0)
@@ -551,7 +552,7 @@ class EvidenceProcess(multiprocessing.Process):
                         # So find out how many attacks corresponds to the width we are using
                         # 60 because the width is specified in seconds
                         detection_threshold_in_this_width = self.detection_threshold * self.width / 60
-                        if accumulated_threat_level >= detection_threshold_in_this_width:
+                        if accumulated_threat_level >= detection_threshold_in_this_width and alert:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
