@@ -243,7 +243,7 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'DataExfiltration'
         detection_info = most_cotacted_daddr
         bytes_sent_in_MB = total_bytes/(10**6)
-        description = f'Data exfiltration detected to IP: {most_cotacted_daddr} contacted {times_contacted} times in the past 1h. {bytes_sent_in_MB} MBs sent'
+        description = f'Possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_cotacted_daddr}. IP contacted {times_contacted} times in the past 1h'
         timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
         if not twid:
             twid = ''
