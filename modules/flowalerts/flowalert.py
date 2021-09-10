@@ -22,6 +22,8 @@ import json
 import configparser
 from ipaddress import ip_address
 import datetime
+import subprocess
+import re
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -57,6 +59,8 @@ class Module(Module, multiprocessing.Process):
         self.timeout = None
         # this dict will store connections on port 0 {'srcips':[(ts,dstip)]}
         self.scans = {}
+        # get the default gateway
+        self.gateway = self.get_default_gateway()
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -246,6 +250,18 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid)
 
+    def get_default_gateway(self):
+        gateway = False
+        if platform.system() == "Darwin":
+            route_default_result = subprocess.check_output(["route", "get", "default"]).decode()
+            gateway = re.search(r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}", route_default_result).group(0)
+
+        elif platform.system() == "Linux":
+            route_default_result = re.findall(r"([\w.][\w.]*'?\w?)", subprocess.check_output(["ip", "route"]).decode())
+            gateway = route_default_result[2]
+
+        return gateway
+
     def run(self):
         # Main loop function
         while True:
@@ -384,6 +400,9 @@ class Module(Module, multiprocessing.Process):
                                 contacted_daddrs[daddr] = contacted_daddrs[daddr]+1
                             except:
                                 contacted_daddrs.update({daddr: 1})
+                        # most of the times the default gateway will be the most contacted daddr, we don't want that
+                        # remove it from the dict if it's there
+                        contacted_daddrs.pop(self.gateway, None)
                         # get the most contacted daddr in the past hour
                         most_cotacted_daddr = max(contacted_daddrs, key=contacted_daddrs.get)
                         times_contacted = contacted_daddrs[most_cotacted_daddr]
