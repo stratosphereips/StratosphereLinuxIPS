@@ -552,12 +552,12 @@ class EvidenceProcess(multiprocessing.Process):
                         # So find out how many attacks corresponds to the width we are using
                         # 60 because the width is specified in seconds
                         detection_threshold_in_this_width = self.detection_threshold * self.width / 60
-                        if accumulated_threat_level >= detection_threshold_in_this_width and alert:
+                        if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
                                 evidence_to_print = self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
-                                self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
+                                if alert: self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 # Set an alert about the evidence being blocked
                                 alert_to_log = self.print_alert(profileid, twid)
                                 alert_dict = {'type':'alert',
