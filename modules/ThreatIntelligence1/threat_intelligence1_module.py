@@ -54,7 +54,7 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
         threat_level = 80
-        confidence = 1
+        confidence = 0.1
         description = ip_description
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
@@ -69,7 +69,7 @@ class Module(Module, multiprocessing.Process):
         detection_info = domain
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
         threat_level = 50
-        confidence = 1
+        confidence = 0.1
         description = domain_description
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
