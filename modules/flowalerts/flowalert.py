@@ -383,19 +383,6 @@ class Module(Module, multiprocessing.Process):
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-    def set_evidence_data_exfiltration(self, most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
-        confidence = 0.6
-        threat_level = 60
-        type_detection  = 'dstip'
-        type_evidence = 'DataExfiltration'
-        detection_info = most_cotacted_daddr
-        bytes_sent_in_MB = total_bytes/(10**6)
-        description = f'Possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_cotacted_daddr}. IP contacted {times_contacted} times in the past 1h'
-        timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid)
 
     def set_evidence_data_exfiltration(self, most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
         confidence = 0.6
@@ -411,17 +398,6 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid)
 
-    def get_default_gateway(self):
-        gateway = False
-        if platform.system() == "Darwin":
-            route_default_result = subprocess.check_output(["route", "get", "default"]).decode()
-            gateway = re.search(r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}", route_default_result).group(0)
-
-        elif platform.system() == "Linux":
-            route_default_result = re.findall(r"([\w.][\w.]*'?\w?)", subprocess.check_output(["ip", "route"]).decode())
-            gateway = route_default_result[2]
-
-        return gateway
     def get_default_gateway(self):
         gateway = False
         if platform.system() == "Darwin":
