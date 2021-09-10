@@ -122,11 +122,14 @@ class EvidenceProcess(multiprocessing.Process):
             self.detection_threshold = 2
         self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)')
 
-    def print_alert(self, profileid, twid, score):
+    def print_alert(self, profileid, twid):
         '''
         Function to print alert about the blocked profileid and twid
         '''
-        alert_to_print = "{} {} is blocked with a score: {}.".format(profileid, twid, score)
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ip = profileid.split("_")[-1]
+        alert_to_print = f'{now} IP {ip} blocked as source (or destination), on its {twid}.'
         return alert_to_print
 
     def print_evidence(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
@@ -535,11 +538,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 evidence_to_print = self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
                                 self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 # Set an alert about the evidence being blocked
-                                alert_to_log = self.print_alert(profileid,
-                                                                      twid,
-                                                                      accumulated_threat_level
-                                                                      )
-
+                                alert_to_log = self.print_alert(profileid, twid)
                                 alert_dict = {'type':'alert',
                                               'profileid': profileid,
                                               'twid': twid,
