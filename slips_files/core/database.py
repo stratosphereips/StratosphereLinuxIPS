@@ -1353,18 +1353,34 @@ class Database(object):
         if data:
             return data
 
-    def get_all_flows(self):
+    def get_all_flows_in_profileid(self, profileid):
+        """
+        Return a list of all the flows in this profileid
+        [{'uid':flow},...]
+        """
+        profileid_flows= []
+        # get all tws in this profile
+        for twid, time in self.getTWsfromProfile(profileid):
+            flows = self.get_all_flows_in_profileid_twid(profileid, twid)
+            if flows:
+                for uid, flow in list(flows.items()):
+                    profileid_flows.append({uid: json.loads(flow)})
+        return profileid_flows
+
+    def get_all_flows(self) -> list:
         """
         Returns a list with all the flows in all profileids and twids
-        Each position in the list is a dictionary of flows.
+        Each element in the list is a flow
         """
-        data = []
+        flows = []
         for profileid in self.getProfiles():
             for (twid, time) in self.getTWsfromProfile(profileid):
-                temp = self.get_all_flows_in_profileid_twid(profileid, twid)
-                if temp:
-                    data.append(temp)
-        return data
+                flows_dict = self.get_all_flows_in_profileid_twid(profileid, twid)
+                if flows_dict:
+                    for flow in flows_dict.values():
+                        dict_flow = json.loads(flow)
+                        flows.append(dict_flow)
+        return flows
 
     def get_flow(self, profileid, twid, uid):
         """
