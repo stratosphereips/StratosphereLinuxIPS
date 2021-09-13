@@ -1075,11 +1075,10 @@ class Database(object):
             # print(f'In the DB: Domain {domain}, and data {data}')
         return data
 
-    def getIPData(self, ip):
+    def getIPData(self, ip: str):
         """
         Return information about this IP
         Returns a dictionary or False if there is no IP in the database
-        ip: a string
         We need to separate these three cases:
         1- IP is in the DB without data. Return empty dict.
         2- IP is in the DB with data. Return dict.
@@ -1497,12 +1496,17 @@ class Database(object):
                 sni_ipdata = ipdata.get('SNI', [])
             else:
                 sni_ipdata = []
-
             SNI_port = {'server_name':server_name, 'dport':dport}
             # We do not want any duplicates.
             if SNI_port not in sni_ipdata:
-                sni_ipdata.append(SNI_port)
-            self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
+                # Verify that the SNI is equal to any of the domains in the DNS resolution
+                # only add this SNI to our db if it has a DNS resolution
+                resolved_domains = list(self.get_dns_answers().keys())
+                import pprint
+                pprint.pprint(self.get_dns_answers())
+                if SNI_port['server_name'] in resolved_domains:
+                    sni_ipdata.append(SNI_port)
+                    self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
 
             # We are giving only new server_name to the threat_intelligence module.
             data_to_send = {
