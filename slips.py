@@ -480,6 +480,7 @@ if __name__ == '__main__':
     from inputProcess import InputProcess
     from outputProcess import OutputProcess
     from profilerProcess import ProfilerProcess
+    from guiProcess import GuiProcess
     from logsProcess import LogsProcess
     from evidenceProcess import EvidenceProcess
 
@@ -577,14 +578,17 @@ if __name__ == '__main__':
                     __database__.store_process_PID(module_name, int(ModuleProcess.pid))
         except TypeError:
             # There are not modules in the configuration to ignore?
-            print('No modules are ignored')
+            print('[Main] No modules are ignored')
 
     c1 = __database__.subscribe('finished_modules')
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
     if args.gui:
-        os.system('cd modules/kalipso;node kalipso.js')
+        # Create the curses thread
+        guiProcessQueue = Queue()
+        guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config, redis_port)
+        guiProcessThread.start()
         outputProcessQueue.put('quiet')
     if not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
