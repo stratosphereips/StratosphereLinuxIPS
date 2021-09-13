@@ -117,7 +117,8 @@ def generate_random_redis_port():
     connected = __database__.connect_to_redis_server(port)
     # check if server is being used by another instance of slips
     try:
-        if not connected or len(list(__database__.r.scan_iter())) > 2:
+        # len(list(__database__.r.scan_iter())) > 2 means the port is used by another instance
+        if not connected or len(list(__database__.r.scan_iter('*'))) > 2:
             # its being used
             while True:
                 # generate another unused port, we'll be using this to close the server slips started
@@ -125,22 +126,15 @@ def generate_random_redis_port():
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     if (s.connect_ex(('localhost', port)) != 0
                             and __database__.connect_to_redis_server(port)
-                            and len(list(__database__.r.scan_iter())) > 2):
+                            and len(list(__database__.r.scan_iter('*'))) < 2):
                         # if the db managed to connect to this random port, then this is
                         # the port we'll be using
                         break
         # todo this function sometimes returns none?????
-        print(f'**********************returning {port}')
         return port
     except redis.exceptions.ConnectionError:
         # Connection refused to this port
-        print(f'**********************recursion')
-        generate_random_redis_port()
-
-
-
-
-
+        return generate_random_redis_port()
 
 
 def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> str:
