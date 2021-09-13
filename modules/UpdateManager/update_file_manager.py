@@ -669,7 +669,6 @@ class UpdateFileManager:
                             else:
                                 self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
                                 continue
-            print(f'**********************malicious_ips_dict: {malicious_ips_dict} malicious_domains_dict: {malicious_domains_dict}')
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
