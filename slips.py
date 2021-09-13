@@ -130,7 +130,6 @@ def generate_random_redis_port():
                         # if the db managed to connect to this random port, then this is
                         # the port we'll be using
                         break
-        # todo this function sometimes returns none?????
         return port
     except redis.exceptions.ConnectionError:
         # Connection refused to this port
@@ -181,9 +180,9 @@ def load_modules(to_ignore):
 
         # Try to import the module, otherwise skip.
         try:
-            # "level specifies whether to use absolute or relative imports. The default is -1 which 
-            # indicates both absolute and relative imports will be attempted. 0 means only perform 
-            # absolute imports. Positive values for level indicate the number of parent 
+            # "level specifies whether to use absolute or relative imports. The default is -1 which
+            # indicates both absolute and relative imports will be attempted. 0 means only perform
+            # absolute imports. Positive values for level indicate the number of parent
             # directories to search relative to the directory of the module calling __import__()."
             module = importlib.import_module(module_name)
         except ImportError as e:
@@ -485,7 +484,6 @@ if __name__ == '__main__':
     from inputProcess import InputProcess
     from outputProcess import OutputProcess
     from profilerProcess import ProfilerProcess
-    from guiProcess import GuiProcess
     from logsProcess import LogsProcess
     from evidenceProcess import EvidenceProcess
 
@@ -525,6 +523,7 @@ if __name__ == '__main__':
     from slips_files.core.database import __database__
     # get the port that is going to be used for this instance of slips
     redis_port = generate_random_redis_port()
+    print(f'[DB] Using redis server on port: {redis_port}')
 
     # Output thread. This thread should be created first because it handles
     # the output of the rest of the threads.
@@ -589,10 +588,7 @@ if __name__ == '__main__':
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
     if args.gui:
-        # Create the curses thread
-        guiProcessQueue = Queue()
-        guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
-        guiProcessThread.start()
+        os.system('cd modules/kalipso;node kalipso.js')
         outputProcessQueue.put('quiet')
     if not args.nologfiles:
         # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True

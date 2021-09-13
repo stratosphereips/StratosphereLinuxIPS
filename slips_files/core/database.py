@@ -51,8 +51,7 @@ class Database(object):
 
 
     def start(self, config, redis_port):
-        print(f'**********************starting the db redis_port:{redis_port}')
-        # toddo fix unit tests to use redis_port
+        # todo fix unit tests to use redis_port
         """ Start the DB. Allow it to read the conf """
         self.config = config
         # Read values from the configuration file
@@ -82,19 +81,17 @@ class Database(object):
             self.width = 3600
 
         # Create the connection to redis
-        if not hasattr(self, 'r'):
-            try:
-                self.connect_to_redis_server(redis_port)
-                # Even if the DB is not deleted. We need to delete some temp data
-                # Zeek_files
-                self.r.delete('zeekfiles')
-                # By default the slips internal time is 0 until we receive something
-                self.setSlipsInternalTime(0)
-                while self.get_slips_start_time() == None:
-                    self.set_slips_start_time()
-                print(f'[DB] Using redis server on port: {redis_port}')
-            except redis.exceptions.ConnectionError:
-                print(f"[DB] Can't connect to redis on port {redis_port}")
+        try:
+            self.connect_to_redis_server(redis_port)
+            # Even if the DB is not deleted. We need to delete some temp data
+            # Zeek_files
+            self.r.delete('zeekfiles')
+            # By default the slips internal time is 0 until we receive something
+            self.setSlipsInternalTime(0)
+            while self.get_slips_start_time() == None:
+                self.set_slips_start_time()
+        except redis.exceptions.ConnectionError:
+            print(f"[DB] Can't connect to redis on port {redis_port}")
 
 
     def print(self, text, verbose=1, debug=0):
