@@ -44,7 +44,7 @@ class UpdateManager(Module, multiprocessing.Process):
         __database__.start(self.config, redis_port)
         self.c1 = __database__.subscribe('core_messages')
         # Update file manager
-        self.update_manager = UpdateFileManager(self.outputqueue, config)
+        self.update_manager = UpdateFileManager(self.outputqueue, config, redis_port)
         # Timer to update the ThreatIntelligence files
         self.timer_manager = InfiniteTimer(self.update_period, self.update_malicious_files)
         self.timeout = None

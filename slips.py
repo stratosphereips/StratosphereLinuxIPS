@@ -206,7 +206,7 @@ def get_cwd():
             cwd = arg[:arg.index('slips.py')]
             return cwd
 
-def shutdown_gracefully():
+def shutdown_gracefully(redis_port: str):
     """ Wait for all modules to confirm that they're done processing and then shutdown """
 
     try:
@@ -282,15 +282,11 @@ def shutdown_gracefully():
                 pass
         # clear primary db
         __database__.r.flushdb()
-        port = __database__.port
         # 6379 is the cache db, don't close this server
-        if port != 6379:
+        if redis_port != 6379:
             # Only close the redis server if it's opened by slips, don't close the default one (the one we use for cache)
-            command = f'redis-cli -h 127.0.0.1 -p {port} shutdown > /dev/null 2>&1'
-            # command = f'redis-cli -h 127.0.0.1 -p {port} shutdown'
-            #todo most of the times we can't close the server!
+            command = f'redis-cli -h 127.0.0.1 -p {redis_port} shutdown > /dev/null 2>&1'
             os.system(command)
-
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -523,7 +519,7 @@ if __name__ == '__main__':
     from slips_files.core.database import __database__
     # get the port that is going to be used for this instance of slips
     redis_port = generate_random_redis_port()
-    print(f'[DB] Using redis server on port: {redis_port}')
+    print(f'[Main] Using redis server on port: {redis_port}')
 
     # Output thread. This thread should be created first because it handles
     # the output of the rest of the threads.
@@ -710,13 +706,13 @@ if __name__ == '__main__':
                     # print('Counter to stop Slips. Amount of modified
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:
-                        shutdown_gracefully()
+                        shutdown_gracefully(redis_port)
                         break
                     minimum_intervals_to_wait -= 1
                 else:
                     minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
     except KeyboardInterrupt:
-        shutdown_gracefully()
+        shutdown_gracefully(redis_port)
 
 
