@@ -1502,8 +1502,6 @@ class Database(object):
                 # Verify that the SNI is equal to any of the domains in the DNS resolution
                 # only add this SNI to our db if it has a DNS resolution
                 resolved_domains = list(self.get_dns_answers().keys())
-                import pprint
-                pprint.pprint(self.get_dns_answers())
                 if SNI_port['server_name'] in resolved_domains:
                     sni_ipdata.append(SNI_port)
                     self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
