@@ -13,14 +13,14 @@ import sys
 
 class UpdateFileManager:
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         self.outputqueue = outputqueue
         self.config = config
         # For now, read the malicious IPs from here
         self.name = 'UpdateManager'
         self.new_update_time = float('-inf')
         # Start the database
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         # Read the conf

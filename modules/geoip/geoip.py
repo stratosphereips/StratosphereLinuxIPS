@@ -8,20 +8,21 @@ import platform
 import time
 import maxminddb
 import ipaddress
+import sys
 
 class Module(Module, multiprocessing.Process):
     name = 'geoip'
     description = 'Module to find the country and geolocaiton information of an IP address'
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         # Open the maminddb offline db
         try:
             self.reader = maxminddb.open_database('modules/geoip/GeoLite2-Country.mmdb')

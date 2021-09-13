@@ -138,7 +138,7 @@ You can also change how often Slips creates log files using the ```log_report_ti
 
 Zeek creates log files in ```output/filename/zeek_files```. All the log files zeek creates are deleted by default when slips stops.
 
-You can set the ```delete_zeek_files``` to ```no``` if you want to keep the log files after slips stops.
+You can set the ```delete_zeek_files``` to ```no``` if you want to keep the zeek log files after slips stops.
 
 ### Disabling module
 You can disable modules easily by appending the module name to the ```disable``` list.

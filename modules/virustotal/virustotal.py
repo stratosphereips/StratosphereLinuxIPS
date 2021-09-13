@@ -20,7 +20,7 @@ class Module(Module, multiprocessing.Process):
     description = 'IP address and domain lookup on VirusTotal'
     authors = ['Dita Hollmannova, Kamila Babayeva']
 
-    def __init__(self, outputqueue, config, testing=False):
+    def __init__(self, outputqueue, config, redis_port, testing=False):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
         self.outputqueue = outputqueue
@@ -29,7 +29,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         # This line might not be needed when running SLIPS, but when VT module is run standalone, it still uses the
         # database and this line is necessary. Do not delete it, instead move it to line 21.
-        __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
+        __database__.start(self.config, redis_port)
         # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
         # The options change, so the last list is on the slips/core/database.py file. However common options are:
         # - new_ip

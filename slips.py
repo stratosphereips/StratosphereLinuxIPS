@@ -18,9 +18,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import configparser
-import argparse
 import json
-import signal
 import sys
 import redis
 import os
@@ -39,6 +37,7 @@ from slips_files.common.argparse import ArgumentParser
 import errno
 import subprocess
 import re
+import random
 
 version = '0.7.3'
 
@@ -84,11 +83,11 @@ def create_folder_for_logs(logs_dir):
             return False
     return logs_folder
 
-def update_malicious_file(outputqueue, config):
+def update_malicious_file(outputqueue, config, redis_port):
     '''
     Update malicious files and store them in database before slips start
     '''
-    update_manager = UpdateFileManager(outputqueue, config)
+    update_manager = UpdateFileManager(outputqueue, config, redis_port)
     update_manager.update()
 
 def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
@@ -99,10 +98,50 @@ def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
         r = redis.StrictRedis(host=redis_host, port=redis_port, db=0, charset="utf-8",
                                    decode_responses=True)
         r.ping()
+        return True
     except Exception as ex:
         print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
         return False
-    return True
+
+
+
+def generate_random_redis_port():
+    """ Keeps trying to connect to random generated ports until we're connected.
+        returns the used port
+    """
+    #todo wrap this in a try except
+
+    # generate a random port to use slips on
+    port = random.randint(32768, 65535)
+    # Create the connection to redis
+    connected = __database__.connect_to_redis_server(port)
+    # check if server is being used by another instance of slips
+    try:
+        if not connected or len(list(__database__.r.scan_iter())) > 2:
+            # its being used
+            while True:
+                # generate another unused port, we'll be using this to close the server slips started
+                port = random.randint(32768, 65535)
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    if (s.connect_ex(('localhost', port)) != 0
+                            and __database__.connect_to_redis_server(port)
+                            and len(list(__database__.r.scan_iter())) > 2):
+                        # if the db managed to connect to this random port, then this is
+                        # the port we'll be using
+                        break
+        # todo this function sometimes returns none?????
+        print(f'**********************returning {port}')
+        return port
+    except redis.exceptions.ConnectionError:
+        # Connection refused to this port
+        print(f'**********************recursion')
+        generate_random_redis_port()
+
+
+
+
+
+
 
 def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> str:
     """
@@ -251,11 +290,14 @@ def shutdown_gracefully():
         # clear primary db
         __database__.r.flushdb()
         port = __database__.port
+        # 6379 is the cache db, don't close this server
         if port != 6379:
             # Only close the redis server if it's opened by slips, don't close the default one (the one we use for cache)
             command = f'redis-cli -h 127.0.0.1 -p {port} shutdown > /dev/null 2>&1'
+            # command = f'redis-cli -h 127.0.0.1 -p {port} shutdown'
             #todo most of the times we can't close the server!
             os.system(command)
+
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -487,6 +529,8 @@ if __name__ == '__main__':
     # Creation of the threads
     ##########################
     from slips_files.core.database import __database__
+    # get the port that is going to be used for this instance of slips
+    redis_port = generate_random_redis_port()
 
     # Output thread. This thread should be created first because it handles
     # the output of the rest of the threads.
@@ -509,7 +553,7 @@ if __name__ == '__main__':
     outputProcessThread.start()
 
     # Before starting update malicious file
-    update_malicious_file(outputProcessQueue,config)
+    update_malicious_file(outputProcessQueue,config, redis_port)
     # Print the PID of the main slips process. We do it here because we needed the queue to the output process
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid
@@ -537,7 +581,7 @@ if __name__ == '__main__':
             for module_name in modules_to_call:
                 if not module_name in to_ignore:
                     module_class = modules_to_call[module_name]['obj']
-                    ModuleProcess = module_class(outputProcessQueue, config)
+                    ModuleProcess = module_class(outputProcessQueue, config, redis_port)
                     # this is multiprocessing.Process.start(), The run() method is automatically called in the new process when start() is called
                     ModuleProcess.start()
                     outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
@@ -564,7 +608,7 @@ if __name__ == '__main__':
             logs_folder = create_folder_for_logs(args.output)
             # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
             logsProcessQueue = Queue()
-            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
+            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder, redis_port)
             logsProcessThread.start()
             outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
             __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
@@ -577,7 +621,7 @@ if __name__ == '__main__':
     # Create the queue for the evidence thread
     evidenceProcessQueue = Queue()
     # Create the thread and start it
-    evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output, logs_folder)
+    evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output, logs_folder, redis_port)
     evidenceProcessThread.start()
     outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
     __database__.store_process_PID('evidenceProcess', int(evidenceProcessThread.pid))
@@ -587,14 +631,14 @@ if __name__ == '__main__':
     # Create the queue for the profile thread
     profilerProcessQueue = Queue()
     # Create the profile thread and start it
-    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+    profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config, redis_port)
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
     __database__.store_process_PID('profilerProcess', int(profilerProcessThread.pid))
 
     # Input process
     # Create the input process and start it
-    inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro, store_zeek=args.output )
+    inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro, redis_port, store_zeek=args.output )
     inputProcess.start()
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
     __database__.store_process_PID('inputProcess', int(inputProcess.pid))

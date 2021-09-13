@@ -35,7 +35,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Detect C&C channels based on behavioral letters'
     authors = ['Sebastian Garcia', 'Kamila Babayeva']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue. The
         # outputqueue is connected to another process called OutputProcess
@@ -44,7 +44,7 @@ class Module(Module, multiprocessing.Process):
         # own configurations
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         # To which channels do you wnat to subscribe? When a message arrives
         # on the channel the module will wakeup
         # The options change, so the last list is on the slips/core/database.py

@@ -23,11 +23,11 @@ from slips_files.core.database import __database__
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r".*\.log$", r".*\.conf$"]
 
-    def __init__(self, config):
+    def __init__(self, config, redis_port):
         super().__init__(self.REGEX)
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
 
     def on_created(self, event):
         self.process(event)

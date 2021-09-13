@@ -30,7 +30,7 @@ class UpdateManager(Module, multiprocessing.Process):
     description = 'Update malicious files from Threat Intelligence'
     authors = ['Kamila Babayeva']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
@@ -41,7 +41,7 @@ class UpdateManager(Module, multiprocessing.Process):
         # Read the conf
         self.read_configuration()
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         self.c1 = __database__.subscribe('core_messages')
         # Update file manager
         self.update_manager = UpdateFileManager(self.outputqueue, config)

@@ -33,16 +33,26 @@ class Database(object):
         # this list will store evidence that slips detected but can't
         # alert for it before the flow of them is added to our db
 
-    def connect_to_redis_server(self):
-        # start the redis server
-        os.system(f'redis-server --port {self.port} --daemonize yes > /dev/null 2>&1')
-        # connect to the redis server
-        # this db changes everytime we run slips
-        self.r = redis.StrictRedis(host='localhost', port=self.port, db=0, charset="utf-8", decode_responses=True) #password='password')
-        # port 6379 db 0 is cache, delete it using -cc flag
-        self.rcache = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+    def connect_to_redis_server(self, port: str):
+        """ Connects to the given port and Sets r and rcache """
+        try:
+            # start the redis server
+            os.system(f'redis-server --port {port} --daemonize yes > /dev/null 2>&1')
+            # connect to the redis server
+            # this db changes everytime we run slips
+            self.r = redis.StrictRedis(host='localhost', port=port, db=0, charset="utf-8", decode_responses=True) #password='password')
+            # port 6379 db 0 is cache, delete it using -cc flag
+            self.rcache = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+            return True
+        except redis.exceptions.ConnectionError:
+            # unable to connect to this port, try another one
+            return False
+            #todo add a unit test for this function
 
-    def start(self, config):
+
+    def start(self, config, redis_port):
+        print(f'**********************starting the db redis_port:{redis_port}')
+        # toddo fix unit tests to use redis_port
         """ Start the DB. Allow it to read the conf """
         self.config = config
         # Read values from the configuration file
@@ -71,26 +81,10 @@ class Database(object):
             # configuration file specified
             self.width = 3600
 
-        # generate a random port to use slips on
-        self.port = random.randint(32768, 65535)
         # Create the connection to redis
         if not hasattr(self, 'r'):
             try:
-                self.connect_to_redis_server()
-                # check if server is being used by another instance of slips
-                if len(list(__database__.r.scan_iter())) > 2:
-                    # its being used
-                    while True:
-                        # generate another unused port, we'll be using this to close the server slips started
-                        self.port = random.randint(32768, 65535)
-                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                            if s.connect_ex(('localhost', self.port)) != 0:
-                                try:
-                                    self.connect_to_redis_server()
-                                    break
-                                except redis.exceptions.ConnectionError:
-                                    # unable to connect to this port, try another one
-                                    continue
+                self.connect_to_redis_server(redis_port)
                 # Even if the DB is not deleted. We need to delete some temp data
                 # Zeek_files
                 self.r.delete('zeekfiles')
@@ -98,9 +92,9 @@ class Database(object):
                 self.setSlipsInternalTime(0)
                 while self.get_slips_start_time() == None:
                     self.set_slips_start_time()
-                print(f'Using redis server on port: {self.port}')
+                print(f'[DB] Using redis server on port: {redis_port}')
             except redis.exceptions.ConnectionError:
-                print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
+                print(f"[DB] Can't connect to redis on port {redis_port}")
 
 
     def print(self, text, verbose=1, debug=0):

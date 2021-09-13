@@ -51,7 +51,7 @@ def timeit(method):
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
     """ A class to create the profiles for IPs and the rest of data """
-    def __init__(self, inputqueue, outputqueue, verbose, debug, config):
+    def __init__(self, inputqueue, outputqueue, verbose, debug, config, redis_port):
         self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
@@ -66,7 +66,7 @@ class ProfilerProcess(multiprocessing.Process):
         # anything in this list will be ignored
         self.read_whitelist()
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
         # 1st. Get the data from the interpreted columns
