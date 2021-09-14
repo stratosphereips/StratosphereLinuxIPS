@@ -521,6 +521,21 @@ if __name__ == '__main__':
     # get the port that is going to be used for this instance of slips
     redis_port = generate_random_redis_port()
     print(f'[Main] Using redis server on port: {redis_port}')
+    # get the pid of the redis server using this port
+    redis_pid = 'Not found'
+    #  On modern systems, the netstat utility comes pre-installed, this can be done using psutil but it needs root on macos
+    command = f'sudo netstat -peanut'
+    result = subprocess.run(command.split(), capture_output=True)
+    # Get command output
+    output = result.stdout.decode('utf-8')
+    for line in output.splitlines():
+        if f":{redis_port}" in line:
+            redis_pid = re.split(r'\s{2,}', line)[-2].split('/')[0]
+            break
+    # log redis-server pid
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open('used_redis_servers.txt','a') as f:
+        f.write(f'{now: <16}    {input_information: <35}    {redis_port: <6}        {redis_pid: <6}\n')
 
     # Output thread. This thread should be created first because it handles
     # the output of the rest of the threads.
