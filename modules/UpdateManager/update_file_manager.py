@@ -467,8 +467,43 @@ class UpdateFileManager:
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
-
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
+                if 'json' in malicious_data_path:
+                    filename= malicious_data_path.split('/')[-1]
+                    # to support nsec/full-results-2019-05-15.json
+                    try:
+                        file = json.loads(malicious_file.read())
+                        for description,iocs in file.items():
+                            # iocs is a list of dicts
+                            for ioc in iocs:
+                                # ioc is a dict with keys 'IP', 'ports', 'domains'
+                                # process IPs
+                                ip = ioc.get('IP','')
+                                # verify its a valid ip
+                                try:
+                                    ip_address = ipaddress.IPv4Address(ip.strip())
+                                except ipaddress.AddressValueError:
+                                    # Is it ipv6?
+                                    try:
+                                        ip_address = ipaddress.IPv6Address(ip.strip())
+                                    except ipaddress.AddressValueError:
+                                        # not a valid IP
+                                        continue
+                                malicious_ips_dict[ip] = json.dumps({'description': description, 'source':filename})
+                                # process domains
+                                domains = ioc.get('domains',[])
+                                for domain in domains:
+                                    if validators.domain(domain.strip()):
+                                        # this is a valid domain
+                                        malicious_domains_dict[domain] = json.dumps({'description': description, 'source':filename})
+                        # Add all loaded malicious ips to the database
+                        __database__.add_ips_to_IoC(malicious_ips_dict)
+                        # Add all loaded malicious domains to the database
+                        __database__.add_domains_to_IoC(malicious_domains_dict)
+                        return True
+                    except json.decoder.JSONDecodeError:
+                        # not a json file??
+                        return False
 
                 # Remove comments and find the description column if possible
                 description_column = None
