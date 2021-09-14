@@ -283,14 +283,31 @@ def shutdown_gracefully(redis_port: str):
         # clear primary db
         __database__.r.flushdb()
         # 6379 is the cache db, don't close this server
-        if redis_port != 6379:
-            # Only close the redis server if it's opened by slips, don't close the default one (the one we use for cache)
-            command = f'redis-cli -h 127.0.0.1 -p {redis_port} shutdown > /dev/null 2>&1'
-            os.system(command)
+        # if redis_port != 6379:
+        #     # Only close the redis server if it's opened by slips, don't close the default one (the one we use for cache)
+        #     command = f'redis-cli -h 127.0.0.1 -p {redis_port} shutdown > /dev/null 2>&1'
+        #     os.system(command)
         os._exit(-1)
         return True
     except KeyboardInterrupt:
         return False
+
+def check_open_redis_servers():
+    """ Function to warn about unused open redis-servers """
+    open_servers = []
+    with open('used_redis_servers.txt','r') as f:
+        line = True
+        while line:
+            line = f.readline()
+            # skip comments
+            if line.startswith('#') or line.startswith('Date') or len(line) < 3:
+                continue
+            open_servers.append(line)
+    if len(open_servers) >0:
+        print(f'\nYou have the following redis servers open, rerun slips with --killall to close them.')
+        for line in open_servers:
+            print(line, end="")
+    print("")
 
 ####################
 # Main
@@ -327,10 +344,11 @@ if __name__ == '__main__':
                         help='block IPs that connect to the computer. Supported only on Linux.')
     parser.add_argument('-o', '--output', action='store', required=False, default=alerts_default_path,
                         help='store alerts.json and alerts.txt in the provided folder.')
+    # parser.add_argument('-k', '--kill-redis',metavar='<PID>', action='store', required=False,
+    #                     help='kill the redis server used by this pid')
     parser.add_argument("-h", "--help", action="help", help="command line help")
 
     args = parser.parse_args()
-
     # Read the config file name given from the parameters
     # don't use '%' for interpolation.
     config = configparser.ConfigParser(interpolation=None)
@@ -660,6 +678,8 @@ if __name__ == '__main__':
                 print("Not Connected to the internet. Reconnecting in 10s.")
                 time.sleep(10)
                 hostIP = recognize_host_ip()
+
+    check_open_redis_servers()
 
     # As the main program, keep checking if we should stop slips or not
     # This is not easy since we need to be sure all the modules are stopped
