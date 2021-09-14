@@ -38,6 +38,7 @@ import errno
 import subprocess
 import re
 import random
+import signal
 
 version = '0.7.3'
 
@@ -103,8 +104,6 @@ def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
         print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
         return False
 
-
-
 def generate_random_redis_port():
     """ Keeps trying to connect to random generated ports until we're connected.
         returns the used port
@@ -135,7 +134,6 @@ def generate_random_redis_port():
         # Connection refused to this port
         return generate_random_redis_port()
 
-
 def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> str:
     """
     Clear cache database
@@ -144,7 +142,6 @@ def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> s
                                decode_responses=True)
     rcache.flushdb()
     return True
-
 
 def check_zeek_or_bro():
     """
@@ -292,22 +289,36 @@ def shutdown_gracefully(redis_port: str):
     except KeyboardInterrupt:
         return False
 
-def check_open_redis_servers():
+def close_open_redis_servers():
     """ Function to warn about unused open redis-servers """
-    open_servers = []
+    # get a list of open servers
+    open_servers_PIDs = []
     with open('used_redis_servers.txt','r') as f:
-        line = True
-        while line:
-            line = f.readline()
+        for line in f.read().splitlines():
             # skip comments
-            if line.startswith('#') or line.startswith('Date') or len(line) < 3:
+            if line.startswith('#') or 'Date' in line or len(line) < 3:
                 continue
-            open_servers.append(line)
-    if len(open_servers) >0:
-        print(f'\nYou have the following redis servers open, rerun slips with --killall to close them.')
-        for line in open_servers:
-            print(line, end="")
-    print("")
+            pid =  re.split(r'\s{2,}', line)[-2]
+            open_servers_PIDs.append(pid)
+
+    if len(open_servers_PIDs) > 0:
+        for pid in open_servers_PIDs:
+            try:
+                os.kill(int(pid), signal.SIGTERM)
+            except ProcessLookupError:
+                # process already exited
+                continue
+
+        # delete the closed redis servers from used_redis_servers.txt
+        with open('used_redis_servers.txt','w') as f:
+            f.write("# This file will contain a list of used redis ports\n# Once a server is killed, all the data in it will be deleted and it will be removed from this file\nDate                   File or interface                   Used port       Server PID\n")
+        print(f"{len(open_servers_PIDs)} Redis Servers Killed.")
+        sys.exit(-1)
+
+    else:
+        print("No unused open servers to kill.")
+        sys.exit(-1)
+
 
 ####################
 # Main
@@ -344,8 +355,8 @@ if __name__ == '__main__':
                         help='block IPs that connect to the computer. Supported only on Linux.')
     parser.add_argument('-o', '--output', action='store', required=False, default=alerts_default_path,
                         help='store alerts.json and alerts.txt in the provided folder.')
-    # parser.add_argument('-k', '--kill-redis',metavar='<PID>', action='store', required=False,
-    #                     help='kill the redis server used by this pid')
+    parser.add_argument('-k', '--killall', action='store_true', required=False,
+                        help='kill all unused redis servers')
     parser.add_argument("-h", "--help", action="help", help="command line help")
 
     args = parser.parse_args()
@@ -370,6 +381,10 @@ if __name__ == '__main__':
         print('Deleting Cache DB in Redis.')
         clear_redis_cache_database()
         terminate_slips()
+
+    # kill all open unused redis servers if the parameter was included
+    if args.killall:
+        close_open_redis_servers()
 
     # Check the type of input
     if args.interface:
@@ -539,7 +554,7 @@ if __name__ == '__main__':
     # get the port that is going to be used for this instance of slips
     redis_port = generate_random_redis_port()
     print(f'[Main] Using redis server on port: {redis_port}')
-    # get the pid of the redis server using this port
+    # log the pid of the redis server using this port
     redis_pid = 'Not found'
     #  On modern systems, the netstat utility comes pre-installed, this can be done using psutil but it needs root on macos
     command = f'sudo netstat -peanut'
@@ -548,7 +563,7 @@ if __name__ == '__main__':
     output = result.stdout.decode('utf-8')
     for line in output.splitlines():
         if f":{redis_port}" in line:
-            redis_pid = re.split(r'\s{2,}', line)[-2].split('/')[0]
+            redis_pid = re.split(r'\s{2,}', line)[-1].split('/')[0]
             break
     # log redis-server pid
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -679,7 +694,7 @@ if __name__ == '__main__':
                 time.sleep(10)
                 hostIP = recognize_host_ip()
 
-    check_open_redis_servers()
+
 
     # As the main program, keep checking if we should stop slips or not
     # This is not easy since we need to be sure all the modules are stopped
