@@ -17,6 +17,7 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-pip \
 	python3-certifi \
 	file \
+	net-tools \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
