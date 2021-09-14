@@ -133,3 +133,4 @@ package-lock.json
 modules/blessed/node_modules/
 alerts.*
 nohup.out
+used_redis_servers.txt
