@@ -23,7 +23,6 @@ var {argv} = require('yargs').option('l',{
     }).option('p',{
 
             alias: 'redis_port',
-            demandOption: true,
             describe:  'port to use for redis database',
             type:     'number',
             nargs: 1
