@@ -27,7 +27,7 @@ class Redis{
         this.redis_resolved_dns = this.redis.createClient(redis_config)
         this.all_profile_evidences = this.redis.createClient(redis_config)
         this.tw_starttime = this.redis.createClient(redis_config)
-        this.redisClient = this.redis.createClient(redis_config)
+        this.redis_client = this.redis.createClient(redis_config)
   	}
 
     /*Get all the keys from the database.*/
@@ -152,11 +152,11 @@ class Redis{
         )
     }
 
-    /*Get a dict with module names as keys and pids as values """.*/
-    get_PIDs(){
+    /*Get all slips processes PIDs.*/
+    getPIDs(){
         return new Promise(
-               (resolve,reject)=>{this.redisClient.hgetall("PIDs", (err,reply)=>{
-                   if(err){console.log("Error in get_PIDs in kalipso_redis.js. Error: ",err); reject(err);}
+               (resolve,reject)=>{this.redis_client.hgetall("PIDs", (err,reply)=>{
+                   if(err){console.log("Error in getPIDs in kalipso_redis.js. Error: ",err); reject(err);}
                    else{resolve(reply);}
                })}
         )
