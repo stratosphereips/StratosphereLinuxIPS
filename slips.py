@@ -195,9 +195,7 @@ def get_cwd():
 
 def shutdown_gracefully(redis_port: str):
     """ Wait for all modules to confirm that they're done processing and then shutdown """
-    if args.gui:
-        # don't shut down when the user is still using kalipso
-        return True
+
     try:
         print('Stopping Slips')
         # Stop the modules that are subscribed to channels
@@ -228,7 +226,7 @@ def shutdown_gracefully(redis_port: str):
                     modules_left = len(set(loaded_modules) - set(finished_modules))
                     # to vertically align them when printing
                     module_name = module_name+' '*(20-len(module_name))
-                    print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
+                    if not args.gui: print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
             max_loops -=1
         # kill processes that didn't stop after timeout
         for unstopped_proc,pid in PIDs.items():
@@ -237,9 +235,9 @@ def shutdown_gracefully(redis_port: str):
             unstopped_proc = unstopped_proc+' '*(20-len(unstopped_proc))
             try:
                 os.kill(int(pid), 9)
-                print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tKilled.')
+                if not args.gui: print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tKilled.')
             except ProcessLookupError:
-                print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready exited.')
+                if not args.gui: print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready exited.')
 
         # Send manual stops to the process not using channels
         try:
@@ -763,7 +761,9 @@ if __name__ == '__main__':
                 if amount_of_modified == 0:
                     # print('Counter to stop Slips. Amount of modified
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
-                    if minimum_intervals_to_wait == 0:
+                    if minimum_intervals_to_wait == 0 and not args.gui:
+                        # When using kalipso, don't run this function unless the user presses q,
+                        # kalipso will send an interrupt signal to this process
                         shutdown_gracefully(redis_port)
                         break
                     minimum_intervals_to_wait -= 1
