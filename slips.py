@@ -107,27 +107,18 @@ def generate_random_redis_port():
     """ Keeps trying to connect to random generated ports until we're connected.
         returns the used port
     """
-    #todo wrap this in a try except
-
-    # generate a random port to use slips on
-    port = random.randint(32768, 65535)
-    # Create the connection to redis
-    connected = __database__.connect_to_redis_server(port)
-    # check if server is being used by another instance of slips
     try:
-        # len(list(__database__.r.scan_iter())) > 2 means the port is used by another instance
-        if not connected or len(list(__database__.r.scan_iter('*'))) > 2:
-            # its being used
-            while True:
-                # generate another unused port, we'll be using this to close the server slips started
-                port = random.randint(32768, 65535)
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    if (s.connect_ex(('localhost', port)) != 0
-                            and __database__.connect_to_redis_server(port)
-                            and len(list(__database__.r.scan_iter('*'))) < 2):
-                        # if the db managed to connect to this random port, then this is
-                        # the port we'll be using
-                        break
+        while True:
+            # generate a random unused port
+            port = random.randint(32768, 65535)
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                # check if 1. we can connect 2.server is not being used by another instance of slips
+                if (s.connect_ex(('localhost', port)) != 0
+                        and __database__.connect_to_redis_server(port)
+                        and len(list(__database__.r.scan_iter('*'))) < 2):
+                    # if the db managed to connect to this random port, then this is
+                    # the port we'll be using
+                    break
         return port
     except redis.exceptions.ConnectionError:
         # Connection refused to this port
