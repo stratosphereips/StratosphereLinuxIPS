@@ -9,9 +9,6 @@ def test_load_modules():
 def test_recognize_host_ip():
     assert recognize_host_ip() != None
 
-def test_create_folder_for_logs():
-    assert create_folder_for_logs() != False
-
 def test_check_redis_database():
     assert check_redis_database() == True
 

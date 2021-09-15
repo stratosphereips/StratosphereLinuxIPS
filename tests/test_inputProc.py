@@ -11,7 +11,7 @@ def create_inputProcess_instance(outputQueue, profilerQueue, input_information, 
         needed by every other test in this file  """
     config = configparser.ConfigParser()
     inputProcess = InputProcess(outputQueue, profilerQueue,
-                                input_type, input_information, config, None, 'zeek')
+                                input_type, input_information, config, None, 'zeek', 123)
     inputProcess.bro_timeout=1
     # override the self.print function to avoid broken pipes
     inputProcess.print = do_nothing

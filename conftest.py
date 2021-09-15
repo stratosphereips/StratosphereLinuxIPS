@@ -43,7 +43,7 @@ def profilerQueue():
 def database(outputQueue):
     from slips_files.core.database import __database__
     config = configparser.ConfigParser()
-    __database__.start(config)
+    __database__.start(config, 1234)
     __database__.outputqueue = outputQueue
     __database__.print = do_nothing
     return __database__

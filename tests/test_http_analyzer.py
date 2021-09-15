@@ -13,7 +13,7 @@ def create_http_analyzer_instance(outputQueue):
     """ Create an instance of http_analyzer.py
         needed by every other test in this file  """
     config = configparser.ConfigParser()
-    http_analyzer = Module(outputQueue, config)
+    http_analyzer = Module(outputQueue, config, 53787)
     # override the self.print function to avoid broken pipes
     http_analyzer.print = do_nothing
     return http_analyzer

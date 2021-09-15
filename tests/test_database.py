@@ -16,21 +16,17 @@ def test_getProfileIdFromIP(database):
     assert database.getProfileIdFromIP(test_ip) != False
 
 def test_timewindows(database):
-<<<<<<< HEAD
     """ unit tests for addNewTW and getFirstTWforProfile """
     # clear the database before running this test
     os.system('./slips.py -c slips.conf -cc')
     profileid = 'profile_8.8.8.8'
-=======
     """ unit tests for addNewTW ,getLastTWforProfile and getFirstTWforProfile """
     profileid = 'profile_192.168.1.1'
->>>>>>> develop
     # add a profile
     database.addProfile(profileid,'00:00','1')
     # add a tw to that profile (first tw)
     database.addNewTW(profileid, 0.0)
     # add  a new tw (last tw)
-<<<<<<< HEAD
     assert database.getFirstTWforProfile(profileid) == [('timewindow1', 0.0)]
 
 # deleted test to be able to parallelize the rest of the unit tests
@@ -46,11 +42,6 @@ def test_timewindows(database):
 #     database.addNewTW(profileid, 5.0)
 #     database.markProfileTWAsModified(profileid,twid,20.0)
 #     assert database.getModifiedTWSinceTime(0.0)[0][0] == 'profile_192.168.1.1_timewindow1'
-=======
-    database.addNewTW(profileid, 5.0)
-    assert database.getFirstTWforProfile(profileid) == [('timewindow1', 0.0)]
-    assert database.getLastTWforProfile(profileid) == [('timewindow2', 5.0)]
->>>>>>> develop
 
 def getSlipsInternalTime():
     """ return a random time for testing"""
