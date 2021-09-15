@@ -38,7 +38,6 @@ import errno
 import subprocess
 import re
 import random
-import signal
 
 version = '0.7.3'
 
@@ -300,16 +299,21 @@ def close_open_redis_servers():
             # skip comments
             if line.startswith('#') or 'Date' in line or len(line) < 3:
                 continue
-            pid =  re.split(r'\s{2,}', line)[-2]
+            pid =  re.split(r'\s{2,}', line)[-1]
             open_servers_PIDs.append(pid)
 
     if len(open_servers_PIDs) > 0:
         for pid in open_servers_PIDs:
-            try:
-                os.kill(int(pid), signal.SIGTERM)
-            except ProcessLookupError:
-                # process already exited
-                continue
+            # signal 0 is to check if the process is still running or not
+            # it returns 1 if the process exitted
+            while os.kill(int(pid), 0) != 1:
+                try:
+                    # sigterm is 9
+                    os.kill(int(pid),9)
+                except ProcessLookupError:
+                    # process already exited, sometimes this exception is raised
+                    # but the process is still running, keep trying to kill it
+                    break
 
         # delete the closed redis servers from used_redis_servers.txt
         with open('used_redis_servers.txt','w') as f:
