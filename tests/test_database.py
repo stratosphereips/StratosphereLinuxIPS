@@ -1,12 +1,30 @@
 import ipaddress
 import redis
 import os
+import configparser
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
 test_ip = '192.168.1.1'
 
-def test_getProfileIdFromIP(database):
+
+def do_nothing(*arg):
+    """ Used to override the print function because using the self.print causes broken pipes """
+    pass
+
+# create another database instance other than the one in
+# conftest because the port in conftest is used in other test files
+def create_db_instace(outputQueue):
+    from slips_files.core.database import __database__
+    config = configparser.ConfigParser()
+    __database__.start(config, 46443)
+    __database__.outputqueue = outputQueue
+    __database__.print = do_nothing
+    return __database__
+
+
+def test_getProfileIdFromIP(outputQueue):
+    database = create_db_instace(outputQueue)
     """ unit test for addProfile and getProfileIdFromIP """
     # clear the database before running this test
     os.system('./slips.py -c slips.conf -cc')
@@ -15,7 +33,8 @@ def test_getProfileIdFromIP(database):
     # try to retrieve it
     assert database.getProfileIdFromIP(test_ip) != False
 
-def test_timewindows(database):
+def test_timewindows(outputQueue):
+    database = create_db_instace(outputQueue)
     """ unit tests for addNewTW and getFirstTWforProfile """
     # clear the database before running this test
     os.system('./slips.py -c slips.conf -cc')
@@ -30,7 +49,7 @@ def test_timewindows(database):
     assert database.getFirstTWforProfile(profileid) == [('timewindow1', 0.0)]
 
 # deleted test to be able to parallelize the rest of the unit tests
-# def test_TW_modification(database):
+# def test_TW_modification(outputQueue):
 #     """ tests markProfileTWAsModified,getModifiedTWSinceTime,check_TW_to_close   """
 #     # clear the database before running this test
 #     os.system('./slips.py -c slips.conf -cc')
@@ -47,7 +66,8 @@ def getSlipsInternalTime():
     """ return a random time for testing"""
     return 50.0
 
-def test_add_ips(database):
+def test_add_ips(outputQueue):
+    database = create_db_instace(outputQueue)
     # add a profile
     database.addProfile(profileid,'00:00','1')
     # add a tw to that profile
@@ -72,7 +92,8 @@ def test_add_ips(database):
     assert stored_dstips == '{"192.168.1.1": 1}'
 
 
-def test_add_flow(database):
+def test_add_flow(outputQueue):
+    database = create_db_instace(outputQueue)
     # clear the database before running this test
     os.system('./slips.py -c slips.conf -cc')
     starttime = '5'
@@ -95,7 +116,8 @@ def test_add_flow(database):
                                           spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid) == True
     assert database.r.hget(profileid + '_' + twid + '_' + 'flows', uid) == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20, "sbytes": 20, "appproto": "dhcp", "label": "", "module_labels": {}}'
 
-def add_flow_to_the_db(database):
+def add_flow_to_the_db(outputQueue):
+    database = create_db_instace(outputQueue)
     starttime = '5'
     dur = '5'
     sport = 80
@@ -115,7 +137,8 @@ def add_flow_to_the_db(database):
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
                                           spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid)
 
-def test_add_port(database):
+def test_add_port(outputQueue):
+    database = create_db_instace(outputQueue)
     # first add the flow to the db
     add_flow_to_the_db(database)
     # add a port to this flow
@@ -138,7 +161,8 @@ def test_add_port(database):
     assert 'DstPortsServerTCPEstablished' in added_ports.keys()
     assert test_ip in added_ports['DstPortsServerTCPEstablished']
 
-def test_setEvidence(database):
+def test_setEvidence(outputQueue):
+    database = create_db_instace(outputQueue)
     type_detection = 'ip'
     detection_info = test_ip
     by = detection_info
@@ -155,7 +179,8 @@ def test_setEvidence(database):
     assert added_evidence2 == added_evidence
     assert added_evidence ==  '{"{\\"type_detection\\": \\"ip\\", \\"detection_info\\": \\"192.168.1.1\\", \\"type_evidence\\": \\"SSHSuccessful-by-192.168.1.1\\"}": {"confidence": 0.5, "threat_level": 0.01, "description": "SSH Successful to IP :8.8.8.8. From IP 192.168.1.1"}}'
 
-def test_deleteEvidence(database):
+def test_deleteEvidence(outputQueue):
+    database = create_db_instace(outputQueue)
     key = {'type_detection': 'ip',
            'detection_info': test_ip,
            'type_evidence': 'SSHSuccessful-by-192.168.1.1'
@@ -167,7 +192,8 @@ def test_deleteEvidence(database):
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
 
 
-def test_module_labels(database):
+def test_module_labels(outputQueue):
+    database = create_db_instace(outputQueue)
     """ tests set and get_module_labels_from_flow """
     # clear the database before running this test
     os.system('./slips.py -c slips.conf -cc')
@@ -180,7 +206,8 @@ def test_module_labels(database):
     labels = database.get_module_labels_from_flow(profileid, twid, uid)
     assert labels ==  {'test': 'malicious'}
 
-def test_setInfoForDomains(database):
+def test_setInfoForDomains(outputQueue):
+    database = create_db_instace(outputQueue)
     """ tests setInfoForDomains, setNewDomain and getDomainData """
     domain = 'www.google.com'
     domain_data = {'threatintelligence': 'sample data'}
@@ -189,14 +216,16 @@ def test_setInfoForDomains(database):
     stored_data = database.getDomainData(domain)
     assert  stored_data == {'threatintelligence': 'sample data'}
 
-def test_subscribe(database):
+def test_subscribe(outputQueue):
+    database = create_db_instace(outputQueue)
     # invalid channel
     assert database.subscribe('invalid_channel') == False
     # valid channel, shoud return a pubsub object
     assert type(database.subscribe('tw_modified')) == redis.client.PubSub
 
 
-def test_profile_moddule_labels(database):
+def test_profile_moddule_labels(outputQueue):
+    database = create_db_instace(outputQueue)
     """ tests set and get_profile_module_label """
     module_label = 'malicious'
     module_name = 'test'
