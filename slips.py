@@ -267,13 +267,6 @@ def shutdown_gracefully(redis_port: str):
             except TypeError:
                 # Slips didn't generate zeek log files
                 pass
-        # clear primary db
-        __database__.r.flushdb()
-        # 6379 is the cache db, don't close this server
-        # if redis_port != 6379:
-        #     # Only close the redis server if it's opened by slips, don't close the default one (the one we use for cache)
-        #     command = f'redis-cli -h 127.0.0.1 -p {redis_port} shutdown > /dev/null 2>&1'
-        #     os.system(command)
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -306,7 +299,7 @@ def close_open_redis_servers():
 
         # delete the closed redis servers from used_redis_servers.txt
         with open('used_redis_servers.txt','w') as f:
-            f.write("# This file will contain a list of used redis ports\n# Once a server is killed, all the data in it will be deleted and it will be removed from this file\nDate                   File or interface                   Used port       Server PID\n")
+            f.write("# This file contains a list of used redis ports.\n# Once a server is killed, it will be removed from this file.\nDate                   File or interface                   Used port       Server PID\n")
         print(f"{len(open_servers_PIDs)} Redis Servers Killed.")
         sys.exit(-1)
 
