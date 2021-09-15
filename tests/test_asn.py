@@ -11,7 +11,7 @@ def create_asn_instance(outputQueue):
     """ Create an instance of asn.py
         needed by every other test in this file  """
     config = configparser.ConfigParser()
-    asn = Module(outputQueue, config, 48531)
+    asn = Module(outputQueue, config, 6380)
     # override the self.print function to avoid broken pipes
     asn.print = do_nothing
     return asn

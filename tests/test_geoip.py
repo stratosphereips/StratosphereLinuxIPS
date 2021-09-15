@@ -11,7 +11,7 @@ def create_geopip_instance(outputQueue):
     """ Create an instance of geoip.py
         needed by every other test in this file  """
     config = configparser.ConfigParser()
-    geoip = Module(outputQueue, config, 52360)
+    geoip = Module(outputQueue, config, 6380)
     geoip.bro_timeout=1
     # override the self.print function to avoid broken pipes
     geoip.print = do_nothing

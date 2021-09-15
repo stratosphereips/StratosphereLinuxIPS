@@ -11,7 +11,7 @@ def create_RDNS_instance(outputQueue):
     """ Create an instance of RDNS.py
         needed by every other test in this file  """
     config = configparser.ConfigParser()
-    RDNS = Module(outputQueue, config, 46001)
+    RDNS = Module(outputQueue, config, 6380)
     # override the self.print function to avoid broken pipes
     RDNS.print = do_nothing
     return RDNS

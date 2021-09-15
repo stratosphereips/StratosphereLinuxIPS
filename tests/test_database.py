@@ -17,7 +17,7 @@ def do_nothing(*arg):
 def create_db_instace(outputQueue):
     from slips_files.core.database import __database__
     config = configparser.ConfigParser()
-    __database__.start(config, 46443)
+    __database__.start(config, 6381)
     __database__.outputqueue = outputQueue
     __database__.print = do_nothing
     return __database__
@@ -89,18 +89,18 @@ def test_add_ips(outputQueue):
     assert database.add_ips(profileid, twid, ipaddress.ip_address(test_ip), columns, 'Server' ) == True
     hash_id = profileid + '_'+ twid
     stored_dstips = database.r.hget(hash_id,'SrcIPs')
-    assert stored_dstips == '{"192.168.1.1": 1}'
+    assert "192.168.1.1" in stored_dstips
 
 
 def test_add_flow(outputQueue):
     database = create_db_instace(outputQueue)
-    # clear the database before running this test
-    os.system('./slips.py -c slips.conf -cc')
+    profileid = 'profile_123.123.123.121'
+    twid = 'timewindow1'
     starttime = '5'
     dur = '5'
     sport = 80
     dport = 88
-    saddr_as_obj = ipaddress.ip_address(test_ip)
+    saddr_as_obj = ipaddress.ip_address('123.123.123.121')
     daddr_as_obj = ipaddress.ip_address('8.8.8.8')
     proto = 'TCP'
     state = 'established'
@@ -109,12 +109,12 @@ def test_add_flow(outputQueue):
     spkts = 20
     sbytes = 20
     appproto = 'dhcp'
-    uid = '1234'
+    uid = '4321'
     assert database.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
                                           saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj),
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
                                           spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid) == True
-    assert database.r.hget(profileid + '_' + twid + '_' + 'flows', uid) == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20, "sbytes": 20, "appproto": "dhcp", "label": "", "module_labels": {}}'
+    assert '{"ts": "5", "dur": "5", "saddr": "123.123.123.121", "sport": 80, "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20, "sbytes": 20, "appproto": "dhcp", "label": "", "module_labels": {}}' in database.r.hget(profileid + '_' + twid + '_' + 'flows', uid)
 
 def add_flow_to_the_db(outputQueue):
     database = create_db_instace(outputQueue)
