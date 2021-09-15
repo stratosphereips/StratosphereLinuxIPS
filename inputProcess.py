@@ -202,12 +202,13 @@ class InputProcess(multiprocessing.Process):
                         # Get timestamp
                         timestamp = nline.split('\t')[0]
 
-                    file_time[filename] = timestamp
-
-                    # self.print(f'File {filename}. TS: {timestamp}')
-                    # Store the line in the cache
-                    # self.print(f'Adding cache and time of {filename}')
-                    cache_lines[filename] = line
+                    if type(timestamp) == float:
+                        # don't store weird strings as timestamps
+                        file_time[filename] = timestamp
+                        # self.print(f'File {filename}. TS: {timestamp}')
+                        # Store the line in the cache
+                        # self.print(f'Adding cache and time of {filename}')
+                        cache_lines[filename] = line
 
             ################
             # Out of the for that check each Zeek file one by one
