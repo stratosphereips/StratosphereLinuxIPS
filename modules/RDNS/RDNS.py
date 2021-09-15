@@ -39,18 +39,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
-        # Set the timeout based on the platform. This is because the
-        # pyredis lib does not have officially recognized the
-        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # Other systems
-            self.timeout = None
+        self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """

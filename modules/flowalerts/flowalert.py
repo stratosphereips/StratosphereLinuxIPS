@@ -46,12 +46,13 @@ class Module(Module, multiprocessing.Process):
         # Retrieve the labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        self.c1 = __database__.subscribe('new_flow')
-        self.c2 = __database__.subscribe('new_ssh')
-        self.c3 = __database__.subscribe('new_notice')
-        self.c4 = __database__.subscribe('new_ssl')
-        self.c5 = __database__.subscribe('new_service')
-        self.c6 = __database__.subscribe('tw_closed')
+        self.pubsub = __database__.r.pubsub()
+        self.pubsub.subscribe('new_flow')
+        self.pubsub.subscribe('new_ssh')
+        self.pubsub.subscribe('new_notice')
+        self.pubsub.subscribe('new_ssl')
+        self.pubsub.subscribe('new_service')
+        self.pubsub.subscribe('tw_closed')
         self.timeout = None
         # ignore default no dns resolution alerts for LAN IP address, loopback addr, dns servers, ...etc
         self.ignored_ips = ('127.0.0.1', '8.8.8.8', '8.8.4.4', '1.1.1.1', '1.0.0.1', '9.9.9.9', '149.112.112.112',
@@ -64,6 +65,8 @@ class Module(Module, multiprocessing.Process):
         # store them as network objects
         self.ignored_ranges = list(map(ipaddress.ip_network,self.ignored_ranges))
         self.p2p_daddrs = {}
+        # get the default gateway
+        self.gateway = self.get_default_gateway()
 
     def is_ignored_ip(self, ip) -> bool:
         ip_obj =  ipaddress.ip_address(ip)
@@ -74,8 +77,7 @@ class Module(Module, multiprocessing.Process):
                 # ip found in one of the ranges, ignore it
                 return True
         return False
-        # get the default gateway
-        self.gateway = self.get_default_gateway()
+
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -414,8 +416,8 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
+                message = self.pubsub.get_message(timeout=None)
                 # ---------------------------- new_flow channel
-                message = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
                     # confirm that the module is done processing
@@ -560,14 +562,8 @@ class Module(Module, multiprocessing.Process):
                             self.set_evidence_data_exfiltration(most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # ---------------------------- new_ssh channel
-                message = self.c2.get_message(timeout=0.01)
-                if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
-                    return True
                 if message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
                     data = message['data']
-
                     # Convert from json to dict
                     data = json.loads(data)
                     profileid = data['profileid']
@@ -610,12 +606,6 @@ class Module(Module, multiprocessing.Process):
                                 pass
 
                 # ---------------------------- new_notice channel
-                # Check for self signed certificates in new_notice channel (notice.log)
-                message = self.c3.get_message(timeout=0.01)
-                if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
-                    return True
                 if message and message['channel'] == 'new_notice':
                     data = message['data']
                     if type(data) == str:
@@ -693,11 +683,6 @@ class Module(Module, multiprocessing.Process):
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
                 # ---------------------------- new_ssl channel
-                message = self.c4.get_message(timeout=0.01)
-                if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
-                    return True
                 if message and message['channel'] == 'new_ssl':
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
@@ -742,11 +727,6 @@ class Module(Module, multiprocessing.Process):
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp)
 
                 # ---------------------------- new_service channel
-                message = self.c5.get_message(timeout=0.01)
-                if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
-                    return True
                 if message and message['channel'] == 'new_service'  and type(message['data']) is not int:
                     data = json.loads(message['data'])
                     # uid = data['uid']
@@ -764,9 +744,6 @@ class Module(Module, multiprocessing.Process):
                         #todo alert?
 
                 # ---------------------------- tw_closed channel
-                message = self.c6.get_message(timeout=0.01)
-                if message and message['data'] == 'stop_process':
-                    return True
                 if message and message['channel'] == 'tw_closed' and type(message['data']) == str:
                     data = message["data"]
                     # data example: profile_192.168.1.1_timewindow1
