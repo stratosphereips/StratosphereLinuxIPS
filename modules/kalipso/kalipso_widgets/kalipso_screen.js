@@ -370,6 +370,10 @@ class screen {
             this.render();
         }
       	else if(key.name == 'q' || key.name == "C-c"){
+      	    console.log("*************okokok")
+            // var PIDs = this.redis_database.get_PIDs()
+            // var slips_PID = PIDs['slips.py']
+            // console.log(slips_PID)
       		return process.exit(0);
       	}
         else if(key.name == 'escape'){

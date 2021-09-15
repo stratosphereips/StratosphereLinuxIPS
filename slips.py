@@ -205,7 +205,9 @@ def get_cwd():
 
 def shutdown_gracefully(redis_port: str):
     """ Wait for all modules to confirm that they're done processing and then shutdown """
-
+    if args.gui:
+        # don't shut down when the user is still using kalipso
+        return True
     try:
         print('Stopping Slips')
         # Stop the modules that are subscribed to channels
@@ -563,7 +565,14 @@ if __name__ == '__main__':
     output = result.stdout.decode('utf-8')
     for line in output.splitlines():
         if f":{redis_port}" in line:
-            redis_pid = re.split(r'\s{2,}', line)[-1].split('/')[0]
+            line = re.split(r'\s{2,}', line)
+            # get the substring that has the pid
+            try:
+                redis_pid = line[-1]
+                _ = redis_pid.index('/')
+            except ValueError:
+                redis_pid = line[-2]
+            redis_pid = redis_pid.split('/')[0]
             break
     # log redis-server pid
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
