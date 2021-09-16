@@ -793,7 +793,7 @@ class Module(Module, multiprocessing.Process):
                     self.check_dns_resolution_without_connection(contacted_ips, profileid, twid, uid)
 
             except KeyboardInterrupt:
-                return True
+                continue
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

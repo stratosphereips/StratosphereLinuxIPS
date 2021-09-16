@@ -202,11 +202,14 @@ def shutdown_gracefully():
                     finished_modules.append(module_name)
                     # remove module from the list of opened pids
                     PIDs.pop(module_name)
-                    modules_left = len(set(loaded_modules) - set(finished_modules))
+                    modules_left = len(list(PIDs.keys()))
                     # to vertically align them when printing
                     module_name = module_name+' '*(20-len(module_name))
                     print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
             max_loops -=1
+        # modules that aren't subscribed to any channel will always be killed and not stopped
+        # some modules continue on sigint, but recieve other msgs (other than stop_message) in the queue before stop_process
+        # they will always be killed
         # kill processes that didn't stop after timeout
         for unstopped_proc,pid in PIDs.items():
             unstopped_proc = unstopped_proc+' '*(20-len(unstopped_proc))
@@ -384,7 +387,6 @@ if __name__ == '__main__':
         terminate_slips()
 
 
-
     # Remove default folder for alerts, if exists
     if os.path.exists(args.output):
         try:
@@ -481,7 +483,7 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid
     outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
-    __database__.store_process_PID('outputProcess',int(outputProcessThread.pid))
+    __database__.store_process_PID('OutputProcess',int(outputProcessThread.pid))
 
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
@@ -543,7 +545,7 @@ if __name__ == '__main__':
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output, logs_folder)
     evidenceProcessThread.start()
     outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
-    __database__.store_process_PID('evidenceProcess', int(evidenceProcessThread.pid))
+    __database__.store_process_PID('EvidenceProcess-13', int(evidenceProcessThread.pid))
 
 
     # Profile thread
@@ -553,7 +555,7 @@ if __name__ == '__main__':
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
-    __database__.store_process_PID('profilerProcess', int(profilerProcessThread.pid))
+    __database__.store_process_PID('ProfilerProcess-14', int(profilerProcessThread.pid))
 
     # Input process
     # Create the input process and start it

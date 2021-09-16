@@ -2,7 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
-import platform
+import sys
 
 # Your imports
 import time

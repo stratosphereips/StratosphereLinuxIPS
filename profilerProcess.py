@@ -52,7 +52,7 @@ def timeit(method):
 class ProfilerProcess(multiprocessing.Process):
     """ A class to create the profiles for IPs and the rest of data """
     def __init__(self, inputqueue, outputqueue, verbose, debug, config):
-        self.name = 'Profiler'
+        self.name = 'ProfilerProcess'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -2540,17 +2540,19 @@ class ProfilerProcess(multiprocessing.Process):
             self.print("{}".format(e), 0, 1)
 
     def run(self):
+        rec_lines = 0
         # Main loop function
-        try:
-            rec_lines = 0
-            while True:
+        while True:
+            try:
                 line = self.inputqueue.get()
                 if 'stop' == line:
                     self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 2)
+                    __database__.publish('finished_modules', self.name)
                     return True
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
                     self.print("Stopping Profiler Process. Received {} lines ({})", 0, 2)
+                    __database__.publish('finished_modules', self.name)
                     return True
                 else:
                     # Received new input data
@@ -2608,6 +2610,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
                 message = self.c1.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'reload_whitelist' and type(message['data']) == str:
                     # if whitelist.conf is edited using pycharm
@@ -2615,16 +2618,15 @@ class ProfilerProcess(multiprocessing.Process):
                     # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
                     self.read_whitelist()
 
-
-        except KeyboardInterrupt:
-            self.print("Received {} lines.".format(rec_lines), 0, 1)
-            return True
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print("Error. Stopped Profiler Process. Received {} lines".format(rec_lines), 0, 1)
-            self.print(f"\tProblem with Profiler Process. line {exception_line}", 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            self.print(traceback.format_exc())
-            return True
+            except KeyboardInterrupt:
+                # self.print("Received {} lines.".format(rec_lines), 0, 1)
+                continue
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print("Error. Stopped Profiler Process. Received {} lines".format(rec_lines), 0, 1)
+                self.print(f"\tProblem with Profiler Process. line {exception_line}", 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc())
+                return True

@@ -435,15 +435,17 @@ class EvidenceProcess(multiprocessing.Process):
         return False
 
     def run(self):
-        try:
+        while True:
+            try:
             # Adapt this process to process evidence from only IPs and not profileid or twid
-            while True:
+
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
                     self.logfile.close()
                     self.jsonfile.close()
+                    __database__.publish('finished_modules', self.name)
                     return True
                 elif message['channel'] == 'evidence_added' and type(message['data']) is not int:
                     # Data sent in the channel as a json dict, it needs to be deserialized first
@@ -550,14 +552,14 @@ class EvidenceProcess(multiprocessing.Process):
 
                                 __database__.publish('new_blocking', srcip)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
-        except KeyboardInterrupt:
-            self.logfile.close()
-            self.jsonfile.close()
-            self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
-            return True
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(f'01|evidence|[Evidence] Error in the Evidence Process line {exception_line}')
-            self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
-            self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
-            return True
+            except KeyboardInterrupt:
+                self.logfile.close()
+                self.jsonfile.close()
+                # self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
+                continue
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.outputqueue.put(f'01|evidence|[Evidence] Error in the Evidence Process line {exception_line}')
+                self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
+                self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
+                return True
