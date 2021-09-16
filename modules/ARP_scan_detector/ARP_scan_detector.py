@@ -46,8 +46,9 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         # Remember to subscribe to this channel in database.py
-        self.c1 = __database__.subscribe('new_arp')
-        self.c2 = __database__.subscribe('tw_closed')
+        self.pubsub = __database__.r.pubsub()
+        self.pubsub.subscribe('new_arp')
+        self.pubsub.subscribe('tw_closed')
         self.timeout = None
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
@@ -132,21 +133,17 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = self.pubsub.get_message(timeout=None)
                 if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
+
                 if message and message['channel'] == 'new_arp' and type(message['data'])==str:
                     flow = json.loads(message['data'])
                     self.check_arp_scan(flow)
 
                 # if the tw is closed, remove all its entries from the cache dict
-                message = self.c2.get_message(timeout=0.5)
-                if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
-                    return True
                 if message and message['channel'] == 'tw_closed' and type(message['data'])==str:
                     profileid_tw = message['data']
                     # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore
