@@ -329,8 +329,6 @@ class Module(Module, multiprocessing.Process):
                 __database__.add_timeline_line(profileid, twid, activity, timestamp)
             self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
 
-        except KeyboardInterrupt:
-            return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on process_flow() line {exception_line}', 0, 1)
@@ -342,13 +340,12 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         # Main loop function
-        #time.sleep(10)
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message and message['data'] == 'stop_process':
+                if message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True

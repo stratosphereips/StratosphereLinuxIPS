@@ -171,7 +171,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 if self.reader:
                     self.reader.close()
-                return True
+                continue
             except Exception as inst:
                 if self.reader:
                     self.reader.close()
