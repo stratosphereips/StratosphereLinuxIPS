@@ -1,5 +1,5 @@
 maxminddb==2.0.3
-numpy==1.17.4
+numpy==1.19.2
 watchdog==2.0.2
 urllib3==1.24.3
 pandas==1.2.3
