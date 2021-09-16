@@ -1171,6 +1171,12 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['md5'] = line.get('md5', '')
             # self.column_values['sha1'] = line.get('sha1','')
             #todo process zeek tabs files.log
+        elif 'arp' in file_type:
+            self.column_values['type'] = 'arp'
+            self.column_values['src_mac'] = line.get('src_mac', '')
+            self.column_values['dst_mac'] = line.get('dst_mac', '')
+            self.column_values['saddr'] = line.get('orig_h','')
+            self.column_values['daddr'] = line.get('resp_h','')
         elif 'known_services' in file_type:
             self.column_values['type'] = 'known_services'
             self.column_values['saddr'] = line.get('host', '')
@@ -1180,12 +1186,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['port_proto'] = line.get('port_proto', '')
             self.column_values['service'] = line.get('service', '')
 
-        elif 'arp' in file_type:
-            self.column_values['type'] = 'arp'
-            self.column_values['src_mac'] = line.get('src_mac', '')
-            self.column_values['dst_mac'] = line.get('dst_mac', '')
-            self.column_values['saddr'] = line.get('orig_h','')
-            self.column_values['daddr'] = line.get('resp_h','')
         else:
             return False
         return True
