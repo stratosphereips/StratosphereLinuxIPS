@@ -185,6 +185,7 @@ def shutdown_gracefully():
         loaded_modules = modules_to_call.keys()
         # get dict of pids spawned by slips
         PIDs = __database__.get_PIDs()
+
         # timeout variable so we don't loop forever
         max_loops = 130
         # loop until all loaded modules are finished
@@ -545,7 +546,7 @@ if __name__ == '__main__':
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output, logs_folder)
     evidenceProcessThread.start()
     outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
-    __database__.store_process_PID('EvidenceProcess-13', int(evidenceProcessThread.pid))
+    __database__.store_process_PID('EvidenceProcess', int(evidenceProcessThread.pid))
 
 
     # Profile thread
