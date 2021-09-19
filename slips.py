@@ -255,7 +255,7 @@ def shutdown_gracefully(input_information):
             input_information = input_information[:input_information.index('.')]
             # Give the exact path to save(), this is where the .rdb backup will be
             __database__.save(backups_dir + input_information)
-            print(f"[Main] Database saved to {backups_dir}/{input_information}" )
+            print(f"[Main] Database saved to {backups_dir[:]}{input_information}" )
 
         os._exit(-1)
         return True

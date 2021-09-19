@@ -28,8 +28,11 @@ class Database(object):
         self.separator = '_'
         self.normal_label = 'normal'
         self.malicious_label = 'malicious'
-        # this list will store evidence that slips detected but can't
-        # alert for it before the flow of them is added to our db
+        self.running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+        if self.running_in_docker:
+            self.sudo =''
+        else:
+            self.sudo = 'sudo '
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
