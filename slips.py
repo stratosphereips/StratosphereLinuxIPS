@@ -600,7 +600,7 @@ if __name__ == '__main__':
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
-    __database__.store_process_PID('ProfilerProcess-14', int(profilerProcessThread.pid))
+    __database__.store_process_PID('ProfilerProcess', int(profilerProcessThread.pid))
 
     c1 = __database__.subscribe('finished_modules')
 

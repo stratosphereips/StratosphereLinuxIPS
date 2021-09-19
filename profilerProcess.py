@@ -2611,7 +2611,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
                 message = self.c1.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
-                    __database__.publish('finished_modules', self.name)
+                    __database__.publish('finished_modules', 'ProfilerProcess')
                     return True
                 if message and message['channel'] == 'reload_whitelist' and type(message['data']) == str:
                     # if whitelist.conf is edited using pycharm
