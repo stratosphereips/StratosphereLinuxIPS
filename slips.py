@@ -29,6 +29,7 @@ from datetime import datetime
 import socket
 import warnings
 from modules.UpdateManager.update_file_manager import UpdateFileManager
+import json
 import pkgutil
 import inspect
 import modules
@@ -172,8 +173,10 @@ def get_cwd():
             cwd = arg[:arg.index('slips.py')]
             return cwd
 
-def shutdown_gracefully():
-    """ Wait for all modules to confirm that they're done processing and then shutdown """
+def shutdown_gracefully(input_information):
+    """ Wait for all modules to confirm that they're done processing and then shutdown
+    :param input_information: the interface/pcap/nfdump/binetflow used. we need it to save the db
+    """
 
     try:
         print('Stopping Slips')
@@ -182,8 +185,13 @@ def shutdown_gracefully():
         # Here we should Wait for any channel if it has still
         # data to receive in its channel
         finished_modules = []
-        loaded_modules = modules_to_call.keys()
-        # get dict of pids spawned by slips
+        try:
+            loaded_modules = modules_to_call.keys()
+        except NameError:
+            # this is the case of -d <rdb file> we don't have loaded_modules
+            loaded_modules = []
+
+        # get dict of PIDs spawned by slips
         PIDs = __database__.get_PIDs()
 
         # timeout variable so we don't loop forever
@@ -218,7 +226,7 @@ def shutdown_gracefully():
                 os.kill(int(pid), 9)
                 print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tKilled.')
             except ProcessLookupError:
-                print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready exited.')
+                print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready stopped.')
         # Send manual stops to the process not using channels
         try:
             logsProcessQueue.put('stop_process')
@@ -238,6 +246,22 @@ def shutdown_gracefully():
             inputProcess.terminate()
         except NameError:
             pass
+        if args.save:
+            # Create a new dir to store backups
+            backups_dir = get_cwd() +'redis_backups' + '/'
+            try:
+                os.mkdir(backups_dir)
+            except FileExistsError:
+                pass
+            # The name of the interface/pcap/nfdump/binetflow used is in input_information
+            # We need to seperate it from the path
+            input_information = os.path.basename(input_information)
+            # Remove the extension from the filename
+            input_information = input_information[:input_information.index('.')]
+            # Give the exact path to save(), this is where the .rdb backup will be
+            __database__.save(backups_dir + input_information)
+            print(f"[Main] Database saved to {backups_dir[:]}{input_information}" )
+
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -278,6 +302,10 @@ if __name__ == '__main__':
                         help='block IPs that connect to the computer. Supported only on Linux.')
     parser.add_argument('-o', '--output', action='store', required=False, default=alerts_default_path,
                         help='store alerts.json and alerts.txt in the provided folder.')
+    parser.add_argument('-s', '--save',action='store_true',required=False,
+                        help='To Save redis db to disk. Requires root access.')
+    parser.add_argument('-d', '--db',action='store',required=False,
+                        help='To read a redis (rdb) saved file. Requires root access.')
     parser.add_argument("-h", "--help", action="help", help="command line help")
 
     args = parser.parse_args()
@@ -297,12 +325,20 @@ if __name__ == '__main__':
     # Check if redis server running
     if check_redis_database() is False:
         terminate_slips()
-
-    # Clear cache if the parameter was included
+        # Clear cache if the parameter was included
     if args.clearcache:
         print('Deleting Cache DB in Redis.')
         clear_redis_cache_database()
         terminate_slips()
+    # Check if user want to save and load a db at the same time
+    if args.save :
+        # make sure slips is running as root
+        if os.geteuid() != 0:
+            print("Slips needs to be run as root to save the database. Stopping.")
+            terminate_slips()
+        if args.db:
+            print("Can't use -s and -b together")
+            terminate_slips()
 
     # Check the type of input
     if args.interface:
@@ -354,6 +390,9 @@ if __name__ == '__main__':
                         input_type = 'binetflow-tabs'
                     elif re.search('\s{1,}-\s{1,}', first_line):
                         input_type = 'zeek_log_file'
+    elif args.db:
+        input_type = 'database'
+        input_information = 'database'
     else:
         print('You need to define an input source.')
         sys.exit(-1)
@@ -478,6 +517,9 @@ if __name__ == '__main__':
     # this process starts the db
     outputProcessThread.start()
 
+
+
+
     # Before starting update malicious file
     update_malicious_file(outputProcessQueue,config)
     # Print the PID of the main slips process. We do it here because we needed the queue to the output process
@@ -486,11 +528,13 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
     __database__.store_process_PID('OutputProcess',int(outputProcessThread.pid))
 
+
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
     # This plugins import will automatically load the modules and put them in the __modules__ variable
-    if to_ignore:
+    # if slips is given a .rdb file, don't load the modules as we don't need them
+    if to_ignore and not args.db:
         # Convert string to list
         to_ignore = to_ignore.replace("[","").replace("]","").replace(" ","").split(",")
         # Ignore exporting alerts module if export_to is empty
@@ -556,7 +600,15 @@ if __name__ == '__main__':
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
     profilerProcessThread.start()
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
-    __database__.store_process_PID('ProfilerProcess', int(profilerProcessThread.pid))
+    __database__.store_process_PID('ProfilerProcess-14', int(profilerProcessThread.pid))
+
+    c1 = __database__.subscribe('finished_modules')
+
+    if args.db:
+        if not __database__.load(args.db):
+            print("[Main] Failed to load the database.")
+            shutdown_gracefully(input_information)
+        shutdown_gracefully(input_information)
 
     # Input process
     # Create the input process and start it
@@ -566,7 +618,6 @@ if __name__ == '__main__':
     __database__.store_process_PID('inputProcess', int(inputProcess.pid))
 
 
-    c1 = __database__.subscribe('finished_modules')
 
     # Store the host IP address if input type is interface
     if input_type == 'interface':
@@ -644,13 +695,14 @@ if __name__ == '__main__':
                     # print('Counter to stop Slips. Amount of modified
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:
-                        shutdown_gracefully()
+                         # If the user specified -s, save the database before stopping
+                        shutdown_gracefully(input_information)
                         break
                     minimum_intervals_to_wait -= 1
                 else:
                     minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
     except KeyboardInterrupt:
-        shutdown_gracefully()
+        shutdown_gracefully(input_information)
 
 

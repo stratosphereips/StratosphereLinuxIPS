@@ -12,7 +12,7 @@ It's recommended to use PCAPs.
 After Slips was run on the traffic, the Slips output can be analyzed with Kalipso GUI interface. In this section, we will explain how to execute each type of file in Slips, and the output can be analyzed with Kalipso.
 
 Either you are [running Slips in docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-and-running-slips-inside-a-docker) or [locally](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-in-your-own-computer), you can run Slips using the same below commands and configurations.
-
+	
 
 ## Reading the input
 
@@ -106,6 +106,23 @@ Create another terminal of the Slips container using
 Now you can run 
 
 ```./kalipso.sh```
+
+## Saving the database
+
+Slips uses redis to store analysis information. you can save your analysis for later use by running slips with ```-s```, for example
+
+```./slips.py -f dataset/hide-and-seek-short.pcap -s```
+
+Your .rdb saved database will be stored in ```redis_backups/```.
+
+You can load it again using ```-d```, For example:
+
+```./slips.py -d redis_backups/hide-and-seek-short.rdb ```
+
+And then use ```./kalipso``` to view the loaded database.
+
+This feature isn't supported in docker due to problems with redis on docker.
+
 
 ## Modifying a configuration file
 

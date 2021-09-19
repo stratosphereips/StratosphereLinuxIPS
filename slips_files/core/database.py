@@ -5,6 +5,7 @@ import json
 from typing import Tuple, Dict, Set, Callable
 import configparser
 import traceback
+import subprocess
 from datetime import datetime
 import ipaddress
 import sys
@@ -27,8 +28,11 @@ class Database(object):
         self.separator = '_'
         self.normal_label = 'normal'
         self.malicious_label = 'malicious'
-        # this list will store evidence that slips detected but can't
-        # alert for it before the flow of them is added to our db
+        self.running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+        if self.running_in_docker:
+            self.sudo =''
+        else:
+            self.sudo = 'sudo '
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -2110,6 +2114,66 @@ class Database(object):
     def get_whitelist(self):
         """ Return dict of 3 keys: IPs, domains and organizations"""
         return self.r.hgetall('whitelist')
+
+    def save(self,backup_file):
+        """
+        Save the db to disk.
+        backup_file should be the path+name of the file you want to store the db in
+        If you -s the same file twice the old backup will be overwritten.
+        """
+        # Saves to /var/lib/redis/dump.rdb
+        # this path is only accessible by root
+        self.r.save()
+        # if you're not root, this will return False even if the path exists
+        if os.path.exists('/var/lib/redis/dump.rdb'):
+            command = self.sudo + 'cp /var/lib/redis/dump.rdb ' + backup_file + '.rdb'
+            os.system(command)
+            self.print("Backup stored in {}.rdb".format(backup_file))
+        else:
+            self.print("Error Saving: Cannot find redis backup directory")
+
+    def load(self,backup_file: str) -> bool:
+        """
+        Load the db from disk
+        backup_file should be the full path of the .rdb
+        """
+        # Set sudo according to environment
+        # Locate the default path of redis dump.rdb
+        command = self.sudo + 'cat /etc/redis/*.conf | grep -w "dir"'
+        redis_dir = subprocess.getoutput(command)
+        if 'dir /var/lib/redis' in redis_dir:
+            redis_dir = '/var/lib/redis'
+        else:
+            # Get the exact path without spaces
+            redis_dir = redis_dir[redis_dir.index(' ')+1:]
+        if os.path.exists(backup_file):
+            # Check if valid .rdb file
+            command = 'file ' + backup_file
+            result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+            # Get command output
+            file_type = result.stdout.decode('utf-8')
+            # Check if valid redis database
+            if 'Redis' in file_type:
+                # All modules throw redis.exceptions.ConnectionError when we stop the redis-server so we need to close all channels first
+                # We won't need them since we're loading a db that's already been analyzed
+                self.publish_stop()
+                # Stop the server first in order for redis to load another db
+                os.system(self.sudo +'service redis-server stop')
+                # todo: find/generate dump.rdb in docker.
+                # todo add unit tests for these load() and save()
+                # Copy out saved db to the dump.rdb (the db redis uses by default)
+                command = self.sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
+                os.system(command)
+                # Start the server again
+                os.system(self.sudo + 'service redis-server start')
+                self.print("{} loaded successfully. Run ./kalipso".format(backup_file))
+                return True
+            else:
+                self.print("{} is not a valid redis database file.".format(backup_file))
+                return False
+        else:
+            self.print("{} doesn't exist.".format(backup_file))
+            return False
 
 
 __database__ = Database()

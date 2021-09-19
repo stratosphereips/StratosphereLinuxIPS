@@ -137,7 +137,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_long_connection(self, ip, duration, profileid, twid, uid, timestamp, ip_state='ip' ):
+    def set_evidence_long_connection(self, ip, duration, profileid, twid, uid, timestamp, ip_state='ip'):
         '''
         Set an evidence for a long connection.
         '''
@@ -741,7 +741,6 @@ class Module(Module, multiprocessing.Process):
                         # zeek detected a port that we didn't know about
                         # add to known ports
                         __database__.set_port_info(f'{port}/{proto}', service[0])
-                        #todo alert?
 
                 # ---------------------------- tw_closed channel
                 if message and message['channel'] == 'tw_closed' and type(message['data']) == str:
