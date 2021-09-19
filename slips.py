@@ -185,8 +185,13 @@ def shutdown_gracefully(input_information):
         # Here we should Wait for any channel if it has still
         # data to receive in its channel
         finished_modules = []
-        loaded_modules = modules_to_call.keys()
-        # get dict of pids spawned by slips
+        try:
+            loaded_modules = modules_to_call.keys()
+        except NameError:
+            # this is the case of -d <rdb file> we don't have loaded_modules
+            loaded_modules = []
+
+        # get dict of PIDs spawned by slips
         PIDs = __database__.get_PIDs()
 
         # timeout variable so we don't loop forever
@@ -221,7 +226,7 @@ def shutdown_gracefully(input_information):
                 os.kill(int(pid), 9)
                 print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tKilled.')
             except ProcessLookupError:
-                print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready exited.')
+                print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready stopped.')
         # Send manual stops to the process not using channels
         try:
             logsProcessQueue.put('stop_process')
@@ -386,6 +391,9 @@ if __name__ == '__main__':
                         input_type = 'binetflow-tabs'
                     elif re.search('\s{1,}-\s{1,}', first_line):
                         input_type = 'zeek_log_file'
+    elif args.db:
+        input_type = 'database'
+        input_information = 'database'
     else:
         print('You need to define an input source.')
         sys.exit(-1)
@@ -510,6 +518,9 @@ if __name__ == '__main__':
     # this process starts the db
     outputProcessThread.start()
 
+
+
+
     # Before starting update malicious file
     update_malicious_file(outputProcessQueue,config)
     # Print the PID of the main slips process. We do it here because we needed the queue to the output process
@@ -518,11 +529,13 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
     __database__.store_process_PID('OutputProcess',int(outputProcessThread.pid))
 
+
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
     # This plugins import will automatically load the modules and put them in the __modules__ variable
-    if to_ignore:
+    # if slips is given a .rdb file, don't load the modules as we don't need them
+    if to_ignore and not args.db:
         # Convert string to list
         to_ignore = to_ignore.replace("[","").replace("]","").replace(" ","").split(",")
         # Ignore exporting alerts module if export_to is empty
@@ -590,6 +603,15 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
     __database__.store_process_PID('ProfilerProcess-14', int(profilerProcessThread.pid))
 
+    c1 = __database__.subscribe('finished_modules')
+
+    if args.db:
+        if not __database__.load(args.db):
+            print("[Main] Failed to load the database.")
+            shutdown_gracefully(input_information)
+        print("[Main] {args.db} loaded successfully. Run ./kalipso")
+        shutdown_gracefully(input_information)
+
     # Input process
     # Create the input process and start it
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
@@ -597,13 +619,7 @@ if __name__ == '__main__':
     outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
     __database__.store_process_PID('inputProcess', int(inputProcess.pid))
 
-    if args.db:
-        # Failed to load the db
-        if not __database__.load(args.db):
-            print("[Main] Failed to load the database.")
-            shutdown_gracefully(input_information)
 
-    c1 = __database__.subscribe('finished_modules')
 
     # Store the host IP address if input type is interface
     if input_type == 'interface':
