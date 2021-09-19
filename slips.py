@@ -173,8 +173,10 @@ def get_cwd():
             cwd = arg[:arg.index('slips.py')]
             return cwd
 
-def shutdown_gracefully():
-    """ Wait for all modules to confirm that they're done processing and then shutdown """
+def shutdown_gracefully(input_information):
+    """ Wait for all modules to confirm that they're done processing and then shutdown
+    :param input_information: the interface/pcap/nfdump/binetflow used. we need it to save the db
+    """
 
     try:
         print('Stopping Slips')
@@ -239,6 +241,22 @@ def shutdown_gracefully():
             inputProcess.terminate()
         except NameError:
             pass
+        if args.save:
+            # Create a new dir to store backups
+            backups_dir = get_cwd() +'redis_backups' + '/'
+            try:
+                os.mkdir(backups_dir)
+            except FileExistsError:
+                pass
+            # The name of the interface/pcap/nfdump/binetflow used is in input_information
+            # We need to seperate it from the path
+            input_information = os.path.basename(input_information)
+            # Remove the extension from the filename
+            input_information = input_information[:input_information.index('.')]
+            # Give the exact path to save(), this is where the .rdb backup will be
+            __database__.save(backups_dir + input_information)
+            print(f"[Main] Database saved to {backups_dir}/{input_information}" )
+
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -583,7 +601,7 @@ if __name__ == '__main__':
         # Failed to load the db
         if not __database__.load(args.db):
             print("[Main] Failed to load the database.")
-            shutdown_gracefully()
+            shutdown_gracefully(input_information)
 
     c1 = __database__.subscribe('finished_modules')
 
@@ -664,28 +682,13 @@ if __name__ == '__main__':
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:
                          # If the user specified -s, save the database before stopping
-                        if args.save:
-                            # Create a new dir to store backups
-                            backups_dir = get_cwd() +'redis_backups' + '/'
-                            try:
-                                os.mkdir(backups_dir)
-                            except FileExistsError:
-                                pass
-                            print("backups_dir" + backups_dir)
-                            # The name of the interface/pcap/nfdump/binetflow used is in input_information
-                            # We need to seperate it from the path
-                            input_information = os.path.basename(input_information)
-                            # Remove the extension from the filename
-                            input_information = input_information[:input_information.index('.')]
-                            # Give the exact path to save(), this is where the .rdb backup will be
-                            __database__.save(backups_dir + input_information)
-                        shutdown_gracefully()
+                        shutdown_gracefully(input_information)
                         break
                     minimum_intervals_to_wait -= 1
                 else:
                     minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
     except KeyboardInterrupt:
-        shutdown_gracefully()
+        shutdown_gracefully(input_information)
 
 
