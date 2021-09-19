@@ -98,7 +98,7 @@ class Module(Module, multiprocessing.Process):
         self.added_ips = set()
         self.timeout = None
         # flag to open json file only once
-        self.is_josn_file_opened = False
+        self.is_json_file_opened = False
         self.json_file_handle = False
 
     def print(self, text, verbose=1, debug=0):
@@ -313,6 +313,10 @@ class Module(Module, multiprocessing.Process):
     def export_to_json(self, evidence):
         """ Export alerts and flows to exported_alerts.json, a suricata like json format. """
 
+        if not self.is_json_file_opened:
+            self.json_file_handle = open('exported_alerts.json','a')
+            self.is_json_file_opened = True
+
         profileid= evidence['profileid']
         twid= evidence['twid']
         uid= evidence['uid']
@@ -383,9 +387,6 @@ class Module(Module, multiprocessing.Process):
                             if not exported_to_stix:
                                 self.print("Problem in export_to_STIX()", 6, 6)
                         if 'json' in self.export_to:
-                            if not self.is_josn_file_opened:
-                                self.json_file_handle = open('exported_alerts.json','a')
-                                self.is_josn_file_opened = True
                             self.export_to_json(evidence)
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
