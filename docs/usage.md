@@ -107,6 +107,18 @@ Now you can run
 
 ```./kalipso.sh```
 
+## Saving the database
+
+Slips uses redis to store analysis information. you can save your analysis for later use by running slips with ```-s```, for example
+
+```./slips.py -f dataset/hide-and-seek-short.pcap -s```
+
+your .rdb saved database will be stored in ```redis_backups/```.
+
+you can load it again using ```-d``` , for example
+
+```./slips.py -d redis_backups/hide-and-seek-short.rdb ```
+
 ## Modifying a configuration file
 
 Slips has a ```slips.conf``` the contains user configurations for different modules and general execution. Below are some of Slips features that can be modifie with respect to the user preferences.
