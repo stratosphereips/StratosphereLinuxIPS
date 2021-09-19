@@ -12,15 +12,18 @@
 # 7. The name of the class MUST be 'Module', do not change it.
 
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 import warnings
+import json
 # Your imports
 import numpy as np
+import sys
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 from tensorflow.python.keras.models import load_model
+
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -50,18 +53,7 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_letters')
-        # Set the timeout based on the platform. This is because the pyredis
-        # lib does not have officially recognized the timeout=None as it works
-        # in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # ??
-            self.timeout = None
+        self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -79,18 +71,18 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def set_evidence(self, score, confidence, tupleid='', profileid='', twid=''):
+    def set_evidence(self, score, confidence, uid, timestamp, tupleid='', profileid='', twid=''):
         '''
         Set an evidence for malicious Tuple
         '''
         type_detection = 'outTuple'
         detection_info = tupleid
         type_evidence = 'C&C channels detection'
-        threat_level = 100
-        description = 'RNN C&C channels detection, score: ' + str(score)
+        threat_level = 30
+        description = 'RNN C&C channels detection, score: ' + str(score) + ', tuple ID:\'' + str(tupleid) +'\''
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, profileid=profileid, twid=twid)
+                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def convert_input_for_module(self, pre_behavioral_model):
         """
@@ -136,19 +128,36 @@ class Module(Module, multiprocessing.Process):
         try:
             # Download lstm model
             tcpmodel = load_model(model_file)
-            # Main loop function
-            while True:
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
+        except KeyboardInterrupt:
+            # enter the while loop to recieve stop_process msg
+            pass
+
+        # Main loop function
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message['channel'] == 'new_letters' and type(message['data']) is not int:
                     data = message['data']
-                    data = data.split('-')
-                    pre_behavioral_model = data[0]
-                    profileid = data[1]
-                    twid = data[2]
-                    tupleid = data[3]
+                    data = json.loads(data)
+                    pre_behavioral_model = data['new_symbol']
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    tupleid = data['tupleid']
+                    uid = data['uid']
+                    stime = data['stime']
+
                     if 'tcp' in tupleid.lower():
                         # Define why this threshold
                         threshold = 0.7
@@ -166,7 +175,7 @@ class Module(Module, multiprocessing.Process):
                                 confidence = 1
                             else:
                                 confidence = len(pre_behavioral_model)/threshold_confidence
-                            self.set_evidence(score,confidence, tupleid, profileid, twid)
+                            self.set_evidence(score, confidence, uid, stime, tupleid, profileid, twid)
                     """
                     elif 'udp' in tupleid.lower():
                         # Define why this threshold
@@ -182,11 +191,14 @@ class Module(Module, multiprocessing.Process):
                         if score > threshold:
                             self.set_evidence(score, tupleid, profileid, twid)
                     """
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

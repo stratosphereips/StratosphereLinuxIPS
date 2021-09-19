@@ -18,21 +18,36 @@
 
 import multiprocessing
 import sys
-
+import io
+from slips_files.core.database import __database__
 
 # Output Process
 class OutputProcess(multiprocessing.Process):
     """ A class process to output everything we need. Manages all the output """
-    def __init__(self, inputqueue, verbose, debug, config):
+    def __init__(self, inputqueue, verbose, debug, config, stdout=''):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
+        self.name = 'OutputProcess'
         self.queue = inputqueue
         self.config = config
         # self.quiet manages if we should really print stuff or not
         self.quiet = False
+        if stdout != '':
+            self.change_stdout(stdout)
         if self.verbose > 2:
             print('Verbosity: {}. Debugging: {}'.format(str(self.verbose), str(self.debug)))
+        # Start the DB
+        __database__.start(self.config)
+
+
+    def change_stdout(self, file):
+        # io.TextIOWrapper creates a file object of this file
+        # Pass 0 to open() to switch output buffering off (only allowed in binary mode)
+        # write_through= True, to flush the buffer to disk, from there the file can read it.
+        # without it, the file writer keeps the information in a local buffer that's not accessible to the file.
+        sys.stdout = io.TextIOWrapper(open(file, 'wb', 0), write_through=True)
+        return
 
     def process_line(self, line):
         """
@@ -79,7 +94,8 @@ class OutputProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            print('\tProblem with process line in OutputProcess()')
+            exception_line = sys.exc_info()[2].tb_lineno
+            print(f'\tProblem with process line in OutputProcess() line {exception_line}')
             print(type(inst))
             print(inst.args)
             print(inst)
@@ -99,27 +115,28 @@ class OutputProcess(multiprocessing.Process):
         # This is to test if we are reading the flows completely
 
     def run(self):
-        try:
-            while True:
+        while True:
+            try:
                 line = self.queue.get()
                 if 'quiet' == line:
                     self.quiet = True
                 # if timewindows are not updated for 25 seconds, we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
+                    __database__.publish('finished_modules', self.name)
                     return True
                 elif 'stop' != line:
                     if not self.quiet:
                         self.output_line(line)
-
                 else:
                     # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
                     print('Stopping the output thread')
-                    return True
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            print('\tProblem with OutputProcess()')
-            print(type(inst))
-            print(inst.args)
-            print(inst)
-            sys.exit(1)
+            except (KeyboardInterrupt, EOFError):
+                __database__.publish('finished_modules', self.name)
+                return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                print(f'\tProblem with OutputProcess() line {exception_line}')
+                print(type(inst))
+                print(inst.args)
+                print(inst)
+                sys.exit(1)

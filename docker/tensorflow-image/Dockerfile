@@ -16,6 +16,8 @@ RUN apt update && apt install -y --no-install-recommends \
     zeek \
     python3-pip \
 	python3-certifi \
+	file \
+	lsof \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
@@ -33,6 +35,14 @@ RUN pip3 install sklearn
 RUN pip3 install urllib3
 RUN pip3 install scipy
 RUN pip3 install watchdog
+RUN pip3 install stix2
+RUN pip3 install cabby
+RUN pip3 install ipwhois
+RUN pip3 install pytest
+RUN pip3 install --ignore-installed six
+RUN pip3 install slackclient
+RUN pip3 install tzlocal
+RUN pip3 install psutil
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git

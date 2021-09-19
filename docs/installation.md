@@ -19,12 +19,16 @@ Before building the docker locally from the Dockerfile, first you should clone S
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 
-If you cloned StratosphereLinuxIPS in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
+If you cloned Slips in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
 
 	cd ~/code/StratosphereLinuxIPS/docker
 	docker build --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f dataset/test3.binetflow
+
+If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
+
+	docker build --network=host --no-cache -t slips -f Dockerfile .
 	
 You can also put your own files in the /dataset/ folder and analyze them with Slips:
 
@@ -68,9 +72,9 @@ Now that pip3 is upgraded, we can proceed to install all required packages via p
 
 _Note: for those using a different base image, you need to also install tensorflow==2.2.0 via pip3._
 
-As we mentioned before, the GUI of Slips known as Kalipso relies on ns. For it to work we will install the following npm packages:
+As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs. Make sure to use NodeJs greater than version 12. For Kalipso to work, we will install the following npm packages:
 
-	npm install blessed blessed-contrib redis async chalk strip-ansi clipboardy fs sorted-array-async yargs
+	npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 
 ###  Installing Zeek
 
@@ -97,7 +101,7 @@ When running Slips for the first time we need to start Redis:
 
 	redis-server --daemonize yes
 
-Once Redis is running it’s time to clone the Stratosphere Linux IPS repository and run it:
+Once Redis is running it’s time to clone the Slips repository and run it:
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 	cd StratosphereLinuxIPS/

@@ -12,10 +12,11 @@
 # 7. The name of the class MUST be 'Module', do not change it.
 
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
+import sys
 
 # Your imports
 import json
@@ -51,18 +52,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('tw_closed')
         # get separator
         self.separator = __database__.separator
-        # Set the timeout based on the platform. This is because the
-        # pyredis lib does not have officially recognized the
-        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # Other systems
-            self.timeout = None
+        self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -120,12 +110,14 @@ class Module(Module, multiprocessing.Process):
                 dstip_labels_total[flow_data['daddr']][self.malicious_label] = dstip_labels_total[flow_data['daddr']].get(self.malicious_label, 0) + 1
 
     def run(self):
-        try:
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message and message['channel'] == 'tw_closed':
                     data = message['data']
@@ -142,11 +134,13 @@ class Module(Module, multiprocessing.Process):
 
                         self.set_label_per_flow_dstip(profileid, twid)
 
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

@@ -1,3 +1,37 @@
+- 0.7.3
+	- Slips 
+		- Added RDNS module to retrieve reverse DNS of the IP
+		- Fixed reading files with Zeek TABs
+		- Fixed the docker image for Ubuntu
+		- Added a new module for exporting alerts to Slack and TAXII server
+		- Added new Threat Intelligence trackers
+		- Added new notice.log detections
+		- Fixed reading Zeek logs with TABs
+		- Added a parameter -cb to clean chains in blocking module
+		- Updated documentation with a usage
+		- Added a new module for Zeek anomaly detections
+		- Fixed a bug of tensorflow not working in the docker
+	- Kalipso
+		- Added reverse DNS to Kalipso IPInfo box
+		- Fixed the version of the npm package
+		- Fixed the print of evidences in the Evidence box
+- 0.7.2 (published 2020/04/28)
+	- Slips
+		- New documentation in read-the-docs
+		- Update of ASN files in the Update manager
+		- Added new Threat Intelligence feeds
+		- Added a custom -help function
+		- Added new detection of self-signed certificates
+		- Improvement of LSTM module to detect C&C channels
+		- Added a duration of the connection in the timeline
+		- Add a default configuration file, if nothing is specified
+		- New docker version without a tensoflow
+		- Fixed the levels of threat and confidence of all modules
+	- Kalipso
+		- Added a new hotkey -z to summarize alerts in all timewindows of the profile
+		- Display of a flow duration in the timeline widget
+		- Fixed the display of SNI only for TLS/SSL connections 
+		- Fixed the bug in dstPortServer hotkey
 - 0.7.1 (published 2020/12/18)
 	- Slips
 		- fix the function of Slips to stop after pressing CTRL-C
