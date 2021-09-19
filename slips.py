@@ -609,7 +609,6 @@ if __name__ == '__main__':
         if not __database__.load(args.db):
             print("[Main] Failed to load the database.")
             shutdown_gracefully(input_information)
-        print("[Main] {args.db} loaded successfully. Run ./kalipso")
         shutdown_gracefully(input_information)
 
     # Input process

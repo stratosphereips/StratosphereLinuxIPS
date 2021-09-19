@@ -2160,12 +2160,13 @@ class Database(object):
                 # Stop the server first in order for redis to load another db
                 os.system(self.sudo +'service redis-server stop')
                 # todo: find/generate dump.rdb in docker.
+                # todo add unit tests for these load() and save()
                 # Copy out saved db to the dump.rdb (the db redis uses by default)
                 command = self.sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
                 os.system(command)
                 # Start the server again
                 os.system(self.sudo + 'service redis-server start')
-                self.print("{} loaded.".format(backup_file))
+                self.print("{} loaded successfully. Run ./kalipso".format(backup_file))
                 return True
             else:
                 self.print("{} is not a valid redis database file.".format(backup_file))
