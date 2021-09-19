@@ -580,11 +580,10 @@ if __name__ == '__main__':
     __database__.store_process_PID('inputProcess', int(inputProcess.pid))
 
     if args.db:
-        is_loaded = __database__.load(args.db)
         # Failed to load the db
-        if not is_loaded:
-            print("Failed to load the database.")
-            terminate_slips()
+        if not __database__.load(args.db):
+            print("[Main] Failed to load the database.")
+            shutdown_gracefully()
 
     c1 = __database__.subscribe('finished_modules')
 
@@ -664,6 +663,22 @@ if __name__ == '__main__':
                     # print('Counter to stop Slips. Amount of modified
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:
+                         # If the user specified -s, save the database before stopping
+                        if args.save:
+                            # Create a new dir to store backups
+                            backups_dir = get_cwd() +'redis_backups' + '/'
+                            try:
+                                os.mkdir(backups_dir)
+                            except FileExistsError:
+                                pass
+                            print("backups_dir" + backups_dir)
+                            # The name of the interface/pcap/nfdump/binetflow used is in input_information
+                            # We need to seperate it from the path
+                            input_information = os.path.basename(input_information)
+                            # Remove the extension from the filename
+                            input_information = input_information[:input_information.index('.')]
+                            # Give the exact path to save(), this is where the .rdb backup will be
+                            __database__.save(backups_dir + input_information)
                         shutdown_gracefully()
                         break
                     minimum_intervals_to_wait -= 1
