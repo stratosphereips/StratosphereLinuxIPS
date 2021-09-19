@@ -2547,12 +2547,13 @@ class ProfilerProcess(multiprocessing.Process):
                 line = self.inputqueue.get()
                 if 'stop' == line:
                     self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 0, 2)
-                    __database__.publish('finished_modules', self.name)
+                    # can't use self.name because multiprocessing library adds the child number to the name so it's not const
+                    __database__.publish('finished_modules', 'ProfilerProcess')
                     return True
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
                     self.print("Stopping Profiler Process. Received {} lines ({})", 0, 2)
-                    __database__.publish('finished_modules', self.name)
+                    __database__.publish('finished_modules', 'ProfilerProcess')
                     return True
                 else:
                     # Received new input data
@@ -2610,7 +2611,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
                 message = self.c1.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
-                    __database__.publish('finished_modules', self.name)
+                    __database__.publish('finished_modules', 'ProfilerProcess')
                     return True
                 if message and message['channel'] == 'reload_whitelist' and type(message['data']) == str:
                     # if whitelist.conf is edited using pycharm
