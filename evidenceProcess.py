@@ -37,7 +37,7 @@ class EvidenceProcess(multiprocessing.Process):
     This should be converted into a module
     """
     def __init__(self, inputqueue, outputqueue, config, output_folder, logs_folder):
-        self.name = 'Evidence'
+        self.name = 'EvidenceProcess'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -445,7 +445,7 @@ class EvidenceProcess(multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     self.logfile.close()
                     self.jsonfile.close()
-                    __database__.publish('finished_modules', self.name)
+                    __database__.publish('finished_modules','EvidenceProcess')
                     return True
                 elif message['channel'] == 'evidence_added' and type(message['data']) is not int:
                     # Data sent in the channel as a json dict, it needs to be deserialized first

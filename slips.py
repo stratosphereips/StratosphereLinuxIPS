@@ -545,7 +545,7 @@ if __name__ == '__main__':
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output, logs_folder)
     evidenceProcessThread.start()
     outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
-    __database__.store_process_PID('EvidenceProcess-13', int(evidenceProcessThread.pid))
+    __database__.store_process_PID('EvidenceProcess', int(evidenceProcessThread.pid))
 
 
     # Profile thread
