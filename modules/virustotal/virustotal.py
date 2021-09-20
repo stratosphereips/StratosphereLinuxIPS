@@ -93,8 +93,8 @@ class Module(Module, multiprocessing.Process):
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def count_positives(self, response: dict, response_key: str, positive_key, total_key):
         """

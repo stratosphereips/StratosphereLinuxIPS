@@ -97,9 +97,8 @@ class Database(object):
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def set_slips_start_time(self):
         """ store the time slips started (datetime obj) """

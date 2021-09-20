@@ -59,8 +59,8 @@ class Module(Module, multiprocessing.Process):
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def get_cached_asn(self, ip):
         """
@@ -82,6 +82,7 @@ class Module(Module, multiprocessing.Process):
         except AttributeError:
             # cached_asn is not found
             return False
+
 
     def update_asn(self, cached_data) -> bool:
         """
@@ -133,7 +134,6 @@ class Module(Module, multiprocessing.Process):
         except ipwhois.exceptions.ASNRegistryError:
             # ASN lookup failed with no more methods to try
             pass
-
 
     def run(self):
         # Main loop function

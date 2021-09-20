@@ -89,16 +89,13 @@ class InputProcess(multiprocessing.Process):
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        # self.name = f'{Fore.YELLOW}{self.name}{Style.RESET_ALL}'
+        vd_text = str(int(verbose) * 10 + int(debug))
+        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
     def stop_queues(self):
         """ Stops the profiler and output queues """
 
-        self.profilerqueue.put("stop")
-        self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
-        self.outputqueue.close()
-        self.profilerqueue.close()
 
     def read_nfdump_output(self) -> int:
         """
