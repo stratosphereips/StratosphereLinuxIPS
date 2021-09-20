@@ -233,4 +233,6 @@ To test your changes to Slips, please run all the unit tests. Fromn the main fol
 
     tests/run_all_tests.py
 
-    
+### Plug in a zeek script
+
+Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir.

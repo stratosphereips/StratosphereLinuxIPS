@@ -73,6 +73,7 @@ class EvidenceProcess(multiprocessing.Process):
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
 
+        # self.name = f'{Style.DIM}{Fore.RED}{self.name}{Style.RESET_ALL}'
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
@@ -435,7 +436,7 @@ class EvidenceProcess(multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     self.logfile.close()
                     self.jsonfile.close()
-                    __database__.publish('finished_modules', 'EvidenceProcess')
+                    __database__.publish('finished_modules','EvidenceProcess')
                     return True
 
                 elif message['channel'] == 'evidence_added' and type(message['data']) is not int:

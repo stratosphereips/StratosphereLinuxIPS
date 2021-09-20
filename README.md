@@ -32,6 +32,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | VirusTotal | module to lookup IP address on VirusTotal |✅|
 | flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
 | RDNS | module to get and store the reverse DNS info about IPs  |✅|
+| ARPScanDetector | module to check for ARP scans in ARP traffic  |✅|
 | ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|
 | http_analyzer | module to analyze HTTP traffic |✅|
 | blocking | module to block malicious IPs connecting to the device |⚠️|
