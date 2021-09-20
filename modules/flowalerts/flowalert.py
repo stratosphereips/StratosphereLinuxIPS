@@ -264,7 +264,7 @@ class Module(Module, multiprocessing.Process):
         """ Checks dports that are not in our modules/timeline/services.csv file"""
 
         port_info = __database__.get_port_info(f'{dport}/{proto}')
-        if not port_info and not 'icmp' in proto.lower() and not self.is_p2p(dport, proto, daddr):
+        if not port_info and not 'icmp' in proto and not self.is_p2p(dport, proto, daddr):
             # we don't have info about this port
             confidence = 1
             threat_level = 10
@@ -456,7 +456,7 @@ class Module(Module, multiprocessing.Process):
                     if not ipaddress.ip_address(daddr).is_multicast and not ipaddress.ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
                     if dport:
-                        self.check_unknown_port(dport, proto, daddr, profileid, twid, uid, timestamp)
+                        self.check_unknown_port(dport, proto.lower(), daddr, profileid, twid, uid, timestamp)
 
                     # Multiple Reconnection attempts
                     key = saddr + '-' + daddr + ':' + str(dport)
