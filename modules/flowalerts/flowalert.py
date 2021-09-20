@@ -64,6 +64,8 @@ class Module(Module, multiprocessing.Process):
         # store them as network objects
         self.ignored_ranges = list(map(ipaddress.ip_network,self.ignored_ranges))
         self.p2p_daddrs = {}
+        # get the default gateway
+        self.gateway = self.get_default_gateway()
 
     def is_ignored_ip(self, ip) -> bool:
         ip_obj =  ipaddress.ip_address(ip)
@@ -74,8 +76,7 @@ class Module(Module, multiprocessing.Process):
                 # ip found in one of the ranges, ignore it
                 return True
         return False
-        # get the default gateway
-        self.gateway = self.get_default_gateway()
+
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
