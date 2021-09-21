@@ -13,6 +13,8 @@
 		- Check suspicious user agents
 		- ARP-scan detector module
 		- Multiple instances of slips
+		- Save and load redis databases
+		- Add unit tests
 - 0.7.3
 	- Slips 
 		- Added RDNS module to retrieve reverse DNS of the IP
