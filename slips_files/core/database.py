@@ -98,7 +98,11 @@ class Database(object):
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        try:
+            self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        except AttributeError:
+            pass
+
 
     def set_slips_start_time(self):
         """ store the time slips started (datetime obj) """
