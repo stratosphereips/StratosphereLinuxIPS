@@ -288,14 +288,14 @@ def close_open_redis_servers():
         for pid in open_servers_PIDs:
             # signal 0 is to check if the process is still running or not
             # it returns 1 if the process exitted
-            while os.kill(int(pid), 0) != 1:
-                try:
+            try:
+                while os.kill(int(pid), 0) != 1:
                     # sigterm is 9
                     os.kill(int(pid),9)
-                except ProcessLookupError:
-                    # process already exited, sometimes this exception is raised
-                    # but the process is still running, keep trying to kill it
-                    break
+            except ProcessLookupError:
+                # process already exited, sometimes this exception is raised
+                # but the process is still running, keep trying to kill it
+                break
 
         # delete the closed redis servers from used_redis_servers.txt
         with open('used_redis_servers.txt','w') as f:

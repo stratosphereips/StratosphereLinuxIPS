@@ -42,7 +42,7 @@ elif [[ ${#open_redis_servers[@]} -gt 0 ]]; then
     let index=index-1
     # get the pid in this index
     port_to_use=${ports[index]}
+    echo "To close all unused redis servers, run slips with --killall"
 fi
-echo "To close all unused redis servers, run slips with --killall"
 # run kalipso
 node kalipso -l 2000 -p ${port_to_use}
