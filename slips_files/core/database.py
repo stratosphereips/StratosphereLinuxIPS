@@ -1,4 +1,6 @@
 import os
+import platform
+
 import redis
 import time
 import json
@@ -2125,11 +2127,18 @@ class Database(object):
         # this path is only accessible by root
         self.r.save()
         # if you're not root, this will return False even if the path exists
-        if os.path.exists('/var/lib/redis/dump.rdb'):
+        if platform.system() == 'Linux':
+            redis_db_path = '/var/lib/redis/dump.rdb'
+        else:
+            redis_db_path = '/opt/homebrew/var/db/redis/dump.rdb'
+
+        if os.path.exists(redis_db_path):
             command = self.sudo + 'cp /var/lib/redis/dump.rdb ' + backup_file + '.rdb'
             os.system(command)
+            print(f"[Main] Database saved to {backup_file}.rdb" )
             return True
         else:
+            print("Error Saving: Cannot find the redis database directory redis/dump.rdb")
             return False
 
     def load(self,backup_file: str) -> bool:

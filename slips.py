@@ -259,11 +259,7 @@ def shutdown_gracefully(input_information):
             # Replace the extension from the filename with .rdb
             input_information = input_information[:input_information.index('.')]
             # Give the exact path to save(), this is where our saved .rdb backup will be
-            saved = __database__.save(backups_dir + input_information)
-            if saved:
-                print(f"[Main] Database saved to {backups_dir[:]}{input_information}.rdb" )
-            else:
-                print("Error Saving: Cannot find the redis database directory /var/lib/redis/dump.rdb")
+            __database__.save(backups_dir + input_information)
 
         os._exit(-1)
         return True
