@@ -309,6 +309,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+
     # Read the config file name given from the parameters
     # don't use '%' for interpolation.
     config = configparser.ConfigParser(interpolation=None)
@@ -336,9 +337,9 @@ if __name__ == '__main__':
             print("Slips needs to be run as root to save the database. Stopping.")
             terminate_slips()
         if args.db:
-            print("Can't use -s and -b together")
+            print("Can't use -s and -d together")
             terminate_slips()
-
+    from slips_files.core.database import __database__
     # Check the type of input
     if args.interface:
         input_information = args.interface
@@ -392,6 +393,9 @@ if __name__ == '__main__':
     elif args.db:
         input_type = 'database'
         input_information = 'database'
+        __database__.start(config)
+        __database__.load(args.db)
+        sys.exit(-1)
     else:
         print('You need to define an input source.')
         sys.exit(-1)
@@ -490,7 +494,6 @@ if __name__ == '__main__':
     ##########################
     # Creation of the threads
     ##########################
-    from slips_files.core.database import __database__
     # Output thread. This thread should be created first because it handles
     # the output of the rest of the threads.
     # Create the queue
@@ -602,12 +605,6 @@ if __name__ == '__main__':
     __database__.store_process_PID('ProfilerProcess', int(profilerProcessThread.pid))
 
     c1 = __database__.subscribe('finished_modules')
-
-    if args.db:
-        if not __database__.load(args.db):
-            print("[Main] Failed to load the database.")
-            shutdown_gracefully(input_information)
-        shutdown_gracefully(input_information)
 
     # Input process
     # Create the input process and start it

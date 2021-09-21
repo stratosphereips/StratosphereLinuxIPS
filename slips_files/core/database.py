@@ -94,7 +94,10 @@ class Database(object):
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        try:
+            self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        except AttributeError:
+            print('[' + self.name + '] ' + text)
 
     def set_slips_start_time(self):
         """ store the time slips started (datetime obj) """
@@ -1348,7 +1351,7 @@ class Database(object):
     def publish_stop(self):
         """ Publish stop command to terminate slips """
         all_channels_list = self.r.pubsub_channels()
-        self.print('Sending the stop signal to all listeners', 3, 3)
+        # self.print('Sending the stop signal to all listeners', 3, 3)
         for channel in all_channels_list:
             self.r.publish(channel, 'stop_process')
 
