@@ -252,18 +252,7 @@ class Module(Module, multiprocessing.Process):
                 self.print("Blocked: " + ip_to_block)
 
 
-    def handle_stop_process_message(self, message):
-        """ Deletes slipsBlocking chain and rules based on the user's platform and firewall """
-        if self.firewall == 'iptables':
-            # Delete rules in slipsBlocking chain
-            self.delete_iptables_chain()
-            return True
-        # TODO: handle the creation of the slipsBlocking chain in nftables
-        # Flush rules in slipsBlocking chain because you can't delete a chain without flushing first
-        os.system(self.sudo + "nft flush chain inet slipsBlocking")
-        # Delete slipsBlocking chain from nftables
-        os.system(self.sudo + "nft delete chain inet slipsBlocking")
-        return True
+
 
 
     def unblock_ip(self, ip_to_unblock, from_=None, to=None, dport=None,
@@ -318,7 +307,6 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
-                    self.handle_stop_process_message(message)
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
