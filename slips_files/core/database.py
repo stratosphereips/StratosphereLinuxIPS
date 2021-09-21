@@ -92,7 +92,11 @@ class Database(object):
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        try:
+            self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        except AttributeError:
+            pass
+
 
     def set_slips_start_time(self):
         """ store the time slips started (datetime obj) """

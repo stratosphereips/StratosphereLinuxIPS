@@ -334,12 +334,30 @@ if __name__ == '__main__':
 
     # Check if redis server running
     if check_redis_database() is False:
+        print("Redis database is not running. Stopping Slips")
         terminate_slips()
-        # Clear cache if the parameter was included
+
+    # Clear cache if the parameter was included
     if args.clearcache:
         print('Deleting Cache DB in Redis.')
         clear_redis_cache_database()
         terminate_slips()
+
+    if args.clearblocking:
+        if os.geteuid() != 0:
+            print("Slips needs to be run as root to clear the slipsBlocking chain. Stopping.")
+            sys.exit(-1)
+        else:
+            # start only the blocking module process and the db
+            from slips_files.core.database import __database__
+            from multiprocessing import Queue
+            from modules.blocking.blocking import Module
+            blocking = Module(Queue(), config)
+            blocking.start()
+            blocking.delete_slipsBlocking_chain()
+            # Tell the blocking module to clear the slips chain
+            shutdown_gracefully('')
+
     # Check if user want to save and load a db at the same time
     if args.save :
         # make sure slips is running as root
@@ -645,17 +663,6 @@ if __name__ == '__main__':
                 print("Not Connected to the internet. Reconnecting in 10s.")
                 time.sleep(10)
                 hostIP = recognize_host_ip()
-
-    if args.clearblocking:
-        if os.geteuid() != 0:
-            print("Slips needs to be run as root to clear the slipsBlocking chain. Stopping.")
-            shutdown_gracefully(input_information)
-        else:
-            # Tell the blocking module to clear the slips chain
-            __database__.publish('new_blocking', 'delete slipsBlocking chain')
-            # Wait enough time for the msg to arrive to the module and be processed
-            time.sleep(3)
-            shutdown_gracefully(input_information)
 
     # As the main program, keep checking if we should stop slips or not
     # This is not easy since we need to be sure all the modules are stopped
