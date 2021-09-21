@@ -541,15 +541,15 @@ class EvidenceProcess(multiprocessing.Process):
 
                                 self.addDataToLogFile(alert_to_log)
                                 self.addDataToJSONFile(alert_dict)
-
-                                # TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
-                                blocking_data = {
-                                    'ip':str(ip),
-                                    'block' : True,
-                                }
-                                blocking_data = json.dumps(blocking_data)
-                                # If the blocking module is loaded after this module this line won't work!!!
-                                __database__.publish('new_blocking', blocking_data)
+                                if type_detection=='dstip':
+                                    # TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
+                                    blocking_data = {
+                                        'ip':str(detection_info),
+                                        'block' : True,
+                                    }
+                                    blocking_data = json.dumps(blocking_data)
+                                    # If the blocking module is loaded after this module this line won't work!!!
+                                    __database__.publish('new_blocking', blocking_data)
                                 __database__.markProfileTWAsBlocked(profileid, twid)
             except KeyboardInterrupt:
                 self.logfile.close()
