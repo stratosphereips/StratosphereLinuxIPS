@@ -3089,8 +3089,10 @@ class Database(object):
             command = self.sudo + 'cp /var/lib/redis/dump.rdb ' + backup_file + '.rdb'
             os.system(command)
             self.print("Backup stored in {}.rdb".format(backup_file))
-        else:
-            self.print("Error Saving: Cannot find redis backup directory")
+            return True
+
+        self.print("Error Saving: Cannot find redis backup directory")
+        return False
 
     def load(self,backup_file: str) -> bool:
         """
