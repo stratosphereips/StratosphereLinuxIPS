@@ -369,12 +369,7 @@ class screen {
             this.render();
         }
         else if(key.name == 'q' || key.name == "C-c"){
-            var PIDs = this.redis_database.getPIDs().then(PIDs=>{
-            var slips_PID = PIDs['slips.py']
-            console.log(slips_PID)
-            process.kill(slips_PID, "SIGINT")
             return process.exit(0)
-            })
         }
         else if(key.name == 'escape'){
           this.helpbar.selectTab(0)
