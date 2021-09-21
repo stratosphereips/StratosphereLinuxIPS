@@ -52,8 +52,6 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_blocking')
         self.timeout = None
         self.set_sudo_according_to_env()
-
-
         # self.test()
 
     def test(self):
@@ -261,7 +259,7 @@ class Module(Module, multiprocessing.Process):
                 # Blocking in MacOS
                 self.print('Mac OS blocking is not supported yet.')
 
-        
+
     def handle_stop_process_message(self, message):
         """ Deletes slipsBlocking chain and rules based on the user's platform and firewall """
         if self.platform_system == 'Linux':

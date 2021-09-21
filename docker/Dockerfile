@@ -35,14 +35,13 @@ RUN apt update && apt install -y --no-install-recommends \
 # Upgrade pip3
 RUN pip3 install --upgrade pip
 
-# Install redis using PIP3
 RUN pip3 install wheel \
     redis \
     setuptools \
     validators \
     colorama \
     requests==2.21.0 \
- && pip3 install --upgrade tensorflow==2.1.0
+RUN pip3 install --upgrade tensorflow==2.1.0
 
 # Download and unpack Slips.
 #RUN wget -nv https://github.com/stratosphereips/StratosphereLinuxIPS/archive/master.tar.gz -O /slips.tar.gz \
