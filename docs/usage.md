@@ -156,11 +156,11 @@ You should have trained at least once with 'Normal' data and once with 'Maliciou
 
 ### Blocking
 
-This module is enabled only using the  ```-p``` parameter. 
+This module is enabled only using the ```-p``` parameter and needs an interface to run. 
 
 Usage example:
 
-```sudo ./slips.py -c slips.conf -i wlp3s0 -p```
+```sudo ./slips.py -i wlp3s0 -p```
 
 Slips needs to be run as root so it can execute iptables commands. 
 
@@ -169,6 +169,7 @@ In Docker, since there's no root, the environment variable ```IS_IN_A_DOCKER_CON
 If you use the latest Dockerfile, it will be set by default. If not, you can set it manually by running this command in the docker container
 
 ```export IS_IN_A_DOCKER_CONTAINER=True```
+
 
 
 
