@@ -1,3 +1,7 @@
+- 0.7.4
+    - Slips
+        - Compute the JA3 fingerprint for all TLS connections
+        - Use JA3 whitelists as detection in the Threat Intelligence module
 - 0.7.3
 	- Slips 
 		- Added RDNS module to retrieve reverse DNS of the IP
