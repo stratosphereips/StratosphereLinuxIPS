@@ -2115,7 +2115,7 @@ class Database(object):
         """ Return dict of 3 keys: IPs, domains and organizations"""
         return self.r.hgetall('whitelist')
 
-    def save(self,backup_file):
+    def save(self,backup_file) -> bool:
         """
         Save the db to disk.
         backup_file should be the path+name of the file you want to store the db in
@@ -2128,9 +2128,9 @@ class Database(object):
         if os.path.exists('/var/lib/redis/dump.rdb'):
             command = self.sudo + 'cp /var/lib/redis/dump.rdb ' + backup_file + '.rdb'
             os.system(command)
-            self.print("Backup stored in {}.rdb".format(backup_file))
+            return True
         else:
-            self.print("Error Saving: Cannot find redis backup directory")
+            return False
 
     def load(self,backup_file: str) -> bool:
         """

@@ -256,11 +256,14 @@ def shutdown_gracefully(input_information):
             # The name of the interface/pcap/nfdump/binetflow used is in input_information
             # We need to seperate it from the path
             input_information = os.path.basename(input_information)
-            # Remove the extension from the filename
+            # Replace the extension from the filename with .rdb
             input_information = input_information[:input_information.index('.')]
-            # Give the exact path to save(), this is where the .rdb backup will be
-            __database__.save(backups_dir + input_information)
-            print(f"[Main] Database saved to {backups_dir[:]}{input_information}" )
+            # Give the exact path to save(), this is where our saved .rdb backup will be
+            saved = __database__.save(backups_dir + input_information)
+            if saved:
+                print(f"[Main] Database saved to {backups_dir[:]}{input_information}.rdb" )
+            else:
+                print("Error Saving: Cannot find the redis database directory /var/lib/redis/dump.rdb")
 
         os._exit(-1)
         return True
