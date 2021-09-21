@@ -2,6 +2,17 @@
     - Slips
         - Compute the JA3 fingerprint for all TLS connections
         - Use JA3 whitelists as detection in the Threat Intelligence module
+		- Detect malicious downloaded files by searching for their hash on virustotal
+		- Detect password guessing
+		- Detect ingoing and outgoing connections on port 0
+		- Detect Connection without dns resolution and DNS resolution without detection
+		- whitelists
+		- Detect data exfiltration
+		- Detect unkown TCP and UDP ports
+		- Exporting alerts to suricata like format
+		- Check suspicious user agents
+		- ARP-scan detector module
+		- Multiple instances of slips
 - 0.7.3
 	- Slips 
 		- Added RDNS module to retrieve reverse DNS of the IP
