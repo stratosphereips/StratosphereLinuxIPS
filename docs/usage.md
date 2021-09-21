@@ -171,6 +171,8 @@ Slips uses redis to store analysis information. you can save your analysis for l
 
 Your .rdb saved database will be stored in ```redis_backups/```.
 
+Note: If you try to save the same file twice using ```-s``` the old backup will be overwritten.
+
 You can load it again using ```-d```, For example:
 
 ```./slips.py -d redis_backups/hide-and-seek-short.rdb ```
