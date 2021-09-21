@@ -1051,6 +1051,9 @@ class Main():
             elif self.args.db:
                 input_type = 'database'
                 input_information = 'database'
+                __database__.start(self.config, redis_port)
+                __database__.load(self.args.db)
+                sys.exit(-1)
             else:
                 print('[Main] You need to define an input source.')
                 sys.exit(-1)
