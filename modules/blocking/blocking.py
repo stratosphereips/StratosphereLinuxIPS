@@ -50,7 +50,13 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         self.c1 = __database__.subscribe('new_blocking')
+        self.os = platform.system()
+        if self.os == 'Darwin':
+            # blocking isn't supported, exit module
+            self.print('Mac OS blocking is not supported yet.')
+            sys.exit()
         self.timeout = None
+        self.firewall = self.determine_linux_firewall()
         self.set_sudo_according_to_env()
         # self.test()
 
@@ -72,7 +78,8 @@ class Module(Module, multiprocessing.Process):
             __database__.publish('new_blocking', blocking_data )
             self.print("Blocked ip.")
         else:
-            self.print("IP is already blocked.")
+            self.print("IP is already blocked")
+        # self.unblock_ip("2.2.0.0",True,True)
 
     def set_sudo_according_to_env(self):
         """ Check if running in host or in docker and sets sudo string accordingly.
@@ -115,7 +122,9 @@ class Module(Module, multiprocessing.Process):
             return 'nftables'
         else:
             # no firewall installed
-            return None
+            # user doesn't have a firewall
+            self.print("iptables is not installed. Blocking module is quitting.")
+            sys.exit()
 
     def delete_iptables_chain(self):
         """ Flushes and deletes everything in slipsBlocking chain """
@@ -130,6 +139,7 @@ class Module(Module, multiprocessing.Process):
             os.system(self.sudo + 'iptables -F slipsBlocking >/dev/null 2>&1')
             # Delete slipsBlocking chain from iptables
             os.system(self.sudo + 'iptables -X slipsBlocking >/dev/null 2>&1')
+        self.print('Successfully deleted everything in slipsBlocking chain.')
 
     def get_cmd_output(self,command):
         """ Executes a command and returns the output """
@@ -143,41 +153,33 @@ class Module(Module, multiprocessing.Process):
         """ For linux: Adds a chain to iptables or a table to nftables called
             slipsBlocking where all the rules will reside """
 
-        if self.platform_system == 'Linux':
-            # Get the user's currently installed firewall
-            self.firewall = self.determine_linux_firewall()
-            if self.firewall == 'iptables':
-                # delete any pre existing slipsBlocking rules that may conflict before adding a new one
-                # self.delete_iptables_chain()
-                self.print('Executing "sudo iptables -N slipsBlocking"',6,0)
-                # Add a new chain to iptables
-                os.system(self.sudo + 'iptables -N slipsBlocking')
+        if self.firewall == 'iptables':
+            # delete any pre existing slipsBlocking rules that may conflict before adding a new one
+            # self.delete_iptables_chain()
+            self.print('Executing "sudo iptables -N slipsBlocking"',6,0)
+            # Add a new chain to iptables
+            os.system(self.sudo + 'iptables -N slipsBlocking >/dev/null 2>&1')
 
-                # Check if we're already redirecting to slipsBlocking chain
-                INPUT_chain_rules = self.get_cmd_output(self.sudo + " iptables -nvL INPUT")
-                OUTPUT_chain_rules = self.get_cmd_output(self.sudo + " iptables -nvL OUTPUT")
-                FORWARD_chain_rules = self.get_cmd_output(self.sudo + " iptables -nvL FORWARD")
-                # Redirect the traffic from all other chains to slipsBlocking so rules
-                # in any pre-existing chains dont override it
-                # -I to insert slipsBlocking at the top of the INPUT, OUTPUT and FORWARD chains
-                if 'slipsBlocking' not in INPUT_chain_rules :
-                    os.system(self.sudo + 'iptables -I INPUT -j slipsBlocking >/dev/null 2>&1')
-                if 'slipsBlocking' not in OUTPUT_chain_rules :
-                    os.system(self.sudo + 'iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1')
-                if 'slipsBlocking' not in FORWARD_chain_rules :
-                    os.system(self.sudo + 'iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1')
+            # Check if we're already redirecting to slipsBlocking chain
+            INPUT_chain_rules = self.get_cmd_output(self.sudo + " iptables -nvL INPUT")
+            OUTPUT_chain_rules = self.get_cmd_output(self.sudo + " iptables -nvL OUTPUT")
+            FORWARD_chain_rules = self.get_cmd_output(self.sudo + " iptables -nvL FORWARD")
+            # Redirect the traffic from all other chains to slipsBlocking so rules
+            # in any pre-existing chains dont override it
+            # -I to insert slipsBlocking at the top of the INPUT, OUTPUT and FORWARD chains
+            if 'slipsBlocking' not in INPUT_chain_rules :
+                os.system(self.sudo + 'iptables -I INPUT -j slipsBlocking >/dev/null 2>&1')
+            if 'slipsBlocking' not in OUTPUT_chain_rules :
+                os.system(self.sudo + 'iptables -I OUTPUT -j slipsBlocking >/dev/null 2>&1')
+            if 'slipsBlocking' not in FORWARD_chain_rules :
+                os.system(self.sudo + 'iptables -I FORWARD -j slipsBlocking >/dev/null 2>&1')
 
-            elif self.firewall == 'nftables':
-                self.print('Executing "sudo nft add table inet slipsBlocking"',6,0)
-                # Add a new nft table that uses the inet family (ipv4,ipv6)
-                os.system(self.sudo + "nft add table inet slipsBlocking")
-                # TODO: HANDLE NFT TABLE
-            elif not self.running_in_docker and self.firewall == None :
-                # user doesn't have a firewall
-                self.print("iptables is not installed. Blocking module is quitting.")
-                pass
-        elif self.platform_system == 'Darwin':
-            self.print('Mac OS blocking is not supported yet.')
+        elif self.firewall == 'nftables':
+            self.print('Executing "sudo nft add table inet slipsBlocking"',6,0)
+            # Add a new nft table that uses the inet family (ipv4,ipv6)
+            os.system(self.sudo + "nft add table inet slipsBlocking")
+            # TODO: HANDLE NFT TABLE
+
 
     def exec_iptables_command(self,
                               action, ip_to_block,
@@ -192,20 +194,16 @@ class Module(Module, multiprocessing.Process):
           delete : to delete an existing rule
         """
 
-        command = self.sudo + "iptables --" + action + " slipsBlocking " + flag + " " + ip_to_block
+        command = f'{self.sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} >/dev/null 2>&1'
         # Add the options constructed in block_ip or unblock_ip to the iptables command
         for key in options.keys():
             command += options[key]
         command += " -j DROP"
-        self.print("Executing: '" + command +" '",6,0)
         # Execute
         exit_status = os.system(command)
         # 0 is the success value
-        if exit_status != 0:
-            self.print("Error executing " + command, verbose=1, debug=1)
-            return 1  # failed to execute command
-        else:
-            return 0  # success
+        success = False if exit_status != 0 else True
+        return success
 
     def is_ip_blocked(self, ip) -> bool:
         """ Checks if ip is already blocked or not """
@@ -225,68 +223,58 @@ class Module(Module, multiprocessing.Process):
         """
 
         # Make sure ip isn't already blocked before blocking
-        if type(ip_to_block) == str and self.is_ip_blocked(ip_to_block) is False:
-            # Block this ip in iptables
-            if self.platform_system == 'Linux':
-                # Blocking in iptables
-                if self.firewall == 'iptables':
-                    # Set the default behaviour to block all traffic from and to an ip
-                    if from_ is None and to is None:
-                        from_, to = True, True
-                    # This dictionary will be used to construct the rule
-                    options = {
-                        "protocol" : " -p " + protocol if protocol is not None else '' ,
-                        "dport"    : " --dport " + str(dport)  if dport is not None else '',
-                        "sport"    : " --sport " + str(sport)  if sport is not None else '',
-                    }
+        if type(ip_to_block) == str and self.is_ip_blocked(ip_to_block) is False and self.firewall == 'iptables':
+            # Blocking in iptables
+            # Set the default behaviour to block all traffic from and to an ip
+            if from_ is None and to is None:
+                from_, to = True, True
+            # This dictionary will be used to construct the rule
+            options = {
+                "protocol" : " -p " + protocol if protocol is not None else '' ,
+                "dport"    : " --dport " + str(dport)  if dport is not None else '',
+                "sport"    : " --sport " + str(sport)  if sport is not None else '',
+            }
 
-                    if from_:
-                        # Add rule to block traffic from source ip_to_block (-s)
-                        exit_status = self.exec_iptables_command(action='insert',
-                                                                 ip_to_block=ip_to_block,
-                                                                 flag='-s',
-                                                                 options=options)
-                    if to:
-                        # Add rule to block traffic to ip_to_block (-d)
-                        exit_status = self.exec_iptables_command(action='insert',
-                                                                 ip_to_block=ip_to_block,
-                                                                 flag='-d',
-                                                                 options=options)
-                    if exit_status:
-                            # Successfully blocked an ip
-                            self.print("Blocked: " + ip_to_block)
-            elif self.platform_system == 'Darwin':
-                # Blocking in MacOS
-                self.print('Mac OS blocking is not supported yet.')
+            if from_:
+                # Add rule to block traffic from source ip_to_block (-s)
+                blocked = self.exec_iptables_command(action='insert',
+                                                         ip_to_block=ip_to_block,
+                                                         flag='-s',
+                                                         options=options)
+            if to:
+                # Add rule to block traffic to ip_to_block (-d)
+                blocked = self.exec_iptables_command(action='insert',
+                                                         ip_to_block=ip_to_block,
+                                                         flag='-d',
+                                                         options=options)
+            if blocked:
+                # Successfully blocked an ip
+                self.print("Blocked: " + ip_to_block)
 
 
     def handle_stop_process_message(self, message):
         """ Deletes slipsBlocking chain and rules based on the user's platform and firewall """
-        if self.platform_system == 'Linux':
-            if self.firewall == 'iptables':
-                # Delete rules in slipsBlocking chain
-                self.delete_iptables_chain()
-            elif self.firewall == 'nftables':
-                # TODO: handle the creation of the slipsBlocking chain in nftables
-                # Flush rules in slipsBlocking chain because you can't delete a chain without flushing first
-                os.system(sudo + "nft flush chain inet slipsBlocking")
-                # Delete slipsBlocking chain from nftables
-                os.system(sudo + "nft delete chain inet slipsBlocking")
-        elif self.platform_system == 'Darwin':
-            self.print('Mac OS blocking is not supported yet.')
+        if self.firewall == 'iptables':
+            # Delete rules in slipsBlocking chain
+            self.delete_iptables_chain()
+            return True
+        # TODO: handle the creation of the slipsBlocking chain in nftables
+        # Flush rules in slipsBlocking chain because you can't delete a chain without flushing first
+        os.system(self.sudo + "nft flush chain inet slipsBlocking")
+        # Delete slipsBlocking chain from nftables
+        os.system(self.sudo + "nft delete chain inet slipsBlocking")
+        return True
 
-    def unblock_ip(self,
-                   ip_to_unblock,
-                   from_, to,
-                   dport=None,
+
+    def unblock_ip(self, ip_to_unblock, from_=None, to=None, dport=None,
                    sport=None,
                    protocol=None):
         """ Unblocks an ip based on the flags passed in the message """
         # This dictionary will be used to construct the rule
         options = {
-            "protocol" : " -p " + protocol if protocol is not None else '' ,
-            "dport"    : " --dport " + str(dport)  if dport is not None else '',
-            "sport"    : " --sport " + str(sport)  if sport is not None else '',
+            "protocol" : f" -p {protocol}"   if protocol  else '' ,
+            "dport"    : f" --dport {dport}" if dport else '',
+            "sport"    : f" --sport {sport}" if sport  else '',
         }
         # Set the default behaviour to unblock all traffic from and to an ip
         if from_ is None and to is None:
@@ -298,30 +286,27 @@ class Module(Module, multiprocessing.Process):
 
         # Block traffic from source ip
         if from_:
-            flag = '-s'
-            exit_status = self.exec_iptables_command(action='delete',
+            unblocked = self.exec_iptables_command(action='delete',
                                                      ip_to_block=ip_to_unblock,
-                                                     flag=flag,
+                                                     flag='-s',
                                                      options=options)
         # Block traffic from distination ip
         if to:
-            flag = '-d'
-            exit_status = self.exec_iptables_command(action='delete',
+            unblocked = self.exec_iptables_command(action='delete',
                                                      ip_to_block=ip_to_unblock,
-                                                     flag=flag,
+                                                     flag='-d',
                                                      options=options)
 
-        if exit_status == 0:
+        if unblocked:
             # Successfully blocked an ip
             self.print("Unblocked: " + ip_to_unblock)
 
     def run(self):
         try:
             self.initialize_chains_in_firewall()
-        except KeyboardInterrupt:
-            return True
         except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -342,19 +327,16 @@ class Module(Module, multiprocessing.Process):
                     and message['type'] == 'message':
                     # sent from slips.py
                     if message['data'] == 'delete slipsBlocking chain':
-                        if self.platform_system == 'Linux':
-                            # Get the user's currently installed firewall
-                            self.firewall = self.determine_linux_firewall()
-                            if self.firewall == 'iptables':
-                                    self.delete_iptables_chain()
-                            elif self.firewall == 'nftables':
-                                # TODO: handle the creation of the slipsBlocking chain in nftables
-                                # Flush rules in slipsBlocking chain because you can't delete a chain without flushing first
-                                os.system(self.sudo + "nft flush chain inet slipsBlocking")
-                                # Delete slipsBlocking chain from nftables
-                                os.system(self.sudo + "nft delete chain inet slipsBlocking")
-                        elif self.platform_system == 'Darwin':
-                            self.print('Mac OS blocking is not supported yet.')
+                        # Get the user's currently installed firewall
+                        if self.firewall == 'iptables':
+                                self.delete_iptables_chain()
+                        elif self.firewall == 'nftables':
+                            # TODO: handle the creation of the slipsBlocking chain in nftables
+                            # Flush rules in slipsBlocking chain because you can't delete a chain without flushing first
+                            os.system(self.sudo + "nft flush chain inet slipsBlocking")
+                            # Delete slipsBlocking chain from nftables
+                            os.system(self.sudo + "nft delete chain inet slipsBlocking")
+
                     else:
                         # message['data'] in the new_blocking channel is a dictionary that contains
                         # the ip and the blocking options
@@ -387,13 +369,14 @@ class Module(Module, multiprocessing.Process):
                             self.block_ip(ip, from_, to, dport, sport, protocol)
                         else:
                             self.unblock_ip(ip, from_, to, dport, sport, protocol)
-        except KeyboardInterrupt:
-            # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-            continue
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

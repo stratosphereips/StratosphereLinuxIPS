@@ -163,6 +163,7 @@ def load_modules(to_ignore):
             if inspect.isclass(member_object):
                 if issubclass(member_object, Module) and member_object is not Module:
                     plugins[member_object.name] = dict(obj=member_object, description=member_object.description)
+
     # Change the order of the blocking module(load it first) so it can receive msgs sent from other modules
     if 'Blocking' in plugins:
         plugins = OrderedDict(plugins)
@@ -308,6 +309,7 @@ if __name__ == '__main__':
                         help='clear a cache database.')
     parser.add_argument('-p', '--blocking', help='Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.',
                         required=False, default=False, action='store_true')
+    parser.add_argument('-cb', '--clearblocking', help='Flush and delete slipsBlocking iptables chain',required=False, default=False, action='store_true')
     parser.add_argument('-o', '--output', action='store', required=False, default=alerts_default_path,
                         help='store alerts.json and alerts.txt in the provided folder.')
     parser.add_argument('-s', '--save',action='store_true',required=False,
@@ -315,7 +317,6 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--db',action='store',required=False,
                         help='To read a redis (rdb) saved file. Requires root access.')
     parser.add_argument("-h", "--help", action="help", help="command line help")
-    parser.add_argument('-cb', '--clearblocking', help='Flush and delete slipsBlocking chain',required=False, default=False, action='store_true')
 
     args = parser.parse_args()
 
@@ -450,9 +451,9 @@ if __name__ == '__main__':
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
-    # If the user wants to blocks, the user needs to give a permission to modify iptables
     # Also check if the user blocks on interface, does not make sense to block on files
     if args.interface and args.blocking and os.geteuid() != 0:
+        # If the user wants to blocks,we need permission to modify iptables
         print('Run slips with sudo to enable the blocking module.')
         shutdown_gracefully(input_information)
 
@@ -552,7 +553,8 @@ if __name__ == '__main__':
         if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
             to_ignore.append('ExportingAlerts')
         # don't run blocking module unless specified
-        if not args.clearblocking and not args.blocking:
+        if not args.clearblocking and not args.blocking \
+                or (args.blocking and not args.interface): # ignore module if not using interface
             to_ignore.append('blocking')
         try:
             # This 'imports' all the modules somehow, but then we ignore some
