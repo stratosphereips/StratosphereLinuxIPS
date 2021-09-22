@@ -44,7 +44,7 @@ Complete documentation of Slips internal architecture and instructions how to im
 
 ## Installation
 
-The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but it is not able to analyze real live traffic.
+The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but it is not able to analyze real live traffic from inside the docker. If you need to analyze the traffic from your computer, use the native version.
 
 ## How to use Slips docker from DockerHub and share files between the host and the docker:
 
@@ -59,6 +59,12 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
         docker build --no-cache -t slips -f Dockerfile .
         docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
         ./slips.py -c slips.conf -f dataset/test3.binetflow
+
+## If you want to allow Slips inside the docker to analyze and block the traffic in your Linux host, run docker with --cap-add=NET_ADMIN. And run with -p
+
+        docker run -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips:latest
+        ./slips.py -c slips.conf -i eno1 -p
+
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
 
