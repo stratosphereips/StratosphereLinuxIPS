@@ -2565,7 +2565,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # What type of input do we have?
                     if not self.input_type:
                         # can't definee the type of input
-                        self.print("Can't determine input type.",5,6)
+                        self.print("Can't determine input type.")
                     elif self.input_type == 'zeek':
                         # self.print('Zeek line')
                         self.process_zeek_input(line)

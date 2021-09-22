@@ -64,7 +64,8 @@ def test_pcap(pcap_path, database, output_dir):
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    command = f'./slips.py -c slips.conf -l -f {pcap_path} -o {output_dir} > {output_dir}slips_output.txt 2>&1'
+    # thee ../../ because we'll be storing the zeek logs inside pcap/zeek_files
+    command = f'./slips.py -c slips.conf -l -f ../../{pcap_path} -o {output_dir} > {output_dir}slips_output.txt 2>&1'
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
@@ -72,6 +73,7 @@ def test_pcap(pcap_path, database, output_dir):
     expected_evidence = 'New horizontal port scan to port 23'
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
+    output_file = f'{output_dir}slips_output.txt'
     assert has_errors(output_file) == False
     shutil.rmtree(output_dir)
 
