@@ -61,15 +61,15 @@ class ListBar{
 
                 'quit kalipso':{ keys : ['q'] },
 
-                 'help':{
-                  keys: ['h']
-                 }
-            }
-    })
-  }
-selectTab(key){
-  this.widget.selectTab(key)
-}
+                 'help':{ keys: ['h'] }
+           }
+        })
+    }
+
+    /*Select key in the widget 'Listbar'*/
+    selectTab(key){
+        this.widget.selectTab(key)
+    }
 }
 
 module.exports = ListBar
