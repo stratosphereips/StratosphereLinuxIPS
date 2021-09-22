@@ -118,8 +118,7 @@ def generate_random_redis_port():
                         and len(list(__database__.r.scan_iter('*'))) < 2):
                     # if the db managed to connect to this random port, then this is
                     # the port we'll be using
-                    break
-        return port
+                    return port
     except redis.exceptions.ConnectionError:
         # Connection refused to this port
         return generate_random_redis_port()
