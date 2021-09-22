@@ -517,7 +517,7 @@ class Module(Module, multiprocessing.Process):
                                     self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
 
                     # Detect Data exfiltration
-                    # we’re looking for systems that are transferring large amount of data in 1h span
+                    # we’re looking for systems that are transferring large amount of data in 20 mins span
                     all_flows = __database__.get_all_flows_in_profileid(profileid)
                     # get a list of flows without uids
                     flows_list =[]
@@ -529,9 +529,11 @@ class Module(Module, multiprocessing.Process):
                     time_of_first_flow = datetime.datetime.fromtimestamp(flows_list[0]['ts'])
                     time_of_last_flow = datetime.datetime.fromtimestamp(flows_list[-1]['ts'])
                     # get the difference between them in seconds
-                    diff = float(str(time_of_last_flow - time_of_first_flow).split(':')[-1])
-                    # we need the flows that happend in 1h span
-                    if diff >= 3600:
+                    diff_in_hrs = int(str(time_of_last_flow - time_of_first_flow).split(':')[0])
+                    diff_in_mins = int(str(time_of_last_flow - time_of_first_flow).split(':')[1])
+                    diff_in_mins = diff_in_hrs*60 + diff_in_mins
+                    # we need the flows that happend in 20 mins span
+                    if diff_in_mins >= 20:
                         contacted_daddrs= {}
                         # get a dict of all contacted daddr in the past hour and how many times they were ccontacted
                         for flow in flows_list:
