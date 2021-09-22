@@ -124,7 +124,6 @@ ENV/
 
 # slips logs
 logs/
-*.swp
 *.pyc
 *.xml
 .idea/StratosphereLinuxIPS.iml
