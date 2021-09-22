@@ -134,12 +134,13 @@ class OutputProcess(multiprocessing.Process):
         while True:
             try:
                 line = self.queue.get()
-                if line == 'quiet':
+                if 'quiet' == line:
                     self.quiet = True
+                # if timewindows are not updated for 25 seconds, we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
                     __database__.publish('finished_modules', self.name)
                     return True
-                elif line != 'stop':
+                elif 'stop' != line:
                     if not self.quiet:
                         self.output_line(line)
                 else:

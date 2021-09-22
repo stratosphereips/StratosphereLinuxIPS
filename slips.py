@@ -468,10 +468,11 @@ if __name__ == '__main__':
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
-    # If the user wants to blocks, the user needs to give a permission to modify iptables
     # Also check if the user blocks on interface, does not make sense to block on files
-    if args.interface and args.blocking:
+    if args.interface and args.blocking and os.geteuid() != 0:
+        # If the user wants to blocks,we need permission to modify iptables
         print('Run slips with sudo to enable the blocking module.')
+        shutdown_gracefully(input_information)
 
     """
     Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
@@ -569,7 +570,8 @@ if __name__ == '__main__':
         if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
             to_ignore.append('ExportingAlerts')
         # don't run blocking module unless specified
-        if not args.clearblocking and not args.blocking:
+        if not args.clearblocking and not args.blocking \
+                or (args.blocking and not args.interface): # ignore module if not using interface
             to_ignore.append('blocking')
         try:
             # This 'imports' all the modules somehow, but then we ignore some

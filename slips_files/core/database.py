@@ -936,16 +936,18 @@ class Database(object):
     def setEvidence(self, type_detection, detection_info, type_evidence,
                     threat_level, confidence, description, timestamp, profileid='', twid='', uid=''):
         """
-        Get the evidence for this TW for this Profile
-
-        Input:
-        - key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans, then this would be the port used.
-               the idea is that you can later update this specific detection when it evolves.
-               Examples of keys are: 'dport:1234' for all the evidences regarding this dport, or 'dip:1.1.1.1' for all the evidences regarding that dst ip
-        - type_evidence: The type of evidence you can send. For example PortScanType1
-        - threat_level: How important this evidence is. Portscan? C&C channel? Exploit?
-        - confidence: How sure you are that this is what you say it is. Basically: the more data the more sure you are.
-
+        Set the evidence for this Profile and Timewindow.
+        Parameters:
+            key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans,
+                 then this would be the port used. The idea is that you can later update
+                 this specific detection when it evolves. Examples of keys are:
+                 'dport:1234' for all the evidences regarding this dport,
+                 'dip:1.1.1.1' for all the evidences regarding that dst ip
+        type_evidence: determine the type of evidenc. E.g. PortScan, ThreatIntelligence
+        threat_level: determine the importance of the evidence.
+        confidence: determine the confidence of the detection. (How sure you are that this is what you say it is.)
+        uid: needed to get the flow from the database
+        Example:
         The evidence is stored as a dict.
         {
             'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'],
@@ -1504,8 +1506,21 @@ class Database(object):
         # Check if the server_name (SNI) is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         # If server_name is not empty, set in the IPsInfo and send to TI
         if server_name:
-            self.setInfoForIPs(str(daddr_as_obj), {'SNI':server_name})
-            self.publish('give_threat_intelligence', server_name + '-' + str(profileid) + '-' + str(twid) + '-' + ' ')
+            # Save new server name in the IPInfo. There might be several server_name per IP.
+            ipdata = self.getIPData(str(daddr_as_obj))
+            if ipdata:
+                sni_ipdata = ipdata.get('SNI', [])
+            else:
+                sni_ipdata = []
+            SNI_port = {'server_name':server_name, 'dport':dport}
+            # We do not want any duplicates.
+            if SNI_port not in sni_ipdata:
+                # Verify that the SNI is equal to any of the domains in the DNS resolution
+                # only add this SNI to our db if it has a DNS resolution
+                resolved_domains = list(self.get_dns_answers().keys())
+                if SNI_port['server_name'] in resolved_domains:
+                    sni_ipdata.append(SNI_port)
+                    self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
 
             # We are giving only new server_name to the threat_intelligence module.
             data_to_send = {
@@ -1552,7 +1567,15 @@ class Database(object):
         self.publish('new_url', to_send)
         self.print('Adding HTTP flow to DB: {}'.format(data), 3, 0)
         # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
-        self.publish('give_threat_intelligence', host + '-' + str(profileid) + '-' + str(twid) + '-'+ ' ')
+        data_to_send = {
+                'host': host,
+                'profileid' : str(profileid),
+                'twid' :  str(twid),
+                'stime': stime,
+                'uid':uid
+            }
+        data_to_send = json.dumps(data_to_send)
+        self.publish('give_threat_intelligence',data_to_send)
 
     def add_out_ssh(self, profileid, twid, stime, flowtype, uid, ssh_version, auth_attempts, auth_success, client, server, cipher_alg, mac_alg, compression_alg, kex_alg, host_key_alg, host_key):
         """
