@@ -75,18 +75,22 @@ class Module(Module, multiprocessing.Process):
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the prcocesses into account
-
-        Input
-         verbose: is the minimum verbosity level required for this text to be printed
-         debug: is the minimum debugging level required for this text to be printed
-         text: text to print. Can include format like 'Test {}'.format('here')
-
-        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        levels = f'{verbose}{debug}'
+        self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def process_timestamp(self, timestamp: float) -> str:
         if self.is_human_timestamp is True:
@@ -283,7 +287,7 @@ class Module(Module, multiprocessing.Process):
             http_data = {}
             if alt_flow_json:
                 alt_flow = json.loads(alt_flow_json)
-                self.print('Received an altflow of type {}: {}'.format(alt_flow['type'], alt_flow), 5,0)
+                self.print('Received an altflow of type {}: {}'.format(alt_flow['type'], alt_flow), 3,0)
                 if 'dns' in alt_flow['type']:
                     answer = alt_flow["answers"]
                     if 'NXDOMAIN' in alt_flow['rcode_name']:
@@ -327,7 +331,7 @@ class Module(Module, multiprocessing.Process):
             activity.update(alt_activity)
             if activity:
                 __database__.add_timeline_line(profileid, twid, activity, timestamp)
-            self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+            self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 3, 0)
 
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno

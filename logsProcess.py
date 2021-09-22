@@ -75,19 +75,24 @@ class LogsProcess(multiprocessing.Process):
         self.outputqueue.put('01|logs|Logs Process configured to report every: {} seconds'.format(self.report_time))
 
     def print(self, text, verbose=1, debug=0):
-        """ 
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the prcocesses into account
-
-        Input
-         verbose: is the minimum verbosity level required for this text to be printed
-         debug: is the minimum debugging level required for this text to be printed
-         text: text to print. Can include format like 'Test {}'.format('here')
-        
-        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
-        vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
+        """
+
+        levels = f'{verbose}{debug}'
+        self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def run(self):
         try:
@@ -283,7 +288,7 @@ class LogsProcess(multiprocessing.Process):
                 # Get the time of this TW. For the file name
                 twtime = __database__.getTimeTW(profileid, twid)
                 twtime = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(twtime))
-                self.print('\tStoring Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime), 0, 2)
+                self.print('\tStoring Profile: {}. TW {}. Time: {}'.format(profileid, twid, twtime), 3, 0)
                 #self.print('\tProfile: {} has {} timewindows'.format(profileid, twLen), 0, 3)
 
                 # Create the folder for this profile if it doesn't exist
@@ -480,7 +485,7 @@ class LogsProcess(multiprocessing.Process):
                     data, first_index = __database__.get_timeline_last_lines(profileid, twid, first_index)
                     self.timeline_first_index[hash_key] = first_index
                     if data:
-                        self.print('Adding to the profile line {} {}, data {}'.format(profileid, twid, data), 6, 0)
+                        self.print('Adding to the profile line {} {}, data {}'.format(profileid, twid, data), 3, 0)
                         self.addDataToFile(profilefolder + '/' + 'Complete-timeline-outgoing-actions.txt', data,
                                            file_mode='a+', data_type='json', data_mode='raw')
 

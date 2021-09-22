@@ -136,13 +136,6 @@ Each IP address that appears in the network traffic of the input is represented 
 
 ```time_window_width```
 
-**Log files.**
-To disable the creation of log files, there are two options:
-1. Running Slips with ```-l``` flag. 
-2. Setting ```create_log_files``` to ```no```.
-
-You can also change how often Slips creates log files using the ```log_report_time``` variable.
-
 ### Disabling module
 You can disable modules easily by appending the module name to the ```disable``` list.
 
@@ -246,6 +239,70 @@ inbox_path = /services/inbox-a
 ```jwt_auth_url```: auth url if JWT based authentication is used.
 
 If running on a file not an interface, Slips will export to server after analysis is done. 
+
+## Logging
+
+To disable the creation of log files, there are two options:
+1. Running Slips with ```-l``` flag. 
+2. Setting ```create_log_files``` to ```no``` in ```slips.conf```.
+
+You can also change how often Slips creates log files using the ```log_report_time``` variable  in ```slips.conf```.
+
+We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
+
+Defaut value for both of them is 1
+
+To change them, We use ```-v``` for verbosity and ```-e``` for debugging
+
+For example:
+
+```./slips.py -c slips.conf -v 2 -e 1 -f zeek_dir ```
+
+Verbosity is about less or more information on the normal work of slips. 
+
+For example: "Done writing logs to file x."
+
+Debug is only about errors.
+
+For example: "Error reading threat intelligence file, line 4, column 2"
+
+To more verbosity level, the more detailed info is printed.
+
+The more debug level, the more errors are logged.
+
+Below is a table showing each level of both.
+
+<table>
+<tbody>
+<tr style="height: 22px;">
+<td style="height: 22px;">&nbsp;</td>
+<td style="height: 22px;">&nbsp;Verbosity</td>
+<td style="height: 22px;">&nbsp;Debugging</td>
+</tr>
+<tr style="height: 22px;">
+<td style="height: 22px;">&nbsp;0</td>
+<td style="height: 22px;">&nbsp;Don't&nbsp;print</td>
+<td style="height: 22px;">&nbsp;Don't print</td>
+</tr>
+<tr style="height: 22px;">
+<td style="height: 22px;">1&nbsp;</td>
+<td style="height: 22px;">&nbsp;Show basic operation, proof of work&nbsp;</td>
+<td style="height: 22px;">&nbsp;Print exceptions</td>
+</tr>
+<tr style="height: 22px;">
+<td style="height: 22px;">2&nbsp;</td>
+<td style="height: 22px;">&nbsp;Log I/O operations and filenames</td>
+<td style="height: 22px;">&nbsp;Unsupported and unhandled types (cases that may cause errors)</td>
+</tr>
+<tr style="height: 22px;">
+<td style="height: 22px;">3&nbsp;</td>
+<td style="height: 22px;">&nbsp;Log database/profile/timewindow changes</td>
+<td style="height: 22px;">&nbsp;Red warnings that need examination - developer warnings</td>
+</tr>
+</tbody>
+</table>
+
+
 
 # Unit testing
 To test your changes to Slips, please run all the unit tests. Fromn the main folder where slips is installed:

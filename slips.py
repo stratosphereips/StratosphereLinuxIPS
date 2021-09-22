@@ -551,11 +551,11 @@ if __name__ == '__main__':
     # Before starting update malicious file
     update_malicious_file(outputProcessQueue,config)
     # Print the PID of the main slips process. We do it here because we needed the queue to the output process
-    outputProcessQueue.put('20|main|Started main program [PID {}]'.format(os.getpid()))
+    outputProcessQueue.put('10|main|Started main program [PID {}]'.format(os.getpid()))
     # Output pid
-    outputProcessQueue.put('20|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
     __database__.store_process_PID('OutputProcess',int(outputProcessThread.pid))
 
+    outputProcessQueue.put('10|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
 
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
@@ -582,8 +582,8 @@ if __name__ == '__main__':
                     module_class = modules_to_call[module_name]['obj']
                     ModuleProcess = module_class(outputProcessQueue, config)
                     ModuleProcess.start()
-                    outputProcessQueue.put('20|main|\t[main] Starting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
                     __database__.store_process_PID(module_name, int(ModuleProcess.pid))
+                    outputProcessQueue.put('10|main|\t\tStarting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
@@ -609,7 +609,7 @@ if __name__ == '__main__':
             logsProcessQueue = Queue()
             logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
             logsProcessThread.start()
-            outputProcessQueue.put('20|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
+            outputProcessQueue.put('10|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
             __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
 
     # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
@@ -622,7 +622,7 @@ if __name__ == '__main__':
     # Create the thread and start it
     evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output, logs_folder)
     evidenceProcessThread.start()
-    outputProcessQueue.put('20|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
+    outputProcessQueue.put('10|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
     __database__.store_process_PID('EvidenceProcess', int(evidenceProcessThread.pid))
 
 
@@ -632,7 +632,7 @@ if __name__ == '__main__':
     # Create the profile thread and start it
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
     profilerProcessThread.start()
-    outputProcessQueue.put('20|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
+    outputProcessQueue.put('10|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
     __database__.store_process_PID('ProfilerProcess', int(profilerProcessThread.pid))
 
     c1 = __database__.subscribe('finished_modules')
@@ -647,7 +647,7 @@ if __name__ == '__main__':
     # Create the input process and start it
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
     inputProcess.start()
-    outputProcessQueue.put('20|main|Started input thread [PID {}]'.format(inputProcess.pid))
+    outputProcessQueue.put('10|main|Started input thread [PID {}]'.format(inputProcess.pid))
     __database__.store_process_PID('inputProcess', int(inputProcess.pid))
 
 
@@ -688,7 +688,8 @@ if __name__ == '__main__':
                 __database__.setSlipsInternalTime(time_of_last_modified_tw)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
-            outputProcessQueue.put('20|main|[Main] Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+            outputProcessQueue.put('10|Main|Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+
             # Check if we need to close some TW
             __database__.check_TW_to_close()
 
