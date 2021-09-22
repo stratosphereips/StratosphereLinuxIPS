@@ -332,6 +332,10 @@ if __name__ == '__main__':
         # No conf file provided
         pass
 
+    if (args.verbose and int(args.verbose)> 3) or (args.debug and int(args.debug) > 3):
+        print("Debug and verbose values range from 0 to 3.")
+        terminate_slips()
+
     # Check if redis server running
     if check_redis_database() is False:
         print("Redis database is not running. Stopping Slips")
@@ -558,7 +562,7 @@ if __name__ == '__main__':
     outputProcessQueue.put('10|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
 
     # Start each module in the folder modules
-    outputProcessQueue.put('01|main|[main] Starting modules')
+    outputProcessQueue.put('01|main|Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
 
     # This plugins import will automatically load the modules and put them in the __modules__ variable

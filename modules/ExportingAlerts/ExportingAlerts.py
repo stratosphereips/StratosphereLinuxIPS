@@ -385,7 +385,7 @@ class Module(Module, multiprocessing.Process):
                                 self.is_thread_created = True
                             exported_to_stix = self.export_to_STIX(msg_to_send)
                             if not exported_to_stix:
-                                self.print("Problem in export_to_STIX()", 6, 6)
+                                self.print("Problem in export_to_STIX()", 0,3)
                         if 'json' in self.export_to:
                             self.export_to_json(evidence)
             except KeyboardInterrupt:
