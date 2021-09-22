@@ -3091,7 +3091,7 @@ class Database(object):
             redis_db_path = '/opt/homebrew/var/db/redis/dump.rdb'
 
         if os.path.exists(redis_db_path):
-            command = self.sudo + 'cp /var/lib/redis/dump.rdb ' + backup_file + '.rdb'
+            command = self.sudo + f'cp {redis_db_path} {backup_file}.rdb'
             os.system(command)
             print(f"[Main] Database saved to {backup_file}.rdb" )
             return True
