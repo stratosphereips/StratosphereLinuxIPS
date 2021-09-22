@@ -1508,7 +1508,7 @@ class Database(object):
                 sni_ipdata = []
             SNI_port = {'server_name':server_name, 'dport':dport}
             # We do not want any duplicates.
-            if SNI_port not in sni_ipdata:
+            if SNI_port['server_name'] not in sni_ipdata:
                 # Verify that the SNI is equal to any of the domains in the DNS resolution
                 # only add this SNI to our db if it has a DNS resolution
                 resolved_domains = list(self.get_dns_answers().keys())
