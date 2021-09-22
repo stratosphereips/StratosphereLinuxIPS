@@ -19,32 +19,19 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-certifi \
     file \
     lsof \
+    net-tools \
+    iproute2 \
+    iptables \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
 RUN pip3 install --upgrade pip
 
 # Install redis using PIP3
-RUN pip3 install wheel
-RUN pip3 install redis
-RUN pip3 install setuptools
-RUN pip3 install validators
-RUN pip3 install colorama
-RUN pip3 install maxminddb
-RUN pip3 install pandas
-RUN pip3 install sklearn
-RUN pip3 install urllib3
-RUN pip3 install scipy
-RUN pip3 install watchdog
-RUN pip3 install slackclient
-RUN pip3 install stix2
-RUN pip3 install cabby
-RUN pip3 install pytest
-RUN pip3 install ipwhois
-RUN pip3 install pytest
+RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
+RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby pytest
+RUN pip3 install ipwhois pytest tzlocal psutil pytest-xdist
 RUN pip3 install --ignore-installed six
-RUN pip3 install tzlocal
-RUN pip3 install psutil
 RUN pip3 install --upgrade tensorflow==2.4.1
 
 # Download and unpack Slips.

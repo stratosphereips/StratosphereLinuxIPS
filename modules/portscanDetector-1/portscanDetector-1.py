@@ -72,12 +72,12 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                         # For port scan detection, we will measure different things:
 
-                        # 1. Vertical port scan:  single IP being scanned for multiple ports
+                        # 1. Vertical port scan:
+                        # (single IP being scanned for multiple ports)
                         # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
-
-                        # 2. Horizontal port scan: scan against a group of IPs for a single port
+                        # 2. Horizontal port scan:
+                        #  (scan against a group of IPs for a single port)
                         # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip.
-
                         # 3. Too many connections???:
                         # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
                         # 4. Slow port scan. Same as the others but distributed in multiple time windows

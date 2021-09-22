@@ -154,6 +154,25 @@ The ```mode=test``` should be used after training the models, to test unknown da
 
 You should have trained at least once with 'Normal' data and once with 'Malicious' data in order for the test to work.
 
+### Blocking
+
+This module is enabled only using the ```-p``` parameter and needs an interface to run. 
+
+Usage example:
+
+```sudo ./slips.py -i wlp3s0 -p```
+
+Slips needs to be run as root so it can execute iptables commands. 
+
+In Docker, since there's no root, the environment variable ```IS_IN_A_DOCKER_CONTAINER``` should be set to ```True``` to use 'sudo' properly.
+
+If you use the latest Dockerfile, it will be set by default. If not, you can set it manually by running this command in the docker container
+
+```export IS_IN_A_DOCKER_CONTAINER=True```
+
+
+
+
 ### VirusTotal
 
 In order for virustotal module to work, you need to add your VirusTotal API key to the file

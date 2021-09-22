@@ -18,6 +18,9 @@ RUN apt update && apt install -y --no-install-recommends \
 	python3-certifi \
 	file \
 	lsof \
+	net-tools \
+	iptables \
+	iproute2 \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
@@ -43,6 +46,7 @@ RUN pip3 install --ignore-installed six
 RUN pip3 install slackclient
 RUN pip3 install tzlocal
 RUN pip3 install psutil
+RUN pip3 install pytest-xdist
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git

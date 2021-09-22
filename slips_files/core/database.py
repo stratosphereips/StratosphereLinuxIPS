@@ -92,7 +92,11 @@ class Database(object):
         If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
         """
         vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        try:
+            self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        except AttributeError:
+            pass
+
 
     def set_slips_start_time(self):
         """ store the time slips started (datetime obj) """
@@ -1504,7 +1508,7 @@ class Database(object):
                 sni_ipdata = []
             SNI_port = {'server_name':server_name, 'dport':dport}
             # We do not want any duplicates.
-            if SNI_port not in sni_ipdata:
+            if SNI_port['server_name'] not in sni_ipdata:
                 # Verify that the SNI is equal to any of the domains in the DNS resolution
                 # only add this SNI to our db if it has a DNS resolution
                 resolved_domains = list(self.get_dns_answers().keys())

@@ -39,6 +39,7 @@ from slips_files.common.argparse import ArgumentParser
 import errno
 import subprocess
 import re
+from collections import OrderedDict
 
 version = '0.7.3'
 
@@ -163,6 +164,12 @@ def load_modules(to_ignore):
                 if issubclass(member_object, Module) and member_object is not Module:
                     plugins[member_object.name] = dict(obj=member_object, description=member_object.description)
 
+    # Change the order of the blocking module(load it first) so it can receive msgs sent from other modules
+    if 'Blocking' in plugins:
+        plugins = OrderedDict(plugins)
+        # last=False to move to the beginning of the dict
+        plugins.move_to_end('Blocking', last=False)
+
     return plugins,failed_to_load_modules
 
 def get_cwd():
@@ -267,6 +274,8 @@ def shutdown_gracefully(input_information):
     except KeyboardInterrupt:
         return False
 
+
+
 ####################
 # Main
 ####################
@@ -298,8 +307,9 @@ if __name__ == '__main__':
     parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
     parser.add_argument('-cc','--clearcache',action='store_true', required=False,
                         help='clear a cache database.')
-    parser.add_argument('-p', '--blocking',action='store_true',required=False,
-                        help='block IPs that connect to the computer. Supported only on Linux.')
+    parser.add_argument('-p', '--blocking', help='Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.',
+                        required=False, default=False, action='store_true')
+    parser.add_argument('-cb', '--clearblocking', help='Flush and delete slipsBlocking iptables chain',required=False, default=False, action='store_true')
     parser.add_argument('-o', '--output', action='store', required=False, default=alerts_default_path,
                         help='store alerts.json and alerts.txt in the provided folder.')
     parser.add_argument('-s', '--save',action='store_true',required=False,
@@ -324,12 +334,30 @@ if __name__ == '__main__':
 
     # Check if redis server running
     if check_redis_database() is False:
+        print("Redis database is not running. Stopping Slips")
         terminate_slips()
-        # Clear cache if the parameter was included
+
+    # Clear cache if the parameter was included
     if args.clearcache:
         print('Deleting Cache DB in Redis.')
         clear_redis_cache_database()
         terminate_slips()
+
+    if args.clearblocking:
+        if os.geteuid() != 0:
+            print("Slips needs to be run as root to clear the slipsBlocking chain. Stopping.")
+            sys.exit(-1)
+        else:
+            # start only the blocking module process and the db
+            from slips_files.core.database import __database__
+            from multiprocessing import Queue
+            from modules.blocking.blocking import Module
+            blocking = Module(Queue(), config)
+            blocking.start()
+            blocking.delete_slipsBlocking_chain()
+            # Tell the blocking module to clear the slips chain
+            shutdown_gracefully('')
+
     # Check if user want to save and load a db at the same time
     if args.save :
         # make sure slips is running as root
@@ -441,11 +469,11 @@ if __name__ == '__main__':
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
-    # If the user wants to blocks, the user needs to give a permission to modify iptables
     # Also check if the user blocks on interface, does not make sense to block on files
-    if args.interface and args.blocking:
-        print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
-        os.system('sudo iptables -N slipsBlocking')
+    if args.interface and args.blocking and os.geteuid() != 0:
+        # If the user wants to blocks,we need permission to modify iptables
+        print('Run slips with sudo to enable the blocking module.')
+        shutdown_gracefully(input_information)
 
     """
     Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
@@ -532,6 +560,7 @@ if __name__ == '__main__':
     # Start each module in the folder modules
     outputProcessQueue.put('01|main|[main] Starting modules')
     to_ignore = read_configuration(config, 'modules', 'disable')
+
     # This plugins import will automatically load the modules and put them in the __modules__ variable
     # if slips is given a .rdb file, don't load the modules as we don't need them
     if to_ignore and not args.db:
@@ -541,8 +570,9 @@ if __name__ == '__main__':
         export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ","").lower()
         if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
             to_ignore.append('ExportingAlerts')
-        # Disable blocking if was not asked and if it is not interface
-        if not args.blocking or not args.interface:
+        # don't run blocking module unless specified
+        if not args.clearblocking and not args.blocking \
+                or (args.blocking and not args.interface): # ignore module if not using interface
             to_ignore.append('blocking')
         try:
             # This 'imports' all the modules somehow, but then we ignore some
@@ -557,6 +587,9 @@ if __name__ == '__main__':
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
+
+
+
 
     # Get the type of output from the parameters
     # Several combinations of outputs should be able to be used
