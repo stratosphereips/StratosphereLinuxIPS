@@ -20,14 +20,12 @@ from slips_files.core.database import __database__
 import json
 from datetime import datetime
 import configparser
-import platform
-from colorama import init
 from os import path
 from colorama import Fore, Back, Style
-import validators
 import ipaddress
 import socket
 import sys
+import requests
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -59,6 +57,8 @@ class EvidenceProcess(multiprocessing.Process):
             self.logs_logfile = False
             self.logs_jsonfile = False
         self.timeout = None
+        # this list will have our local and public ips
+        self.our_ips = self.get_IP()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -79,6 +79,21 @@ class EvidenceProcess(multiprocessing.Process):
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
+
+    def get_IP(self):
+        """ Returns a list of our local and public IPs"""
+        IPs = []
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('10.255.255.255', 1))
+            IPs.append(s.getsockname()[0])
+        except Exception:
+            IPs.append('127.0.0.1')
+        finally:
+            s.close()
+        # get public ip
+        IPs.append(requests.get('http://ipinfo.io/json').json()['ip'])
+        return IPs
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -544,8 +559,9 @@ class EvidenceProcess(multiprocessing.Process):
 
                                 self.addDataToLogFile(alert_to_log)
                                 self.addDataToJSONFile(alert_dict)
-                                if type_detection=='dstip':
-                                    # # TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
+                                # check that the dst ip isn't our own IP
+                                if type_detection=='dstip' and detection_info not in self.our_ips:
+                                    #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
                                     # blocking_data = {
                                     #     'ip':str(detection_info),
                                     #     'block' : True,
