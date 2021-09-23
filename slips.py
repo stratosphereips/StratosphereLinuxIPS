@@ -350,7 +350,7 @@ if __name__ == '__main__':
     if args.clearblocking:
         if os.geteuid() != 0:
             print("Slips needs to be run as root to clear the slipsBlocking chain. Stopping.")
-            sys.exit(-1)
+            terminate_slips()
         else:
             # start only the blocking module process and the db
             from slips_files.core.database import __database__
