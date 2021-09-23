@@ -2158,6 +2158,7 @@ class Database(object):
         else:
             # Get the exact path without spaces
             redis_dir = redis_dir[redis_dir.index(' ')+1:]
+
         if os.path.exists(backup_file):
             # Check if valid .rdb file
             command = 'file ' + backup_file
@@ -2172,13 +2173,15 @@ class Database(object):
                 # Stop the server first in order for redis to load another db
                 os.system(self.sudo +'service redis-server stop')
                 # todo: find/generate dump.rdb in docker.
-                # todo add unit tests for these load() and save()
                 # Copy out saved db to the dump.rdb (the db redis uses by default)
-                command = self.sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
-                os.system(command)
-                # Start the server again
-                os.system(self.sudo + 'service redis-server start')
-                self.print("{} loaded successfully. Run ./kalipso".format(backup_file))
+                try:
+                    command = self.sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
+                    os.system(command)
+                    # Start the server again
+                    os.system(self.sudo + 'service redis-server start')
+                    self.print("{} loaded successfully. Run ./kalipso".format(backup_file))
+                except:
+                    self.print(f'Error loading the database {backup_file} to {redis_dir}.')
                 return True
             else:
                 self.print("{} is not a valid redis database file.".format(backup_file))
