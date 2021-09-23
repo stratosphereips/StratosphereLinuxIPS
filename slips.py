@@ -261,13 +261,19 @@ def shutdown_gracefully(input_information):
             except FileExistsError:
                 pass
             # The name of the interface/pcap/nfdump/binetflow used is in input_information
+            # if the input is a zeek dir, remove the / at the end
+            if input_information.endswith('/'): input_information = input_information[:-1]
             # We need to seperate it from the path
             input_information = os.path.basename(input_information)
             # Remove the extension from the filename
-            input_information = input_information[:input_information.index('.')]
+            try:
+                input_information = input_information[:input_information.index('.')]
+            except ValueError:
+                # it's a zeek dir
+                pass
             # Give the exact path to save(), this is where the .rdb backup will be
             __database__.save(backups_dir + input_information)
-            print(f"[Main] Database saved to {backups_dir[:]}{input_information}" )
+            print(f"[Main] Database saved to {backups_dir}{input_information}" )
 
         os._exit(-1)
         return True
