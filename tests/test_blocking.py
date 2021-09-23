@@ -36,7 +36,7 @@ def test_initialize_chains_in_firewall(outputQueue, database):
     blocking.firewall = 'iptables'
     blocking.initialize_chains_in_firewall()
     assert is_slipschain_initialized(outputQueue) == True
-#
+# todo
 # def test_delete_slipsBlocking_chain(outputQueue, database):
 #     blocking = create_blocking_instance(outputQueue)
 #     # first make sure they are initialized
