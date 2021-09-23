@@ -1,4 +1,6 @@
 """ Unit test for ../slips.py """
+import os
+
 from ..slips  import *
 
 
@@ -12,16 +14,25 @@ def test_save():
     command = f'sudo ./slips.py -l -f dataset/sample_zeek_files-2 -s > /dev/null 2>&1'
     # this function returns when slips is done
     os.system(command)
-    assert os.path.exists('redis_backups/sample_zeek_files-2')
+    assert os.path.exists('redis_backups/sample_zeek_files-2.rdb')
+    os.remove('redis_backups/sample_zeek_files-2.rdb')
 
-def test_load():
+
+def test_load(database):
     """ tests loading the database"""
+    # make sure the db exists
+    if not os.path.exists('redis_backups/sample_zeek_files-2'):
+        # save it if it doesn't exist
+        command = f'sudo ./slips.py -l -f dataset/sample_zeek_files-2 -s > /dev/null 2>&1'
+        os.system(command)
+
     # this test needs sudo
-    command = f'sudo ./slips.py -l -f dataset/sample_zeek_files-2 -s > /dev/null 2>&1'
+    command = f'sudo ./slips.py -d redis_backups/sample_zeek_files-2.rdb  > /dev/null 2>&1'
     # this function returns when slips is done
     os.system(command)
-    assert os.path.exists('redis_backups/sample_zeek_files-2')
-    #todo
+    # a random value to make sure the db is loaded
+    x = database.r.hgetall('profile_147.32.83.190_timewindow1_flows')
+    assert 'CW4pvYSwLQaQ87q74' in str(x)
 
 def test_recognize_host_ip():
     assert recognize_host_ip() != None

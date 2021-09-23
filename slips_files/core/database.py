@@ -97,9 +97,9 @@ class Database(object):
             3 - red warnings that needs examination - developer warnings
         :param text: text to print. Can include format like 'Test {}'.format('here')
         """
-        vd_text = str(int(verbose) * 10 + int(debug))
+        levels = f'{verbose}{debug}'
         try:
-            self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+            self.outputqueue.put(f"{levels}|{self.name}|{text}")
         except AttributeError:
             pass
 
@@ -2170,13 +2170,12 @@ class Database(object):
                 # Stop the server first in order for redis to load another db
                 os.system(self.sudo +'service redis-server stop')
                 # todo: find/generate dump.rdb in docker.
-                # todo add unit tests for these load() and save()
                 # Copy out saved db to the dump.rdb (the db redis uses by default)
                 command = self.sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
                 os.system(command)
                 # Start the server again
                 os.system(self.sudo + 'service redis-server start')
-                self.print("{} loaded successfully. Run ./kalipso".format(backup_file))
+                self.print("{} loaded successfully. Run ./kalipso.sh".format(backup_file))
                 return True
             else:
                 self.print("{} is not a valid redis database file.".format(backup_file))
