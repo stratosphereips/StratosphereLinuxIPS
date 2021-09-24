@@ -146,15 +146,14 @@ If ```home_network``` is not defined, Slips uses all ranges ```'92.168.0.0/16, 1
 **Analysis Direction**
 
 
-```analysis_direction``` cab either be ```out``` or ```all```
+```analysis_direction``` can either be ```out``` or ```all```
 
 <div class="zoom">
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/directions.png" title="Figure 1. Out and all directions">
-<figcaption><b>Figure 1.</b> Explanation of Slips directions.</figcaption>
+<img style="max-width:500px;max-height:500px;" src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/directions.png" title="Figure 1. Out and all directions">
 </div>
 
 
-### Disabling module
+### Disabling a module
 
 You can disable modules easily by appending the module name to the ```disable``` list.
 
