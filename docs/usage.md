@@ -138,9 +138,21 @@ Each IP address that appears in the network traffic of the input is represented 
 
 **Home Network**
 
-Slips needs to know your home network to be able to use specific zeek scripts.
+Slips needs to know your home network to be able to use specific zeek scripts. 
 
-If not defined, Slips uses all ranges ```'92.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8``` as your local network.
+If ```home_network``` is not defined, Slips uses all ranges ```'92.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8``` as your local network.
+
+
+**Analysis Direction**
+
+
+```analysis_direction``` cab either be ```out``` or ```all```
+
+<div class="zoom">
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/directions.png" title="Figure 1. Out and all directions">
+<figcaption><b>Figure 1.</b> Explanation of Slips directions.</figcaption>
+</div>
+
 
 ### Disabling module
 
