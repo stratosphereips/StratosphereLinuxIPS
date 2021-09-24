@@ -459,6 +459,29 @@ class UpdateFileManager:
             print(traceback.format_exc())
             return False
 
+    def detect_data_type(self, data):
+        """ Detects if incoming data is ipv4, ipv6 or domain """
+        # Check if the data is a valid IPv4, IPv6 or domain
+        try:
+            ip_address = ipaddress.IPv4Address(data)
+            # Is IPv4!
+            return ip_address
+        except ipaddress.AddressValueError:
+            # Is it ipv6?
+            try:
+                ip_address = ipaddress.IPv6Address(data)
+                # Is IPv6!
+                return ip_address
+            except ipaddress.AddressValueError:
+                # It does not look as IP address.
+                # So it should be a domain
+                if validators.domain(data):
+                    domain = data
+                    return 'domain'
+                else:
+                    # unknown
+                    return None
+                    # self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
 
     def __load_malicious_datafile(self, malicious_data_path: str) -> bool:
         """
@@ -650,29 +673,9 @@ class UpdateFileManager:
 
                     data_file_name = malicious_data_path.split('/')[-1]
 
-                    # Check if the data is a valid IPv4, IPv6 or domain
-                    try:
-                        ip_address = ipaddress.IPv4Address(data)
-                        # Is IPv4!
-                        # Store the ip in our local dict
-                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name})
-                    except ipaddress.AddressValueError:
-                        # Is it ipv6?
-                        try:
-                            ip_address = ipaddress.IPv6Address(data)
-                            # Is IPv6!
-                            # Store the ip in our local dict
-                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name})
-                        except ipaddress.AddressValueError:
-                            # It does not look as IP address.
-                            # So it should be a domain
-                            if validators.domain(data):
-                                domain = data
-                                # Store the ip in our local dict
-                                malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name})
-                            else:
-                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
-                                continue
+                    # if we have info about data, append to it, if we don't add a new entry in the correct dict
+                    #todo
+
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database

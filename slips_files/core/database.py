@@ -1781,7 +1781,6 @@ class Database(object):
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
         """
         Store a group of IPs in the db as they were obtained from an IoC source
-        What is the format of ips_and_description?
         """
         if ips_and_description:
             self.rcache.hmset('IoC_ips', ips_and_description)
