@@ -15,11 +15,9 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
-import platform
 
 # Your imports
 import json
-import time
 import sys
 import datetime
 
@@ -77,43 +75,46 @@ class Module(Module, multiprocessing.Process):
         uid = flow['uid']
         try:
             # cached_requests is a list, append this request to it
-            # if ip x sends more than 10 arp requests to 3 or more different ips within 30 seconds, then this is x doing arp scan
+            # if ip x sends arp requests to 3 or more different ips within 30 seconds, then this is x doing arp scan
             # the key f'{profileid}_{twid} is used to group requests from the same saddr
             #  the dict looks something like this {profileid_twid1: {'daddr': {'uid':..,'ts' : ..'}, daddr2: {uid,ts}}
 
             cached_requests = self.cache_arp_requests[f'{profileid}_{twid}']
             cached_requests.update({daddr: {'uid' : uid,
                                     'ts' : ts}})
-            if len(list(cached_requests.keys()))>=3:
-                # check if these requests happened within 30 secs
-                # get the first and the last request of the 10
-                starttime = cached_requests[0]['ts']
-                endtime = cached_requests[-1]['ts']
-                # get the time of each one in secondstodo do we need mac addresses?
-                starttime = datetime.datetime.fromtimestamp(starttime)
-                endtime = datetime.datetime.fromtimestamp(endtime)
-                # get the difference between them in seconds
-                self.diff = float(str(endtime - starttime).split(':')[-1])
-                print(f'**********************diff : {self.diff}')
-                if self.diff <= 30.00:
-                    # we are sure this is an arp scan
-                    confidence = 0.8
-                    threat_level = 60
-                    description = f'performing ARP scan'
-                    type_evidence = 'ARPScan'
-                    type_detection = 'ip' #srcip
-                    detection_info = profileid.split("_")[1]
-                    __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                         threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
-                    # after we set evidence, clear the dict so we can detect if it does another scan
-                    self.cache_arp_requests.pop(f'{profileid}_{twid}')
-                    return True
         except KeyError:
             # create the key if it doesn't exist
             self.cache_arp_requests[f'{profileid}_{twid}'] = {daddr: {'uid' : uid,
                                                                 'ts' : ts}}
             return True
 
+        # get the keys of cache_arp_requests in a list
+        profileids_twids = list(cached_requests.keys())
+        if len(profileids_twids) >=3:
+            # check if these requests happened within 30 secs
+            # get the first and the last request of the 10
+            first_daddr = profileids_twids[0]
+            last_daddr = profileids_twids[-1]
+            starttime = cached_requests[first_daddr]['ts']
+            endtime = cached_requests[last_daddr]['ts']
+            # get the time of each one in secondstodo do we need mac addresses?
+            starttime = datetime.datetime.fromtimestamp(starttime)
+            endtime = datetime.datetime.fromtimestamp(endtime)
+            # get the difference between them in seconds
+            self.diff = float(str(endtime - starttime).split(':')[-1])
+            if self.diff <= 30.00:
+                # we are sure this is an arp scan
+                confidence = 0.8
+                threat_level = 60
+                description = f'performing ARP scan'
+                type_evidence = 'ARPScan'
+                type_detection = 'ip' #srcip
+                detection_info = profileid.split("_")[1]
+                __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                     threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                # after we set evidence, clear the dict so we can detect if it does another scan
+                self.cache_arp_requests.pop(f'{profileid}_{twid}')
+                return True
         return False
 
     def run(self):

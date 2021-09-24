@@ -78,7 +78,6 @@ class Module(Module, multiprocessing.Process):
                 return True
         return False
 
-
     def read_configuration(self):
         """ Read the configuration file for what we need """
         # Get the pcap filter
@@ -179,7 +178,6 @@ class Module(Module, multiprocessing.Process):
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-
 
     def set_evidence_for_connection_to_multiple_ports(self,profileid, twid, ip, description, uid, timestamp):
         '''
