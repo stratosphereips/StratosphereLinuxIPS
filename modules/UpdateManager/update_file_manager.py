@@ -674,7 +674,31 @@ class UpdateFileManager:
                     data_file_name = malicious_data_path.split('/')[-1]
 
                     # if we have info about data, append to it, if we don't add a new entry in the correct dict
-                    #todo
+                    data_type = self.detect_data_type(data)
+                    if data_type == None:
+                        self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
+                        continue
+                    if data_type == 'domain':
+                        try:
+                            #  do we already have info about this domain?
+                            domain_info = json.loads(malicious_domains_dict[str(data)] )
+                            # append the new blacklist name to the current one
+                            source = f'{domain_info["source"]}, {data_file_name}'
+                            # Store the ip in our local dict
+                            malicious_domains_dict[str(data)] = json.dumps({'description': domain_info['description'], 'source':source})
+                        except KeyError:
+                            # Store the ip in our local dict
+                            malicious_domains_dict[str(data)] = json.dumps({'description': description, 'source':data_file_name})
+                    else:
+                        try:
+                            #  do we already have info about this ip?
+                            ip_info = json.loads(malicious_ips_dict[str(data)])
+                            # append the new blacklist name to the current one
+                            source = f'{ip_info["source"]}, {data_file_name}'
+                            malicious_ips_dict[str(data)] = json.dumps({'description': ip_info['description'], 'source': source})
+                        except KeyError:
+                            # Store the ip in our local dict
+                            malicious_ips_dict[str(data)] = json.dumps({'description': description, 'source':data_file_name})
 
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
