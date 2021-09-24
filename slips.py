@@ -197,7 +197,7 @@ def prepare_zeek_scripts():
     if not is_local_nets_defined:
         with open(zeek_scripts_dir + '/slips-conf.zeek','a') as f :
             # update home network
-            f.write('redef Site::local_nets += { '+home_network+' };\n')
+            f.write('\nredef Site::local_nets += { '+home_network+' };\n')
 
 
     # load all scripts in zeek-script dir
@@ -399,6 +399,13 @@ if __name__ == '__main__':
             blocking.delete_slipsBlocking_chain()
             # Tell the blocking module to clear the slips chain
             shutdown_gracefully('')
+
+    if args.db:
+        from slips_files.core.database import __database__
+        __database__.start(config)
+        if not __database__.load(args.db): print(f"[Main] Failed to {args.db}")
+        else: print(f"{args.db.split('/')[-1]} loaded successfully. Run ./kalipso.sh")
+        terminate_slips()
 
     # Check if user want to save and load a db at the same time
     if args.save :
@@ -669,11 +676,7 @@ if __name__ == '__main__':
 
     c1 = __database__.subscribe('finished_modules')
 
-    if args.db:
-        if not __database__.load(args.db):
-            print("[Main] Failed to load the database.")
-            shutdown_gracefully(input_information)
-        shutdown_gracefully(input_information)
+
 
     # Input process
     # Create the input process and start it
