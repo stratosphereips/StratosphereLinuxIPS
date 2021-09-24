@@ -2032,6 +2032,7 @@ class ProfilerProcess(multiprocessing.Process):
                     to_send = {
                         'uid' : self.column_values['uid'],
                         'daddr': self.column_values['daddr'],
+                        'saddr': self.column_values['saddr'],
                         'ts' : starttime,
                         'profileid' : profileid,
                         'twid' : twid,
