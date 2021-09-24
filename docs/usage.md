@@ -136,7 +136,14 @@ Each IP address that appears in the network traffic of the input is represented 
 
 ```time_window_width```
 
+**Home Network**
+
+Slips needs to know your home network to be able to use specific zeek scripts.
+
+If not defined, Slips uses all ranges ```'92.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8``` as your local network.
+
 ### Disabling module
+
 You can disable modules easily by appending the module name to the ```disable``` list.
 
 ### ML Detection

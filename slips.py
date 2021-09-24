@@ -180,6 +180,38 @@ def get_cwd():
             cwd = arg[:arg.index('slips.py')]
             return cwd
 
+def prepare_zeek_scripts():
+    """ automatically adds zeek scripts in zeek-scripts/ dir in __load__.zeek and adds local network to slips-conf.zeek"""
+    # get home network from slips.conf
+    try:
+        home_network = config.get('parameters', 'home_network')
+    except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        # There is a conf, but there is no option, or no section or no configuration file specified
+        home_network = '192.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8'
+
+    zeek_scripts_dir  = os.getcwd() + '/zeek-scripts'
+    # add local sites if not there
+    is_local_nets_defined = False
+    with open(zeek_scripts_dir + '/slips-conf.zeek','r') as f :
+        if  'local_nets' in f.read(): is_local_nets_defined = True
+    if not is_local_nets_defined:
+        with open(zeek_scripts_dir + '/slips-conf.zeek','a') as f :
+            # update home network
+            f.write('redef Site::local_nets += { '+home_network+' };\n')
+
+
+    # load all scripts in zeek-script dir
+    with open(zeek_scripts_dir + '/__load__.zeek','r') as f:
+        loaded_scripts = f.read()
+    with open(zeek_scripts_dir + '/__load__.zeek','a') as f:
+        for file_name in os.listdir(zeek_scripts_dir):
+            # ignore the load file
+            if file_name == '__load__.zeek':
+                continue
+            if file_name not in loaded_scripts:
+                # found a file in the dir that isn't in __load__.zeek, add it
+                f.write(f'\n@load ./{file_name}')
+
 def shutdown_gracefully(input_information):
     """ Wait for all modules to confirm that they're done processing and then shutdown
     :param input_information: the interface/pcap/nfdump/binetflow used. we need it to save the db
@@ -438,26 +470,16 @@ if __name__ == '__main__':
     # If we need zeek (bro), test if we can run it.
     # Need to be assign to something because we pass it to inputProcess later
     zeek_bro = None
-    if input_type == 'pcap' or args.interface:
+    if input_type == 'pcap' or args.interface or 'zeek' in input_type:
         zeek_bro = check_zeek_or_bro()
         if zeek_bro is False:
             # If we do not have bro or zeek, terminate Slips.
             print('no zeek nor bro')
             terminate_slips()
         else:
-            zeek_scripts_dir  = os.getcwd() + '/zeek-scripts'
-            # load all scripts in zeek-script dir
-            with open(zeek_scripts_dir + '/__load__.zeek','r') as f:
-                loaded_scripts = f.read()
-            with open(zeek_scripts_dir + '/__load__.zeek','a') as f:
+            prepare_zeek_scripts()
 
-                for file_name in os.listdir(zeek_scripts_dir):
-                    # ignore the load file
-                    if file_name == '__load__.zeek':
-                        continue
-                    if file_name not in loaded_scripts:
-                        # found a file in the dir that isn't in __load__.zeek, add it
-                        f.write(f'\n@load ./{file_name}')
+
 
     # See if we have the nfdump, if we need it according to the input type
     if input_type == 'nfdump' and shutil.which('nfdump') is None:
