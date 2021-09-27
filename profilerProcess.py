@@ -1190,6 +1190,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['port_proto'] = line.get('port_proto', '')
             self.column_values['service'] = line.get('service', '')
 
+
         else:
             return False
         return True
@@ -2033,14 +2034,16 @@ class ProfilerProcess(multiprocessing.Process):
                         'uid' : self.column_values['uid'],
                         'daddr': self.column_values['daddr'],
                         'saddr': self.column_values['saddr'],
-                        'src_mac': self.column_values['src_mac'] ,
-                        'dst_mac': self.column_values['dst_mac'] ,
                         'ts' : starttime,
                         'profileid' : profileid,
                         'twid' : twid,
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish('new_arp', to_send)
+                    # Add the flow with all the fields interpreted
+                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur='0',
+                                          saddr=str(saddr_as_obj), daddr=str(daddr_as_obj),
+                                          proto='ARP', uid=uid)
 
             def store_features_going_in(profileid, twid, starttime):
                 """
