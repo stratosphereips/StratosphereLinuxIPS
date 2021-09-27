@@ -43,7 +43,14 @@ class UpdateFileManager:
             self.path_to_threat_intelligence_data = 'modules/ThreatIntelligence1/remote_data_files/'
         try:
             # Read the list of URLs to download. Convert to list
-            self.list_of_urls = self.config.get('threatintelligence', 'ti_files').split(',')
+            self.ti_feeds = self.config.get('threatintelligence', 'ti_files').split(',')
+            # this dict will contain every link and its confidence
+            self.list_of_urls = {}
+            # this is a list of tuples, each tuple is (url,confidence), extract the links
+            for tuple_ in self.ti_feeds:
+                url = tuple_.split(' ')[0].replace('(','')
+                confidence= tuple_.split(' ')[1].replace(')','')
+                self.list_of_urls[url] = confidence
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.list_of_urls = []
