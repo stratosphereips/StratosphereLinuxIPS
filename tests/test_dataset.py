@@ -58,8 +58,10 @@ def has_errors(output_file):
     return False
 
 
-@pytest.mark.parametrize("pcap_path, output_dir", [('dataset/hide-and-seek-short.pcap','pcap/')])
-def test_pcap(pcap_path, database, output_dir):
+@pytest.mark.parametrize("pcap_path,expected_profiles, output_dir, expected_evidence",
+                         [('dataset/hide-and-seek-short.pcap',15,'pcap/', 'New horizontal port scan to port 23'),
+                          ('dataset/arp-only.pcap',3,'pcap2/','performing ARP scan')])
+def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evidence):
     try:
         os.mkdir(output_dir)
     except FileExistsError:
@@ -69,8 +71,7 @@ def test_pcap(pcap_path, database, output_dir):
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
-    assert profiles > 15
-    expected_evidence = 'New horizontal port scan to port 23'
+    assert profiles > expected_profiles
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
     assert has_errors(output_file) == False
