@@ -83,6 +83,7 @@ class Module(Module, multiprocessing.Process):
         Train a model based on the flows we receive and the labels
         """
         try:
+            # Process the labels to have only Normal and Malware
             self.flows.label = self.flows.label.str.replace(r'(^.*Normal.*$)', 'Normal')
             self.flows.label = self.flows.label.str.replace(r'(^.*Malware.*$)', 'Malware')
             self.flows.label = self.flows.label.str.replace(r'(^.*Malicious.*$)', 'Malware')
@@ -97,10 +98,6 @@ class Module(Module, multiprocessing.Process):
 
             # Train 
             self.clf.fit(X_flow, y_flow)
-
-            # Error in train()
-            # <class 'ValueError'>
-            # The number of classes has to be greater than one; got 1 class
 
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
@@ -119,67 +116,73 @@ class Module(Module, multiprocessing.Process):
         '''
         Discards some features of the dataset and can create new.
         '''
-        # Discard flows arp and icmp, since they dont have the ports
-        dataset = dataset[dataset.proto != 'arp']
-        dataset = dataset[dataset.proto != 'icmp']
-        # For now, discard the ports
         try:
-            dataset = dataset.drop('appproto', axis=1)
-        except ValueError:
-            pass
-        try:
-            dataset = dataset.drop('daddr', axis=1)
-        except ValueError:
-            pass
-        try:
-            dataset = dataset.drop('saddr', axis=1)
-        except ValueError:
-            pass
-        try:
-            dataset = dataset.drop('ts', axis=1)
-        except ValueError:
-            pass
-        try:
-            dataset = dataset.drop('origstate', axis=1)
-        except ValueError:
-            pass
-        # Convert state to categorical
-        dataset.state = dataset.state.str.replace(r'(^.*NotEstablished.*$)', '0')
-        dataset.state = dataset.state.str.replace(r'(^.*Established.*$)', '1')
-        dataset.state = dataset.state.astype('float64')
-        # Convert proto to categorical. For now we only have to states, so we can hardcode...
-        dataset.proto = dataset.proto.str.replace(r'(^.*tcp.*$)', '0')
-        dataset.proto = dataset.proto.str.replace(r'(^.*udp.*$)', '1')
-        dataset.proto = dataset.proto.str.replace(r'(^.*icmp.*$)', '2')
-        dataset.proto = dataset.proto.str.replace(r'(^.*icmp-ipv6.*$)', '3')
-        dataset.proto = dataset.proto.str.replace(r'(^.*arp.*$)', '4')
-        dataset.proto = dataset.proto.astype('float64')
-        try:
-            # Convert Dur to float
-            dataset.dur = dataset.dur.astype('float')
-        except ValueError:
-            pass
-        try:
-            # Convert TotPkts to float
-            dataset.pkts = dataset.pkts.astype('float')
-        except ValueError:
-            pass
-        try:
-            # Convert SrcPkts to float
-            dataset.spkts = dataset.spkts.astype('float')
-        except ValueError:
-            pass
-        try:
-            # Convert TotBytes to float
-            dataset.allbytes = dataset.allbytes.astype('float')
-        except ValueError:
-            pass
-        try:
-            # Convert SrcBytes to float
-            dataset.sbytes = dataset.sbytes.astype('float')
-        except ValueError:
-            pass
-        return dataset
+            # Discard flows arp and icmp, since they dont have the ports
+            dataset = dataset[dataset.proto != 'arp']
+            dataset = dataset[dataset.proto != 'icmp']
+            # For now, discard the ports
+            try:
+                dataset = dataset.drop('appproto', axis=1)
+            except ValueError:
+                pass
+            try:
+                dataset = dataset.drop('daddr', axis=1)
+            except ValueError:
+                pass
+            try:
+                dataset = dataset.drop('saddr', axis=1)
+            except ValueError:
+                pass
+            try:
+                dataset = dataset.drop('ts', axis=1)
+            except ValueError:
+                pass
+            try:
+                dataset = dataset.drop('origstate', axis=1)
+            except ValueError:
+                pass
+            # Convert state to categorical
+            dataset.state = dataset.state.str.replace(r'(^.*NotEstablished.*$)', '0')
+            dataset.state = dataset.state.str.replace(r'(^.*Established.*$)', '1')
+            dataset.state = dataset.state.astype('float64')
+            # Convert proto to categorical. For now we only have to states, so we can hardcode...
+            dataset.proto = dataset.proto.str.replace(r'(^.*tcp.*$)', '0')
+            dataset.proto = dataset.proto.str.replace(r'(^.*udp.*$)', '1')
+            dataset.proto = dataset.proto.str.replace(r'(^.*icmp.*$)', '2')
+            dataset.proto = dataset.proto.str.replace(r'(^.*icmp-ipv6.*$)', '3')
+            dataset.proto = dataset.proto.str.replace(r'(^.*arp.*$)', '4')
+            dataset.proto = dataset.proto.astype('float64')
+            try:
+                # Convert Dur to float
+                dataset.dur = dataset.dur.astype('float')
+            except ValueError:
+                pass
+            try:
+                # Convert TotPkts to float
+                dataset.pkts = dataset.pkts.astype('float')
+            except ValueError:
+                pass
+            try:
+                # Convert SrcPkts to float
+                dataset.spkts = dataset.spkts.astype('float')
+            except ValueError:
+                pass
+            try:
+                # Convert TotBytes to float
+                dataset.allbytes = dataset.allbytes.astype('float')
+            except ValueError:
+                pass
+            try:
+                # Convert SrcBytes to float
+                dataset.sbytes = dataset.sbytes.astype('float')
+            except ValueError:
+                pass
+            return dataset
+        except Exception as inst:
+            # Stop the timer
+            self.print('Error in process_flows()')
+            self.print(type(inst))
+            self.print(inst)
 
     def process_flows(self):
         """ 
@@ -190,13 +193,7 @@ class Module(Module, multiprocessing.Process):
             # We get all the flows so far
             # because this retraining happens in batches
             flows = __database__.get_all_flows()
-            list_flows = []
-            for flowdict in flows:
-                for flow in flowdict:
-                    dict_flow = json.loads(flowdict[flow])
-                    list_flows.append(dict_flow)
-            # Convert the list to a pandas dataframe
-            df_flows = pd.DataFrame(list_flows)
+            df_flows = pd.DataFrame(flows)
             # Process features
             df_flows = self.process_features(df_flows)
             # Update the flow to the processed version
@@ -242,6 +239,7 @@ class Module(Module, multiprocessing.Process):
             # self.print(X_flow)
             pred = self.clf.predict(X_flow)
             return pred
+            #return [1.0]
         except Exception as inst:
             # Stop the timer
             self.print('Error in detect()')
@@ -276,6 +274,17 @@ class Module(Module, multiprocessing.Process):
         except EOFError:
             self.print('Error')
             self.clf = SGDClassifier(warm_start=True)
+
+    def load_known_labeled_flows(self):
+        """
+        Load the flows and labels from dataset/train
+        in order to have a baseline of normal and malware
+        before retraining with the data of the user
+        """
+        pass
+        self.print(f'Storing the trained model on disk.')
+        f = open('./modules/RFdetection/RFmodel.bin', 'wb')
+        data = pickle.dumps(self.clf)
 
     def run(self):
         # Load the model first
@@ -313,14 +322,16 @@ class Module(Module, multiprocessing.Process):
                         # First process the flow to convert to pandas
                         if self.mode == 'train':
                             # We are training. 
+                            # Load the normal and malware flows from the dataset/train folder
                             # Then check if we have already more than 1 label in the training data
                             labels = __database__.get_labels()
                             sum_labeled_flows = sum([i[1] for i in labels])
-                            #self.print(f'{sum_labeled_flows}, {self.minimum_lables_to_retrain}')
+                            #self.print(f'Sum labeled flows: {sum_labeled_flows}, Min Labels to retrain:{self.minimum_lables_to_retrain}')
                             if sum_labeled_flows <= 1:
                                 self.print(f'Training mode active but there are only {len(labels)} labels in the DB.')
+                                load_known_labeled_flows()
                             # Is the amount in the DB of lables enough to retrain?
-                            elif sum_labeled_flows >= self.minimum_lables_to_retrain and sum_labeled_flows%self.minimum_lables_to_retrain == 1:
+                            if sum_labeled_flows >= self.minimum_lables_to_retrain and sum_labeled_flows%self.minimum_lables_to_retrain == 1:
                                 self.print(f'Training the model with the last group of flows and labels {labels}.')
                                 # Process all flows in the DB and make them ready for pandas
                                 self.process_flows()
