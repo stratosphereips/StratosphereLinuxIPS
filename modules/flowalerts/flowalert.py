@@ -550,8 +550,13 @@ class Module(Module, multiprocessing.Process):
                         total_bytes = 0
                         for flow in flows_list:
                             daddr = flow['daddr']
+                            # In ARP the sbytes is actually ''
+                            if flow['sbytes'] == '':
+                                sbytes = 0
+                            else:
+                                sbytes = flow['sbytes']
                             if daddr == most_cotacted_daddr:
-                                total_bytes = total_bytes + flow['sbytes']
+                                total_bytes = total_bytes + sbytes
                         # print(f'total_bytes:{total_bytes} most_cotacted_daddr: {most_cotacted_daddr} times_contacted: {times_contacted} ')
                         if total_bytes >= self.data_exfiltration_threshold*(10**6):
                             # get the first uid of these flows to use for setEvidence
