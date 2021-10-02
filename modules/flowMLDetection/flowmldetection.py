@@ -351,7 +351,7 @@ class Module(Module, multiprocessing.Process):
                         elif self.mode == 'test':
                             # We are testing, which means using
                             # the model to detect
-                            if not 'igmp' in self.flow_dict['proto'] and not 'icmp' in self.flow_dict['proto'] and not 'arp' in self.flow_dict['proto']:
+                            if not 'igmp' in self.flow_dict['proto'] and not 'icmp' in self.flow_dict['proto'] and not 'arp' in self.flow_dict['proto'].lower():
                                 self.process_flow()
                                 # Predict
                                 pred = self.detect()
