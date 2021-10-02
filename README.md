@@ -24,7 +24,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | ---| --- | :-: |
 | asn | loads and finds the ASN of each IP |✅|
 | geoip | finds the country and geolocation information of each IP |✅|
-| https | training&test of RandomForest to detect malicious https flows |✅|
+| https | training&test of RandomForest to detect malicious https flows |⏳|
 | port scan detector | detects Horizontal and Vertical port scans |✅|
 | threat Intelligence | checks if each IP is in a list of malicious IPs  |✅|
 | timeline |  creates a timeline of what happened in the network based on all the flows and type of data available  |✅|
@@ -36,11 +36,29 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|
 | http_analyzer | module to analyze HTTP traffic |✅|
 | blocking | module to block malicious IPs connecting to the device |✅|
+| flowmldetection | module to detect malicious flows using ML pretrained models |✅|
+
 
 
 Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.
 
 Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/develop/
+
+## Training of machine learning models from your data
+
+Slips can also be used in _training_ mode with traffic from the user, so that the machine learning model can be **extended** with the users' traffic to improve detection.
+To use this feature you need to modify the configuration file ```slips.conf``` to add in the ```[flowmldetection]``` section:
+
+    mode = train
+
+And also you need to specify the label of the traffic you are adding with:
+
+    label = normal
+
+After this, just run slips normally in your data (interface or any input file) and the machine learning model will be updated automatically.
+To use the new model, just reconfigure slips in test mode
+
+    mode = train
 
 ## Installation
 
