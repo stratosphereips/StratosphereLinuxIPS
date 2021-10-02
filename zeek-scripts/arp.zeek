@@ -7,13 +7,19 @@ type Info: record {
 				## Timestamp
 				ts: time &log;
 				## The requestor's MAC address.
+                ## The type of operation: request or reply
+                operation: string &log &optional;
 				src_mac: string &log &optional;
-        ## The responder's MAC address.
+                ## The responder's MAC address.
 				dst_mac: string &log &optional;
-        ## Source Protocol Address
-        orig_h:            addr        &log &optional;
-        ## Source Hardware Address
-        resp_h:            addr        &log &optional;
+                ## Source Protocol Address
+                orig_h:            addr        &log &optional;
+                ## Source Hardware Address
+                resp_h:            addr        &log &optional;
+                # the src arp mac addr
+                orig_hw: string &log &optional;
+                # the dst arp mac addr
+                resp_hw: string &log &optional;
 };
 
 global log_sensato_combined: event(rec: Info);
@@ -38,14 +44,21 @@ function set_session(c: connection)
   }
 }
 
-event arp_request(mac_src: string, dst_mac: string, orig_h: addr, SHA: string, resp_h: addr, THA: string) &priority=5
+# SPA: The sender protocol address. (orig_h here)
+# SHA: The sender hardware address.
+# TPA: The target protocol address. (resp_h here)
+# THA: The target hardware address.
+event arp_request(src_mac: string, dst_mac: string, orig_h: addr, SHA: string, resp_h: addr, THA: string) &priority=5
 {
     local info: Info;
 		info$ts        = network_time();
-		info$src_mac   = mac_src;
+        info$operation = "request";
+		info$src_mac   = src_mac;
 		info$dst_mac   = dst_mac;
 		info$orig_h       = orig_h;
 		info$resp_h       = resp_h;
+        info$orig_hw      = SHA;
+        info$resp_hw      = THA;
 {
     Log::write(ARP::LOG, info);
   }
