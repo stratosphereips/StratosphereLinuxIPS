@@ -94,10 +94,13 @@ class Module(Module, multiprocessing.Process):
             X_flow = self.flow.drop('module_labels', axis=1)
             # self.print('	X_flow without label: {}'.format(X_flow))
 
-            #self.print(X_flow)
 
             # Train 
-            self.clf.fit(X_flow, y_flow)
+            try:
+                self.clf.fit(X_flow, y_flow)
+            except ValueError:
+                self.print('Train was not possible yet due to insufficient labels.')
+                return False
 
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
