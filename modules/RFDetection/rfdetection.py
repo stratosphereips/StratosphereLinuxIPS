@@ -255,7 +255,7 @@ class Module(Module, multiprocessing.Process):
         """
         Store the trained model on disk
         """
-        self.print(f'Storing the trained model on disk.')
+        self.print(f'Storing the trained model on disk.', 0, 3)
         f = open('./modules/RFdetection/RFmodel.bin', 'wb')
         data = pickle.dumps(self.clf)
         f.write(data)
@@ -266,7 +266,7 @@ class Module(Module, multiprocessing.Process):
         Read the trained model from disk
         """
         try:
-            self.print(f'Reading the trained model from disk.')
+            #self.print(f'Reading the trained model from disk.')
             f = open('./modules/RFdetection/RFmodel.bin', 'rb')
             self.clf = pickle.load(f)
             f.close()
@@ -275,7 +275,7 @@ class Module(Module, multiprocessing.Process):
             #self.clf = RandomForestClassifier(n_estimators=30, criterion='entropy', warm_start=True)
             self.clf = SGDClassifier(warm_start=True)
         except EOFError:
-            self.print('Error')
+            self.print('Error reading model from disk')
             self.clf = SGDClassifier(warm_start=True)
 
     def load_known_labeled_flows(self):
