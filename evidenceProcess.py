@@ -25,7 +25,8 @@ from colorama import Fore, Back, Style
 import ipaddress
 import socket
 import sys
-import requests
+#import requests
+import subprocess
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -92,7 +93,14 @@ class EvidenceProcess(multiprocessing.Process):
         finally:
             s.close()
         # get public ip
-        IPs.append(requests.get('http://ipinfo.io/json').json()['ip'])
+        #IPs.append(requests.get('http://ipinfo.io/json').json()['ip'])
+        command = f'curl -s http://ipinfo.io/json'
+        result = subprocess.run(command.split(), capture_output=True)
+        text_output = result.stdout.decode("utf-8").replace('\n','')
+        public_ip = json.loads(text_output)['ip']
+        IPs.append(public_ip)
+        #self.print(result)
+
         return IPs
 
     def read_configuration(self):
