@@ -25,7 +25,7 @@ warnings.warn = warn
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'rfdetection'
+    name = 'flowmldetection'
     description = 'Module to train or test a Machine Learning model to detect malicious flows.'
     authors = ['Sebastian Garcia']
 
@@ -52,7 +52,7 @@ class Module(Module, multiprocessing.Process):
     def read_configuration(self):
         """ Read the configuration file for what we need """
         try:
-            self.mode = self.config.get('RFdetection', 'mode')
+            self.mode = self.config.get('flowmldetection', 'mode')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # Default to test
@@ -265,7 +265,7 @@ class Module(Module, multiprocessing.Process):
         Store the trained model on disk
         """
         self.print(f'Storing the trained model on disk.', 0, 3)
-        f = open('./modules/RFdetection/RFmodel.bin', 'wb')
+        f = open('./modules/flowmldetection/model.bin', 'wb')
         data = pickle.dumps(self.clf)
         f.write(data)
         f.close()
@@ -276,7 +276,7 @@ class Module(Module, multiprocessing.Process):
         """
         try:
             #self.print(f'Reading the trained model from disk.')
-            f = open('./modules/RFdetection/RFmodel.bin', 'rb')
+            f = open('./modules/flowmldetection/model.bin', 'rb')
             self.clf = pickle.load(f)
             f.close()
         except FileNotFoundError:
