@@ -13,6 +13,7 @@ import pickle
 import pandas as pd
 import json
 import platform
+import datetime
 
 
 # This horrible hack is only to stop sklearn from printing those warnings
@@ -196,6 +197,14 @@ class Module(Module, multiprocessing.Process):
             # We get all the flows so far
             # because this retraining happens in batches
             flows = __database__.get_all_flows()
+
+            # Load some normal and malware flows and labels, so training can have at
+            # least 1 flow of each kind (required)
+            # These are fake flows that do not get into Slips, 
+            # they are only for the training process
+            flows.append({'ts':1594417039.029793 , 'dur': '1.9424750804901123', 'saddr': '10.7.10.101', 'sport': '49733', 'daddr': '40.70.224.145', 'dport': '443', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 84, 'allbytes': 42764, 'spkts': 37, 'sbytes': 25517, 'appproto': 'ssl', 'label': 'malicious', 'module_labels': {'flowalerts-long-connection': 'malicious'}})
+            flows.append({'ts':1382355032.706468 , 'dur': '10.896695', 'saddr': '147.32.83.52', 'sport': '47956', 'daddr': '80.242.138.72', 'dport': '80', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 67, 'allbytes': 67696, 'spkts': 1, 'sbytes': 100, 'appproto': 'http', 'label': 'normal', 'module_labels': {'flowalerts-long-connection': 'normal'}})
+
             df_flows = pd.DataFrame(flows)
             # Process features
             df_flows = self.process_features(df_flows)
@@ -278,16 +287,21 @@ class Module(Module, multiprocessing.Process):
             self.print('Error reading model from disk')
             self.clf = SGDClassifier(warm_start=True)
 
-    def load_known_labeled_flows(self):
+    def set_evidence_malicious_flow(self, saddr, sport, daddr, dport, profileid, twid, uid):
         """
-        Load the flows and labels from dataset/train
-        in order to have a baseline of normal and malware
-        before retraining with the data of the user
+        Set the evidence that a flow was detected as malicious
         """
-        pass
-        self.print(f'Storing the trained model on disk.')
-        f = open('./modules/RFdetection/RFmodel.bin', 'wb')
-        data = pickle.dumps(self.clf)
+        confidence = 0.2
+        threat_level = 30
+        type_detection  = 'flow'
+        detection_info = str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
+        type_evidence = 'MaliciousFlow'
+        description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport}'
+        timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, timestamp, profileid=profileid, twid=twid)
 
     def run(self):
         # Load the model first
@@ -305,14 +319,11 @@ class Module(Module, multiprocessing.Process):
                         __database__.publish('finished_modules', self.name)
                         return True
                     elif message['channel'] == 'new_flow' and message['data'] != 1:
-                        # [rfdetection] Flow received: {'ts': 1545138530.000001, 'dur': '2.997325', 'saddr': '147.32.84.147', 'sport': '55898', 'daddr': '54.192.46.117', 'dport': '22', 'proto': 'tcp', 'origstate': 'SRPA_SRPA', 'state': 'Established', 'pkts': 2, 'allbytes': 1300, 'spkts': False, 'sbytes': 661, 'appproto': False, 'label': 'unknown', 'module_labels': {}}
-
                         data = message['data']
                         # Convert from json to dict
                         data = json.loads(data)
                         profileid = data['profileid']
                         twid = data['twid']
-
                         # Get flow that is now in json format
                         flow = data['flow']
                         # Convert flow to a dict
@@ -322,30 +333,38 @@ class Module(Module, multiprocessing.Process):
                         uid = next(iter(flow))
                         self.flow_dict = json.loads(flow[uid])
 
-                        # First process the flow to convert to pandas
                         if self.mode == 'train':
-                            # We are training. 
-                            # Load the normal and malware flows from the dataset/train folder
-                            # Then check if we have already more than 1 label in the training data
+                            # We are training.
+                            # Then check if we have already more than 1 label in the whole data
                             labels = __database__.get_labels()
                             sum_labeled_flows = sum([i[1] for i in labels])
                             #self.print(f'Sum labeled flows: {sum_labeled_flows}, Min Labels to retrain:{self.minimum_lables_to_retrain}')
-                            if sum_labeled_flows <= 1:
-                                self.print(f'Training mode active but there are only {len(labels)} labels in the DB.')
-                                load_known_labeled_flows()
-                            # Is the amount in the DB of lables enough to retrain?
+                            # Is the amount in the DB of labels enough to retrain?
                             if sum_labeled_flows >= self.minimum_lables_to_retrain and sum_labeled_flows%self.minimum_lables_to_retrain == 1:
+                                # We get here every 'self.minimum_lables_to_retrain' amount of labels
+                                # So for example we retrain every 100 labels and only when we have at least 100 labels
                                 self.print(f'Training the model with the last group of flows and labels {labels}.')
                                 # Process all flows in the DB and make them ready for pandas
                                 self.process_flows()
                                 # Train an algorithm
                                 self.train()
                         elif self.mode == 'test':
-                            if not 'icmp' in self.flow_dict['proto'] and not 'arp' in self.flow_dict['proto']:
+                            # We are testing, which means using
+                            # the model to detect
+                            if not 'igmp' in self.flow_dict['proto'] and not 'icmp' in self.flow_dict['proto'] and not 'arp' in self.flow_dict['proto']:
                                 self.process_flow()
                                 # Predict
                                 pred = self.detect()
-                                self.print(f'Prediction {pred[0]} for label {self.flow_dict["label"]} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
+                                label = self.flow_dict["label"]
+                                # Only print when the label and the predicion are dissimilar and the label is not unknown
+                                if pred[0] == 'malicious':
+                                    # Generate an alert
+                                    self.set_evidence_malicious_flow(self.flow_dict['saddr'], self.flow_dict['sport'], self.flow_dict['daddr'], self.flow_dict['dport'], profileid, twid, uid)
+                                    self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}')
+                                elif label != 'unknown' and label != pred[0]:
+                                    # If the user specified a label in test mode, and the label
+                                    # is diff from the prediction, print in debug mode
+                                    self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
                 except Exception as inst:
                     # Stop the timer
                     self.print('Error in run()')
