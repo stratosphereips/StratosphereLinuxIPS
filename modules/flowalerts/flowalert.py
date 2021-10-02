@@ -456,7 +456,7 @@ class Module(Module, multiprocessing.Process):
                     if dport:
                         self.check_unknown_port(dport, proto.lower(), daddr, profileid, twid, uid, timestamp)
 
-                    # Multiple Reconnection attempts
+                    # Detect Multiple Reconnection attempts
                     key = saddr + '-' + daddr + ':' + str(dport)
                     if dport != 0 and origstate == 'REJ':
                         current_reconnections = __database__.getReconnectionsForTW(profileid,twid)
@@ -467,17 +467,17 @@ class Module(Module, multiprocessing.Process):
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
 
-                    # Port 0 Scanning
+                    # Detect Port 0 Scanning
                     if sport == '0' or dport == '0':
                         direction = 'source' if sport==0 else 'destination'
                         self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
 
-                   # Check if daddr has a dns answer
+                   # Detect if daddr has a dns answer or not
                     if not self.is_ignored_ip(daddr) and dport == 443:
                         self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
 
-                    # Connection to multiple ports
+                    # Detect Connection to multiple ports (for RAT)
                     if proto == 'tcp' and state == 'Established':
                         dport_name = flow_dict.get('appproto','')
                         if not dport_name:
