@@ -124,6 +124,8 @@ class Module(Module, multiprocessing.Process):
             # Discard flows arp and icmp, since they dont have the ports
             dataset = dataset[dataset.proto != 'arp']
             dataset = dataset[dataset.proto != 'icmp']
+            dataset = dataset[dataset.proto != 'igmp']
+            dataset = dataset[dataset.proto != 'ipv6-icmp']
             # For now, discard the ports
             try:
                 dataset = dataset.drop('appproto', axis=1)
