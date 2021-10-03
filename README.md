@@ -75,7 +75,7 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
         cd dockeri/ubuntu-image
         docker build --no-cache -t slips -f Dockerfile .
-        docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
+        docker run -it --rm --net=host -v $(pwd)/../../dataset:/StratosphereLinuxIPS/dataset slips
         ./slips.py -c slips.conf -f dataset/test3.binetflow
 
 ## If you want to allow Slips inside the docker to analyze and block the traffic in your Linux host, run docker with --cap-add=NET_ADMIN. And run with -p
