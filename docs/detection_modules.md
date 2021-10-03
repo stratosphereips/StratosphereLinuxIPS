@@ -47,7 +47,7 @@ tr:nth-child(even) {
   <tr>
     <td>https</td>
     <td>training&test of RandomForest to detect malicious https flows</td>
-    <td>✅</td>
+    <td>⏳</td>
   </tr>
   <tr>
     <td>port scan detector</td>
@@ -92,6 +92,11 @@ tr:nth-child(even) {
   <tr>
     <td>blocking</td>
     <td>module to block malicious IPs connecting to the device</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>flowmldetection</td>
+    <td>module to detect malicious flows using machine learning</td>
     <td>✅</td>
   </tr>
   
