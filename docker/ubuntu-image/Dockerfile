@@ -22,6 +22,8 @@ RUN apt update && apt install -y --no-install-recommends \
     net-tools \
     iproute2 \
     iptables \
+    psutils \
+    python3-tzlocal \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
@@ -29,8 +31,8 @@ RUN pip3 install --upgrade pip
 
 # Install redis using PIP3
 RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
-RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby pytest
-RUN pip3 install ipwhois pytest tzlocal psutil pytest-xdist
+RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby
+RUN pip3 install ipwhois pytest pytest-xdist
 RUN pip3 install --ignore-installed six
 RUN pip3 install --upgrade tensorflow==2.4.1
 

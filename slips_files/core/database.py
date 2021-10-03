@@ -943,6 +943,7 @@ class Database(object):
                  this specific detection when it evolves. Examples of keys are:
                  'dport:1234' for all the evidences regarding this dport,
                  'dip:1.1.1.1' for all the evidences regarding that dst ip
+        type_detection: the value that is important: dport, dip, flow
         type_evidence: determine the type of evidenc. E.g. PortScan, ThreatIntelligence
         threat_level: determine the importance of the evidence.
         confidence: determine the confidence of the detection. (How sure you are that this is what you say it is.)
@@ -1409,7 +1410,10 @@ class Database(object):
         return data
 
     def get_labels(self):
-        """ Return the amount of each label so far """
+        """ 
+        Return the amount of each label so far in the DB
+        Used to know how many labels are available during training
+        """
         return self.r.zrange('labels', 0, -1, withscores=True)
 
     def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='',
@@ -1745,6 +1749,8 @@ class Database(object):
     def set_profile_module_label(self, profileid, module, label):
         """
         Set a module label for a profile.
+        A module label is a label set by a module, and not
+        a groundtruth label
         """
         data = self.get_profile_modules_labels(profileid)
         data[module] = label
