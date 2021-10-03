@@ -468,7 +468,7 @@ class Module(Module, multiprocessing.Process):
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
 
                     # Detect Port 0 Scanning
-                    if sport == '0' or dport == '0':
+                    if proto != 'igmp' and proto != 'icmp' and  proto != 'ipv6-icmp' and (sport == '0' or dport == '0'):
                         direction = 'source' if sport==0 else 'destination'
                         self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
@@ -545,27 +545,28 @@ class Module(Module, multiprocessing.Process):
                             # remove it from the dict if it's there
                             contacted_daddrs.pop(self.gateway, None)
                             # get the most contacted daddr in the past hour
-                            most_cotacted_daddr = max(contacted_daddrs, key=contacted_daddrs.get)
-                            times_contacted = contacted_daddrs[most_cotacted_daddr]
-                            # get the sum of all bytes send to that ip in the past hour
-                            total_bytes = 0
-                            for flow in flows_list:
-                                daddr = flow['daddr']
-                                # In ARP the sbytes is actually ''
-                                if flow['sbytes'] == '':
-                                    sbytes = 0
-                                else:
-                                    sbytes = flow['sbytes']
-                                if daddr == most_cotacted_daddr:
-                                    total_bytes = total_bytes + sbytes
-                            # print(f'total_bytes:{total_bytes} most_cotacted_daddr: {most_cotacted_daddr} times_contacted: {times_contacted} ')
-                            if total_bytes >= self.data_exfiltration_threshold*(10**6):
-                                # get the first uid of these flows to use for setEvidence
-                                for flow_dict in all_flows:
-                                    for uid, flow in flow_dict.items():
-                                        if flow['daddr'] == daddr:
-                                            break
-                                self.set_evidence_data_exfiltration(most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
+                            if contacted_daddrs:
+                                most_cotacted_daddr = max(contacted_daddrs, key=contacted_daddrs.get)
+                                times_contacted = contacted_daddrs[most_cotacted_daddr]
+                                # get the sum of all bytes send to that ip in the past hour
+                                total_bytes = 0
+                                for flow in flows_list:
+                                    daddr = flow['daddr']
+                                    # In ARP the sbytes is actually ''
+                                    if flow['sbytes'] == '':
+                                        sbytes = 0
+                                    else:
+                                        sbytes = flow['sbytes']
+                                    if daddr == most_cotacted_daddr:
+                                        total_bytes = total_bytes + sbytes
+                                # print(f'total_bytes:{total_bytes} most_cotacted_daddr: {most_cotacted_daddr} times_contacted: {times_contacted} ')
+                                if total_bytes >= self.data_exfiltration_threshold*(10**6):
+                                    # get the first uid of these flows to use for setEvidence
+                                    for flow_dict in all_flows:
+                                        for uid, flow in flow_dict.items():
+                                            if flow['daddr'] == daddr:
+                                                break
+                                    self.set_evidence_data_exfiltration(most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # ---------------------------- new_ssh channel
                 if message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
