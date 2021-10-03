@@ -384,14 +384,14 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_data_exfiltration(self, most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
+    def set_evidence_data_exfiltration(self, most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
         confidence = 0.6
         threat_level = 60
         type_detection  = 'dstip'
         type_evidence = 'DataExfiltration'
-        detection_info = most_cotacted_daddr
+        detection_info = most_contacted_daddr
         bytes_sent_in_MB = total_bytes/(10**6)
-        description = f'Possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_cotacted_daddr}. IP contacted {times_contacted} times in the past 1h'
+        description = f'Possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}. IP contacted {times_contacted} times in the past 1h'
         timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
         if not twid:
             twid = ''
@@ -473,7 +473,7 @@ class Module(Module, multiprocessing.Process):
                         self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
 
-                   # Detect if daddr has a dns answer or not
+                    # Detect if daddr has a dns answer or not
                     if not self.is_ignored_ip(daddr) and dport == 443:
                         self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
 
@@ -517,54 +517,57 @@ class Module(Module, multiprocessing.Process):
                     # Detect Data exfiltration
                     # we’re looking for systems that are transferring large amount of data in 20 mins span
                     all_flows = __database__.get_all_flows_in_profileid(profileid)
-                    # get a list of flows without uids
-                    flows_list =[]
-                    for flow_dict in all_flows:
-                        flows_list.append(list(flow_dict.items())[0][1])
-                    # sort flows by ts
-                    flows_list = sorted(flows_list, key = lambda i: i['ts'])
-                    #get first and last flow ts
-                    time_of_first_flow = datetime.datetime.fromtimestamp(flows_list[0]['ts'])
-                    time_of_last_flow = datetime.datetime.fromtimestamp(flows_list[-1]['ts'])
-                    # get the difference between them in seconds
-                    diff_in_hrs = int(str(time_of_last_flow - time_of_first_flow).split(':')[0])
-                    diff_in_mins = int(str(time_of_last_flow - time_of_first_flow).split(':')[1])
-                    diff_in_mins = diff_in_hrs*60 + diff_in_mins
-                    # we need the flows that happend in 20 mins span
-                    if diff_in_mins >= 20:
-                        contacted_daddrs= {}
-                        # get a dict of all contacted daddr in the past hour and how many times they were ccontacted
-                        for flow in flows_list:
-                            daddr = flow['daddr']
-                            try:
-                                contacted_daddrs[daddr] = contacted_daddrs[daddr]+1
-                            except:
-                                contacted_daddrs.update({daddr: 1})
-                        # most of the times the default gateway will be the most contacted daddr, we don't want that
-                        # remove it from the dict if it's there
-                        contacted_daddrs.pop(self.gateway, None)
-                        # get the most contacted daddr in the past hour
-                        most_cotacted_daddr = max(contacted_daddrs, key=contacted_daddrs.get)
-                        times_contacted = contacted_daddrs[most_cotacted_daddr]
-                        # get the sum of all bytes send to that ip in the past hour
-                        total_bytes = 0
-                        for flow in flows_list:
-                            daddr = flow['daddr']
-                            # In ARP the sbytes is actually ''
-                            if flow['sbytes'] == '':
-                                sbytes = 0
-                            else:
-                                sbytes = flow['sbytes']
-                            if daddr == most_cotacted_daddr:
-                                total_bytes = total_bytes + sbytes
-                        # print(f'total_bytes:{total_bytes} most_cotacted_daddr: {most_cotacted_daddr} times_contacted: {times_contacted} ')
-                        if total_bytes >= self.data_exfiltration_threshold*(10**6):
-                            # get the first uid of these flows to use for setEvidence
-                            for flow_dict in all_flows:
-                                for uid, flow in flow_dict.items():
-                                    if flow['daddr'] == daddr:
-                                        break
-                            self.set_evidence_data_exfiltration(most_cotacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
+                    if all_flows:
+                        # get a list of flows without uids
+                        flows_list =[]
+                        for flow_dict in all_flows:
+                            flows_list.append(list(flow_dict.items())[0][1])
+                        # sort flows by ts
+                        flows_list = sorted(flows_list, key = lambda i: i['ts'])
+                        # get first and last flow ts
+                        time_of_first_flow = datetime.datetime.fromtimestamp(flows_list[0]['ts'])
+                        time_of_last_flow = datetime.datetime.fromtimestamp(flows_list[-1]['ts'])
+                        # get the difference between them in seconds
+                        diff_in_hrs = int(str(time_of_last_flow - time_of_first_flow).split(':')[0])
+                        diff_in_mins = int(str(time_of_last_flow - time_of_first_flow).split(':')[1])
+                        diff_in_mins = diff_in_hrs*60 + diff_in_mins
+                        # we need the flows that happend in 20 mins span
+                        if diff_in_mins >= 20:
+                            contacted_daddrs= {}
+                            # get a dict of all contacted daddr in the past hour and how many times they were ccontacted
+                            for flow in flows_list:
+                                daddr = flow['daddr']
+                                try:
+                                    contacted_daddrs[daddr] = contacted_daddrs[daddr]+1
+                                except:
+                                    contacted_daddrs.update({daddr: 1})
+                            # most of the times the default gateway will be the most contacted daddr, we don't want that
+                            # remove it from the dict if it's there
+                            contacted_daddrs.pop(self.gateway, None)
+
+                            # get the most contacted daddr in the past hour, if there is any
+                            if contacted_daddrs:
+                                most_contacted_daddr = max(contacted_daddrs, key=contacted_daddrs.get)
+                                times_contacted = contacted_daddrs[most_contacted_daddr]
+                                # get the sum of all bytes send to that ip in the past hour
+                                total_bytes = 0
+                                for flow in flows_list:
+                                    daddr = flow['daddr']
+                                    # In ARP the sbytes is actually ''
+                                    if flow['sbytes'] == '':
+                                        sbytes = 0
+                                    else:
+                                        sbytes = flow['sbytes']
+                                    if daddr == most_contacted_daddr:
+                                        total_bytes = total_bytes + sbytes
+                                # print(f'total_bytes:{total_bytes} most_contacted_daddr: {most_contacted_daddr} times_contacted: {times_contacted} ')
+                                if total_bytes >= self.data_exfiltration_threshold*(10**6):
+                                    # get the first uid of these flows to use for setEvidence
+                                    for flow_dict in all_flows:
+                                        for uid, flow in flow_dict.items():
+                                            if flow['daddr'] == daddr:
+                                                break
+                                    self.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # ---------------------------- new_ssh channel
                 if message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
