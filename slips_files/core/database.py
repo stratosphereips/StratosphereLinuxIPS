@@ -934,7 +934,7 @@ class Database(object):
         return self.separator
 
     def setEvidence(self, type_detection, detection_info, type_evidence,
-                    threat_level, confidence, description, timestamp, profileid='', twid='', uid=''):
+                    threat_level, confidence, description, timestamp, profileid='', twid='', uid='', alert=True):
         """
         Set the evidence for this Profile and Timewindow.
         Parameters:
@@ -948,6 +948,7 @@ class Database(object):
         threat_level: determine the importance of the evidence.
         confidence: determine the confidence of the detection. (How sure you are that this is what you say it is.)
         uid: needed to get the flow from the database
+        alert: do we want to generate an alert for this evidence or not
         Example:
         The evidence is stored as a dict.
         {
@@ -975,7 +976,7 @@ class Database(object):
         # key uses dictionary format, so it needs to be converted to json to work as a dict key.
         key_json = json.dumps(key)
         # It is done to ignore repetition of the same evidence sent.
-        if key_json not in current_evidence.keys():
+        if key_json not in current_evidence.keys() and alert:
             evidence_to_send = {
                 'profileid': str(profileid),
                 'twid': str(twid),

@@ -57,9 +57,10 @@ class Module(Module, multiprocessing.Process):
         threat_level = 80
         confidence = __database__.get_ip_confidence(ip)
         description = source_file
-
+        alert = True if float(confidence) > 0.5 else False
+        print(f'**********************ip : {ip} conf: {confidence} alert: {alert}')
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid,uid=uid)
+                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid, alert=alert)
 
     def set_evidence_domain(self, domain, uid, timestamp, source_file='', profileid='', twid=''):
         '''
@@ -72,11 +73,11 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
         threat_level = 50
         confidence = __database__.get_domain_confidence(domain)
-        print(f'**********************domain {domain} conf: {confidence} due to {source_file}')
         description = source_file
+        alert = True if float(confidence) > 0.5 else False
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid, alert=alert)
 
     def print(self, text, verbose=1, debug=0):
         """
