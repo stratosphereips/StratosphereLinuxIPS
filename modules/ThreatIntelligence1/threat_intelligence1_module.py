@@ -45,34 +45,35 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_local_threat_intelligence_data = 'modules/ThreatIntelligence1/local_data_files/'
 
-    def set_evidence_ip(self, ip, uid, timestamp, ip_description='', profileid='', twid='', ip_state='ip'):
+    def set_evidence_ip(self, ip, uid, timestamp, source_file='', profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
-        :param ip_description: the ip source file
+        :param source_file: the ip source file
         '''
 
         type_detection = ip_state
         detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
         threat_level = 80
-        confidence = 0.1
-        description = ip_description
+        confidence = __database__.get_ip_confidence(ip)
+        description = source_file
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid,uid=uid)
 
-    def set_evidence_domain(self, domain, uid, timestamp, domain_description='', profileid='', twid=''):
+    def set_evidence_domain(self, domain, uid, timestamp, source_file='', profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
-        :param domain_description: is the domain source file
+        :param source_file: is the domain source file
         '''
 
         type_detection = 'dstdomain'
         detection_info = domain
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
         threat_level = 50
-        confidence = 0.1
-        description = domain_description
+        confidence = __database__.get_domain_confidence(domain)
+        print(f'**********************domain {domain} conf: {confidence} due to {source_file}')
+        description = source_file
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
