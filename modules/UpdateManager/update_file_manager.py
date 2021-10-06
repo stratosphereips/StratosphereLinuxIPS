@@ -45,22 +45,29 @@ class UpdateFileManager:
             # Read the list of URLs to download. Convert to list
             self.ti_feeds = self.config.get('threatintelligence', 'ti_files').split(',')
             # this dict will contain every link and its confidence
-            self.list_of_urls = {}
+            self.url_confidence = {}
             # this is a list of tuples, each tuple is (url,confidence), extract the links
             for tuple_ in self.ti_feeds:
                 url = tuple_.split(' ')[0].replace('(','')
                 confidence= tuple_.split(' ')[1].replace(')','')
-                self.list_of_urls[url] = confidence
+                self.url_confidence[url] = confidence
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.list_of_urls = []
+            self.url_confidence = {}
 
         try:
             # Read the list of ja3 feeds to download. Convert to list
             self.ja3_feeds = self.config.get('threatintelligence', 'ja3_feeds').split(',')
+            self.ja3_confidence = {}
+            # this is a list of tuples, each tuple is (url,confidence), extract the links
+            for tuple_ in self.ja3_feeds:
+                url = tuple_.split(' ')[0].replace('(','')
+                confidence= tuple_.split(' ')[1].replace(')','')
+                self.ja3_confidence[url] = confidence
+
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.ja3_feeds = []
+            self.ja3_feeds = {}
 
         try:
             # Read the riskiq username
@@ -208,7 +215,7 @@ class UpdateFileManager:
                     return False
 
                 # is it a ti_file? load updated IPs to the database
-                if file_to_download in self.list_of_urls \
+                if file_to_download in self.url_confidence \
                         and not self.__load_malicious_datafile(f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
                     # an error occured
                     return False
@@ -300,7 +307,7 @@ class UpdateFileManager:
         self.print('Checking if we need to download TI files.')
         # Check if the remote file is newer than our own
         # For each file that we should update
-        for file_to_download in self.list_of_urls + self.ja3_feeds:
+        for file_to_download in {**self.url_confidence, **self.ja3_confidence}:
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
                 self.print(f'We should update the remote file {file_to_download}', 1, 0)
