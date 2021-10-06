@@ -201,7 +201,13 @@ The threat intelligence module reads IoCs from local and remote files.
 **Remote files**
 
 We update the remote ones regularly. The list of remote threat intelligence files is set in the variables ```ti_files``` variable in slips.conf. You can insert your own remote threat intelligence files in this variable. Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
- 
+
+The format is (url confidence), confidence is on a scale from 0 to 1 how confident are you that this feed has valid IOCs, Slips doesn't alert on confidence <= 0.5
+
+
+Be sure the format is correct and only use spaces to separate between the url and the confidence.
+
+
 The remote files are installed to the path set in the ```download_path_for_local_threat_intelligence```. By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` 
 
 **Local files**

@@ -1,6 +1,7 @@
 - 0.8.1
     - Slips
 		- Detect PING sweep.
+		- Alerts based on confidence
 - 0.8
     - Slips
         - Compute the JA3 hash for all TLS connections using a Zeek script
