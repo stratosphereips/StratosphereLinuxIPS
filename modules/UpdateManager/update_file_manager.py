@@ -67,7 +67,7 @@ class UpdateFileManager:
 
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.ja3_feeds = {}
+            self.ja3_confidence = {}
 
         try:
             # Read the riskiq username
@@ -180,9 +180,9 @@ class UpdateFileManager:
             self.print(f'Error: {e}', 0, 1)
             return False
 
-    def download_malicious_file(self, file_to_download: str) -> bool:
+    def download_malicious_file(self, link_to_download: str) -> bool:
         """
-        Compare the e-tag of file_to_download in our database with the e-tag of this file and download if they're different
+        Compare the e-tag of link_to_download in our database with the e-tag of this file and download if they're different
         Doesn't matter if it's a ti_feed or JA3 feed
         """
         try:
@@ -190,7 +190,7 @@ class UpdateFileManager:
             if not os.path.isdir(self.path_to_threat_intelligence_data):
                 os.mkdir(self.path_to_threat_intelligence_data)
 
-            file_name_to_download = file_to_download.split('/')[-1]
+            file_name_to_download = link_to_download.split('/')[-1]
             # Get what files are stored in cache db and their E-TAG to compare with current files
             data = __database__.get_malicious_file_info(file_name_to_download)
             try:
@@ -199,11 +199,11 @@ class UpdateFileManager:
                 old_e_tag = ''
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
-            new_e_tag = self.get_e_tag_from_web(file_to_download)
+            new_e_tag = self.get_e_tag_from_web(link_to_download)
             if new_e_tag and old_e_tag != new_e_tag:
                 # Our malicious file is old. Download new one.
                 self.print(f'Trying to download the file {file_name_to_download}', 3, 0)
-                if not self.download_file(file_to_download, self.path_to_threat_intelligence_data + '/' + file_name_to_download):
+                if not self.download_file(link_to_download, self.path_to_threat_intelligence_data + '/' + file_name_to_download):
                     return False
                 if old_e_tag:
                     # File is updated and was in database. Delete previous IPs of this file.
@@ -211,12 +211,12 @@ class UpdateFileManager:
 
                 # ja3 files and ti_files are parsed differently, check which file is this
                 # is it ja3 feed?
-                if file_to_download in self.ja3_feeds and not self.parse_ja3_feed(f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
+                if link_to_download in self.ja3_confidence and not self.parse_ja3_feed(f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
                     return False
 
                 # is it a ti_file? load updated IPs to the database
-                if file_to_download in self.url_confidence \
-                        and not self.__load_malicious_datafile(f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
+                if link_to_download in self.url_confidence \
+                        and not self.__load_malicious_datafile(link_to_download, f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
                     # an error occured
                     return False
 
@@ -227,7 +227,7 @@ class UpdateFileManager:
                 __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
                 return True
             elif new_e_tag and old_e_tag == new_e_tag:
-                self.print(f'File {file_to_download} is still the same. Not downloading the file', 3, 0)
+                self.print(f'File {link_to_download} is still the same. Not downloading the file', 3, 0)
                 # Store the update time like we downloaded it anyway
                 self.new_update_time = time.time()
                 # Store the new etag and time of file in the database
@@ -238,7 +238,7 @@ class UpdateFileManager:
                 return True
             elif not new_e_tag:
                 # Something failed. Do not download
-                self.print(f'Some error ocurred. Not downloading the file {file_to_download}', 0, 1)
+                self.print(f'Some error ocurred. Not downloading the file {link_to_download}', 0, 1)
                 return False
 
         except Exception as inst:
@@ -497,11 +497,13 @@ class UpdateFileManager:
                     return None
                     # self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
 
-    def __load_malicious_datafile(self, malicious_data_path: str) -> bool:
+    def __load_malicious_datafile(self, link_to_download, malicious_data_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
         This also helps in having unique ioc across files
+        :param link_to_download: this link that has the IOCs we're currently parsing, used for getting the confidence
+        :param malicious_data_path: this is the path where the saved file from the link is downloaded
         """
 
         try:
@@ -559,7 +561,7 @@ class UpdateFileManager:
                         # looks like the column names, search where is the
                         # description column
                         for column in line.split(','):
-                            # some files have the name of the malware ad the description of the ioc
+                            # some files have the name of the malware and the description of the ioc
                             if column.lower().startswith('desc') or 'malware' in column or 'tags_str' in column or 'collect' in column:
                                 description_column = line.split(',').index(column)
                     if not line.startswith('#') and not "type" in line.lower() \
@@ -694,25 +696,30 @@ class UpdateFileManager:
                         continue
                     if data_type == 'domain':
                         try:
-                            #  do we already have info about this domain?
+                            # we already have info about this domain?
                             domain_info = json.loads(malicious_domains_dict[str(data)] )
                             # append the new blacklist name to the current one
                             source = f'{domain_info["source"]}, {data_file_name}'
                             # Store the ip in our local dict
                             malicious_domains_dict[str(data)] = json.dumps({'description': domain_info['description'], 'source':source})
                         except KeyError:
-                            # Store the ip in our local dict
-                            malicious_domains_dict[str(data)] = json.dumps({'description': description, 'source':data_file_name})
+                            # We don't have info about this domain, Store the ip in our local dict
+                            malicious_domains_dict[str(data)] = json.dumps({'description': description,
+                                                                                  'source':data_file_name,
+                                                                                  'confidence':self.url_confidence[link_to_download]})
+
                     else:
                         try:
-                            #  do we already have info about this ip?
+                            # we already have info about this ip?
                             ip_info = json.loads(malicious_ips_dict[str(data)])
                             # append the new blacklist name to the current one
                             source = f'{ip_info["source"]}, {data_file_name}'
                             malicious_ips_dict[str(data)] = json.dumps({'description': ip_info['description'], 'source': source})
                         except KeyError:
-                            # Store the ip in our local dict
-                            malicious_ips_dict[str(data)] = json.dumps({'description': description, 'source':data_file_name})
+                            # We don't have info about this IP, Store the ip in our local dict
+                            malicious_ips_dict[str(data)] = json.dumps({'description': description,
+                                                                          'source':data_file_name,
+                                                                          'confidence':self.url_confidence[link_to_download]})
 
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
