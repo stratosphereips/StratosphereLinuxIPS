@@ -536,11 +536,10 @@ class EvidenceProcess(multiprocessing.Process):
 
                             # Deserialize evidence data
                             data = evidence[key]
-                            confidence = data.get('confidence')
+                            confidence = float(data.get('confidence'))
                             threat_level = data.get('threat_level')
                             description = data.get('description')
-                            # every evidence has a confidence, we alert on important evidence only
-                            alert = True if confidence > 0.5 else False
+
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
                             self.print('\t\tWeighted Threat Level: {}'.format(new_threat_level), 3, 0)
@@ -557,7 +556,7 @@ class EvidenceProcess(multiprocessing.Process):
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
                                 evidence_to_print = self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
-                                if alert: self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
+                                self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 # Set an alert about the evidence being blocked
                                 alert_to_log = self.print_alert(profileid, twid)
                                 alert_dict = {'type':'alert',
@@ -587,7 +586,7 @@ class EvidenceProcess(multiprocessing.Process):
                 continue
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
-                self.outputqueue.put(f'01|evidence|[Evidence] Error in the Evidence Process line {exception_line}')
-                self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
-                self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
+                self.outputqueue.put(f'01|[Evidence] Error in the Evidence Process line {exception_line}')
+                self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
+                self.outputqueue.put('01|[Evidence] {}'.format(inst))
                 return True
