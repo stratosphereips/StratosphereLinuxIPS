@@ -700,8 +700,8 @@ class UpdateFileManager:
                             domain_info = json.loads(malicious_domains_dict[str(data)] )
                             # append the new blacklist name to the current one
                             source = f'{domain_info["source"]}, {data_file_name}'
-                            # the new confidence is the old + the new one
-                            confidence = str(int(domain_info['confidence']) + int(self.url_confidence[link_to_download]))
+                            # the new confidence is the maximum confidence
+                            confidence = str(max(int(domain_info['confidence']) , int(self.url_confidence[link_to_download])))
                             # Store the ip in our local dict
                             malicious_domains_dict[str(data)] = json.dumps({'description': domain_info['description'],
                                                                             'source':source,
@@ -718,10 +718,14 @@ class UpdateFileManager:
                             # append the new blacklist name to the current one
                             source = f'{ip_info["source"]}, {data_file_name}'
                             # the new confidence is the old + the new one
-                            confidence = str(int(domain_info['confidence']) + int(self.url_confidence[link_to_download]))
-                            malicious_ips_dict[str(data)] = json.dumps({'description': domain_info['description'],
+                            confidence = str(max(int(ip_info['confidence']) ,int(self.url_confidence[link_to_download])))
+                            malicious_ips_dict[str(data)] = json.dumps({'description': ip_info['description'],
                                                                             'source':source,
                                                                             'confidence':confidence})
+                            # print(f'Dulicate ip {data} found in sources: {source} old confidence: {ip_info["confidence"]}
+                            # new confidence: {self.url_confidence[link_to_download]} maximum confidence is {confidence}')
+
+
                         except KeyError:
                             # We don't have info about this IP, Store the ip in our local dict
                             malicious_ips_dict[str(data)] = json.dumps({'description': description,

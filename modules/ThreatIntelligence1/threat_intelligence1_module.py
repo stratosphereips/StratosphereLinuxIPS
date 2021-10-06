@@ -48,6 +48,7 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_ip(self, ip, uid, timestamp, ip_description='', profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
+        :param ip_description: the ip source file
         '''
 
         type_detection = ip_state
@@ -63,6 +64,7 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_domain(self, domain, uid, timestamp, domain_description='', profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
+        :param domain_description: is the domain source file
         '''
 
         type_detection = 'dstdomain'
