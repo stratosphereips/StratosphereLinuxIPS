@@ -210,13 +210,15 @@ class UpdateFileManager:
                     self.__delete_old_source_data_from_database(file_name_to_download)
 
                 # ja3 files and ti_files are parsed differently, check which file is this
+                path = f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'
                 # is it ja3 feed?
-                if link_to_download in self.ja3_confidence and not self.parse_ja3_feed(f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
+                if link_to_download in self.ja3_confidence \
+                        and not self.parse_ja3_feed(link_to_download, path):
                     return False
 
                 # is it a ti_file? load updated IPs to the database
                 if link_to_download in self.url_confidence \
-                        and not self.__load_malicious_datafile(link_to_download, f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'):
+                        and not self.__load_malicious_datafile(link_to_download, path):
                     # an error occured
                     return False
 
@@ -366,10 +368,11 @@ class UpdateFileManager:
         self.__delete_old_source_IPs(data_file)
         self.__delete_old_source_Domains(data_file)
 
-    def parse_ja3_feed(self, ja3_feed_path: str) -> bool:
+    def parse_ja3_feed(self, url, ja3_feed_path: str) -> bool:
         """
         Read all ja3 fingerprints in ja3_feed_path and store the info in our db
-        :param ja3_feed_path: the file path where a ja3 feed is download
+        :param url: this is the src feed
+        :param ja3_feed_path: the file path where a ja3 feed is downloaded
         """
 
         try:
@@ -454,7 +457,7 @@ class UpdateFileManager:
                     # Check if the data is a valid IPv4, IPv6 or domain
                     if len(ja3) == 32:
                         # Store the ja3 in our local dict
-                        malicious_ja3_dict[ja3] = json.dumps({'description': description, 'source':filename})
+                        malicious_ja3_dict[ja3] = json.dumps({'description': description, 'source':filename, 'confidence': self.ja3_confidence[url]})
                     else:
                         self.print('The data {} is not valid. It was found in {}.'.format(data, filename), 3, 3)
                         continue

@@ -370,8 +370,10 @@ class Module(Module, multiprocessing.Process):
             # this tw has no dns resolutions.
             return
 
-    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp):
-        confidence = 0.6
+    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
+        """
+        :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
+        """
         threat_level = 80
         type_detection  = 'dstip'
         if 'JA3s ' in description:
@@ -382,7 +384,7 @@ class Module(Module, multiprocessing.Process):
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid, alert=alert)
 
     def set_evidence_data_exfiltration(self, most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
         confidence = 0.6
@@ -739,14 +741,20 @@ class Module(Module, multiprocessing.Process):
                             daddr = flow['daddr']
 
                             if ja3 in malicious_ja3_dict:
-                                description = json.loads(malicious_ja3_dict[ja3])['description']
+                                malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3])
+                                description = malicious_ja3_dict['description']
                                 description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description}'
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp)
+                                confidence = malicious_ja3_dict['confidence']
+                                alert = True if float(confidence) > 0.5 else False
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
 
                             if ja3s in malicious_ja3_dict:
-                                description = json.loads(malicious_ja3_dict[ja3s])['description']
+                                malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3s])
+                                description = malicious_ja3_dict['description']
                                 description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description}'
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp)
+                                confidence = malicious_ja3_dict['confidence']
+                                alert = True if float(confidence) > 0.5 else False
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
 
                 # ---------------------------- new_service channel
                 if message and message['channel'] == 'new_service'  and type(message['data']) is not int:
