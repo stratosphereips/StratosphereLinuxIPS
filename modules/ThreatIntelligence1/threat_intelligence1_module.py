@@ -229,21 +229,21 @@ class Module(Module, multiprocessing.Process):
                         ip_address = ipaddress.IPv4Address(data)
                         # Is IPv4!
                         # Store the ip in our local dict
-                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name})
+                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name, 'confidence':1})
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
                         try:
                             ip_address = ipaddress.IPv6Address(data)
                             # Is IPv6!
                             # Store the ip in our local dict
-                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name})
+                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name, 'confidence':1})
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
                             if validators.domain(data):
                                 domain = data
                                 # Store the ip in our local dict
-                                malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name})
+                                malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name, 'confidence':1})
                             else:
                                 self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 0, 2)
                                 continue
