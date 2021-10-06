@@ -983,7 +983,8 @@ class Database(object):
                 'data': data,
                 'description': description,
                 'stime': timestamp,
-                'uid' : uid
+                'uid' : uid,
+                'confidence' : confidence
             }
             evidence_to_send = json.dumps(evidence_to_send)
             self.publish('evidence_added', evidence_to_send)
@@ -1799,6 +1800,7 @@ class Database(object):
         """
         if domains_and_description:
             self.rcache.hmset('IoC_domains', domains_and_description)
+
 
     def add_ja3_to_IoC(self, ja3_dict) -> None:
         """
