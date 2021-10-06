@@ -58,7 +58,6 @@ class Module(Module, multiprocessing.Process):
         confidence = __database__.get_ip_confidence(ip)
         description = source_file
         alert = True if float(confidence) > 0.5 else False
-        print(f'**********************ip : {ip} conf: {confidence} alert: {alert}')
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid, alert=alert)
 
