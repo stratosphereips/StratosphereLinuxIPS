@@ -30,4 +30,6 @@ After this edits, just run Slips as usual with any type of input, for example wi
     ./slips.py -c slips.conf -l -f ~/my-computer-normal/
 
 3- If you have also malicious traffic, just repeat this steps with a different label.
+
+
 4- Finally, put back the __test__ mode in the configuration to use the newly re-trained model in any traffic you want.
