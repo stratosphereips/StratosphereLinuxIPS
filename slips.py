@@ -41,7 +41,7 @@ import subprocess
 import re
 from collections import OrderedDict
 
-version = '0.7.3'
+version = '0.8'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
