@@ -18,11 +18,10 @@
 
 import os
 from watchdog.events import RegexMatchingEventHandler
-import redis
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 
 class FileEventHandler(RegexMatchingEventHandler):
-    REGEX = [r".*\.log$"]
+    REGEX = [r".*\.log$", r".*\.conf$"]
 
     def __init__(self, config):
         super().__init__(self.REGEX)
@@ -35,4 +34,10 @@ class FileEventHandler(RegexMatchingEventHandler):
 
     def process(self, event):
         filename, ext = os.path.splitext(event.src_path)
-        __database__.add_zeek_file(filename)
+        if 'log' in ext:
+            __database__.add_zeek_file(filename)
+
+    def on_modified(self, event):
+        filename, ext = os.path.splitext(event.src_path)
+        if 'whitelist' in filename:
+            __database__.publish("reload_whitelist","reload")

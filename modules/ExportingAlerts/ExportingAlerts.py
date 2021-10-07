@@ -12,9 +12,9 @@
 # 7. The name of the class MUST be 'Module', do not change it.
 
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 # Your imports
 from slack import WebClient
@@ -29,6 +29,7 @@ import time
 import _thread
 import sys
 import validators
+import datetime
 
 
 class Module(Module, multiprocessing.Process):
@@ -37,7 +38,7 @@ class Module(Module, multiprocessing.Process):
     You need to have the token in your environment variables to use this module
     """
     name = 'ExportingAlerts'
-    description = 'Module to export alerts to slack and STIX'
+    description = 'Module to export alerts to slack, STIX and json format.'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):
@@ -51,7 +52,6 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('evidence_added')
-        self.c2 = __database__.subscribe('push_to_taxii_server')
         # slack_bot_token_secret should contain your slack token only
         try:
             with open("modules/ExportingAlerts/slack_bot_token_secret", "r") as f:
@@ -96,38 +96,30 @@ class Module(Module, multiprocessing.Process):
         self.is_thread_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
-        # Set the timeout based on the platform. This is because the
-        # pyredis lib does not have officially recognized the
-        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # Other systems)
-            self.timeout = None
+        self.timeout = None
+        # flag to open json file only once
+        self.is_json_file_opened = False
+        self.json_file_handle = False
 
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by
-        taking all the prcocesses into account
-
-        Input
-         verbose: is the minimum verbosity level required for this text to
-         be printed
-         debug: is the minimum debugging level required for this text to be
-         printed
-         text: text to print. Can include format like 'Test {}'.format('here')
-
-        If not specified, the minimum verbosity level required is 1, and the
-        minimum debugging level is 0
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        levels = f'{verbose}{debug}'
+        self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def get_ioc_type(self, ioc):
         """ Check the type of ioc, returns url, ip or domain"""
@@ -156,7 +148,7 @@ class Module(Module, multiprocessing.Process):
         # Token to login to your slack bot. it should be set in slack_bot_token_secret
         if self.BOT_TOKEN is '':
             # The file is empty
-            self.print("Can't find SLACK_BOT_TOKEN in modules/ExportingAlerts/slack_bot_token_secret.", 0, 1)
+            self.print("Can't find SLACK_BOT_TOKEN in modules/ExportingAlerts/slack_bot_token_secret.", 0, 2)
             return False
         slack_client = WebClient(token=self.BOT_TOKEN)
         try:
@@ -166,7 +158,7 @@ class Module(Module, multiprocessing.Process):
                 # Sensor name is set in slips.conf
                 text = self.sensor_name + ': ' + msg_to_send
             )
-            self.print("Exported to slack", 0, 1)
+            self.print("Exported to slack", 1, 0)
         except SlackApiError as e:
             # You will get a SlackApiError if "ok" is False
             assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
@@ -204,7 +196,7 @@ class Module(Module, multiprocessing.Process):
                 break
         else:
             # Comes here if it cant find inbox in services
-            self.print("Server doesn't have inbox available. Exporting STIX_data.json is cancelled.", 0, 1)
+            self.print("Server doesn't have inbox available. Exporting STIX_data.json is cancelled.", 0, 2)
             return False
         # Get the data that we want to send
         with open("STIX_data.json") as stix_file:
@@ -216,7 +208,7 @@ class Module(Module, multiprocessing.Process):
             client.push(stix_data, binding,
                         collection_names=[self.collection_name],
                         uri=self.inbox_path)
-            self.print(f"Successfully exported to {self.TAXII_server}.", 0, 1)
+            self.print(f"Successfully exported to {self.TAXII_server}.", 1, 0)
             return True
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
@@ -251,7 +243,7 @@ class Module(Module, multiprocessing.Process):
         try:
             name = type_evidence_descriptions[type_evidence]
         except KeyError:
-            self.print("Can't find the description for type_evidence: {}".format(type_evidence), 0, 1)
+            self.print("Can't find the description for type_evidence: {}".format(type_evidence), 0, 3)
             return False
         # ---------------- set pattern attribute ----------------
         if 'port' in type_detection:
@@ -269,7 +261,7 @@ class Module(Module, multiprocessing.Process):
         elif ioc_type is 'url':
             pattern = "[url:value = '{}']".format(detection_info)
         else:
-            self.print("Can't set pattern for STIX. {}".format(detection_info), 0, 1)
+            self.print("Can't set pattern for STIX. {}".format(detection_info), 0, 3)
             return False
         # Required Indicator Properties: type, spec_version, id, created, modified , all are set automatically
         # Valid_from, created and modified attribute will be set to the current time
@@ -301,7 +293,7 @@ class Module(Module, multiprocessing.Process):
                 stix_file.write("," + str(indicator) + "]\n}\n")
         # Set of unique ips added to stix_data.json to avoid duplicates
         self.added_ips.add(detection_info)
-        self.print("Indicator added to STIX_data.json", 6, 0)
+        self.print("Indicator added to STIX_data.json", 2, 0)
         return True
 
     def send_to_server(self):
@@ -316,15 +308,61 @@ class Module(Module, multiprocessing.Process):
                 os.remove('STIX_data.json')
                 self.is_bundle_created = False
             else:
-                self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.")
+                self.print(f"{self.push_delay} seconds passed, no new alerts in STIX_data.json.",2,0)
+
+    def export_to_json(self, evidence):
+        """ Export alerts and flows to exported_alerts.json, a suricata like json format. """
+
+        if not self.is_json_file_opened:
+            self.json_file_handle = open('exported_alerts.json','a')
+            self.is_json_file_opened = True
+
+        profileid= evidence['profileid']
+        twid= evidence['twid']
+        uid= evidence['uid']
+        # get the original fllow that triggered this evidence
+        flow = __database__.get_flow(profileid,twid,uid)[uid]
+        # portscans aren't associated with 1 flow, so we don't have a uid or a flow for this alert, ignore #todo
+        if flow:
+            flow = json.loads(flow)
+            # suricata ts format: Date+T+Time
+            # toddo take the original timestamp or the current tiemstamp?
+            timestamp =  str(datetime.datetime.now()).replace(' ','T')
+            line = {'timestamp': timestamp,
+                    'flow_id' : uid,
+                    'src_ip': flow.get('saddr'),
+                    'src_port': flow.get('sport'),
+                    'dest_ip': flow.get('daddr'),
+                    'dest_port': flow.get('dport'),
+                    'proto': flow.get('proto'),
+                    'event_type': 'alert',
+                    'alert': evidence['data']['description'],
+                    'state': flow.get('state'),
+                    'bytes_toserver': flow.get('sbytes'),
+                    'pkts_toserver': flow.get('spkts')
+                    }
+            if flow.get('label') != 'unknown':
+                line.update({'label': flow.get('label') })
+            line = str(line)
+            self.json_file_handle.write(f'{line}\n')
+            return True
+        return False
 
     def run(self):
-        try:
-            # Main loop function
-            while True:
+        # Main loop function
+        while True:
+            try:
                 message_c1 = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message_c1['data'] == 'stop_process':
+                    # We need to publish to taxii server before stopping
+                    if 'stix' in self.export_to:
+                        self.push_to_TAXII_server()
+
+                    if self.json_file_handle:
+                        self.json_file_handle.close()
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message_c1['channel'] == 'evidence_added':
                     if type(message_c1['data']) == str:
@@ -333,7 +371,7 @@ class Module(Module, multiprocessing.Process):
                         if 'slack' in self.export_to:
                             sent_to_slack = self.send_to_slack(description)
                             if not sent_to_slack:
-                                self.print("Problem in send_to_slack()", 0, 1)
+                                self.print("Problem in send_to_slack()", 0, 3)
                         if 'stix' in self.export_to:
                             key = evidence['key']
                             msg_to_send = (key['type_evidence'],key['type_detection'],
@@ -347,26 +385,16 @@ class Module(Module, multiprocessing.Process):
                                 self.is_thread_created = True
                             exported_to_stix = self.export_to_STIX(msg_to_send)
                             if not exported_to_stix:
-                                self.print("Problem in export_to_STIX()", 0, 1)
-
-                # -------------------- push_to_taxii_server channel
-                # This channel recieves a 'True' msg from slips.py if all 3 conditions are true
-                # 1- slips is running on a file (not an interface)
-                # 2- slips is about to stop.
-                # 3- export_to in slips.conf has 'stix' enabled
-                # We need to publish to taxii server before stopping
-                message_c2 = self.c1.get_message(timeout=self.timeout)
-                if message_c2['data'] == 'stop_process':
-                    return True
-                if message_c2['channel'] == 'push_to_taxii_server':
-                    if type(message_c2['data']) == str and 'True' in message_c2['data']:
-                        self.push_to_TAXII_server()
-                        return True
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+                                self.print("Problem in export_to_STIX()", 0,3)
+                        if 'json' in self.export_to:
+                            self.export_to_json(evidence)
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

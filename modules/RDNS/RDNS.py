@@ -12,9 +12,9 @@
 # 7. The name of the class MUST be 'Module', do not change it.
 
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 
 # Your imports
@@ -39,38 +39,27 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
-        # Set the timeout based on the platform. This is because the
-        # pyredis lib does not have officially recognized the
-        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # Other systems
-            self.timeout = None
+        self.timeout = None
 
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by
-        taking all the prcocesses into account
-
-        Input
-         verbose: is the minimum verbosity level required for this text to
-         be printed
-         debug: is the minimum debugging level required for this text to be
-         printed
-         text: text to print. Can include format like 'Test {}'.format('here')
-
-        If not specified, the minimum verbosity level required is 1, and the
-        minimum debugging level is 0
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        levels = f'{verbose}{debug}'
+        self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def get_ip_family(self, ip):
         """
@@ -81,38 +70,50 @@ class Module(Module, multiprocessing.Process):
             return socket.AF_INET6
         return socket.AF_INET
 
+    def get_rdns(self, ip):
+        """
+        get reverse DNS of an ip
+        returns RDNS of the given ip or False if not found
+        :param ip: str
+        """
+        data = {}
+        try:
+            # works with both ipv4 and ipv6
+            reverse_dns = socket.gethostbyaddr(ip)[0]
+            # if there's no reverse dns record for this ip, reverse_dns will be an ip.
+            try:
+                # reverse_dns is an ip and there's no reverse dns, don't store
+                socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
+                return False
+            except socket.error:
+                # all good, store it
+                data['reverse_dns'] = reverse_dns
+        except (socket.gaierror, socket.herror, OSError):
+            # not an ip or multicast, can't get the reverse dns record of it
+            return False
+        return data
+
     def run(self):
         # Main loop function
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. Probably unnecessary...
                 if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if (message and message['channel'] == 'new_ip'
                             and message['type'] == "message"
                             and type(message['data']) == str):
                     ip = message['data']
-                    data = {}
-                    try:
-                        # works with both ipv4 and ipv6
-                        reverse_dns = socket.gethostbyaddr(ip)[0]
-                        # if there's no reverse dns record for this ip, reverse_dns will be an ip.
-                        try:
-                            # reverse_dns is an ip and there's no reverse dns, don't store
-                            socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
-                            continue
-                        except socket.error:
-                            # all good, store it
-                            data['reverse_dns'] = reverse_dns
-                    except (socket.gaierror, socket.herror, OSError):
-                        # not an ip or multicast, can't get the reverse dns record of it
+                    data  = self.get_rdns(ip)
+                    if not data :
+                        # cant get RDNS of current ip
                         continue
                     # Store in the db
                     __database__.setInfoForIPs(ip, data)
             except KeyboardInterrupt:
-                self.print('Stopping the process', 0, 1)
-                return True
+                continue
             except Exception as inst:
                 self.print('Error in run() of {}'.format(inst), 0, 1)
                 self.print(type(inst), 0, 1)
