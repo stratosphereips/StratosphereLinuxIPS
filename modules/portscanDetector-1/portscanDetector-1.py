@@ -1,6 +1,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+import datetime
 import time
 import json
 import platform
@@ -226,6 +227,29 @@ class PortScanProcess(Module, multiprocessing.Process):
                                     self.print(description, 3, 0)
                                     # Store in our local cache how many dips were there:
                                     self.cache_det_thresholds[cache_key] = amount_of_dports
+
+
+                        # Check ICMP Sweep
+                        # is used to find out which hosts are alive in a network or large number of IP addresses using ping/icmp.
+                        # to test it run fping -f ../iplist
+                        direction = 'Dst'
+                        role = 'Client'
+                        protocol = 'ICMP'
+                        state = 'Established'
+                        type_data = 'IPs'
+                        data = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
+                        # if we have 5 different dstips, we are sure this is an ICMP sweep
+                        scanned_dstips = len(list(data.keys()))
+                        if scanned_dstips > 5 :
+                            confidence = 0.8
+                            threat_level = 25
+                            type_detection  = 'srcip'
+                            type_evidence = 'ICMPSweep'
+                            detection_info = profileid.split('_')[1]
+                            description = f'performing PING sweep. {scanned_dstips} different IPs scanned'
+                            timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
+                            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, timestamp, profileid=profileid, twid=twid)
 
                     except AttributeError:
                         # When the channel is created the data '1' is sent
