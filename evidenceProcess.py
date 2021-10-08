@@ -158,7 +158,7 @@ class EvidenceProcess(multiprocessing.Process):
         dns_resolution_detection_info = __database__.get_dns_resolution(detection_info)
         dns_resolution_detection_info_final = dns_resolution_detection_info[0:3] if dns_resolution_detection_info else ''
         dns_resolution_ip = __database__.get_dns_resolution(ip)
-        dns_resolution_ip_final = f' DNS: {dns_resolution_ip[0:3]}. ' if dns_resolution_detection_info else ''
+        dns_resolution_ip_final = f' DNS: {dns_resolution_ip[0:3]}. ' if (dns_resolution_detection_info and len(dns_resolution_ip[0:3]) > 0) else ''
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
             if detection_type == 'dstip':
