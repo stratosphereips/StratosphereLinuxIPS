@@ -117,6 +117,10 @@ class Module(Module, multiprocessing.Process):
 
     def check_dstip_outside_localnet(self, profileid, twid, daddr, uid, saddr, ts):
         """ Function to setEvidence when daddr is outside the local network """
+
+        if '0.0.0.0' in saddr or '0.0.0.0' in daddr:
+            return False
+
         # get first  octet of the saddr
         local_net = saddr.split('.')[0]
         if not daddr.startswith(local_net):
