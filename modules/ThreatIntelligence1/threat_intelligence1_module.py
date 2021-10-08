@@ -45,34 +45,36 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_local_threat_intelligence_data = 'modules/ThreatIntelligence1/local_data_files/'
 
-    def set_evidence_ip(self, ip, uid, timestamp, source_file='', profileid='', twid='', ip_state='ip'):
+    def set_evidence_ip(self, ip, uid, timestamp, ip_info: dict, profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
         :param source_file: the ip source file
+        :param ip_info: is all the info we have about that IP in the db source, confidence , description etc...
         '''
 
         type_detection = ip_state
         detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
         threat_level = 80
-        confidence = __database__.get_ip_confidence(ip)
-        description = source_file
+        confidence = ip_info['confidence']
+        description = f'{ip_info["source"]}: {ip_info["description"]}'
         alert = True if float(confidence) > 0.5 else False
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid, alert=alert)
 
-    def set_evidence_domain(self, domain, uid, timestamp, source_file='', profileid='', twid=''):
+    def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
         :param source_file: is the domain source file
+        :param domain_info: is all the info we have about this domain in the db source, confidence , description etc...
         '''
 
         type_detection = 'dstdomain'
         detection_info = domain
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
         threat_level = 50
-        confidence = __database__.get_domain_confidence(domain)
-        description = source_file
+        confidence = domain_info['confidence']
+        description = f'{domain_info["source"]}: {domain_info["description"]}'
         alert = True if float(confidence) > 0.5 else False
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
@@ -453,28 +455,28 @@ class Module(Module, multiprocessing.Process):
                     # Check if the new data is an ip or a domain
                     if ip:
                         # Search for this IP in our database of IoC
-                        ip_description = __database__.search_IP_in_IoC(ip)
+                        ip_info = __database__.search_IP_in_IoC(ip)
                         # Block only if the traffic isn't outgoing ICMP port unreachable packet
-                        if (ip_description != False
+                        if (ip_info != False
                                 and not self.is_outgoing_icmp_packet(protocol,ip_state)): # Dont change this condition. This is the only way it works
                             # If the IP is in the blacklist of IoC. Add it as Malicious
-                            ip_description = json.loads(ip_description)
-                            ip_source = ip_description['source'] # this is a .csv file
+                            ip_info = json.loads(ip_info)
                             # Set the evidence on this detection
-                            self.set_evidence_ip(ip, uid, timestamp, ip_source, profileid, twid, ip_state)
+                            self.set_evidence_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
                             # set malicious IP in IPInfo
-                            self.set_maliciousIP_to_IPInfo(ip, ip_description)
+                            self.set_maliciousIP_to_IPInfo(ip, ip_info)
                             # set malicious IP in MaliciousIPs
                             self.set_maliciousIP_to_MaliousIPs(ip, profileid, twid)
 
                     if domain:
                         # Search for this domain in our database of IoC
-                        domain_description = __database__.search_Domain_in_IoC(domain)
-                        if domain_description != False: # Dont change this condition. This is the only way it works
+                        domain_info = __database__.search_Domain_in_IoC(domain)
+                        if domain_info != False: # Dont change this condition. This is the only way it works
                             # If the domain is in the blacklist of IoC. Set an evidence
-                            self.set_evidence_domain(domain, uid, timestamp, domain_description, profileid, twid)
+                            domain_info = json.loads(domain_info)
+                            self.set_evidence_domain(domain, uid, timestamp, domain_info, profileid, twid)
                             # set malicious domain in DomainInfo
-                            self.set_maliciousDomain_to_DomainInfo(domain, domain_description)
+                            self.set_maliciousDomain_to_DomainInfo(domain, domain_info)
                             # set malicious domain in MaliciousDomains
                             self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
             except KeyboardInterrupt:
