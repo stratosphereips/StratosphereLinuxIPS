@@ -1816,6 +1816,19 @@ class Database(object):
         """
         self.rcache.hset('IoC_ips', ip, description)
 
+    def get_ip_confidence(self, ip):
+        """ Get the confidence of an IP from Ioc_ips """
+
+        ip_info = json.loads(self.rcache.hget('IoC_ips', ip))
+        return ip_info['confidence']
+
+    def get_domain_confidence(self, domain):
+        """ Get the confidence of a domain from IoC_domains """
+
+        domain_info = json.loads(self.rcache.hget('IoC_domains', domain))
+        return domain_info['confidence']
+
+
     def add_domain_to_IoC(self, domain: str, description: str) -> None:
         """
         Store in the DB 1 domain we read from an IoC source
