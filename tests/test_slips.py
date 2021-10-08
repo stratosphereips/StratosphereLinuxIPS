@@ -2,7 +2,7 @@
 import os
 
 from ..slips  import *
-
+import time
 
 def test_load_modules():
     failed_to_load_modules = load_modules(['template' , 'mldetection-1', 'ensembling'])[1]
@@ -30,6 +30,7 @@ def test_load(database):
     command = f'sudo ./slips.py -d redis_backups/sample_zeek_files-2.rdb  > /dev/null 2>&1'
     # this function returns when slips is done
     os.system(command)
+    time.sleep(3)
     # a random value to make sure the db is loaded
     x = database.r.hgetall('profile_147.32.83.190_timewindow1_flows')
     assert 'CW4pvYSwLQaQ87q74' in str(x)
