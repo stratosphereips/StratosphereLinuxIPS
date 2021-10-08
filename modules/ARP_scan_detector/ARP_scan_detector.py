@@ -26,7 +26,7 @@ import datetime
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'ARPScanDetector'
-    description = 'Module to detect ARP scans.'
+    description = 'Detect ARP scans'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):

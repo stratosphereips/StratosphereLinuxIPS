@@ -26,7 +26,7 @@ warnings.warn = warn
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'flowmldetection'
-    description = 'Module to train or test a Machine Learning model to detect malicious flows.'
+    description = 'Train or test a Machine Learning model to detect malicious flows'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):

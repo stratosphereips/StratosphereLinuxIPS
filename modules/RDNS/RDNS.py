@@ -24,7 +24,7 @@ import socket
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'RDNS'
-    description = 'Module to get and store the reverse DNS info about IPs'
+    description = 'Get and store the reverse DNS info about IPs'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):

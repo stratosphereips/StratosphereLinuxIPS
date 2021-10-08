@@ -38,7 +38,7 @@ class Module(Module, multiprocessing.Process):
     You need to have the token in your environment variables to use this module
     """
     name = 'ExportingAlerts'
-    description = 'Module to export alerts to slack, STIX and json format.'
+    description = 'Export alerts to slack, STIX and json format'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):
