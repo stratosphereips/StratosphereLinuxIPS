@@ -704,7 +704,7 @@ class UpdateFileManager:
                             # append the new blacklist name to the current one
                             source = f'{domain_info["source"]}, {data_file_name}'
                             # the new confidence is the maximum confidence
-                            confidence = str(max(int(domain_info['confidence']) , int(self.url_confidence[link_to_download])))
+                            confidence = str(max(float(domain_info['confidence']) , float(self.url_confidence[link_to_download])))
                             # Store the ip in our local dict
                             malicious_domains_dict[str(data)] = json.dumps({'description': domain_info['description'],
                                                                             'source':source,
