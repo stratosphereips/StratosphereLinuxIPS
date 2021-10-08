@@ -528,9 +528,23 @@ class Module(Module, multiprocessing.Process):
                         time_of_first_flow = datetime.datetime.fromtimestamp(flows_list[0]['ts'])
                         time_of_last_flow = datetime.datetime.fromtimestamp(flows_list[-1]['ts'])
                         # get the difference between them in seconds
-                        diff_in_hrs = int(str(time_of_last_flow - time_of_first_flow).split(':')[0])
-                        diff_in_mins = int(str(time_of_last_flow - time_of_first_flow).split(':')[1])
-                        diff_in_mins = diff_in_hrs*60 + diff_in_mins
+
+                        diff = str(time_of_last_flow - time_of_first_flow)
+                        # if there are days diff between the flows , diff will be something like 1 day, 17:25:57.458395
+                        try:
+                            # calculate the days difference
+                            diff_in_days = int(diff.split(', ')[0].split(' ')[0])
+                            diff = diff.split(', ')[1]
+                        except (IndexError,ValueError):
+                            # no days different
+                            diff = diff.split(', ')[0]
+                            diff_in_days = 0
+
+                        diff_in_hrs = int(diff.split(':')[0])
+                        diff_in_mins = int(diff.split(':')[1])
+                        # total diff in mins
+                        diff_in_mins = 24*diff_in_days*60 + diff_in_hrs*60 + diff_in_mins
+
                         # we need the flows that happend in 20 mins span
                         if diff_in_mins >= 20:
                             contacted_daddrs= {}
