@@ -57,6 +57,8 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'ThreatIntelligenceBlacklistIP'
         threat_level = 80
         confidence = ip_info['confidence']
+        if not confidence:
+            confidence = 0
         description = f'{ip_info["source"]}: {ip_info["description"]}'
         alert = True if float(confidence) > 0.5 else False
         __database__.setEvidence(type_detection, detection_info, type_evidence,
