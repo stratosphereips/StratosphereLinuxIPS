@@ -43,13 +43,15 @@ class UpdateFileManager:
             self.path_to_threat_intelligence_data = 'modules/ThreatIntelligence1/remote_data_files/'
         try:
             # Read the list of URLs to download. Convert to list
-            self.ti_feeds = self.config.get('threatintelligence', 'ti_files').split(',')
+            self.ti_feeds = self.config.get('threatintelligence', 'ti_files').split(', ')
             # this dict will contain every link and its confidence
             self.url_confidence = {}
             # this is a list of tuples, each tuple is (url,confidence), extract the links
             for tuple_ in self.ti_feeds:
-                url = tuple_.split(' ')[0].replace('(','')
-                confidence= tuple_.split(' ')[1].replace(')','')
+                # remove the () from the tuple and store url,confidence in a list
+                tuple_ = tuple_.replace('(','').replace(')','').split(',')
+                url = tuple_[0]
+                confidence= tuple_[1]
                 self.url_confidence[url] = confidence
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -57,14 +59,15 @@ class UpdateFileManager:
 
         try:
             # Read the list of ja3 feeds to download. Convert to list
-            self.ja3_feeds = self.config.get('threatintelligence', 'ja3_feeds').split(',')
+            self.ja3_feeds = self.config.get('threatintelligence', 'ja3_feeds').split(', ')
             self.ja3_confidence = {}
             # this is a list of tuples, each tuple is (url,confidence), extract the links
             for tuple_ in self.ja3_feeds:
-                url = tuple_.split(' ')[0].replace('(','')
-                confidence= tuple_.split(' ')[1].replace(')','')
+                # remove the () from the tuple and store url,confidence in a list
+                tuple_ = tuple_.replace('(','').replace(')','').split(',')
+                url = tuple_[0]
+                confidence= tuple_[1]
                 self.ja3_confidence[url] = confidence
-
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ja3_confidence = {}
@@ -141,7 +144,7 @@ class UpdateFileManager:
             return True
         return False
 
-    def get_e_tag_from_web(self, file_to_download) -> str:
+    def get_e_tag_from_web(self, file_to_download):
         try:
             # We use a command in os because if we use urllib or requests the process complains!:w
             # If the webpage does not answer in 10 seconds, continue
