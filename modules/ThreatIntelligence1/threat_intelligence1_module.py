@@ -62,7 +62,7 @@ class Module(Module, multiprocessing.Process):
         description = f'{ip_info["source"]}: {ip_info["description"]}'
         alert = True if float(confidence) > 0.5 else False
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid, alert=alert)
+                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, profileid='', twid=''):
         '''
@@ -80,7 +80,7 @@ class Module(Module, multiprocessing.Process):
         alert = True if float(confidence) > 0.5 else False
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid, alert=alert)
+                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def print(self, text, verbose=1, debug=0):
         """

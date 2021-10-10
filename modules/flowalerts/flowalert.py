@@ -384,7 +384,7 @@ class Module(Module, multiprocessing.Process):
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid, alert=alert)
+                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_data_exfiltration(self, most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
         confidence = 0.6
