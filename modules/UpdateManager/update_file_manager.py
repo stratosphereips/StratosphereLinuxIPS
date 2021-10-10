@@ -705,7 +705,9 @@ class UpdateFileManager:
                             # we already have info about this domain?
                             domain_info = json.loads(malicious_domains_dict[str(data)] )
                             # append the new blacklist name to the current one
-                            source = f'{domain_info["source"]}, {data_file_name}'
+                            if data_file_name not in ['source']:
+                                # if the domain appeared twice in the same blacklist, don't add the blacklist name twice
+                                source = f'{domain_info["source"]}, {data_file_name}'
                             # the new confidence is the maximum confidence
                             confidence = str(max(float(domain_info['confidence']) , float(self.url_confidence[link_to_download])))
                             # Store the ip in our local dict
@@ -722,7 +724,9 @@ class UpdateFileManager:
                             # we already have info about this ip?
                             ip_info = json.loads(malicious_ips_dict[str(data)])
                             # append the new blacklist name to the current one
-                            source = f'{ip_info["source"]}, {data_file_name}'
+                            if data_file_name not in ip_info['source']:
+                                # if the IP appeared twice in the same blacklist, don't add the blacklist name twice
+                                source = f'{ip_info["source"]}, {data_file_name}'
                             # the new confidence is the old + the new one
                             confidence = str(max(int(ip_info['confidence']) ,int(self.url_confidence[link_to_download])))
                             malicious_ips_dict[str(data)] = json.dumps({'description': ip_info['description'],
