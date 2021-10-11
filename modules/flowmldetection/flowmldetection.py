@@ -401,6 +401,11 @@ class Module(Module, multiprocessing.Process):
                         elif self.mode == 'test':
                             # We are testing, which means using the model to detect
                             self.process_flow()
+                            
+                            # After processing the flow, it may happen that we delete icmp/arp/etc
+                            # so the dataframe can be empty
+                            if self.flow.empty:
+                                continue
 
                             # Predict
                             pred = self.detect()
@@ -424,7 +429,9 @@ class Module(Module, multiprocessing.Process):
                     return True
 
         except KeyboardInterrupt:
+            self.print('Storing the model on disk before stopping')
             self.store_model()
+            self.print('Model stored')
             return True
         except Exception as inst:
             # Stop the timer
