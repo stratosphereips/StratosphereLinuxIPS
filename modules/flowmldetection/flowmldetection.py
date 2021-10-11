@@ -13,6 +13,8 @@ import pandas as pd
 import json
 import platform
 import datetime
+# Only for debbuging
+#from matplotlib import pyplot as plt
 
 
 # This horrible hack is only to stop sklearn from printing those warnings
@@ -105,6 +107,10 @@ class Module(Module, multiprocessing.Process):
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
             self.print('	Training Score: {}'.format(score))
+
+            # Debug code to store a plot in a png of the scores
+            #plt.plot(self.scores)
+            #plt.savefig('train-scores.png')
 
             # Store the models on disk
             self.store_model()
