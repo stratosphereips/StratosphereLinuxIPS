@@ -115,8 +115,8 @@ class Module(Module, multiprocessing.Process):
             # To debug the training score
             #self.scores.append(score)
 
-            self.print('	Training Score: {}'.format(score))
-            self.print(f'    Model Parameters: {self.clf.coef_}')
+            self.print(f'	Training Score: {score}', 0, 1)
+            #self.print(f'    Model Parameters: {self.clf.coef_}')
 
             # Debug code to store a plot in a png of the scores
             #plt.plot(self.scores)
@@ -241,7 +241,7 @@ class Module(Module, multiprocessing.Process):
                 # that are fake but representative of a normal and malware flow
                 # they are only for the training process
                 # At least 1 flow of each label is required
-                self.print(f'Amount of labeled flows: {labels}', 0, 1)
+                #self.print(f'Amount of labeled flows: {labels}', 0, 1)
                 flows.append({'ts':1594417039.029793 , 'dur': '1.9424750804901123', 'saddr': '10.7.10.101', 'sport': '49733', 'daddr': '40.70.224.145', 'dport': '443', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 84, 'allbytes': 42764, 'spkts': 37, 'sbytes': 25517, 'appproto': 'ssl', 'label': 'Malware', 'module_labels': {'flowalerts-long-connection': 'Malware'}})
                 flows.append({'ts':1382355032.706468 , 'dur': '10.896695', 'saddr': '147.32.83.52', 'sport': '47956', 'daddr': '80.242.138.72', 'dport': '80', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 67, 'allbytes': 67696, 'spkts': 1, 'sbytes': 100, 'appproto': 'http', 'label': 'Normal', 'module_labels': {'flowalerts-long-connection': 'Normal'}})
                 # If there are enough flows, we dont insert them anymore
