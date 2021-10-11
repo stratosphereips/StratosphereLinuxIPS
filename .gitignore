@@ -133,3 +133,6 @@ package-lock.json
 modules/blessed/node_modules/
 alerts.*
 nohup.out
+
+# trained models
+model.bin
