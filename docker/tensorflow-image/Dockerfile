@@ -22,6 +22,7 @@ RUN apt update && apt install -y --no-install-recommends \
     zeek \
     python3-pip \
 	python3-certifi \
+	python3-dev \
 	file \
 	lsof \
 	net-tools \
@@ -33,27 +34,22 @@ RUN apt update && apt install -y --no-install-recommends \
 # Upgrade pip3
 RUN pip3 install --upgrade pip
 
+# To avoid user interaction with tzdata
+ENV DEBIAN_FRONTEND=noninteractive
+# Compile and install YARA
+RUN apt install -y automake libtool make gcc pkg-config
+RUN wget -O yara-4.1.2.tar.gz https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.2.tar.gz \
+ && tar -zxf yara-4.1.2.tar.gz \
+ && cd yara-4.1.2  \
+ && ./bootstrap.sh
+RUN cd yara-4.1.2/  && ./configure && make && make install
+
 # Install redis using PIP3
-RUN pip3 install wheel
-RUN pip3 install redis
-RUN pip3 install setuptools
-RUN pip3 install validators
-RUN pip3 install colorama
-RUN pip3 install maxminddb
-RUN pip3 install pandas
-RUN pip3 install sklearn
-RUN pip3 install urllib3
-RUN pip3 install scipy
-RUN pip3 install watchdog
-RUN pip3 install stix2
-RUN pip3 install cabby
-RUN pip3 install ipwhois
-RUN pip3 install pytest
+RUN pip3 install wheel redis setuptools validators colorama
+RUN pip3 install maxminddb pandas sklearn urllib3 scipy watchdog
+RUN pip3 install stix2 cabby ipwhois pytest yara-python
+RUN pip3 install slackclient tzlocal psutil pytest-xdist
 RUN pip3 install --ignore-installed six
-RUN pip3 install slackclient
-RUN pip3 install tzlocal
-RUN pip3 install psutil
-RUN pip3 install pytest-xdist
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
