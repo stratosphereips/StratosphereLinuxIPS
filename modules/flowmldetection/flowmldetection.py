@@ -49,6 +49,8 @@ class Module(Module, multiprocessing.Process):
         self.timeout = None
         # Minum amount of new lables needed to trigger the train
         self.minimum_lables_to_retrain = 50
+        # The scaler trained during training and to use during testing
+        self.scaler = StandardScaler()
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -96,6 +98,8 @@ class Module(Module, multiprocessing.Process):
             X_flow = self.flow.drop('module_labels', axis=1)
             # self.print('	X_flow without label: {}'.format(X_flow))
 
+            # Normalize this batch of data so far. This can get progressivle slow
+            X_flow = self.scaler.fit_transform(X_flow)
 
             # Train 
             try:
@@ -263,12 +267,9 @@ class Module(Module, multiprocessing.Process):
             # Drop the label predictions of the other modules
             X_flow = self.flow.drop('module_labels', axis=1)
             # Scale the flow
-            # self.print('Scale')
-            # X_flow = self.sc.transform(X_flow)
-            # self.print(X_flow)
+            X_flow = self.scaler.transform(X_flow)
             pred = self.clf.predict(X_flow)
             return pred
-            #return [1.0]
         except Exception as inst:
             # Stop the timer
             self.print('Error in detect()')
@@ -281,11 +282,15 @@ class Module(Module, multiprocessing.Process):
         """
         Store the trained model on disk
         """
-        self.print(f'Storing the trained model on disk.', 0, 3)
+        self.print(f'Storing the trained model and scaler on disk.', 0, 2)
         f = open('./modules/flowmldetection/model.bin', 'wb')
         data = pickle.dumps(self.clf)
         f.write(data)
         f.close()
+        g = open('./modules/flowmldetection/scaler.bin', 'wb')
+        data = pickle.dumps(self.scaler)
+        g.write(data)
+        g.close()
 
     def read_model(self):
         """
@@ -296,6 +301,10 @@ class Module(Module, multiprocessing.Process):
             f = open('./modules/flowmldetection/model.bin', 'rb')
             self.clf = pickle.load(f)
             f.close()
+            self.print(f'Reading the trained scaler from disk.', 0, 2)
+            g = open('./modules/flowmldetection/scaler.bin', 'rb')
+            self.scaler = pickle.load(g)
+            g.close()
         except FileNotFoundError:
             # If there is no model, create one empty
             self.print('There was no model. Creating a new empty model.', 0, 2)
