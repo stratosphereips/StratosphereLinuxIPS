@@ -95,19 +95,19 @@ class Module(Module, multiprocessing.Process):
 
             # Separate
             y_flow = self.flows['label']
-            self.flow = self.flows.drop('label', axis=1)
-            X_flow = self.flow.drop('module_labels', axis=1)
-            # self.print('	X_flow without label: {}'.format(X_flow))
+            X_flow = self.flows.drop('label', axis=1)
+            X_flow = X_flow.drop('module_labels', axis=1)
 
             # Normalize this batch of data so far. This can get progressivle slow
             X_flow = self.scaler.fit_transform(X_flow)
 
             # Train 
             try:
-                self.clf.fit(X_flow, y_flow)
-            except ValueError:
-                self.print('Train was not possible yet due to insufficient labels.')
-                return False
+                self.clf.partial_fit(X_flow, y_flow, classes=['Malware', 'Normal'])
+            except Exception as inst:
+                self.print('Error while calling clf.train()')
+                self.print(type(inst))
+                self.print(inst)
 
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
@@ -180,6 +180,16 @@ class Module(Module, multiprocessing.Process):
             dataset.proto = dataset.proto.str.replace(r'(^.*arp.*$)', '4')
             dataset.proto = dataset.proto.astype('float64')
             try:
+                # Convert dport to float
+                dataset.dport = dataset.dport.astype('float')
+            except ValueError:
+                pass
+            try:
+                # Convert sport to float
+                dataset.sport = dataset.sport.astype('float')
+            except ValueError:
+                pass
+            try:
                 # Convert Dur to float
                 dataset.dur = dataset.dur.astype('float')
             except ValueError:
@@ -222,12 +232,19 @@ class Module(Module, multiprocessing.Process):
             # because this retraining happens in batches
             flows = __database__.get_all_flows()
 
-            # Load some normal and malware flows and labels, so training can have at
-            # least 1 flow of each kind (required)
-            # These are fake flows that do not get into Slips, 
-            # they are only for the training process
-            flows.append({'ts':1594417039.029793 , 'dur': '1.9424750804901123', 'saddr': '10.7.10.101', 'sport': '49733', 'daddr': '40.70.224.145', 'dport': '443', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 84, 'allbytes': 42764, 'spkts': 37, 'sbytes': 25517, 'appproto': 'ssl', 'label': 'malicious', 'module_labels': {'flowalerts-long-connection': 'malicious'}})
-            flows.append({'ts':1382355032.706468 , 'dur': '10.896695', 'saddr': '147.32.83.52', 'sport': '47956', 'daddr': '80.242.138.72', 'dport': '80', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 67, 'allbytes': 67696, 'spkts': 1, 'sbytes': 100, 'appproto': 'http', 'label': 'normal', 'module_labels': {'flowalerts-long-connection': 'normal'}})
+            # Check how many different labels are in the DB
+            # We need both normal and malware
+            labels = __database__.get_labels()
+            if len(labels) == 1:
+                # Only 1 label has flows
+                # There are not enough different labels, so insert two flows
+                # that are fake but representative of a normal and malware flow
+                # they are only for the training process
+                # At least 1 flow of each label is required
+                self.print(f'Amount of labeled flows: {labels}', 0, 1)
+                flows.append({'ts':1594417039.029793 , 'dur': '1.9424750804901123', 'saddr': '10.7.10.101', 'sport': '49733', 'daddr': '40.70.224.145', 'dport': '443', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 84, 'allbytes': 42764, 'spkts': 37, 'sbytes': 25517, 'appproto': 'ssl', 'label': 'Malware', 'module_labels': {'flowalerts-long-connection': 'Malware'}})
+                flows.append({'ts':1382355032.706468 , 'dur': '10.896695', 'saddr': '147.32.83.52', 'sport': '47956', 'daddr': '80.242.138.72', 'dport': '80', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 67, 'allbytes': 67696, 'spkts': 1, 'sbytes': 100, 'appproto': 'http', 'label': 'Normal', 'module_labels': {'flowalerts-long-connection': 'Normal'}})
+                # If there are enough flows, we dont insert them anymore
 
             # Convert to pandas df
             df_flows = pd.DataFrame(flows)
@@ -314,9 +331,10 @@ class Module(Module, multiprocessing.Process):
         except FileNotFoundError:
             # If there is no model, create one empty
             self.print('There was no model. Creating a new empty model.', 0, 2)
+            self.clf = SGDClassifier(warm_start=True, loss='hinge', penalty="l1")
         except EOFError:
-            self.print('Error reading model from disk')
-            self.clf = SGDClassifier(warm_start=True)
+            self.print('Error reading model from disk. Creating a new empty model.', 0, 2)
+            self.clf = SGDClassifier(warm_start=True, loss='hinge', penalty="l1")
 
     def set_evidence_malicious_flow(self, saddr, sport, daddr, dport, profileid, twid, uid):
         """
