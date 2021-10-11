@@ -6,7 +6,6 @@ from slips_files.core.database import __database__
 import sys
 import configparser
 import time
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 import pickle
