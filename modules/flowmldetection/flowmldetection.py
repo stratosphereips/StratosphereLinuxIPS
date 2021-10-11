@@ -83,16 +83,15 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-
     def train(self):
         """ 
         Train a model based on the flows we receive and the labels
         """
         try:
             # Process the labels to have only Normal and Malware
-            self.flows.label = self.flows.label.str.replace(r'(^.*Normal.*$)', 'Normal')
-            self.flows.label = self.flows.label.str.replace(r'(^.*Malware.*$)', 'Malware')
-            self.flows.label = self.flows.label.str.replace(r'(^.*Malicious.*$)', 'Malware')
+            self.flows.label = self.flows.label.str.replace(r'(^.*ormal.*$)', 'Normal')
+            self.flows.label = self.flows.label.str.replace(r'(^.*alware.*$)', 'Malware')
+            self.flows.label = self.flows.label.str.replace(r'(^.*alicious.*$)', 'Malware')
 
             # Separate
             y_flow = self.flows['label']
