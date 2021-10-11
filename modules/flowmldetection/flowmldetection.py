@@ -49,6 +49,8 @@ class Module(Module, multiprocessing.Process):
         self.timeout = None
         # Minum amount of new lables needed to trigger the train
         self.minimum_lables_to_retrain = 50
+        # To plot the scores of training
+        #self.scores = []
         # The scaler trained during training and to use during testing
         self.scaler = StandardScaler()
 
@@ -110,7 +112,12 @@ class Module(Module, multiprocessing.Process):
 
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
+
+            # To debug the training score
+            #self.scores.append(score)
+
             self.print('	Training Score: {}'.format(score))
+            self.print(f'    Model Parameters: {self.clf.coef_}')
 
             # Debug code to store a plot in a png of the scores
             #plt.plot(self.scores)
