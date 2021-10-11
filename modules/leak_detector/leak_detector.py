@@ -15,15 +15,15 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
-import platform
 import sys
 
 # Your imports
-
+import os
+import yara
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'leak_detector'
+    name = 'leak_detmove GPS_leaks.yara to a separate folderector'
     description = 'Detect leaks of data in the traffic'
     authors = ['Alya Gomaa']
 
@@ -33,8 +33,11 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        # self.c1 = __database__.subscribe('new_ip')
         self.timeout = None
+        # this module is only loaded when a pcap is given get the pcap path
+        self.pcap = sys.argv[sys.argv.index('-f')+1]
+        self.yara_rules_path = 'modules/leak_detector/yara_rules/rules/'
+        self.compiled_yara_rules_path = 'modules/leak_detector/yara_rules/compiled/'
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -58,27 +61,30 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         # Main loop function
-        while True:
-            try:
-                message = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. Probably unnecessary...
-                if message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
-                    return True
-                # if message['channel'] == 'new_ip':
-                #     # Example of printing the number of profiles in the
-                #     # Database every second
-                #     data = len(__database__.getProfiles())
-                #     self.print('Amount of profiles: {}'.format(data),3,0)
+        # while True:
+        try:
+            # if we we don't have compiled rules, compile them
+            if not os.path.exists(self.compiled_yara_rules_path):
+                os.mkdir(self.compiled_yara_rules_path)
+                for rule in os.listdir(self.yara_rules_path):
+                    rule_path = os.path.join(self.yara_rules_path, rule)
+                    # ignore yara_rules/compiled/
+                    if not os.path.isfile(rule_path):
+                        continue
+                    # compile the rule
+                    compiled_rule = yara.compile(filepath=rule_path)
+                    # save the compiled rule
+                    compiled_rule.save(os.path.join(self.compiled_yara_rules_path, f'{rule}_compiled'))
 
-            except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
+            # todo load and run the rules
+
+        except KeyboardInterrupt:
+            # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+            return True
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
