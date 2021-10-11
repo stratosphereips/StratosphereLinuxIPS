@@ -23,7 +23,7 @@ import yara
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'leak_detmove GPS_leaks.yara to a separate folderector'
+    name = 'leak_detector'
     description = 'Detect leaks of data in the traffic'
     authors = ['Alya Gomaa']
 
@@ -59,6 +59,13 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
+    def set_evidence_yara_match(self, info:dict ):
+        """
+        This function is called when yara finds a match
+        :param info: a dict with info about the matched rule, example keys 'tags', 'matches', 'rule', 'strings' etc.
+        """
+        pass
+
     def run(self):
         # Main loop function
         # while True:
@@ -76,7 +83,12 @@ class Module(Module, multiprocessing.Process):
                     # save the compiled rule
                     compiled_rule.save(os.path.join(self.compiled_yara_rules_path, f'{rule}_compiled'))
 
-            # todo load and run the rules
+            for compiled_rule in os.listdir(self.compiled_yara_rules_path):
+                compiled_rule_path = os.path.join(self.compiled_yara_rules_path, compiled_rule)
+                # load the compiled rules
+                rule = yara.load(compiled_rule_path)
+                # call set_evidence_yara_match when a match is found
+                matches = rule.match(self.pcap, callback=self.set_evidence_yara_match, which_callbacks=yara.CALLBACK_MATCHES)
 
         except KeyboardInterrupt:
             # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
