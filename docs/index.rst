@@ -21,6 +21,8 @@ This documentation gives an overview how Slips works, how to use it and how to h
   
 - **Training with your own data**. Explanation on how to re-train the machine learning system of Slips with your own traffic (normal or malicious).See :doc:`Training <training>`. 
 
+- **Thread Intelligence**. Explanation on how Slips works with the threat intelligence feeds.See :doc:`Threat Intelligence <threatintelligence>`. 
+
 - **Contributing**. Explanation how to contribute to Slips, and instructions how to implement new detection module in Slips. See :doc:`Contributing <contributing>`. 
 
 
@@ -37,3 +39,4 @@ This documentation gives an overview how Slips works, how to use it and how to h
    architecture
    contributing
    training
+   threatintelligence
