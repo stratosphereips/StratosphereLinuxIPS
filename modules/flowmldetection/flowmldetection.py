@@ -116,7 +116,6 @@ class Module(Module, multiprocessing.Process):
             self.store_model()
 
         except Exception as inst:
-            # Stop the timer
             self.print('Error in train()')
             self.print(type(inst))
             self.print(inst)
@@ -124,9 +123,10 @@ class Module(Module, multiprocessing.Process):
     def process_features(self, dataset):
         '''
         Discards some features of the dataset and can create new.
+        Clean the dataset
         '''
         try:
-            # Discard flows arp and icmp, since they dont have the ports
+            # Discard some type of flows that they dont have ports
             dataset = dataset[dataset.proto != 'arp']
             dataset = dataset[dataset.proto != 'icmp']
             dataset = dataset[dataset.proto != 'igmp']
@@ -152,11 +152,17 @@ class Module(Module, multiprocessing.Process):
                 dataset = dataset.drop('origstate', axis=1)
             except ValueError:
                 pass
+
             # Convert state to categorical
             dataset.state = dataset.state.str.replace(r'(^.*NotEstablished.*$)', '0')
             dataset.state = dataset.state.str.replace(r'(^.*Established.*$)', '1')
             dataset.state = dataset.state.astype('float64')
-            # Convert proto to categorical. For now we only have to states, so we can hardcode...
+
+            # Convert proto to categorical. For now we only have few states, so we can hardcode...
+            # We dont use the data to create categories because in testing mode
+            # we dont see all the protocols
+            # Also we dont store the Categorizer because the user can retrain
+            # with its own data.
             dataset.proto = dataset.proto.str.replace(r'(^.*tcp.*$)', '0')
             dataset.proto = dataset.proto.str.replace(r'(^.*udp.*$)', '1')
             dataset.proto = dataset.proto.str.replace(r'(^.*icmp.*$)', '2')
@@ -195,6 +201,7 @@ class Module(Module, multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
+
     def process_flows(self):
         """ 
         Process all the flwos in the DB 
@@ -212,9 +219,12 @@ class Module(Module, multiprocessing.Process):
             flows.append({'ts':1594417039.029793 , 'dur': '1.9424750804901123', 'saddr': '10.7.10.101', 'sport': '49733', 'daddr': '40.70.224.145', 'dport': '443', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 84, 'allbytes': 42764, 'spkts': 37, 'sbytes': 25517, 'appproto': 'ssl', 'label': 'malicious', 'module_labels': {'flowalerts-long-connection': 'malicious'}})
             flows.append({'ts':1382355032.706468 , 'dur': '10.896695', 'saddr': '147.32.83.52', 'sport': '47956', 'daddr': '80.242.138.72', 'dport': '80', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 67, 'allbytes': 67696, 'spkts': 1, 'sbytes': 100, 'appproto': 'http', 'label': 'normal', 'module_labels': {'flowalerts-long-connection': 'normal'}})
 
+            # Convert to pandas df
             df_flows = pd.DataFrame(flows)
+
             # Process features
             df_flows = self.process_features(df_flows)
+
             # Update the flow to the processed version
             self.flows = df_flows
         except Exception as inst:
@@ -282,14 +292,13 @@ class Module(Module, multiprocessing.Process):
         Read the trained model from disk
         """
         try:
-            #self.print(f'Reading the trained model from disk.')
+            self.print(f'Reading the trained model from disk.', 0, 2)
             f = open('./modules/flowmldetection/model.bin', 'rb')
             self.clf = pickle.load(f)
             f.close()
         except FileNotFoundError:
             # If there is no model, create one empty
-            #self.clf = RandomForestClassifier(n_estimators=30, criterion='entropy', warm_start=True)
-            self.clf = SGDClassifier(warm_start=True)
+            self.print('There was no model. Creating a new empty model.', 0, 2)
         except EOFError:
             self.print('Error reading model from disk')
             self.clf = SGDClassifier(warm_start=True)
@@ -337,20 +346,21 @@ class Module(Module, multiprocessing.Process):
                         flow = json.loads(flow)
                         # Convert the common fields to something that can
                         # be interpreted
+                        # Get the uid which is the key
                         uid = next(iter(flow))
                         self.flow_dict = json.loads(flow[uid])
 
                         if self.mode == 'train':
-                            # We are training.
-                            # Then check if we have already more than 1 label in the whole data
+                            # We are training
+
+                            # Is the amount in the DB of labels enough to retrain?
+                            # Use labeled flows
                             labels = __database__.get_labels()
                             sum_labeled_flows = sum([i[1] for i in labels])
-                            #self.print(f'Sum labeled flows: {sum_labeled_flows}, Min Labels to retrain:{self.minimum_lables_to_retrain}')
-                            # Is the amount in the DB of labels enough to retrain?
                             if sum_labeled_flows >= self.minimum_lables_to_retrain and sum_labeled_flows%self.minimum_lables_to_retrain == 1:
                                 # We get here every 'self.minimum_lables_to_retrain' amount of labels
                                 # So for example we retrain every 100 labels and only when we have at least 100 labels
-                                self.print(f'Training the model with the last group of flows and labels {labels}.')
+                                self.print(f'Training the model with the last group of flows and labels. Total flows: {sum_labeled_flows}.')
                                 # Process all flows in the DB and make them ready for pandas
                                 self.process_flows()
                                 # Train an algorithm
