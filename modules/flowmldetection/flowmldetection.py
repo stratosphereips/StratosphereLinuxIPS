@@ -6,7 +6,6 @@ from slips_files.core.database import __database__
 import sys
 import configparser
 import time
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 import pickle
@@ -14,6 +13,8 @@ import pandas as pd
 import json
 import platform
 import datetime
+# Only for debbuging
+#from matplotlib import pyplot as plt
 
 
 # This horrible hack is only to stop sklearn from printing those warnings
@@ -48,6 +49,10 @@ class Module(Module, multiprocessing.Process):
         self.timeout = None
         # Minum amount of new lables needed to trigger the train
         self.minimum_lables_to_retrain = 50
+        # To plot the scores of training
+        #self.scores = []
+        # The scaler trained during training and to use during testing
+        self.scaler = StandardScaler()
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -78,40 +83,49 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-
     def train(self):
         """ 
         Train a model based on the flows we receive and the labels
         """
         try:
             # Process the labels to have only Normal and Malware
-            self.flows.label = self.flows.label.str.replace(r'(^.*Normal.*$)', 'Normal')
-            self.flows.label = self.flows.label.str.replace(r'(^.*Malware.*$)', 'Malware')
-            self.flows.label = self.flows.label.str.replace(r'(^.*Malicious.*$)', 'Malware')
+            self.flows.label = self.flows.label.str.replace(r'(^.*ormal.*$)', 'Normal')
+            self.flows.label = self.flows.label.str.replace(r'(^.*alware.*$)', 'Malware')
+            self.flows.label = self.flows.label.str.replace(r'(^.*alicious.*$)', 'Malware')
 
             # Separate
             y_flow = self.flows['label']
-            self.flow = self.flows.drop('label', axis=1)
-            X_flow = self.flow.drop('module_labels', axis=1)
-            # self.print('	X_flow without label: {}'.format(X_flow))
+            X_flow = self.flows.drop('label', axis=1)
+            X_flow = X_flow.drop('module_labels', axis=1)
 
+            # Normalize this batch of data so far. This can get progressivle slow
+            X_flow = self.scaler.fit_transform(X_flow)
 
             # Train 
             try:
-                self.clf.fit(X_flow, y_flow)
-            except ValueError:
-                self.print('Train was not possible yet due to insufficient labels.')
-                return False
+                self.clf.partial_fit(X_flow, y_flow, classes=['Malware', 'Normal'])
+            except Exception as inst:
+                self.print('Error while calling clf.train()')
+                self.print(type(inst))
+                self.print(inst)
 
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
-            self.print('	Training Score: {}'.format(score))
+
+            # To debug the training score
+            #self.scores.append(score)
+
+            self.print(f'	Training Score: {score}', 0, 1)
+            #self.print(f'    Model Parameters: {self.clf.coef_}')
+
+            # Debug code to store a plot in a png of the scores
+            #plt.plot(self.scores)
+            #plt.savefig('train-scores.png')
 
             # Store the models on disk
             self.store_model()
 
         except Exception as inst:
-            # Stop the timer
             self.print('Error in train()')
             self.print(type(inst))
             self.print(inst)
@@ -119,10 +133,12 @@ class Module(Module, multiprocessing.Process):
     def process_features(self, dataset):
         '''
         Discards some features of the dataset and can create new.
+        Clean the dataset
         '''
         try:
-            # Discard flows arp and icmp, since they dont have the ports
+            # Discard some type of flows that they dont have ports
             dataset = dataset[dataset.proto != 'arp']
+            dataset = dataset[dataset.proto != 'ARP']
             dataset = dataset[dataset.proto != 'icmp']
             dataset = dataset[dataset.proto != 'igmp']
             dataset = dataset[dataset.proto != 'ipv6-icmp']
@@ -147,17 +163,33 @@ class Module(Module, multiprocessing.Process):
                 dataset = dataset.drop('origstate', axis=1)
             except ValueError:
                 pass
+
             # Convert state to categorical
             dataset.state = dataset.state.str.replace(r'(^.*NotEstablished.*$)', '0')
             dataset.state = dataset.state.str.replace(r'(^.*Established.*$)', '1')
             dataset.state = dataset.state.astype('float64')
-            # Convert proto to categorical. For now we only have to states, so we can hardcode...
+
+            # Convert proto to categorical. For now we only have few states, so we can hardcode...
+            # We dont use the data to create categories because in testing mode
+            # we dont see all the protocols
+            # Also we dont store the Categorizer because the user can retrain
+            # with its own data.
             dataset.proto = dataset.proto.str.replace(r'(^.*tcp.*$)', '0')
             dataset.proto = dataset.proto.str.replace(r'(^.*udp.*$)', '1')
             dataset.proto = dataset.proto.str.replace(r'(^.*icmp.*$)', '2')
             dataset.proto = dataset.proto.str.replace(r'(^.*icmp-ipv6.*$)', '3')
             dataset.proto = dataset.proto.str.replace(r'(^.*arp.*$)', '4')
             dataset.proto = dataset.proto.astype('float64')
+            try:
+                # Convert dport to float
+                dataset.dport = dataset.dport.astype('float')
+            except ValueError:
+                pass
+            try:
+                # Convert sport to float
+                dataset.sport = dataset.sport.astype('float')
+            except ValueError:
+                pass
             try:
                 # Convert Dur to float
                 dataset.dur = dataset.dur.astype('float')
@@ -190,6 +222,7 @@ class Module(Module, multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
+
     def process_flows(self):
         """ 
         Process all the flwos in the DB 
@@ -200,16 +233,26 @@ class Module(Module, multiprocessing.Process):
             # because this retraining happens in batches
             flows = __database__.get_all_flows()
 
-            # Load some normal and malware flows and labels, so training can have at
-            # least 1 flow of each kind (required)
-            # These are fake flows that do not get into Slips, 
-            # they are only for the training process
-            flows.append({'ts':1594417039.029793 , 'dur': '1.9424750804901123', 'saddr': '10.7.10.101', 'sport': '49733', 'daddr': '40.70.224.145', 'dport': '443', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 84, 'allbytes': 42764, 'spkts': 37, 'sbytes': 25517, 'appproto': 'ssl', 'label': 'malicious', 'module_labels': {'flowalerts-long-connection': 'malicious'}})
-            flows.append({'ts':1382355032.706468 , 'dur': '10.896695', 'saddr': '147.32.83.52', 'sport': '47956', 'daddr': '80.242.138.72', 'dport': '80', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 67, 'allbytes': 67696, 'spkts': 1, 'sbytes': 100, 'appproto': 'http', 'label': 'normal', 'module_labels': {'flowalerts-long-connection': 'normal'}})
+            # Check how many different labels are in the DB
+            # We need both normal and malware
+            labels = __database__.get_labels()
+            if len(labels) == 1:
+                # Only 1 label has flows
+                # There are not enough different labels, so insert two flows
+                # that are fake but representative of a normal and malware flow
+                # they are only for the training process
+                # At least 1 flow of each label is required
+                #self.print(f'Amount of labeled flows: {labels}', 0, 1)
+                flows.append({'ts':1594417039.029793 , 'dur': '1.9424750804901123', 'saddr': '10.7.10.101', 'sport': '49733', 'daddr': '40.70.224.145', 'dport': '443', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 84, 'allbytes': 42764, 'spkts': 37, 'sbytes': 25517, 'appproto': 'ssl', 'label': 'Malware', 'module_labels': {'flowalerts-long-connection': 'Malware'}})
+                flows.append({'ts':1382355032.706468 , 'dur': '10.896695', 'saddr': '147.32.83.52', 'sport': '47956', 'daddr': '80.242.138.72', 'dport': '80', 'proto': 'tcp', 'origstate': 'SRPA_SPA', 'state': 'Established', 'pkts': 67, 'allbytes': 67696, 'spkts': 1, 'sbytes': 100, 'appproto': 'http', 'label': 'Normal', 'module_labels': {'flowalerts-long-connection': 'Normal'}})
+                # If there are enough flows, we dont insert them anymore
 
+            # Convert to pandas df
             df_flows = pd.DataFrame(flows)
+
             # Process features
             df_flows = self.process_features(df_flows)
+
             # Update the flow to the processed version
             self.flows = df_flows
         except Exception as inst:
@@ -248,12 +291,9 @@ class Module(Module, multiprocessing.Process):
             # Drop the label predictions of the other modules
             X_flow = self.flow.drop('module_labels', axis=1)
             # Scale the flow
-            # self.print('Scale')
-            # X_flow = self.sc.transform(X_flow)
-            # self.print(X_flow)
+            X_flow = self.scaler.transform(X_flow)
             pred = self.clf.predict(X_flow)
             return pred
-            #return [1.0]
         except Exception as inst:
             # Stop the timer
             self.print('Error in detect()')
@@ -266,34 +306,42 @@ class Module(Module, multiprocessing.Process):
         """
         Store the trained model on disk
         """
-        self.print(f'Storing the trained model on disk.', 0, 3)
+        self.print(f'Storing the trained model and scaler on disk.', 0, 2)
         f = open('./modules/flowmldetection/model.bin', 'wb')
         data = pickle.dumps(self.clf)
         f.write(data)
         f.close()
+        g = open('./modules/flowmldetection/scaler.bin', 'wb')
+        data = pickle.dumps(self.scaler)
+        g.write(data)
+        g.close()
 
     def read_model(self):
         """
         Read the trained model from disk
         """
         try:
-            #self.print(f'Reading the trained model from disk.')
+            self.print(f'Reading the trained model from disk.', 0, 2)
             f = open('./modules/flowmldetection/model.bin', 'rb')
             self.clf = pickle.load(f)
             f.close()
+            self.print(f'Reading the trained scaler from disk.', 0, 2)
+            g = open('./modules/flowmldetection/scaler.bin', 'rb')
+            self.scaler = pickle.load(g)
+            g.close()
         except FileNotFoundError:
             # If there is no model, create one empty
-            #self.clf = RandomForestClassifier(n_estimators=30, criterion='entropy', warm_start=True)
-            self.clf = SGDClassifier(warm_start=True)
+            self.print('There was no model. Creating a new empty model.', 0, 2)
+            self.clf = SGDClassifier(warm_start=True, loss='hinge', penalty="l1")
         except EOFError:
-            self.print('Error reading model from disk')
-            self.clf = SGDClassifier(warm_start=True)
+            self.print('Error reading model from disk. Creating a new empty model.', 0, 2)
+            self.clf = SGDClassifier(warm_start=True, loss='hinge', penalty="l1")
 
     def set_evidence_malicious_flow(self, saddr, sport, daddr, dport, profileid, twid, uid):
         """
         Set the evidence that a flow was detected as malicious
         """
-        confidence = 0.2
+        confidence = 0.6
         threat_level = 30
         type_detection  = 'flow'
         detection_info = str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
@@ -332,41 +380,48 @@ class Module(Module, multiprocessing.Process):
                         flow = json.loads(flow)
                         # Convert the common fields to something that can
                         # be interpreted
+                        # Get the uid which is the key
                         uid = next(iter(flow))
                         self.flow_dict = json.loads(flow[uid])
 
                         if self.mode == 'train':
-                            # We are training.
-                            # Then check if we have already more than 1 label in the whole data
+                            # We are training
+
+                            # Is the amount in the DB of labels enough to retrain?
+                            # Use labeled flows
                             labels = __database__.get_labels()
                             sum_labeled_flows = sum([i[1] for i in labels])
-                            #self.print(f'Sum labeled flows: {sum_labeled_flows}, Min Labels to retrain:{self.minimum_lables_to_retrain}')
-                            # Is the amount in the DB of labels enough to retrain?
                             if sum_labeled_flows >= self.minimum_lables_to_retrain and sum_labeled_flows%self.minimum_lables_to_retrain == 1:
                                 # We get here every 'self.minimum_lables_to_retrain' amount of labels
                                 # So for example we retrain every 100 labels and only when we have at least 100 labels
-                                self.print(f'Training the model with the last group of flows and labels {labels}.')
+                                self.print(f'Training the model with the last group of flows and labels. Total flows: {sum_labeled_flows}.')
                                 # Process all flows in the DB and make them ready for pandas
                                 self.process_flows()
                                 # Train an algorithm
                                 self.train()
                         elif self.mode == 'test':
-                            # We are testing, which means using
-                            # the model to detect
-                            if not 'igmp' in self.flow_dict['proto'] and not 'icmp' in self.flow_dict['proto'] and not 'arp' in self.flow_dict['proto'].lower():
-                                self.process_flow()
-                                # Predict
-                                pred = self.detect()
-                                label = self.flow_dict["label"]
-                                # Only print when the label and the predicion are dissimilar and the label is not unknown
-                                if pred[0] == 'malicious':
-                                    # Generate an alert
-                                    self.set_evidence_malicious_flow(self.flow_dict['saddr'], self.flow_dict['sport'], self.flow_dict['daddr'], self.flow_dict['dport'], profileid, twid, uid)
-                                    self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
-                                elif label != 'unknown' and label != pred[0]:
-                                    # If the user specified a label in test mode, and the label
-                                    # is diff from the prediction, print in debug mode
-                                    self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
+                            # We are testing, which means using the model to detect
+                            self.process_flow()
+                            
+                            # After processing the flow, it may happen that we delete icmp/arp/etc
+                            # so the dataframe can be empty
+                            if self.flow.empty:
+                                continue
+
+                            # Predict
+                            pred = self.detect()
+                            label = self.flow_dict["label"]
+                            
+                            # Report
+                            if label and label != 'unknown' and label != pred[0]:
+                                # If the user specified a label in test mode, and the label
+                                # is diff from the prediction, print in debug mode
+                                self.print(f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
+                            if pred[0] == 'Malware':
+                                # Generate an alert
+                                self.set_evidence_malicious_flow(self.flow_dict['saddr'], self.flow_dict['sport'], self.flow_dict['daddr'], self.flow_dict['dport'], profileid, twid, uid)
+                                self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
+
                 except Exception as inst:
                     # Stop the timer
                     self.print('Error in run()')
@@ -375,7 +430,9 @@ class Module(Module, multiprocessing.Process):
                     return True
 
         except KeyboardInterrupt:
+            self.print('Storing the model on disk before stopping')
             self.store_model()
+            self.print('Model stored')
             return True
         except Exception as inst:
             # Stop the timer

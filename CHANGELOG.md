@@ -2,6 +2,8 @@
     - Slips
 		- Detect PING sweep.
 		- Support giving each threat intelligence file a confidence from 0 to 1.
+		- Slips allows you to re-train the machine learning model for flows with your own traffic. You can extend the current model, or start from scratch.
+
 - 0.8
     - Slips
         - Compute the JA3 hash for all TLS connections using a Zeek script
