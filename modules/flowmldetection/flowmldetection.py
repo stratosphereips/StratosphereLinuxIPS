@@ -340,7 +340,7 @@ class Module(Module, multiprocessing.Process):
         """
         Set the evidence that a flow was detected as malicious
         """
-        confidence = 0.2
+        confidence = 0.6
         threat_level = 30
         type_detection  = 'flow'
         detection_info = str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
@@ -399,22 +399,23 @@ class Module(Module, multiprocessing.Process):
                                 # Train an algorithm
                                 self.train()
                         elif self.mode == 'test':
-                            # We are testing, which means using
-                            # the model to detect
-                            if not 'igmp' in self.flow_dict['proto'] and not 'icmp' in self.flow_dict['proto'] and not 'arp' in self.flow_dict['proto'].lower():
-                                self.process_flow()
-                                # Predict
-                                pred = self.detect()
-                                label = self.flow_dict["label"]
-                                # Only print when the label and the predicion are dissimilar and the label is not unknown
-                                if pred[0] == 'malicious':
-                                    # Generate an alert
-                                    self.set_evidence_malicious_flow(self.flow_dict['saddr'], self.flow_dict['sport'], self.flow_dict['daddr'], self.flow_dict['dport'], profileid, twid, uid)
-                                    self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
-                                elif label != 'unknown' and label != pred[0]:
-                                    # If the user specified a label in test mode, and the label
-                                    # is diff from the prediction, print in debug mode
-                                    self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
+                            # We are testing, which means using the model to detect
+                            self.process_flow()
+
+                            # Predict
+                            pred = self.detect()
+                            label = self.flow_dict["label"]
+                            
+                            # Report
+                            if label and label != 'unknown' and label != pred[0]:
+                                # If the user specified a label in test mode, and the label
+                                # is diff from the prediction, print in debug mode
+                                self.print(f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
+                            if pred[0] == 'Malware':
+                                # Generate an alert
+                                self.set_evidence_malicious_flow(self.flow_dict['saddr'], self.flow_dict['sport'], self.flow_dict['daddr'], self.flow_dict['dport'], profileid, twid, uid)
+                                self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
+
                 except Exception as inst:
                     # Stop the timer
                     self.print('Error in run()')
