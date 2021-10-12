@@ -50,7 +50,7 @@ RUN pip3 install pytest-xdist
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-RUN cd StratosphereLinuxIPS && git checkout develop && chmod 774 slips.py
+RUN cd StratosphereLinuxIPS && chmod 774 slips.py
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_10.x  | bash -
