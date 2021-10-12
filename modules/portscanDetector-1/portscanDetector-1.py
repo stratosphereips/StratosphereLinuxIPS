@@ -65,32 +65,6 @@ class PortScanProcess(Module, multiprocessing.Process):
             data = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
             # For each port, see if the amount is over the threshold
             for dport in data.keys():
-                """
-                ###
-                # PortScan Type 3. Direction OUT
-                # Considering all the flows in this TW, for all the Dst IP, get the sum of all the pkts send to each dst port TCP No tEstablished
-                totalpkts = int(data[dport]['totalpkt'])
-                # If for each port, more than X amount of packets were sent, report an evidence
-                if totalpkts > 3:
-                    # Type of evidence
-                    type_evidence = 'PortScanType3'
-                    # Key
-                    key = 'dport' + ':' + dport + ':' + type_evidence
-                    # Description
-                    description = 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts)
-                    # Threat level
-                    threat_level = 50
-                    # Confidence. By counting how much we are over the threshold. 
-                    if totalpkts >= 10:
-                        # 10 pkts or more, receive the max confidence
-                        confidence = 1
-                    else:
-                        # Between 3 and 10 pkts compute a kind of linear grow
-                        confidence = totalpkts / 10.0
-                    __database__.setEvidence(profileid, twid, type_evidence, threat_level, confidence)
-                    self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
-
-                """
                 ### PortScan Type 2. Direction OUT
                 dstips = data[dport]['dstips']
                 # Remove dstips that have DNS resolution already
@@ -250,6 +224,33 @@ class PortScanProcess(Module, multiprocessing.Process):
             # cache the amount of dips to make sure we don't detect
             # the same amount of dips twice.
             self.cache_det_thresholds[cache_key] = scanned_dstips
+
+    def check_portscan_type3(self):
+     """
+        ###
+        # PortScan Type 3. Direction OUT
+        # Considering all the flows in this TW, for all the Dst IP, get the sum of all the pkts send to each dst port TCP No tEstablished
+        totalpkts = int(data[dport]['totalpkt'])
+        # If for each port, more than X amount of packets were sent, report an evidence
+        if totalpkts > 3:
+            # Type of evidence
+            type_evidence = 'PortScanType3'
+            # Key
+            key = 'dport' + ':' + dport + ':' + type_evidence
+            # Description
+            description = 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts)
+            # Threat level
+            threat_level = 50
+            # Confidence. By counting how much we are over the threshold.
+            if totalpkts >= 10:
+                # 10 pkts or more, receive the max confidence
+                confidence = 1
+            else:
+                # Between 3 and 10 pkts compute a kind of linear grow
+                confidence = totalpkts / 10.0
+            __database__.setEvidence(profileid, twid, type_evidence, threat_level, confidence)
+            self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
+        """
 
     def run(self):
         while True:
