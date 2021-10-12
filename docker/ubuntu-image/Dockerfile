@@ -1,5 +1,8 @@
 FROM ubuntu
 
+# To avoid user interaction when installing libraries
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
@@ -17,35 +20,31 @@ RUN apt update && apt install -y --no-install-recommends \
     zeek \
     python3-pip \
     python3-certifi \
+    file \
+    lsof \
+    net-tools \
+    iproute2 \
+    iptables \
+    psutils \
+    python3-tzlocal \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
 RUN pip3 install --upgrade pip
 
 # Install redis using PIP3
-RUN pip3 install wheel
-RUN pip3 install redis
-RUN pip3 install setuptools
-RUN pip3 install validators
-RUN pip3 install colorama
-RUN pip3 install maxminddb
-RUN pip3 install pandas
-RUN pip3 install sklearn
-RUN pip3 install urllib3
-RUN pip3 install scipy
-RUN pip3 install watchdog
-RUN pip3 install slackclient
-RUN pip3 install stix2
-RUN pip3 install cabby
+RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
+RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby
+RUN pip3 install ipwhois pytest pytest-xdist
 RUN pip3 install --ignore-installed six
-RUN pip3 install --upgrade tensorflow==2.1.0
+RUN pip3 install --upgrade tensorflow==2.4.1
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-RUN cd StratosphereLinuxIPS && git checkout develop && chmod 774 slips.py
+RUN cd StratosphereLinuxIPS && chmod 774 slips.py
 
 # For Kalipso:
-RUN curl -sL https://deb.nodesource.com/setup_10.x  | bash -
+RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
 RUN npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 

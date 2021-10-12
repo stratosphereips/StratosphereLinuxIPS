@@ -1,7 +1,7 @@
 .. image:: /images/slips_logo.png
     :align: center
 
-Slips v0.7.3
+Slips v0.8
 ============================
 
 The tool is available on GitHub `here <https://github.com/stratosphereips/StratosphereLinuxIPS/tree/master>`_.
@@ -19,6 +19,11 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Architecture**. Internal architecture of Slips (profiles, timewindows), the use of Zeek and connection to Redis. See :doc:`Architecture <architecture>`.
   
+- **Training with your own data**. Explanation on how to re-train the machine learning system of Slips with your own traffic (normal or malicious).See :doc:`Training <training>`. 
+
+- **Thread Intelligence**. Explanation on how Slips works with the threat intelligence feeds.See :doc:`Threat Intelligence <threatintelligence>`. 
+
+- **Contributing**. Explanation how to contribute to Slips, and instructions how to implement new detection module in Slips. See :doc:`Contributing <contributing>`. 
 
 
 
@@ -32,3 +37,6 @@ This documentation gives an overview how Slips works, how to use it and how to h
    usage
    detection_modules
    architecture
+   contributing
+   training
+   threatintelligence

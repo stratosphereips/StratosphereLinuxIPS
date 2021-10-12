@@ -1,9 +1,10 @@
 # Must imports
 import configparser
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
+import sys
 
 # Your imports
 import json
@@ -12,11 +13,11 @@ import certifi
 import time
 import ipaddress
 import threading
-
+import validators
 
 class Module(Module, multiprocessing.Process):
-    name = 'VirusTotal'
-    description = 'IP address and domain lookup on VirusTotal'
+    name = 'virustotal'
+    description = 'IP, domain and file hash lookup on VirusTotal'
     authors = ['Dita Hollmannova, Kamila Babayeva']
 
     def __init__(self, outputqueue, config, testing=False):
@@ -36,8 +37,8 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_dns_flow')
-        # VT api URL for querying IPs
-        self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
+        self.c3 = __database__.subscribe('new_url')
+        self.c4 = __database__.subscribe('new_downloaded_file')
         # Read the conf file
         self.__read_configuration()
         self.key = None
@@ -54,19 +55,10 @@ class Module(Module, multiprocessing.Process):
         # Pool manager to make HTTP requests with urllib3
         # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            #??
-            self.timeout = None
-        # start the queue thread
-        self.api_calls_thread = threading.Thread(target=self.API_calls_thread,
-                         daemon=True)
+        self.timeout = None
+        self.counter = 0
+        # create the queue thread
+        self.api_calls_thread = threading.Thread(target=self.API_calls_thread, daemon=True)
 
     def __read_configuration(self) -> str:
         """ Read the configuration file for what we need """
@@ -88,17 +80,41 @@ class Module(Module, multiprocessing.Process):
         """
         Function to use to print text using the outputqueue of slips.
         Slips then decides how, when and where to print this text by taking all the processes into account
-
-        Input
-         verbose: is the minimum verbosity level required for this text to be printed
-         debug: is the minimum debugging level required for this text to be printed
-         text: text to print. Can include format like 'Test {}'.format('here')
-
-        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        levels = f'{verbose}{debug}'
+        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+
+    def count_positives(self, response: dict, response_key: str, positive_key, total_key):
+        """
+        Count positive checks and total checks in the response, for the given category. To compute ratio of downloaded
+        samples, sum results for both detected and undetected dicts: "undetected_downloaded_samples" and
+        "detected_downloaded_samples".
+        :param response: json dictionary with response data
+        :param response_key: category to count, eg "undetected_downloaded_samples"
+        :param positive_key: key to use inside of the category for successful detections (usually its "positives")
+        :param total_key: key to use inside of the category to sum all checks (usually its "total")
+        :return: number of positive tests, number of total tests run
+        """
+        detections = 0
+        total = 0
+        if response_key in response.keys():
+            for item in response[response_key]:
+                detections += item[positive_key]
+                total += item[total_key]
+        return detections, total
+
 
     def set_vt_data_in_IPInfo(self, ip, cached_data):
         """
@@ -107,20 +123,52 @@ class Module(Module, multiprocessing.Process):
         It also set passive dns retrieved from VirusTotal.
         """
         vt_scores, passive_dns, as_owner = self.get_ip_vt_data(ip)
+        ts = time.time()
         vtdata = {"URL": vt_scores[0],
                   "down_file": vt_scores[1],
                   "ref_file": vt_scores[2],
                   "com_file": vt_scores[3],
-                  "timestamp": time.time()}
+                  "timestamp": ts}
         data = {}
         data["VirusTotal"] = vtdata
 
         # Add asn if it is unknown or not in the IP info
-        if cached_data and ('asn' not in cached_data or cached_data['asn'] == 'Unknown'):
-            data['asn'] = as_owner
+        if cached_data and ('asn' not in cached_data or cached_data['asn']['asnorg'] == 'Unknown'):
+            data['asn'] = {'asnorg': as_owner,
+                           'timestamp': ts}
 
         __database__.setInfoForIPs(ip, data)
         __database__.set_passive_dns(ip, passive_dns)
+
+    def get_url_vt_data(self,url):
+        """
+        Function to perform API call to VirusTotal and return the score for the URL.
+        Response is cached in a dictionary.
+        :param url: url to check
+        :return: URL ratio
+        """
+        response = self.api_query_(url)
+        # Can't get url report
+        if type(response)== dict and response.get('response_code','') is -1:
+            self.print(f"VT API returned an Error - {response['verbose_msg']}")
+            return 0
+        try:
+            score = int(response['positives']) / int(response['total'])
+        except:
+            score = 0
+        self.counter += 1
+        return score
+
+    def set_url_data_in_URLInfo(self,url,cached_data):
+        """
+        Function to set VirusTotal data of the URL in the URLInfo.
+        """
+        score = self.get_url_vt_data(url)
+        # Score of this url didn't change
+        vtdata = {"URL" : score,
+                  "timestamp": time.time()}
+        data = {"VirusTotal" : vtdata}
+        __database__.setInfoForURLs(url, data)
 
     def set_domain_data_in_DomainInfo(self, domain, cached_data):
         """
@@ -141,9 +189,43 @@ class Module(Module, multiprocessing.Process):
             data['asn'] = as_owner
         __database__.setInfoForDomains(domain, data)
 
+    def scan_file(self, file_info: dict):
+        """
+        Function to scan the md5 of the file with vt and set evidence if malicious
+        """
+        uid = file_info['uid']
+        daddr = file_info['daddr']
+        saddr = file_info['saddr']
+        size = file_info['size']
+        profileid = file_info['profileid']
+        twid = file_info['twid']
+        md5 = file_info['md5']
+        ts = file_info['ts']
+
+        response = self.api_query_(md5)
+
+        positives = int(response.get('positives','0'))
+        total = response.get('total',0)
+        score = f'{positives}/{total}'
+        self.counter += 1
+        if positives >= 3:
+            # consider it malicious and alert
+            type_detection = 'file'
+            detection_info = md5
+            type_evidence = "MaliciousDownloadedFile"
+            threat_level = 80
+            confidence = 1
+            description =  f'Malicious downloaded file {md5} size: {size} from IP: {saddr} Score: {score}'
+            if not twid:
+                twid = ''
+            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                     threat_level, confidence, description, ts , profileid=profileid, twid=twid, uid=uid)
+            return 'malicious'
+        return 'benign'
+
     def API_calls_thread(self):
         """
-        This thread starts if there's an API calls queue,
+         This thread starts if there's an API calls queue,
          it operates every minute, and executes 4 api calls
          from the queue then sleeps again.
         """
@@ -155,21 +237,73 @@ class Module(Module, multiprocessing.Process):
             time.sleep(60)
             while self.api_call_queue:
                 # get the first element in the queue
-                ip = self.api_call_queue.pop(0)
-                # try to query. the ip will be added back to the queue if the api call isn't successfull
-                self.api_query_(ip)
+                ioc = self.api_call_queue.pop(0)
+                if type(ioc) == dict:
+                    # this is a file
+                    self.scan_file(self.file_info)
+                    continue
+
+                ioc_type = self.get_ioc_type(ioc)
+                if ioc_type is 'ip':
+                    cached_data = __database__.getIPData(ioc)
+                    self.set_vt_data_in_IPInfo(ioc,cached_data)
+                    # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
+                    ip_addr = ipaddress.ip_address(ioc)
+                    # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
+                    # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
+                    if (not cached_data or 'VirusTotal' not in cached_data) and not ip_addr.is_multicast:
+                        self.set_vt_data_in_IPInfo(ioc, cached_data)
+
+                elif ioc_type is 'domain':
+                    cached_data = __database__.getDomainData(ioc)
+                    if not cached_data or 'VirusTotal' not in cached_data:
+                        self.set_domain_data_in_DomainInfo(ioc, cached_data)
+
+                elif ioc_type is 'url':
+                    cached_data = __database__.getURLData(ioc)
+                    # If VT data of this domain is not in the DomainInfo, ask VT
+                    # If 'Virustotal' key is not in the DomainInfo
+                    if not cached_data or 'VirusTotal' not in cached_data:
+                        # cached data is either False or {}
+                        self.set_url_data_in_URLInfo(ioc, cached_data)
+
+
+    def get_file_score(self, md5):
+        """ returns the vt scores for the specified md5 """
+        vt_scores, passive_dns, as_owner = self.get_vt_data_of_file(md5)
+        ts = time.time()
+        data = {}
+        data["VirusTotal"] = {"md5": vt_scores[0],
+                  "down_file": vt_scores[1],
+                  "ref_file": vt_scores[2],
+                  "com_file": vt_scores[3],
+                  "timestamp": ts}
+
+        __database__.setInfoForFile(md5, data)
+        pass
 
     def run(self):
-        if self.key is None:
-            # We don't have a virustotal key
-            return
         try:
+            if self.key is None:
+                # We don't have a virustotal key
+                return
             self.api_calls_thread.start()
-            # Main loop function
-            while True:
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
+
+        # Main loop function
+        while True:
+            try:
                 message_c1 = self.c1.get_message(timeout=0.01)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message_c1 and message_c1['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message_c1 and message_c1['channel'] == 'new_flow' and message_c1["type"] == "message":
                     data = message_c1["data"]
@@ -200,6 +334,8 @@ class Module(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 message_c2 = self.c2.get_message(timeout=0.01)
                 if message_c2 and message_c2['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
                     return True
                 if message_c2 and message_c2['channel'] == 'new_dns_flow' and message_c2["type"] == "message":
                     data = message_c2["data"]
@@ -208,28 +344,70 @@ class Module(Module, multiprocessing.Process):
                         data = json.loads(data)
                         profileid = data['profileid']
                         twid = data['twid']
+                        uid = data['uid']
                         flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-                        domain = flow_data['query']
+
+                        # store the dns answers in our db to check for unused queries later in flowalerts.py
+                        domain = flow_data.get('query',False)
+                        answers = flow_data.get('answers', False)
+                        ts = flow_data.get('stime', '')
+                        if domain and answers:
+                            __database__.store_dns_answers(domain, answers, f'{profileid}_{twid}' ,ts, uid)
+
                         cached_data = __database__.getDomainData(domain)
                         # If VT data of this domain is not in the DomainInfo, ask VT
                         # If 'Virustotal' key is not in the DomainInfo
-                        if not cached_data or 'VirusTotal' not in cached_data:
+                        if domain and (not cached_data or 'VirusTotal' not in cached_data):
                             self.set_domain_data_in_DomainInfo(domain, cached_data)
-
-                        elif cached_data and 'VirusTotal' in cached_data:
+                        elif domain and cached_data and 'VirusTotal' in cached_data:
                             # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                             if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                                 self.set_domain_data_in_DomainInfo(domain, cached_data)
 
+                message_c3 = self.c3.get_message(timeout=0.01)
+                if message_c3 and message_c3['data'] == 'stop_process':
+                    return True
+                if message_c3 and message_c3['channel'] == 'new_url' and message_c3["type"] == "message":
+                    data = message_c3["data"]
+                    # The first message comes with data=1
+                    if type(data) == str:
+                        data = json.loads(data)
+                        profileid = data['profileid']
+                        twid = data['twid']
+                        flow_data = json.loads(data['flow'])
+                        url = flow_data['host'] + flow_data.get('uri','')
+                        cached_data = __database__.getURLData(url)
+                        # If VT data of this domain is not in the DomainInfo, ask VT
+                        # If 'Virustotal' key is not in the DomainInfo
+                        if not cached_data or 'VirusTotal' not in cached_data:
+                            # cached data is either False or {}
+                            self.set_url_data_in_URLInfo(url,cached_data)
+                        elif cached_data and 'VirusTotal' in cached_data:
+                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                            if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
+                                self.set_url_data_in_URLInfo(url, cached_data)
 
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            self.print('Problem on the run()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+
+                message_c4 = self.c4.get_message(timeout=0.01)
+                if message_c4 and message_c4['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
+                    return True
+                if message_c4 and message_c4['channel'] == 'new_downloaded_file' and message_c4["type"] == "message":
+                    self.file_info = json.loads(message_c4['data'])
+                    file_info = self.file_info.copy()
+                    self.scan_file(file_info)
+
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
 
     def get_as_owner(self, response):
         """
@@ -264,7 +442,7 @@ class Module(Module, multiprocessing.Process):
         try:
             addr = ipaddress.ip_address(ip)
             if addr.is_private:
-                self.print("[" + ip + "] is private, skipping", 5, 3)
+                self.print("[" + ip + "] is private, skipping", 0, 2)
                 scores = 0,0,0,0
                 return scores, '', ''
 
@@ -272,11 +450,12 @@ class Module(Module, multiprocessing.Process):
             response = self.api_query_(ip)
             as_owner = self.get_as_owner(response)
             passive_dns = self.get_passive_dns(response)
-            scores = interpret_response(response)
+            scores = self.interpret_response(response)
             self.counter += 1
             return scores, passive_dns, as_owner
         except Exception as inst:
-            self.print('Problem in the get_ip_vt_data()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem in the get_ip_vt_data() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -288,29 +467,72 @@ class Module(Module, multiprocessing.Process):
         :param domain: Domain address to check
         :return: 4-tuple of floats: URL ratio, downloaded file ratio, referrer file ratio, communicating file ratio
         """
-
+        if 'arpa' in domain or '.local' in domain:
+            # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
+            return (0, 0, 0, 0), ''
         try:
             # for unknown address, do the query
             response = self.api_query_(domain)
             as_owner = self.get_as_owner(response)
-            scores = interpret_response(response)
+            scores = self.interpret_response(response)
             self.counter += 1
             return scores, as_owner
         except Exception as inst:
-            self.print('Problem in the get_domain_vt_data()', 0, 1)
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem in the get_domain_vt_data() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            return False
 
-    def api_query_(self, ip, save_data=False):
+    def get_ioc_type(self, ioc):
+        """ Check the type of ioc, returns url, ip, domain or hash type"""
+        try:
+            # Is IPv4
+            ip_address = ipaddress.IPv4Address(ioc)
+            return 'ip'
+        except ipaddress.AddressValueError:
+            # Is it ipv6?
+            try:
+                ip_address = ipaddress.IPv6Address(ioc)
+                return 'ip'
+            except ipaddress.AddressValueError:
+                # It does not look as IP address.
+                if validators.domain(ioc):
+                    return 'domain'
+                elif validators.url(ioc):
+                    return 'url'
+                elif len(ioc)==32:
+                    return 'md5'
+                else:
+                    # 192.168.1.1/wpad.dat combinations like this are treated as a url
+                    return 'url'
+
+    def api_query_(self, ioc, save_data=False):
         """
         Create request and perform API call
-        :param ip: IP address to check
+        :param ioc: IP address, domain, or URL to check
         :param save_data: False by default. Set to True to save each request json in a file named ip.txt
         :return: Response object
         """
-
-        params = {'apikey': self.key, 'ip': ip}
+        params = {'apikey': self.key}
+        ioc_type = self.get_ioc_type(ioc)
+        if ioc_type is 'ip':
+            # VT api URL for querying IPs
+            self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
+            params.update({'ip': ioc})
+        elif ioc_type is 'domain':
+             # VT api URL for querying domains
+            self.url = 'https://www.virustotal.com/vtapi/v2/domain/report'
+            params.update({'domain': ioc})
+        elif ioc_type is 'url':
+             # VT api URL for querying URLS
+            self.url = 'https://www.virustotal.com/vtapi/v2/url/report'
+            params.update({'resource': ioc})
+        elif ioc_type is 'md5':
+            # VT api URL for querying files
+            self.url = 'https://www.virustotal.com/vtapi/v2/file/report'
+            params.update({'resource': ioc})
 
         # wait for network
         while True:
@@ -326,7 +548,10 @@ class Module(Module, multiprocessing.Process):
             # than allowed. You have exceeded one of your quotas (minute, daily or monthly).
             if response.status == 204:
                 # Add to the queue of api calls in case of api limit reached.
-                self.api_call_queue.append(ip)
+                if ioc_type == 'md5':
+                    # we need to add the entire dict to the queue because we'll be using it to setEvidence later
+                    self.api_call_queue.append(self.file_info)
+                else: self.api_call_queue.append(ioc)
             # 403 means you don't have enough privileges to make the request or wrong API key
             elif response.status == 403:
                 # don't add to the api call queue because the user will have to restart slips anyway
@@ -344,125 +569,109 @@ class Module(Module, multiprocessing.Process):
 
             # report that API limit is reached, wait one minute and try again
             self.print("Status code is " + str(response.status) + " at " + str(time.asctime()) + ", query id: " + str(
-                self.counter), verbose=5)
+                self.counter), 0,2)
             # return empty dict because api call isn't successful
             data = {}
         else:
             # query successful
             data = json.loads(response.data)
+            if type(data) == list:
+                # this is an empty list, vt dometimes returns it with status code 200
+                data = {}
             # optionally, save data to file
-            if save_data:
-                filename = ip + ".txt"
+            if save_data and ioc_type is 'ip':
+                filename = ioc + ".txt"
                 if filename:
                     with open(filename, 'w') as f:
                         json.dump(data, f)
 
         return data
 
+    def interpret_response(self, response: dict):
+        """
+        Read the dictionary and compute ratio for each category.
 
-def interpret_response(response: dict):
-    """
-    Read the dictionary and compute ratio for each category.
-    
-    The ratio is computed as follows:
-    For each IP, VT API returns data about four categories: URLs that resolved to the IP, samples (files) downloaded
-    from the IP, samples (files) that contain the given IP, and samples (programs) that contact the IP. The structure of
-    the data is same for all four categories.
-    
-    For each sample in a category, VT asks the antivirus engines and counts how many of them find the sample malicious.
-    For example, if VT asked 27 engines and four of them found the sample malicious, the sample would be given score
-    4/27, where 4 is the number of successful detections, and 27 is the total number of engines used.
-    
-    The response has two fields for each category. These are the "detected_<category>" field, which contains list of
-    samples that were found malicious by at least one engine, and the "undetected_<category>" field, which contains all 
-    the samples that none of the engines found malicious (all samples in undetected have score 0/x). This means that the
-    response has 8 fields with scores - two (detected and undetected) for each of the four categories. Some fields may
-    be missing if data for the category is not present.
-    
-    To compute the ratio for a category, scores across the two fields are summed together. A global number of detections
-    is computed (sum of all positive detections across all samples in the detected field) and the global number of tests
-    is computed (sum of all "total" values in both detected and undetected sample lists). Now we have detections for a 
-    category and total for a category. The ratio for a category is detections/total. If no tests were run (the field is
-    empty and total=0), this would be undefined, so the ratio is set to 0.
-    
-    Ratio is computed separately for each category.
-    
-    :param response: dictionary (json data from the response)
-    :return: four floats: url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
-    """
+        The ratio is computed as follows:
+        For each IP, VT API returns data about four categories: URLs that resolved to the IP, samples (files) downloaded
+        from the IP, samples (files) that contain the given IP, and samples (programs) that contact the IP. The structure of
+        the data is same for all four categories.
 
-    # compute how many tests were run on the undetected samples. This will return tuple (0, total)
-    # the numbers 2 and 3 are keys to the dictionary, which is in this only case (probably by mistake) a list
-    undetected_url_score = count_positives(response, "undetected_urls", 2, 3)
+        For each sample in a category, VT asks the antivirus engines and counts how many of them find the sample malicious.
+        For example, if VT asked 27 engines and four of them found the sample malicious, the sample would be given score
+        4/27, where 4 is the number of successful detections, and 27 is the total number of engines used.
 
-    # compute how many tests were run on the detected samples. This will return tuple (detections, total)
-    detected_url_score = count_positives(response, "detected_urls", "positives", "total")
+        The response has two fields for each category. These are the "detected_<category>" field, which contains list of
+        samples that were found malicious by at least one engine, and the "undetected_<category>" field, which contains all
+        the samples that none of the engines found malicious (all samples in undetected have score 0/x). This means that the
+        response has 8 fields with scores - two (detected and undetected) for each of the four categories. Some fields may
+        be missing if data for the category is not present.
 
-    # sum the previous results, to get the sum of detections and sum of total tests
-    url_detections = undetected_url_score[0] + detected_url_score[0]
-    url_total = undetected_url_score[1] + detected_url_score[1]
+        To compute the ratio for a category, scores across the two fields are summed together. A global number of detections
+        is computed (sum of all positive detections across all samples in the detected field) and the global number of tests
+        is computed (sum of all "total" values in both detected and undetected sample lists). Now we have detections for a
+        category and total for a category. The ratio for a category is detections/total. If no tests were run (the field is
+        empty and total=0), this would be undefined, so the ratio is set to 0.
 
-    # compute the score for the category
-    if url_total:
-        url_ratio = url_detections/url_total
-    else:
-        url_ratio = 0
+        Ratio is computed separately for each category.
 
-    # following categories are computed in the same way
-    undetected_download_score = count_positives(response, "undetected_downloaded_samples", "positives", "total")
-    detected_download_score = count_positives(response, "detected_downloaded_samples", "positives", "total")
-    down_file_detections = undetected_download_score[0] + detected_download_score[0]
-    down_file_total = undetected_download_score[1] + detected_download_score[1]
+        :param response: dictionary (json data from the response)
+        :return: four floats: url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
+        """
 
-    if down_file_total:
-        down_file_ratio = down_file_detections/down_file_total
-    else:
-        down_file_ratio = 0
+        # compute how many tests were run on the undetected samples. This will return tuple (0, total)
+        # the numbers 2 and 3 are keys to the dictionary, which is in this only case (probably by mistake) a list
+        undetected_url_score = self.count_positives(response, "undetected_urls", 2, 3)
 
-    undetected_ref_score = count_positives(response, "undetected_referrer_samples", "positives", "total")
-    detected_ref_score = count_positives(response, "detected_referrer_samples", "positives", "total")
-    ref_file_detections = undetected_ref_score[0] + detected_ref_score[0]
-    ref_file_total = undetected_ref_score[1] + detected_ref_score[1]
+        # compute how many tests were run on the detected samples. This will return tuple (detections, total)
+        detected_url_score = self.count_positives(response, "detected_urls", "positives", "total")
 
-    if ref_file_total:
-        ref_file_ratio = ref_file_detections/ref_file_total
-    else:
-        ref_file_ratio = 0
+        # sum the previous results, to get the sum of detections and sum of total tests
+        url_detections = undetected_url_score[0] + detected_url_score[0]
+        url_total = undetected_url_score[1] + detected_url_score[1]
 
-    undetected_com_score = count_positives(response, "undetected_communicating_samples", "positives", "total")
-    detected_com_score = count_positives(response, "detected_communicating_samples", "positives", "total")
-    com_file_detections = undetected_com_score[0] + detected_com_score[0]
-    com_file_total = undetected_com_score[1] + detected_com_score[1]
+        # compute the score for the category
+        if url_total:
+            url_ratio = url_detections/url_total
+        else:
+            url_ratio = 0
 
-    if com_file_total:
-        com_file_ratio = com_file_detections/com_file_total
-    else:
-        com_file_ratio = 0
+        # following categories  are computed in the same way
+        undetected_download_score = self.count_positives(response, "undetected_downloaded_samples", "positives", "total")
+        detected_download_score = self.count_positives(response, "detected_downloaded_samples", "positives", "total")
+        down_file_detections = undetected_download_score[0] + detected_download_score[0]
+        down_file_total = undetected_download_score[1] + detected_download_score[1]
 
-    # Convert the values into percentages before returning
-    url_ratio = url_ratio * 100
-    down_file_ratio = down_file_ratio * 100
-    ref_file_ratio = ref_file_ratio * 100
-    com_file_ratio = com_file_ratio * 100
+        if down_file_total:
+            down_file_ratio = down_file_detections/down_file_total
+        else:
+            down_file_ratio = 0
 
-    return url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
+        undetected_ref_score = self.count_positives(response, "undetected_referrer_samples", "positives", "total")
+        detected_ref_score = self.count_positives(response, "detected_referrer_samples", "positives", "total")
+        ref_file_detections = undetected_ref_score[0] + detected_ref_score[0]
+        ref_file_total = undetected_ref_score[1] + detected_ref_score[1]
+
+        if ref_file_total:
+            ref_file_ratio = ref_file_detections/ref_file_total
+        else:
+            ref_file_ratio = 0
+
+        undetected_com_score = self.count_positives(response, "undetected_communicating_samples", "positives", "total")
+        detected_com_score = self.count_positives(response, "detected_communicating_samples", "positives", "total")
+        com_file_detections = undetected_com_score[0] + detected_com_score[0]
+        com_file_total = undetected_com_score[1] + detected_com_score[1]
+
+        if com_file_total:
+            com_file_ratio = com_file_detections/com_file_total
+        else:
+            com_file_ratio = 0
+
+        # Convert the values into percentages before returning
+        url_ratio = url_ratio * 100
+        down_file_ratio = down_file_ratio * 100
+        ref_file_ratio = ref_file_ratio * 100
+        com_file_ratio = com_file_ratio * 100
+
+        return url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
 
 
-def count_positives(response: dict, response_key: str, positive_key, total_key):
-    """
-    Count positive checks and total checks in the response, for the given category. To compute ratio of downloaded
-    samples, sum results for both detected and undetected dicts: "undetected_downloaded_samples" and
-    "detected_downloaded_samples".
-    :param response: json dictionary with response data
-    :param response_key: category to count, eg "undetected_downloaded_samples"
-    :param positive_key: key to use inside of the category for successful detections (usually its "positives")
-    :param total_key: key to use inside of the category to sum all checks (usually its "total")
-    :return: number of positive tests, number of total tests run
-    """
-    detections = 0
-    total = 0
-    if response_key in response.keys():
-        for item in response[response_key]:
-            detections += item[positive_key]
-            total += item[total_key]
-    return detections, total

@@ -1,5 +1,8 @@
 FROM tensorflow/tensorflow
 
+# To avoid user interaction when installing libraries
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
@@ -16,6 +19,11 @@ RUN apt update && apt install -y --no-install-recommends \
     zeek \
     python3-pip \
 	python3-certifi \
+	file \
+	lsof \
+	net-tools \
+	iptables \
+	iproute2 \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
@@ -35,12 +43,17 @@ RUN pip3 install scipy
 RUN pip3 install watchdog
 RUN pip3 install stix2
 RUN pip3 install cabby
+RUN pip3 install ipwhois
+RUN pip3 install pytest
 RUN pip3 install --ignore-installed six
 RUN pip3 install slackclient
+RUN pip3 install tzlocal
+RUN pip3 install psutil
+RUN pip3 install pytest-xdist
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-RUN cd StratosphereLinuxIPS && git checkout develop && chmod 774 slips.py
+RUN cd StratosphereLinuxIPS && chmod 774 slips.py
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_10.x  | bash -

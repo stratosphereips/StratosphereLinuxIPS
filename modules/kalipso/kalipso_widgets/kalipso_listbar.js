@@ -1,40 +1,31 @@
-/*
-This is the widget to display hotkeys and their letters in the bottom
-*/
 class ListBar{
 
-  constructor(grid, blessed, contrib, redis_database,screen ){
+    constructor(grid, blessed, contrib, redis_database,screen ){
         this.contrib = contrib
         this.screen = screen
         this.blessed = blessed
         this.grid = grid
         this.redis_database = redis_database
         this.widget = this.initWidget()
-  }
+    }
 
-  hide(){
-    /*
-    To hide the widget
-    */
+    /*Hide the widget on the screen*/
+    hide(){
     this.widget.hide()
-  }
-  show(){
-    /*
-    To show the widget
-    */
-    this.widget.show()
-  }
-  focus(){
-    /*
-    To focus on the widget
-    */
-    this.widget.focus()
-  }
+    }
 
-  initWidget(){
-    /*
-    Widget initialisation on the screen abd its parameters
-    */
+    /*Show the widget on the screen*/
+    show(){
+    this.widget.show()
+    }
+
+    /*Focus on the widget on the screen*/
+    focus(){
+    this.widget.focus()
+    }
+
+    /*Initialize widget on the screen with its parameters*/
+    initWidget(){
     return this.grid.set(5.7,0,0.4,6,this.blessed.listbar,{
           keys: false,
           style: 
@@ -46,62 +37,39 @@ class ListBar{
           autoCommandKeys: true,
           commands:
            {
-                'main':{
-                  keys : ' '},
+                'main':{ keys : ' '},
                 
-                'srcPortClient': {
-                  keys: ['e']
-                            },
+                'srcPortClient': { keys: ['e'] },
 
-                'dstIPsClient': {
-                  keys: ['d']
-                            },
+                'dstIPsClient': { keys: ['d'] },
 
-                'dstPortServer': {
-                  keys: ['r']
-                            },
+                'dstPortServer': { keys: ['r'] },
 
-                'dstPortsClient': {
-                  keys: ['p']
-                            },
+                'dstPortsClient': { keys: ['p'] },
 
-                'dstPortsClientIPs': {
-                  keys: ['t']
-                            },
+                'dstPortsClientIPs': { keys: ['t'] },
                 
-                'OutTuples': {
-                  keys: ['i']
-                            },
+                'OutTuples': { keys: ['i'] },
 
-                'InTuples': {
-                  keys: ['y']
-                            },
+                'InTuples': { keys: ['y'] },
 
-                'ProfileEvidences':{
-                  keys : ['z']
-                         },
+                'ProfileEvidences':{ keys : ['z'] },
            
-                'reload':{
-                  keys : ['o']
-                         },    
+                'reload':{ keys : ['o'] },
 
-                'quit hotkey':{
-                  keys : ['ESC']
-                         },  
+                'quit hotkey':{ keys : ['ESC'] },
 
-                'quit kalipso':{
-                  keys : ['q']
-                         },
+                'quit kalipso':{ keys : ['q'] },
 
-                 'help':{
-                  keys: ['h']
-                 }
-            }
-    })
-  }
-selectTab(key){
-  this.widget.selectTab(key)
-}
+                 'help':{ keys: ['h'] }
+           }
+        })
+    }
+
+    /*Select key in the widget 'Listbar'*/
+    selectTab(key){
+        this.widget.selectTab(key)
+    }
 }
 
 module.exports = ListBar
