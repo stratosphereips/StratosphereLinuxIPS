@@ -67,11 +67,17 @@ class PortScanProcess(Module, multiprocessing.Process):
             for dport in data.keys():
                 ### PortScan Type 2. Direction OUT
                 dstips = data[dport]['dstips']
+                # this is the list of dstips that have dns resolution, we will remove them from the dstips later
+                dstips_to_discard = []
                 # Remove dstips that have DNS resolution already
                 for dip in dstips:
                     dns_resolution = __database__.get_dns_resolution(dip)
                     if dns_resolution:
-                        dstips.remove(dip)
+                        dstips_to_discard.append(dip)
+                # remove the resolved dstips from dstips dict
+                for ip in dstips_to_discard:
+                    dstips.pop(ip)
+
                 amount_of_dips = len(dstips)
                 # If we contacted more than 3 dst IPs on this port with not established connections.. we have evidence
                 #self.print('Horizontal Portscan check. Amount of dips: {}. Threshold=3'.format(amount_of_dips), 3, 0)
