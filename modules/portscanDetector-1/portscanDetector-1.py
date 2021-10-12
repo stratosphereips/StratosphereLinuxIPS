@@ -254,6 +254,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             prev_amount_dstips = self.cache_det_thresholds[cache_key]
                         except KeyError:
                             prev_amount_dstips = 0
+
                         # every 5,10,15 .. etc. different dstips generate an alert
                         if scanned_dstips % 5 == 0 and prev_amount_dstips < scanned_dstips:
                             # Compute the confidence based on the packets sent
@@ -267,12 +268,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 confidence = pkts_sent / 10.0
 
                             threat_level = 25
-                            # type_detection is set to dstip even though the srcip is the one performing the scan
-                            # because setEvidence doesn't alert on the same key twice, so we have to send different keys to be able
-                            # to generate an alert every 5,10,15,.. scans
-                            type_detection = 'dstip'
-                            # this is the last dip scanned
-                            detection_info = dip
+                            type_detection  = 'srcip'
+                            detection_info = srcip
                             description = f'performing PING sweep. {scanned_dstips} different IPs scanned'
                             timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
                             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
