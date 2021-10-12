@@ -1,5 +1,8 @@
 FROM tensorflow/tensorflow
 
+# To avoid user interaction when installing libraries
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
