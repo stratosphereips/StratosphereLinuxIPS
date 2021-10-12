@@ -2,9 +2,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
 import datetime
-import time
-import json
-import platform
+import sys
 
 # Port Scan Detector Process
 class PortScanProcess(Module, multiprocessing.Process):
@@ -258,6 +256,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
             except Exception as inst:
-                self.print('Error in run() of {}'.format(inst), 0, 1)
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Error in run() line {exception_line}', 0, 1)
                 self.print(type(inst), 0, 1)
                 self.print(inst, 0, 1)

@@ -119,6 +119,7 @@ class Module(Module, multiprocessing.Process):
         """ Function to setEvidence when daddr is outside the local network """
 
         if '0.0.0.0' in saddr or '0.0.0.0' in daddr:
+            # this is the case of ARP probe, not an arp outside of local network, don't alert
             return False
 
         # get first  octet of the saddr
