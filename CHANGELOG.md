@@ -1,29 +1,27 @@
-- 0.8.1
-    - Slips
-		- Detect PING sweep.
-		- Alerts based on confidence
-        - Slips allows you to re-train the machine learning model for flows with your own traffic. You can extend the current model, or start from scratch.
 - 0.8
     - Slips
-        - Compute the JA3 hash for all TLS connections using a Zeek script
-        - Use JA3 whitelists as detection in the Threat Intelligence module
-		- Detect malicious downloaded files by searching for their MD5 hash on virustotal
-		- Detect SSH password guessing by using the Zeek log for this
-		- Detect connection to and from port 0/TCP and 0/UDP
-		- Detect Connection without DNS resolution and DNS resolutions without a following TCP or UDP connection
-		- Use whitelists of IPs, domains, and complete Organizations (using lists of ASN and domains and IPs) to ignore flows or to ignore alerts (organizations preconfigured for Google, Apple, Facebook, and Twitter)
-		- New module to detect data exfiltration by checking large transfers (commit ef88fc6)
-		- Detect connections to unkown TCP and UDP ports (ignore P2P traffic)
-		- New export alerts in suricata-style format
-		- Check suspicious user agents in HTTP (for now only 'httpsend', 'chm_msdn', 'pb')
-		- New ARP-scan detector module
-		- Be able to run multiple independent instances of slips in the same machine
-		- Save and load redis databases to disk as backup for later analysis
-		- Add unit tests in tests/ folder
-        - Use our own Zeek configuration file, so Slips does not collide with the local installation
-        - Use our own Zeek scripts folder, so Slips does not collide with the local installation
-        - Add port 57621/UDP as known spotify-p2p-communication
-        - Add support for the format of many TI feeds
+		- Detect PING sweep scan.
+		- The Threat Intelligence feeds are no assigned a confidence value by default (user can change), so you can establish how each list impact your detection.
+        - Slips now allows you to re-train the machine learning model for flows with your own traffic. You can extend the current model, or start from scratch.
+        - Compute the JA3 hash for all TLS connections using a Zeek script.
+        - Use JA3 whitelists as detection in the Threat Intelligence module.
+		- Detect malicious downloaded files by searching for their MD5 hash on virustotal.
+		- Detect SSH password guessing by using the Zeek log for this.
+		- Detect connection to and from port 0/TCP and 0/UDP.
+		- Detect Connection without DNS resolution and DNS resolutions without a following TCP or UDP connection.
+		- Use whitelists of IPs, domains, and complete Organizations (using lists of ASN and domains and IPs) to ignore flows or to ignore alerts (organizations preconfigured for Google, Apple, Facebook, and Twitter).
+		- New module to detect data exfiltration by checking large transfers (commit ef88fc6).
+		- Detect connections to unkown TCP and UDP ports (ignore P2P traffic).
+		- New export alerts in suricata-style format.
+		- Check suspicious user agents in HTTP (for now only 'httpsend', 'chm_msdn', 'pb').
+		- New ARP-scan detector module.
+		- Be able to run multiple independent instances of slips in the same machine.
+		- Save and load redis databases to disk as backup for later analysis.
+		- Add unit tests in tests/ folder.
+        - Use our own Zeek configuration file, so Slips does not collide with the local installation.
+        - Use our own Zeek scripts folder, so Slips does not collide with the local installation.
+        - Add port 57621/UDP as known spotify-p2p-communication.
+        - Add support for the format of many TI feeds.
         - Add the following Threat Intelligence lists by default to be downloaded and used:
             - https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv
             - https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_historical_blacklist_prioritized_by_newest_attackers.csv
@@ -66,17 +64,17 @@
             - https://raw.githubusercontent.com/kwouffe/cryptonote-hunt/master/nsec/full-results-2019-05-15.json
             - https://raw.githubusercontent.com/craiu/mobiletrackers/master/list.txt
         - Add support for URLs checking in the VirusTotal module. The URLs are also cached for performance improving.
-        - Use the RiskIQ site API to download the IoC lists of Phishing domains (https://api.riskiq.net/pt/v2/articles/indicators)
-        - Use the RiskIQ phishing domains for threat intelligence detection
+        - Use the RiskIQ site API to download the IoC lists of Phishing domains (https://api.riskiq.net/pt/v2/articles/indicators).
+        - Use the RiskIQ phishing domains for threat intelligence detection.
         - Implement read the docs stratospherelinuxips.readthedocs.io
-        - Improve how we read binetflow files
-        - Add some new test datasets to ./datasets folder
-        - Add requirements.txt
+        - Improve how we read binetflow files.
+        - Add some new test datasets to ./datasets folder.
+        - Add requirements.txt.
     - Kalipso
-        - Add Reverse DNS to the 'i' hotkey
-        - Timewindows have correct time and date in the interface
-        - Large refactoring of code of whole Kalipso
-        - Improve the documentation
+        - Add Reverse DNS to the 'i' hotkey.
+        - Timewindows have correct time and date in the interface.
+        - Large refactoring of code of whole Kalipso.
+        - Improve the documentation.
 - 0.7.3
 	- Slips 
 		- Added RDNS module to retrieve reverse DNS of the IP
