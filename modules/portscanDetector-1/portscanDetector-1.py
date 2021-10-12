@@ -6,7 +6,7 @@ import sys
 
 # Port Scan Detector Process
 class PortScanProcess(Module, multiprocessing.Process):
-    """ 
+    """
     A class process to find port scans
     This should be converted into a module that wakesup alone when a new alert arrives
     """
@@ -27,7 +27,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('tw_modified')
         # We need to know that after a detection, if we receive another flow that does not modify the count for the detection, we are not
-        # re-detecting again only becase the threshold was overcomed last time.
+        # re-detecting again only because the threshold was overcomed last time.
         self.cache_det_thresholds = {}
         # Retrieve malicious/benigh labels
         self.normal_label = __database__.normal_label
@@ -138,13 +138,13 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 # Key
                                 type_detection = 'dport'
                                 detection_info = dport
-                                key = 'dport' + ':' + dport + ':' + type_evidence
                                 # Threat level
                                 threat_level = 25
                                 # Compute the confidence
                                 pkts_sent = 0
                                 # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dips per port.
                                 # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
+                                key = 'dport' + ':' + dport + ':' + type_evidence
                                 cache_key = profileid + ':' + twid + ':' + key
                                 try:
                                     prev_amount_dips = self.cache_det_thresholds[cache_key]
@@ -228,26 +228,56 @@ class PortScanProcess(Module, multiprocessing.Process):
 
 
                         # Check ICMP Sweep
+                        type_evidence = 'ICMPSweep'
                         # is used to find out which hosts are alive in a network or large number of IP addresses using ping/icmp.
-                        # to test it run fping -f ../iplist
                         direction = 'Dst'
                         role = 'Client'
                         protocol = 'ICMP'
                         state = 'Established'
                         type_data = 'IPs'
-                        data = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
-                        # if we have 5 different dstips, we are sure this is an ICMP sweep
-                        scanned_dstips = len(list(data.keys()))
-                        if scanned_dstips > 5 :
-                            confidence = 0.8
+
+                        srcip = profileid.split("_")[1]
+                        # get all icmp requests done in this profileid_twid sorted by dstip
+                        #todo investigate getDataFromProfileTW
+                        icmp_requests = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
+                        dstips = list(icmp_requests.keys())
+                        scanned_dstips = len(dstips)
+
+                        # We detect a scan every Threshold. So we detect when there is 5,10,15,20,.. etc. dips
+                        # The idea is that after 5 dips we detect a sweep. and then we cache the amount of dips to make sure we don't detect
+                        # the same amount of dips twice.
+
+                        # this key is used for storing last number of dst IPs that generated an evidence
+                        # each srcip will have an entry in this dict, the value will be the amount of dstips scanned
+                        cache_key = f'{profileid}:{twid}:srcip:{srcip}:{type_evidence}'
+                        try:
+                            prev_amount_dstips = self.cache_det_thresholds[cache_key]
+                        except KeyError:
+                            prev_amount_dstips = 0
+
+                        # every 5,10,15 .. etc. different dstips generate an alert
+                        if scanned_dstips % 5 == 0 and prev_amount_dstips < scanned_dstips:
+                            # Compute the confidence based on the packets sent
+                            pkts_sent = 0
+                            for dip in dstips:
+                                # Get the total amount of pkts sent to the same port to all IPs
+                                pkts_sent += icmp_requests[dip]['totalpkt']
+                            if pkts_sent > 10:
+                                confidence = 1
+                            else:
+                                confidence = pkts_sent / 10.0
+
                             threat_level = 25
                             type_detection  = 'srcip'
-                            type_evidence = 'ICMPSweep'
-                            detection_info = profileid.split('_')[1]
+                            detection_info = srcip
                             description = f'performing PING sweep. {scanned_dstips} different IPs scanned'
                             timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
                             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid)
+
+                            # cache the amount of dips to make sure we don't detect
+                            # the same amount of dips twice.
+                            self.cache_det_thresholds[cache_key] = scanned_dstips
 
                     except AttributeError:
                         # When the channel is created the data '1' is sent
