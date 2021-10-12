@@ -574,7 +574,7 @@ class UpdateFileManager:
                             and not "first_seen_utc" in line.lower() \
                             and not "ip_v4" in line.lower() \
                             and not line.isspace() \
-                            and line not in ('\n',''):
+                            and not "domain" in line.lower() and line not in ('\n',''):
                         # break while statement if it is not a comment(i.e. does not startwith #) or a header line
                         break
 
