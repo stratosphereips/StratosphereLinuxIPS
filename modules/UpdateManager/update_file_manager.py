@@ -172,7 +172,7 @@ class UpdateFileManager:
             filepath = filepath.replace('\`', '')
             url = url.replace(';', '')
             url = url.replace('\`', '')
-            command = 'curl --insecure -s ' + url + ' -o ' + filepath
+            command = 'curl -m 10 --insecure -s ' + url + ' -o ' + filepath
             self.print(f'Downloading with curl command: {command}', 0, 6)
             os.system(command)
             # Get the time of update
@@ -574,7 +574,8 @@ class UpdateFileManager:
                             and not "first_seen_utc" in line.lower() \
                             and not "ip_v4" in line.lower() \
                             and not line.isspace() \
-                            and not "domain" in line.lower() and line not in ('\n',''):
+                            and len(line) > 2 \
+                            and not '"domain"' in line.lower():
                         # break while statement if it is not a comment(i.e. does not startwith #) or a header line
                         break
 
