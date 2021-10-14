@@ -38,6 +38,11 @@ class Module(Module, multiprocessing.Process):
         self.pcap = sys.argv[sys.argv.index('-f')+1]
         self.yara_rules_path = 'modules/leak_detector/yara_rules/rules/'
         self.compiled_yara_rules_path = 'modules/leak_detector/yara_rules/compiled/'
+        # this file is used for writing all the evidence detected by this module
+        self.output_file = 'output/leak_detection.txt'
+        # create the evidence file if not there
+        if not os.path.exists(self.output_file):
+            open(self.output_file,'w').close()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -64,27 +69,24 @@ class Module(Module, multiprocessing.Process):
         This function is called when yara finds a match
         :param info: a dict with info about the matched rule, example keys 'tags', 'matches', 'rule', 'strings' etc.
         """
-        # Example info dict # {'matches': True, 'rule': 'AlyasRULE', 'namespace': 'default', 'tags': [], 'meta': {'description': 'Detects GPS leaked', 'author': 'Veronica Valeros', 'organization': 'Civilsphere Project', 'reference': 'dome referenece', 'date': '2021-10-10'}, 'strings': [(24, '$rgx_gps_lat', b'L\xf3\xa2Z'), (126, '$rgx_gps_lat', b'L\xf3\xa2Z'), (204, '$rgx_gps_lat', b'L\xf3\xa2Z'), (653, '$rgx_gps_lat', b'L\xf3\xa2Z'), (1122, '$rgx_gps_lat', b'L\xf3\xa2Z')]}
+
         rule = info.get('rule')
         meta = info.get('meta',False)
+        # strings is a list of tuples containing information about the matching strings.
+        # Each tuple has the form: (<offset>, <string identifier>, <string data>).
+        strings = info.get('strings')
         description = meta.get('description')
         # author = meta.get('author')
         # reference = meta.get('reference')
         # organization = meta.get('organization')
 
-        # strings is a list of tuples containing information about the matching strings.
-        # Each tuple has the form: (<offset>, <string identifier>, <string data>).
-        # strings = meta.get('strings')
+        evidence = f'{rule} detected in {self.pcap}. Rule description: {description}.\nMatches:\n'
+        for match in strings:
+            offset, string_found, matched_bytes = match[0], match[1], match[2]
+            evidence+= f'At offset {offset} found {string_found} matched bytes: {matched_bytes}\n'
 
-        #todo
-        # type_detection = 'ip'
-        # detection_info = saddr
-        # type_evidence = 'SSHSuccessful'
-        # threat_level = 0.01
-        # confidence = 0.5
-        # __database__.setEvidence(type_detection, detection_info, type_evidence,
-        #                          threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-
+        with open(self.output_file,'a') as f:
+            f.write(f'{evidence}\n')
 
     def run(self):
         # Main loop function
