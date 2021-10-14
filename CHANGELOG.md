@@ -1,7 +1,6 @@
 - 0.8.1
     - Slips
-		- Detect PING sweep.
-		- Alerts based on confidence
+		- Add module to detect leaks of data in the traffic using YARA rules
 - 0.8
     - Slips
         - Compute the JA3 hash for all TLS connections using a Zeek script
