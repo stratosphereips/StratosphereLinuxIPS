@@ -37,7 +37,7 @@ class Module(Module, multiprocessing.Process):
         # this module is only loaded when a pcap is given get the pcap path
         try:
             self.pcap = sys.argv[sys.argv.index('-f')+1]
-        except NameError:
+        except ValueError:
             # this error is raised when we start this module in the unit tests so there's no argv
             # ignore it
             pass
