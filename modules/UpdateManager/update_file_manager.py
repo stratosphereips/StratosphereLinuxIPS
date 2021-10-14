@@ -172,7 +172,7 @@ class UpdateFileManager:
             filepath = filepath.replace('\`', '')
             url = url.replace(';', '')
             url = url.replace('\`', '')
-            command = 'curl --insecure -s ' + url + ' -o ' + filepath
+            command = 'curl -m 10 --insecure -s ' + url + ' -o ' + filepath
             self.print(f'Downloading with curl command: {command}', 0, 6)
             os.system(command)
             # Get the time of update
@@ -556,30 +556,41 @@ class UpdateFileManager:
 
                 # Remove comments and find the description column if possible
                 description_column = None
+                # if any keyword of the following is present in a line
+                # then this line should be ignored by slips
+                # either a not supported ioc type or a header line etc.
+                header_keywords = ('type', 'first_seen_utc', 'ip_v4','"domain"','#"type"','#fields')
+                ignored_IoCs = ('email', 'url', 'file_hash')
+
                 while True:
                     line = malicious_file.readline()
                     # Try to find the line that has column names
-                    if line.startswith('#"type"') \
-                            or line.startswith('"first_seen_utc"') \
-                            or line.startswith('"ip_v4"')\
-                            or line.startswith('"domain"')\
-                            or line.startswith('#fields'):
-                        # looks like the column names, search where is the
-                        # description column
-                        for column in line.split(','):
-                            # some files have the name of the malware and the description of the ioc
-                            if column.lower().startswith('desc') or 'malware' in column or 'tags_str' in column or 'collect' in column:
-                                description_column = line.split(',').index(column)
-                    if not line.startswith('#') and not "type" in line.lower() \
-                            and not "first_seen_utc" in line.lower() \
-                            and not "ip_v4" in line.lower() \
-                            and not line.isspace() \
-                            and not "domain" in line.lower() and line not in ('\n',''):
-                        # break while statement if it is not a comment(i.e. does not startwith #) or a header line
+                    for keyword in header_keywords:
+                        if line.startswith(keyword):
+                            # looks like the column names, search where is the description column
+                            for column in line.split(','):
+                                if column.lower().startswith('desc') \
+                                        or 'malware' in column \
+                                        or 'tags_str' in column \
+                                        or 'collect' in column:
+                                    description_column = line.split(',').index(column)
+                                    break
+
+                    # make sure the next line is not a header, a comment or an unsupported IoC type
+                    process_line = True
+                    if line.startswith('#') or line.isspace() or len(line) < 3: continue
+                    for keyword in header_keywords + ignored_IoCs:
+                        if keyword in line.lower():
+                            # we should ignore this line
+                            process_line = False
+                            break
+
+                    if process_line:
                         break
 
-                # Find in which column is the imporant info in this TI file (domain or ip)
 
+
+                # Find in which column is the important info in this TI file (domain or ip)
                 # Store the current position of the TI file
                 current_file_position = malicious_file.tell()
                 # temp_line = malicious_file.readline()
