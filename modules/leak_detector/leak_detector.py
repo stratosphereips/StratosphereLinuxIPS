@@ -108,6 +108,16 @@ class Module(Module, multiprocessing.Process):
             # save the compiled rule
             compiled_rule.save(os.path.join(self.compiled_yara_rules_path, f'{yara_rule}_compiled'))
 
+    def find_matches(self):
+        """ Run yara rules on the given pcap and find matches"""
+        for compiled_rule in os.listdir(self.compiled_yara_rules_path):
+            compiled_rule_path = os.path.join(self.compiled_yara_rules_path, compiled_rule)
+            # load the compiled rules
+            rule = yara.load(compiled_rule_path)
+            # call set_evidence_yara_match when a match is found
+            matches = rule.match(self.pcap, callback=self.set_evidence_yara_match, which_callbacks=yara.CALLBACK_MATCHES)
+
+
     def run(self):
         try:
             # if we we don't have compiled rules, compile them
@@ -115,12 +125,7 @@ class Module(Module, multiprocessing.Process):
                 os.mkdir(self.compiled_yara_rules_path)
                 self.compile_and_save_rules()
 
-            for compiled_rule in os.listdir(self.compiled_yara_rules_path):
-                compiled_rule_path = os.path.join(self.compiled_yara_rules_path, compiled_rule)
-                # load the compiled rules
-                rule = yara.load(compiled_rule_path)
-                # call set_evidence_yara_match when a match is found
-                matches = rule.match(self.pcap, callback=self.set_evidence_yara_match, which_callbacks=yara.CALLBACK_MATCHES)
+            self.find_matches()
 
         except KeyboardInterrupt:
             return True
