@@ -28,6 +28,7 @@ import time
 import json
 import traceback
 import subprocess
+import shutil
 
 # Input Process
 class InputProcess(multiprocessing.Process):
@@ -411,9 +412,9 @@ class InputProcess(multiprocessing.Process):
 
         if len(os.listdir(self.zeek_folder)) > 0:
             # First clear the zeek folder of old .log files
-            # The rm should not be in background because we must wait until the folder is empty
-            command = "rm " + self.zeek_folder + "/*.log > /dev/null  2>&1"
-            os.system(command)
+            shutil.rmtree(self.zeek_folder)
+            # create the zeek folder again
+            os.mkdir(self.zeek_folder)
 
         # Run zeek on the pcap or interface. The redef is to have json files
         zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
