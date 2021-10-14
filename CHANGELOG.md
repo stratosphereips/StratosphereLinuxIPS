@@ -1,6 +1,7 @@
 -0.8.1
 	-Slips
 		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
+		- Add module to detect leaks of data in the traffic using YARA rules
 - 0.8
     - Slips
 		- Detect PING sweep scan.
@@ -67,17 +68,17 @@
             - https://raw.githubusercontent.com/kwouffe/cryptonote-hunt/master/nsec/full-results-2019-05-15.json
             - https://raw.githubusercontent.com/craiu/mobiletrackers/master/list.txt
         - Add support for URLs checking in the VirusTotal module. The URLs are also cached for performance improving.
-        - Use the RiskIQ site API to download the IoC lists of Phishing domains (https://api.riskiq.net/pt/v2/articles/indicators).
-        - Use the RiskIQ phishing domains for threat intelligence detection.
+        - Use the RiskIQ site API to download the IoC lists of Phishing domains (https://api.riskiq.net/pt/v2/articles/indicators)
+        - Use the RiskIQ phishing domains for threat intelligence detection
         - Implement read the docs stratospherelinuxips.readthedocs.io
-        - Improve how we read binetflow files.
-        - Add some new test datasets to ./datasets folder.
-        - Add requirements.txt.
+        - Improve how we read binetflow files
+        - Add some new test datasets to ./datasets folder
+        - Add requirements.txt
     - Kalipso
-        - Add Reverse DNS to the 'i' hotkey.
-        - Timewindows have correct time and date in the interface.
-        - Large refactoring of code of whole Kalipso.
-        - Improve the documentation.
+        - Add Reverse DNS to the 'i' hotkey
+        - Timewindows have correct time and date in the interface
+        - Large refactoring of code of whole Kalipso
+        - Improve the documentation
 - 0.7.3
 	- Slips 
 		- Added RDNS module to retrieve reverse DNS of the IP

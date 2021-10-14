@@ -171,6 +171,11 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
+    <td>leak_detector</td>
+    <td>module to  detect leaks of data in the traffic using YARA rules</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>ARPScanDetector</td>
     <td>module to check for ARP scans in ARP traffic</td>
     <td>✅</td>

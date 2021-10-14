@@ -37,6 +37,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | http_analyzer | module to analyze HTTP traffic |✅|
 | blocking | module to block malicious IPs connecting to the device |✅|
 | flowmldetection | module to detect malicious flows using ML pretrained models |✅|
+| leak_detector | module to  detect leaks of data in the traffic using YARA rules |✅|
 
 
 
