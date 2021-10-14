@@ -35,7 +35,12 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         self.timeout = None
         # this module is only loaded when a pcap is given get the pcap path
-        self.pcap = sys.argv[sys.argv.index('-f')+1]
+        try:
+            self.pcap = sys.argv[sys.argv.index('-f')+1]
+        except NameError:
+            # this error is raised when we start this module in the unit tests so there's no argv
+            # ignore it
+            pass
         self.yara_rules_path = 'modules/leak_detector/yara_rules/rules/'
         self.compiled_yara_rules_path = 'modules/leak_detector/yara_rules/compiled/'
         # this file is used for writing all the evidence detected by this module
@@ -88,20 +93,27 @@ class Module(Module, multiprocessing.Process):
         with open(self.output_file,'a') as f:
             f.write(f'{evidence}\n')
 
+    def compile_and_save_rules(self):
+        """
+        Compile and save all yara rules in the compiled_yara_rules_path
+        """
+        for yara_rule in os.listdir(self.yara_rules_path):
+            # get the complete path of the rule
+            rule_path = os.path.join(self.yara_rules_path, yara_rule)
+            # ignore yara_rules/compiled/
+            if not os.path.isfile(rule_path):
+                continue
+            # compile the rule
+            compiled_rule = yara.compile(filepath=rule_path)
+            # save the compiled rule
+            compiled_rule.save(os.path.join(self.compiled_yara_rules_path, f'{yara_rule}_compiled'))
+
     def run(self):
         try:
             # if we we don't have compiled rules, compile them
             if not os.path.exists(self.compiled_yara_rules_path):
                 os.mkdir(self.compiled_yara_rules_path)
-                for rule in os.listdir(self.yara_rules_path):
-                    rule_path = os.path.join(self.yara_rules_path, rule)
-                    # ignore yara_rules/compiled/
-                    if not os.path.isfile(rule_path):
-                        continue
-                    # compile the rule
-                    compiled_rule = yara.compile(filepath=rule_path)
-                    # save the compiled rule
-                    compiled_rule.save(os.path.join(self.compiled_yara_rules_path, f'{rule}_compiled'))
+                self.compile_and_save_rules()
 
             for compiled_rule in os.listdir(self.compiled_yara_rules_path):
                 compiled_rule_path = os.path.join(self.compiled_yara_rules_path, compiled_rule)
