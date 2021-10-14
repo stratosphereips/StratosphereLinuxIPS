@@ -426,9 +426,7 @@ if __name__ == '__main__':
         # default value
         input_type = 'file'
         # Get the type of file
-        command = 'file ' + input_information
-        # Execute command
-        cmd_result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+        cmd_result = subprocess.run(['file',input_information], stdout=subprocess.PIPE)
         # Get command output
         cmd_result = cmd_result.stdout.decode('utf-8')
 

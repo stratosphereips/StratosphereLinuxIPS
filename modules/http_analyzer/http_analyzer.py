@@ -10,7 +10,7 @@ import json
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'HTTP Analyzer'
-    description = 'Module to analyze HTTP zeek files.'
+    description = 'Analyze HTTP flows'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):

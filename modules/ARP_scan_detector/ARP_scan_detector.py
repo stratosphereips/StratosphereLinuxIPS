@@ -26,7 +26,7 @@ import datetime
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'ARPScanDetector'
-    description = 'Module to detect ARP scans.'
+    description = 'Detect ARP scans'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):
@@ -117,6 +117,11 @@ class Module(Module, multiprocessing.Process):
 
     def check_dstip_outside_localnet(self, profileid, twid, daddr, uid, saddr, ts):
         """ Function to setEvidence when daddr is outside the local network """
+
+        if '0.0.0.0' in saddr or '0.0.0.0' in daddr:
+            # this is the case of ARP probe, not an arp outside of local network, don't alert
+            return False
+
         # get first  octet of the saddr
         local_net = saddr.split('.')[0]
         if not daddr.startswith(local_net):

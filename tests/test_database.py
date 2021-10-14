@@ -80,7 +80,7 @@ def test_setEvidence(database):
     by = detection_info
     type_evidence = 'SSHSuccessful-by-' + by
     threat_level = 0.01
-    confidence = 0.5
+    confidence = 0.6
     description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip
     timestamp = ''
     database.setEvidence(type_detection, detection_info, type_evidence,
@@ -89,7 +89,7 @@ def test_setEvidence(database):
     added_evidence = database.r.hget('evidence'+profileid, twid)
     added_evidence2 = database.r.hget(profileid + '_' + twid, 'Evidence')
     assert added_evidence2 == added_evidence
-    assert added_evidence ==  '{"{\\"type_detection\\": \\"ip\\", \\"detection_info\\": \\"192.168.1.1\\", \\"type_evidence\\": \\"SSHSuccessful-by-192.168.1.1\\"}": {"confidence": 0.5, "threat_level": 0.01, "description": "SSH Successful to IP :8.8.8.8. From IP 192.168.1.1"}}'
+    assert added_evidence ==  '{"{\\"type_detection\\": \\"ip\\", \\"detection_info\\": \\"192.168.1.1\\", \\"type_evidence\\": \\"SSHSuccessful-by-192.168.1.1\\"}": {"confidence": 0.6, "threat_level": 0.01, "description": "SSH Successful to IP :8.8.8.8. From IP 192.168.1.1"}}'
 
 def test_deleteEvidence(database):
     key = {'type_detection': 'ip',

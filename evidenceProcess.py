@@ -158,7 +158,7 @@ class EvidenceProcess(multiprocessing.Process):
         dns_resolution_detection_info = __database__.get_dns_resolution(detection_info)
         dns_resolution_detection_info_final = dns_resolution_detection_info[0:3] if dns_resolution_detection_info else ''
         dns_resolution_ip = __database__.get_dns_resolution(ip)
-        dns_resolution_ip_final = dns_resolution_ip[0:3] if dns_resolution_detection_info else ''
+        dns_resolution_ip_final = f' DNS: {dns_resolution_ip[0:3]}. ' if (dns_resolution_detection_info and len(dns_resolution_ip[0:3]) > 0) else ''
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
             if detection_type == 'dstip':
@@ -173,7 +173,7 @@ class EvidenceProcess(multiprocessing.Process):
         elif detection_module == 'SSHSuccessful':
             evidence_string = f'{profileid}_{twid}: IP {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'{profileid}_{twid}: IP: {ip}. DNS: {dns_resolution_ip_final}. detected {description}.'
+            evidence_string = f'{profileid}_{twid}: IP: {ip} {dns_resolution_ip_final}detected {description}.'
 
         return evidence_string
 
@@ -536,7 +536,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                             # Deserialize evidence data
                             data = evidence[key]
-                            confidence = data.get('confidence')
+                            confidence = float(data.get('confidence'))
                             threat_level = data.get('threat_level')
                             description = data.get('description')
 
@@ -586,7 +586,7 @@ class EvidenceProcess(multiprocessing.Process):
                 continue
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
-                self.outputqueue.put(f'01|evidence|[Evidence] Error in the Evidence Process line {exception_line}')
-                self.outputqueue.put('01|evidence|[Evidence] {}'.format(type(inst)))
-                self.outputqueue.put('01|evidence|[Evidence] {}'.format(inst))
+                self.outputqueue.put(f'01|[Evidence] Error in the Evidence Process line {exception_line}')
+                self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
+                self.outputqueue.put('01|[Evidence] {}'.format(inst))
                 return True

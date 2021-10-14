@@ -5,9 +5,8 @@ from ..modules.blocking.blocking import Module
 import configparser
 import os
 
-
 def do_nothing(*args):
-    """ Used to override the print function because using the self.print causes broken pipes """
+    """ Used to override the print function because using the print causes broken pipes """
     pass
 
 def create_blocking_instance(outputQueue):
@@ -15,15 +14,14 @@ def create_blocking_instance(outputQueue):
         needed by every other test in this file  """
     config = configparser.ConfigParser()
     blocking = Module(outputQueue, config)
-    # override the self.print function to avoid broken pipes
+    # override the print function to avoid broken pipes
     blocking.print = do_nothing
-    blocking.sudo = 'sudo '
     return blocking
 
 
 def is_slipschain_initialized(outputQueue) -> bool:
     blocking = create_blocking_instance(outputQueue)
-    output = blocking.get_cmd_output('sudo iptables -S')
+    output = blocking.get_cmd_output(f'{blocking.sudo} iptables -S')
     rules = ['-A INPUT -j slipsBlocking' , '-A FORWARD -j slipsBlocking','-A OUTPUT -j slipsBlocking']
     for rule in rules:
         if rule not in output:

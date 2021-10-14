@@ -1,5 +1,3 @@
-# Module to load and find the ASN of each IP
-
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
@@ -17,7 +15,7 @@ import ipwhois
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'asn'
-    description = 'Module to find the ASN of an IP address'
+    description = 'Find the ASN of an IP address'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):

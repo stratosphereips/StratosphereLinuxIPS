@@ -353,7 +353,7 @@ class InputProcess(multiprocessing.Process):
 
     def handle_zeek_log_file(self):
         try:
-            file_name_without_extension = self.given_path[:self.given_path.index('.')]
+            file_name_without_extension = self.given_path[:self.given_path.index('.log')]
         except IndexError:
             # filename doesn't have an extension, probably not a conn.log
             return False

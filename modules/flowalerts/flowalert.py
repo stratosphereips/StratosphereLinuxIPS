@@ -370,8 +370,10 @@ class Module(Module, multiprocessing.Process):
             # this tw has no dns resolutions.
             return
 
-    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp):
-        confidence = 0.6
+    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
+        """
+        :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
+        """
         threat_level = 80
         type_detection  = 'dstip'
         if 'JA3s ' in description:
@@ -528,9 +530,23 @@ class Module(Module, multiprocessing.Process):
                         time_of_first_flow = datetime.datetime.fromtimestamp(flows_list[0]['ts'])
                         time_of_last_flow = datetime.datetime.fromtimestamp(flows_list[-1]['ts'])
                         # get the difference between them in seconds
-                        diff_in_hrs = int(str(time_of_last_flow - time_of_first_flow).split(':')[0])
-                        diff_in_mins = int(str(time_of_last_flow - time_of_first_flow).split(':')[1])
-                        diff_in_mins = diff_in_hrs*60 + diff_in_mins
+
+                        diff = str(time_of_last_flow - time_of_first_flow)
+                        # if there are days diff between the flows , diff will be something like 1 day, 17:25:57.458395
+                        try:
+                            # calculate the days difference
+                            diff_in_days = int(diff.split(', ')[0].split(' ')[0])
+                            diff = diff.split(', ')[1]
+                        except (IndexError,ValueError):
+                            # no days different
+                            diff = diff.split(', ')[0]
+                            diff_in_days = 0
+
+                        diff_in_hrs = int(diff.split(':')[0])
+                        diff_in_mins = int(diff.split(':')[1])
+                        # total diff in mins
+                        diff_in_mins = 24*diff_in_days*60 + diff_in_hrs*60 + diff_in_mins
+
                         # we need the flows that happend in 20 mins span
                         if diff_in_mins >= 20:
                             contacted_daddrs= {}
@@ -725,14 +741,20 @@ class Module(Module, multiprocessing.Process):
                             daddr = flow['daddr']
 
                             if ja3 in malicious_ja3_dict:
-                                description = json.loads(malicious_ja3_dict[ja3])['description']
+                                malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3])
+                                description = malicious_ja3_dict['description']
                                 description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description}'
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp)
+                                confidence = malicious_ja3_dict['confidence']
+                                alert = True if float(confidence) > 0.5 else False
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
 
                             if ja3s in malicious_ja3_dict:
-                                description = json.loads(malicious_ja3_dict[ja3s])['description']
+                                malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3s])
+                                description = malicious_ja3_dict['description']
                                 description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description}'
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp)
+                                confidence = malicious_ja3_dict['confidence']
+                                alert = True if float(confidence) > 0.5 else False
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
 
                 # ---------------------------- new_service channel
                 if message and message['channel'] == 'new_service'  and type(message['data']) is not int:

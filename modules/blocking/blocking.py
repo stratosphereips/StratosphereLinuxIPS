@@ -29,7 +29,7 @@ class Module(Module, multiprocessing.Process):
     by default this module flushes all slipsBlocking chains before it starts """
     # Name: short name of the module. Do not use spaces
     name = 'Blocking'
-    description = 'Module to block IPs connecting to this device'
+    description = 'Block malicious IPs connecting to this device'
     authors = ['Sebastian Garcia, Alya Gomaa']
 
     def __init__(self, outputqueue, config):
