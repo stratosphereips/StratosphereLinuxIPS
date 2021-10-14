@@ -89,8 +89,6 @@ class Module(Module, multiprocessing.Process):
             f.write(f'{evidence}\n')
 
     def run(self):
-        # Main loop function
-        # while True:
         try:
             # if we we don't have compiled rules, compile them
             if not os.path.exists(self.compiled_yara_rules_path):
@@ -113,7 +111,6 @@ class Module(Module, multiprocessing.Process):
                 matches = rule.match(self.pcap, callback=self.set_evidence_yara_match, which_callbacks=yara.CALLBACK_MATCHES)
 
         except KeyboardInterrupt:
-            # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
             return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno

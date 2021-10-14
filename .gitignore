@@ -133,3 +133,6 @@ package-lock.json
 modules/blessed/node_modules/
 alerts.*
 nohup.out
+
+# compiled yara rules
+modules/leak_detector/yara_rules/compiled
