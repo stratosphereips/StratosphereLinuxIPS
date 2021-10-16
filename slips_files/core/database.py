@@ -1874,17 +1874,23 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query: str, answers: str):
+    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str):
         """
-        Save in DB DNS name for each IP
+        Cache DNS answers for each query
+        stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
+        :param ts: epoch time
         """
-        for ans in answers:
+
+        for ip in answers:
             # get stored DNS resolution from our db
-            data = self.get_dns_resolution(ans)
-            if query not in data:
-                data.append(query)
-            data = json.dumps(data)
-            self.r.hset('DNSresolution', ans, data)
+            domains = self.get_dns_resolution(ip=ip)
+            # if the domain(query) we have isn't already in DNSresolution in the db, add it
+            if query not in domains:
+                domains.append(query)
+            domains = json.dumps(domains)
+            ip_info = {ts: ts , 'domains': domains, 'uid':uid }
+            ip_info = json.dumps(ip_info)
+            self.r.hset('DNSresolution', ip, ip_info)
 
     def get_dns_resolution(self, ip):
         """
@@ -2076,37 +2082,7 @@ class Database(object):
             data = ''
         return data
 
-    def store_dns_answers(self, query: str, answers: list, profileid_twid: str, ts: float, uid: str):
-        """
-        Cache DNS answers for each query
-        stored as {'query':{ts: .. , 'answers': .. , 'uid':... }}
-        :param ts: epoch time
-        """
-        try:
-            # to avoid duplicates, if key exists update it
-            stored_answers = self.get_dns_answers()
-            # try to get the results os this query
-            answers_dict = json.loads(stored_answers[query])
-            # found results for this query, update them
-            answers_dict.update(
-                            {'ts':ts,
-                             'answers': answers,
-                             'uid': uid})
-            answers_dict = json.dumps(answers_dict)
-        except KeyError:
-            # key doesn't exist
-            answers = json.dumps(answers)
-            answers_dict = json.dumps(
-                                    {'ts':ts,
-                                     'answers': answers,
-                                     'uid': uid})
 
-        # we're storing in dns_answers instead of 'DomainsInfo' because domainsInfo is stored in the cache,
-        self.r.hset('dns_answers', query, answers_dict)
-
-    def get_dns_answers(self):
-        """ Returns dns_answers dict {query: {'ts':..,'answers':serialized answers list, 'uid':...}}"""
-        return self.r.hgetall('dns_answers')
 
 
     def set_asn_cache(self, asn, asn_range) -> None:
