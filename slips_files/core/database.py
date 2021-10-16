@@ -1896,7 +1896,7 @@ class Database(object):
             if query not in domains:
                 domains.append(query)
             domains = json.dumps(domains)
-            ip_info = {ts: ts , 'domains': domains, 'uid':uid }
+            ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
             ip_info = json.dumps(ip_info)
             self.r.hset('DNSresolution', ip, ip_info)
 
@@ -1918,6 +1918,14 @@ class Database(object):
             return domains
         else:
             return []
+
+    def get_all_dns_resolutions(self):
+        dns_resolutions = self.r.hgetall('DNSresolution')
+        if not dns_resolutions:
+            return []
+        else:
+            return dns_resolutions
+
 
     def set_passive_dns(self, ip, data):
         """
