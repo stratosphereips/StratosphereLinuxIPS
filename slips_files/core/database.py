@@ -1887,6 +1887,9 @@ class Database(object):
         """
 
         for ip in answers:
+            # don't store TXT records in the database
+            if 'TXT' in ip:
+                continue
             # get stored DNS resolution from our db
             domains = self.get_dns_resolution(ip=ip)
             # if the domain(query) we have isn't already in DNSresolution in the db, add it
@@ -1915,7 +1918,6 @@ class Database(object):
             return domains
         else:
             return []
-
 
     def set_passive_dns(self, ip, data):
         """
