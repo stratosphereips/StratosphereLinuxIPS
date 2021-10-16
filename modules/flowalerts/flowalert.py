@@ -310,44 +310,24 @@ class Module(Module, multiprocessing.Process):
         """
         if contacted_ips == {}: return
         # Get an updated list of dns answers
-        # answers example {profileid_twid : {query: [ts,serialized answers list]}}
-        answers = __database__.get_dns_answers()
-        # get dns resolutions that took place in this tw only
-        tw_answers = answers.get(f'{profileid}_{twid}' , False)
-        if tw_answers:
-            tw_answers = json.loads(tw_answers)
-
-            for query,query_details in tw_answers.items():
-                if query.endswith(".arpa"):
-                    # Reverse DNS lookups for IPv4 addresses use the special domain in-addr.arpa.
-                    continue
-                timestamp = query_details['ts']
-                dns_answer = query_details['answers']
-                # every dns answer is a list of ip that correspond to a spicif query,
-                # one of these ips should be present in the contacted ips
-                for answer in dns_answer:
-                    if answer in contacted_ips:
-                        # found a used dns resolution
-                        # continue to next dns_answer
-                        break
-                else:
-                    # found a query without usage
-                    uid = query_details['uid']
-                    confidence = 0.8
-                    threat_level = 30
-                    type_detection  = 'dstdomain'
-                    type_evidence = 'DNSWithoutConnection'
-                    try:
-                        detection_info = query[0]
-                    except IndexError:
-                        # query is a str
-                        detection_info = query
-                    description = f'Domain {query} resolved with no connection'
-                    __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
-        else:
-            # this tw has no dns resolutions.
-            return
+        resolutions = __database__.get_all_dns_resolutions()
+        # every dns answer is a list of ip that correspond to a spicif query,
+        # one of these ips should be present in the contacted ips
+        for ip in resolutions:
+            if ip not in contacted_ips:
+                # found a query without usage
+                ip_info = json.loads(resolutions[ip])
+                uid = ip_info['uid']
+                timestamp = ip_info['ts']
+                confidence = 0.8
+                threat_level = 30
+                type_detection  = 'dstdomain'
+                type_evidence = 'DNSWithoutConnection'
+                query = json.loads(ip_info['domains'])[-1]
+                detection_info = query
+                description = f'Domain {query} resolved with no connection'
+                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                     description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
         """
