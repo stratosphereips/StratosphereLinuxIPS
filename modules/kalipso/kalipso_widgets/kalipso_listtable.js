@@ -87,6 +87,7 @@ class ListTable{
    setIPInfo(ip){
     try{
         this.getIPInfo_dict(ip).then(ip_info_dict =>{
+            // fill the widget at the top right of the screen
             var ipInfo_data  = [['asn','geo','url','down','ref','com']]
             this.widget.setLabel(ip_info_dict['reverse_dns'])
             ipInfo_data.push([ip_info_dict['asn'], ip_info_dict['geo'], ip_info_dict['url'], ip_info_dict['down'],ip_info_dict['ref'],ip_info_dict['com']])
