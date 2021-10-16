@@ -1523,12 +1523,16 @@ class Database(object):
             if SNI_port['server_name'] not in sni_ipdata:
                 # Verify that the SNI is equal to any of the domains in the DNS resolution
                 # only add this SNI to our db if it has a DNS resolution
-                #todo fix this
-                resolved_domains = list(self.get_dns_answers().keys())
-                if SNI_port['server_name'] in resolved_domains:
-                    sni_ipdata.append(SNI_port)
-                    self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
-
+                dns_resolutions = self.r.hgetall('DNSresolution')
+                if dns_resolutions:
+                    # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
+                    dns_resolutions = json.loads(dns_resolutions)
+                    for ip,ip_info in dns_resolutions:
+                        if SNI_port['server_name'] in json.loads(ip_info['domains']):
+                            # add SNI to our db as it has a DNS resolution
+                            sni_ipdata.append(SNI_port)
+                            self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
+                            break
             # We are giving only new server_name to the threat_intelligence module.
             data_to_send = {
                 'server_name' : server_name,
@@ -1911,6 +1915,7 @@ class Database(object):
             return domains
         else:
             return []
+
 
     def set_passive_dns(self, ip, data):
         """
