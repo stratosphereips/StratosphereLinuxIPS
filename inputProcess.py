@@ -246,9 +246,15 @@ class InputProcess(multiprocessing.Process):
                 continue
 
             # to fix the problem of evidence being generated BEFORE their corresponding flows are added to our db
-            # make sure we send the lines of conn.log before the lines of any other file
+            # make sure we read flows in the following order:
+            # dns.log  (make it a priority to avoid FP connection without dns resolution alerts)
+            # conn.log
+            # any other flow
             for key in cache_lines:
-                if 'conn' in key:
+                if 'dns' in key:
+                    file_with_earliest_flow = key
+                    break
+                elif 'conn' in key:
                     file_with_earliest_flow = key
                     break
             # comes here if we're done with all conn.log flows and it's time to process other files
