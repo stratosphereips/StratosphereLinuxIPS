@@ -250,13 +250,10 @@ class InputProcess(multiprocessing.Process):
             # dns.log  (make it a priority to avoid FP connection without dns resolution alerts)
             # conn.log
             # any other flow
-            for key in cache_lines:
-                if 'dns' in key:
-                    file_with_earliest_flow = key
-                    break
-                elif 'conn' in key:
-                    file_with_earliest_flow = key
-                    break
+            # for key in cache_lines:
+            #     if 'dns' in key:
+            #         file_with_earliest_flow = key
+            #         break
             # comes here if we're done with all conn.log flows and it's time to process other files
             line_to_send = cache_lines[file_with_earliest_flow]
 
