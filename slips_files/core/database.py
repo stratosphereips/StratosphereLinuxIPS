@@ -1523,6 +1523,7 @@ class Database(object):
             if SNI_port['server_name'] not in sni_ipdata:
                 # Verify that the SNI is equal to any of the domains in the DNS resolution
                 # only add this SNI to our db if it has a DNS resolution
+                #todo fix this
                 resolved_domains = list(self.get_dns_answers().keys())
                 if SNI_port['server_name'] in resolved_domains:
                     sni_ipdata.append(SNI_port)
@@ -1892,14 +1893,22 @@ class Database(object):
             ip_info = json.dumps(ip_info)
             self.r.hset('DNSresolution', ip, ip_info)
 
-    def get_dns_resolution(self, ip):
+    def get_dns_resolution(self, ip, all_info=False):
         """
         Get DNS name of the IP, a list
+        :param all_info: if provided returns a dict with {ts: .. , 'answers': .. , 'uid':... } of this IP
+        if not returns answers only
+        this function is called for every IP in the timeline of kalipso
         """
-        data = self.r.hget('DNSresolution', ip)
-        if data:
-            data = json.loads(data)
-            return data
+        ip_info = self.r.hget('DNSresolution', ip)
+        if ip_info:
+            ip_info = json.loads(ip_info)
+            if all_info:
+                # return a dict with 'ts' 'uid' 'answers' about this IP
+                return ip_info
+            # return answers only
+            domains = json.loads(ip_info['domains'])
+            return domains
         else:
             return []
 
