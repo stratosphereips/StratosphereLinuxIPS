@@ -69,6 +69,61 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
+    def parse_pcap(self):
+        with open("slips2/dataset/hide-and-seek-short.pcap",'rb') as f:
+            # this dict will store packet numbers with their packet length
+            packets_length = {}
+            # header is 24
+            f.read(24)
+            # since packets start from 1 in wireshark
+            packet_number = 0
+            try:
+                while True:
+                    # the number of the packet we're currently working with
+                    packet_number += 1
+                    # # this offset is exactly when the packet starts
+                    # start_offset = f.tell()
+                    #  get the Packet header
+                    packet_header = f.read(16)
+                    # print("read header")
+                    # print(bytes(packet_header))
+
+                    # get the length of the Packet Data field , [::-1] for little endian
+                    packet_data_length = packet_header[8:12][::-1]
+
+                    # we now have the 4 bytes that represent the length of the packet in decimal we need to concat them
+                    packet_length_in_hex = ''
+                    for byte_ in packet_data_length:
+                        # convert the bytes to hex
+                        packet_length_in_hex+= str(hex(byte_))[2:]
+
+                    # print(f"packet {packet_number} length is : {packet_length_in_hex}")
+
+                    # remove padding bytes (0s in the left)
+                    packet_length_in_hex = packet_length_in_hex.strip('0')
+
+                    # print(f"packet {packet_number} length without 0s is : {packet_length_in_hex}")
+
+                    # convert the hex into decimal
+                    packet_length_in_decimal = int('0x' +packet_length_in_hex,16)
+                    # read until the end of this packet
+                    packet_data = f.read(packet_length_in_decimal)
+                    # store the offset that marks the end of this packet
+                    packets_length.update({str(packet_number):f.tell()})
+
+                    # print(f"added: {str(packet_number)} : {f.tell()}")
+                    # print(" ")
+
+                # import pprint
+                # pprint.pprint(packets_length)
+            except ValueError:
+                # reached the end of pcap
+                pass
+
+
+
+
+
     def set_evidence_yara_match(self, info:dict ):
         """
         This function is called when yara finds a match
@@ -85,13 +140,17 @@ class Module(Module, multiprocessing.Process):
         # reference = meta.get('reference')
         # organization = meta.get('organization')
 
-        evidence = f'{rule} detected in {self.pcap}. Rule description: {description}.\nMatches:\n'
-        for match in strings:
-            offset, string_found, matched_bytes = match[0], match[1], match[2]
-            evidence+= f'At offset {offset} found {string_found} matched bytes: {matched_bytes}\n'
+        # we now know there's a match at offset x, we need to know offset x belongs to which packet
 
-        with open(self.output_file,'a') as f:
-            f.write(f'{evidence}\n')
+
+        # evidence = f'{rule} detected in {self.pcap}. Rule description: {description}.\nMatches:\n'
+        # for match in strings:
+        #     offset, string_found, matched_bytes = match[0], match[1], match[2]
+        #     evidence+= f'At offset {offset} found {string_found} matched bytes: {matched_bytes}\n'
+        #
+        # with open(self.output_file,'a') as f:
+        #     f.write(f'{evidence}\n')
+
 
     def compile_and_save_rules(self):
         """
