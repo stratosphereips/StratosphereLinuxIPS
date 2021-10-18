@@ -41,7 +41,7 @@ RUN cd yara-4.1.2/  && ./configure && make && make install
 RUN pip3 install wheel redis setuptools validators colorama
 RUN pip3 install maxminddb pandas sklearn urllib3 scipy watchdog
 RUN pip3 install stix2 cabby ipwhois pytest yara-python
-RUN pip3 install slackclient tzlocal psutil pytest-xdist
+RUN pip3 install slackclient tzlocal psutil pytest-xdist pyshark
 RUN pip3 install --ignore-installed six
 
 # Download and unpack Slips.
