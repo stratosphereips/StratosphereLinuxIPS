@@ -481,6 +481,8 @@ class EvidenceProcess(multiprocessing.Process):
                     description = evidence_data.get('description')
                     timestamp = data.get('stime')
                     uid = data.get('uid')
+                    # in case of blacklisted ip evidence, we add the tag to the description like this [tag]
+                    tag = data.get('tag',False)
 
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
@@ -512,7 +514,14 @@ class EvidenceProcess(multiprocessing.Process):
                                      'detected_ip': srcip,
                                      'detection_module':type_evidence,
                                      'detection_info':str(type_detection) + ' ' + str(detection_info),
-                                     'description':description}
+                                     'description':description
+                                     }
+                    if tag:
+
+                        # remove the tag from the description
+                        description = description[:description.index('[')]
+                        # add a key in the json evidence with tag
+                        evidence_dict.update({'tag':tag, 'description': description})
 
                     self.addDataToLogFile(flow_datetime + ' ' + evidence_to_log)
                     self.addDataToJSONFile(evidence_dict)
