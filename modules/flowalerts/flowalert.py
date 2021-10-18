@@ -702,7 +702,8 @@ class Module(Module, multiprocessing.Process):
                             if ja3 in malicious_ja3_dict:
                                 malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3])
                                 description = malicious_ja3_dict['description']
-                                description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description}'
+                                tag = malicious_ja3_dict['tag']
+                                description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description} [{tag}]'
                                 confidence = malicious_ja3_dict['confidence']
                                 alert = True if float(confidence) > 0.5 else False
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
@@ -710,7 +711,8 @@ class Module(Module, multiprocessing.Process):
                             if ja3s in malicious_ja3_dict:
                                 malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3s])
                                 description = malicious_ja3_dict['description']
-                                description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description}'
+                                tag = malicious_ja3_dict['tag']
+                                description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description} [{tag}]'
                                 confidence = malicious_ja3_dict['confidence']
                                 alert = True if float(confidence) > 0.5 else False
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
