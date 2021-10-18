@@ -77,50 +77,38 @@ class Module(Module, multiprocessing.Process):
             f.read(24)
             # since packets start from 1 in wireshark
             packet_number = 0
-            try:
-                while True:
-                    # the number of the packet we're currently working with
-                    packet_number += 1
-                    # # this offset is exactly when the packet starts
-                    # start_offset = f.tell()
-                    #  get the Packet header
-                    packet_header = f.read(16)
-                    # print("read header")
-                    # print(bytes(packet_header))
 
-                    # get the length of the Packet Data field , [::-1] for little endian
-                    packet_data_length = packet_header[8:12][::-1]
+            packet_data_length = True
+            while packet_data_length:
+                # the number of the packet we're currently working with
+                packet_number += 1
+                # # this offset is exactly when the packet starts
+                # start_offset = f.tell()
+                #  get the Packet header
+                packet_header = f.read(16)
+                # print("read header")
+                # print(bytes(packet_header))
 
-                    # we now have the 4 bytes that represent the length of the packet in decimal we need to concat them
-                    packet_length_in_hex = ''
-                    for byte_ in packet_data_length:
-                        # convert the bytes to hex
-                        packet_length_in_hex+= str(hex(byte_))[2:]
+                # get the length of the Packet Data field , [::-1] for little endian
+                packet_data_length = packet_header[8:12][::-1]
+                # print(f"lengthhhh in hex : {packet_data_length}")
 
-                    # print(f"packet {packet_number} length is : {packet_length_in_hex}")
+                # convert the hex into decimal
+                packet_length_in_decimal = int.from_bytes(packet_data_length, "big")
 
-                    # remove padding bytes (0s in the left)
-                    packet_length_in_hex = packet_length_in_hex.strip('0')
 
-                    # print(f"packet {packet_number} length without 0s is : {packet_length_in_hex}")
+                # print(f"packet {packet_number} length is : {packet_length_in_decimal}")
 
-                    # convert the hex into decimal
-                    packet_length_in_decimal = int('0x' +packet_length_in_hex,16)
-                    # read until the end of this packet
-                    packet_data = f.read(packet_length_in_decimal)
-                    # store the offset that marks the end of this packet
-                    packets_length.update({str(packet_number):f.tell()})
+                # read untill the end of this packet
+                packet_data = f.read(packet_length_in_decimal)
+                # store the offset that marks the end of this packet
+                packets_length.update({str(packet_number):f.tell()})
 
-                    # print(f"added: {str(packet_number)} : {f.tell()}")
-                    # print(" ")
+                # print(f"added: {str(packet_number)} : {f.tell()}")
+                # print(" ")
 
                 # import pprint
                 # pprint.pprint(packets_length)
-            except ValueError:
-                # reached the end of pcap
-                pass
-
-
 
 
 
