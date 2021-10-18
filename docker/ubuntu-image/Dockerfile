@@ -3,6 +3,9 @@ FROM ubuntu
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Blocking module requirement to avoid using sudo
+ENV IS_IN_A_DOCKER_CONTAINER True
+
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
@@ -27,6 +30,7 @@ RUN apt update && apt install -y --no-install-recommends \
     iptables \
     psutils \
     python3-tzlocal \
+    nfdump \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3

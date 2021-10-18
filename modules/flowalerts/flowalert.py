@@ -1,16 +1,3 @@
-# This is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
-
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
@@ -294,25 +281,16 @@ class Module(Module, multiprocessing.Process):
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
+
         # to avoid false positives don't alert ConnectionWithoutDNS until 2 minutes has passed after starting slips
         start_time = __database__.get_slips_start_time()
         now = datetime.datetime.now()
         diff = now - start_time
         diff = diff.seconds
         if int(diff) >= 120:
-            resolved = False
-            answers_dict = __database__.get_dns_answers()
-            # answers dict is a dict  {query:{ 'ts': .., 'answers':.., 'uid':... }  }
-            for query in answers_dict.values():
-                # convert json dict  to dict
-                query = json.loads(query)
-                # query is  a dict { 'ts': .., 'answers':.., 'uid':... }, we need to get 'answers'
-                answers = query['answers']
-                if daddr in answers:
-                    resolved = True
-                    break
+            answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
             # IP has no dns answer, alert.
-            if not resolved:
+            if not answers_dict:
                 confidence = 1
                 threat_level = 30
                 type_detection  = 'dstip'
@@ -321,6 +299,7 @@ class Module(Module, multiprocessing.Process):
                 description = f'A connection without DNS resolution to IP: {daddr}'
                 if not twid:
                     twid = ''
+
                 __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                          description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
@@ -331,44 +310,24 @@ class Module(Module, multiprocessing.Process):
         """
         if contacted_ips == {}: return
         # Get an updated list of dns answers
-        # answers example {profileid_twid : {query: [ts,serialized answers list]}}
-        answers = __database__.get_dns_answers()
-        # get dns resolutions that took place in this tw only
-        tw_answers = answers.get(f'{profileid}_{twid}' , False)
-        if tw_answers:
-            tw_answers = json.loads(tw_answers)
-
-            for query,query_details in tw_answers.items():
-                if query.endswith(".arpa"):
-                    # Reverse DNS lookups for IPv4 addresses use the special domain in-addr.arpa.
-                    continue
-                timestamp = query_details['ts']
-                dns_answer = query_details['answers']
-                # every dns answer is a list of ip that correspond to a spicif query,
-                # one of these ips should be present in the contacted ips
-                for answer in dns_answer:
-                    if answer in contacted_ips:
-                        # found a used dns resolution
-                        # continue to next dns_answer
-                        break
-                else:
-                    # found a query without usage
-                    uid = query_details['uid']
-                    confidence = 0.8
-                    threat_level = 30
-                    type_detection  = 'dstdomain'
-                    type_evidence = 'DNSWithoutConnection'
-                    try:
-                        detection_info = query[0]
-                    except IndexError:
-                        # query is a str
-                        detection_info = query
-                    description = f'Domain {query} resolved with no connection'
-                    __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
-        else:
-            # this tw has no dns resolutions.
-            return
+        resolutions = __database__.get_all_dns_resolutions()
+        # every dns answer is a list of ip that correspond to a spicif query,
+        # one of these ips should be present in the contacted ips
+        for ip in resolutions:
+            if ip not in contacted_ips:
+                # found a query without usage
+                ip_info = json.loads(resolutions[ip])
+                uid = ip_info['uid']
+                timestamp = ip_info['ts']
+                confidence = 0.8
+                threat_level = 30
+                type_detection  = 'dstdomain'
+                type_evidence = 'DNSWithoutConnection'
+                query = json.loads(ip_info['domains'])[-1]
+                detection_info = query
+                description = f'Domain {query} resolved with no connection'
+                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                     description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
         """

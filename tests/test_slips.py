@@ -3,11 +3,18 @@ import os
 
 from ..slips  import *
 import time
+import os
+import pytest
+
+IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+
 
 def test_load_modules():
     failed_to_load_modules = load_modules(['template' , 'mldetection-1', 'ensembling'])[1]
     assert failed_to_load_modules == 0
 
+
+@pytest.mark.skipif(IS_IN_A_DOCKER_CONTAINER, reason='This functionality is not supported in docker')
 def test_save():
     """ tests saving the database"""
     # this test needs sudo
@@ -17,7 +24,7 @@ def test_save():
     assert os.path.exists('redis_backups/sample_zeek_files.rdb')
     os.remove('redis_backups/sample_zeek_files.rdb')
 
-
+@pytest.mark.skipif(IS_IN_A_DOCKER_CONTAINER, reason='This functionality is not supported in docker')
 def test_load(database):
     """ tests loading the database"""
     # make sure the db exists
@@ -34,7 +41,7 @@ def test_load(database):
     time.sleep(3)
     # check a random value to make sure the db is loaded
     x = database.r.hgetall('profile_10.0.2.15_timewindow0_altflows')
-    assert 'CTudTc7oyRltJwU32' in str(x)
+    assert 'Cjmmqo3oAg8XaawHok' in str(x)
 
 def test_recognize_host_ip():
     assert recognize_host_ip() != None

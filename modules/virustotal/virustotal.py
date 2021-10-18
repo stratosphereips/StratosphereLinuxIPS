@@ -349,10 +349,7 @@ class Module(Module, multiprocessing.Process):
 
                         # store the dns answers in our db to check for unused queries later in flowalerts.py
                         domain = flow_data.get('query',False)
-                        answers = flow_data.get('answers', False)
-                        ts = flow_data.get('stime', '')
-                        if domain and answers:
-                            __database__.store_dns_answers(domain, answers, f'{profileid}_{twid}' ,ts, uid)
+
 
                         cached_data = __database__.getDomainData(domain)
                         # If VT data of this domain is not in the DomainInfo, ask VT

@@ -29,22 +29,30 @@ class Tree{
 
     /*Function to manipulate tree, timeline, evidence*/
     on(){
+    	// node is the widgest name
+
         this.widget.on('select',node=>{
+        	// comes here when you press enter on an IP in the leftmost widget(the one that has iPs and tws)
 		  	if(!node.name.includes('timewindow')){
+		  		// get the ip of the host
 	    	  	var ip = node.name.replace(' (me)','')
 	    	    ip = ip.replace(' (old me)','')
 	    	  	ip = stripAnsi(ip)
 		      	this.current_ip = ip
+				// fill the widget at the top right of the screen with this IP info
 		      	this.ipinfo.setIPInfo(ip)
 	        	}
-	      	else{	
+	      	else{
+	      		// comes here when you press enter on a tw in the leftmost widget(the one that has iPs and tws)
 		      	var ip  = stripAnsi(node.parent.name);
 		      	ip = ip.replace(' (me)','')
 		        ip = ip.replace(' (old me)','')
 		    	var timewindow = stripAnsi(node.name);
 		    	this.current_ip = ip
 		    	this.current_tw = timewindow
+				// prepare what to show when pressing z
 		    	this.evidence.setEvidence(ip, timewindow)
+				// prepare timeline for this ip,tw
 		    	this.timeline.setTimeline(ip, timewindow)
 		    	this.screen.render()
 		    	}

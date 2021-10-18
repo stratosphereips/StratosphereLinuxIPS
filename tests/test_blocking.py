@@ -3,7 +3,14 @@ this file needs sudoroot to run
 """
 from ..modules.blocking.blocking import Module
 import configparser
+import platform
+import pytest
 import os
+
+# ignore all tests if not using linux
+pytestmark = pytest.mark.skipif(platform.system() != 'Linux', reason='Blocking is supported only in Linux with root priveledges')
+pytestmark = pytest.mark.skipif(os.geteuid() != 0, reason='Blocking is supported only with root priveledges')
+
 
 def do_nothing(*args):
     """ Used to override the print function because using the print causes broken pipes """

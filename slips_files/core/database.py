@@ -1523,11 +1523,16 @@ class Database(object):
             if SNI_port['server_name'] not in sni_ipdata:
                 # Verify that the SNI is equal to any of the domains in the DNS resolution
                 # only add this SNI to our db if it has a DNS resolution
-                resolved_domains = list(self.get_dns_answers().keys())
-                if SNI_port['server_name'] in resolved_domains:
-                    sni_ipdata.append(SNI_port)
-                    self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
-
+                dns_resolutions = self.r.hgetall('DNSresolution')
+                if dns_resolutions:
+                    # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
+                    for ip, resolution in dns_resolutions.items():
+                        resolution = json.loads(resolution)
+                        if SNI_port['server_name'] in json.loads(resolution['domains']):
+                            # add SNI to our db as it has a DNS resolution
+                            sni_ipdata.append(SNI_port)
+                            self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
+                            break
             # We are giving only new server_name to the threat_intelligence module.
             data_to_send = {
                 'server_name' : server_name,
@@ -1874,28 +1879,53 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query: str, answers: str):
+    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str):
         """
-        Save in DB DNS name for each IP
+        Cache DNS answers for each query
+        stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
+        :param ts: epoch time
         """
-        for ans in answers:
-            # get stored DNS resolution from our db
-            data = self.get_dns_resolution(ans)
-            if query not in data:
-                data.append(query)
-            data = json.dumps(data)
-            self.r.hset('DNSresolution', ans, data)
 
-    def get_dns_resolution(self, ip):
+        for ip in answers:
+            # don't store TXT records in the database
+            if 'TXT' in ip:
+                continue
+            # get stored DNS resolution from our db
+            domains = self.get_dns_resolution(ip=ip)
+            # if the domain(query) we have isn't already in DNSresolution in the db, add it
+            if query not in domains:
+                domains.append(query)
+            domains = json.dumps(domains)
+            ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
+            ip_info = json.dumps(ip_info)
+            self.r.hset('DNSresolution', ip, ip_info)
+
+    def get_dns_resolution(self, ip, all_info=False):
         """
         Get DNS name of the IP, a list
+        :param all_info: if provided returns a dict with {ts: .. , 'answers': .. , 'uid':... } of this IP
+        if not returns answers only
+        this function is called for every IP in the timeline of kalipso
         """
-        data = self.r.hget('DNSresolution', ip)
-        if data:
-            data = json.loads(data)
-            return data
+        ip_info = self.r.hget('DNSresolution', ip)
+        if ip_info:
+            ip_info = json.loads(ip_info)
+            if all_info:
+                # return a dict with 'ts' 'uid' 'answers' about this IP
+                return ip_info
+            # return answers only
+            domains = json.loads(ip_info['domains'])
+            return domains
         else:
             return []
+
+    def get_all_dns_resolutions(self):
+        dns_resolutions = self.r.hgetall('DNSresolution')
+        if not dns_resolutions:
+            return []
+        else:
+            return dns_resolutions
+
 
     def set_passive_dns(self, ip, data):
         """
@@ -2076,37 +2106,7 @@ class Database(object):
             data = ''
         return data
 
-    def store_dns_answers(self, query: str, answers: list, profileid_twid: str, ts: float, uid: str):
-        """
-        Cache DNS answers for each query
-        stored as {'query':{ts: .. , 'answers': .. , 'uid':... }}
-        :param ts: epoch time
-        """
-        try:
-            # to avoid duplicates, if key exists update it
-            stored_answers = self.get_dns_answers()
-            # try to get the results os this query
-            answers_dict = json.loads(stored_answers[query])
-            # found results for this query, update them
-            answers_dict.update(
-                            {'ts':ts,
-                             'answers': answers,
-                             'uid': uid})
-            answers_dict = json.dumps(answers_dict)
-        except KeyError:
-            # key doesn't exist
-            answers = json.dumps(answers)
-            answers_dict = json.dumps(
-                                    {'ts':ts,
-                                     'answers': answers,
-                                     'uid': uid})
 
-        # we're storing in dns_answers instead of 'DomainsInfo' because domainsInfo is stored in the cache,
-        self.r.hset('dns_answers', query, answers_dict)
-
-    def get_dns_answers(self):
-        """ Returns dns_answers dict {query: {'ts':..,'answers':serialized answers list, 'uid':...}}"""
-        return self.r.hgetall('dns_answers')
 
 
     def set_asn_cache(self, asn, asn_range) -> None:
