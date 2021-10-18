@@ -202,7 +202,11 @@ The threat intelligence module reads IoCs from local and remote files.
 
 We update the remote ones regularly. The list of remote threat intelligence files is set in the variables ```ti_files``` variable in slips.conf. You can add your own remote threat intelligence feeds in this variable. Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
 
-Each URL should be added with a confidence, the format is (url,confidence), confidence is on a scale from 0 to 1 how confident are you that this feed has valid IOCs.
+Each URL should be added with a confidence and a tag, the format is (url,confidence,tag) 
+
+tag is which category is this feed e.g. phishing, adtrackers, etc..
+
+confidence is on a scale from 0 to 1 how confident are you that this feed has valid IOCs.
 
 The lower the confidence the less likely it is for Slips to alert when a malicious IP/domain is found in this feed.
 

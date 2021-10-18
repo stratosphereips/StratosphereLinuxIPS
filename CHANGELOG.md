@@ -1,7 +1,10 @@
+-0.8.1
+	-Slips
+		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
 - 0.8
     - Slips
 		- Detect PING sweep scan.
-		- The Threat Intelligence feeds are no assigned a confidence value by default (user can change), so you can establish how each list impact your detection.
+		- The Threat Intelligence feeds are now assigned a confidence value by default (user can change), so you can establish how each list impact your detection.
         - Slips now allows you to re-train the machine learning model for flows with your own traffic. You can extend the current model, or start from scratch.
         - Compute the JA3 hash for all TLS connections using a Zeek script.
         - Use JA3 whitelists as detection in the Threat Intelligence module.
