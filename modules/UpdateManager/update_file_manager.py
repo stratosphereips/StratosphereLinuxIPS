@@ -43,34 +43,36 @@ class UpdateFileManager:
             self.path_to_threat_intelligence_data = 'modules/ThreatIntelligence1/remote_data_files/'
         try:
             # Read the list of URLs to download. Convert to list
-            self.ti_feeds = self.config.get('threatintelligence', 'ti_files').split(', ')
+            self.ti_feed_tuples = self.config.get('threatintelligence', 'ti_files').split(', ')
             # this dict will contain every link and its confidence
-            self.url_confidence = {}
-            # this is a list of tuples, each tuple is (url,confidence), extract the links
-            for tuple_ in self.ti_feeds:
+            self.url_feeds = {}
+            # this is a list of tuples, each tuple is (url,confidence,tag), extract the links
+            for tuple_ in self.ti_feed_tuples:
                 # remove the () from the tuple and store url,confidence in a list
                 tuple_ = tuple_.replace('(','').replace(')','').split(',')
                 url = tuple_[0]
                 confidence= tuple_[1]
-                self.url_confidence[url] = confidence
+                tag = tuple_[2]
+                self.url_feeds[url] =  {'confidence': confidence, 'tag':tag}
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.url_confidence = {}
+            self.url_feeds = {}
 
         try:
             # Read the list of ja3 feeds to download. Convert to list
-            self.ja3_feeds = self.config.get('threatintelligence', 'ja3_feeds').split(', ')
-            self.ja3_confidence = {}
-            # this is a list of tuples, each tuple is (url,confidence), extract the links
-            for tuple_ in self.ja3_feeds:
-                # remove the () from the tuple and store url,confidence in a list
+            self.ja3_feed_tuples = self.config.get('threatintelligence', 'ja3_feeds').split(', ')
+            self.ja3_feeds = {}
+            # this is a list of tuples, each tuple is (url,confidence,tag), extract the links
+            for tuple_ in self.ja3_feed_tuples:
+                # remove the () from the tuple and store url,confidence, tag in a list
                 tuple_ = tuple_.replace('(','').replace(')','').split(',')
                 url = tuple_[0]
                 confidence= tuple_[1]
-                self.ja3_confidence[url] = confidence
+                tag = tuple_[2]
+                self.ja3_feeds[url] = {'confidence': confidence, 'tag':tag}
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.ja3_confidence = {}
+            self.ja3_feeds = {}
 
         try:
             # Read the riskiq username
@@ -215,13 +217,13 @@ class UpdateFileManager:
                 # ja3 files and ti_files are parsed differently, check which file is this
                 path = f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'
                 # is it ja3 feed?
-                if link_to_download in self.ja3_confidence \
+                if link_to_download in self.ja3_feeds \
                         and not self.parse_ja3_feed(link_to_download, path):
                     return False
 
                 # is it a ti_file? load updated IPs to the database
-                if link_to_download in self.url_confidence \
-                        and not self.__load_malicious_datafile(link_to_download, path):
+                if link_to_download in self.url_feeds \
+                        and not self.parse_ti_feed(link_to_download, path):
                     # an error occured
                     return False
 
@@ -312,7 +314,7 @@ class UpdateFileManager:
         self.print('Checking if we need to download TI files.')
         # Check if the remote file is newer than our own
         # For each file that we should update
-        for file_to_download in {**self.url_confidence, **self.ja3_confidence}:
+        for file_to_download in {**self.url_feeds, **self.ja3_feeds}:
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
                 self.print(f'We should update the remote file {file_to_download}', 1, 0)
@@ -460,7 +462,9 @@ class UpdateFileManager:
                     # Check if the data is a valid IPv4, IPv6 or domain
                     if len(ja3) == 32:
                         # Store the ja3 in our local dict
-                        malicious_ja3_dict[ja3] = json.dumps({'description': description, 'source':filename, 'confidence': self.ja3_confidence[url]})
+                        malicious_ja3_dict[ja3] = json.dumps({'description': description, 'source':filename,
+                                                              'confidence': self.ja3_feeds[url]['confidence'],
+                                                              'tag': self.ja3_feeds[url]['tag'] })
                     else:
                         self.print('The data {} is not valid. It was found in {}.'.format(data, filename), 3, 3)
                         continue
@@ -503,7 +507,7 @@ class UpdateFileManager:
                     return None
                     # self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
 
-    def __load_malicious_datafile(self, link_to_download, malicious_data_path: str) -> bool:
+    def parse_ti_feed(self, link_to_download, malicious_data_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
@@ -714,37 +718,44 @@ class UpdateFileManager:
                     if data_type == 'domain':
                         try:
                             # we already have info about this domain?
-                            domain_info = json.loads(malicious_domains_dict[str(data)] )
+                            old_domain_info = json.loads(malicious_domains_dict[str(data)] )
                             # if the domain appeared twice in the same blacklist, don't add the blacklist name twice
                             # or calculate the max confidence
-                            if data_file_name not in domain_info['source']:
+                            if data_file_name not in old_domain_info['source']:
                                 # append the new blacklist name to the current one
-                                source = f'{domain_info["source"]}, {data_file_name}'
+                                source = f'{old_domain_info["source"]}, {data_file_name}'
+                                # append the new tag to the current tag
+                                tag = f'{old_domain_info["tag"]}, {self.url_feeds[link_to_download]["tag"]}'
                                 # the new confidence is the maximum confidence
-                                confidence = str(max(float(domain_info['confidence']) , float(self.url_confidence[link_to_download])))
+                                confidence = str(max(float(old_domain_info['confidence']), float(self.url_feeds[link_to_download]['confidence'])))
                                 # Store the ip in our local dict
-                                malicious_domains_dict[str(data)] = json.dumps({'description': domain_info['description'],
+                                malicious_domains_dict[str(data)] = json.dumps({'description': old_domain_info['description'],
                                                                                 'source':source,
-                                                                                'confidence':confidence})
+                                                                                'confidence':confidence,
+                                                                                'tag':tag })
                         except KeyError:
                             # We don't have info about this domain, Store the ip in our local dict
                             malicious_domains_dict[str(data)] = json.dumps({'description': description,
                                                                                   'source':data_file_name,
-                                                                                  'confidence':self.url_confidence[link_to_download]})
+                                                                                  'confidence':self.url_feeds[link_to_download]['confidence'],
+                                                                                'tag': self.url_feeds[link_to_download]['tag']})
                     else:
                         try:
                             # we already have info about this ip?
-                            ip_info = json.loads(malicious_ips_dict[str(data)])
+                            old_ip_info = json.loads(malicious_ips_dict[str(data)])
                             # if the IP appeared twice in the same blacklist, don't add the blacklist name twice
                             # or calculate the max confidence
-                            if data_file_name not in ip_info['source']:
+                            if data_file_name not in old_ip_info['source']:
                                 # append the new blacklist name to the current one
-                                source = f'{ip_info["source"]}, {data_file_name}'
-                                # the new confidence is the old + the new one
-                                confidence = str(max(int(ip_info['confidence']) ,int(self.url_confidence[link_to_download])))
-                                malicious_ips_dict[str(data)] = json.dumps({'description': ip_info['description'],
+                                source = f'{old_ip_info["source"]}, {data_file_name}'
+                                # append the new tag to the old tag
+                                tag = f'{old_ip_info["tag"]}, {self.url_feeds[link_to_download]["tag"]}'
+                                # the new confidence is the max of the 2
+                                confidence = str(max(int(old_ip_info['confidence']), int(self.url_feeds[link_to_download]['confidence'])))
+                                malicious_ips_dict[str(data)] = json.dumps({'description': old_ip_info['description'],
                                                                                 'source':source,
-                                                                                'confidence':confidence})
+                                                                                'confidence':confidence,
+                                                                                'tag': tag})
                                 # print(f'Dulicate ip {data} found in sources: {source} old confidence: {ip_info["confidence"]}
                                 # new confidence: {self.url_confidence[link_to_download]} maximum confidence is {confidence}')
 
@@ -752,8 +763,8 @@ class UpdateFileManager:
                             # We don't have info about this IP, Store the ip in our local dict
                             malicious_ips_dict[str(data)] = json.dumps({'description': description,
                                                                           'source':data_file_name,
-                                                                          'confidence':self.url_confidence[link_to_download]})
-
+                                                                          'confidence':self.url_feeds[link_to_download]['confidence'],
+                                                                        'tag': self.url_feeds[link_to_download]['tag']})
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
