@@ -28,6 +28,7 @@ import time
 import json
 import traceback
 import subprocess
+import shutil
 
 # Input Process
 class InputProcess(multiprocessing.Process):
@@ -245,11 +246,14 @@ class InputProcess(multiprocessing.Process):
                 continue
 
             # to fix the problem of evidence being generated BEFORE their corresponding flows are added to our db
-            # make sure we send the lines of conn.log before the lines of any other file
-            for key in cache_lines:
-                if 'conn' in key:
-                    file_with_earliest_flow = key
-                    break
+            # make sure we read flows in the following order:
+            # dns.log  (make it a priority to avoid FP connection without dns resolution alerts)
+            # conn.log
+            # any other flow
+            # for key in cache_lines:
+            #     if 'dns' in key:
+            #         file_with_earliest_flow = key
+            #         break
             # comes here if we're done with all conn.log flows and it's time to process other files
             line_to_send = cache_lines[file_with_earliest_flow]
 
@@ -411,9 +415,9 @@ class InputProcess(multiprocessing.Process):
 
         if len(os.listdir(self.zeek_folder)) > 0:
             # First clear the zeek folder of old .log files
-            # The rm should not be in background because we must wait until the folder is empty
-            command = "rm " + self.zeek_folder + "/*.log > /dev/null  2>&1"
-            os.system(command)
+            shutil.rmtree(self.zeek_folder)
+            # create the zeek folder again
+            os.mkdir(self.zeek_folder)
 
         # Run zeek on the pcap or interface. The redef is to have json files
         zeek_scripts_dir = os.getcwd() + '/zeek-scripts'

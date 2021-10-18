@@ -1894,29 +1894,30 @@ class ProfilerProcess(multiprocessing.Process):
                 answers = self.column_values['answers']
                 ttls = self.column_values['TTLs']
             elif 'dhcp' in flow_type:
-                mac_addr = self.column_values['mac']
-                client_addr = self.column_values['client_addr']
-                profileid = get_rev_profile(starttime, client_addr)[0]
-                MAC_info = {'MAC': mac_addr}
-                oui = mac_addr[:8].upper()
-                with open('databases/macaddress-db.json','r') as db:
-                    line = db.readline()
-                    while line:
-                        if oui in line:
-                            break
+                # client mac addr and client_addr is optional in zeek, so sometimes it may not be there
+                mac_addr = self.column_values.get('mac',False)
+                client_addr = self.column_values.get('client_addr',False)
+                if client_addr:
+                    profileid = get_rev_profile(starttime, client_addr)[0]
+                if mac_addr:
+                    MAC_info = {'MAC': mac_addr}
+                    oui = mac_addr[:8].upper()
+                    with open('databases/macaddress-db.json','r') as db:
                         line = db.readline()
-                    else:
-                        # comes here if it doesn't find info about this mac addr
-                        line = False
-                if line:
-                    line = json.loads(line)
-                    vendor = line['companyName']
-                    MAC_info.update({'Vendor': vendor})
-                # Store info in the db
-                MAC_info = json.dumps(MAC_info)
-                __database__.add_mac_addr_to_profile(profileid, MAC_info)
-
-
+                        while line:
+                            if oui in line:
+                                break
+                            line = db.readline()
+                        else:
+                            # comes here if it doesn't find info about this mac addr
+                            line = False
+                    if line:
+                        line = json.loads(line)
+                        vendor = line['companyName']
+                        MAC_info.update({'Vendor': vendor})
+                    # Store info in the db
+                    MAC_info = json.dumps(MAC_info)
+                    __database__.add_mac_addr_to_profile(profileid, MAC_info)
 
             # Create the objects of IPs
             try:
@@ -1965,7 +1966,8 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                     # Add DNS resolution if there are answers for the query
                     if answers:
-                        __database__.set_dns_resolution(query, answers)
+                        __database__.set_dns_resolution(query, answers, starttime, uid)
+
                 elif flow_type == 'http':
                     __database__.add_out_http(profileid, twid, starttime, flow_type, uid, self.column_values['method'],
                                               self.column_values['host'], self.column_values['uri'],
