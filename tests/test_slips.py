@@ -40,8 +40,8 @@ def test_load(database):
     # wait for the command to finish
     time.sleep(3)
     # check a random value to make sure the db is loaded
-    x = database.r.hgetall('profile_10.0.2.15_timewindow0_altflows')
-    assert 'Cjmmqo3oAg8XaawHok' in str(x)
+    x = database.r.hgetall('profile_10.0.2.2_timewindow1_flows')
+    assert 'CDm47v3jrYL8lx0cOh' in str(x)
 
 def test_recognize_host_ip():
     assert recognize_host_ip() != None
