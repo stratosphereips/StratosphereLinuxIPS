@@ -16,11 +16,8 @@ sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clip
 
 # Compile and install YARA
 echo "[+] Installing YARA ..."
-sudo apt install -y automake libtool make gcc pkg-config
-wget -O yara-4.1.2.tar.gz https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.2.tar.gz \
- && tar -zxf yara-4.1.2.tar.gz \
- && cd yara-4.1.2  \
- && ./bootstrap.sh  && ./configure && make && make install
+git clone https://github.com/VirusTotal/yara-python yara-python && cd yara-python
+python3 setup.py build && python3 setup.py install
 
 echo "[+] Executing 'python3 -m pip install yara-python'"
 python3 -m pip install yara-python
