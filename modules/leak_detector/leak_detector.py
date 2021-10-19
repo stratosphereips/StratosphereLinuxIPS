@@ -70,7 +70,7 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def get_packet_info(self, offset: int):
-        """ Parse pcap and determine the packet at this offset then get the srcip, dstip , etc.. """
+        """ Parse pcap and determine the packet at this offset then return the srcip, dstip , etc.. """
         offset = int(offset)
         with open(self.pcap ,'rb') as f:
             # every pcap header is 24 bytes
@@ -95,16 +95,23 @@ class Module(Module, multiprocessing.Process):
                 # this offset is exactly when the packet ends
                 end_offset = f.tell()
                 if offset <= end_offset and offset >= start_offset:
-                    # print(f"found a match. Packet number in wireshark: {packet_number+1}")
-                    # get the packet the yara match is in
-                    packet_at_offset = rdpcap(self.pcap)[packet_number]
-                    print(packet_at_offset['IP'].dst)
-                    print(packet_at_offset['IP'].src)
-                    # 17 is UDP 6 is TCP
-                    print(packet_at_offset['IP'].proto)
-                    print(packet_at_offset['TCP'].sport)
-                    print(packet_at_offset['TCP'].dport)
+                    # print(f"Found a match. Packet number in wireshark: {packet_number+1}")
 
+                    # get the packet the yara match is in
+                    packet = rdpcap(self.pcap)[packet_number]
+                    # make sure the packet has an IP layer
+                    if IP in packet:
+                        dstip = packet[IP].dst
+                        srcip = packet[IP].src
+                        # proto is a number in scapy, 17 is UDP 6 is TCP.
+                        proto = packet[IP].proto
+                        proto = TCP if proto==6 else UDP
+                        sport = packet[proto].sport
+                        dport = packet[proto].dport
+                        proto = 'TCP' if 'TCP' in str(proto) else 'UDP'
+
+                        return srcip, dstip, proto, sport, dport
+                    break
 
 
     def set_evidence_yara_match(self, info:dict ):
@@ -123,8 +130,11 @@ class Module(Module, multiprocessing.Process):
         # reference = meta.get('reference')
         # organization = meta.get('organization')
 
-        # we now know there's a match at offset x, we need to know offset x belongs to which packet
-
+        for match in strings:
+            offset, string_found = match[0], match[1]
+            # we now know there's a match at offset x, we need to know offset x belongs to which packet
+            srcip, dstip, proto, sport, dport = self.get_packet_info(offset)
+            #todo set evidence
 
         # evidence = f'{rule} detected in {self.pcap}. Rule description: {description}.\nMatches:\n'
         # for match in strings:
@@ -133,6 +143,7 @@ class Module(Module, multiprocessing.Process):
         #
         # with open(self.output_file,'a') as f:
         #     f.write(f'{evidence}\n')
+
 
 
     def compile_and_save_rules(self):
