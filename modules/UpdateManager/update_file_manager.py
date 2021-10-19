@@ -25,6 +25,8 @@ class UpdateFileManager:
         self.separator = __database__.getFieldSeparator()
         # Read the conf
         self.read_configuration()
+        # this will store the number of loaded ti files
+        self.loaded_ti_files = 0
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -360,12 +362,15 @@ class UpdateFileManager:
                 self.print(f'We should update the remote file {file_to_download}', 1, 0)
                 if self.download_malicious_file(file_to_download):
                     self.print(f'Successfully updated remote file {file_to_download}.', 1, 0)
+                    self.loaded_ti_files +=1
                 else:
                     self.print(f'An error occured during downloading file {file_to_download}. Updating was aborted.', 0, 1)
                     continue
             else:
                 self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
+                self.loaded_ti_files +=1
                 continue
+        self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
         # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
         # check if we have a username and api key and a week has passed since we last updated
         if self.riskiq_email and self.riskiq_key and self.__check_if_update('riskiq_domains'):
@@ -504,7 +509,7 @@ class UpdateFileManager:
                         # Store the ja3 in our local dict
                         malicious_ja3_dict[ja3] = json.dumps({'description': description, 'source':filename,
                                                               'confidence': self.ja3_feeds[url]['confidence'],
-                                                              'tag': self.ja3_feeds[url]['tag'] })
+                                                              'tag': self.ja3_feeds[url]['tags'] })
                     else:
                         self.print('The data {} is not valid. It was found in {}.'.format(data, filename), 3, 3)
                         continue
