@@ -18,8 +18,8 @@ from slips_files.core.database import __database__
 import sys
 
 # Your imports
-import os
 import yara
+from scapy.all import *
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -69,46 +69,40 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-    def parse_pcap(self):
-        with open("slips2/dataset/hide-and-seek-short.pcap",'rb') as f:
-            # this dict will store packet numbers with their packet length
-            packets_length = {}
-            # header is 24
+    def get_packet_info(self, offset: int):
+        """ Parse pcap and determine the packet at this offset then get the srcip, dstip , etc.. """
+        offset = int(offset)
+        with open(self.pcap ,'rb') as f:
+            # every pcap header is 24 bytes
             f.read(24)
-            # since packets start from 1 in wireshark
             packet_number = 0
 
             packet_data_length = True
             while packet_data_length:
-                # the number of the packet we're currently working with
+                # the number of the packet we're currently working with, since packets start from 1 in wireshark , the first packet should be 1
                 packet_number += 1
-                # # this offset is exactly when the packet starts
-                # start_offset = f.tell()
-                #  get the Packet header
+                # this offset is exactly when the packet starts
+                start_offset = f.tell() + 1
+                # get the Packet header, every packet header is exactly 16 bytes long
                 packet_header = f.read(16)
-                # print("read header")
-                # print(bytes(packet_header))
-
-                # get the length of the Packet Data field , [::-1] for little endian
+                # get the length of the Packet Data field (the second last 4 bytes of the header), [::-1] for little endian
                 packet_data_length = packet_header[8:12][::-1]
-                # print(f"lengthhhh in hex : {packet_data_length}")
-
                 # convert the hex into decimal
                 packet_length_in_decimal = int.from_bytes(packet_data_length, "big")
 
-
-                # print(f"packet {packet_number} length is : {packet_length_in_decimal}")
-
-                # read untill the end of this packet
-                packet_data = f.read(packet_length_in_decimal)
-                # store the offset that marks the end of this packet
-                packets_length.update({str(packet_number):f.tell()})
-
-                # print(f"added: {str(packet_number)} : {f.tell()}")
-                # print(" ")
-
-                # import pprint
-                # pprint.pprint(packets_length)
+                # read until the end of this packet
+                f.read(packet_length_in_decimal)
+                # this offset is exactly when the packet ends
+                end_offset = f.tell()
+                if offset < end_offset and offset > start_offset:
+                    # get the packet the yara match is in
+                    packet_at_offset = rdpcap(self.pcap)[packet_number]
+                    print(packet_at_offset['IP'].dst)
+                    print(packet_at_offset['IP'].src)
+                    # 17 is UDP 6 is TCP
+                    print(packet_at_offset['IP'].proto)
+                    print(packet_at_offset['TCP'].sport)
+                    print(packet_at_offset['TCP'].dport)
 
 
 
@@ -167,19 +161,19 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         try:
-            # if we we don't have compiled rules, compile them
-            if not os.path.exists(self.compiled_yara_rules_path):
-                os.mkdir(self.compiled_yara_rules_path)
-                self.compile_and_save_rules()
-
-            self.find_matches()
-
+            # # if we we don't have compiled rules, compile them
+            # if not os.path.exists(self.compiled_yara_rules_path):
+            #     os.mkdir(self.compiled_yara_rules_path)
+            #     self.compile_and_save_rules()
+            #
+            # self.find_matches()
+            self.get_packet_info(7563) # for testing ****
         except KeyboardInterrupt:
             return True
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+        # except Exception as inst:
+        #     exception_line = sys.exc_info()[2].tb_lineno
+        #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
+        #     self.print(str(type(inst)), 0, 1)
+        #     self.print(str(inst.args), 0, 1)
+        #     self.print(str(inst), 0, 1)
+        #     return True
