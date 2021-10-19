@@ -53,7 +53,7 @@ RUN cd yara-4.1.2/  && ./configure && make && make install
 # Install redis using PIP3
 RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
 RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby
-RUN pip3 install ipwhois pytest pytest-xdist yara-python pyshark
+RUN pip3 install ipwhois pytest pytest-xdist yara-python scapy
 RUN pip3 install --ignore-installed six
 RUN pip3 install --upgrade tensorflow==2.4.1
 
