@@ -20,6 +20,8 @@ import sys
 # Your imports
 import yara
 from scapy.all import *
+import base64
+import binascii
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -43,11 +45,6 @@ class Module(Module, multiprocessing.Process):
             pass
         self.yara_rules_path = 'modules/leak_detector/yara_rules/rules/'
         self.compiled_yara_rules_path = 'modules/leak_detector/yara_rules/compiled/'
-        # this file is used for writing all the evidence detected by this module
-        self.output_file = 'output/leak_detection.txt'
-        # create the evidence file if not there
-        if not os.path.exists(self.output_file):
-            open(self.output_file,'w').close()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -99,6 +96,7 @@ class Module(Module, multiprocessing.Process):
 
                     # get the packet the yara match is in
                     packet = rdpcap(self.pcap)[packet_number]
+                    ts = packet.time
                     # make sure the packet has an IP layer
                     if IP in packet:
                         dstip = packet[IP].dst
@@ -110,7 +108,7 @@ class Module(Module, multiprocessing.Process):
                         dport = packet[proto].dport
                         proto = 'TCP' if 'TCP' in str(proto) else 'UDP'
 
-                        return srcip, dstip, proto, sport, dport
+                        return srcip, dstip, proto, sport, dport, ts
                     break
 
 
@@ -133,18 +131,20 @@ class Module(Module, multiprocessing.Process):
         for match in strings:
             offset, string_found = match[0], match[1]
             # we now know there's a match at offset x, we need to know offset x belongs to which packet
-            srcip, dstip, proto, sport, dport = self.get_packet_info(offset)
-            #todo set evidence
-
-        # evidence = f'{rule} detected in {self.pcap}. Rule description: {description}.\nMatches:\n'
-        # for match in strings:
-        #     offset, string_found, matched_bytes = match[0], match[1], match[2]
-        #     evidence+= f'At offset {offset} found {string_found} matched bytes: {matched_bytes}\n'
-        #
-        # with open(self.output_file,'a') as f:
-        #     f.write(f'{evidence}\n')
-
-
+            srcip, dstip, proto, sport, dport, ts = self.get_packet_info(offset)
+            type_detection = 'dstip'
+            detection_info = dstip
+            type_evidence = f'{rule}'
+            threat_level = 0.9
+            confidence = 0.9
+            description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
+            # generate a random uid
+            uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
+            profileid = f'profile_{srcip}'
+            #todo get twid
+            twid = ''
+            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                     threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
 
     def compile_and_save_rules(self):
         """
@@ -173,13 +173,12 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         try:
-            # # if we we don't have compiled rules, compile them
-            # if not os.path.exists(self.compiled_yara_rules_path):
-            #     os.mkdir(self.compiled_yara_rules_path)
-            #     self.compile_and_save_rules()
-            #
-            # self.find_matches()
-            self.get_packet_info(0x52eeb) # for testing ****
+            # if we we don't have compiled rules, compile them
+            if not os.path.exists(self.compiled_yara_rules_path):
+                os.mkdir(self.compiled_yara_rules_path)
+                self.compile_and_save_rules()
+            # run the yara rules on the given pcap
+            self.find_matches()
         except KeyboardInterrupt:
             return True
         # except Exception as inst:
