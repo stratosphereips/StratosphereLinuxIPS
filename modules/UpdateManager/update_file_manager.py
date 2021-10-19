@@ -46,14 +46,33 @@ class UpdateFileManager:
             self.ti_feed_tuples = self.config.get('threatintelligence', 'ti_files').split(', ')
             # this dict will contain every link and its confidence
             self.url_feeds = {}
-            # this is a list of tuples, each tuple is (url,confidence,tag), extract the links
+            # Empty the variables so we know which ones we read already
+            url = ''
+            confidence = ''
+            tags = ''
+            # Each tuple_ is in turn a url, confidence and tags
             for tuple_ in self.ti_feed_tuples:
-                # remove the () from the tuple and store url,confidence in a list
-                tuple_ = tuple_.replace('(','').replace(')','').split(',')
-                url = tuple_[0]
-                confidence= tuple_[1]
-                tag = tuple_[2]
-                self.url_feeds[url] =  {'confidence': confidence, 'tag':tag}
+                if not url:
+                    url = tuple_.replace('\n','')
+                    continue
+                elif not confidence:
+                    confidence = tuple_.replace('confidence=','')
+                    continue
+                elif not tags:
+                    if '\n' in tuple_:
+                        # Is a combined tags+url.
+                        # This is an issue with the library
+                        tags = tuple_.split('\n')[0].replace('tags=','')
+                        self.url_feeds[url] =  {'confidence': confidence, 'tags':tags}
+                        url = tuple_.split('\n')[1]
+                        confidence = ''
+                        tags = ''
+                    else:
+                        # The first line is not combined tag+url
+                        tags = tuple_.replace('tags=','')
+                        self.url_feeds[url] =  {'confidence': confidence, 'tags':tags}
+                    continue
+            #self.print(f'Final: {self.url_feeds}')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.url_feeds = {}
@@ -62,14 +81,30 @@ class UpdateFileManager:
             # Read the list of ja3 feeds to download. Convert to list
             self.ja3_feed_tuples = self.config.get('threatintelligence', 'ja3_feeds').split(', ')
             self.ja3_feeds = {}
-            # this is a list of tuples, each tuple is (url,confidence,tag), extract the links
+            url = ''
+            confidence = ''
+            tags = ''
             for tuple_ in self.ja3_feed_tuples:
-                # remove the () from the tuple and store url,confidence, tag in a list
-                tuple_ = tuple_.replace('(','').replace(')','').split(',')
-                url = tuple_[0]
-                confidence= tuple_[1]
-                tag = tuple_[2]
-                self.ja3_feeds[url] = {'confidence': confidence, 'tag':tag}
+                if not url:
+                    url = tuple_.replace('\n','')
+                    continue
+                elif not confidence:
+                    confidence = tuple_.replace('confidence=','')
+                    continue
+                elif not tags:
+                    if '\n' in tuple_:
+                        # Is a combined tags+url.
+                        # This is an issue with the library
+                        tags = tuple_.split('\n')[0].replace('tags=','')
+                        self.ja3_feeds[url] =  {'confidence': confidence, 'tags':tags}
+                        url = tuple_.split('\n')[0]
+                        confidence = ''
+                        tags = ''
+                    else:
+                        # The first line is not combined tag+url
+                        tags = tuple_.replace('tags=','')
+                        self.ja3_feeds[url] =  {'confidence': confidence, 'tags':tags}
+                    continue
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ja3_feeds = {}
@@ -217,11 +252,13 @@ class UpdateFileManager:
                 # ja3 files and ti_files are parsed differently, check which file is this
                 path = f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'
                 # is it ja3 feed?
+                # Not sure if this is working with the new dict format. check
                 if link_to_download in self.ja3_feeds \
                         and not self.parse_ja3_feed(link_to_download, path):
                     return False
 
                 # is it a ti_file? load updated IPs to the database
+                # Not sure if this is working with the new dict format. check
                 if link_to_download in self.url_feeds \
                         and not self.parse_ti_feed(link_to_download, path):
                     # an error occured
@@ -314,7 +351,10 @@ class UpdateFileManager:
         self.print('Checking if we need to download TI files.')
         # Check if the remote file is newer than our own
         # For each file that we should update
-        for file_to_download in {**self.url_feeds, **self.ja3_feeds}:
+        files_to_download_dics = {}
+        files_to_download_dics.update(self.url_feeds)
+        files_to_download_dics.update(self.ja3_feeds)
+        for file_to_download in files_to_download_dics.keys():
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
                 self.print(f'We should update the remote file {file_to_download}', 1, 0)
@@ -725,20 +765,20 @@ class UpdateFileManager:
                                 # append the new blacklist name to the current one
                                 source = f'{old_domain_info["source"]}, {data_file_name}'
                                 # append the new tag to the current tag
-                                tag = f'{old_domain_info["tag"]}, {self.url_feeds[link_to_download]["tag"]}'
+                                tags = f'{old_domain_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
                                 # the new confidence is the maximum confidence
                                 confidence = str(max(float(old_domain_info['confidence']), float(self.url_feeds[link_to_download]['confidence'])))
                                 # Store the ip in our local dict
                                 malicious_domains_dict[str(data)] = json.dumps({'description': old_domain_info['description'],
                                                                                 'source':source,
                                                                                 'confidence':confidence,
-                                                                                'tag':tag })
+                                                                                'tags':tags })
                         except KeyError:
                             # We don't have info about this domain, Store the ip in our local dict
                             malicious_domains_dict[str(data)] = json.dumps({'description': description,
                                                                                   'source':data_file_name,
                                                                                   'confidence':self.url_feeds[link_to_download]['confidence'],
-                                                                                'tag': self.url_feeds[link_to_download]['tag']})
+                                                                                'tags': self.url_feeds[link_to_download]['tags']})
                     else:
                         try:
                             # we already have info about this ip?
@@ -749,13 +789,13 @@ class UpdateFileManager:
                                 # append the new blacklist name to the current one
                                 source = f'{old_ip_info["source"]}, {data_file_name}'
                                 # append the new tag to the old tag
-                                tag = f'{old_ip_info["tag"]}, {self.url_feeds[link_to_download]["tag"]}'
+                                tags = f'{old_ip_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
                                 # the new confidence is the max of the 2
                                 confidence = str(max(int(old_ip_info['confidence']), int(self.url_feeds[link_to_download]['confidence'])))
                                 malicious_ips_dict[str(data)] = json.dumps({'description': old_ip_info['description'],
                                                                                 'source':source,
                                                                                 'confidence':confidence,
-                                                                                'tag': tag})
+                                                                                'tags': tags})
                                 # print(f'Dulicate ip {data} found in sources: {source} old confidence: {ip_info["confidence"]}
                                 # new confidence: {self.url_confidence[link_to_download]} maximum confidence is {confidence}')
 
@@ -764,7 +804,7 @@ class UpdateFileManager:
                             malicious_ips_dict[str(data)] = json.dumps({'description': description,
                                                                           'source':data_file_name,
                                                                           'confidence':self.url_feeds[link_to_download]['confidence'],
-                                                                        'tag': self.url_feeds[link_to_download]['tag']})
+                                                                        'tags': self.url_feeds[link_to_download]['tags']})
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
