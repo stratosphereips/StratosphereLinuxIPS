@@ -2519,7 +2519,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # The flow was not in the last TW, its OLDER that it
                     self.print("The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time), 3, 0)
                     # Find out if we already have this TW in the past
-                    data = __database__.getTWforScore(profileid, flowtime)
+                    data = __database__.getTWofTime(profileid, flowtime)
                     if data:
                         # We found a TW where this flow belongs to
                         (twid, tw_start_time) = data

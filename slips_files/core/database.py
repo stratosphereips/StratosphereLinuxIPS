@@ -198,7 +198,7 @@ class Database(object):
 
     def getamountTWsfromProfile(self, profileid):
         """
-        Receives a profile id and returns the list of all the TW in that profile
+        Receives a profile id and returns the number of all the TWs in that profile
         """
         return len(self.r.zrange('tws' + profileid, 0, -1, withscores=True))
 
@@ -256,7 +256,7 @@ class Database(object):
         data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
         return data
 
-    def getTWforScore(self, profileid, time):
+    def getTWofTime(self, profileid, time):
         """
         Return the TW id and the time for the TW that includes the given time.
         The score in the DB is the start of the timewindow, so we should search

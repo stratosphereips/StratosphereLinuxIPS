@@ -96,7 +96,7 @@ class Module(Module, multiprocessing.Process):
 
                     # get the packet the yara match is in
                     packet = rdpcap(self.pcap)[packet_number]
-                    ts = packet.time
+                    ts = str(packet.time)
                     # make sure the packet has an IP layer
                     if IP in packet:
                         dstip = packet[IP].dst
@@ -107,17 +107,18 @@ class Module(Module, multiprocessing.Process):
                         sport = packet[proto].sport
                         dport = packet[proto].dport
                         proto = 'TCP' if 'TCP' in str(proto) else 'UDP'
-
                         return srcip, dstip, proto, sport, dport, ts
+                    else:
+                        # todo try to tget info from ethernet layer
+                        pass
                     break
 
 
-    def set_evidence_yara_match(self, info:dict ):
+    def set_evidence_yara_match(self, info:dict):
         """
         This function is called when yara finds a match
         :param info: a dict with info about the matched rule, example keys 'tags', 'matches', 'rule', 'strings' etc.
         """
-
         rule = info.get('rule')
         meta = info.get('meta',False)
         # strings is a list of tuples containing information about the matching strings.
@@ -131,7 +132,12 @@ class Module(Module, multiprocessing.Process):
         for match in strings:
             offset, string_found = match[0], match[1]
             # we now know there's a match at offset x, we need to know offset x belongs to which packet
-            srcip, dstip, proto, sport, dport, ts = self.get_packet_info(offset)
+            try:
+                srcip, dstip, proto, sport, dport, ts = self.get_packet_info(offset)
+            except TypeError:
+                # we couldn't get the packet of this offset!
+                #todo
+                continue
             type_detection = 'dstip'
             detection_info = dstip
             type_evidence = f'{rule}'
@@ -141,10 +147,15 @@ class Module(Module, multiprocessing.Process):
             # generate a random uid
             uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
             profileid = f'profile_{srcip}'
-            #todo get twid
-            twid = ''
-            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                     threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+            # make sure we have this profileid
+            if __database__.hasProfile(profileid):
+                # in which tw is this ts?
+                twid = __database__.getTWofTime(profileid, ts)[0]
+                __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                         threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+            else:
+                #todo
+                pass
 
     def compile_and_save_rules(self):
         """
