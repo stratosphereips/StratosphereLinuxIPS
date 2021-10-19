@@ -75,11 +75,11 @@ class Module(Module, multiprocessing.Process):
         with open(self.pcap ,'rb') as f:
             # every pcap header is 24 bytes
             f.read(24)
-            packet_number = 0
+            packet_number = -1
 
             packet_data_length = True
             while packet_data_length:
-                # the number of the packet we're currently working with, since packets start from 1 in wireshark , the first packet should be 1
+                # the number of the packet we're currently working with, since packets start from 0 in scapy , the first packet should be 0
                 packet_number += 1
                 # this offset is exactly when the packet starts
                 start_offset = f.tell() + 1
@@ -94,7 +94,8 @@ class Module(Module, multiprocessing.Process):
                 f.read(packet_length_in_decimal)
                 # this offset is exactly when the packet ends
                 end_offset = f.tell()
-                if offset < end_offset and offset > start_offset:
+                if offset <= end_offset and offset >= start_offset:
+                    # print(f"found a match. Packet number in wireshark: {packet_number+1}")
                     # get the packet the yara match is in
                     packet_at_offset = rdpcap(self.pcap)[packet_number]
                     print(packet_at_offset['IP'].dst)
@@ -167,7 +168,7 @@ class Module(Module, multiprocessing.Process):
             #     self.compile_and_save_rules()
             #
             # self.find_matches()
-            self.get_packet_info(7563) # for testing ****
+            self.get_packet_info(0x52eeb) # for testing ****
         except KeyboardInterrupt:
             return True
         # except Exception as inst:
