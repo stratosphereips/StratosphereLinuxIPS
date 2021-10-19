@@ -29,13 +29,12 @@ RUN pip3 install --upgrade pip
 
 # To avoid user interaction with tzdata
 ENV DEBIAN_FRONTEND=noninteractive
+
 # Compile and install YARA
-RUN apt install -y automake libtool make gcc pkg-config
-RUN wget -O yara-4.1.2.tar.gz https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.2.tar.gz \
- && tar -zxf yara-4.1.2.tar.gz \
- && cd yara-4.1.2  \
- && ./bootstrap.sh
-RUN cd yara-4.1.2/  && ./configure && make && make install
+RUN git clone https://github.com/VirusTotal/yara-python yara-python \
+    && cd yara-python \
+    && python setup.py build \
+    && python setup.py install
 
 # Install redis using PIP3
 RUN pip3 install wheel redis setuptools validators colorama
