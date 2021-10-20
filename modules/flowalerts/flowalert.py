@@ -324,6 +324,9 @@ class Module(Module, multiprocessing.Process):
                 type_detection  = 'dstdomain'
                 type_evidence = 'DNSWithoutConnection'
                 query = json.loads(ip_info['domains'])[-1]
+                if 'arpa' in query or '.local' in query:
+                    # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
+                    continue
                 detection_info = query
                 description = f'Domain {query} resolved with no connection'
                 __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
