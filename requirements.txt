@@ -21,4 +21,3 @@ scikit_learn==0.24.2
 slackclient==2.9.3
 psutil==5.8.0
 yara_python==4.1.2
-scapy==2.4.5
