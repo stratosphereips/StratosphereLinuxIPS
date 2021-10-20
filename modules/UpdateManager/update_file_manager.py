@@ -504,7 +504,7 @@ class UpdateFileManager:
                         # Store the ja3 in our local dict
                         malicious_ja3_dict[ja3] = json.dumps({'description': description, 'source':filename,
                                                               'confidence': self.ja3_feeds[url]['confidence'],
-                                                              'tag': self.ja3_feeds[url]['tag'] })
+                                                              'tags': self.ja3_feeds[url]['tags'] })
                     else:
                         self.print('The data {} is not valid. It was found in {}.'.format(data, filename), 3, 3)
                         continue
