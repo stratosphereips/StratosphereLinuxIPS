@@ -17,11 +17,14 @@ import ipaddress
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+import configparser
 
 # Your imports
 import json
 import sys
 import datetime
+import ipaddress
+
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -43,6 +46,7 @@ class Module(Module, multiprocessing.Process):
         self.pubsub.subscribe('new_arp')
         self.pubsub.subscribe('tw_closed')
         self.timeout = None
+        self.read_configuration()
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
 
@@ -65,6 +69,17 @@ class Module(Module, multiprocessing.Process):
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
+
+    def read_configuration(self):
+        self.home_network = []
+        try:
+            self.home_network.append(self.config.get('parameters', 'home_network'))
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.home_network = ['192.168.0.0/16', '172.16.0.0/12', '10.0.0.0/8']
+            # convert the ranges into network obj
+
+        self.home_network = list(map(ipaddress.ip_network,self.home_network))
 
 
     def check_arp_scan(self, profileid, twid, daddr, uid, ts):
@@ -122,17 +137,21 @@ class Module(Module, multiprocessing.Process):
             # this is the case of ARP probe, not an arp outside of local network, don't alert
             return False
 
-        # get first  octet of the saddr
-        local_net = saddr.split('.')[0]
-        if not daddr.startswith(local_net):
-            confidence = 0.8
-            threat_level = 50
-            description = f'sending ARP packet to a destination address outside of local network: {daddr}'
-            type_evidence = 'ARPScan'
-            type_detection = 'ip' #srcip
-            detection_info = profileid.split("_")[1]
-            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+        daddr_as_obj = ipaddress.IPv4Address(daddr)
+        for network in self.home_network:
+            if daddr_as_obj in network:
+                # IP is in this local network , don't alert
+                return False
+
+        # comes here if the IP isn't in any of the local networks
+        confidence = 0.8
+        threat_level = 50
+        description = f'sending ARP packet to a destination address outside of local network: {daddr}'
+        type_evidence = 'ARPScan'
+        type_detection = 'ip' #srcip
+        detection_info = profileid.split("_")[1]
+        __database__.setEvidence(type_detection, detection_info, type_evidence,
+                             threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
 
     def run(self):
         # Main loop function
