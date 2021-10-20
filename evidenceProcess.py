@@ -179,7 +179,7 @@ class EvidenceProcess(multiprocessing.Process):
             evidence_string = f'{dns_resolution_ip_final} detected {description}.'
 
         # Add the srcip to the evidence
-        evidence_string = f'IP: {ip}' + evidence_string
+        evidence_string = f'IP: {ip} ' + evidence_string
 
         return evidence_string
 

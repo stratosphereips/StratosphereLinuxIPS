@@ -140,7 +140,7 @@ class Module(Module, multiprocessing.Process):
         daddr_as_obj = ipaddress.IPv4Address(daddr)
         for network in self.home_network:
             if daddr_as_obj in network:
-                # IP is in this local network , don't alert
+                # IP is in this local network, don't alert
                 return False
 
         # comes here if the IP isn't in any of the local networks
