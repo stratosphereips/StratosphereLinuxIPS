@@ -142,16 +142,18 @@ class Module(Module, multiprocessing.Process):
             if daddr_as_obj in network:
                 # IP is in this local network, don't alert
                 return False
-
-        # comes here if the IP isn't in any of the local networks
-        confidence = 0.8
-        threat_level = 50
-        description = f'sending ARP packet to a destination address outside of local network: {daddr}'
-        type_evidence = 'ARPScan'
-        type_detection = 'ip' #srcip
-        detection_info = profileid.split("_")[1]
-        __database__.setEvidence(type_detection, detection_info, type_evidence,
-                             threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+        # to prevent ARP alerts from one IP to itself
+        local_net = saddr.split('.')[0]
+        if not daddr.startswith(local_net):
+            # comes here if the IP isn't in any of the local networks
+            confidence = 0.8
+            threat_level = 50
+            description = f'sending ARP packet to a destination address outside of local network: {daddr}'
+            type_evidence = 'ARPScan'
+            type_detection = 'ip' #srcip
+            detection_info = profileid.split("_")[1]
+            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
 
     def run(self):
         # Main loop function
