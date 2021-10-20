@@ -991,7 +991,7 @@ class Database(object):
             if '[' in description and ']' in description:
                 # get the tag
                 tag = description.split('[')[1].replace(']','')
-                evidence_to_send.update({'tag':tag})
+                evidence_to_send.update({'tags':tag})
             evidence_to_send = json.dumps(evidence_to_send)
             self.publish('evidence_added', evidence_to_send)
 
