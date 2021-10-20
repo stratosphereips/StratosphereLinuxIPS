@@ -146,7 +146,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ip = profileid.split("_")[-1]
-        alert_to_print = f'{now} IP {ip} blocked as source (or destination), on its {twid}.'
+        alert_to_print = f'{now} IP: {ip} blocked as source (or destination), on its {twid}.'
         return alert_to_print
 
     def print_evidence(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
@@ -159,21 +159,21 @@ class EvidenceProcess(multiprocessing.Process):
         dns_resolution_detection_info_final = dns_resolution_detection_info[0:3] if dns_resolution_detection_info else ''
         dns_resolution_ip = __database__.get_dns_resolution(ip)
         dns_resolution_ip_final = f' DNS: {dns_resolution_ip[0:3]}. ' if (dns_resolution_detection_info and len(dns_resolution_ip[0:3]) > 0) else ''
-
+        srcip = profileid.split('_')[1]
         if detection_module == 'ThreatIntelligenceBlacklistIP':
             if detection_type == 'dstip':
-                evidence_string = f'{profileid}_{twid}: Infected IP {ip} connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
+                evidence_string = f'IP: {ip} connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
 
             elif detection_type == 'srcip':
-                evidence_string = f'{profileid}_{twid}: Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}. '
+                evidence_string = f'IP: {srcip} Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-            evidence_string = f'{profileid}_{twid}: Detected domain {detection_info} due to {description}.'
+            evidence_string = f'IP: {srcip} Detected blacklisted domain {detection_info} due to {description}.'
 
         elif detection_module == 'SSHSuccessful':
-            evidence_string = f'{profileid}_{twid}: IP {ip} did a successful SSH. {description}.'
+            evidence_string = f'IP: {ip} did a successful SSH. {description}.'
         else:
-            evidence_string = f'{profileid}_{twid}: IP: {ip} {dns_resolution_ip_final}detected {description}.'
+            evidence_string = f'IP: {ip} {dns_resolution_ip_final}detected {description}.'
 
         return evidence_string
 
@@ -564,7 +564,9 @@ class EvidenceProcess(multiprocessing.Process):
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
-                                evidence_to_print = self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
+                                # when printing alerts to the terminal print the profileid_twid that generated this alert too
+                                evidence_to_print = f'{profileid}_{twid} '
+                                evidence_to_print += self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
                                 self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 # Set an alert about the evidence being blocked
                                 alert_to_log = self.print_alert(profileid, twid)
