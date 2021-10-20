@@ -7,8 +7,8 @@ echo "[+] Executing 'sudo apt-get -y install curl git redis python3.7-minimal py
 sudo apt-get -y install curl git redis python3.7-minimal python3-redis python3-pip python3-watchdog nodejs npm lsof file iptables
 echo "[+] Executing 'python3 -m pip install --upgrade pip'"
 python3 -m pip install --upgrade pip
-echo "[+] Executing 'pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1 netaddr slackclient stix2 cabby ipwhois tzlocal psutil yara-python scapy'"
-pip3 install maxminddb colorama validators urllib3 numpy sklearn requests pandas certifi keras redis==3.4.1 netaddr slackclient stix2 cabby ipwhois tzlocal psutil yara-python scapy
+echo "[+] Executing 'pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1 netaddr slackclient stix2 cabby ipwhois tzlocal psutil yara-python'"
+pip3 install maxminddb colorama validators urllib3 numpy sklearn requests pandas certifi keras redis==3.4.1 netaddr slackclient stix2 cabby ipwhois tzlocal psutil yara-python
 echo "[+] Executing pip3 install --ignore-installed six"
 pip3 install --ignore-installed six
 echo "[+] Executing 'sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs pytest'"

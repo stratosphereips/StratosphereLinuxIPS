@@ -19,9 +19,9 @@ import sys
 
 # Your imports
 import yara
-from scapy.all import *
 import base64
 import binascii
+import os
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -94,25 +94,7 @@ class Module(Module, multiprocessing.Process):
                 if offset <= end_offset and offset >= start_offset:
                     # print(f"Found a match. Packet number in wireshark: {packet_number+1}")
 
-                    # get the packet the yara match is in
-                    packet = rdpcap(self.pcap)[packet_number]
-                    ts = str(packet.time)
-                    # make sure the packet has an IP layer
-                    if IP in packet:
-                        dstip = packet[IP].dst
-                        srcip = packet[IP].src
-                        # proto is a number in scapy, 17 is UDP 6 is TCP.
-                        proto = packet[IP].proto
-                        proto = TCP if proto==6 else UDP
-                        sport = packet[proto].sport
-                        dport = packet[proto].dport
-                        proto = 'TCP' if 'TCP' in str(proto) else 'UDP'
-                        return srcip, dstip, proto, sport, dport, ts
-                    else:
-                        # todo try to tget info from ethernet layer
-                        pass
-                    break
-
+                    pass
 
     def set_evidence_yara_match(self, info:dict):
         """
@@ -135,12 +117,12 @@ class Module(Module, multiprocessing.Process):
             try:
                 srcip, dstip, proto, sport, dport, ts = self.get_packet_info(offset)
             except TypeError:
-                # we couldn't get the packet of this offset!
-                #todo
+                # we couldn't get the packet of this offset, the offset is probably at the header of a pcaap
+                # or the header of a packet! ignore it
                 continue
             type_detection = 'dstip'
             detection_info = dstip
-            type_evidence = f'{rule}'
+            type_evidence = f'{rule}by{srcip}'
             threat_level = 0.9
             confidence = 0.9
             description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
@@ -153,9 +135,6 @@ class Module(Module, multiprocessing.Process):
                 twid = __database__.getTWofTime(profileid, ts)[0]
                 __database__.setEvidence(type_detection, detection_info, type_evidence,
                                          threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
-            else:
-                #todo
-                pass
 
     def compile_and_save_rules(self):
         """
