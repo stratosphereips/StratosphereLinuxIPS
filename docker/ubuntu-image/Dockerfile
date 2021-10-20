@@ -32,6 +32,7 @@ RUN apt update && apt install -y --no-install-recommends \
     psutils \
     python3-tzlocal \
     nfdump \
+    tshark \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3

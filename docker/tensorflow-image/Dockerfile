@@ -29,6 +29,7 @@ RUN apt update && apt install -y --no-install-recommends \
 	iptables \
 	iproute2 \
 	nfdump \
+	tshark \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
