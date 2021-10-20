@@ -160,20 +160,26 @@ class EvidenceProcess(multiprocessing.Process):
         dns_resolution_ip = __database__.get_dns_resolution(ip)
         dns_resolution_ip_final = f' DNS: {dns_resolution_ip[0:3]}. ' if (dns_resolution_detection_info and len(dns_resolution_ip[0:3]) > 0) else ''
         srcip = profileid.split('_')[1]
+
         if detection_module == 'ThreatIntelligenceBlacklistIP':
             if detection_type == 'dstip':
-                evidence_string = f'IP: {ip} connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
+                evidence_string = f'Connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
 
             elif detection_type == 'srcip':
-                evidence_string = f'IP: {srcip} Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
+                ip = srcip
+                evidence_string = f'Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-            evidence_string = f'IP: {srcip} Detected blacklisted domain {detection_info} due to {description}.'
+            ip = srcip
+            evidence_string = f'Detected blacklisted domain {detection_info} due to {description}.'
 
         elif detection_module == 'SSHSuccessful':
-            evidence_string = f'IP: {ip} did a successful SSH. {description}.'
+            evidence_string = f'Did a successful SSH. {description}.'
         else:
-            evidence_string = f'IP: {ip} {dns_resolution_ip_final}detected {description}.'
+            evidence_string = f'{dns_resolution_ip_final} detected {description}.'
+
+        # Add the srcip to the evidence
+        evidence_string = f'IP: {ip}' + evidence_string
 
         return evidence_string
 
@@ -496,7 +502,9 @@ class EvidenceProcess(multiprocessing.Process):
                         flow_datetime = datetime.fromtimestamp(timestamp)
                         flow_datetime = flow_datetime.strftime('%Y-%m-%d %H:%M:%S')
                     else:
-                        flow_datetime = timestamp
+                        # A str like 2021-06-07T12:44:56.654854+0200
+                        flow_datetime = timestamp.split('T')[0] +' '+ timestamp.split('T')[1][:8]
+
 
 
                     evidence_to_log = self.print_evidence(profileid,
