@@ -502,10 +502,12 @@ class EvidenceProcess(multiprocessing.Process):
                         flow_datetime = datetime.fromtimestamp(timestamp)
                         flow_datetime = flow_datetime.strftime('%Y-%m-%d %H:%M:%S')
                     else:
-                        # A str like 2021-06-07T12:44:56.654854+0200
-                        flow_datetime = timestamp.split('T')[0] +' '+ timestamp.split('T')[1][:8]
-
-
+                        try:
+                            # for timestamps like 2021-06-07T12:44:56.654854+0200
+                            flow_datetime = timestamp.split('T')[0] +' '+ timestamp.split('T')[1][:8]
+                        except IndexError:
+                            #  for timestamps like 2018-03-09 22:57:44.781449+02:00
+                            flow_datetime = timestamp[:19]
 
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
