@@ -22,6 +22,9 @@ import yara
 import base64
 import binascii
 import os
+import subprocess
+import json
+
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -67,7 +70,10 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def get_packet_info(self, offset: int):
-        """ Parse pcap and determine the packet at this offset then return the srcip, dstip , etc.. """
+        """
+        Parse pcap and determine the packet at this offset
+        returns  a tuple with packet info (srcip, dstip, proto, sport, dport, ts) or False if not found
+        """
         offset = int(offset)
         with open(self.pcap ,'rb') as f:
             # every pcap header is 24 bytes
@@ -93,8 +99,39 @@ class Module(Module, multiprocessing.Process):
                 end_offset = f.tell()
                 if offset <= end_offset and offset >= start_offset:
                     # print(f"Found a match. Packet number in wireshark: {packet_number+1}")
+                    # use tshark to get packet info
+                    command = f'tshark -r {self.pcap} -T json -Y frame.number=={packet_number}'
+                    result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=open('/dev/null','w'))
+                    json_packet = result.stdout.decode("utf-8")
+                    json_packet =  json.loads(json_packet)[0]['_source']['layers']
 
-                    pass
+                    # get ip family and used protocol
+                    used_protocols = json_packet['frame']['frame.protocols']
+                    if 'ipv6' in used_protocols:
+                        ip_family = 'ipv6'
+                    else:
+                        ip_family = 'ip'
+
+                    if 'tcp' in used_protocols:
+                        proto='tcp'
+                    elif 'udp' in used_protocols:
+                        proto = 'udp'
+                    else:
+                        # probably ipv6.hopopt
+                        continue
+
+                    try:
+                        ts = json_packet['frame']['frame.time_epoch']
+                        srcip = json_packet[ip_family][f'{ip_family}.src']
+                        dstip = json_packet[ip_family][f'{ip_family}.dst']
+                        sport = json_packet[proto][f'{proto}.srcport']
+                        dport = json_packet[proto][f'{proto}.dstport']
+                    except KeyError:
+                        continue
+
+                    return  (srcip, dstip, proto, sport, dport, ts)
+        return False
+
 
     def set_evidence_yara_match(self, info:dict):
         """
@@ -114,27 +151,24 @@ class Module(Module, multiprocessing.Process):
         for match in strings:
             offset, string_found = match[0], match[1]
             # we now know there's a match at offset x, we need to know offset x belongs to which packet
-            try:
-                srcip, dstip, proto, sport, dport, ts = self.get_packet_info(offset)
-            except TypeError:
-                # we couldn't get the packet of this offset, the offset is probably at the header of a pcaap
-                # or the header of a packet! ignore it
-                continue
-            type_detection = 'dstip'
-            detection_info = dstip
-            type_evidence = f'{rule}by{srcip}'
-            threat_level = 0.9
-            confidence = 0.9
-            description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
-            # generate a random uid
-            uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
-            profileid = f'profile_{srcip}'
-            # make sure we have this profileid
-            if __database__.hasProfile(profileid):
-                # in which tw is this ts?
-                twid = __database__.getTWofTime(profileid, ts)[0]
-                __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                         threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+            packet_info = self.get_packet_info(offset)
+            if packet_info:
+                srcip, dstip, proto, sport, dport, ts = packet_info[0],packet_info[1],packet_info[2],packet_info[3],packet_info[4],packet_info[5]
+                type_detection = 'dstip'
+                detection_info = dstip
+                type_evidence = f'{rule}by{srcip}'
+                threat_level = 0.9
+                confidence = 0.9
+                description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
+                # generate a random uid
+                uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
+                profileid = f'profile_{srcip}'
+                # make sure we have this profileid
+                if __database__.hasProfile(profileid):
+                    # in which tw is this ts?
+                    twid = __database__.getTWofTime(profileid, ts)[0]
+                    __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                             threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
 
     def compile_and_save_rules(self):
         """
