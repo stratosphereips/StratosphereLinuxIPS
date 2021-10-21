@@ -1,7 +1,7 @@
 -0.8.1
 	-Slips
 		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
-		- Add module to detect leaks of data in the traffic using YARA rules
+		- Add module to detect leaks of data in the traffic using YARA rules (works on PCAPs only)
 - 0.8
     - Slips
 		- Detect PING sweep scan.

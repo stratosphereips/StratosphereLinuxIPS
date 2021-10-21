@@ -216,3 +216,9 @@ If you don't have a slack bot follow steps 1 to 3 [here](https://api.slack.com/b
 If you want to contribute: improve existing Slips detection modules or implement your own detection modules, see section :doc:`Contributing <contributing>`.
 
 
+## Leak detection module
+
+This module on runs on pcaps, it uses YARA rules to detect leaks.
+
+You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` and it will be automatically compiled and stored in ```modules/leak_detector/yara_rules/compiled``` and matched against every pcap.
+
