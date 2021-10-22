@@ -399,7 +399,8 @@ class Module(Module, multiprocessing.Process):
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                if message and message['channel'] == 'new_flow' and type(message['data']) is not int:
+
+                elif message and message['channel'] == 'new_flow' and type(message['data']) is not int:
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -444,7 +445,6 @@ class Module(Module, multiprocessing.Process):
                             if count_reconnections > 1:
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
-
                     # Detect Port 0 Scanning
                     if proto != 'igmp' and proto != 'icmp' and  proto != 'ipv6-icmp' and (sport == '0' or dport == '0'):
                         direction = 'source' if sport==0 else 'destination'
@@ -562,7 +562,7 @@ class Module(Module, multiprocessing.Process):
                                     self.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # ---------------------------- new_ssh channel
-                if message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
+                elif message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -606,7 +606,7 @@ class Module(Module, multiprocessing.Process):
                                 pass
 
                 # ---------------------------- new_notice channel
-                if message and message['channel'] == 'new_notice':
+                elif message and message['channel'] == 'new_notice':
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
@@ -683,7 +683,7 @@ class Module(Module, multiprocessing.Process):
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
                 # ---------------------------- new_ssl channel
-                if message and message['channel'] == 'new_ssl':
+                elif message and message['channel'] == 'new_ssl':
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
                     if type(data) == str:
@@ -735,7 +735,7 @@ class Module(Module, multiprocessing.Process):
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
 
                 # ---------------------------- new_service channel
-                if message and message['channel'] == 'new_service'  and type(message['data']) is not int:
+                elif message and message['channel'] == 'new_service'  and type(message['data']) is not int:
                     data = json.loads(message['data'])
                     # uid = data['uid']
                     # profileid = data['profileid']
@@ -751,7 +751,7 @@ class Module(Module, multiprocessing.Process):
                         __database__.set_port_info(f'{port}/{proto}', service[0])
 
                 # ---------------------------- tw_closed channel
-                if message and message['channel'] == 'tw_closed' and type(message['data']) == str:
+                elif message and message['channel'] == 'tw_closed' and type(message['data']) == str:
                     data = message["data"]
                     # data example: profile_192.168.1.1_timewindow1
                     data = data.split('_')
