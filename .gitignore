@@ -133,3 +133,5 @@ package-lock.json
 modules/blessed/node_modules/
 alerts.*
 nohup.out
+modules/ThreatIntelligence1/remote_data_files/*
+node_modules/
