@@ -12,6 +12,7 @@ import datetime
 import subprocess
 import re
 import sys
+import time
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -287,21 +288,27 @@ class Module(Module, multiprocessing.Process):
         now = datetime.datetime.now()
         diff = now - start_time
         diff = diff.seconds
+
         if int(diff) >= 120:
             answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
             # IP has no dns answer, alert.
             if not answers_dict:
-                confidence = 1
-                threat_level = 30
-                type_detection  = 'dstip'
-                type_evidence = 'ConnectionWithoutDNS'
-                detection_info = daddr
-                description = f'A connection without DNS resolution to IP: {daddr}'
-                if not twid:
-                    twid = ''
+                # to make sure this is not a False positive,
+                # only alert if 2 minutes has passed from the ts of the connection without a dns resolution
+                epoch_now  = int(time.time())
+                diff = (epoch_now - float(timestamp))
 
-                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                if diff > 120:
+                    confidence = 1
+                    threat_level = 30
+                    type_detection  = 'dstip'
+                    type_evidence = 'ConnectionWithoutDNS'
+                    detection_info = daddr
+                    description = f'A connection without DNS resolution to IP: {daddr}'
+                    if not twid:
+                        twid = ''
+                    __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                             description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
@@ -319,15 +326,25 @@ class Module(Module, multiprocessing.Process):
                 ip_info = json.loads(resolutions[ip])
                 uid = ip_info['uid']
                 timestamp = ip_info['ts']
-                confidence = 0.8
-                threat_level = 30
-                type_detection  = 'dstdomain'
-                type_evidence = 'DNSWithoutConnection'
-                query = json.loads(ip_info['domains'])[-1]
-                detection_info = query
-                description = f'Domain {query} resolved with no connection'
-                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                     description, timestamp, profileid=profileid, twid=twid, uid=uid)
+
+                # to make sure this is not a False positive,
+                # only alert if 2 minutes has passed from the ts of the dns resolution without a connection
+                epoch_now  = int(time.time())
+                diff = (epoch_now - float(timestamp))
+
+                if diff > 120:
+                    confidence = 0.8
+                    threat_level = 30
+                    type_detection  = 'dstdomain'
+                    type_evidence = 'DNSWithoutConnection'
+                    query = json.loads(ip_info['domains'])[-1]
+                    if 'arpa' in query or '.local' in query:
+                        # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
+                        continue
+                    detection_info = query
+                    description = f'Domain {query} resolved with no connection'
+                    __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
         """

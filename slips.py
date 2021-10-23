@@ -611,6 +611,9 @@ if __name__ == '__main__':
         if not args.clearblocking and not args.blocking \
                 or (args.blocking and not args.interface): # ignore module if not using interface
             to_ignore.append('blocking')
+
+        # leak detector only works on pcap files
+        if input_type != 'pcap': to_ignore.append('leak_detector')
         try:
             # This 'imports' all the modules somehow, but then we ignore some
             modules_to_call = load_modules(to_ignore)[0]
@@ -620,7 +623,9 @@ if __name__ == '__main__':
                     ModuleProcess = module_class(outputProcessQueue, config)
                     ModuleProcess.start()
                     __database__.store_process_PID(module_name, int(ModuleProcess.pid))
-                    outputProcessQueue.put('10|main|\t\tStarting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
+                    outputProcessQueue.put('10|main|\t\tStarting the module {} ({}) [PID {}]'.format(module_name,
+                                                                                                     modules_to_call[module_name]['description'],
+                                                                                                     ModuleProcess.pid))
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')

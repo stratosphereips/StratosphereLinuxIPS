@@ -198,7 +198,7 @@ class Database(object):
 
     def getamountTWsfromProfile(self, profileid):
         """
-        Receives a profile id and returns the list of all the TW in that profile
+        Receives a profile id and returns the number of all the TWs in that profile
         """
         return len(self.r.zrange('tws' + profileid, 0, -1, withscores=True))
 
@@ -256,7 +256,7 @@ class Database(object):
         data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
         return data
 
-    def getTWforScore(self, profileid, time):
+    def getTWofTime(self, profileid, time):
         """
         Return the TW id and the time for the TW that includes the given time.
         The score in the DB is the start of the timewindow, so we should search
@@ -1884,7 +1884,7 @@ class Database(object):
             if 'TXT' in ip:
                 continue
             # get stored DNS resolution from our db
-            domains = self.get_dns_resolution(ip=ip)
+            domains = self.get_dns_resolution(ip)
             # if the domain(query) we have isn't already in DNSresolution in the db, add it
             if query not in domains:
                 domains.append(query)
@@ -1908,6 +1908,7 @@ class Database(object):
                 return ip_info
             # return answers only
             domains = json.loads(ip_info['domains'])
+
             return domains
         else:
             return []
@@ -2001,7 +2002,7 @@ class Database(object):
 
     def search_Domain_in_IoC(self, domain: str) -> str:
         """
-        Search in the dB of malicious domainss and return a
+        Search in the dB of malicious domains and return a
         description if we found a match
         """
         domain_description = self.rcache.hget('IoC_domains',domain)

@@ -23,6 +23,7 @@ RUN apt update && apt install -y --no-install-recommends \
     zeek \
     python3-pip \
     python3-certifi \
+    python3-dev \
     file \
     lsof \
     net-tools \
@@ -31,15 +32,27 @@ RUN apt update && apt install -y --no-install-recommends \
     psutils \
     python3-tzlocal \
     nfdump \
+    tshark \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
 RUN pip3 install --upgrade pip
 
+
+# To avoid user interaction with tzdata
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Compile and install YARA
+RUN git clone https://github.com/VirusTotal/yara-python yara-python \
+    && cd yara-python \
+    && python setup.py build \
+    && python setup.py install
+
+
 # Install redis using PIP3
 RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
 RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby
-RUN pip3 install ipwhois pytest pytest-xdist
+RUN pip3 install ipwhois pytest pytest-xdist yara-python
 RUN pip3 install --ignore-installed six
 RUN pip3 install --upgrade tensorflow==2.4.1
 

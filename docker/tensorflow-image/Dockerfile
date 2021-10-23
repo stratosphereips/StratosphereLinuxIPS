@@ -22,38 +22,34 @@ RUN apt update && apt install -y --no-install-recommends \
     zeek \
     python3-pip \
 	python3-certifi \
+	python3-dev \
 	file \
 	lsof \
 	net-tools \
 	iptables \
 	iproute2 \
 	nfdump \
+	tshark \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
 RUN pip3 install --upgrade pip
 
+# To avoid user interaction with tzdata
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Compile and install YARA
+RUN git clone https://github.com/VirusTotal/yara-python yara-python \
+    && cd yara-python \
+    && python setup.py build \
+    && python setup.py install
+
 # Install redis using PIP3
-RUN pip3 install wheel
-RUN pip3 install redis
-RUN pip3 install setuptools
-RUN pip3 install validators
-RUN pip3 install colorama
-RUN pip3 install maxminddb
-RUN pip3 install pandas
-RUN pip3 install sklearn
-RUN pip3 install urllib3
-RUN pip3 install scipy
-RUN pip3 install watchdog
-RUN pip3 install stix2
-RUN pip3 install cabby
-RUN pip3 install ipwhois
-RUN pip3 install pytest
+RUN pip3 install wheel redis setuptools validators colorama
+RUN pip3 install maxminddb pandas sklearn urllib3 scipy watchdog
+RUN pip3 install stix2 cabby ipwhois pytest yara-python
+RUN pip3 install slackclient tzlocal psutil pytest-xdist
 RUN pip3 install --ignore-installed six
-RUN pip3 install slackclient
-RUN pip3 install tzlocal
-RUN pip3 install psutil
-RUN pip3 install pytest-xdist
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
