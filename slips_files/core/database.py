@@ -2140,6 +2140,13 @@ class Database(object):
         """ Return dict of 3 keys: IPs, domains and organizations"""
         return self.r.hgetall('whitelist')
 
+    def whitelist_contains(self, key):
+        """
+        Whitelist supports different keys like : IPs domains and organizations
+        this function is used to check if we have any of the above keys whitelisted
+        """
+        return self.r.hget('whitelist',key)
+
     def save(self,backup_file):
         """
         Save the db to disk.
