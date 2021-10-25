@@ -59,8 +59,10 @@ class Module(Module, multiprocessing.Process):
         confidence = ip_info['confidence']
         if not confidence:
             confidence = 0
-        tags = ip_info['tags']
-        description = f'{ip_info["source"]}: {ip_info["description"]} tags={tags}'
+        description = f'{ip_info["source"]}: {ip_info["description"]}'
+        tags = ip_info.get('tags',False)
+        if tags:
+            description += f' tags={tags}'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 

@@ -1631,6 +1631,7 @@ class ProfilerProcess(multiprocessing.Process):
         # check if we have domains whitelisted
         whitelisted_domains = __database__.whitelist_contains('domains')
         if whitelisted_domains:
+            whitelisted_domains = json.loads(whitelisted_domains)
             #self.print('Check the domains')
             # Check if the domain is whitelisted
             # Domain names are stored in different zeek files using different names.
@@ -1698,6 +1699,7 @@ class ProfilerProcess(multiprocessing.Process):
         whitelisted_IPs = __database__.whitelist_contains('IPs')
 
         if whitelisted_IPs:
+            whitelisted_IPs =  json.loads(whitelisted_IPs)
             #self.print('Check the IPs')
             # Check if the IPs are whitelisted
             ips_to_whitelist = list(whitelisted_IPs.keys())
@@ -1723,6 +1725,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         # Check if the orgs are whitelisted
         if whitelisted_orgs:
+            whitelisted_orgs = json.loads(whitelisted_orgs)
             #self.print('Check if the organization is whitelisted')
             # Check if IP belongs to a whitelisted organization range
             # Check if the ASN of this IP is any of these organizations
