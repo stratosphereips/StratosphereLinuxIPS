@@ -18,7 +18,7 @@ import validators
 class Module(Module, multiprocessing.Process):
     name = 'virustotal'
     description = 'IP, domain and file hash lookup on VirusTotal'
-    authors = ['Dita Hollmannova, Kamila Babayeva']
+    authors = ['Dita Hollmannova, Kamila Babayeva', 'Alya Gomaa', 'Sebastian Garcia']
 
     def __init__(self, outputqueue, config, testing=False):
         multiprocessing.Process.__init__(self)
