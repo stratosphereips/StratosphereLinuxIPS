@@ -332,7 +332,7 @@ class EvidenceProcess(multiprocessing.Process):
             try:
                 # data coming from portscan module contains the port and not the ip, we need to extract
                 # the ip from the description
-                data = description.split('. Tot')[0].split(': ')[1]
+                data = description.split(' scanned')[0].split('. ')[1]
                 data_type = 'ip'
             except (IndexError,ValueError):
                 # not coming from portscan module , data is a dport, do nothing
