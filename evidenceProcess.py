@@ -595,7 +595,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 # when printing alerts to the terminal print the profileid_twid that generated this alert too
                                 evidence_to_print = f'{profileid}_{twid} '
                                 evidence_to_print += self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
-                                self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
+                                self.print(f'{Fore.RED}{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 # Set an alert about the evidence being blocked
                                 alert_to_log = self.print_alert(profileid, twid)
                                 alert_dict = {'type':'alert',

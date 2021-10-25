@@ -278,8 +278,6 @@ class Module(Module, multiprocessing.Process):
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
         """ Checks dports that are not in our modules/timeline/services.csv file"""
 
-        # don't check for broadcast address #todo
-
         port_info = __database__.get_port_info(f'{dport}/{proto}')
         if not port_info and not 'icmp' in proto and not self.is_p2p(dport, proto, daddr):
             # we don't have info about this port
