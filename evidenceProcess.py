@@ -25,8 +25,11 @@ from colorama import Fore, Back, Style
 import ipaddress
 import socket
 import sys
+
 #import requests
 import subprocess
+import socket
+import re
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -327,13 +330,21 @@ class EvidenceProcess(multiprocessing.Process):
                 # is ipv4
                 data = data[0]
             data_type = 'ip'
+
         elif 'dport' in type_detection:
             # is coming from portscan module
             try:
                 # data coming from portscan module contains the port and not the ip, we need to extract
                 # the ip from the description
-                data = description.split(' scanned')[0].split('. ')[1]
-                data_type = 'ip'
+                ip_regex = r'[0-9]+.[0-9]+.[0-9]+.[0-9]+'
+                match = re.search(ip_regex, description)
+                if match:
+                    data = match.group()
+                    data_type = 'ip'
+                else:
+                    # can't get the ip from the description!!
+                    return False
+
             except (IndexError,ValueError):
                 # not coming from portscan module , data is a dport, do nothing
                 data_type = ''
@@ -535,7 +546,6 @@ class EvidenceProcess(multiprocessing.Process):
                                      'description':description
                                      }
                     if tag:
-
                         # remove the tag from the description
                         description = description[:description.index('[')]
                         # add a key in the json evidence with tag
