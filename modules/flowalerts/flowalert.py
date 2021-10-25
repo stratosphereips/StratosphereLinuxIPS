@@ -320,6 +320,7 @@ class Module(Module, multiprocessing.Process):
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
+
         # to avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
         # after starting slips because the dns may have happened before starting slips
         if '-i' in sys.argv:
@@ -330,7 +331,6 @@ class Module(Module, multiprocessing.Process):
             if not int(diff) >= 120:
                 # less than 2 minutes have passed
                 return False
-
 
         answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
         # IP has no dns answer, alert.
@@ -375,7 +375,7 @@ class Module(Module, multiprocessing.Process):
         if contacted_ips == {}: return
         # Get an updated list of dns answers
         resolutions = __database__.get_all_dns_resolutions()
-        # every dns answer is a list of ips that correspond to a specific query,
+        # every dns answer is a list of ip that correspond to a spicif query,
         # one of these ips should be present in the contacted ips
         for ip in resolutions:
             if ip not in contacted_ips:
@@ -383,6 +383,7 @@ class Module(Module, multiprocessing.Process):
                 ip_info = json.loads(resolutions[ip])
                 uid = ip_info['uid']
                 timestamp = ip_info['ts']
+
                 # to make sure this is not a False positive,
                 # only alert if 2 minutes has passed from the ts of the dns resolution without a connection
                 epoch_now  = int(time.time())
