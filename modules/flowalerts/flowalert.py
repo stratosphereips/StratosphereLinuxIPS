@@ -316,32 +316,43 @@ class Module(Module, multiprocessing.Process):
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
 
-        # to avoid false positives don't alert ConnectionWithoutDNS until 2 minutes has passed after starting slips
-        start_time = __database__.get_slips_start_time()
-        now = datetime.datetime.now()
-        diff = now - start_time
-        diff = diff.seconds
+        # to avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
+        # after starting slips because the dns may have happened before starting slips
+        if '-i' in sys.argv:
+            start_time = __database__.get_slips_start_time()
+            now = datetime.datetime.now()
+            diff = now - start_time
+            diff = diff.seconds
+            if not int(diff) >= 120:
+                # less than 2 minutes have passed
+                return False
 
-        if int(diff) >= 120:
-            answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
-            # IP has no dns answer, alert.
-            if not answers_dict:
-                # to make sure this is not a False positive,
-                # only alert if 2 minutes has passed from the ts of the connection without a dns resolution
-                epoch_now  = int(time.time())
-                diff = (epoch_now - float(timestamp))
+        answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
+        # IP has no dns answer, alert.
+        if not answers_dict:
+            # usually slips alerts a connection without dns resolution when the connection is
+            # read from conn.log before the dns is read from dns.log
+            # To avoid this case don't alert until 2 mins has passed since the last dns resolution
+            # so we are basically giving slips enough time to process more dns resolutions in case this connection DOES have a dns resolution
+            last_dns_ts = __database__.get_last_dns_ts()
+            if not last_dns_ts:
+                # we don't have dns resolutions yet
+                return False
 
-                if diff > 120:
-                    confidence = 1
-                    threat_level = 30
-                    type_detection  = 'dstip'
-                    type_evidence = 'ConnectionWithoutDNS'
-                    detection_info = daddr
-                    description = f'A connection without DNS resolution to IP: {daddr}'
-                    if not twid:
-                        twid = ''
-                    __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                             description, timestamp, profileid=profileid, twid=twid, uid=uid)
+            epoch_now = int(time.time())
+            diff = (epoch_now - float(timestamp))
+
+            if diff > 120:
+                confidence = 1
+                threat_level = 30
+                type_detection  = 'dstip'
+                type_evidence = 'ConnectionWithoutDNS'
+                detection_info = daddr
+                description = f'A connection without DNS resolution to IP: {daddr}'
+                if not twid:
+                    twid = ''
+                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
@@ -483,10 +494,17 @@ class Module(Module, multiprocessing.Process):
                         direction = 'source' if sport==0 else 'destination'
                         self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
-
                     # Detect if daddr has a dns answer or not
-                    if not self.is_ignored_ip(daddr) and dport == 443:
-                        self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
+                    if dport:
+                        # some flows in binetflow files don't have dport field for example test2.binetflow
+                        try:
+                            dport = int(dport)
+                        except ValueError:
+                            # dport is hex
+                            dport = int(dport, 16)
+
+                        if not self.is_ignored_ip(daddr) and dport and dport == 443:
+                            self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
 
                     # Detect Connection to multiple ports (for RAT)
                     if proto == 'tcp' and state == 'Established':
@@ -811,10 +829,10 @@ class Module(Module, multiprocessing.Process):
 
             except KeyboardInterrupt:
                 continue
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
+            # except Exception as inst:
+            #     exception_line = sys.exc_info()[2].tb_lineno
+            #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            #     self.print(str(type(inst)), 0, 1)
+            #     self.print(str(inst.args), 0, 1)
+            #     self.print(str(inst), 0, 1)
+            #     return True
