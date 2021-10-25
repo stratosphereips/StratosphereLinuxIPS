@@ -13,6 +13,8 @@ import subprocess
 import re
 import sys
 import time
+import socket
+import validators
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -246,8 +248,37 @@ class Module(Module, multiprocessing.Process):
 
         return False
 
+    def get_ip_info(self, ip):
+        """ Return ani domain/server/dns info we have about this daddr """
+
+        # Get info from our cache db ip data may have SNI or reverse_dns or both
+        ip_data = __database__.getIPData(ip)
+        if ip_data:
+            rev_dns = ip_data.get('reverse_dns',False)
+            if rev_dns :
+                return rev_dns
+
+            ip_sni = ip_data.get('SNI',False)
+            if ip_sni:
+                server_name = ip_sni[0]['server_name']
+                if server_name:
+                    return server_name
+        # we don't have cached info about this ip, was it resolved?
+        ip_info = __database__.get_dns_resolution(ip)
+        if ip_info:
+            return ip_info
+
+        # we have no info about this ip in our db, resolve it
+        dns_resolution = repr(socket.gethostbyname_ex(ip))[-1]
+        # make sure we were able to resolve it
+        if validators.domain(dns_resolution):
+            return dns_resolution
+        return False
+
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
         """ Checks dports that are not in our modules/timeline/services.csv file"""
+
+        # don't check for broadcast address #todo
 
         port_info = __database__.get_port_info(f'{dport}/{proto}')
         if not port_info and not 'icmp' in proto and not self.is_p2p(dport, proto, daddr):
@@ -258,6 +289,10 @@ class Module(Module, multiprocessing.Process):
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
             description = f'Connection to unknown destination port {dport}/{proto.upper()} destination IP {daddr}'
+            # get the sni/reverse dns of this daddr
+            ip_info = self.get_ip_info(daddr)
+            if ip_info:
+                description += f' ({ip_info})'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
