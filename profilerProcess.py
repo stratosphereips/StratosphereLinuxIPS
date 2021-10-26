@@ -178,7 +178,6 @@ class ProfilerProcess(multiprocessing.Process):
         if not whitelisted_orgs:
             whitelisted_orgs = {}
 
-
         try:
             with open(self.whitelist_path) as whitelist:
                 # Process lines after comments
@@ -197,27 +196,27 @@ class ProfilerProcess(multiprocessing.Process):
                                 # make sure the user commented the line we have in cache exactly
                                 if ip in line and whitelisted_IPs[ip]['from'] in line and whitelisted_IPs[ip]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_ips
-                                    __database__.remove_from_whitelist("IPs" ,ip)
+                                    whitelisted_IPs.pop(ip)
                                     break
 
-                        elif whitelisted_domains:
+                        if whitelisted_domains:
                             for domain in list(whitelisted_domains):
                                 if domain in line \
                                 and whitelisted_domains[domain]['from'] in line \
                                 and whitelisted_domains[domain]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_domains
-                                    __database__.remove_from_whitelist("domains" ,domain)
+                                    whitelisted_domains.pop(domain)
                                     break
 
-                        elif whitelisted_orgs:
+                        if whitelisted_orgs:
                             for org in list(whitelisted_orgs):
                                 if org in line \
                                 and whitelisted_orgs[org]['from'] in line \
                                 and whitelisted_orgs[org]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_domains
-                                    __database__.remove_from_whitelist("organizations" ,org)
-                                    print(f'@@@@@@@@@@@@@@@@@@  removed org :  {org} ')
+                                    whitelisted_orgs.pop(org)
                                     break
+
                         # todo if the user closes slips, changes the whitelist, and reopens slips , slips will still have the old whitelist in the cache!
                         line = whitelist.readline()
                         continue
@@ -249,7 +248,11 @@ class ProfilerProcess(multiprocessing.Process):
                             #  {'google': {'from':'dst',
                             #               'what_to_ignore': 'alerts'
                             #               'IPs': {'34.64.0.0/10': subnet}}
-                            whitelisted_orgs[data] = {'from' : from_, 'what_to_ignore' : what_to_ignore}
+                            try:
+                                whitelisted_orgs[data]['from'] = from_
+                                whitelisted_orgs[data]['what_to_ignore'] = what_to_ignore
+                            except KeyError:
+                                whitelisted_orgs[data] = {'from' : from_, 'what_to_ignore' : what_to_ignore}
                         else:
                             self.print(f"{data} is not a valid {type_}.",1,0)
                     except:
