@@ -2151,20 +2151,20 @@ class Database(object):
     def set_whitelist(self,whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
         """ Store a dict of whitelisted IPs, domains and organizations in the db """
 
-        self.r.hset("whitelist" , "IPs", json.dumps(whitelisted_IPs))
-        self.r.hset("whitelist" , "domains", json.dumps(whitelisted_domains))
-        self.r.hset("whitelist" , "organizations", json.dumps(whitelisted_organizations))
+        self.rcache.hset("whitelist" , "IPs", json.dumps(whitelisted_IPs))
+        self.rcache.hset("whitelist" , "domains", json.dumps(whitelisted_domains))
+        self.rcache.hset("whitelist" , "organizations", json.dumps(whitelisted_organizations))
 
     def get_whitelist(self):
         """ Return dict of 3 keys: IPs, domains and organizations"""
-        return self.r.hgetall('whitelist')
+        return self.rcache.hgetall('whitelist')
 
     def whitelist_contains(self, key):
         """
         Whitelist supports different keys like : IPs domains and organizations
         this function is used to check if we have any of the above keys whitelisted
         """
-        return self.r.hget('whitelist',key)
+        return self.rcache.hget('whitelist',key)
 
     def save(self,backup_file):
         """
