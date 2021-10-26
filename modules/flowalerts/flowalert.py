@@ -326,6 +326,7 @@ class Module(Module, multiprocessing.Process):
                 # less than 2 minutes have passed
                 return False
 
+
         answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
         # IP has no dns answer, alert.
         if not answers_dict:
@@ -343,16 +344,23 @@ class Module(Module, multiprocessing.Process):
                 # Now we're sure that 1. this daddr doesn't have a dns resolution
                 # 2. 2 mins has passed since the last dns we saw, now we have this connection,
                 # so we're kind of sure it happened without a dns
-                confidence = 1
                 threat_level = 30
                 type_detection  = 'dstip'
                 type_evidence = 'ConnectionWithoutDNS'
                 detection_info = daddr
+
+                # assume the min number of evidence of this type(in the same profileid_twid) is 0, max is 100
+                # we want to get this on a scale from 0 to 1
+                evidence_count = __database__.get_evidence_count(type_evidence, profileid, twid)
+                # the more the evidence of this type the more confident we are
+                confidence = 1/100*evidence_count
+
                 description = f'A connection without DNS resolution to IP: {daddr}'
                 if not twid:
                     twid = ''
                 __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                          description, timestamp, profileid=profileid, twid=twid, uid=uid)
+
 
     def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
