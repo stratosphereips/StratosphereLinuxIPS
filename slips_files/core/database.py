@@ -1740,14 +1740,14 @@ class Database(object):
         Save in the DB a port with its description
         :param portproto: portnumber + / + protocol
         """
-        self.r.hset('portinfo', portproto, name)
+        self.rcache.hset('portinfo', portproto, name)
 
     def get_port_info(self, portproto: str):
         """
         Retrieve the name of a port
         :param portproto: portnumber + / + protocol
         """
-        return self.r.hget('portinfo', portproto)
+        return self.rcache.hget('portinfo', portproto)
 
     def add_zeek_file(self, filename):
         """ Add an entry to the list of zeek files """
