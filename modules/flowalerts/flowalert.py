@@ -380,7 +380,10 @@ class Module(Module, multiprocessing.Process):
         gateway = False
         if platform.system() == "Darwin":
             route_default_result = subprocess.check_output(["route", "get", "default"]).decode()
-            gateway = re.search(r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}", route_default_result).group(0)
+            try:
+                gateway = re.search(r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}", route_default_result).group(0)
+            except AttributeError:
+                gateway = ''
 
         elif platform.system() == "Linux":
             route_default_result = re.findall(r"([\w.][\w.]*'?\w?)", subprocess.check_output(["ip", "route"]).decode())
