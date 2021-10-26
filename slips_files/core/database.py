@@ -1002,6 +1002,26 @@ class Database(object):
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
         return True
 
+    def get_evidence_count(self, evidence_type, profileid, twid):
+        """
+        Returns the number of evidence of this type in this profiled and twid
+        :param evidence_type: PortScan, ThreatIntelligence, C&C channels detection etc..
+        """
+        evidence = self.getEvidenceForTW(profileid, twid)
+        count = 0
+        if evidence:
+            evidence = json.loads(evidence)
+            # evidence is a dict of evidence
+            for ev in evidence:
+                # evidence_description is a dicct with type_detection, detection_info and type_evidence as keys
+                evidence_description = json.loads(ev)
+                # count how many evidence of this specific type (evidence_type)
+                evidence_description = evidence_description['type_evidence']
+                if evidence_type in evidence_description:
+                    count +=1
+        return count
+
+
 
     def deleteEvidence(self,profileid, twid, key):
         """ Delete evidence from the database
