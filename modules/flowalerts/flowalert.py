@@ -320,7 +320,6 @@ class Module(Module, multiprocessing.Process):
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
-
         # to avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
         # after starting slips because the dns may have happened before starting slips
         if '-i' in sys.argv:
@@ -344,10 +343,11 @@ class Module(Module, multiprocessing.Process):
                 # we don't have dns resolutions yet
                 return False
 
-            epoch_now = int(time.time())
-            diff = (epoch_now - float(timestamp))
-
-            if diff > 120:
+            diff = last_dns_ts - float(timestamp)
+            if diff >= 120:
+                # Now we're sure that 1. this daddr doesn't have a dns resolution
+                # 2. 2 mins has passed since the last dns we saw, now we have this connection,
+                # so we're kind of sure it happened without a dns
                 confidence = 1
                 threat_level = 30
                 type_detection  = 'dstip'
