@@ -1939,6 +1939,15 @@ class Database(object):
         else:
             return dns_resolutions
 
+    def get_last_dns_ts(self):
+        """ returns the timestamp of the last DNS resolution slips read """
+        dns_resolutions = self.get_all_dns_resolutions()
+        if dns_resolutions:
+            # sort resolutions by ts
+            # k_v is a tuple (key, value) , each value is a serialized json dict.
+            sorted_dns_resolutions = sorted(dns_resolutions.items(), key=lambda k_v: json.loads(k_v[1])['ts'])
+            # return the ts of the last dns resolution in our db
+            return sorted_dns_resolutions[-1]
 
     def set_passive_dns(self, ip, data):
         """
