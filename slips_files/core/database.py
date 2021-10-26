@@ -2154,18 +2154,24 @@ class Database(object):
         :param type: supporte types are IPs, domains and organizations
         :param whitelist_dict: the dict of IPs, domains or orgs to store
         """
-        self.rcache.hset("whitelist" , type, json.dumps(whitelist_dict))
+        self.r.hset("whitelist" , type, json.dumps(whitelist_dict))
+        print(f'@@@@@@@@@@@@@@@@@@   set whitelist : {type} : {whitelist_dict}')
 
     def get_whitelist(self):
         """ Return dict of 3 keys: IPs, domains and organizations"""
-        return self.rcache.hgetall('whitelist')
+        return self.r.hgetall('whitelist')
 
     def whitelist_contains(self, key):
         """
         Whitelist supports different keys like : IPs domains and organizations
         this function is used to check if we have any of the above keys whitelisted
         """
-        return self.rcache.hget('whitelist',key)
+        whitelist = self.r.hget('whitelist',key)
+        if whitelist:
+            return json.loads(whitelist)
+        else:
+            return False
+
 
     def remove_from_whitelist(self, type, ioc):
         """
@@ -2175,11 +2181,11 @@ class Database(object):
 
         whitelist = self.whitelist_contains(type)
         if whitelist:
-            whitelist = json.loads(whitelist)
             # remove the ioc from the old whitelist
             whitelist.pop(ioc)
             # store the new whitelist to our db
             self.set_whitelist(type, whitelist)
+            print(f'@@@@@@@@@@@@@@@@@@   removed :{ioc} from whitelisted {type} ')
 
     def save(self,backup_file):
         """

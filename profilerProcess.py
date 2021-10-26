@@ -162,9 +162,22 @@ class ProfilerProcess(multiprocessing.Process):
     def read_whitelist(self):
         """ Reads the content of whitelist.conf and stores information about each ip/org/domain in the database """
 
-        whitelisted_IPs = {}
-        whitelisted_domains = {}
-        whitelisted_orgs = {}
+        # since this function can be run when the user modifies whitelist.conf
+        # we need to check if the dicts are already there
+        whitelisted_IPs = __database__.whitelist_contains('IPs')
+        whitelisted_domains = __database__.whitelist_contains('domains')
+        whitelisted_orgs = __database__.whitelist_contains('organizations')
+
+        # if any of the dicts arent there in the db, insitialize it
+        if not whitelisted_IPs:
+            whitelisted_IPs = {}
+            
+        if not whitelisted_domains:
+            whitelisted_domains = {}
+
+        if not whitelisted_orgs:
+            whitelisted_orgs = {}
+
 
         try:
             with open(self.whitelist_path) as whitelist:
@@ -177,42 +190,35 @@ class ProfilerProcess(multiprocessing.Process):
                         line = whitelist.readline()
                         continue
 
-
                     # check if the user commented an org, ip or domain that was whitelisted
                     if line.startswith('#'):
-                        cached_whitelisted_IPs = __database__.whitelist_contains('IPs')
-                        cached_whitelisted_domains = __database__.whitelist_contains('domains')
-                        cached_whitelisted_orgs = __database__.whitelist_contains('organizations')
-
-                        if cached_whitelisted_IPs:
-                            cached_whitelisted_IPs = json.loads(cached_whitelisted_IPs)
-                            for ip in list(cached_whitelisted_IPs):
+                        if whitelisted_IPs:
+                            for ip in list(whitelisted_IPs):
                                 # make sure the user commented the line we have in cache exactly
-                                if ip in line and cached_whitelisted_IPs[ip]['from'] in line and cached_whitelisted_IPs[ip]['what_to_ignore'] in line:
+                                if ip in line and whitelisted_IPs[ip]['from'] in line and whitelisted_IPs[ip]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_ips
                                     __database__.remove_from_whitelist("IPs" ,ip)
                                     break
 
-                        elif cached_whitelisted_domains:
-                            cached_whitelisted_domains = json.loads(cached_whitelisted_domains)
-                            for domain in list(cached_whitelisted_domains):
+                        elif whitelisted_domains:
+                            for domain in list(whitelisted_domains):
                                 if domain in line \
-                                and cached_whitelisted_domains[domain]['from'] in line \
-                                and cached_whitelisted_domains[domain]['what_to_ignore'] in line:
+                                and whitelisted_domains[domain]['from'] in line \
+                                and whitelisted_domains[domain]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_domains
                                     __database__.remove_from_whitelist("domains" ,domain)
                                     break
 
-                        elif cached_whitelisted_orgs:
-                            cached_whitelisted_orgs = json.loads(cached_whitelisted_orgs)
-                            for org in list(cached_whitelisted_orgs):
+                        elif whitelisted_orgs:
+                            for org in list(whitelisted_orgs):
                                 if org in line \
-                                and cached_whitelisted_orgs[org]['from'] in line \
-                                and cached_whitelisted_orgs[org]['what_to_ignore'] in line:
+                                and whitelisted_orgs[org]['from'] in line \
+                                and whitelisted_orgs[org]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_domains
                                     __database__.remove_from_whitelist("organizations" ,org)
+                                    print(f'@@@@@@@@@@@@@@@@@@  removed org :  {org} ')
                                     break
-                        # todo if the used closes slips, changes the whitelist, and reopens slips , slips will still have the old whitelist in the cache!
+                        # todo if the user closes slips, changes the whitelist, and reopens slips , slips will still have the old whitelist in the cache!
                         line = whitelist.readline()
                         continue
 
@@ -1642,7 +1648,6 @@ class ProfilerProcess(multiprocessing.Process):
         # check if we have domains whitelisted
         whitelisted_domains = __database__.whitelist_contains('domains')
         if whitelisted_domains:
-            whitelisted_domains = json.loads(whitelisted_domains)
             #self.print('Check the domains')
             # Check if the domain is whitelisted
             # Domain names are stored in different zeek files using different names.
@@ -1710,7 +1715,6 @@ class ProfilerProcess(multiprocessing.Process):
         whitelisted_IPs = __database__.whitelist_contains('IPs')
 
         if whitelisted_IPs:
-            whitelisted_IPs =  json.loads(whitelisted_IPs)
             #self.print('Check the IPs')
             # Check if the IPs are whitelisted
             ips_to_whitelist = list(whitelisted_IPs.keys())
@@ -1736,7 +1740,6 @@ class ProfilerProcess(multiprocessing.Process):
 
         # Check if the orgs are whitelisted
         if whitelisted_orgs:
-            whitelisted_orgs = json.loads(whitelisted_orgs)
             #self.print('Check if the organization is whitelisted')
             # Check if IP belongs to a whitelisted organization range
             # Check if the ASN of this IP is any of these organizations
