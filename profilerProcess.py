@@ -177,6 +177,45 @@ class ProfilerProcess(multiprocessing.Process):
                         line = whitelist.readline()
                         continue
 
+
+                    # check if the user commented an org, ip or domain that was whitelisted
+                    if line.startswith('#'):
+                        cached_whitelisted_IPs = __database__.whitelist_contains('IPs')
+                        cached_whitelisted_domains = __database__.whitelist_contains('domains')
+                        cached_whitelisted_orgs = __database__.whitelist_contains('organizations')
+
+                        if cached_whitelisted_IPs:
+                            cached_whitelisted_IPs = json.loads(cached_whitelisted_IPs)
+                            for ip in list(cached_whitelisted_IPs):
+                                # make sure the user commented the line we have in cache exactly
+                                if ip in line and cached_whitelisted_IPs[ip]['from'] in line and cached_whitelisted_IPs[ip]['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_ips
+                                    __database__.remove_from_whitelist("IPs" ,ip)
+                                    break
+
+                        elif cached_whitelisted_domains:
+                            cached_whitelisted_domains = json.loads(cached_whitelisted_domains)
+                            for domain in list(cached_whitelisted_domains):
+                                if domain in line \
+                                and cached_whitelisted_domains[domain]['from'] in line \
+                                and cached_whitelisted_domains[domain]['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_domains
+                                    __database__.remove_from_whitelist("domains" ,domain)
+                                    break
+
+                        elif cached_whitelisted_orgs:
+                            cached_whitelisted_orgs = json.loads(cached_whitelisted_orgs)
+                            for org in list(cached_whitelisted_orgs):
+                                if org in line \
+                                and cached_whitelisted_orgs[org]['from'] in line \
+                                and cached_whitelisted_orgs[org]['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_domains
+                                    __database__.remove_from_whitelist("organizations" ,org)
+                                    break
+                        # todo if the used closes slips, changes the whitelist, and reopens slips , slips will still have the old whitelist in the cache!
+                        line = whitelist.readline()
+                        continue
+
                     # skip comments
                     if line.startswith('#'):
                         line = whitelist.readline()
@@ -244,9 +283,9 @@ class ProfilerProcess(multiprocessing.Process):
                 whitelisted_orgs[org].update({'asn' : json.dumps(org_asn)})
 
         # store everything in the cache db because we'll be needing this info in the evidenceProcess
-        __database__.set_whitelist(whitelisted_IPs,
-                                   whitelisted_domains,
-                                   whitelisted_orgs)
+        __database__.set_whitelist("IPs", whitelisted_IPs)
+        __database__.set_whitelist("domains", whitelisted_domains)
+        __database__.set_whitelist("organizations", whitelisted_orgs)
         return line_number
 
     def load_org_asn(self, org) -> list :
