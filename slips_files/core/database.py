@@ -1947,7 +1947,8 @@ class Database(object):
             # k_v is a tuple (key, value) , each value is a serialized json dict.
             sorted_dns_resolutions = sorted(dns_resolutions.items(), key=lambda k_v: json.loads(k_v[1])['ts'])
             # return the ts of the last dns resolution in our db
-            return sorted_dns_resolutions[-1]
+            last_dns_ts = json.loads(sorted_dns_resolutions[-1][1])['ts']
+            return last_dns_ts
 
     def set_passive_dns(self, ip, data):
         """
