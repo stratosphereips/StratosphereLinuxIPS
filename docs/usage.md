@@ -214,6 +214,15 @@ Be sure the format is correct and only use spaces to separate between tuples and
 
 The remote files are installed to the path set in the ```download_path_for_local_threat_intelligence```. By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` 
 
+**RiskIQ feeds**
+
+Slips supports getting phishing domains from RiskIQ.
+
+You can add your your email in the configuration file in the ```RiskIQ_email``` parameter
+
+The path of the API key is specified in the ```RiskIQ_key_path``` parameter, 
+in that file there should only be the 64 character RiskIQ API key.
+
 **Local files**
 
 You can insert your files into the folder specified in the variable ```download_path_for_remote_threat_intelligence```. You can also hardcode your own malicious IPs in the file```modules/ThreatIntelligence1/local_data_files/own_malicious_ips.csv```

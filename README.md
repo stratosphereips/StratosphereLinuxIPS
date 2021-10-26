@@ -11,7 +11,7 @@ Behavioral based Intrusion Prevention System<br><br>
 
 Slips documentation is [here](https://stratospherelinuxips.readthedocs.io/en/develop/) <br>
 
-[Features](#features) — [Slips in action](#slips-in-action) — [Running Slips in a Docker](#running-slips-in-a-docker) — [Authors](#authors) - [How to contribute](#how-to-contribute)
+[Features](#features) — [Running Slips in a Docker](#installation) — [Authors](#people-involved) - [How to contribute](#how-to-contribute)
 </h3>
 
 ## Features

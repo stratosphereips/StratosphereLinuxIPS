@@ -13,6 +13,8 @@ import subprocess
 import re
 import sys
 import time
+import socket
+import validators
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -246,6 +248,33 @@ class Module(Module, multiprocessing.Process):
 
         return False
 
+    def get_ip_info(self, ip):
+        """ Return ani domain/server/dns info we have about this daddr """
+
+        # Get info from our cache db ip data may have SNI or reverse_dns or both
+        ip_data = __database__.getIPData(ip)
+        if ip_data:
+            rev_dns = ip_data.get('reverse_dns',False)
+            if rev_dns :
+                return rev_dns
+
+            ip_sni = ip_data.get('SNI',False)
+            if ip_sni:
+                server_name = ip_sni[0]['server_name']
+                if server_name:
+                    return server_name
+        # we don't have cached info about this ip, was it resolved?
+        ip_info = __database__.get_dns_resolution(ip)
+        if ip_info:
+            return ip_info
+
+        # we have no info about this ip in our db, resolve it
+        dns_resolution = repr(socket.gethostbyname_ex(ip))[-1]
+        # make sure we were able to resolve it
+        if validators.domain(dns_resolution):
+            return dns_resolution
+        return False
+
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
         """ Checks dports that are not in our modules/timeline/services.csv file"""
 
@@ -258,6 +287,10 @@ class Module(Module, multiprocessing.Process):
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
             description = f'Connection to unknown destination port {dport}/{proto.upper()} destination IP {daddr}'
+            # get the sni/reverse dns of this daddr
+            ip_info = self.get_ip_info(daddr)
+            if ip_info:
+                description += f' ({ip_info})'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
@@ -402,7 +435,8 @@ class Module(Module, multiprocessing.Process):
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                if message and message['channel'] == 'new_flow' and type(message['data']) is not int:
+
+                elif message and message['channel'] == 'new_flow' and type(message['data']) is not int:
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -447,7 +481,6 @@ class Module(Module, multiprocessing.Process):
                             if count_reconnections > 1:
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
-
                     # Detect Port 0 Scanning
                     if proto != 'igmp' and proto != 'icmp' and  proto != 'ipv6-icmp' and (sport == '0' or dport == '0'):
                         direction = 'source' if sport==0 else 'destination'
@@ -565,7 +598,7 @@ class Module(Module, multiprocessing.Process):
                                     self.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # ---------------------------- new_ssh channel
-                if message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
+                elif message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -609,7 +642,7 @@ class Module(Module, multiprocessing.Process):
                                 pass
 
                 # ---------------------------- new_notice channel
-                if message and message['channel'] == 'new_notice':
+                elif message and message['channel'] == 'new_notice':
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
@@ -686,7 +719,7 @@ class Module(Module, multiprocessing.Process):
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
                 # ---------------------------- new_ssl channel
-                if message and message['channel'] == 'new_ssl':
+                elif message and message['channel'] == 'new_ssl':
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
                     if type(data) == str:
@@ -738,7 +771,7 @@ class Module(Module, multiprocessing.Process):
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
 
                 # ---------------------------- new_service channel
-                if message and message['channel'] == 'new_service'  and type(message['data']) is not int:
+                elif message and message['channel'] == 'new_service'  and type(message['data']) is not int:
                     data = json.loads(message['data'])
                     # uid = data['uid']
                     # profileid = data['profileid']
@@ -754,7 +787,7 @@ class Module(Module, multiprocessing.Process):
                         __database__.set_port_info(f'{port}/{proto}', service[0])
 
                 # ---------------------------- tw_closed channel
-                if message and message['channel'] == 'tw_closed' and type(message['data']) == str:
+                elif message and message['channel'] == 'tw_closed' and type(message['data']) == str:
                     data = message["data"]
                     # data example: profile_192.168.1.1_timewindow1
                     data = data.split('_')

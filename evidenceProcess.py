@@ -25,8 +25,11 @@ from colorama import Fore, Back, Style
 import ipaddress
 import socket
 import sys
+
 #import requests
 import subprocess
+import socket
+import re
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -316,16 +319,32 @@ class EvidenceProcess(multiprocessing.Process):
             data_type = 'domain'
         elif 'outTuple' in type_detection:
             # for example: ip:port:proto
-            # get the ip
-            data = data.split(":")[0]
+            # check if ipv6 or v4
+            data = data.split(':')
+            if len(data) > 3:
+                # outtuples can contain ipv6 like this 2a00:1450:400c:c05::be:443:tcp
+                # we're sure this is an ipv6, extract it
+                data = data[:-2]  # remove port and proto
+                data = "".join(i+':' for i in data)[:-1]
+            else:
+                # is ipv4
+                data = data[0]
             data_type = 'ip'
+
         elif 'dport' in type_detection:
             # is coming from portscan module
             try:
                 # data coming from portscan module contains the port and not the ip, we need to extract
                 # the ip from the description
-                data = description.split('. Tot')[0].split(': ')[1]
-                data_type = 'ip'
+                ip_regex = r'[0-9]+.[0-9]+.[0-9]+.[0-9]+'
+                match = re.search(ip_regex, description)
+                if match:
+                    data = match.group()
+                    data_type = 'ip'
+                else:
+                    # can't get the ip from the description!!
+                    return False
+
             except (IndexError,ValueError):
                 # not coming from portscan module , data is a dport, do nothing
                 data_type = ''
@@ -527,7 +546,6 @@ class EvidenceProcess(multiprocessing.Process):
                                      'description':description
                                      }
                     if tag:
-
                         # remove the tag from the description
                         description = description[:description.index('[')]
                         # add a key in the json evidence with tag
@@ -577,7 +595,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 # when printing alerts to the terminal print the profileid_twid that generated this alert too
                                 evidence_to_print = f'{profileid}_{twid} '
                                 evidence_to_print += self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
-                                self.print(f'{Fore.RED}\t{evidence_to_print}{Style.RESET_ALL}', 1, 0)
+                                self.print(f'{Fore.RED}{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 # Set an alert about the evidence being blocked
                                 alert_to_log = self.print_alert(profileid, twid)
                                 alert_dict = {'type':'alert',
