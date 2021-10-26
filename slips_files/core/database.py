@@ -2148,12 +2148,13 @@ class Database(object):
         """ returns a dict with module names as keys and pids as values """
         return self.r.hgetall('PIDs')
 
-    def set_whitelist(self,whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
-        """ Store a dict of whitelisted IPs, domains and organizations in the db """
-
-        self.rcache.hset("whitelist" , "IPs", json.dumps(whitelisted_IPs))
-        self.rcache.hset("whitelist" , "domains", json.dumps(whitelisted_domains))
-        self.rcache.hset("whitelist" , "organizations", json.dumps(whitelisted_organizations))
+    def set_whitelist(self,type, whitelist_dict):
+        """
+        Store the whitelist_dict in the given key
+        :param type: supporte types are IPs, domains and organizations
+        :param whitelist_dict: the dict of IPs, domains or orgs to store
+        """
+        self.rcache.hset("whitelist" , type, json.dumps(whitelist_dict))
 
     def get_whitelist(self):
         """ Return dict of 3 keys: IPs, domains and organizations"""
@@ -2165,6 +2166,20 @@ class Database(object):
         this function is used to check if we have any of the above keys whitelisted
         """
         return self.rcache.hget('whitelist',key)
+
+    def remove_from_whitelist(self, type, ioc):
+        """
+        Removes the given ioc from the whitelist in our db
+        :param type: supported types are IPs, domains and organizations
+        """
+
+        whitelist = self.whitelist_contains(type)
+        if whitelist:
+            whitelist = json.loads(whitelist)
+            # remove the ioc from the old whitelist
+            whitelist.pop(ioc)
+            # store the new whitelist to our db
+            self.set_whitelist(type, whitelist)
 
     def save(self,backup_file):
         """
