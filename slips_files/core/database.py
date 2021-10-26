@@ -1041,13 +1041,7 @@ class Database(object):
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
 
     def getEvidenceForTW(self, profileid, twid):
-        """
-        Get the evidence for this TW for this Profile
-        Return a dict that looks like this {"type_detection": "", "detection_info": "", "type_evidence": ""}': {'confidence': ,
-                                                                                                    'threat_level': ,
-                                                                                                    'description': }
-        """
-
+        """ Get the evidence for this TW for this Profile """
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
         return data
 
