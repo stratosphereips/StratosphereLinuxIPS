@@ -172,7 +172,7 @@ class ProfilerProcess(multiprocessing.Process):
         # if any of the dicts arent there in the db, insitialize it
         if not whitelisted_IPs:
             whitelisted_IPs = {}
-            
+
         if not whitelisted_domains:
             whitelisted_domains = {}
 
@@ -225,10 +225,6 @@ class ProfilerProcess(multiprocessing.Process):
                         line = whitelist.readline()
                         continue
 
-                    # skip comments
-                    if line.startswith('#'):
-                        line = whitelist.readline()
-                        continue
 
                     # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
                     line = line.replace("\n","").replace(" ","").split(",")
