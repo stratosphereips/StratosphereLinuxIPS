@@ -366,7 +366,6 @@ class Module(Module, multiprocessing.Process):
                 __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                          description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-
     def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
         Makes sure all cached DNS answers are used in contacted_ips
