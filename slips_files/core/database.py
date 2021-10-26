@@ -2136,7 +2136,6 @@ class Database(object):
         :param whitelist_dict: the dict of IPs, domains or orgs to store
         """
         self.r.hset("whitelist" , type, json.dumps(whitelist_dict))
-        print(f'@@@@@@@@@@@@@@@@@@   set whitelist : {type} : {whitelist_dict}')
 
     def get_whitelist(self):
         """ Return dict of 3 keys: IPs, domains and organizations"""
@@ -2152,21 +2151,6 @@ class Database(object):
             return json.loads(whitelist)
         else:
             return False
-
-
-    def remove_from_whitelist(self, type, ioc):
-        """
-        Removes the given ioc from the whitelist in our db
-        :param type: supported types are IPs, domains and organizations
-        """
-
-        whitelist = self.whitelist_contains(type)
-        if whitelist:
-            # remove the ioc from the old whitelist
-            whitelist.pop(ioc)
-            # store the new whitelist to our db
-            self.set_whitelist(type, whitelist)
-            print(f'@@@@@@@@@@@@@@@@@@   removed :{ioc} from whitelisted {type} ')
 
     def save(self,backup_file):
         """
