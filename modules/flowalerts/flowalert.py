@@ -332,6 +332,7 @@ class Module(Module, multiprocessing.Process):
                 # less than 2 minutes have passed
                 return False
 
+
         answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
         # IP has no dns answer, alert.
         if not answers_dict:
@@ -365,6 +366,7 @@ class Module(Module, multiprocessing.Process):
                     twid = ''
                 __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                          description, timestamp, profileid=profileid, twid=twid, uid=uid)
+
 
     def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
