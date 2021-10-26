@@ -1831,7 +1831,8 @@ class ProfilerProcess(multiprocessing.Process):
 
             if not self.column_values:
                 return True
-            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp','files', 'known_services', 'arp'):
+            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
+                                                    'dhcp','files', 'known_services', 'arp'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -1989,6 +1990,7 @@ class ProfilerProcess(multiprocessing.Process):
                         __database__.set_dns_resolution(query, answers, starttime, uid)
 
                 elif flow_type == 'http':
+
                     __database__.add_out_http(profileid, twid, starttime, flow_type, uid, self.column_values['method'],
                                               self.column_values['host'], self.column_values['uri'],
                                               self.column_values['httpversion'], self.column_values['user_agent'],
