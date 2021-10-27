@@ -170,9 +170,11 @@ class Module(Module, multiprocessing.Process):
                 # make sure we have this profileid
                 if __database__.hasProfile(profileid):
                     # in which tw is this ts?
-                    twid = __database__.getTWofTime(profileid, ts)[0]
-                    __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                             threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                    twid = __database__.getTWofTime(profileid, ts)
+                    if twid:
+                        twid = twid[0]
+                        __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
 
     def compile_and_save_rules(self):
         """
