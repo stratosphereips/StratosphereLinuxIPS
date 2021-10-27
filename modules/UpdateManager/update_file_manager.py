@@ -123,10 +123,13 @@ class UpdateFileManager:
         try:
             # Read the riskiq api key
             riskiq_key_path = self.config.get('threatintelligence', 'RiskIQ_key_path')
-            with open(riskiq_key_path,'r') as f:
-                self.riskiq_key = f.read().replace('\n','')
-                if len(self.riskiq_key) != 64:
-                    raise NameError
+            try:
+                with open(riskiq_key_path,'r') as f:
+                    self.riskiq_key = f.read().replace('\n','')
+                    if len(self.riskiq_key) != 64:
+                        raise NameError
+            except FileNotFoundError:
+                raise NameError
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.riskiq_key = None
