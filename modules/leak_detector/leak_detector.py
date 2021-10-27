@@ -78,11 +78,11 @@ class Module(Module, multiprocessing.Process):
         with open(self.pcap ,'rb') as f:
             # every pcap header is 24 bytes
             f.read(24)
-            packet_number = -1
+            packet_number = 0
 
             packet_data_length = True
             while packet_data_length:
-                # the number of the packet we're currently working with, since packets start from 0 in scapy , the first packet should be 0
+                # the number of the packet we're currently working with, since packets start from 1 in tshark , the first packet should be 1
                 packet_number += 1
                 # this offset is exactly when the packet starts
                 start_offset = f.tell() + 1
@@ -103,33 +103,37 @@ class Module(Module, multiprocessing.Process):
                     command = f'tshark -r {self.pcap} -T json -Y frame.number=={packet_number}'
                     result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=open('/dev/null','w'))
                     json_packet = result.stdout.decode("utf-8")
-                    json_packet =  json.loads(json_packet)[0]['_source']['layers']
+                    json_packet =  json.loads(json_packet)
+                    if json_packet:
+                        # sometime tshark can't find the desired packet?
+                        json_packet = json_packet[0]['_source']['layers']
 
-                    # get ip family and used protocol
-                    used_protocols = json_packet['frame']['frame.protocols']
-                    if 'ipv6' in used_protocols:
-                        ip_family = 'ipv6'
-                    else:
-                        ip_family = 'ip'
+                        # get ip family and used protocol
+                        used_protocols = json_packet['frame']['frame.protocols']
+                        if 'ipv6' in used_protocols:
+                            ip_family = 'ipv6'
+                        else:
+                            ip_family = 'ip'
 
-                    if 'tcp' in used_protocols:
-                        proto='tcp'
-                    elif 'udp' in used_protocols:
-                        proto = 'udp'
-                    else:
-                        # probably ipv6.hopopt
-                        continue
+                        if 'tcp' in used_protocols:
+                            proto='tcp'
+                        elif 'udp' in used_protocols:
+                            proto = 'udp'
+                        else:
+                            # probably ipv6.hopopt
+                            continue
 
-                    try:
-                        ts = json_packet['frame']['frame.time_epoch']
-                        srcip = json_packet[ip_family][f'{ip_family}.src']
-                        dstip = json_packet[ip_family][f'{ip_family}.dst']
-                        sport = json_packet[proto][f'{proto}.srcport']
-                        dport = json_packet[proto][f'{proto}.dstport']
-                    except KeyError:
-                        continue
+                        try:
+                            ts = json_packet['frame']['frame.time_epoch']
+                            srcip = json_packet[ip_family][f'{ip_family}.src']
+                            dstip = json_packet[ip_family][f'{ip_family}.dst']
+                            sport = json_packet[proto][f'{proto}.srcport']
+                            dport = json_packet[proto][f'{proto}.dstport']
+                        except KeyError:
+                            continue
 
-                    return  (srcip, dstip, proto, sport, dport, ts)
+                        return  (srcip, dstip, proto, sport, dport, ts)
+
         return False
 
 
