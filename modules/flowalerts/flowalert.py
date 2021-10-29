@@ -135,7 +135,7 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'LongConnection'
         threat_level = 10
         confidence = 0.5
-        description = 'Long Connection ' + str(duration)
+        description = 'long connection ' + str(duration)
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
@@ -286,7 +286,7 @@ class Module(Module, multiprocessing.Process):
             type_detection  = 'dport'
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
-            description = f'Connection to unknown destination port {dport}/{proto.upper()} destination IP {daddr}'
+            description = f'connection to unknown destination port {dport}/{proto.upper()} destination IP {daddr}'
             # get the sni/reverse dns of this daddr
             ip_info = self.get_ip_info(daddr)
             if ip_info:
@@ -337,7 +337,7 @@ class Module(Module, multiprocessing.Process):
                     type_detection  = 'dstip'
                     type_evidence = 'ConnectionWithoutDNS'
                     detection_info = daddr
-                    description = f'A connection without DNS resolution to IP: {daddr}'
+                    description = f'a connection without DNS resolution to IP: {daddr}'
                     if not twid:
                         twid = ''
                     __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
@@ -513,7 +513,7 @@ class Module(Module, multiprocessing.Process):
                                 dst_IPs_ports = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
                                 dstports = list(dst_IPs_ports[daddr]['dstports'])
                                 if len(dstports) > 1:
-                                    description = "Connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
+                                    description = "connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
                                     self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
                             # Connection to multiple port to the Source IP. Happens in the mode 'all'
                             elif profileid.split('_')[1] == daddr:
@@ -525,7 +525,7 @@ class Module(Module, multiprocessing.Process):
                                 src_IPs_ports = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
                                 dstports = list(src_IPs_ports[saddr]['dstports'])
                                 if len(dstports) > 1:
-                                    description = "Connection to multiple ports {} of Source IP: {}".format(dstports, saddr)
+                                    description = "connection to multiple ports {} of Source IP: {}".format(dstports, saddr)
                                     self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
 
                     # Detect Data exfiltration
