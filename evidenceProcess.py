@@ -97,13 +97,12 @@ class EvidenceProcess(multiprocessing.Process):
             s.close()
         # get public ip
         #IPs.append(requests.get('http://ipinfo.io/json').json()['ip'])
-        command = f'curl -s http://ipinfo.io/json'
+        command = f'curl -m 5 -s http://ipinfo.io/json'
         result = subprocess.run(command.split(), capture_output=True)
         text_output = result.stdout.decode("utf-8").replace('\n','')
-        public_ip = json.loads(text_output)['ip']
-        IPs.append(public_ip)
-        #self.print(result)
-
+        if text_output:
+            public_ip = json.loads(text_output)['ip']
+            IPs.append(public_ip)
         return IPs
 
     def read_configuration(self):
