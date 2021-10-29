@@ -141,14 +141,14 @@ class EvidenceProcess(multiprocessing.Process):
             self.detection_threshold = 2
         self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)')
 
-    def print_alert(self, profileid, twid):
+    def print_alert(self, profileid, twid, flow_datetime):
         '''
         Function to print alert about the blocked profileid and twid
         '''
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ip = profileid.split("_")[-1]
-        alert_to_print = f'{now} IP: {ip} blocked as source (or destination), on its {twid}.'
+        now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        ip = profileid.split("_")[-1].strip()
+        alert_to_print = f'{flow_datetime}: Src IP {ip:15}. Blocked given enough evidence on {twid}. (real time {now})'
         return alert_to_print
 
     def print_evidence(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
@@ -160,7 +160,11 @@ class EvidenceProcess(multiprocessing.Process):
         dns_resolution_detection_info = __database__.get_dns_resolution(detection_info)
         dns_resolution_detection_info_final = dns_resolution_detection_info[0:3] if dns_resolution_detection_info else ''
         dns_resolution_ip = __database__.get_dns_resolution(ip)
-        dns_resolution_ip_final = f' DNS: {dns_resolution_ip[0:3]}. ' if (dns_resolution_detection_info and len(dns_resolution_ip[0:3]) > 0) else ''
+        if len(dns_resolution_ip) >= 1:
+            dns_resolution_ip = dns_resolution_ip[0]
+        elif len(dns_resolution_ip) == 0:
+            dns_resolution_ip = ''
+        dns_resolution_ip_final = f' DNS: {dns_resolution_ip[0:3]}. ' if (dns_resolution_detection_info and len(dns_resolution_ip[0:3]) > 0) else '. '
         srcip = profileid.split('_')[1]
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
@@ -175,10 +179,11 @@ class EvidenceProcess(multiprocessing.Process):
         elif detection_module == 'SSHSuccessful':
             evidence_string = f'Did a successful SSH. {description}.'
         else:
-            evidence_string = f'{srcip} (DNS: {dns_resolution_ip_final}) detected {description}.'
+            evidence_string = f'Detected {description}.'
 
         # Add the srcip to the evidence
-        evidence_string = f'IP: {ip} ' + evidence_string
+        #evidence_string = f'IP: {ip} (DNS:{dns_resolution_ip}). ' + evidence_string
+        evidence_string = f'Src IP {ip:15}. ' + evidence_string
 
         return evidence_string
 
@@ -515,7 +520,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                     if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
                         flow_datetime = datetime.fromtimestamp(timestamp)
-                        flow_datetime = flow_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                        flow_datetime = flow_datetime.strftime('%Y/%m/%d %H:%M:%S')
                     else:
                         try:
                             # for timestamps like 2021-06-07T12:44:56.654854+0200
@@ -548,7 +553,7 @@ class EvidenceProcess(multiprocessing.Process):
                         # add a key in the json evidence with tag
                         evidence_dict.update({'tags':tag.replace("'",''), 'description': description})
 
-                    self.addDataToLogFile(flow_datetime + ' ' + evidence_to_log)
+                    self.addDataToLogFile(flow_datetime + ': ' + evidence_to_log)
                     self.addDataToJSONFile(evidence_dict)
 
                     evidence = __database__.getEvidenceForTW(profileid, twid)
@@ -590,11 +595,12 @@ class EvidenceProcess(multiprocessing.Process):
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # Differentiate the type of evidence for different detections
                                 # when printing alerts to the terminal print the profileid_twid that generated this alert too
-                                evidence_to_print = f'{profileid}_{twid} '
+                                #evidence_to_print = f'{profileid}_{twid} '
+                                evidence_to_print = f'{flow_datetime}: '
                                 evidence_to_print += self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
                                 self.print(f'{Fore.RED}{evidence_to_print}{Style.RESET_ALL}', 1, 0)
                                 # Set an alert about the evidence being blocked
-                                alert_to_log = self.print_alert(profileid, twid)
+                                alert_to_log = self.print_alert(profileid, twid, flow_datetime)
                                 alert_dict = {'type':'alert',
                                               'profileid': profileid,
                                               'twid': twid,
