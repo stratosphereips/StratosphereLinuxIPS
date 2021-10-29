@@ -175,7 +175,7 @@ class EvidenceProcess(multiprocessing.Process):
         elif detection_module == 'SSHSuccessful':
             evidence_string = f'Did a successful SSH. {description}.'
         else:
-            evidence_string = f'{dns_resolution_ip_final} detected {description}.'
+            evidence_string = f'{srcip} (DNS: {dns_resolution_ip_final}) detected {description}.'
 
         # Add the srcip to the evidence
         evidence_string = f'IP: {ip} ' + evidence_string
