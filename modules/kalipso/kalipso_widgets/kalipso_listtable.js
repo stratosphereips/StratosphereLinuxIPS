@@ -176,16 +176,17 @@ class ListTable{
                 if(split_tuple.length > 3){var outTuple_ip = split_tuple.slice(0,split_tuple.length-2).join(':')}
                 else{var outTuple_ip = split_tuple[0]}
                 var letters_string = tuple_info[0].substr(0, this.limit_letter_outtuple)
-
                 this.getIPInfo_dict(outTuple_ip).then(ip_info_dict =>{
-                this.redis_database.getDNSResolution(outTuple_ip).then(dns_resolution=>{
+                this.redis_database.getDNSResolution(outTuple_ip).then(all_dns_resolution=>{
                 var letter_string_chunks = this.chunkString(letters_string.trim(),40);
                 var length_letter = letter_string_chunks.length
-                if(dns_resolution){dns_resolution = JSON.parse(dns_resolution)}
+                if(all_dns_resolution){all_dns_resolution = JSON.parse(all_dns_resolution)['domains']}
+                var dns_resolution = all_dns_resolution
                 var length_dns_resolution = dns_resolution.length
                 var all_sni = ip_info_dict['SNI']
                 var sni = all_sni.slice(Math.max(all_sni.length - 3, 0))
                 var length_sni = sni.length
+                // If dns resolution is not defined, use 0 
                 if (length_dns_resolution == null) { length_dns_resolution = 0 }
                 var max_length = Math.max(length_dns_resolution, length_letter, length_sni)
                 var indexes_array = Array.from(Array(max_length).keys())
@@ -243,7 +244,6 @@ class ListTable{
                 if(split_tuple.length > 3){var inTuple_ip = split_tuple.slice(0,split_tuple.length-2).join(':')}
                 else{var inTuple_ip = split_tuple[0]}
                 var letters_string = tuple_info[0].substr(0, this.limit_letter_intuple)
-
                 this.getIPInfo_dict(inTuple_ip).then(ip_info_dict =>{
                 this.redis_database.getDNSResolution(inTuple_ip).then(dns_resolution=>{
                 var letter_string_chunks = this.chunkString(letters_string.trim(),40);
