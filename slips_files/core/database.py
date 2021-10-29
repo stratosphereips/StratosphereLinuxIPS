@@ -1888,7 +1888,7 @@ class Database(object):
             # if the domain(query) we have isn't already in DNSresolution in the db, add it
             if query not in domains:
                 domains.append(query)
-            domains = json.dumps(domains)
+            # domains should be a list, not a string!, so don't use json.dumps here
             ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
             ip_info = json.dumps(ip_info)
             self.r.hset('DNSresolution', ip, ip_info)
@@ -1907,7 +1907,7 @@ class Database(object):
                 # return a dict with 'ts' 'uid' 'answers' about this IP
                 return ip_info
             # return answers only
-            domains = json.loads(ip_info['domains'])
+            domains = ip_info['domains']
 
             return domains
         else:
