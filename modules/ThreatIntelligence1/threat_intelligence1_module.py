@@ -63,7 +63,7 @@ class Module(Module, multiprocessing.Process):
         dns_resolution = __database__.get_dns_resolution(ip)
         dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
 
-        description = f'Connection to a blacklisted IP: {ip}{dns_resolution}source: {ip_info["source"]}, description: {ip_info["description"]}'
+        description = f'Connection to a blacklisted IP: {ip}{dns_resolution} source: {ip_info["source"]}, description: {ip_info["description"]}'
         tags = ip_info.get('tags',False)
         if tags:
             description += f' tags={tags}'
