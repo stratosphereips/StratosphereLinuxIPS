@@ -186,6 +186,7 @@ class ListTable{
                 var all_sni = ip_info_dict['SNI']
                 var sni = all_sni.slice(Math.max(all_sni.length - 3, 0))
                 var length_sni = sni.length
+                if (length_dns_resolution == null) { length_dns_resolution = 0 }
                 var max_length = Math.max(length_dns_resolution, length_letter, length_sni)
                 var indexes_array = Array.from(Array(max_length).keys())
 
