@@ -478,7 +478,7 @@ class Module(Module, multiprocessing.Process):
                         current_reconnections[key] = current_reconnections.get(key, 0) + 1
                         __database__.setReconnections(profileid, twid, current_reconnections)
                         for key, count_reconnections in current_reconnections.items():
-                            if count_reconnections > 1:
+                            if count_reconnections >= 5:
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
                     # Detect Port 0 Scanning
