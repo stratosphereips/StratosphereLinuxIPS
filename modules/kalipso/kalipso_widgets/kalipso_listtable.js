@@ -164,7 +164,7 @@ class ListTable{
     /*Combine data for the outtuple hotkey - key, behavioral letters, asn, geo VT*/
     setOutTuples(ip, timewindow){
         this.redis_database.getOutTuples(ip, timewindow).then(redis_outTuples=>{
-            var data = [['key','string','dns_resolution','SNI','RDNS','asn','geo','url','down','ref','com']]
+            var data = [['Out Tuple','Flow Behavior','DNS Resolution','SNI','RDNS','AS','CN','Url','Down','Ref','Com']]
             if(redis_outTuples==null){this.setData(data);this.screen.render(); return;}
             var json_outTuples = JSON.parse(redis_outTuples)
             var keys = Object.keys(json_outTuples)
