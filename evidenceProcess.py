@@ -165,16 +165,13 @@ class EvidenceProcess(multiprocessing.Process):
         srcip = profileid.split('_')[1]
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
-            if detection_type == 'dstip':
-                evidence_string = f'Connected to blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
-
-            elif detection_type == 'srcip':
+            evidence_string = f'Detected {description}.'
+            if detection_type == 'srcip':
                 ip = srcip
-                evidence_string = f'Detected blacklisted IP {detection_info} {dns_resolution_detection_info_final} due to {description}.'
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
             ip = srcip
-            evidence_string = f'Detected blacklisted domain {detection_info} due to {description}.'
+            evidence_string = f'Detected {description}.'
 
         elif detection_module == 'SSHSuccessful':
             evidence_string = f'Did a successful SSH. {description}.'
@@ -545,11 +542,12 @@ class EvidenceProcess(multiprocessing.Process):
                                      'detection_info':str(type_detection) + ' ' + str(detection_info),
                                      'description':description
                                      }
+
                     if tag:
                         # remove the tag from the description
-                        description = description[:description.index('[')]
+                        description = description[:description.index('[')][:-5]
                         # add a key in the json evidence with tag
-                        evidence_dict.update({'tags':tag, 'description': description})
+                        evidence_dict.update({'tags':tag.replace("'",''), 'description': description})
 
                     self.addDataToLogFile(flow_datetime + ' ' + evidence_to_log)
                     self.addDataToJSONFile(evidence_dict)

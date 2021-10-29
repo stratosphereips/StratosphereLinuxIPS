@@ -59,7 +59,11 @@ class Module(Module, multiprocessing.Process):
         confidence = ip_info['confidence']
         if not confidence:
             confidence = 0
-        description = f'{ip_info["source"]}: {ip_info["description"]}'
+
+        dns_resolution = __database__.get_dns_resolution(ip)
+        dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
+
+        description = f'Connection to a blacklisted IP: {ip}{dns_resolution}source: {ip_info["source"]}, description: {ip_info["description"]}'
         tags = ip_info.get('tags',False)
         if tags:
             description += f' tags={tags}'
@@ -81,7 +85,7 @@ class Module(Module, multiprocessing.Process):
         confidence = domain_info.get('confidence',False)
         if not confidence:
             confidence = 0.5
-        description = f'{domain_info["source"]}: {domain_info["description"]}'
+        description = f'Connection to a blacklisted domain {domain} found in: {domain_info["source"]}'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
