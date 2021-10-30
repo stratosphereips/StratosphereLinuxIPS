@@ -49,7 +49,7 @@ class EvidenceProcess(multiprocessing.Process):
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
-        # Subscribe to channel 'tw_modified'
+        # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
         self.logfile = self.clean_evidence_log_file(output_folder)
         self.jsonfile = self.clean_evidence_json_file(output_folder)
@@ -529,6 +529,7 @@ class EvidenceProcess(multiprocessing.Process):
                             #  for timestamps like 2018-03-09 22:57:44.781449+02:00
                             flow_datetime = timestamp[:19]
 
+                    # Print the evidence in the outprocess
                     evidence_to_log = self.print_evidence(profileid,
                                                           twid,
                                                           srcip,
@@ -547,16 +548,26 @@ class EvidenceProcess(multiprocessing.Process):
                                      'description':description
                                      }
 
+                    # What tag is this??? TI tag?
                     if tag:
                         # remove the tag from the description
                         description = description[:description.index('[')][:-5]
                         # add a key in the json evidence with tag
                         evidence_dict.update({'tags':tag.replace("'",''), 'description': description})
 
+                    # Add the evidence to the log files
                     self.addDataToLogFile(flow_datetime + ': ' + evidence_to_log)
                     self.addDataToJSONFile(evidence_dict)
 
+
+                    #
+                    # Analysis of evidence for blocking or not
+                    # This is done every time we receive 1 new evidence
+                    # 
+
+                    # Get all the evidence for the TW
                     evidence = __database__.getEvidenceForTW(profileid, twid)
+
                     # Important! It may happen that the evidence is not related to a profileid and twid.
                     # For example when the evidence is on some src IP attacking our home net, and we are not creating
                     # profiles for attackers
