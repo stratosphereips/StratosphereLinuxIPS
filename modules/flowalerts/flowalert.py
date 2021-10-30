@@ -18,8 +18,8 @@ import validators
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
-    description = 'Alerts about flows: long connection, successful ssh'
-    authors = ['Kamila Babayeva', 'Sebastian Garcia','Alya Gomaa']
+    description = 'Alerts about flows: long connection, successful ssh, password guessing, self-signed certificate, data exfiltration, etc.'
+    authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -52,7 +52,7 @@ class Module(Module, multiprocessing.Process):
                            '223.31.121.171','169.53.182.120')
         # ignore private Address
         self.ignored_ranges = ('172.16.0.0/12','192.168.0.0/16','10.0.0.0/8')
-        # store them as network objects
+        # store private ranges as network objects
         self.ignored_ranges = list(map(ipaddress.ip_network,self.ignored_ranges))
         self.p2p_daddrs = {}
         # get the default gateway
