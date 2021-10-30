@@ -44,28 +44,21 @@ class Module(Module, multiprocessing.Process):
         self.pubsub.subscribe('new_service')
         self.pubsub.subscribe('tw_closed')
         self.timeout = None
-        # ignore default no dns resolution alerts for LAN IP address, loopback addr, dns servers, ...etc
-        self.ignored_ips = ('127.0.0.1', '8.8.8.8', '8.8.4.4', '1.1.1.1', '1.0.0.1', '9.9.9.9', '149.112.112.112',
-                            '208.67.222.222', '208.67.220.220', '185.228.168.9', '185.228.169.9','76.76.19.19', '76.223.122.150', '94.140.14.14',
-                            '94.140.15.15','193.159.232.5', '82.103.129.72', '103.113.200.10','77.68.45.252', '117.53.46.10', '103.11.98.187',
-                           '160.19.155.51', '31.204.180.44', '169.38.73.5', '104.152.211.99', '177.20.178.12', '185.43.51.84', '79.175.208.28',
-                           '223.31.121.171','169.53.182.120')
-        # ignore private Address
-        self.ignored_ranges = ('172.16.0.0/12','192.168.0.0/16','10.0.0.0/8')
-        # store private ranges as network objects
-        self.ignored_ranges = list(map(ipaddress.ip_network,self.ignored_ranges))
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = self.get_default_gateway()
 
     def is_ignored_ip(self, ip) -> bool:
+        """
+        This function checks if an IP is an special list of IPs that
+        should not be alerted for different reasons
+        """
         ip_obj =  ipaddress.ip_address(ip)
-        if ip_obj.is_multicast or ip in self.ignored_ips or ip.endswith('255'):
+        # Is the IP multicast, private? (including localhost)
+        # local_link or reserved?
+        # The broadcast address 255.255.255.255 is reserved.
+        if ip_obj.is_multicast or ip_obj.is_private or ip_obj.is_local_link or ip_obj.is_reserved:
             return True
-        for network_range in self.ignored_ranges:
-            if ip_obj in network_range:
-                # ip found in one of the ranges, ignore it
-                return True
         return False
 
     def read_configuration(self):
