@@ -269,10 +269,15 @@ class Module(Module, multiprocessing.Process):
             return ip_info
 
         # we have no info about this ip in our db, resolve it
-        dns_resolution = repr(socket.gethostbyname_ex(ip))[-1]
-        # make sure we were able to resolve it
-        if validators.domain(dns_resolution):
-            return dns_resolution
+        try:
+            dns_resolution = socket.gethostbyaddr(ip)[0]
+            # make sure we were able to resolve it
+            if validators.domain(dns_resolution):
+                return dns_resolution
+        except socket.herror:
+           # can't resolve this ip
+            return False
+
         return False
 
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
@@ -351,7 +356,7 @@ class Module(Module, multiprocessing.Process):
         if contacted_ips == {}: return
         # Get an updated list of dns answers
         resolutions = __database__.get_all_dns_resolutions()
-        # every dns answer is a list of ip that correspond to a spicif query,
+        # every dns answer is a list of ips that correspond to a specific query,
         # one of these ips should be present in the contacted ips
         for ip in resolutions:
             if ip not in contacted_ips:
@@ -359,7 +364,6 @@ class Module(Module, multiprocessing.Process):
                 ip_info = json.loads(resolutions[ip])
                 uid = ip_info['uid']
                 timestamp = ip_info['ts']
-
                 # to make sure this is not a False positive,
                 # only alert if 2 minutes has passed from the ts of the dns resolution without a connection
                 epoch_now  = int(time.time())
@@ -797,15 +801,16 @@ class Module(Module, multiprocessing.Process):
                     flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
                     # a list of contacte dips in this tw
                     contacted_ips = {}
-                    # flows is a dict of uids as keys and actual flows as values
-                    for flow in flows.values():
-                        flow = json.loads(flow)
-                        contacted_ip = flow.get('daddr','')
-                        # this will be used in setEvidence if there's an ununsed_DNS_resolution
-                        uid = flow.get('uid','')
-                        # append ipv4 addresses only to ths list
-                        if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
-                            contacted_ips.update({contacted_ip: uid })
+                    if flows:
+                        # flows is a dict of uids as keys and actual flows as values
+                        for flow in flows.values():
+                            flow = json.loads(flow)
+                            contacted_ip = flow.get('daddr','')
+                            # this will be used in setEvidence if there's an ununsed_DNS_resolution
+                            uid = flow.get('uid','')
+                            # append ipv4 addresses only to ths list
+                            if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
+                                contacted_ips.update({contacted_ip: uid })
 
                     # dns answers are processed and stored in virustotal.py in new_dns_flow channel
                     # we simply need to check if we have an unused answer
