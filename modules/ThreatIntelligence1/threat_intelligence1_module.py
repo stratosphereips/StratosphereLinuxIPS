@@ -82,10 +82,11 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
         threat_level = 50
         # when we comment ti_files and run slips, we get the error of not being able to get feed confidence
-        confidence = domain_info.get('confidence',False)
+        confidence = domain_info.get('confidence', False)
+        tags = domain_info.get('tags', False)
         if not confidence:
             confidence = 0.5
-        description = f'connection to a blacklisted domain {domain} found in: {domain_info["source"]}'
+        description = f'connection to the blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
