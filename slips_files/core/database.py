@@ -2000,11 +2000,11 @@ class Database(object):
         Search in the dB of malicious domains and return a
         description if we found a match
         """
-        domain_description = self.rcache.hget('IoC_domains',domain)
+        domain_description = self.rcache.hget('IoC_domains', domain)
         if domain_description == None:
             # try to match subdomain
             ioc_domains = self.rcache.hgetall('IoC_domains')
-            for malicious_domain,description in ioc_domains.items():
+            for malicious_domain, description in ioc_domains.items():
                 if malicious_domain in domain:
                     return description
             return False
