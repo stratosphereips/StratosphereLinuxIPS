@@ -78,10 +78,10 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [
-     ('dataset/test2.binetflow',1,'RNN C&C channels detection','test2/'),
+     ('dataset/test2.binetflow',1,'C&C channels detection','test2/'),
     ('dataset/test3.binetflow',20,'New horizontal port scan to port 3389','test3/'),
       ('dataset/test4.binetflow',2,'New horizontal port scan to port 81','test4/'),
-     ('dataset/test5.binetflow',4,'RNN C&C channels detection','test5/')])
+     ('dataset/test5.binetflow',4,'C&C channels detection','test5/')])
 def test_binetflow(database, binetflow_path, expected_profiles, expected_evidence,  output_dir ):
     try:
         os.mkdir(output_dir)
@@ -121,8 +121,8 @@ def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize("conn_log_path, expected_profiles, expected_evidence,  output_dir",
-     [('dataset/sample_zeek_files/conn.log',4,'RNN C&C channels detection','conn_log/'),
-      ('dataset/sample_zeek_files-2/conn.log',5,'RNN C&C channels detection','conn_log-2/')])
+     [('dataset/sample_zeek_files/conn.log',4,'C&C channels detection','conn_log/'),
+      ('dataset/sample_zeek_files-2/conn.log',5,'C&C channels detection','conn_log-2/')])
 def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evidence,  output_dir):
     try:
         os.mkdir(output_dir)
@@ -150,7 +150,7 @@ def test_suricata(database, suricata_path,  output_dir):
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
-    expected_evidence = 'New vertical port scan detected to IP 192.168.1.129 from 193.46.255.92'
+    expected_evidence = 'New vertical port scan detected'
     assert profiles > 90
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
@@ -168,7 +168,7 @@ def test_nfdump(database, nfdump_path,  output_dir):
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
-    expected_evidence = 'RNN C&C channels detection'
+    expected_evidence = 'C&C channels detection'
     # make sure slips generated profiles for this file (can't the number of profiles exactly because slips doesn't generate a const number of profiles per file)
     assert profiles > 0
     log_file = output_dir + alerts_file
