@@ -662,7 +662,7 @@ class Module(Module, multiprocessing.Process):
                             profileid = data['profileid']
                             twid = data['twid']
                             ip = flow['daddr']
-                            description = 'Self-signed certificate. Destination IP: {}'.format(ip)
+                            description = 'self-signed certificate. Destination IP {}'.format(ip)
                             confidence = 0.5
                             threat_level = 30
                             type_detection = 'dstip'
@@ -679,7 +679,7 @@ class Module(Module, multiprocessing.Process):
                             confidence = 1
                             threat_level = 60
                             # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
-                            description = 'Zeek: Vertical port scan. ' + msg
+                            description = 'vertical port scan by Zeek engine. ' + msg
                             type_evidence = 'PortScanType1'
                             type_detection = 'dstip'
                             detection_info = flow.get('scanning_ip','')
@@ -698,7 +698,7 @@ class Module(Module, multiprocessing.Process):
                             # Horizontal port scan
                             confidence = 1
                             threat_level = 60
-                            description = 'Zeek: Horizontal port scan. ' + msg
+                            description = 'horizontal port scan by Zeek engine. ' + msg
                             type_evidence = 'PortScanType2'
                             type_detection = 'dport'
                             detection_info = flow.get('scanned_port','')
@@ -711,7 +711,7 @@ class Module(Module, multiprocessing.Process):
                             confidence = 1
                             threat_level = 60
                             # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
-                            description = 'Zeek: Password_Guessing. ' + msg
+                            description = 'password guessing by Zeek enegine. ' + msg
                             type_evidence = 'Password_Guessing'
                             type_detection = 'dstip'
                             detection_info = flow.get('scanning_ip','')
