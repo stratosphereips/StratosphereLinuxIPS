@@ -191,7 +191,7 @@ class Database(object):
     def getTWsfromProfile(self, profileid):
         """
         Receives a profile id and returns the list of all the TW in that profile
-        Returns a list with data or an empty list
+        Returns a list of tuples (twid, ts) or an empty list
         """
         data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
         return data
@@ -957,11 +957,11 @@ class Database(object):
             'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
         }
         """
-        # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
-        current_evidence = self.getEvidenceForTW(profileid, twid)
-        if current_evidence:
-            current_evidence = json.loads(current_evidence)
-        else:
+
+        # the same evidence is sometimes repeated in the same profileid and different twids,
+        # to avoid this, check for the evidence in all evidence in this profiled, if this evidence is there, don't alert
+        current_evidence = self.getEvidenceForProfileid(profileid)
+        if not current_evidence:
             current_evidence = {}
         # Prepare key for a new evidence
         key = dict()
@@ -1021,9 +1021,28 @@ class Database(object):
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
 
     def getEvidenceForTW(self, profileid, twid):
-        """ Get the evidence for this TW for this Profile """
+        """
+        Get the evidence for this TW for this Profile
+        Return a dict that looks like this {"type_detection": "", "detection_info": "", "type_evidence": ""}': {'confidence': ,
+                                                                                                    'threat_level': ,
+                                                                                                    'description': }
+        """
+
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
         return data
+
+    def getEvidenceForProfileid(self,profileid):
+        profile_evidence = {}
+        # get all tws for this profileid
+        timewindows = self.getTWsfromProfile(profileid)
+        for twid,ts in timewindows:
+            # get all evidence in this tw
+            tw_evidence = self.getEvidenceForTW(profileid, twid)
+            if tw_evidence:
+                tw_evidence = json.loads(tw_evidence)
+                profile_evidence.update(tw_evidence)
+        return profile_evidence
+
 
     def checkBlockedProfTW(self, profileid, twid):
         """
