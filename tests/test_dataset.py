@@ -59,7 +59,7 @@ def has_errors(output_file):
 
 
 @pytest.mark.parametrize("pcap_path,expected_profiles, output_dir, expected_evidence",
-                         [('dataset/hide-and-seek-short.pcap',15,'pcap/', 'New horizontal port scan to port 23'),
+                         [('dataset/hide-and-seek-short.pcap',15,'pcap/', 'horizontal port scan to port 23'),
                           ('dataset/arp-only.pcap',3,'pcap2/','performing ARP scan')])
 def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evidence):
     try:
@@ -79,8 +79,8 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
 
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [
      ('dataset/test2.binetflow',1,'C&C channels detection','test2/'),
-    ('dataset/test3.binetflow',20,'New horizontal port scan to port 3389','test3/'),
-      ('dataset/test4.binetflow',2,'New horizontal port scan to port 81','test4/'),
+    ('dataset/test3.binetflow',20,'horizontal port scan to port 3389','test3/'),
+      ('dataset/test4.binetflow',2,'horizontal port scan to port 81','test4/'),
      ('dataset/test5.binetflow',4,'C&C channels detection','test5/')])
 def test_binetflow(database, binetflow_path, expected_profiles, expected_evidence,  output_dir ):
     try:
@@ -150,7 +150,7 @@ def test_suricata(database, suricata_path,  output_dir):
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
-    expected_evidence = 'New vertical port scan detected'
+    expected_evidence = 'vertical port scan detected'
     assert profiles > 90
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
