@@ -375,8 +375,9 @@ class Module(Module, multiprocessing.Process):
                     type_detection  = 'dstdomain'
                     type_evidence = 'DNSWithoutConnection'
                     query = ip_info['domains'][-1]
-                    if 'arpa' in query or '.local' in query:
+                    if 'arpa' in query or '.local' in query or query.endswith('debian.pool.ntp.org'):
                         # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
+                        # queries ending with debian.pool.ntp.org are NTP requests, ignore them
                         continue
                     detection_info = query
                     description = f'Domain {query} resolved with no connection'
