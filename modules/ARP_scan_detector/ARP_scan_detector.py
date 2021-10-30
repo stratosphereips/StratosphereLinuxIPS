@@ -121,7 +121,7 @@ class Module(Module, multiprocessing.Process):
                 # we are sure this is an arp scan
                 confidence = 0.8
                 threat_level = 60
-                description = f'performing ARP scan'
+                description = f'performing an ARP scan. Threat level {threat_level}. Confidence {confidence}.'
                 type_evidence = 'ARPScan'
                 type_detection = 'ip' #srcip
                 detection_info = profileid.split("_")[1]
