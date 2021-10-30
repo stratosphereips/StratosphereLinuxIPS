@@ -167,6 +167,7 @@ class ProfilerProcess(multiprocessing.Process):
         whitelisted_IPs = __database__.whitelist_contains('IPs')
         whitelisted_domains = __database__.whitelist_contains('domains')
         whitelisted_orgs = __database__.whitelist_contains('organizations')
+        whitelisted_mac = __database__.whitelist_contains('mac')
 
         # if any of the dicts arent there in the db, insitialize it
         if not whitelisted_IPs:
@@ -177,6 +178,9 @@ class ProfilerProcess(multiprocessing.Process):
 
         if not whitelisted_orgs:
             whitelisted_orgs = {}
+
+        if not whitelisted_mac:
+            whitelisted_mac = {}
 
         try:
             with open(self.whitelist_path) as whitelist:
@@ -229,7 +233,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
                     line = line.replace("\n","").replace(" ","").split(",")
                     try:
-                        type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
+                        type_ , data, from_ , what_to_ignore = (line[0]).lower(), line[1], line[2], line[3]
                     except IndexError:
                         # line is missing a column, ignore it.
                         self.print(f"Line {line_number} in whitelist.conf is missing a column. Skipping.")
@@ -243,6 +247,8 @@ class ProfilerProcess(multiprocessing.Process):
                             whitelisted_IPs[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
                         elif 'domain' in type_ and validators.domain(data):
                             whitelisted_domains[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                        elif 'mac' in type_ and validators.mac_address(data):
+                            whitelisted_mac[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
                         elif 'org' in type_:
                             #organizations dicts look something like this:
                             #  {'google': {'from':'dst',
@@ -253,6 +259,7 @@ class ProfilerProcess(multiprocessing.Process):
                                 whitelisted_orgs[data]['what_to_ignore'] = what_to_ignore
                             except KeyError:
                                 whitelisted_orgs[data] = {'from' : from_, 'what_to_ignore' : what_to_ignore}
+
                         else:
                             self.print(f"{data} is not a valid {type_}.",1,0)
                     except:
@@ -274,7 +281,6 @@ class ProfilerProcess(multiprocessing.Process):
                 # if we have the org in cache , we have its ips domains and asn, skip it
                 continue
 
-
             # Store the IPs, domains and asn of this org in the db
             org_subnets = self.load_org_IPs(org)
             if org_subnets:
@@ -295,6 +301,8 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.set_whitelist("IPs", whitelisted_IPs)
         __database__.set_whitelist("domains", whitelisted_domains)
         __database__.set_whitelist("organizations", whitelisted_orgs)
+        __database__.set_whitelist("mac", whitelisted_mac)
+
         return line_number
 
     def load_org_asn(self, org) -> list :
@@ -1125,13 +1133,11 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'long' in file_type:
             self.column_values['type'] = 'long'
         elif 'dhcp' in file_type:
-            """ Parse the fields we're interested in in zeek's dhcp.log file """
-
             self.column_values['type'] = 'dhcp'
             self.column_values['client_addr'] = line.get('client_addr','')
             # self.column_values['server_addr'] = line.get('server_addr','')
             # self.column_values['host_name'] = line.get('host_name','')
-            self.column_values['mac'] = line.get('mac','')
+            self.column_values['mac'] = line.get('mac','') # this is the client mac
             # self.column_values['domain'] = line.get('domain','')
             # self.column_values['assigned_addr'] = line.get('assigned_addr','')
         elif 'dce_rpc' in file_type:
@@ -1830,6 +1836,32 @@ class ProfilerProcess(multiprocessing.Process):
                                 # match subdomains too
                                 if domain in flow_domain:
                                     return True
+
+        # check if we have mac addresses whitelisted
+        whitelisted_mac = __database__.whitelist_contains('mac')
+
+        if whitelisted_mac:
+
+            # try to get the mac address of the current flow
+            src_mac =  self.column_values.get('src_mac',False)
+            if not src_mac: src_mac = self.column_values.get('mac',False)
+            if not src_mac:
+                src_mac = __database__.get_mac_addr_from_profile(f'profile_{saddr}')[0]
+
+            if src_mac and src_mac in list(whitelisted_mac.keys()):
+                # the src mac of this flow is whitelisted, but which direction?
+                from_ = whitelisted_mac[src_mac]['from']
+                what_to_ignore = whitelisted_IPs[src_mac]['what_to_ignore']
+                if ('src' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                    return True
+
+            dst_mac = self.column_values.get('dst_mac',False)
+            if dst_mac and dst_mac in list(whitelisted_mac.keys()):
+                # the dst mac of this flow is whitelisted, but which direction?
+                from_ = whitelisted_mac[dst_mac]['from']
+                what_to_ignore = whitelisted_IPs[dst_mac]['what_to_ignore']
+                if ('dst' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                    return True
 
         return False
 
