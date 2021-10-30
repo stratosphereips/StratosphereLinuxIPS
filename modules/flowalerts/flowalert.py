@@ -269,10 +269,15 @@ class Module(Module, multiprocessing.Process):
             return ip_info
 
         # we have no info about this ip in our db, resolve it
-        dns_resolution = repr(socket.gethostbyname_ex(ip))[-1]
-        # make sure we were able to resolve it
-        if validators.domain(dns_resolution):
-            return dns_resolution
+        try:
+            dns_resolution = socket.gethostbyaddr(ip)[0]
+            # make sure we were able to resolve it
+            if validators.domain(dns_resolution):
+                return dns_resolution
+        except socket.herror:
+           # can't resolve this ip
+            return False
+
         return False
 
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
