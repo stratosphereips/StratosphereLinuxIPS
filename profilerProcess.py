@@ -1171,7 +1171,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['uid'] = line.get('conn_uids',[''])[0]
             self.column_values['saddr'] = line.get('tx_hosts',[''])[0]
             self.column_values['daddr'] = line.get('rx_hosts',[''])[0]
-            self.column_values['size'] = line.get('total_bytes', '') # downloaded file size
+            self.column_values['size'] = line.get('seen_bytes', '') # downloaded file size
+
             self.column_values['md5'] = line.get('md5', '')
             # self.column_values['sha1'] = line.get('sha1','')
             #todo process zeek tabs files.log
