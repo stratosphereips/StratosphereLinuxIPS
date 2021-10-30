@@ -118,9 +118,9 @@ class Module(Module, multiprocessing.Process):
         type_detection = 'ip'
         detection_info = saddr
         type_evidence = 'SSHSuccessful-by-' + by
-        threat_level = 0.01
+        threat_level = 0
         confidence = 0.5
-        description = 'SSH Successful to IP: ' + daddr + '. From IP ' + saddr + '. Size: ' + str(size) + '. Detection Model ' + by
+        description = f'SSH successful to IP {daddr}. From IP {saddr}. Size: {str(size)}. Detection model {by}. Threat level {threat_level}. Confidence {confidence}'
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence,
