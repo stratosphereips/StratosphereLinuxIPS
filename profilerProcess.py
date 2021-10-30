@@ -164,10 +164,10 @@ class ProfilerProcess(multiprocessing.Process):
 
         # since this function can be run when the user modifies whitelist.conf
         # we need to check if the dicts are already there
-        whitelisted_IPs = __database__.whitelist_contains('IPs')
-        whitelisted_domains = __database__.whitelist_contains('domains')
-        whitelisted_orgs = __database__.whitelist_contains('organizations')
-        whitelisted_mac = __database__.whitelist_contains('mac')
+        whitelisted_IPs = __database__.get_whitelist('IPs')
+        whitelisted_domains = __database__.get_whitelist('domains')
+        whitelisted_orgs = __database__.get_whitelist('organizations')
+        whitelisted_mac = __database__.get_whitelist('mac')
 
         # if any of the dicts arent there in the db, insitialize it
         if not whitelisted_IPs:
@@ -273,7 +273,7 @@ class ProfilerProcess(multiprocessing.Process):
 
 
         # after we're done reading the file, process organizations info and store in the db
-        orgs_in_cache = __database__.whitelist_contains('organizations')
+        orgs_in_cache = __database__.get_whitelist('organizations')
         for org in whitelisted_orgs:
             # make sure we don't already have info about this org in the cache db
             if orgs_in_cache and org in orgs_in_cache:
@@ -1655,7 +1655,7 @@ class ProfilerProcess(multiprocessing.Process):
         #self.print(f'List of whitelist: Domains: {whitelisted_domains}, IPs: {whitelisted_IPs}, Orgs: {whitelisted_orgs}')
 
         # check if we have domains whitelisted
-        whitelisted_domains = __database__.whitelist_contains('domains')
+        whitelisted_domains = __database__.get_whitelist('domains')
         if whitelisted_domains:
             #self.print('Check the domains')
             # Check if the domain is whitelisted
@@ -1721,7 +1721,7 @@ class ProfilerProcess(multiprocessing.Process):
         daddr = self.column_values['daddr']
 
         # check if we have IPs whitelisted
-        whitelisted_IPs = __database__.whitelist_contains('IPs')
+        whitelisted_IPs = __database__.get_whitelist('IPs')
 
         if whitelisted_IPs:
             #self.print('Check the IPs')
@@ -1745,7 +1745,7 @@ class ProfilerProcess(multiprocessing.Process):
                     return True
 
         # check if we have orgs whitelisted
-        whitelisted_orgs = __database__.whitelist_contains('organizations')
+        whitelisted_orgs = __database__.get_whitelist('organizations')
 
         # Check if the orgs are whitelisted
         if whitelisted_orgs:
@@ -1838,7 +1838,7 @@ class ProfilerProcess(multiprocessing.Process):
                                     return True
 
         # check if we have mac addresses whitelisted
-        whitelisted_mac = __database__.whitelist_contains('mac')
+        whitelisted_mac = __database__.get_whitelist('mac')
 
         if whitelisted_mac:
 
@@ -1851,7 +1851,7 @@ class ProfilerProcess(multiprocessing.Process):
             if src_mac and src_mac in list(whitelisted_mac.keys()):
                 # the src mac of this flow is whitelisted, but which direction?
                 from_ = whitelisted_mac[src_mac]['from']
-                what_to_ignore = whitelisted_IPs[src_mac]['what_to_ignore']
+                what_to_ignore = whitelisted_mac[src_mac]['what_to_ignore']
                 if ('src' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
                     return True
 
@@ -1859,7 +1859,7 @@ class ProfilerProcess(multiprocessing.Process):
             if dst_mac and dst_mac in list(whitelisted_mac.keys()):
                 # the dst mac of this flow is whitelisted, but which direction?
                 from_ = whitelisted_mac[dst_mac]['from']
-                what_to_ignore = whitelisted_IPs[dst_mac]['what_to_ignore']
+                what_to_ignore = whitelisted_mac[dst_mac]['what_to_ignore']
                 if ('dst' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
                     return True
 
