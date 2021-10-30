@@ -804,7 +804,10 @@ class Module(Module, multiprocessing.Process):
                         # this will be used in setEvidence if there's an ununsed_DNS_resolution
                         uid = flow.get('uid','')
                         # append ipv4 addresses only to ths list
-                        if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
+                        # It is not clear why here we where ignoring these IPs. There is no 
+                        # explanation, so deleting this whitelisting
+                        #if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
+                        if not ':' in contacted_ip:
                             contacted_ips.update({contacted_ip: uid })
 
                     # dns answers are processed and stored in virustotal.py in new_dns_flow channel
