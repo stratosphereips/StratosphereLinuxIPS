@@ -156,6 +156,14 @@ class Database(object):
         # Add the MAC addr and vendor to this profile
         self.r.hmset(profileid, MAC_info)
 
+    def get_mac_addr_from_profile(self,profileid) -> dict:
+        """
+        Retuns MAC info about a certain profile
+        return a dict with 'MAC  and 'Vendor' as keys
+        """
+        MAC_info = self.r.hmget(profileid, 'MAC')
+        return MAC_info
+
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
         try:
