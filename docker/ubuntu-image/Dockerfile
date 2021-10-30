@@ -52,8 +52,8 @@ RUN pip3 install --upgrade tensorflow==2.4.1
 # Compile and install YARA
 RUN git clone https://github.com/VirusTotal/yara-python yara-python \
     && cd yara-python \
-    && python setup.py build \
-    && python setup.py install
+    && python3 setup.py build \
+    && python3 setup.py install
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
@@ -67,4 +67,3 @@ RUN npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipb
 # Switch to Slips installation dir when login.
 WORKDIR /StratosphereLinuxIPS
 CMD redis-server --daemonize yes && /bin/bash
-
