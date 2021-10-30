@@ -370,7 +370,7 @@ class Module(Module, multiprocessing.Process):
                     threat_level = 30
                     type_detection  = 'dstdomain'
                     type_evidence = 'DNSWithoutConnection'
-                    query = json.loads(ip_info['domains'])[-1]
+                    query = ip_info['domains'][-1]
                     if 'arpa' in query or '.local' in query:
                         # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
                         continue
