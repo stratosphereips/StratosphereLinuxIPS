@@ -320,7 +320,6 @@ class Module(Module, multiprocessing.Process):
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
-
         # to avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
         # after starting slips because the dns may have happened before starting slips
         if '-i' in sys.argv:
@@ -366,7 +365,6 @@ class Module(Module, multiprocessing.Process):
                     twid = ''
                 __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                          description, timestamp, profileid=profileid, twid=twid, uid=uid)
-
 
     def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
