@@ -1944,8 +1944,9 @@ class Database(object):
         """
         Save in DB passive DNS from virus total
         """
-        data = json.dumps(data)
-        self.r.hset('passiveDNS', ip, data)
+        if data:
+            data = json.dumps(data)
+            self.r.hset('passiveDNS', ip, data)
 
     def get_passive_dns(self, ip):
         """

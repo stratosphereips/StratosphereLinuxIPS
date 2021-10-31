@@ -40,7 +40,6 @@ class Module(Module, multiprocessing.Process):
         self.pubsub.subscribe('new_dns_flow')
         self.pubsub.subscribe('new_url')
         self.pubsub.subscribe('new_downloaded_file')
-        self.pubsub.subscribe('new_ip')
         # Read the conf file
         self.__read_configuration()
         self.key = None
@@ -565,7 +564,7 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.pubsub.get_message(timeout=None)
-                if not message or message["type"] != "message":
+                if not message or message["type"] != "message" or type(message['data']) == int:
                     # didn't receive a msg on any channel, or received the subscribe msg. keep trying
                     continue
                 
@@ -577,80 +576,76 @@ class Module(Module, multiprocessing.Process):
 
                 elif message['channel'] == 'new_flow' :
                     data = message["data"]
-                    if type(data) == str:
-                        data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        stime = data['stime']
-                        flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-                        # there is only one pair key-value in the dictionary
-                        for key, value in flow.items():
-                            uid = key
-                            flow_data = json.loads(value)
-                        ip = flow_data['daddr']
-                        cached_data = __database__.getIPData(ip)
-                        # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
-                        ip_addr = ipaddress.ip_address(ip)
-                        # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
-                        # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
-                        if (not cached_data or 'VirusTotal' not in cached_data) and not ip_addr.is_multicast:
-                            self.set_vt_data_in_IPInfo(ip, cached_data)
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    stime = data['stime']
+                    flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                    # there is only one pair key-value in the dictionary
+                    for key, value in flow.items():
+                        uid = key
+                        flow_data = json.loads(value)
+                    ip = flow_data['daddr']
+                    cached_data = __database__.getIPData(ip)
+                    # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
+                    ip_addr = ipaddress.ip_address(ip)
+                    # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
+                    # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
+                    if (not cached_data or 'VirusTotal' not in cached_data) and not ip_addr.is_multicast:
+                        self.set_vt_data_in_IPInfo(ip, cached_data)
 
-                        # if VT data of this IP is in the IPInfo, check the timestamp.
-                        elif cached_data and 'VirusTotal' in cached_data:
-                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                            if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
-                                self.set_vt_data_in_IPInfo(ip, cached_data)
+                    # if VT data of this IP is in the IPInfo, check the timestamp.
+                    elif cached_data and 'VirusTotal' in cached_data:
+                        # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                        if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
+                            self.set_vt_data_in_IPInfo(ip, cached_data)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 elif message['channel'] == 'new_dns_flow':
                     data = message["data"]
-                    # The first message comes with data=1
-                    if type(data) == str:
-                        data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        uid = data['uid']
-                        flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
 
-                        # store the dns answers in our db to check for unused queries later in flowalerts.py
-                        domain = flow_data.get('query',False)
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    uid = data['uid']
+                    flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+
+                    # store the dns answers in our db to check for unused queries later in flowalerts.py
+                    domain = flow_data.get('query',False)
 
 
-                        cached_data = __database__.getDomainData(domain)
-                        # If VT data of this domain is not in the DomainInfo, ask VT
-                        # If 'Virustotal' key is not in the DomainInfo
-                        if domain and (not cached_data or 'VirusTotal' not in cached_data):
+                    cached_data = __database__.getDomainData(domain)
+                    # If VT data of this domain is not in the DomainInfo, ask VT
+                    # If 'Virustotal' key is not in the DomainInfo
+                    if domain and (not cached_data or 'VirusTotal' not in cached_data):
+                        self.set_domain_data_in_DomainInfo(domain, cached_data)
+                    elif domain and cached_data and 'VirusTotal' in cached_data:
+                        # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                        if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                             self.set_domain_data_in_DomainInfo(domain, cached_data)
-                        elif domain and cached_data and 'VirusTotal' in cached_data:
-                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                            if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
-                                self.set_domain_data_in_DomainInfo(domain, cached_data)
 
                 elif message['channel'] == 'new_url':
                     data = message["data"]
-                    # The first message comes with data=1
-                    if type(data) == str:
-                        data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        flow_data = json.loads(data['flow'])
-                        url = flow_data['host'] + flow_data.get('uri','')
-                        cached_data = __database__.getURLData(url)
-                        # If VT data of this domain is not in the DomainInfo, ask VT
-                        # If 'Virustotal' key is not in the DomainInfo
-                        if not cached_data or 'VirusTotal' not in cached_data:
-                            # cached data is either False or {}
-                            self.set_url_data_in_URLInfo(url,cached_data)
-                        elif cached_data and 'VirusTotal' in cached_data:
-                            # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                            if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
-                                self.set_url_data_in_URLInfo(url, cached_data)
+
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    flow_data = json.loads(data['flow'])
+                    url = flow_data['host'] + flow_data.get('uri','')
+                    cached_data = __database__.getURLData(url)
+                    # If VT data of this domain is not in the DomainInfo, ask VT
+                    # If 'Virustotal' key is not in the DomainInfo
+                    if not cached_data or 'VirusTotal' not in cached_data:
+                        # cached data is either False or {}
+                        self.set_url_data_in_URLInfo(url,cached_data)
+                    elif cached_data and 'VirusTotal' in cached_data:
+                        # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                        if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
+                            self.set_url_data_in_URLInfo(url, cached_data)
 
                 elif message['channel'] == 'new_downloaded_file' :
                     self.file_info = json.loads(message['data'])
                     file_info = self.file_info.copy()
                     self.scan_file(file_info)
-
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
