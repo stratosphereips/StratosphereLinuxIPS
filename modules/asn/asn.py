@@ -10,6 +10,8 @@ import time
 import maxminddb
 import ipaddress
 import ipwhois
+import configparser
+
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
@@ -33,12 +35,37 @@ class Module(Module, multiprocessing.Process):
             self.reader = maxminddb.open_database('modules/asn/GeoLite2-ASN.mmdb')
         except:
             self.print('Error opening the geolite2 db in ./GeoLite2-Country_20190402/GeoLite2-Country.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
+        self.read_configuration()
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
         self.timeout = None
         # update asn every 1 month
         self.update_period = 2592000
 
+
+    def read_configuration(self):
+        try:
+            # Read the riskiq username
+            self.riskiq_email = self.config.get('threatintelligence', 'RiskIQ_email')
+            if '@' not in self.riskiq_email:
+                raise NameError
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.riskiq_email = None
+
+        try:
+            # Read the riskiq api key
+            riskiq_key_path = self.config.get('threatintelligence', 'RiskIQ_key_path')
+            try:
+                with open(riskiq_key_path,'r') as f:
+                    self.riskiq_key = f.read().replace('\n','')
+                    if len(self.riskiq_key) != 64:
+                        raise NameError
+            except FileNotFoundError:
+                raise NameError
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.riskiq_key = None
 
     def print(self, text, verbose=1, debug=0):
         """
