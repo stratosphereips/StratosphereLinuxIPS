@@ -433,14 +433,17 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.pubsub.get_message(timeout=None)
+                if not message or message["type"] != "message" or type(message['data']) == int:
+                    # didn't receive a msg on any channel, or received the subscribe msg. keep trying
+                    continue
                 # ---------------------------- new_flow channel
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
-                if message and message['data'] == 'stop_process':
+                if message['data'] == 'stop_process':
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                elif message and message['channel'] == 'new_flow' and type(message['data']) is not int:
+                elif message['channel'] == 'new_flow':
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -602,7 +605,7 @@ class Module(Module, multiprocessing.Process):
                                     self.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # ---------------------------- new_ssh channel
-                elif message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
+                elif message['channel'] == 'new_ssh' :
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -646,7 +649,7 @@ class Module(Module, multiprocessing.Process):
                                 pass
 
                 # ---------------------------- new_notice channel
-                elif message and message['channel'] == 'new_notice':
+                elif message['channel'] == 'new_notice':
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
@@ -723,7 +726,7 @@ class Module(Module, multiprocessing.Process):
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
                 # ---------------------------- new_ssl channel
-                elif message and message['channel'] == 'new_ssl':
+                elif message['channel'] == 'new_ssl':
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
                     if type(data) == str:
@@ -775,7 +778,7 @@ class Module(Module, multiprocessing.Process):
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
 
                 # ---------------------------- new_service channel
-                elif message and message['channel'] == 'new_service'  and type(message['data']) is not int:
+                elif message['channel'] == 'new_service':
                     data = json.loads(message['data'])
                     # uid = data['uid']
                     # profileid = data['profileid']
@@ -791,7 +794,7 @@ class Module(Module, multiprocessing.Process):
                         __database__.set_port_info(f'{port}/{proto}', service[0])
 
                 # ---------------------------- tw_closed channel
-                elif message and message['channel'] == 'tw_closed' and type(message['data']) == str:
+                elif message['channel'] == 'tw_closed':
                     data = message["data"]
                     # data example: profile_192.168.1.1_timewindow1
                     data = data.split('_')
