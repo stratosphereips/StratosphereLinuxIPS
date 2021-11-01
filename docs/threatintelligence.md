@@ -1,4 +1,4 @@
-# Threat Inelligence
+# Threat Intelligence
 
 Slips has a complex system to deal with Threat Intelligence feeds. The general features are:
 
