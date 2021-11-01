@@ -1528,7 +1528,7 @@ class Database(object):
                     # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
                     for ip, resolution in dns_resolutions.items():
                         resolution = json.loads(resolution)
-                        if SNI_port['server_name'] in json.loads(resolution['domains']):
+                        if SNI_port['server_name'] in resolution['domains']:
                             # add SNI to our db as it has a DNS resolution
                             sni_ipdata.append(SNI_port)
                             self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
