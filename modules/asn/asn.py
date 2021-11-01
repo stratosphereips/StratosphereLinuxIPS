@@ -222,10 +222,12 @@ class Module(Module, multiprocessing.Process):
                         data['asn'].update({'timestamp': time.time()})
                         __database__.setInfoForIPs(ip, data)
 
-                    # Get Passive total data
-                    passive_dns = self.get_passive_dns(ip)
-                    if passive_dns:
-                        __database__.set_passive_dns(ip, passive_dns)
+                    # Only get passive total dns data if we don't have it in the db
+                    if __database__.get_passive_dns(ip) == '':
+                        passive_dns = self.get_passive_dns(ip)
+                        if passive_dns:
+                            # if we found data from passive total, store it in the db
+                            __database__.set_passive_dns(ip, passive_dns)
 
             except KeyboardInterrupt:
                 if self.reader:
