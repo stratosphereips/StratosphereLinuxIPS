@@ -224,8 +224,6 @@ class ProfilerProcess(multiprocessing.Process):
                         # todo if the user closes slips, changes the whitelist, and reopens slips , slips will still have the old whitelist in the cache!
                         line = whitelist.readline()
                         continue
-
-
                     # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
                     line = line.replace("\n","").replace(" ","").split(",")
                     try:

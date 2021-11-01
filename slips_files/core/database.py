@@ -2164,7 +2164,6 @@ class Database(object):
         """
         self.r.hset("whitelist" , type, json.dumps(whitelist_dict))
 
-
     def get_all_whitelist(self):
         """ Return dict of 3 keys: IPs, domains and organizations"""
         return self.r.hgetall('whitelist')
