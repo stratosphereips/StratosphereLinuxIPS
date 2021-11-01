@@ -1946,13 +1946,13 @@ class Database(object):
         """
         if data:
             data = json.dumps(data)
-            self.r.hset('passiveDNS', ip, data)
+            self.rcache.hset('passiveDNS', ip, data)
 
     def get_passive_dns(self, ip):
         """
         Get passive DNS from virus total
         """
-        data = self.r.hget('passiveDNS', ip)
+        data = self.rcache.hget('passiveDNS', ip)
         if data:
             data = json.loads(data)
             return data
