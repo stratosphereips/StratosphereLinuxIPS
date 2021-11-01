@@ -11,7 +11,8 @@ import maxminddb
 import ipaddress
 import ipwhois
 import configparser
-
+import os
+import json
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
@@ -160,6 +161,29 @@ class Module(Module, multiprocessing.Process):
             # ASN lookup failed with no more methods to try
             pass
 
+    def get_passive_dns(self, ip) -> list:
+        """
+        Get passive dns info abbout this ip from passive total
+        """
+        if not self.riskiq_email or not self.riskiq_key:
+            return False
+
+        command = f"curl -m 25 --insecure -s -u {self.riskiq_email}:{self.riskiq_key} 'https://api.riskiq.net/pt/v2/dns/passive?query={ip}' "
+        processed_pt_data = os.popen(command).read()
+        try:
+            processed_pt_data = json.loads(processed_pt_data)
+            # Sort and reverse the keys
+            # Store the samples in our dictionary so we can sort them
+            pt_data = {}
+            for pt_results in processed_pt_data['results']:
+                pt_data[pt_results['lastSeen']] = [pt_results['firstSeen'], pt_results['resolve'], pt_results['collected']]
+            # Sort them by datetime and convert to list, sort the first 10 entries only
+            sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
+        except json.decoder.JSONDecodeError:
+            sorted_pt_results = None
+
+        return sorted_pt_results
+
     def run(self):
         # Main loop function
         while True:
@@ -197,6 +221,12 @@ class Module(Module, multiprocessing.Process):
                         # store asn info in the db
                         data['asn'].update({'timestamp': time.time()})
                         __database__.setInfoForIPs(ip, data)
+
+                    # Get Passive total data
+                    passive_dns = self.get_passive_dns(ip)
+                    if passive_dns:
+                        __database__.set_passive_dns(ip, passive_dns)
+
             except KeyboardInterrupt:
                 if self.reader:
                     self.reader.close()
