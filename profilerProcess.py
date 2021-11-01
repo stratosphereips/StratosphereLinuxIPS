@@ -164,12 +164,23 @@ class ProfilerProcess(multiprocessing.Process):
 
         # since this function can be run when the user modifies whitelist.conf
         # we need to check if the dicts are already there
-        if not hasattr(self,'whitelisted_IPs'):
-            self.whitelisted_IPs = {}
-        if not hasattr(self,'whitelisted_domains'):
-            self.whitelisted_domains = {}
-        if not hasattr(self,'whitelisted_orgs'):
-            self.whitelisted_orgs = {}
+        whitelisted_IPs = __database__.get_whitelist('IPs')
+        whitelisted_domains = __database__.get_whitelist('domains')
+        whitelisted_orgs = __database__.get_whitelist('organizations')
+        whitelisted_mac = __database__.get_whitelist('mac')
+
+        # if any of the dicts arent there in the db, insitialize it
+        if not whitelisted_IPs:
+            whitelisted_IPs = {}
+
+        if not whitelisted_domains:
+            whitelisted_domains = {}
+
+        if not whitelisted_orgs:
+            whitelisted_orgs = {}
+
+        if not whitelisted_mac:
+            whitelisted_mac = {}
 
         try:
             with open(self.whitelist_path) as whitelist:
@@ -184,34 +195,39 @@ class ProfilerProcess(multiprocessing.Process):
 
                     # check if the user commented an org, ip or domain that was whitelisted
                     if line.startswith('#'):
-                        if hasattr(self,'whitelisted_IPs'):
-                            for ip in list(self.whitelisted_IPs):
-                                # make sure the user commented the line they added exactly
-                                if ip in line and self.whitelisted_IPs[ip]['from'] in line and self.whitelisted_IPs[ip]['what_to_ignore'] in line:
+                        if whitelisted_IPs:
+                            for ip in list(whitelisted_IPs):
+                                # make sure the user commented the line we have in cache exactly
+                                if ip in line and whitelisted_IPs[ip]['from'] in line and whitelisted_IPs[ip]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_ips
-                                    self.whitelisted_IPs.pop(ip)
+                                    whitelisted_IPs.pop(ip)
+                                    break
 
-                        if hasattr(self,'whitelisted_domains'):
-                            for domain in list(self.whitelisted_domains):
-                                # make sure the user commented the line they added exactly
-                                if domain in line and self.whitelisted_domains[domain]['from'] in line and self.whitelisted_domains[domain]['what_to_ignore'] in line:
-                                    # remove that entry from whitelisted_ips
-                                    self.whitelisted_domains.pop(domain)
+                        if whitelisted_domains:
+                            for domain in list(whitelisted_domains):
+                                if domain in line \
+                                and whitelisted_domains[domain]['from'] in line \
+                                and whitelisted_domains[domain]['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_domains
+                                    whitelisted_domains.pop(domain)
+                                    break
 
-                        if hasattr(self,'whitelisted_orgs'):
-                            for org in list(self.whitelisted_orgs):
-                                # make sure the user commented the line they added exactly
-                                if org in line and self.whitelisted_orgs[org]['from'] in line and self.whitelisted_orgs[org]['what_to_ignore'] in line:
-                                    # remove that entry from whitelisted_ips
-                                    self.whitelisted_orgs.pop(org)
-                                    # todo if the user commented organization,facebook,both,both
-                                    # todo and added organization,facebook,src,src , the asn, domain and ips info about fb will be deleted and then reloaded again!!
+                        if whitelisted_orgs:
+                            for org in list(whitelisted_orgs):
+                                if org in line \
+                                and whitelisted_orgs[org]['from'] in line \
+                                and whitelisted_orgs[org]['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_domains
+                                    whitelisted_orgs.pop(org)
+                                    break
+
+                        # todo if the user closes slips, changes the whitelist, and reopens slips , slips will still have the old whitelist in the cache!
                         line = whitelist.readline()
                         continue
                     # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
                     line = line.replace("\n","").replace(" ","").split(",")
                     try:
-                        type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
+                        type_ , data, from_ , what_to_ignore = (line[0]).lower(), line[1], line[2], line[3]
                     except IndexError:
                         # line is missing a column, ignore it.
                         self.print(f"Line {line_number} in whitelist.conf is missing a column. Skipping.")
@@ -222,20 +238,23 @@ class ProfilerProcess(multiprocessing.Process):
                     try:
                         if ('ip' in type_ and
                             (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
-                            self.whitelisted_IPs[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                            whitelisted_IPs[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
                         elif 'domain' in type_ and validators.domain(data):
-                            self.whitelisted_domains[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                            whitelisted_domains[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                        elif 'mac' in type_ and validators.mac_address(data):
+                            whitelisted_mac[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
                         elif 'org' in type_:
                             #organizations dicts look something like this:
                             #  {'google': {'from':'dst',
                             #               'what_to_ignore': 'alerts'
                             #               'IPs': {'34.64.0.0/10': subnet}}
                             try:
-                                # if we already have this org ips and domains loaded, just update the from and what_to_ignore keys if the user changed them
-                                self.whitelisted_orgs[data].update({'from' : from_, 'what_to_ignore' : what_to_ignore})
+                                # org already whitelisted, update info
+                                whitelisted_orgs[data]['from'] = from_
+                                whitelisted_orgs[data]['what_to_ignore'] = what_to_ignore
                             except KeyError:
-                                # we don't have loaded info about this org, add new keys
-                                self.whitelisted_orgs[data] = {'from' : from_, 'what_to_ignore' : what_to_ignore}
+                                # first time seeing this org
+                                whitelisted_orgs[data] = {'from' : from_, 'what_to_ignore' : what_to_ignore}
 
                         else:
                             self.print(f"{data} is not a valid {type_}.",1,0)
@@ -249,33 +268,37 @@ class ProfilerProcess(multiprocessing.Process):
                 self.read_whitelist()
 
 
-        # after we're done reading the file, process organizations info
-        # If the user specified an org in the whitelist, load the info about it only to the db and to memory
-        for org in self.whitelisted_orgs:
-            # make sure you only load domains, IPs and asn of an org once
-            if not 'domains' in self.whitelisted_orgs[org]:
-                org_domains = self.load_org_domains(org)
-                if org_domains:
-                    # Store the ASN of this org
-                    self.whitelisted_orgs[org].update({'domains' : json.dumps(org_domains)})
+        # after we're done reading the file, process organizations info and store in the db
+        orgs_in_cache = __database__.get_whitelist('organizations')
+        for org in whitelisted_orgs:
+            # make sure we don't already have info about this org in the cache db
+            if orgs_in_cache and org in orgs_in_cache:
+                # we have orgs in cache but do we have this org?
+                # if we have the org in cache , we have its ips domains and asn, skip it
+                continue
 
-            if not 'IPs' in self.whitelisted_orgs[org]:
-                # Store the IPs of this org in the db
-                org_subnets = self.load_org_IPs(org)
-                if org_subnets:
-                    # Store the IPs of this org
-                    self.whitelisted_orgs[org].update({'IPs' : json.dumps(org_subnets)})
+            # Store the IPs, domains and asn of this org in the db
+            org_subnets = self.load_org_IPs(org)
+            if org_subnets:
+                # Store the IPs of this org
+                whitelisted_orgs[org].update({'IPs' : json.dumps(org_subnets)})
 
-            if not 'asn' in self.whitelisted_orgs[org]:
-                org_asn = self.load_org_asn(org)
-                if org_asn:
-                    # Store the ASN of this org
-                    self.whitelisted_orgs[org].update({'asn' : json.dumps(org_asn)})
+            org_domains = self.load_org_domains(org)
+            if org_domains:
+                # Store the ASN of this org
+                whitelisted_orgs[org].update({'domains' : json.dumps(org_domains)})
 
-        # store everything in the db because we'll be needing this info in the evidenceProcess
-        __database__.set_whitelist(self.whitelisted_IPs,
-                                   self.whitelisted_domains,
-                                   self.whitelisted_orgs)
+            org_asn = self.load_org_asn(org)
+            if org_asn:
+                # Store the ASN of this org
+                whitelisted_orgs[org].update({'asn' : json.dumps(org_asn)})
+
+        # store everything in the cache db because we'll be needing this info in the evidenceProcess
+        __database__.set_whitelist("IPs", whitelisted_IPs)
+        __database__.set_whitelist("domains", whitelisted_domains)
+        __database__.set_whitelist("organizations", whitelisted_orgs)
+        __database__.set_whitelist("mac", whitelisted_mac)
+
         return line_number
 
     def load_org_asn(self, org) -> list :
@@ -1106,13 +1129,11 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'long' in file_type:
             self.column_values['type'] = 'long'
         elif 'dhcp' in file_type:
-            """ Parse the fields we're interested in in zeek's dhcp.log file """
-
             self.column_values['type'] = 'dhcp'
             self.column_values['client_addr'] = line.get('client_addr','')
             # self.column_values['server_addr'] = line.get('server_addr','')
             # self.column_values['host_name'] = line.get('host_name','')
-            self.column_values['mac'] = line.get('mac','')
+            self.column_values['mac'] = line.get('mac','') # this is the client mac
             # self.column_values['domain'] = line.get('domain','')
             # self.column_values['assigned_addr'] = line.get('assigned_addr','')
         elif 'dce_rpc' in file_type:
@@ -1627,12 +1648,11 @@ class ProfilerProcess(multiprocessing.Process):
         Checks if the src IP or dst IP or domain or organization of this flow is whitelisted.
         """
 
-        #self.print(f'List of whitelist: Domains: {self.whitelisted_domains}, IPs: {self.whitelisted_IPs}, Orgs: {self.whitelisted_orgs}')
+        #self.print(f'List of whitelist: Domains: {whitelisted_domains}, IPs: {whitelisted_IPs}, Orgs: {whitelisted_orgs}')
 
         # check if we have domains whitelisted
-        whitelisted_domains = __database__.whitelist_contains('domains')
+        whitelisted_domains = __database__.get_whitelist('domains')
         if whitelisted_domains:
-            whitelisted_domains = json.loads(whitelisted_domains)
             #self.print('Check the domains')
             # Check if the domain is whitelisted
             # Domain names are stored in different zeek files using different names.
@@ -1697,10 +1717,9 @@ class ProfilerProcess(multiprocessing.Process):
         daddr = self.column_values['daddr']
 
         # check if we have IPs whitelisted
-        whitelisted_IPs = __database__.whitelist_contains('IPs')
+        whitelisted_IPs = __database__.get_whitelist('IPs')
 
         if whitelisted_IPs:
-            whitelisted_IPs =  json.loads(whitelisted_IPs)
             #self.print('Check the IPs')
             # Check if the IPs are whitelisted
             ips_to_whitelist = list(whitelisted_IPs.keys())
@@ -1722,11 +1741,10 @@ class ProfilerProcess(multiprocessing.Process):
                     return True
 
         # check if we have orgs whitelisted
-        whitelisted_orgs = __database__.whitelist_contains('organisations')
+        whitelisted_orgs = __database__.get_whitelist('organizations')
 
         # Check if the orgs are whitelisted
         if whitelisted_orgs:
-            whitelisted_orgs = json.loads(whitelisted_orgs)
             #self.print('Check if the organization is whitelisted')
             # Check if IP belongs to a whitelisted organization range
             # Check if the ASN of this IP is any of these organizations
@@ -1744,7 +1762,6 @@ class ProfilerProcess(multiprocessing.Process):
                     if 'both' in from_ : domains_to_check = domains_to_check_src + domains_to_check_dst
                     elif 'src' in from_: domains_to_check = domains_to_check_src
                     elif 'dst' in from_: domains_to_check = domains_to_check_dst
-
                     # get the ips of this org?? #todo
                     org_subnets = json.loads(whitelisted_orgs[org].get('IPs','{}'))
 
@@ -1766,7 +1783,7 @@ class ProfilerProcess(multiprocessing.Process):
                         ip_data = __database__.getIPData(saddr)
                         try:
                             ip_asn = ip_data['asn']['asnorg']
-                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in self.whitelisted_orgs[org]['asn']):
+                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in whitelisted_orgs[org]['asn']):
                                 # this ip belongs to a whitelisted org, ignore flow
                                 #self.print(f"The ASN {ip_asn} of IP {saddr} is in the values of org {org}. Whitelisted.")
                                 return True
@@ -1775,7 +1792,7 @@ class ProfilerProcess(multiprocessing.Process):
                             pass
 
                         # Method 3 Check if the domains of this flow belong to this org
-                        org_domains = json.loads(self.whitelisted_orgs[org].get('domains','{}'))
+                        org_domains = json.loads(whitelisted_orgs[org].get('domains','{}'))
                         # domains to check are usually 1 or 2 domains
                         for flow_domain in domains_to_check:
                             if org in flow_domain:
@@ -1800,7 +1817,7 @@ class ProfilerProcess(multiprocessing.Process):
                         ip_data = __database__.getIPData(self.column_values['daddr'])
                         try:
                             ip_asn = ip_data['asn']['asnorg']
-                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in self.whitelisted_orgs[org]['asn']):
+                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in whitelisted_orgs[org]['asn']):
                                 # this ip belongs to a whitelisted org, ignore flow
                                 #self.print(f"The ASN {ip_asn} of IP {self.column_values['daddr']} is in the values of org {org}. Whitelisted.")
                                 return True
@@ -1815,6 +1832,32 @@ class ProfilerProcess(multiprocessing.Process):
                                 # match subdomains too
                                 if domain in flow_domain:
                                     return True
+
+        # check if we have mac addresses whitelisted
+        whitelisted_mac = __database__.get_whitelist('mac')
+
+        if whitelisted_mac:
+
+            # try to get the mac address of the current flow
+            src_mac =  self.column_values.get('src_mac',False)
+            if not src_mac: src_mac = self.column_values.get('mac',False)
+            if not src_mac:
+                src_mac = __database__.get_mac_addr_from_profile(f'profile_{saddr}')[0]
+
+            if src_mac and src_mac in list(whitelisted_mac.keys()):
+                # the src mac of this flow is whitelisted, but which direction?
+                from_ = whitelisted_mac[src_mac]['from']
+                what_to_ignore = whitelisted_mac[src_mac]['what_to_ignore']
+                if ('src' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                    return True
+
+            dst_mac = self.column_values.get('dst_mac',False)
+            if dst_mac and dst_mac in list(whitelisted_mac.keys()):
+                # the dst mac of this flow is whitelisted, but which direction?
+                from_ = whitelisted_mac[dst_mac]['from']
+                what_to_ignore = whitelisted_mac[dst_mac]['what_to_ignore']
+                if ('dst' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                    return True
 
         return False
 

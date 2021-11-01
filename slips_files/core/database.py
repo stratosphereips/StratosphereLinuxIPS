@@ -156,6 +156,14 @@ class Database(object):
         # Add the MAC addr and vendor to this profile
         self.r.hmset(profileid, MAC_info)
 
+    def get_mac_addr_from_profile(self,profileid) -> dict:
+        """
+        Retuns MAC info about a certain profile
+        return a dict with 'MAC  and 'Vendor' as keys
+        """
+        MAC_info = self.r.hmget(profileid, 'MAC')
+        return MAC_info
+
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
         try:
@@ -2172,23 +2180,28 @@ class Database(object):
         """ returns a dict with module names as keys and pids as values """
         return self.r.hgetall('PIDs')
 
-    def set_whitelist(self,whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
-        """ Store a dict of whitelisted IPs, domains and organizations in the db """
+    def set_whitelist(self,type, whitelist_dict):
+        """
+        Store the whitelist_dict in the given key
+        :param type: supporte types are IPs, domains and organizations
+        :param whitelist_dict: the dict of IPs, domains or orgs to store
+        """
+        self.r.hset("whitelist" , type, json.dumps(whitelist_dict))
 
-        self.r.hset("whitelist" , "IPs", json.dumps(whitelisted_IPs))
-        self.r.hset("whitelist" , "domains", json.dumps(whitelisted_domains))
-        self.r.hset("whitelist" , "organizations", json.dumps(whitelisted_organizations))
-
-    def get_whitelist(self):
+    def get_all_whitelist(self):
         """ Return dict of 3 keys: IPs, domains and organizations"""
         return self.r.hgetall('whitelist')
 
-    def whitelist_contains(self, key):
+    def get_whitelist(self, key):
         """
         Whitelist supports different keys like : IPs domains and organizations
         this function is used to check if we have any of the above keys whitelisted
         """
-        return self.r.hget('whitelist',key)
+        whitelist = self.r.hget('whitelist',key)
+        if whitelist:
+            return json.loads(whitelist)
+        else:
+            return False
 
     def save(self,backup_file):
         """

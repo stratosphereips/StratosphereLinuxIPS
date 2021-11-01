@@ -27,7 +27,7 @@ The output process collects output from the modules and handles the display of i
 - log files in a folder _current-date-time_ - separates the traffic into files according to a profile and timewindow and summarize the traffic according to each profile and timewindow.
 
 ## Whitelisting
-Slips allows you to whitelist some pieces of data in order to avoid its processing. In particular you can whitelist an IP address, a domain, or a complete organization. You can choose to whitelist what is going __to__ them and what is coming __from__ them. You can also choose to whitelist the flows, so they are not processed, or the alerts, so you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid processing any communication to or from these pieces of data, not to avoid any packet that contains that piece of data. For example, if you whitelist the domain slack.com, then a DNS request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
+Slips allows you to whitelist some pieces of data in order to avoid its processing. In particular you can whitelist an IP address, a domain, a MAC address or a complete organization. You can choose to whitelist what is going __to__ them and what is coming __from__ them. You can also choose to whitelist the flows, so they are not processed, or the alerts, so you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid processing any communication to or from these pieces of data, not to avoid any packet that contains that piece of data. For example, if you whitelist the domain slack.com, then a DNS request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
 ## Flows Whitelist
 If you whitelist an IP address, Slips will check all flows and see if you are whitelisting to them or from them.
@@ -43,18 +43,28 @@ If you whitelist an organization, then:
 - Every domain (SNI/HTTP Host/IP Resolution/TLS CN certs) is checked against all the known domains of that organization
 - ASNs of every IP are verified against the known ASN of that organization
 
+If you whitelist a MAC address, then:
+- The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
+
+
 ## Alerts Whitelist
 
 If you whitelist some piece of data not to generate alerts, the process is the following:
+
 - If you whitelisted an IP
     - We check if the source or destination IP of the flow that generated that alert is whitelisted.
     - We check if the content of the alert is related to the IP that is whitelisted.
+  
 - If you whitelisted a domain
     - We check if any domain in alerts related to DNS/HTTP Host/SNI is whitelisted. 
     - We check also if any domain in the traffic is a subdomain of your whitelisted domain. So if you whitelist 'test.com', we also match 'one.test.com'
+  
 - If you whitelisted an organization
     - We check that the ASN of the IP in the alert belongs to that organization.
     - We check that the range of the IP in the alert belongs to that organization.
+  
+- If you whitelist a MAC address, then:
+  - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
 
 ## Whitelisting Example
 You can modify the file ```whitelist.csv``` file with this content:
@@ -66,6 +76,7 @@ You can modify the file ```whitelist.csv``` file with this content:
     domain,apple.com,both,both
     ip,94.23.253.72,both,alerts
     ip,91.121.83.118,both,alerts
+    mac,b1:b1:b1:c1:c2:c3,both,alerts
     organization,microsoft,both,both
     organization,facebook,both,both
     organization,google,both,both
@@ -75,7 +86,7 @@ You can modify the file ```whitelist.csv``` file with this content:
 The values for each column are the following:
 
     Column IoCType
-        - Supported IoCTypes: ip, domain, organization
+        - Supported IoCTypes: ip, domain, organization, mac
     Column IoCValue
         - Supported organizations: google, microsoft, apple, facebook, twitter.
     Column Direction
