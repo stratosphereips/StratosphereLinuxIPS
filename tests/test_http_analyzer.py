@@ -27,3 +27,23 @@ def test_check_suspicious_user_agents(outputQueue, database):
     user_agent =  'CHM_MSDN'
     timestamp = 1635765895.037696
     assert http_analyzer.check_suspicious_user_agents(uid, host, uri, timestamp, user_agent, profileid, twid) == True
+
+def test_check_multiple_google_connections(outputQueue, database):
+    http_analyzer = create_http_analyzer_instance(outputQueue)
+    # {"ts":1635765765.435485,"uid":"C7mv0u4M1zqJBHydgj",
+    # "id.orig_h":"192.168.1.28","id.orig_p":52102,"id.resp_h":"216.58.198.78",
+    # "id.resp_p":80,"trans_depth":1,"method":"GET","host":"google.com","uri":"/",
+    # "version":"1.1","user_agent":"Wget/1.20.3 (linux-gnu)","request_body_len":0,"response_body_len":219,
+    # "status_code":301,"status_msg":"Moved Permanently","tags":[],"resp_fuids":["FGhwTU1OdvlfLrzBKc"],
+    # "resp_mime_types":["text/html"]}
+    uid = 'CAeDWs37BipkfP21u8'
+    host = 'google.com'
+    uri = '/'
+    timestamp = 1635765895.037696
+    request_body_len = 0
+    for i in range(2):
+        found_detection = http_analyzer.check_multiple_google_connections(uid, host, uri, timestamp, request_body_len, profileid, twid)
+
+    assert found_detection == True
+
+
