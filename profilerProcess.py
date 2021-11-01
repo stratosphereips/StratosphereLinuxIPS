@@ -249,9 +249,11 @@ class ProfilerProcess(multiprocessing.Process):
                             #               'what_to_ignore': 'alerts'
                             #               'IPs': {'34.64.0.0/10': subnet}}
                             try:
+                                # org already whitelisted, update info
                                 whitelisted_orgs[data]['from'] = from_
                                 whitelisted_orgs[data]['what_to_ignore'] = what_to_ignore
                             except KeyError:
+                                # first time seeing this org
                                 whitelisted_orgs[data] = {'from' : from_, 'what_to_ignore' : what_to_ignore}
 
                         else:

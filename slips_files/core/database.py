@@ -2179,20 +2179,6 @@ class Database(object):
         else:
             return False
 
-    def remove_from_whitelist(self, type, ioc):
-        """
-        Removes the given ioc from the whitelist in our db
-        :param type: supported types are IPs, domains and organizations
-        """
-
-        whitelist = self.whitelist_contains(type)
-        if whitelist:
-            whitelist = json.loads(whitelist)
-            # remove the ioc from the old whitelist
-            whitelist.pop(ioc)
-            # store the new whitelist to our db
-            self.set_whitelist(type, whitelist)
-
     def save(self,backup_file):
         """
         Save the db to disk.
