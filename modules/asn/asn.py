@@ -10,6 +10,9 @@ import time
 import maxminddb
 import ipaddress
 import ipwhois
+import configparser
+import os
+import json
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
@@ -33,12 +36,37 @@ class Module(Module, multiprocessing.Process):
             self.reader = maxminddb.open_database('modules/asn/GeoLite2-ASN.mmdb')
         except:
             self.print('Error opening the geolite2 db in ./GeoLite2-Country_20190402/GeoLite2-Country.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
+        self.read_configuration()
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
         self.timeout = None
         # update asn every 1 month
         self.update_period = 2592000
 
+
+    def read_configuration(self):
+        try:
+            # Read the riskiq username
+            self.riskiq_email = self.config.get('threatintelligence', 'RiskIQ_email')
+            if '@' not in self.riskiq_email:
+                raise NameError
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.riskiq_email = None
+
+        try:
+            # Read the riskiq api key
+            riskiq_key_path = self.config.get('threatintelligence', 'RiskIQ_key_path')
+            try:
+                with open(riskiq_key_path,'r') as f:
+                    self.riskiq_key = f.read().replace('\n','')
+                    if len(self.riskiq_key) != 64:
+                        raise NameError
+            except FileNotFoundError:
+                raise NameError
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.riskiq_key = None
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -133,6 +161,29 @@ class Module(Module, multiprocessing.Process):
             # ASN lookup failed with no more methods to try
             pass
 
+    def get_passive_dns(self, ip) -> list:
+        """
+        Get passive dns info abbout this ip from passive total
+        """
+        if not self.riskiq_email or not self.riskiq_key:
+            return False
+
+        command = f"curl -m 25 --insecure -s -u {self.riskiq_email}:{self.riskiq_key} 'https://api.riskiq.net/pt/v2/dns/passive?query={ip}' "
+        processed_pt_data = os.popen(command).read()
+        try:
+            processed_pt_data = json.loads(processed_pt_data)
+            # Sort and reverse the keys
+            # Store the samples in our dictionary so we can sort them
+            pt_data = {}
+            for pt_results in processed_pt_data['results']:
+                pt_data[pt_results['lastSeen']] = [pt_results['firstSeen'], pt_results['resolve'], pt_results['collected']]
+            # Sort them by datetime and convert to list, sort the first 10 entries only
+            sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
+        except json.decoder.JSONDecodeError:
+            sorted_pt_results = None
+
+        return sorted_pt_results
+
     def run(self):
         # Main loop function
         while True:
@@ -170,6 +221,14 @@ class Module(Module, multiprocessing.Process):
                         # store asn info in the db
                         data['asn'].update({'timestamp': time.time()})
                         __database__.setInfoForIPs(ip, data)
+
+                    # Only get passive total dns data if we don't have it in the db
+                    if __database__.get_passive_dns(ip) == '':
+                        passive_dns = self.get_passive_dns(ip)
+                        if passive_dns:
+                            # if we found data from passive total, store it in the db
+                            __database__.set_passive_dns(ip, passive_dns)
+
             except KeyboardInterrupt:
                 if self.reader:
                     self.reader.close()
