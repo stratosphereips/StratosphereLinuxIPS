@@ -1002,6 +1002,26 @@ class Database(object):
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
         return True
 
+    def get_evidence_count(self, evidence_type, profileid, twid):
+        """
+        Returns the number of evidence of this type in this profiled and twid
+        :param evidence_type: PortScan, ThreatIntelligence, C&C channels detection etc..
+        """
+        evidence = self.getEvidenceForTW(profileid, twid)
+        count = 0
+        if evidence:
+            evidence = json.loads(evidence)
+            # evidence is a dict of evidence
+            for ev in evidence:
+                # evidence_description is a dicct with type_detection, detection_info and type_evidence as keys
+                evidence_description = json.loads(ev)
+                # count how many evidence of this specific type (evidence_type)
+                evidence_description = evidence_description['type_evidence']
+                if evidence_type in evidence_description:
+                    count +=1
+        return count
+
+
 
     def deleteEvidence(self,profileid, twid, key):
         """ Delete evidence from the database
@@ -1021,13 +1041,7 @@ class Database(object):
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
 
     def getEvidenceForTW(self, profileid, twid):
-        """
-        Get the evidence for this TW for this Profile
-        Return a dict that looks like this {"type_detection": "", "detection_info": "", "type_evidence": ""}': {'confidence': ,
-                                                                                                    'threat_level': ,
-                                                                                                    'description': }
-        """
-
+        """ Get the evidence for this TW for this Profile """
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
         return data
 
@@ -1939,6 +1953,16 @@ class Database(object):
         else:
             return dns_resolutions
 
+    def get_last_dns_ts(self):
+        """ returns the timestamp of the last DNS resolution slips read """
+        dns_resolutions = self.get_all_dns_resolutions()
+        if dns_resolutions:
+            # sort resolutions by ts
+            # k_v is a tuple (key, value) , each value is a serialized json dict.
+            sorted_dns_resolutions = sorted(dns_resolutions.items(), key=lambda k_v: json.loads(k_v[1])['ts'])
+            # return the ts of the last dns resolution in our db
+            last_dns_ts = json.loads(sorted_dns_resolutions[-1][1])['ts']
+            return last_dns_ts
 
     def set_passive_dns(self, ip, data):
         """
