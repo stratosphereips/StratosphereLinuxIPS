@@ -103,6 +103,8 @@ class Module(Module, multiprocessing.Process):
         return sorted_pt_results
 
     def run(self):
+        if not self.riskiq_email or not self.riskiq_key:
+            return False
         # Main loop function
         while True:
             try:
