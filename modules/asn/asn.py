@@ -48,7 +48,7 @@ class Module(Module, multiprocessing.Process):
         try:
             # Read the riskiq username
             self.riskiq_email = self.config.get('threatintelligence', 'RiskIQ_email')
-            if '@' not in self.riskiq_email:
+            if '@' not in self.riskiq_email or 'example@gmail.com' in self.riskiq_email:
                 raise NameError
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -169,16 +169,23 @@ class Module(Module, multiprocessing.Process):
             return False
 
         command = f"curl -m 25 --insecure -s -u {self.riskiq_email}:{self.riskiq_key} 'https://api.riskiq.net/pt/v2/dns/passive?query={ip}' "
-        processed_pt_data = os.popen(command).read()
+        response = os.popen(command).read()
         try:
-            processed_pt_data = json.loads(processed_pt_data)
+            response = json.loads(response)
             # Sort and reverse the keys
             # Store the samples in our dictionary so we can sort them
             pt_data = {}
-            for pt_results in processed_pt_data['results']:
-                pt_data[pt_results['lastSeen']] = [pt_results['firstSeen'], pt_results['resolve'], pt_results['collected']]
-            # Sort them by datetime and convert to list, sort the first 10 entries only
-            sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
+            # the response may have results key, OR 'message' key with an error,
+            # make sure we have results before processing
+            results = response.get('results', False)
+            if results:
+                for pt_results in results:
+                    pt_data[pt_results['lastSeen']] = [pt_results['firstSeen'], pt_results['resolve'], pt_results['collected']]
+                # Sort them by datetime and convert to list, sort the first 10 entries only
+                sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
+            else:
+                sorted_pt_results = None
+
         except json.decoder.JSONDecodeError:
             sorted_pt_results = None
 
