@@ -114,7 +114,7 @@ class UpdateFileManager:
         try:
             # Read the riskiq username
             self.riskiq_email = self.config.get('threatintelligence', 'RiskIQ_email')
-            if '@' not in self.riskiq_email:
+            if '@' not in self.riskiq_email or 'example@gmail.com' in self.riskiq_email:
                 raise NameError
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
