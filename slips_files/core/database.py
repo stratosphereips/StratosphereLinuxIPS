@@ -1914,10 +1914,11 @@ class Database(object):
         stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
         :param ts: epoch time
         """
-        #if 'TXT' not in answers and answers != '-' and (qtype_name == 'AAAA' or qtype_name == 'A'):
+        #self.print(f'Set DNS resolution for query {query}, answers {answers}, qtype {qtype_name}')
         if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' :
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
-            for ip in answers.split(','):
+            for ip in answers:
+                #self.print(f'IP: {ip}')
                 # get stored DNS resolution from our db
                 domains = self.get_dns_resolution(ip)
                 # if the domain(query) we have isn't already in DNSresolution in the db, add it
