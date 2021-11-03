@@ -32,7 +32,9 @@ class Module(Module, multiprocessing.Process):
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        self.c1 = __database__.subscribe('new_ip')
+        self.pubsub = __database__.r.pubsub()
+        self.pubsub.subscribe('new_ip')
+        self.pubsub.subscribe('new_MAC')
         self.timeout = None
         # update asn every 1 month
         self.update_period = 2592000
@@ -228,7 +230,10 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = self.pubsub.get_message(timeout=None)
+                if not message or message["type"] != "message" or type(message['data']) == int:
+                    # didn't receive a msg on any channel, or received the subscribe msg. keep trying
+                    continue
 
                 # if timewindows are not updated for a long time (see at logsProcess.py),
                 # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
@@ -239,7 +244,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                elif message['channel'] == 'new_ip' and type(message['data'])==str:
+                elif message['channel'] == 'new_ip':
                     ip = message['data']
                     try:
                         ip_addr = ipaddress.ip_address(ip)
@@ -264,6 +269,9 @@ class Module(Module, multiprocessing.Process):
                         self.get_asn(ip, cached_ip_info)
 
                     self.get_rdns(ip)
+
+                elif message['channel'] == 'new_MAC':
+                    MAC = message['data']
 
             except KeyboardInterrupt:
                 if hasattr(self, 'asn_db'): self.asn_db.close()
