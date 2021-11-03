@@ -608,8 +608,6 @@ class Module(Module, multiprocessing.Process):
                     twid = data['twid']
                     uid = data['uid']
                     flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-
-                    # store the dns answers in our db to check for unused queries later in flowalerts.py
                     domain = flow_data.get('query',False)
 
 

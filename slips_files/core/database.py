@@ -1441,6 +1441,19 @@ class Database(object):
                         flows.append(dict_flow)
         return flows
 
+    def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) ->dict:
+        all_flows = self.get_all_flows_in_profileid_twid(profileid,twid)
+        if not all_flows:
+            return {}
+        contacted_ips = {}
+        for uid, flow in all_flows.items():
+            # get the daddr of this flow
+            flow = json.loads(flow)
+            daddr = flow['daddr']
+            contacted_ips[daddr] = uid
+        return contacted_ips
+
+
     def get_flow(self, profileid, twid, uid):
         """
         Returns the flow in the specific time
@@ -1908,7 +1921,7 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str):
+    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str, profileid: str, twid: str):
         """
         Cache DNS answers for each query
         stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
@@ -1928,6 +1941,8 @@ class Database(object):
                 ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
                 ip_info = json.dumps(ip_info)
                 self.r.hset('DNSresolution', ip, ip_info)
+                # also store the resolutions made specifically in this profileid_twid
+                self.r.hset(profileid+self.separator+twid, 'DNS_resolutions', {ip:ip_info} )
 
     def get_dns_resolution(self, ip, all_info=False):
         """

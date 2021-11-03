@@ -2050,7 +2050,7 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                     # Add DNS resolution if there are answers for the query
                     if answers:
-                        __database__.set_dns_resolution(query, answers, starttime, uid, qtype_name)
+                        __database__.set_dns_resolution(query, answers, starttime, uid, qtype_name, profileid, twid)
 
                 elif flow_type == 'http':
 
