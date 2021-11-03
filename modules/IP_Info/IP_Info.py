@@ -60,7 +60,6 @@ class Module(Module, multiprocessing.Process):
         except OSError:
             self.print('Error opening the macaddress db in databases/macaddress-db.json. Please download it from https://macaddress.io/database-download/json.')
 
-
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -258,13 +257,13 @@ class Module(Module, multiprocessing.Process):
                 line = json.loads(line)
                 vendor = line['companyName']
                 MAC_info.update({'Vendor': vendor})
-                # Store info in the db
+                print(f'@@@@@@@@@@@@@@@@@@  found : {MAC_info} for {mac_addr} {profileid}')
                 break
             line = self.mac_db.readline()
 
         # either we found the vendor or not, store the mac of this ip to the db
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
-
+        return MAC_info
 
     def run(self):
         # Main loop function
