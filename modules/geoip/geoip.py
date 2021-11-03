@@ -24,9 +24,9 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         # Open the maminddb offline db
         try:
-            self.reader = maxminddb.open_database('modules/geoip/GeoLite2-Country.mmdb')
+            self.reader = maxminddb.open_database('databases/GeoLite2-Country.mmdb')
         except:
-            self.print('Error opening the geolite2 db in ./GeoLite2-Country_20190402/GeoLite2-Country.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
+            self.print('Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
         self.timeout = None
