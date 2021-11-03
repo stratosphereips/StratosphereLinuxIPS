@@ -152,16 +152,16 @@ class Database(object):
         Used when mac adddr
         :param MAC_info: dict containing mac address and vendor info
         """
-        MAC_info = json.loads(MAC_info)
+        # MAC_info = json.dumps(MAC_info)
         # Add the MAC addr and vendor to this profile
         self.r.hmset(profileid, MAC_info)
 
-    def get_mac_addr_from_profile(self,profileid) -> dict:
+    def get_mac_addr_from_profile(self,profileid) -> str:
         """
-        Retuns MAC info about a certain profile
-        return a dict with 'MAC  and 'Vendor' as keys
+        Retuns MAC info about a certain profile, doesn't return the vendor
+        return the mac address or None
         """
-        MAC_info = self.r.hmget(profileid, 'MAC')
+        MAC_info = self.r.hmget(profileid, 'MAC')[0]
         return MAC_info
 
     def getProfileIdFromIP(self, daddr_as_obj):

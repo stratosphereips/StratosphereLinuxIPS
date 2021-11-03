@@ -11,12 +11,13 @@ import maxminddb
 import ipaddress
 import ipwhois
 import socket
+import json
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'IP_Info'
-    description = 'Get different info about an IP address'
+    description = 'Get different info about an IP/MAC address'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
@@ -46,15 +47,20 @@ class Module(Module, multiprocessing.Process):
         try:
             self.asn_db = maxminddb.open_database('databases/GeoLite2-ASN.mmdb')
         except:
-            self.print('Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
+            self.print('Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. Please download it from https://dev.maxmind.com/geoip/docs/databases/asn?lang=en Please note it must be the MaxMind DB version.')
         
         # Open the maminddb Country offline db
         try:
             self.country_db = maxminddb.open_database('databases/GeoLite2-Country.mmdb')
         except:
-            self.print('Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
+            self.print('Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. Please download it from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. Please note it must be the MaxMind DB version.')
         
-        
+        try:
+            self.mac_db = open('databases/macaddress-db.json','r')
+        except OSError:
+            self.print('Error opening the macaddress db in databases/macaddress-db.json. Please download it from https://macaddress.io/database-download/json.')
+
+
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -118,18 +124,19 @@ class Module(Module, multiprocessing.Process):
         :param ip: str
         return a dict with {'asn': {'asnorg':asnorg}}
         """
+        if not hasattr(self, 'asn_db'):
+            return {'asn': {'asnorg': 'Unknown'}}
+
         asninfo = self.asn_db.get(ip)
         data = {}
         try:
             # found info in geolite
             asnorg = asninfo['autonomous_system_organization']
             data['asn'] = {'asnorg': asnorg}
-        except KeyError:
+        except (KeyError,TypeError):
             # asn info not found in geolite
             data['asn'] ={'asnorg': 'Unknown'}
-        except TypeError:
-            # geolite returned nothing at all for this ip
-            data['asn'] = {'asnorg': 'Unknown'}
+
         return data
 
     def cache_ip_range(self, ip) -> bool:
@@ -151,6 +158,7 @@ class Module(Module, multiprocessing.Process):
 
     def get_asn(self, ip, cached_ip_info):
         """ Gets ASN info about IP, either cached or from our offline mmdb """
+
         # do we have asn cached for this range?
         cached_asn = self.get_cached_asn(ip)
         if not cached_asn:
@@ -174,6 +182,9 @@ class Module(Module, multiprocessing.Process):
         Get ip geocountry from geolite database
         :param ip: str
         """
+        if not hasattr(self, 'country_db'):
+            return False
+
         geoinfo = self.country_db.get(ip)
         if geoinfo:
             try:
@@ -225,6 +236,35 @@ class Module(Module, multiprocessing.Process):
             return False
         return data
 
+    # MAC functions
+    def get_vendor(self, mac_addr: str, profileid: str):
+        """
+        Get vendor info of a MAC address from our offline database
+        """
+        if not hasattr(self, 'mac_db'):
+            return False
+
+        # don't look for the vendor again if we already have MAC info about this profileid
+        MAC_info = __database__.get_mac_addr_from_profile(profileid)
+        if MAC_info:
+            return True
+
+        MAC_info = {'MAC': mac_addr}
+        oui = mac_addr[:8].upper()
+        # parse the mac db and search for this oui
+        line = self.mac_db.readline()
+        while line:
+            if oui in line:
+                line = json.loads(line)
+                vendor = line['companyName']
+                MAC_info.update({'Vendor': vendor})
+                # Store info in the db
+                break
+            line = self.mac_db.readline()
+
+        # either we found the vendor or not, store the mac of this ip to the db
+        __database__.add_mac_addr_to_profile(profileid, MAC_info)
+
 
     def run(self):
         # Main loop function
@@ -247,6 +287,7 @@ class Module(Module, multiprocessing.Process):
                 elif message['channel'] == 'new_ip':
                     ip = message['data']
                     try:
+                        # make sure its a valid ip
                         ip_addr = ipaddress.ip_address(ip)
                         if ip_addr.is_multicast:
                             continue
@@ -254,24 +295,27 @@ class Module(Module, multiprocessing.Process):
                         # not a valid ip skip
                         continue
 
+                    # do we have cached info about this ip in redis?
                     cached_ip_info = __database__.getIPData(ip)
                     if not cached_ip_info:
                         cached_ip_info = {}
 
-                    # Check that there is cached data in the DB,
-                    # and that the data is not empty, and that our key is not there yet
-                    if hasattr(self, 'country_db') and (cached_ip_info == {} or 'geocountry' not in cached_ip_info):
+                    if cached_ip_info == {} or 'geocountry' not in cached_ip_info:
                         self.get_geocountry(ip)
 
                     # Check if a month has passed since last time we updated asn
                     update_asn = self.update_asn(cached_ip_info)
-                    if hasattr(self, 'asn_db') and update_asn:
+                    if update_asn:
                         self.get_asn(ip, cached_ip_info)
 
                     self.get_rdns(ip)
 
                 elif message['channel'] == 'new_MAC':
-                    MAC = message['data']
+                    data = json.loads(message['data'])
+                    mac_addr = data['MAC']
+                    profileid = data['profileid']
+                    self.get_vendor(mac_addr, profileid)
+
 
             except KeyboardInterrupt:
                 if hasattr(self, 'asn_db'): self.asn_db.close()
