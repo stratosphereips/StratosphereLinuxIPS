@@ -9,6 +9,8 @@ import subprocess
 from datetime import datetime
 import ipaddress
 import sys
+import validators
+
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -1935,7 +1937,7 @@ class Database(object):
 
         for ip in answers:
             # don't store TXT records in the database
-            if 'TXT' in ip:
+            if 'TXT' in ip or not (validators.ipv4(ip) or validators.ipv6(ip)):
                 continue
             # get stored DNS resolution from our db
             domains = self.get_dns_resolution(ip)
@@ -1948,7 +1950,8 @@ class Database(object):
             # we store ALL dns resolutions seen since starting slips in DNSresolution
             self.r.hset('DNSresolution', ip, ip_info)
             # also store the resolutions made specifically in this profileid_twid
-            self.r.hset(profileid+self.separator+twid, 'DNS_resolutions', {ip:ip_info} )
+            self.r.hset(profileid+self.separator+twid+'DNS_resolutions',ip,ip_info)
+
 
     def get_dns_resolution(self, ip, all_info=False):
         """
@@ -1976,6 +1979,11 @@ class Database(object):
             return []
         else:
             return dns_resolutions
+
+    def get_all_dns_resolutions_for_profileid_twid(self, profileid, twid):
+        # check if we have past resolutions in this profileid twid
+        dns_resolutions = self.r.hgetall(profileid+self.separator+twid+'DNS_resolutions')
+        return dns_resolutions
 
     def get_last_dns_ts(self):
         """ returns the timestamp of the last DNS resolution slips read """
