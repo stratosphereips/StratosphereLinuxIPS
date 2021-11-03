@@ -17,8 +17,8 @@ import json
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'asn'
-    description = 'Find the ASN of an IP address'
+    name = 'IP_Info'
+    description = 'Get different info about an IP address'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
@@ -27,22 +27,34 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
-        # Start the DB
+        # Start the redis DB
         __database__.start(self.config)
+        # open mmdbs
+        self.open_dbs()
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
-        # Open the maminddb offline db
-        try:
-            self.reader = maxminddb.open_database('databases/GeoLite2-ASN.mmdb')
-        except:
-            self.print('Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
         self.timeout = None
         # update asn every 1 month
         self.update_period = 2592000
-
-
+    
+    def open_dbs(self):
+        """ Function to open the different offline databases used in this module. ASN, Country etc.. """
+        
+        # Open the maxminddb ASN offline db 
+        try:
+            self.asn_db = maxminddb.open_database('databases/GeoLite2-ASN.mmdb')
+        except:
+            self.print('Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
+        
+        # Open the maminddb Country offline db
+        try:
+            self.country_db = maxminddb.open_database('databases/GeoLite2-Country.mmdb')
+        except:
+            self.print('Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. Please download it from https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz. Please note it must be the MaxMind DB version.')
+        
+        
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -89,7 +101,7 @@ class Module(Module, multiprocessing.Process):
         """
         Returns True if
         - no asn data is found in the db OR ip has no cached info
-        - OR month has passed since we last updated asn info in the db
+        - OR a month has passed since we last updated asn info in the db
         :param cached_data: ip cached info from the database, dict
         """
         try:
@@ -100,12 +112,13 @@ class Module(Module, multiprocessing.Process):
             # we should update
             return True
 
-    def get_asn_info_from_geolite(self, ip) -> bool:
+    def get_asn_info_from_geolite(self, ip) -> dict:
         """
         Get ip info from geolite database
         :param ip: str
+        return a dict with {'asn': {'asnorg':asnorg}}
         """
-        asninfo = self.reader.get(ip)
+        asninfo = self.asn_db.get(ip)
         data = {}
         try:
             # found info in geolite
@@ -136,54 +149,96 @@ class Module(Module, multiprocessing.Process):
             # ASN lookup failed with no more methods to try
             pass
 
+    def get_geocountry_info(self, ip) -> dict:
+        """
+        Get ip geocountry from geolite database
+        :param ip: str
+        """
+        geoinfo = self.country_db.get(ip)
+        if geoinfo:
+            try:
+                countrydata = geoinfo['country']
+                countryname = countrydata['names']['en']
+                data = {'geocountry': countryname}
+            except KeyError:
+                data = {'geocountry': 'Unknown'}
+
+        elif ipaddress.ip_address(ip).is_private:
+            # Try to find if it is a local/private IP
+            data = {'geocountry': 'Private'}
+        else:
+            data = {'geocountry': 'Unknown'}
+        __database__.setInfoForIPs(ip, data)
+        return data
+
+
+    def get_asn_info(self, ip, cached_ip_info):
+        """ Gets ASN info about IP, either cached or from our offline mmdb """
+        # do we have asn cached for this range?
+        cached_asn = self.get_cached_asn(ip)
+        if not cached_asn:
+            # we don't have it cached in our db, get it from geolite
+            asn = self.get_asn_info_from_geolite(ip)
+            cached_ip_info.update(asn)
+            # cache this range in our redis db
+            self.cache_ip_range(ip)
+        else:
+            # found cached asn for this ip range, store it
+            cached_ip_info.update({'asn' : {'asnorg': cached_asn}})
+
+        # store asn info in the db
+        cached_ip_info['asn'].update({'timestamp': time.time()})
+
+        __database__.setInfoForIPs(ip, cached_ip_info)
+
     def run(self):
         # Main loop function
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
-                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+
+                # if timewindows are not updated for a long time (see at logsProcess.py),
+                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
-                    if self.reader:
-                        self.reader.close()
+                    if hasattr(self, 'asn_db'): self.asn_db.close()
+                    if hasattr(self, 'country_db'): self.country_db.close()
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
+
                 elif message['channel'] == 'new_ip' and type(message['data'])==str:
-                    # Not all the ips!! only the new one coming in the data
                     ip = message['data']
-                    # The first message comes with data=1
-                    data = __database__.getIPData(ip)
                     try:
                         ip_addr = ipaddress.ip_address(ip)
+                        if ip_addr.is_multicast:
+                            continue
                     except ValueError:
                         # not a valid ip skip
                         continue
-                    # Check if a month has passed since last time we updated asn
-                    update_asn = self.update_asn(data)
-                    if not ip_addr.is_multicast and update_asn:
-                        # do we have asn cached for this range?
-                        cached_asn = self.get_cached_asn(ip)
-                        if not cached_asn:
-                            # we don't have it cached
-                            data = self.get_asn_info_from_geolite(ip)
-                            self.cache_ip_range(ip)
-                        else:
-                            # found cached asn for this ip's range, store it
-                            data['asn'] = {'asnorg': cached_asn}
-                        # store asn info in the db
-                        data['asn'].update({'timestamp': time.time()})
-                        __database__.setInfoForIPs(ip, data)
 
+                    cached_ip_info = __database__.getIPData(ip)
+                    if not cached_ip_info:
+                        cached_ip_info = {}
+
+                    # Check that there is data in the DB,
+                    # and that the data is not empty, and that our key is not there yet
+                    if hasattr(self, 'country_db') and (cached_ip_info == {} or 'geocountry' not in cached_ip_info):
+                        self.get_geocountry_info(ip)
+
+                    # Check if a month has passed since last time we updated asn
+                    update_asn = self.update_asn(cached_ip_info)
+                    if hasattr(self, 'asn_db') and update_asn:
+                        self.get_asn_info(ip, cached_ip_info)
             except KeyboardInterrupt:
-                if self.reader:
-                    self.reader.close()
+                if hasattr(self, 'asn_db'): self.asn_db.close()
+                if hasattr(self, 'country_db'): self.country_db.close()
                 continue
-            except Exception as inst:
-                if self.reader:
-                    self.reader.close()
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
+            # except Exception as inst:
+            #     exception_line = sys.exc_info()[2].tb_lineno
+            #     self.print(f'Problem on run() line {exception_line}', 0, 1)
+            #     self.print(str(type(inst)), 0, 1)
+            #     self.print(str(inst.args), 0, 1)
+            #     self.print(str(inst), 0, 1)
+            #     if self.asn_db: self.asn_db.close()
+            #     if self.country_db: self.country_db.close()
+            #     return True
