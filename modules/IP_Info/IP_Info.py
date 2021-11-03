@@ -280,6 +280,7 @@ class Module(Module, multiprocessing.Process):
                 if message['data'] == 'stop_process':
                     if hasattr(self, 'asn_db'): self.asn_db.close()
                     if hasattr(self, 'country_db'): self.country_db.close()
+                    if hasattr(self, 'mac_db'): self.mac_db.close()
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
@@ -320,13 +321,15 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 if hasattr(self, 'asn_db'): self.asn_db.close()
                 if hasattr(self, 'country_db'): self.country_db.close()
+                if hasattr(self, 'mac_db'): self.mac_db.close()
                 continue
-            # except Exception as inst:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.print(f'Problem on run() line {exception_line}', 0, 1)
-            #     self.print(str(type(inst)), 0, 1)
-            #     self.print(str(inst.args), 0, 1)
-            #     self.print(str(inst), 0, 1)
-            #     if self.asn_db: self.asn_db.close()
-            #     if self.country_db: self.country_db.close()
-            #     return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                if self.asn_db: self.asn_db.close()
+                if self.country_db: self.country_db.close()
+                if hasattr(self, 'mac_db'): self.mac_db.close()
+                return True
