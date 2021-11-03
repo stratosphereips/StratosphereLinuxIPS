@@ -1908,26 +1908,25 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str):
+    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str):
         """
         Cache DNS answers for each query
         stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
         :param ts: epoch time
         """
-
-        for ip in answers:
-            # don't store TXT records in the database
-            if 'TXT' in ip:
-                continue
-            # get stored DNS resolution from our db
-            domains = self.get_dns_resolution(ip)
-            # if the domain(query) we have isn't already in DNSresolution in the db, add it
-            if query not in domains:
-                domains.append(query)
-            # domains should be a list, not a string!, so don't use json.dumps here
-            ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
-            ip_info = json.dumps(ip_info)
-            self.r.hset('DNSresolution', ip, ip_info)
+        #if 'TXT' not in answers and answers != '-' and (qtype_name == 'AAAA' or qtype_name == 'A'):
+        if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' :
+            # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
+            for ip in answers.split(','):
+                # get stored DNS resolution from our db
+                domains = self.get_dns_resolution(ip)
+                # if the domain(query) we have isn't already in DNSresolution in the db, add it
+                if query not in domains:
+                    domains.append(query)
+                # domains should be a list, not a string!, so don't use json.dumps here
+                ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
+                ip_info = json.dumps(ip_info)
+                self.r.hset('DNSresolution', ip, ip_info)
 
     def get_dns_resolution(self, ip, all_info=False):
         """
