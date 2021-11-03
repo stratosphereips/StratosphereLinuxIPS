@@ -15,7 +15,7 @@ from datetime import datetime
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'timeline'
-    description = 'Creates kalispo timeline of what happened in the network based on flows and available data'
+    description = 'Creates kalipso timeline of what happened in the network based on flows and available data'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
