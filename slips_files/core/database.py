@@ -1203,7 +1203,7 @@ class Database(object):
         data = self.getDomainData(domain)
         if data is False:
             # If there is no data about this domain
-            # Set this domain for the first time in the IPsInfo
+            # Set this domain for the first time in the DomainsInfo
             # Its VERY important that the data of the first time we see a domain
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
@@ -1445,6 +1445,19 @@ class Database(object):
                         dict_flow = json.loads(flow)
                         flows.append(dict_flow)
         return flows
+
+    def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) ->dict:
+        all_flows = self.get_all_flows_in_profileid_twid(profileid,twid)
+        if not all_flows:
+            return {}
+        contacted_ips = {}
+        for uid, flow in all_flows.items():
+            # get the daddr of this flow
+            flow = json.loads(flow)
+            daddr = flow['daddr']
+            contacted_ips[daddr] = uid
+        return contacted_ips
+
 
     def get_flow(self, profileid, twid, uid):
         """
@@ -1913,7 +1926,7 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str):
+    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, profileid, twid):
         """
         Cache DNS answers for each query
         stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
@@ -1932,7 +1945,10 @@ class Database(object):
             # domains should be a list, not a string!, so don't use json.dumps here
             ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
             ip_info = json.dumps(ip_info)
+            # we store ALL dns resolutions seen since starting slips in DNSresolution
             self.r.hset('DNSresolution', ip, ip_info)
+            # also store the resolutions made specifically in this profileid_twid
+            self.r.hset(profileid+self.separator+twid, 'DNS_resolutions', {ip:ip_info} )
 
     def get_dns_resolution(self, ip, all_info=False):
         """
