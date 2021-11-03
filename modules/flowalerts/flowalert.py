@@ -336,42 +336,6 @@ class Module(Module, multiprocessing.Process):
 
 
         answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
-        # IP has no dns answer, alert.
-        if not answers_dict:
-            # usually slips alerts a connection without dns resolution when the connection is
-            # read from conn.log before the dns is read from dns.log
-            # To avoid this case don't alert until 2 mins has passed since the last dns resolution
-            # so we are basically giving slips enough time to process more dns resolutions in case this connection DOES have a dns resolution
-            last_dns_ts = __database__.get_last_dns_ts()
-            if not last_dns_ts:
-                # we don't have dns resolutions yet
-                return False
-
-            diff = last_dns_ts - float(timestamp)
-            if diff >= 120:
-                # Now we're sure that 1. this daddr doesn't have a dns resolution
-                # 2. 2 mins has passed since the last dns we saw, now we have this connection,
-                # so we're kind of sure it happened without a dns
-        """ 
-        Checks if there's a flow to a dstip that has no cached DNS answer 
-        """
-
-        # If you start Slips in a network device, it may be that
-        # some DNS resolutions were already done.
-        # to avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
-        # after starting slips because the dns may have happened before starting slips
-        if '-i' in sys.argv:
-            start_time = __database__.get_slips_start_time()
-            now = datetime.datetime.now()
-            diff = now - start_time
-            diff = diff.seconds
-            if not int(diff) >= 120:
-                # less than 2 minutes have passed
-                return False
-
-        # We are after 2 min, so start checking.
-        answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
-
         #self.print(f'Checking DNS of {daddr} {uid}')
         if not answers_dict:
             #self.print(f'No DNS resolution in {answers_dict}')
@@ -392,13 +356,15 @@ class Module(Module, multiprocessing.Process):
             elif uid in self.conn_checked_dns:
                 # It means we already checked this conn with the Timer process. So now alert
                 #self.print(f'Alerting after timer conn without dns on {daddr}, uid {uid}. time {datetime.datetime.now()}')
-                confidence = 1
+                threat_level = 30
+                type_detection  = 'dstip'
+                type_evidence = 'ConnectionWithoutDNS'
+                detection_info = daddr
                 # assume the min number of evidence of this type(in the same profileid_twid) is 0, max is 100
                 # we want to get this on a scale from 0 to 1
                 evidence_count = __database__.get_evidence_count(type_evidence, profileid, twid)
                 # the more the evidence of this type the more confident we are
                 confidence = 1/100*evidence_count
-
                 description = f'a connection without DNS resolution to IP: {daddr}'
                 if not twid:
                     twid = ''
