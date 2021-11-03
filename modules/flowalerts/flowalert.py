@@ -384,11 +384,12 @@ class Module(Module, multiprocessing.Process):
             if uid not in self.conn_checked_dns:
                 self.conn_checked_dns.append(uid)
                 params = [daddr, twid, profileid, timestamp, uid]
-                self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
                 timer = TimerThread(15, self.check_connection_without_dns_resolution, params)
+                #self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
                 timer.start()
             elif uid in self.conn_checked_dns:
                 # It means we already checked this conn with the Timer process. So now alert
+                #self.print(f'Alerting after timer conn without dns on {daddr}, uid {uid}. time {datetime.datetime.now()}')
                 confidence = 1
                 # assume the min number of evidence of this type(in the same profileid_twid) is 0, max is 100
                 # we want to get this on a scale from 0 to 1
@@ -528,7 +529,6 @@ class Module(Module, multiprocessing.Process):
                     # timestamp = data['stime']
                     dport = flow_dict.get('dport',None)
                     proto = flow_dict.get('proto')
-                    self.print(f'DATA: {flow_dict}')
                     appproto = flow_dict.get('appproto', '')
                     if not appproto or appproto == '-':
                         appproto = flow_dict.get('type', '')
@@ -927,7 +927,7 @@ class TimerThread(threading.Thread):
             return True
     
     def task(self):
-        print(f'Executing the function with {self.parameters} on {datetime.datetime.now()}')
+        #print(f'Executing the function with {self.parameters} on {datetime.datetime.now()}')
         self.function(*self.parameters)
 
 
