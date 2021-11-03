@@ -15,6 +15,7 @@ import sys
 import time
 import socket
 import validators
+import threading
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
@@ -47,19 +48,28 @@ class Module(Module, multiprocessing.Process):
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = self.get_default_gateway()
+        # Cache list of connections we waited for the dns resolution
+        self.conn_checked_dns = []
 
     def is_ignored_ip(self, ip) -> bool:
         """
         This function checks if an IP is an special list of IPs that
         should not be alerted for different reasons
         """
-        ip_obj =  ipaddress.ip_address(ip)
-        # Is the IP multicast, private? (including localhost)
-        # local_link or reserved?
-        # The broadcast address 255.255.255.255 is reserved.
-        if ip_obj.is_multicast or ip_obj.is_private or ip_obj.is_local_link or ip_obj.is_reserved:
-            return True
-        return False
+        try:
+            ip_obj =  ipaddress.ip_address(ip)
+            # Is the IP multicast, private? (including localhost)
+            # local_link or reserved?
+            # The broadcast address 255.255.255.255 is reserved.
+            if ip_obj.is_multicast or ip_obj.is_private or ip_obj.is_link_local or ip_obj.is_reserved or '.255' in ip_obj.exploded:
+                return True
+            return False
+        except Exception as inst:
+            self.print(f'Problem on function is_ignored_ipd()', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return False
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -342,22 +352,59 @@ class Module(Module, multiprocessing.Process):
                 # Now we're sure that 1. this daddr doesn't have a dns resolution
                 # 2. 2 mins has passed since the last dns we saw, now we have this connection,
                 # so we're kind of sure it happened without a dns
-                threat_level = 30
-                type_detection  = 'dstip'
-                type_evidence = 'ConnectionWithoutDNS'
-                detection_info = daddr
+        """ 
+        Checks if there's a flow to a dstip that has no cached DNS answer 
+        """
 
+        # If you start Slips in a network device, it may be that
+        # some DNS resolutions were already done.
+        # to avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
+        # after starting slips because the dns may have happened before starting slips
+        if '-i' in sys.argv:
+            start_time = __database__.get_slips_start_time()
+            now = datetime.datetime.now()
+            diff = now - start_time
+            diff = diff.seconds
+            if not int(diff) >= 120:
+                # less than 2 minutes have passed
+                return False
+
+        # We are after 2 min, so start checking.
+        answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
+
+        if not answers_dict:
+            # There is no DNS resolution, but it can be that Slips is
+            # still reading it from the files.
+            # To give time to Slips to read all the files and get all the flows
+            # don't alert a Connection Without DNS until 10 seconds has passed 
+            # in real time from the time of this checking. 
+
+            # Create a timer thread that will wait 5 seconds and then check again
+            #self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
+            if uid not in self.conn_checked_dns:
+                self.conn_checked_dns.append(uid)
+                params = [daddr, twid, profileid, timestamp, uid]
+                self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
+                timer = TimerThread(15, self.check_connection_without_dns_resolution, params)
+                timer.start()
+            elif uid in self.conn_checked_dns:
+                # It means we already checked this conn with the Timer process. So now alert
+                confidence = 1
                 # assume the min number of evidence of this type(in the same profileid_twid) is 0, max is 100
                 # we want to get this on a scale from 0 to 1
                 evidence_count = __database__.get_evidence_count(type_evidence, profileid, twid)
                 # the more the evidence of this type the more confident we are
                 confidence = 1/100*evidence_count
 
-                description = f'A connection without DNS resolution to IP: {daddr}'
+                description = f'a connection without DNS resolution to IP: {daddr}'
                 if not twid:
                     twid = ''
                 __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                          description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                # This UID will never appear again, so we can remove it and
+                # free some memory
+                self.conn_checked_dns.remove(uid)
+
 
     def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
@@ -481,6 +528,10 @@ class Module(Module, multiprocessing.Process):
                     # timestamp = data['stime']
                     dport = flow_dict.get('dport',None)
                     proto = flow_dict.get('proto')
+                    self.print(f'DATA: {flow_dict}')
+                    appproto = flow_dict.get('appproto', '')
+                    if not appproto or appproto == '-':
+                        appproto = flow_dict.get('type', '')
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
 
@@ -488,6 +539,8 @@ class Module(Module, multiprocessing.Process):
                     # saddr is a  multicast.
                     if not ipaddress.ip_address(daddr).is_multicast and not ipaddress.ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
+
+                    # Check unknown port
                     if dport:
                         self.check_unknown_port(dport, proto.lower(), daddr, profileid, twid, uid, timestamp)
 
@@ -501,22 +554,18 @@ class Module(Module, multiprocessing.Process):
                             if count_reconnections >= 5:
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
+
                     # Detect Port 0 Scanning
                     if proto != 'igmp' and proto != 'icmp' and  proto != 'ipv6-icmp' and (sport == '0' or dport == '0'):
                         direction = 'source' if sport==0 else 'destination'
                         self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
-                    # Detect if daddr has a dns answer or not
-                    if dport:
-                        # some flows in binetflow files don't have dport field for example test2.binetflow
-                        try:
-                            dport = int(dport)
-                        except ValueError:
-                            # dport is hex
-                            dport = int(dport, 16)
-
-                        if not self.is_ignored_ip(daddr) and dport and dport == 443:
-                            self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
+                    # Detect if this is a connection without a DNS resolution
+                    # The exceptions are: 
+                    # 1- Do not check this for DNS requests
+                    # 2- Ignore some IPs like private IPs, multicast, and broadcast
+                    if appproto != 'dns' and not self.is_ignored_ip(daddr):
+                        self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
 
                     # Detect Connection to multiple ports (for RAT)
                     if proto == 'tcp' and state == 'Established':
@@ -849,3 +898,36 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
                 return True
+
+class TimerThread(threading.Thread):
+    """Thread that executes 1 task after N seconds. Only to run the process_global_data."""
+    
+    def __init__(self, interval, function, parameters):
+        threading.Thread.__init__(self)
+        self._finished = threading.Event()
+        self._interval = interval
+        self.function = function 
+        self.parameters = parameters
+
+    def shutdown(self):
+        """Stop this thread"""
+        self._finished.set()
+    
+    def run(self):
+        try:
+            if self._finished.isSet(): return True
+
+            # sleep for interval or until shutdown
+            self._finished.wait(self._interval)
+
+            self.task()
+            return True
+            
+        except KeyboardInterrupt:
+            return True
+    
+    def task(self):
+        print(f'Executing the function with {self.parameters} on {datetime.datetime.now()}')
+        self.function(*self.parameters)
+
+
