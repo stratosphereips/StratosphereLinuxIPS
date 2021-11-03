@@ -128,7 +128,7 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'LongConnection'
         threat_level = 10
         confidence = 0.5
-        description = 'long connection ' + str(duration)
+        description = 'Long Connection ' + str(duration)
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
@@ -262,10 +262,15 @@ class Module(Module, multiprocessing.Process):
             return ip_info
 
         # we have no info about this ip in our db, resolve it
-        dns_resolution = repr(socket.gethostbyname_ex(ip))[-1]
-        # make sure we were able to resolve it
-        if validators.domain(dns_resolution):
-            return dns_resolution
+        try:
+            dns_resolution = socket.gethostbyaddr(ip)[0]
+            # make sure we were able to resolve it
+            if validators.domain(dns_resolution):
+                return dns_resolution
+        except socket.herror:
+           # can't resolve this ip
+            return False
+
         return False
 
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
@@ -279,7 +284,7 @@ class Module(Module, multiprocessing.Process):
             type_detection  = 'dport'
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
-            description = f'connection to unknown destination port {dport}/{proto.upper()} destination IP {daddr}'
+            description = f'Connection to unknown destination port {dport}/{proto.upper()} destination IP {daddr}'
             # get the sni/reverse dns of this daddr
             ip_info = self.get_ip_info(daddr)
             if ip_info:
@@ -308,33 +313,51 @@ class Module(Module, multiprocessing.Process):
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
+        # to avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
+        # after starting slips because the dns may have happened before starting slips
+        if '-i' in sys.argv:
+            start_time = __database__.get_slips_start_time()
+            now = datetime.datetime.now()
+            diff = now - start_time
+            diff = diff.seconds
+            if not int(diff) >= 120:
+                # less than 2 minutes have passed
+                return False
 
-        # to avoid false positives don't alert ConnectionWithoutDNS until 2 minutes has passed after starting slips
-        start_time = __database__.get_slips_start_time()
-        now = datetime.datetime.now()
-        diff = now - start_time
-        diff = diff.seconds
 
-        if int(diff) >= 120:
-            answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
-            # IP has no dns answer, alert.
-            if not answers_dict:
-                # to make sure this is not a False positive,
-                # only alert if 2 minutes has passed from the ts of the connection without a dns resolution
-                epoch_now  = int(time.time())
-                diff = (epoch_now - float(timestamp))
+        answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
+        # IP has no dns answer, alert.
+        if not answers_dict:
+            # usually slips alerts a connection without dns resolution when the connection is
+            # read from conn.log before the dns is read from dns.log
+            # To avoid this case don't alert until 2 mins has passed since the last dns resolution
+            # so we are basically giving slips enough time to process more dns resolutions in case this connection DOES have a dns resolution
+            last_dns_ts = __database__.get_last_dns_ts()
+            if not last_dns_ts:
+                # we don't have dns resolutions yet
+                return False
 
-                if diff > 120:
-                    confidence = 1
-                    threat_level = 30
-                    type_detection  = 'dstip'
-                    type_evidence = 'ConnectionWithoutDNS'
-                    detection_info = daddr
-                    description = f'a connection without DNS resolution to IP: {daddr}'
-                    if not twid:
-                        twid = ''
-                    __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                             description, timestamp, profileid=profileid, twid=twid, uid=uid)
+            diff = last_dns_ts - float(timestamp)
+            if diff >= 120:
+                # Now we're sure that 1. this daddr doesn't have a dns resolution
+                # 2. 2 mins has passed since the last dns we saw, now we have this connection,
+                # so we're kind of sure it happened without a dns
+                threat_level = 30
+                type_detection  = 'dstip'
+                type_evidence = 'ConnectionWithoutDNS'
+                detection_info = daddr
+
+                # assume the min number of evidence of this type(in the same profileid_twid) is 0, max is 100
+                # we want to get this on a scale from 0 to 1
+                evidence_count = __database__.get_evidence_count(type_evidence, profileid, twid)
+                # the more the evidence of this type the more confident we are
+                confidence = 1/100*evidence_count
+
+                description = f'A connection without DNS resolution to IP: {daddr}'
+                if not twid:
+                    twid = ''
+                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
         """
@@ -363,9 +386,10 @@ class Module(Module, multiprocessing.Process):
                     threat_level = 30
                     type_detection  = 'dstdomain'
                     type_evidence = 'DNSWithoutConnection'
-                    query = json.loads(ip_info['domains'])[-1]
-                    if 'arpa' in query or '.local' in query:
+                    query = ip_info['domains'][-1]
+                    if 'arpa' in query or '.local' in query or query.endswith('debian.pool.ntp.org'):
                         # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
+                        # queries ending with debian.pool.ntp.org are NTP requests, ignore them
                         continue
                     detection_info = query
                     description = f'Domain {query} resolved with no connection'
@@ -422,14 +446,17 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.pubsub.get_message(timeout=None)
+                if not message or message["type"] != "message" or type(message['data']) == int:
+                    # didn't receive a msg on any channel, or received the subscribe msg. keep trying
+                    continue
                 # ---------------------------- new_flow channel
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
-                if message and message['data'] == 'stop_process':
+                if message['data'] == 'stop_process':
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                elif message and message['channel'] == 'new_flow' and type(message['data']) is not int:
+                elif message['channel'] == 'new_flow':
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -479,10 +506,17 @@ class Module(Module, multiprocessing.Process):
                         direction = 'source' if sport==0 else 'destination'
                         self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
-
                     # Detect if daddr has a dns answer or not
-                    if not self.is_ignored_ip(daddr) and dport == 443:
-                        self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
+                    if dport:
+                        # some flows in binetflow files don't have dport field for example test2.binetflow
+                        try:
+                            dport = int(dport)
+                        except ValueError:
+                            # dport is hex
+                            dport = int(dport, 16)
+
+                        if not self.is_ignored_ip(daddr) and dport and dport == 443:
+                            self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
 
                     # Detect Connection to multiple ports (for RAT)
                     if proto == 'tcp' and state == 'Established':
@@ -506,7 +540,7 @@ class Module(Module, multiprocessing.Process):
                                 dst_IPs_ports = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
                                 dstports = list(dst_IPs_ports[daddr]['dstports'])
                                 if len(dstports) > 1:
-                                    description = "connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
+                                    description = "Connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
                                     self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
                             # Connection to multiple port to the Source IP. Happens in the mode 'all'
                             elif profileid.split('_')[1] == daddr:
@@ -518,7 +552,7 @@ class Module(Module, multiprocessing.Process):
                                 src_IPs_ports = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
                                 dstports = list(src_IPs_ports[saddr]['dstports'])
                                 if len(dstports) > 1:
-                                    description = "connection to multiple ports {} of Source IP: {}".format(dstports, saddr)
+                                    description = "Connection to multiple ports {} of Source IP: {}".format(dstports, saddr)
                                     self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
 
                     # Detect Data exfiltration
@@ -591,7 +625,7 @@ class Module(Module, multiprocessing.Process):
                                     self.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # ---------------------------- new_ssh channel
-                elif message and message['channel'] == 'new_ssh'  and type(message['data']) is not int:
+                elif message['channel'] == 'new_ssh' :
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -635,7 +669,7 @@ class Module(Module, multiprocessing.Process):
                                 pass
 
                 # ---------------------------- new_notice channel
-                elif message and message['channel'] == 'new_notice':
+                elif message['channel'] == 'new_notice':
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
@@ -712,7 +746,7 @@ class Module(Module, multiprocessing.Process):
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
                 # ---------------------------- new_ssl channel
-                elif message and message['channel'] == 'new_ssl':
+                elif message['channel'] == 'new_ssl':
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
                     if type(data) == str:
@@ -764,7 +798,7 @@ class Module(Module, multiprocessing.Process):
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
 
                 # ---------------------------- new_service channel
-                elif message and message['channel'] == 'new_service'  and type(message['data']) is not int:
+                elif message['channel'] == 'new_service':
                     data = json.loads(message['data'])
                     # uid = data['uid']
                     # profileid = data['profileid']
@@ -780,7 +814,7 @@ class Module(Module, multiprocessing.Process):
                         __database__.set_port_info(f'{port}/{proto}', service[0])
 
                 # ---------------------------- tw_closed channel
-                elif message and message['channel'] == 'tw_closed' and type(message['data']) == str:
+                elif message['channel'] == 'tw_closed':
                     data = message["data"]
                     # data example: profile_192.168.1.1_timewindow1
                     data = data.split('_')
@@ -790,18 +824,16 @@ class Module(Module, multiprocessing.Process):
                     flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
                     # a list of contacte dips in this tw
                     contacted_ips = {}
-                    # flows is a dict of uids as keys and actual flows as values
-                    for flow in flows.values():
-                        flow = json.loads(flow)
-                        contacted_ip = flow.get('daddr','')
-                        # this will be used in setEvidence if there's an ununsed_DNS_resolution
-                        uid = flow.get('uid','')
-                        # append ipv4 addresses only to ths list
-                        # It is not clear why here we where ignoring these IPs. There is no 
-                        # explanation, so deleting this whitelisting
-                        #if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
-                        if not ':' in contacted_ip:
-                            contacted_ips.update({contacted_ip: uid })
+                    if flows:
+                        # flows is a dict of uids as keys and actual flows as values
+                        for flow in flows.values():
+                            flow = json.loads(flow)
+                            contacted_ip = flow.get('daddr','')
+                            # this will be used in setEvidence if there's an ununsed_DNS_resolution
+                            uid = flow.get('uid','')
+                            # append ipv4 addresses only to ths list
+                            if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
+                                contacted_ips.update({contacted_ip: uid })
 
                     # dns answers are processed and stored in virustotal.py in new_dns_flow channel
                     # we simply need to check if we have an unused answer

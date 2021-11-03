@@ -42,19 +42,18 @@ RUN pip3 install --upgrade pip
 # To avoid user interaction with tzdata
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Compile and install YARA
-RUN git clone https://github.com/VirusTotal/yara-python yara-python \
-    && cd yara-python \
-    && python setup.py build \
-    && python setup.py install
-
-
 # Install redis using PIP3
 RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
 RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby
 RUN pip3 install ipwhois pytest pytest-xdist yara-python
 RUN pip3 install --ignore-installed six
 RUN pip3 install --upgrade tensorflow==2.4.1
+
+# Compile and install YARA
+RUN git clone https://github.com/VirusTotal/yara-python yara-python \
+    && cd yara-python \
+    && python3 setup.py build \
+    && python3 setup.py install
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
@@ -68,4 +67,3 @@ RUN npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipb
 # Switch to Slips installation dir when login.
 WORKDIR /StratosphereLinuxIPS
 CMD redis-server --daemonize yes && /bin/bash
-

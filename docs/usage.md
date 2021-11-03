@@ -344,7 +344,7 @@ Below is a table showing each level of both.
 # Unit testing
 To test your changes to Slips, please run all the unit tests. Fromn the main folder where slips is installed:
 
-    tests/run_all_tests.py
+    python3 tests/run_all_tests.py
 
 ### Plug in a zeek script
 

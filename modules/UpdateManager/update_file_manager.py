@@ -114,7 +114,7 @@ class UpdateFileManager:
         try:
             # Read the riskiq username
             self.riskiq_email = self.config.get('threatintelligence', 'RiskIQ_email')
-            if '@' not in self.riskiq_email:
+            if '@' not in self.riskiq_email or 'example@gmail.com' in self.riskiq_email:
                 raise NameError
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -299,7 +299,6 @@ class UpdateFileManager:
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
 
-
     def update_riskiq_feed(self):
         """ Get and parse RiskIQ feed """
         try:
@@ -384,7 +383,6 @@ class UpdateFileManager:
                 self.print('Successfully updated RiskIQ domains.', 1, 0)
             else:
                 self.print(f'An error occured while updating RiskIQ domains. Updating was aborted.', 0, 1)
-
 
     def __delete_old_source_IPs(self, file):
         """
@@ -675,7 +673,7 @@ class UpdateFileManager:
                         ip_address = ipaddress.IPv4Address(data[column].strip())
                         # Is IPv4! let go
                         data_column = column
-                        self.print(f'The data is on column {column} and is ipv4: {ip_address}', 0, 6)
+                        self.print(f'The data is on column {column} and is ipv4: {ip_address}', 2, 0)
                         break
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
@@ -683,7 +681,7 @@ class UpdateFileManager:
                             ip_address = ipaddress.IPv6Address(data[column].strip())
                             # Is IPv6! let go
                             data_column = column
-                            self.print(f'The data is on column {column} and is ipv6: {ip_address}', 0, 6)
+                            self.print(f'The data is on column {column} and is ipv6: {ip_address}', 0, 2)
                             break
                         except ipaddress.AddressValueError:
                             # It does not look like an IP address.
@@ -708,7 +706,7 @@ class UpdateFileManager:
 
                 if data_column is None:
                     # can't find a column that contains an ioc
-                    self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 1, 1)
+                    self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 0, 1)
                     return False
 
                 # Now that we read the first line, go back so we can process it
@@ -754,16 +752,16 @@ class UpdateFileManager:
                         else:
                             description = line.replace("\n", "").replace("\"", "").split("\t")[description_column].strip()
                     except IndexError:
-                        self.print(f'IndexError Description column: {description_column}. Line: {line}')
+                        self.print(f'IndexError Description column: {description_column}. Line: {line}',0,1)
 
-                    self.print('\tRead Data {}: {}'.format(data, description), 10, 0)
+                    self.print('\tRead Data {}: {}'.format(data, description), 3, 0)
 
                     data_file_name = malicious_data_path.split('/')[-1]
 
                     # if we have info about data, append to it, if we don't add a new entry in the correct dict
                     data_type = self.detect_data_type(data)
                     if data_type == None:
-                        self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
+                        self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 0, 1)
                         continue
                     if data_type == 'domain':
                         try:

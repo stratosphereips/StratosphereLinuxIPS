@@ -24,7 +24,7 @@ import binascii
 import os
 import subprocess
 import json
-
+import datetime
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -171,6 +171,10 @@ class Module(Module, multiprocessing.Process):
                 if __database__.hasProfile(profileid):
                     # in which tw is this ts?
                     twid = __database__.getTWofTime(profileid, ts)
+                    # convert ts to a readable format
+                    flow_datetime = datetime.datetime.fromtimestamp(float(ts))
+                    ts = flow_datetime.strftime('%Y/%m/%d %H:%M:%S')
+
                     if twid:
                         twid = twid[0]
                         __database__.setEvidence(type_detection, detection_info, type_evidence,

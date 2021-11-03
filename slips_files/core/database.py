@@ -156,6 +156,14 @@ class Database(object):
         # Add the MAC addr and vendor to this profile
         self.r.hmset(profileid, MAC_info)
 
+    def get_mac_addr_from_profile(self,profileid) -> dict:
+        """
+        Retuns MAC info about a certain profile
+        return a dict with 'MAC  and 'Vendor' as keys
+        """
+        MAC_info = self.r.hmget(profileid, 'MAC')
+        return MAC_info
+
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
         try:
@@ -191,7 +199,7 @@ class Database(object):
     def getTWsfromProfile(self, profileid):
         """
         Receives a profile id and returns the list of all the TW in that profile
-        Returns a list with data or an empty list
+        Returns a list of tuples (twid, ts) or an empty list
         """
         data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
         return data
@@ -957,11 +965,11 @@ class Database(object):
             'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
         }
         """
-        # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
-        current_evidence = self.getEvidenceForTW(profileid, twid)
-        if current_evidence:
-            current_evidence = json.loads(current_evidence)
-        else:
+
+        # the same evidence is sometimes repeated in the same profileid and different twids,
+        # to avoid this, check for the evidence in all evidence in this profiled, if this evidence is there, don't alert
+        current_evidence = self.getEvidenceForProfileid(profileid)
+        if not current_evidence:
             current_evidence = {}
         # Prepare key for a new evidence
         key = dict()
@@ -997,6 +1005,26 @@ class Database(object):
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
         return True
 
+    def get_evidence_count(self, evidence_type, profileid, twid):
+        """
+        Returns the number of evidence of this type in this profiled and twid
+        :param evidence_type: PortScan, ThreatIntelligence, C&C channels detection etc..
+        """
+        evidence = self.getEvidenceForTW(profileid, twid)
+        count = 0
+        if evidence:
+            evidence = json.loads(evidence)
+            # evidence is a dict of evidence
+            for ev in evidence:
+                # evidence_description is a dicct with type_detection, detection_info and type_evidence as keys
+                evidence_description = json.loads(ev)
+                # count how many evidence of this specific type (evidence_type)
+                evidence_description = evidence_description['type_evidence']
+                if evidence_type in evidence_description:
+                    count +=1
+        return count
+
+
 
     def deleteEvidence(self,profileid, twid, key):
         """ Delete evidence from the database
@@ -1019,6 +1047,19 @@ class Database(object):
         """ Get the evidence for this TW for this Profile """
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
         return data
+
+    def getEvidenceForProfileid(self,profileid):
+        profile_evidence = {}
+        # get all tws for this profileid
+        timewindows = self.getTWsfromProfile(profileid)
+        for twid,ts in timewindows:
+            # get all evidence in this tw
+            tw_evidence = self.getEvidenceForTW(profileid, twid)
+            if tw_evidence:
+                tw_evidence = json.loads(tw_evidence)
+                profile_evidence.update(tw_evidence)
+        return profile_evidence
+
 
     def checkBlockedProfTW(self, profileid, twid):
         """
@@ -1915,19 +1956,30 @@ class Database(object):
         else:
             return dns_resolutions
 
+    def get_last_dns_ts(self):
+        """ returns the timestamp of the last DNS resolution slips read """
+        dns_resolutions = self.get_all_dns_resolutions()
+        if dns_resolutions:
+            # sort resolutions by ts
+            # k_v is a tuple (key, value) , each value is a serialized json dict.
+            sorted_dns_resolutions = sorted(dns_resolutions.items(), key=lambda k_v: json.loads(k_v[1])['ts'])
+            # return the ts of the last dns resolution in our db
+            last_dns_ts = json.loads(sorted_dns_resolutions[-1][1])['ts']
+            return last_dns_ts
 
     def set_passive_dns(self, ip, data):
         """
         Save in DB passive DNS from virus total
         """
-        data = json.dumps(data)
-        self.r.hset('passiveDNS', ip, data)
+        if data:
+            data = json.dumps(data)
+            self.rcache.hset('passiveDNS', ip, data)
 
     def get_passive_dns(self, ip):
         """
         Get passive DNS from virus total
         """
-        data = self.r.hget('passiveDNS', ip)
+        data = self.rcache.hget('passiveDNS', ip)
         if data:
             data = json.loads(data)
             return data
@@ -2124,23 +2176,28 @@ class Database(object):
         """ returns a dict with module names as keys and pids as values """
         return self.r.hgetall('PIDs')
 
-    def set_whitelist(self,whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
-        """ Store a dict of whitelisted IPs, domains and organizations in the db """
+    def set_whitelist(self,type, whitelist_dict):
+        """
+        Store the whitelist_dict in the given key
+        :param type: supporte types are IPs, domains and organizations
+        :param whitelist_dict: the dict of IPs, domains or orgs to store
+        """
+        self.r.hset("whitelist" , type, json.dumps(whitelist_dict))
 
-        self.r.hset("whitelist" , "IPs", json.dumps(whitelisted_IPs))
-        self.r.hset("whitelist" , "domains", json.dumps(whitelisted_domains))
-        self.r.hset("whitelist" , "organizations", json.dumps(whitelisted_organizations))
-
-    def get_whitelist(self):
-        """ Return dict of 3 keys: IPs, domains and organizations"""
+    def get_all_whitelist(self):
+        """ Return dict of 3 keys: IPs, domains, organizations or mac"""
         return self.r.hgetall('whitelist')
 
-    def whitelist_contains(self, key):
+    def get_whitelist(self, key):
         """
         Whitelist supports different keys like : IPs domains and organizations
         this function is used to check if we have any of the above keys whitelisted
         """
-        return self.r.hget('whitelist',key)
+        whitelist = self.r.hget('whitelist',key)
+        if whitelist:
+            return json.loads(whitelist)
+        else:
+            return False
 
     def save(self,backup_file):
         """

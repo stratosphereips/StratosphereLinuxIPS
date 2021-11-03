@@ -291,7 +291,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         #self.print(f'Checking the whitelist of {srcip}: {data} {type_detection} {description} ')
 
-        whitelist = __database__.get_whitelist()
+        whitelist = __database__.get_all_whitelist()
         max_tries = 10
         # if this module is loaded before profilerProcess or before we're done processing the whitelist in general
         # the database won't return the whitelist
@@ -300,7 +300,7 @@ class EvidenceProcess(multiprocessing.Process):
         while bool(whitelist) is False and max_tries!=0:
             # try max 10 times to get the whitelist, if it's still empty then it's not empty by mistake
             max_tries -=1
-            whitelist = __database__.get_whitelist()
+            whitelist = __database__.get_all_whitelist()
         if max_tries is 0:
             # we tried 10 times to get the whitelist, it's probably empty.
             return False
@@ -318,6 +318,11 @@ class EvidenceProcess(multiprocessing.Process):
             whitelisted_orgs = json.loads(whitelist['organizations'])
         except IndexError:
             pass
+        try:
+            whitelisted_mac = json.loads(whitelist['organizations'])
+        except IndexError:
+            pass
+
 
         # Set data type
         if 'domain' in type_detection:
@@ -358,28 +363,13 @@ class EvidenceProcess(multiprocessing.Process):
             # it's probably one of the following:  'sip', 'dip', 'sport'
             data_type = 'ip'
 
-        # Check that the srcip of the flow that generated this alert is whitelisted
-        is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
-        ip = srcip
-        if ip in whitelisted_IPs:
-            # Check if we should ignore src or dst alerts from this ip
-            # from_ can be: src, dst, both
-            # what_to_ignore can be: alerts or flows or both
-            from_ = whitelisted_IPs[ip]['from']
-            what_to_ignore = whitelisted_IPs[ip]['what_to_ignore']
-            ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
-            ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
-            if ignore_alerts_from_ip:
-                #self.print(f'Whitelisting src IP {srcip} for generating an alert related to {data} in {description}')
-                return True
-
         # Check IPs
         if data_type is 'ip':
             # Check that the IP in the content of the alert is whitelisted
             # Was the evidence coming as a src or dst?
+            ip = data
             is_srcip = type_detection in ('sip', 'srcip', 'sport', 'inTuple')
             is_dstip = type_detection in ('dip', 'dstip', 'dport', 'outTuple')
-            ip = data
             if ip in whitelisted_IPs:
                 # Check if we should ignore src or dst alerts from this ip
                 # from_ can be: src, dst, both
@@ -387,11 +377,29 @@ class EvidenceProcess(multiprocessing.Process):
                 from_ = whitelisted_IPs[ip]['from']
                 what_to_ignore = whitelisted_IPs[ip]['what_to_ignore']
                 ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+
                 ignore_alerts_from_ip = ignore_alerts and is_srcip and ('src' in from_ or 'both' in from_)
                 ignore_alerts_to_ip = ignore_alerts and is_dstip and ('dst' in from_ or 'both' in from_)
                 if ignore_alerts_from_ip or ignore_alerts_to_ip:
                     #self.print(f'Whitelisting src IP {srcip} for evidence about {ip}, due to a connection related to {data} in {description}')
                     return True
+
+                # Now we know this ipv4 or ipv6 isn't whitelisted
+                # is the mac address of this ip whitelisted?
+                if whitelisted_mac:
+                    # getthe mac addr of this ip from our db
+                    # this mac can be src or dst mac, based on the type of ip (is_srcip or is_dstip)
+                    mac = __database__.get_mac_addr_from_profile(f'profile_{ip}')[0]
+                    if mac and mac in list(whitelisted_mac.keys()):
+                        # src or dst and
+                        from_ = whitelisted_mac[mac]['from']
+                        what_to_ignore = whitelisted_mac[mac]['what_to_ignore']
+                        # do we want to whitelist alerts?
+                        if ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                            if is_srcip and ('src' in from_ or 'both' in from_) :
+                                return True
+                            if is_dstip and ('dst' in from_ or 'both' in from_):
+                                return True
 
         # Check domains
         if data_type is 'domain':

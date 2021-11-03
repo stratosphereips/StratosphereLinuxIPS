@@ -38,18 +38,18 @@ RUN pip3 install --upgrade pip
 # To avoid user interaction with tzdata
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Compile and install YARA
-RUN git clone https://github.com/VirusTotal/yara-python yara-python \
-    && cd yara-python \
-    && python setup.py build \
-    && python setup.py install
-
 # Install redis using PIP3
 RUN pip3 install wheel redis setuptools validators colorama
 RUN pip3 install maxminddb pandas sklearn urllib3 scipy watchdog
 RUN pip3 install stix2 cabby ipwhois pytest yara-python
 RUN pip3 install slackclient tzlocal psutil pytest-xdist
 RUN pip3 install --ignore-installed six
+
+# Compile and install YARA
+RUN git clone https://github.com/VirusTotal/yara-python yara-python \
+    && cd yara-python \
+    && python3 setup.py build \
+    && python3 setup.py install
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git

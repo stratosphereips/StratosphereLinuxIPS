@@ -28,9 +28,9 @@ def test_read_whitelist(outputQueue, inputQueue, database):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
     # 9 is the number of lines read after the comment lines at th ebegging of the file
     assert profilerProcess.read_whitelist() == 29
-    assert '91.121.83.118' in profilerProcess.whitelisted_IPs.keys()
-    assert 'apple.com' in profilerProcess.whitelisted_domains.keys()
-    assert 'microsoft' in profilerProcess.whitelisted_orgs.keys()
+    assert '91.121.83.118' in database.get_whitelist("IPs").keys()
+    assert 'apple.com' in database.get_whitelist("domains").keys()
+    assert 'microsoft' in database.get_whitelist("organizations").keys()
 
 @pytest.mark.parametrize("org,asn",[('google','as19448')])
 def test_load_org_asn(org, outputQueue, inputQueue, asn):
