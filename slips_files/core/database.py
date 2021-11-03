@@ -9,6 +9,8 @@ import subprocess
 from datetime import datetime
 import ipaddress
 import sys
+import validators
+
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -1198,7 +1200,7 @@ class Database(object):
         data = self.getDomainData(domain)
         if data is False:
             # If there is no data about this domain
-            # Set this domain for the first time in the IPsInfo
+            # Set this domain for the first time in the DomainsInfo
             # Its VERY important that the data of the first time we see a domain
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
@@ -1940,6 +1942,7 @@ class Database(object):
                 # domains should be a list, not a string!, so don't use json.dumps here
                 ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
                 ip_info = json.dumps(ip_info)
+                # we store ALL dns resolutions seen since starting slips in DNSresolution
                 self.r.hset('DNSresolution', ip, ip_info)
                 # also store the resolutions made specifically in this profileid_twid
                 self.r.hset(profileid+self.separator+twid, 'DNS_resolutions', {ip:ip_info} )
@@ -1970,6 +1973,11 @@ class Database(object):
             return []
         else:
             return dns_resolutions
+
+    def get_all_dns_resolutions_for_profileid_twid(self, profileid, twid):
+        # check if we have past resolutions in this profileid twid
+        dns_resolutions = self.r.hgetall(profileid+self.separator+twid+'DNS_resolutions')
+        return dns_resolutions
 
     def get_last_dns_ts(self):
         """ returns the timestamp of the last DNS resolution slips read """
