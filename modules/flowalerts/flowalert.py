@@ -43,7 +43,7 @@ class Module(Module, multiprocessing.Process):
         self.pubsub.subscribe('new_notice')
         self.pubsub.subscribe('new_ssl')
         self.pubsub.subscribe('new_service')
-        self.pubsub.subscribe('tw_closed')
+        self.pubsub.subscribe('new_dns_flow')
         self.timeout = None
         self.p2p_daddrs = {}
         # get the default gateway
@@ -375,14 +375,16 @@ class Module(Module, multiprocessing.Process):
                 self.conn_checked_dns.remove(uid)
 
 
-    def check_dns_resolution_without_connection(self, contacted_ips: dict, profileid, twid, uid):
+    def check_dns_resolution_without_connection(self, contacted_ips: dict, domain, profileid, twid, uid):
         """
         Makes sure all cached DNS answers are used in contacted_ips
         :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
         if contacted_ips == {}: return
         # Get an updated list of dns answers
-        resolutions = __database__.get_all_dns_resolutions()
+        resolutions = __database__.get_all_dns_resolutions_for_profileid_twid(profileid, twid)
+        #todo
+
         # every dns answer is a list of ip that correspond to a spicif query,
         # one of these ips should be present in the contacted ips
         for ip in resolutions:
@@ -830,32 +832,20 @@ class Module(Module, multiprocessing.Process):
                         # add to known ports
                         __database__.set_port_info(f'{port}/{proto}', service[0])
 
-                # ---------------------------- tw_closed channel
-                elif message['channel'] == 'tw_closed':
-                    data = message["data"]
-                    # data example: profile_192.168.1.1_timewindow1
-                    data = data.split('_')
-                    profileid = f'{data[0]}_{data[1]}'
-                    twid = data[2]
-                    # get all flows in this tw
-                    flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
-                    # a list of contacte dips in this tw
-                    contacted_ips = {}
-                    if flows:
-                        # flows is a dict of uids as keys and actual flows as values
-                        for flow in flows.values():
-                            flow = json.loads(flow)
-                            contacted_ip = flow.get('daddr','')
-                            # this will be used in setEvidence if there's an ununsed_DNS_resolution
-                            uid = flow.get('uid','')
-                            # append ipv4 addresses only to ths list
-                            if not ':' in contacted_ip and not self.is_ignored_ip(contacted_ip) :
-                                contacted_ips.update({contacted_ip: uid })
+                # ---------------------------- new_dns_flow channel
+                elif message['channel'] == 'new_dns_flow':
+                    data = json.loads(message["data"])
 
-                    # dns answers are processed and stored in virustotal.py in new_dns_flow channel
-                    # we simply need to check if we have an unused answer
-                    # set evidence if we have an answer that isn't used in the contacted ips
-                    self.check_dns_resolution_without_connection(contacted_ips, profileid, twid, uid)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    uid = data['uid']
+                    flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                    domain = flow_data.get('query',False)
+                    contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
+
+                    if not contacted_ips:
+                        continue
+                    self.check_dns_resolution_without_connection(contacted_ips, domain, profileid, twid, uid)
 
             except KeyboardInterrupt:
                 continue
