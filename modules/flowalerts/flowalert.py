@@ -384,8 +384,8 @@ class Module(Module, multiprocessing.Process):
             if uid not in self.conn_checked_dns:
                 self.conn_checked_dns.append(uid)
                 params = [daddr, twid, profileid, timestamp, uid]
-                timer = TimerThread(15, self.check_connection_without_dns_resolution, params)
                 #self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
+                timer = TimerThread(5, self.check_connection_without_dns_resolution, params)
                 timer.start()
             elif uid in self.conn_checked_dns:
                 # It means we already checked this conn with the Timer process. So now alert
