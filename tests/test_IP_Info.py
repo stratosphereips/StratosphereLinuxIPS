@@ -44,3 +44,13 @@ def test_get_geocountry(outputQueue, database):
     IP_Info = create_IP_Info_instance(outputQueue)
     assert IP_Info.get_geocountry('153.107.41.230') == {'geocountry': 'Australia'}
     assert IP_Info.get_geocountry('23.188.195.255') == {'geocountry': 'Unknown'}
+
+
+# MAC unit tests
+def test_get_vendor(outputQueue, database):
+    IP_Info = create_IP_Info_instance(outputQueue)
+    profileid = 'profile_10.0.2.15'
+    mac_addr = '08:00:27:7f:09:e1'
+    mac_info = IP_Info.get_vendor(mac_addr, profileid)
+    assert mac_info != False
+    assert mac_info['Vendor'] == 'Pcs Systemtechnik GmbH'
