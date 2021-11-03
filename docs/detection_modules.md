@@ -35,13 +35,8 @@ tr:nth-child(even) {
     <th>Status</th>
   </tr>
   <tr>
-    <td>asn</td>
-    <td>loads and finds the ASN of each IP</td>
-    <td>✅</td>
-  </tr>
-  <tr>
-    <td>geoip</td>
-    <td>finds the country and geolocation information of each IP</td>
+    <td>IP_Info</td>
+    <td>Finds Geolocation, ASN, RDNS info about IPs and MAC vendors.</td>
     <td>✅</td>
   </tr>
   <tr>

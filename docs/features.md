@@ -132,16 +132,6 @@ tr:nth-child(even) {
     <th>Status</th>
   </tr>
   <tr>
-    <td>asn</td>
-    <td>loads and finds the ASN of each IP</td>
-    <td>✅</td>
-  </tr>
-  <tr>
-    <td>geoip</td>
-    <td>finds the country and geolocation information of each IP</td>
-    <td>✅</td>
-  </tr>
-  <tr>
     <td>https</td>
     <td>training&test of RandomForest to detect malicious https flows</td>
     <td>✅</td>
@@ -177,8 +167,8 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>RDNS</td>
-    <td>module to get and store the reverse DNS info about IPs</td>
+    <td>IP_Info</td>
+    <td>Finds Geolocation, ASN, RDNS info about IPs and MAC vendors.</td>
     <td>✅</td>
   </tr>
   <tr>

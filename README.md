@@ -22,8 +22,6 @@ Slips is a modular software. Each module is designed to perform a specific detec
 
 |   module  |   description | status |
 | ---| --- | :-: |
-| asn | loads and finds the ASN of each IP |✅|
-| geoip | finds the country and geolocation information of each IP |✅|
 | https | training&test of RandomForest to detect malicious https flows |⏳|
 | port scan detector | detects Horizontal and Vertical port scans |✅|
 | threat Intelligence | checks if each IP is in a list of malicious IPs  |✅|
@@ -31,7 +29,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | rnn-cc-detection | detects command and control channels using recurrent neural network and the stratosphere behavioral letters |✅|
 | VirusTotal | module to lookup IP address on VirusTotal |✅|
 | flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
-| RDNS | module to get and store the reverse DNS info about IPs  |✅|
+| IP_Info | module to find Geolocation, ASN, RDNS info about IPs and MAC vendors  |✅|
 | ARPScanDetector | module to check for ARP scans in ARP traffic  |✅|
 | ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|
 | http_analyzer | module to analyze HTTP traffic |✅|
