@@ -10,9 +10,7 @@ import time
 import maxminddb
 import ipaddress
 import ipwhois
-import configparser
-import os
-import json
+import socket
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
@@ -75,6 +73,7 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
+    # ASN functions
     def get_cached_asn(self, ip):
         """
         If this ip belongs to a cached ip range, return the cached asn info of it
@@ -95,7 +94,6 @@ class Module(Module, multiprocessing.Process):
         except AttributeError:
             # cached_asn is not found
             return False
-
 
     def update_asn(self, cached_data) -> bool:
         """
@@ -149,7 +147,27 @@ class Module(Module, multiprocessing.Process):
             # ASN lookup failed with no more methods to try
             pass
 
-    def get_geocountry_info(self, ip) -> dict:
+    def get_asn(self, ip, cached_ip_info):
+        """ Gets ASN info about IP, either cached or from our offline mmdb """
+        # do we have asn cached for this range?
+        cached_asn = self.get_cached_asn(ip)
+        if not cached_asn:
+            # we don't have it cached in our db, get it from geolite
+            asn = self.get_asn_info_from_geolite(ip)
+            cached_ip_info.update(asn)
+            # cache this range in our redis db
+            self.cache_ip_range(ip)
+        else:
+            # found cached asn for this ip range, store it
+            cached_ip_info.update({'asn' : {'asnorg': cached_asn}})
+
+        # store asn info in the db
+        cached_ip_info['asn'].update({'timestamp': time.time()})
+
+        __database__.setInfoForIPs(ip, cached_ip_info)
+
+    # GeoInfo functions
+    def get_geocountry(self, ip) -> dict:
         """
         Get ip geocountry from geolite database
         :param ip: str
@@ -171,25 +189,40 @@ class Module(Module, multiprocessing.Process):
         __database__.setInfoForIPs(ip, data)
         return data
 
+    # RDNS functions
+    def get_ip_family(self, ip):
+        """
+        returns the family of the IP, AF_INET or AF_INET6
+        :param ip: str
+        """
+        if ':' in ip:
+            return socket.AF_INET6
+        return socket.AF_INET
 
-    def get_asn_info(self, ip, cached_ip_info):
-        """ Gets ASN info about IP, either cached or from our offline mmdb """
-        # do we have asn cached for this range?
-        cached_asn = self.get_cached_asn(ip)
-        if not cached_asn:
-            # we don't have it cached in our db, get it from geolite
-            asn = self.get_asn_info_from_geolite(ip)
-            cached_ip_info.update(asn)
-            # cache this range in our redis db
-            self.cache_ip_range(ip)
-        else:
-            # found cached asn for this ip range, store it
-            cached_ip_info.update({'asn' : {'asnorg': cached_asn}})
+    def get_rdns(self, ip):
+        """
+        get reverse DNS of an ip
+        returns RDNS of the given ip or False if not found
+        :param ip: str
+        """
+        data = {}
+        try:
+            # works with both ipv4 and ipv6
+            reverse_dns = socket.gethostbyaddr(ip)[0]
+            # if there's no reverse dns record for this ip, reverse_dns will be an ip.
+            try:
+                # reverse_dns is an ip and there's no reverse dns, don't store
+                socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
+                return False
+            except socket.error:
+                # all good, store it
+                data['reverse_dns'] = reverse_dns
+                __database__.setInfoForIPs(ip, data)
+        except (socket.gaierror, socket.herror, OSError):
+            # not an ip or multicast, can't get the reverse dns record of it
+            return False
+        return data
 
-        # store asn info in the db
-        cached_ip_info['asn'].update({'timestamp': time.time()})
-
-        __database__.setInfoForIPs(ip, cached_ip_info)
 
     def run(self):
         # Main loop function
@@ -220,15 +253,18 @@ class Module(Module, multiprocessing.Process):
                     if not cached_ip_info:
                         cached_ip_info = {}
 
-                    # Check that there is data in the DB,
+                    # Check that there is cached data in the DB,
                     # and that the data is not empty, and that our key is not there yet
                     if hasattr(self, 'country_db') and (cached_ip_info == {} or 'geocountry' not in cached_ip_info):
-                        self.get_geocountry_info(ip)
+                        self.get_geocountry(ip)
 
                     # Check if a month has passed since last time we updated asn
                     update_asn = self.update_asn(cached_ip_info)
                     if hasattr(self, 'asn_db') and update_asn:
-                        self.get_asn_info(ip, cached_ip_info)
+                        self.get_asn(ip, cached_ip_info)
+
+                    self.get_rdns(ip)
+
             except KeyboardInterrupt:
                 if hasattr(self, 'asn_db'): self.asn_db.close()
                 if hasattr(self, 'country_db'): self.country_db.close()
