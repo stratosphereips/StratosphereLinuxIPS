@@ -1980,7 +1980,11 @@ class ProfilerProcess(multiprocessing.Process):
                 if client_addr:
                     profileid = get_rev_profile(starttime, client_addr)[0]
                 if mac_addr:
-                    __database__.publish('new_MAC', mac_addr)
+                    # send this to IP_Info module to get vendor info about this MAC
+                    to_send = {'MAC': mac_addr,
+                               'profileid': profileid}
+                    __database__.publish('new_MAC', json.dumps(to_send))
+
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(self.saddr)
