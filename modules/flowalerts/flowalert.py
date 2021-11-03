@@ -372,7 +372,9 @@ class Module(Module, multiprocessing.Process):
         # We are after 2 min, so start checking.
         answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
 
+        #self.print(f'Checking DNS of {daddr} {uid}')
         if not answers_dict:
+            #self.print(f'No DNS resolution in {answers_dict}')
             # There is no DNS resolution, but it can be that Slips is
             # still reading it from the files.
             # To give time to Slips to read all the files and get all the flows
