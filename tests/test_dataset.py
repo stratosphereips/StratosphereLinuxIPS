@@ -150,7 +150,7 @@ def test_suricata(database, suricata_path,  output_dir):
     # this function returns when slips is done
     os.system(command)
     profiles = get_profiles(output_dir)
-    expected_evidence = 'vertical port scan detected'
+    expected_evidence = 'vertical port scan'
     assert profiles > 90
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
