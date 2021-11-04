@@ -172,6 +172,11 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
+    <td>RiskIQ</td>
+    <td>Module to get different information from RiskIQ.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>leak_detector</td>
     <td>module to  detect leaks of data in the traffic using YARA rules</td>
     <td>✅</td>

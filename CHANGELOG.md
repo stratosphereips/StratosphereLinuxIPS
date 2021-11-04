@@ -4,6 +4,7 @@
 		- Add module to detect leaks of data in the traffic using YARA rules (works on PCAPs only)
 		- Move RiskIQ api key to a separate file in modules/UpdateManager/api_key_secret
 		- Add support for whitelisting MAC addresses
+		- Add a new module for getting RiskIQ info
 		- Merge geoip, asn and RDNS modules into a single new module called IP_Info
 - 0.8
     - Slips
