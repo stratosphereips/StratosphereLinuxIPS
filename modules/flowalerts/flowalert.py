@@ -375,15 +375,15 @@ class Module(Module, multiprocessing.Process):
                 self.conn_checked_dns.remove(uid)
 
 
-    def check_dns_resolution_without_connection(self, contacted_ips: dict, domain, profileid, twid, uid):
+    def check_dns_resolution_without_connection(self, domain, profileid, twid, uid):
         """
         Makes sure all cached DNS answers are used in contacted_ips
         :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
+        contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
         if contacted_ips == {}: return
         # Get an updated list of dns answers
         resolutions = __database__.get_all_dns_resolutions_for_profileid_twid(profileid, twid)
-        #todo
 
         # every dns answer is a list of ip that correspond to a spicif query,
         # one of these ips should be present in the contacted ips
@@ -394,25 +394,20 @@ class Module(Module, multiprocessing.Process):
                 uid = ip_info['uid']
                 timestamp = ip_info['ts']
 
-                # to make sure this is not a False positive,
-                # only alert if 2 minutes has passed from the ts of the dns resolution without a connection
-                epoch_now  = int(time.time())
-                diff = (epoch_now - float(timestamp))
 
-                if diff > 120:
-                    confidence = 0.8
-                    threat_level = 30
-                    type_detection  = 'dstdomain'
-                    type_evidence = 'DNSWithoutConnection'
-                    query = ip_info['domains'][-1]
-                    if 'arpa' in query or '.local' in query or query.endswith('debian.pool.ntp.org'):
-                        # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
-                        # queries ending with debian.pool.ntp.org are NTP requests, ignore them
-                        continue
-                    detection_info = query
-                    description = f'Domain {query} resolved with no connection'
-                    __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                confidence = 0.8
+                threat_level = 30
+                type_detection  = 'dstdomain'
+                type_evidence = 'DNSWithoutConnection'
+                query = ip_info['domains'][-1]
+                if 'arpa' in query or '.local' in query or query.endswith('debian.pool.ntp.org'):
+                    # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
+                    # queries ending with debian.pool.ntp.org are NTP requests, ignore them
+                    continue
+                detection_info = query
+                description = f'Domain {query} resolved with no connection'
+                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                     description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
         """
@@ -841,11 +836,8 @@ class Module(Module, multiprocessing.Process):
                     uid = data['uid']
                     flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
                     domain = flow_data.get('query',False)
-                    contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
 
-                    if not contacted_ips:
-                        continue
-                    self.check_dns_resolution_without_connection(contacted_ips, domain, profileid, twid, uid)
+                    self.check_dns_resolution_without_connection(domain, profileid, twid, uid)
 
             except KeyboardInterrupt:
                 continue

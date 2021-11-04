@@ -1945,7 +1945,7 @@ class Database(object):
                 # we store ALL dns resolutions seen since starting slips in DNSresolution
                 self.r.hset('DNSresolution', ip, ip_info)
                 # also store the resolutions made specifically in this profileid_twid
-                self.r.hset(profileid+self.separator+twid, 'DNS_resolutions', {ip:ip_info} )
+                self.r.hset(f'{profileid}{self.separator}{twid}{self.separator}DNS_resolutions', ip, ip_info)
 
     def get_dns_resolution(self, ip, all_info=False):
         """
@@ -1976,7 +1976,7 @@ class Database(object):
 
     def get_all_dns_resolutions_for_profileid_twid(self, profileid, twid):
         # check if we have past resolutions in this profileid twid
-        dns_resolutions = self.r.hgetall(profileid+self.separator+twid+'DNS_resolutions')
+        dns_resolutions = self.r.hgetall(f'{profileid}{self.separator}{twid}{self.separator}DNS_resolutions')
         return dns_resolutions
 
     def get_last_dns_ts(self):
