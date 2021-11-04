@@ -343,7 +343,7 @@ class Module(Module, multiprocessing.Process):
             # still reading it from the files.
             # To give time to Slips to read all the files and get all the flows
             # don't alert a Connection Without DNS until 5 seconds has passed
-            # in real time from the time of this checking. 
+            # in real time from the time of this checking.
 
             # Create a timer thread that will wait 5 seconds for the dns to arrive and then check again
             #self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
@@ -549,7 +549,7 @@ class Module(Module, multiprocessing.Process):
                         self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
                     # Detect if this is a connection without a DNS resolution
-                    # The exceptions are: 
+                    # The exceptions are:
                     # 1- Do not check this for DNS requests
                     # 2- Ignore some IPs like private IPs, multicast, and broadcast
                     if appproto != 'dns' and not self.is_ignored_ip(daddr):
@@ -861,8 +861,9 @@ class Module(Module, multiprocessing.Process):
                     domain = flow_data.get('query',False)
                     answers = flow_data.get('answers',False)
                     stime = data.get('stime',False)
-
-                    self.check_dns_resolution_without_connection(domain, answers, stime, profileid, twid, uid)
+                    # only check dns without connection if we have answers(we're sure the query is resolved)
+                    if answers:
+                        self.check_dns_resolution_without_connection(domain, answers, stime, profileid, twid, uid)
 
             except KeyboardInterrupt:
                 continue
