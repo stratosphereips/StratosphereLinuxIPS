@@ -12,7 +12,6 @@ import datetime
 import subprocess
 import re
 import sys
-import time
 import socket
 import validators
 import threading
@@ -48,8 +47,10 @@ class Module(Module, multiprocessing.Process):
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = self.get_default_gateway()
-        # Cache list of connections we waited for the dns resolution
-        self.conn_checked_dns = []
+        # Cache list of connections that we already checked in the timer thread (we waited for the dns resolution for these connections)
+        self.connections_checked_in_timer_thread = []
+        # Cache list of connections that we already checked in the timer thread (we waited for the connection of these dns resolutions)
+        self.dns_checked_in_timer_thread = []
 
     def is_ignored_ip(self, ip) -> bool:
         """
@@ -334,7 +335,6 @@ class Module(Module, multiprocessing.Process):
                 # less than 2 minutes have passed
                 return False
 
-
         answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
         #self.print(f'Checking DNS of {daddr} {uid}')
         if not answers_dict:
@@ -342,19 +342,23 @@ class Module(Module, multiprocessing.Process):
             # There is no DNS resolution, but it can be that Slips is
             # still reading it from the files.
             # To give time to Slips to read all the files and get all the flows
-            # don't alert a Connection Without DNS until 10 seconds has passed 
+            # don't alert a Connection Without DNS until 5 seconds has passed
             # in real time from the time of this checking. 
 
-            # Create a timer thread that will wait 5 seconds and then check again
+            # Create a timer thread that will wait 5 seconds for the dns to arrive and then check again
             #self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
-            if uid not in self.conn_checked_dns:
-                self.conn_checked_dns.append(uid)
+            if uid not in self.connections_checked_in_timer_thread:
+                # comes here if we haven't started the timer thread for this connection before
+                # mark this connection as checked
+                self.connections_checked_in_timer_thread.append(uid)
                 params = [daddr, twid, profileid, timestamp, uid]
                 #self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
                 timer = TimerThread(5, self.check_connection_without_dns_resolution, params)
                 timer.start()
-            elif uid in self.conn_checked_dns:
-                # It means we already checked this conn with the Timer process. So now alert
+            elif uid in self.connections_checked_in_timer_thread:
+                # It means we already checked this conn with the Timer process
+                # (we waited 5 seconds for the dns to arrive after the connection was made)
+                # but still no dns resolution for it. So now alert
                 #self.print(f'Alerting after timer conn without dns on {daddr}, uid {uid}. time {datetime.datetime.now()}')
                 threat_level = 30
                 type_detection  = 'dstip'
@@ -372,42 +376,61 @@ class Module(Module, multiprocessing.Process):
                                          description, timestamp, profileid=profileid, twid=twid, uid=uid)
                 # This UID will never appear again, so we can remove it and
                 # free some memory
-                self.conn_checked_dns.remove(uid)
+                self.connections_checked_in_timer_thread.remove(uid)
 
 
-    def check_dns_resolution_without_connection(self, domain, profileid, twid, uid):
+    def check_dns_resolution_without_connection(self, domain, answers, timestamp, profileid, twid, uid):
         """
         Makes sure all cached DNS answers are used in contacted_ips
         :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
+
+        if 'arpa' in domain or '.local' in domain or domain.endswith('debian.pool.ntp.org'):
+            # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
+            # queries ending with debian.pool.ntp.org are NTP requests, ignore them
+            return #todo
+
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
         if contacted_ips == {}: return
         # Get an updated list of dns answers
-        resolutions = __database__.get_all_dns_resolutions_for_profileid_twid(profileid, twid)
-
-        # every dns answer is a list of ip that correspond to a spicif query,
+        # resolutions = __database__.get_all_dns_resolutions_for_profileid_twid(profileid, twid)
+        # every dns answer is a list of ips that correspond to a spicific query,
         # one of these ips should be present in the contacted ips
-        for ip in resolutions:
-            if ip not in contacted_ips:
-                # found a query without usage
-                ip_info = json.loads(resolutions[ip])
-                uid = ip_info['uid']
-                timestamp = ip_info['ts']
-
-
-                confidence = 0.8
-                threat_level = 30
-                type_detection  = 'dstdomain'
-                type_evidence = 'DNSWithoutConnection'
-                query = ip_info['domains'][-1]
-                if 'arpa' in query or '.local' in query or query.endswith('debian.pool.ntp.org'):
-                    # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
-                    # queries ending with debian.pool.ntp.org are NTP requests, ignore them
-                    continue
-                detection_info = query
-                description = f'Domain {query} resolved with no connection'
-                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                     description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        # check each one of the resolutions of this domain
+        for ip in answers:
+            if ip in contacted_ips:
+                  # this dns resolution has a connection
+                    return
+        # found a query without usage
+        # There is no connection for this dns resolution, but it can be that Slips is
+        # still reading it from the files.
+        # To give time to Slips to read all the files and get all the flows
+        # don't alert a Connection Without DNS until 5 seconds has passed
+        # in real time from the time we received the dns.
+        # Create a timer thread that will wait 5 seconds for the connection to arrive and then check again
+        if uid not in self.dns_checked_in_timer_thread:
+            # comes here if we haven't started the timer thread for this dns before
+            # mark this dns as checked
+            self.dns_checked_in_timer_thread.append(uid)
+            params = [ domain, answers, timestamp, profileid, twid, uid]
+            #self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
+            timer = TimerThread(5, self.check_dns_resolution_without_connection, params)
+            timer.start()
+        elif uid in self.dns_checked_in_timer_thread:
+            # It means we already checked this dns with the Timer process
+            # (we waited 5 seconds for the connection to arrive after the dns was made)
+            # but still no connection for it. So now alert
+            confidence = 0.8
+            threat_level = 30
+            type_detection  = 'dstdomain'
+            type_evidence = 'DNSWithoutConnection'
+            detection_info = domain
+            description = f'Domain {domain} resolved with no connection'
+            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
+                                 description, timestamp, profileid=profileid, twid=twid, uid=uid)
+            # This UID will never appear again, so we can remove it and
+            # free some memory
+            self.dns_checked_in_timer_thread.remove(uid)
 
     def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
         """
@@ -836,18 +859,20 @@ class Module(Module, multiprocessing.Process):
                     uid = data['uid']
                     flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
                     domain = flow_data.get('query',False)
+                    answers = flow_data.get('answers',False)
+                    stime = data.get('stime',False)
 
-                    self.check_dns_resolution_without_connection(domain, profileid, twid, uid)
+                    self.check_dns_resolution_without_connection(domain, answers, stime, profileid, twid, uid)
 
             except KeyboardInterrupt:
                 continue
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
+            # except Exception as inst:
+                # exception_line = sys.exc_info()[2].tb_lineno
+                # self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                # self.print(str(type(inst)), 0, 1)
+                # self.print(str(inst.args), 0, 1)
+                # self.print(str(inst), 0, 1)
+                # return True
 
 class TimerThread(threading.Thread):
     """Thread that executes 1 task after N seconds. Only to run the process_global_data."""
