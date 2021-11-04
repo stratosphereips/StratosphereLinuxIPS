@@ -60,7 +60,7 @@ def has_errors(output_file):
 
 @pytest.mark.parametrize("pcap_path,expected_profiles, output_dir, expected_evidence",
                          [('dataset/hide-and-seek-short.pcap',15,'pcap/', 'horizontal port scan to port 23'),
-                          ('dataset/arp-only.pcap',3,'pcap2/','performing ARP scan')])
+                          ('dataset/arp-only.pcap',3,'pcap2/','performing an ARP scan')])
 def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evidence):
     try:
         os.mkdir(output_dir)
@@ -101,7 +101,7 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
 
 @pytest.mark.parametrize("zeek_dir_path,expected_profiles, expected_evidence,  output_dir",
      [('dataset/sample_zeek_files',4,'SSL certificate validation failed with (certificate is not yet valid)','sample_zeek_files/'),
-      ('dataset/sample_zeek_files-2',20,'Horizontal port scan','sample_zeek_files-2/')])
+      ('dataset/sample_zeek_files-2',20,'horizontal port scan','sample_zeek_files-2/')])
 def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,  output_dir):
     import time
     time.sleep(3)
