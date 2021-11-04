@@ -968,10 +968,11 @@ class Database(object):
         }
         """
 
-        # the same evidence is sometimes repeated in the same profileid and different twids,
-        # to avoid this, check for the evidence in all evidence in this profiled, if this evidence is there, don't alert
-        current_evidence = self.getEvidenceForProfileid(profileid)
-        if not current_evidence:
+        # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
+        current_evidence = self.getEvidenceForTW(profileid, twid)
+        if current_evidence:
+            current_evidence = json.loads(current_evidence)
+        else:
             current_evidence = {}
         # Prepare key for a new evidence
         key = dict()
