@@ -40,6 +40,11 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
+    <td>RiskIQ</td>
+    <td>Module to get different information from RiskIQ.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>https</td>
     <td>training&test of RandomForest to detect malicious https flows</td>
     <td>⏳</td>
