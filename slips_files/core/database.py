@@ -1934,6 +1934,10 @@ class Database(object):
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
             for ip in answers:
                 #self.print(f'IP: {ip}')
+                # Make sure it's an ip not a CNAME
+                if not validators.ipv6(ip) or validators.ipv4(ip):
+                    # it is a CNAME, maybe we can use it later
+                    continue
                 # get stored DNS resolution from our db
                 domains = self.get_dns_resolution(ip)
                 # if the domain(query) we have isn't already in DNSresolution in the db, add it
