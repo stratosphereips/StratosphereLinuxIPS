@@ -1974,11 +1974,6 @@ class Database(object):
         else:
             return dns_resolutions
 
-    def get_all_dns_resolutions_for_profileid_twid(self, profileid, twid):
-        # check if we have past resolutions in this profileid twid
-        dns_resolutions = self.r.hgetall(f'{profileid}{self.separator}{twid}{self.separator}DNS_resolutions')
-        return dns_resolutions
-
     def get_last_dns_ts(self):
         """ returns the timestamp of the last DNS resolution slips read """
         dns_resolutions = self.get_all_dns_resolutions()

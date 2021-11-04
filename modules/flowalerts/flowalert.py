@@ -392,8 +392,6 @@ class Module(Module, multiprocessing.Process):
 
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
         if contacted_ips == {}: return
-        # Get an updated list of dns answers
-        # resolutions = __database__.get_all_dns_resolutions_for_profileid_twid(profileid, twid)
         # every dns answer is a list of ips that correspond to a spicific query,
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
