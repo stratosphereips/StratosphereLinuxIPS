@@ -734,8 +734,7 @@ class ProfilerProcess(multiprocessing.Process):
                 if type(self.column_values['answers']) == str:
                     # If the answer is only 1, Zeek gives a string
                     # so convert to a list
-                    temp = []
-                    self.column_values['answers'] = temp.append(self.column_values['answers'])
+                    self.column_values['answers'] =[self.column_values['answers']]
             except IndexError:
                 self.column_values['answers'] = ''
             try:
@@ -1081,8 +1080,7 @@ class ProfilerProcess(multiprocessing.Process):
             if type(self.column_values['answers']) == str:
                 # If the answer is only 1, Zeek gives a string
                 # so convert to a list
-                temp = []
-                self.column_values['answers'] = temp.append(self.column_values['answers'])
+                self.column_values['answers'] = [ self.column_values['answers'] ]
             self.column_values['TTLs'] = line.get('TTLs','')
 
         elif 'http' in  file_type:
@@ -1575,11 +1573,10 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['qclass_name'] = ''
                     self.column_values['rcode_name'] = ''
                     self.column_values['answers'] = ''
-                    if type(answers) == str:
+                    if type(self.column_values['answers']) == str:
                         # If the answer is only 1, Zeek gives a string
                         # so convert to a list
-                        temp = []
-                        answers = temp.append(answers)
+                        self.column_values['answers'] = [self.column_values['answers']]
             elif self.column_values['type'] == 'tls':
                 if line.get('tls', None):
                     try:
@@ -1974,8 +1971,7 @@ class ProfilerProcess(multiprocessing.Process):
                 if type(answers) == str:
                     # If the answer is only 1, Zeek gives a string
                     # so convert to a list
-                    temp = []
-                    answers = temp.append(answers)
+                    answers = [answers]
                 ttls = self.column_values['TTLs']
             elif 'dhcp' in flow_type:
                 # client mac addr and client_addr is optional in zeek, so sometimes it may not be there
