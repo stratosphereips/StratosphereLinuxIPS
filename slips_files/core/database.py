@@ -1953,8 +1953,6 @@ class Database(object):
                 ip_info = json.dumps(ip_info)
                 # we store ALL dns resolutions seen since starting slips in DNSresolution
                 self.r.hset('DNSresolution', ip, ip_info)
-                # also store the resolutions made specifically in this profileid_twid
-                self.r.hset(f'{profileid}{self.separator}{twid}{self.separator}DNS_resolutions', ip, ip_info)
 
     def get_dns_resolution(self, ip, all_info=False):
         """
