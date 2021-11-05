@@ -257,7 +257,6 @@ class Module(Module, multiprocessing.Process):
                 line = json.loads(line)
                 vendor = line['companyName']
                 MAC_info.update({'Vendor': vendor})
-                print(f'@@@@@@@@@@@@@@@@@@  found : {MAC_info} for {mac_addr} {profileid}')
                 break
             line = self.mac_db.readline()
 
