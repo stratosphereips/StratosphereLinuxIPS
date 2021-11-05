@@ -1935,7 +1935,8 @@ class Database(object):
         :param ts: epoch time
         """
         #self.print(f'Set DNS resolution for query {query}, answers {answers}, qtype {qtype_name}')
-        if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' :
+        # don't store queries ending with arpa as dns resolutions, they're reverse dns
+        if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
             for ip in answers:
                 #self.print(f'IP: {ip}')
