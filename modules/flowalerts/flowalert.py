@@ -520,7 +520,6 @@ class Module(Module, multiprocessing.Process):
                         appproto = flow_dict.get('type', '')
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-
                     # Do not check the duration of the flow if the daddr or
                     # saddr is a  multicast.
                     if not ipaddress.ip_address(daddr).is_multicast and not ipaddress.ip_address(saddr).is_multicast:
@@ -555,7 +554,7 @@ class Module(Module, multiprocessing.Process):
 
                     # Detect Connection to multiple ports (for RAT)
                     if proto == 'tcp' and state == 'Established':
-                        dport_name = flow_dict.get('appproto','')
+                        dport_name = appproto
                         if not dport_name:
                             dport_name = __database__.get_port_info(str(dport) + '/' + proto.lower())
                             if dport_name:
@@ -573,10 +572,13 @@ class Module(Module, multiprocessing.Process):
                                 role = 'Client'
                                 type_data = 'IPs'
                                 dst_IPs_ports = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
-                                dstports = list(dst_IPs_ports[daddr]['dstports'])
-                                if len(dstports) > 1:
-                                    description = "Connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
-                                    self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
+                                # make sure we find established connections to this daddr
+                                if daddr in dst_IPs_ports:
+                                    dstports = list(dst_IPs_ports[daddr]['dstports'])
+                                    if len(dstports) > 1:
+                                        description = "Connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
+                                        self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
+
                             # Connection to multiple port to the Source IP. Happens in the mode 'all'
                             elif profileid.split('_')[1] == daddr:
                                 direction = 'Src'
