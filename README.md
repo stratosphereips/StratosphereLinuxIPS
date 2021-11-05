@@ -84,6 +84,22 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
         ./slips.py -c slips.conf -i eno1 -p
 
 
+## If you want to run Slips locally on bare metal
+The easiest way is to use [conda](https://docs.conda.io/en/latest/) for Python environment management. 
+Note that if you want to analyze PCAPs, you need to have either `zeek` or `bro` installed. Check [slips.py](slips.py) and usage of `check_zeek_or_bro` function.
+Slips also needs Redis for interprocess communication, you can either install Redis on bare metal and run `redis-server --daemonize yes` or you can use docker version
+and execute `docker run --rm -d --name slips_redis -p 6379:6379 redis:alpine`.
+```bash
+# clone repository
+git@github.com:stratosphereips/StratosphereLinuxIPS.git && cd StratosphereLinuxIPS
+# create conda environment and download all python dependencies
+conda env create -f conda-environment.yaml
+# activate conda environment
+conda activate slips 
+# and finally run slips
+./slips.py -c slips.conf -f dataset/myfile.pcap
+```
+
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
 
 ## People Involved

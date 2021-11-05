@@ -138,3 +138,6 @@ node_modules/
 
 # compiled yara rules
 modules/leak_detector/yara_rules/compiled
+
+# Ignore all data from Jetbrains IDE
+.idea
