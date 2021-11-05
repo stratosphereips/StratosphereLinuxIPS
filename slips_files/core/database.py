@@ -1936,7 +1936,8 @@ class Database(object):
         :param ts: epoch time
         """
         #self.print(f'Set DNS resolution for query {query}, answers {answers}, qtype {qtype_name}')
-        if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' :
+        # don't store queries ending with arpa as dns resolutions, they're reverse dns
+        if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
             for ip in answers:
                 #self.print(f'IP: {ip}')
@@ -1954,8 +1955,6 @@ class Database(object):
                 ip_info = json.dumps(ip_info)
                 # we store ALL dns resolutions seen since starting slips in DNSresolution
                 self.r.hset('DNSresolution', ip, ip_info)
-                # also store the resolutions made specifically in this profileid_twid
-                self.r.hset(f'{profileid}{self.separator}{twid}{self.separator}DNS_resolutions', ip, ip_info)
 
     def get_dns_resolution(self, ip, all_info=False):
         """
