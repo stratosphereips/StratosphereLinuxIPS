@@ -6,6 +6,7 @@
 		- Add support for whitelisting MAC addresses
 		- Add a new module for getting RiskIQ info
 		- Merge geoip, asn and RDNS modules into a single new module called IP_Info
+		- Add detection for multiple connections to google.com on port 80
 - 0.8
     - Slips
 		- Detect PING sweep scan.
