@@ -21,6 +21,3 @@ class Printer:
 
         vd_text = str(int(verbose) * 10 + int(debug))
         self.output_queue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
-
-    def err(self, e: str):
-        self.print(e, verbose=0)
