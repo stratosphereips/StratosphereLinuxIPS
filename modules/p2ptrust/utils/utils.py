@@ -3,10 +3,8 @@ import configparser
 import ipaddress
 import time
 import json
-from typing import Union, Dict
 
 from slips_files.core.database import __database__
-
 
 # TODO: add outputQueue printing to this file (or remove all prints, they are debug anyway)
 
@@ -14,6 +12,8 @@ from slips_files.core.database import __database__
 #
 # DATA VALIDATION METHODS
 #
+
+
 def validate_ip_address(ip: str) -> bool:
     """
     Make sure that the given string is a valid IP address
@@ -31,7 +31,7 @@ def validate_ip_address(ip: str) -> bool:
     return True
 
 
-def validate_timestamp(timestamp: str) -> Union[int, None]:
+def validate_timestamp(timestamp: str) -> (int, bool):
     """
     Make sure the given string is a timestamp between 0 and now
 
@@ -45,13 +45,13 @@ def validate_timestamp(timestamp: str) -> Union[int, None]:
         int_timestamp = int(timestamp)
     except ValueError:
         print("Timestamp is not a number")
-        return None
+        return 0, False
 
     if int_timestamp > time.time() or int_timestamp < 0:
         print("Invalid timestamp value")
-        return None
+        return 0, False
 
-    return int_timestamp
+    return int_timestamp, True
 
 
 def validate_go_reports(data: str) -> list:
@@ -80,7 +80,7 @@ def validate_go_reports(data: str) -> list:
 # READ DATA FROM REDIS, WRITE DATA TO REDIS
 #
 
-def get_ip_info_from_slips(ip_address: str) -> (float, float):
+def get_ip_info_from_slips(ip_address: str, storage_name: str) -> (float, float):
     """
     Get score and confidence on IP from Slips.
 
@@ -89,22 +89,44 @@ def get_ip_info_from_slips(ip_address: str) -> (float, float):
     """
 
     # poll new info from redis
-    ip_info = __database__.getIPData(ip_address)
+    ip_info = getIPData(ip_address, storage_name)
 
     # There is a bug in the database where sometimes False is returned when key is not found. Correctly, dictionary
     # should be always returned, even if it is empty. This check cannot be simplified to `if not ip_info`, because I
     # want the empty dictionary to be handled by the read data function.
     # TODO: when database is fixed and doesn't return booleans, remove this IF statement
-    if ip_info is False:
+    if ip_info == False:
         return None, None
 
     slips_score, slips_confidence = read_data_from_ip_info(ip_info)
     # check that both values were provided
-    # TODO by Martin: Dita does not handle scenario when only confidence is None, is it intentional?
     if slips_score is None:
         return None, None
 
     return slips_score, slips_confidence
+
+
+def getIPData(ip, storage_name):
+    """
+    Return information about this IP from the IPs has
+    Returns a dictionary
+    We need to separate these three cases:
+    1- IP is in the DB without data
+    2- IP is in the DB with data
+    3- IP is not in the DB
+    """
+    data = __database__.r.hget(storage_name, ip)
+    if data or data == {}:
+        # This means the IP was in the database, with or without data
+        # Convert the data
+        data = json.loads(data)
+        #print(f'In the DB: IP {ip}, and data {data}')
+    else:
+        # The IP was not in the DB
+        data = False
+        #print(f'In the DB: IP {ip}, and data {data}')
+    # Always return a dictionary
+    return data
 
 
 # parse data from redis
@@ -124,20 +146,51 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
         return None, None
 
 
-def save_ip_report_to_db(ip, score, confidence, network_trust, timestamp=None):
+def save_ip_report_to_db(ip, score, confidence, network_trust, storage_name, timestamp=None):
+    # TODO: because of bugs in the database, I can only save this once.
+
     if timestamp is None:
         timestamp = time.time()
 
     report_data = {"score": score, "confidence": confidence, "network_score": network_trust, "timestamp": timestamp}
     wrapped_data = {"p2p4slips": report_data}
 
-    __database__.setInfoForIPs(ip, wrapped_data)
+    # TODO: remove the first call after database is fixed
+    setNewIP(ip, storage_name)
+    setInfoForIPs(ip, wrapped_data, storage_name)
 
+def setNewIP(ip, storage_name):
+    data = getIPData(ip, storage_name)
+    if data is False:
+        __database__.r.hset(storage_name, ip, '{}')
+        __database__.publish('new_ip', ip)
+
+def setInfoForIPs(ip, wrapped_data, storage_name):
+        data = getIPData(ip, storage_name)
+
+        if not data:
+            setNewIP(ip, storage_name)
+            data = getIPData(ip, storage_name)
+
+        for key in iter(wrapped_data):
+            if type(data) == str:
+                data = json.loads(data)
+
+            data_to_store = wrapped_data[key]
+            try:
+                _ = data[key]
+            except KeyError:
+                data[key] = data_to_store
+                newdata_str = json.dumps(data)
+                __database__.r.hset(storage_name, ip, newdata_str)
+                # Publish the changes
+                __database__.r.publish('ip_info_change', ip)
 
 
 #
 # SEND COMMUNICATION TO GO
 #
+
 def build_go_message(message_type: str, key_type: str, key: str, evaluation_type: str, evaluation=None) -> dict:
     """
     Assemble parameters to one dictionary, with keys that are expected by the remote peer.
@@ -191,32 +244,24 @@ def send_evaluation_to_go(ip: str, score: float, confidence: float, recipient: s
     evaluation_raw = build_score_confidence(score, confidence)
     message_raw = build_go_message("report", "ip", ip, "score_confidence", evaluation=evaluation_raw)
 
-    send_message_to_go(ip, recipient, channel_name, message_raw)
+    message_json = json.dumps(message_raw)
+    message_b64 = base64.b64encode(bytes(message_json, "ascii")).decode()
+
+    send_b64_to_go(message_b64, recipient, channel_name)
 
 
 def send_empty_evaluation_to_go(ip: str, recipient: str, channel_name: str) -> None:
     """
-    Creates empty message and sends it to recipient;ip
+    Send empty data to other peer, to show that there is no data here to be shared.
 
     :param ip: The IP that is being reported
     :param recipient: The peer that should receive the report. Use "*" wildcard to broadcast to everyone
     :return: None
     """
+
     message_raw = build_go_message("report", "ip", ip, "score_confidence", evaluation=None)
-    send_message_to_go(ip, recipient, channel_name, message_raw)
 
-
-def send_message_to_go(ip: str, recipient: str, channel_name: str, msg: Dict):
-    """
-    Send raw msg as json and b64 to other peer.
-
-    :param ip: The IP that is being reported
-    :param recipient: The peer that should receive the report. Use "*" wildcard to broadcast to everyone
-    :param channel_name name of channel
-    :param msg dictionary message
-    :return: None
-    """
-    message_json = json.dumps(msg)
+    message_json = json.dumps(message_raw)
     message_b64 = base64.b64encode(bytes(message_json, "ascii")).decode()
 
     send_b64_to_go(message_b64, recipient, channel_name)
