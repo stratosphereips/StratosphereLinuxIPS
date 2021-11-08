@@ -59,6 +59,7 @@ RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
 RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby
 RUN pip3 install ipwhois pytest pytest-xdist yara-python
 RUN pip3 install --ignore-installed six
+RUN pip3 install --upgrade tensorflow==2.4.1
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git \
