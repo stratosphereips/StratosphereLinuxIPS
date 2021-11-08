@@ -38,18 +38,24 @@ RUN pip3 install --upgrade pip
 # To avoid user interaction with tzdata
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install redis using PIP3
-RUN pip3 install wheel redis setuptools validators colorama
-RUN pip3 install maxminddb pandas sklearn urllib3 scipy watchdog
-RUN pip3 install stix2 cabby ipwhois pytest yara-python
-RUN pip3 install slackclient tzlocal psutil pytest-xdist
-RUN pip3 install --ignore-installed six
+
+# Requirements for compiling yara
+RUN apt install -y automake libtool make gcc pkg-config
 
 # Compile and install YARA
-RUN git clone https://github.com/VirusTotal/yara-python yara-python \
-    && cd yara-python \
-    && python3 setup.py build \
-    && python3 setup.py install
+RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
+  && tar -zxf v4.1.3.tar.gz \
+  && cd yara-4.1.3 \
+  && ./bootstrap.sh \
+  && ./configure \
+  && make \
+  && make install
+
+# Install Slips python requirements
+RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
+RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby
+RUN pip3 install ipwhois pytest pytest-xdist yara-python
+RUN pip3 install --ignore-installed six
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git

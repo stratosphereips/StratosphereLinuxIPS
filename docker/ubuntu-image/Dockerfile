@@ -6,6 +6,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Blocking module requirement to avoid using sudo
 ENV IS_IN_A_DOCKER_CONTAINER True
 
+# To disable user interaction when installing libraries
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
@@ -24,6 +27,7 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-pip \
     python3-certifi \
     python3-dev \
+    build-essential \
     file \
     lsof \
     net-tools \
@@ -38,26 +42,28 @@ RUN apt update && apt install -y --no-install-recommends \
 # Upgrade pip3
 RUN pip3 install --upgrade pip
 
+# Requirements for compiling yara
+RUN apt install -y automake libtool make gcc pkg-config
 
-# To avoid user interaction with tzdata
-ENV DEBIAN_FRONTEND=noninteractive
+# Compile and install YARA
+RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
+  && tar -zxf v4.1.3.tar.gz \
+  && cd yara-4.1.3 \
+  && ./bootstrap.sh \
+  && ./configure \
+  && make \
+  && make install
 
-# Install redis using PIP3
+# Install Slips python requirements
 RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
 RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby
 RUN pip3 install ipwhois pytest pytest-xdist yara-python
 RUN pip3 install --ignore-installed six
-RUN pip3 install --upgrade tensorflow==2.4.1
-
-# Compile and install YARA
-RUN git clone https://github.com/VirusTotal/yara-python yara-python \
-    && cd yara-python \
-    && python3 setup.py build \
-    && python3 setup.py install
 
 # Download and unpack Slips.
-RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-RUN cd StratosphereLinuxIPS && chmod 774 slips.py
+RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git \
+    && cd StratosphereLinuxIPS  \
+    && chmod 774 slips.py
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
