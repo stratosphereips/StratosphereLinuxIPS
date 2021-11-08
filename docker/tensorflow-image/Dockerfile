@@ -23,6 +23,7 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-pip \
 	python3-certifi \
 	python3-dev \
+    build-essential \
 	file \
 	lsof \
 	net-tools \
