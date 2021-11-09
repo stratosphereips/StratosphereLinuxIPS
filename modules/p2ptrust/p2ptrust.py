@@ -4,14 +4,15 @@ import platform
 import signal
 import subprocess
 import time
+from typing import Dict
 
 from slips_files.core.database import __database__
 from slips_files.common.abstracts import Module
 
 import modules.p2ptrust.trust.trustdb as trustdb
 from modules.p2ptrust.utils.printer import Printer
-import modules.p2ptrust.trust.trust_model as reputation_model
-import modules.p2ptrust.utils.go_listener as go_listener
+import modules.p2ptrust.trust.base_model as reputation_model
+from modules.p2ptrust.utils.go_director import GoDirector
 import modules.p2ptrust.utils.utils as utils
 
 
@@ -48,7 +49,7 @@ class Trust(Module, multiprocessing.Process):
     def __init__(self,
                  output_queue: multiprocessing.Queue,
                  config: configparser.ConfigParser,
-                 data_dir: str,
+                 data_dir: str = "./",  # TODO by martin: Default value by me. What is correct value?
                  pigeon_port=6668,
                  rename_with_port=False,
                  slips_update_channel="ip_info_change",
@@ -110,29 +111,27 @@ class Trust(Module, multiprocessing.Process):
             # ??
             self.timeout = None
 
+        # Start the db
         __database__.start(self.config)
-        self.pubsub = __database__.r.pubsub()
-        self.pubsub.subscribe(self.slips_update_channel)
-        self.pubsub.subscribe(self.p2p_data_request_channel)
 
         # TODO: do not drop tables on startup
         sql_db_name = data_dir + "trustdb.db"
         if rename_sql_db_file:
             sql_db_name += str(pigeon_port)
         self.trust_db = trustdb.TrustDB(sql_db_name, self.printer, drop_tables_on_startup=True)
-        self.reputation_model = reputation_model.TrustModel(self.printer, self.trust_db, self.config)
+        self.reputation_model = reputation_model.BaseModel(self.printer, self.trust_db, self.config)
 
-        self.go_listener_process = go_listener.GoListener(self.printer,
-                                                          self.trust_db,
-                                                          self.config,
-                                                          self.storage_name,
-                                                          override_p2p=self.override_p2p,
-                                                          report_func=self.process_message_report,
-                                                          request_func=self.respond_to_message_request,
-                                                          gopy_channel=self.gopy_channel,
-                                                          pygo_channel=self.pygo_channel)
-        self.go_listener_process.start()
+        self.go_director = GoDirector(self.printer,
+                                      self.trust_db,
+                                      self.config,
+                                      self.storage_name,
+                                      override_p2p=self.override_p2p,
+                                      report_func=self.process_message_report,
+                                      request_func=self.respond_to_message_request,
+                                      gopy_channel=self.gopy_channel,
+                                      pygo_channel=self.pygo_channel)
 
+        # TODO by martin: redo this if completely
         if self.start_pigeon:
             outfile = open(self.pigeon_logfile, "+w")
             executable = ["/home/dita/ownCloud/m4.semestr/go/src/github.com/stratosphereips/p2p4slips/p2p4slips"]
@@ -153,43 +152,62 @@ class Trust(Module, multiprocessing.Process):
         self.printer.print(text, verbose, debug)
 
     def run(self):
-        try:
-            # Main loop function
-            while True:
-                message = self.pubsub.get_message(timeout=None)
-                # skip control messages, such as subscribe notifications
-                if message['type'] != "message":
-                    continue
+        pubsub = __database__.r.pubsub()
 
-                data = message['data']
+        # callbacks for subscribed channels
+        callbacks = {
+            self.p2p_data_request_channel: self.data_request_callback,
+            self.slips_update_channel: self.update_callback,
+            self.gopy_channel: self.gopy_callback,
+        }
+
+        pubsub.subscribe(**callbacks, ignore_subscribe_messages=True)
+        try:
+            while True:
+                # get_message() also let redis library to take execution time and call subscribed callbacks if needed
+                message = pubsub.get_message()
 
                 # listen to slips kill signal and quit
-                if data == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     self.print("Received stop signal from slips, stopping")
-                    self.trust_db.__del__()
-                    self.go_listener_process.kill()
                     if self.start_pigeon:
                         self.pigeon.send_signal(signal.SIGINT)
-                    return True
 
-                if message["channel"] == self.slips_update_channel:
-                    self.print("IP info was updated in slips for ip: " + data)
-                    self.handle_update(message["data"])
-                    continue
+                    # TODO by martin: this is from Dita, is it correct way how to do it?
+                    self.trust_db.__del__()
+                    break
 
-                if message["channel"] == self.p2p_data_request_channel:
-                    self.handle_data_request(message["data"])
-                    continue
+                time.sleep(0.1)
 
         except KeyboardInterrupt:
-            return True
-        # except Exception as inst:
-        #     self.print('Problem on the run()', 0, 1)
-        #     self.print(str(type(inst)), 0, 1)
-        #     self.print(str(inst.args), 0, 1)
-        #     self.print(str(inst), 0, 1)
-        #     return True
+            pass
 
+        except Exception as e:
+            self.print(f"Exception {e}")
+
+        return True
+
+    def gopy_callback(self, msg: Dict):
+        try:
+            self.go_director.handle_gopy_data(msg["data"])
+        except Exception as e:
+            self.printer.err(f"Exception {e} in gopy_callback")
+
+    def update_callback(self, msg: Dict):
+        try:
+            data = msg["data"]
+            self.print(f"IP info was updated in slips for ip: {data}")
+            self.handle_update(data)
+        except Exception as e:
+            self.printer.err(f"Exception {e} in update_callback")
+
+    def data_request_callback(self, msg: Dict):
+        try:
+            self.handle_data_request(msg["data"])
+        except Exception as e:
+            self.printer.err(f"Exception {e} in data_request_callback")
+
+    # TODO by martin: still need to be checked, I had no time to check this func
     def handle_update(self, ip_address: str) -> None:
         """
         Handle IP scores changing in Slips received from the ip_info_change channel
@@ -239,6 +257,7 @@ class Trust(Module, multiprocessing.Process):
         if score > 0.8 and confidence > 0.6:
             utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
 
+    # TODO by martin: still need to be checked, I had no time to check this func
     def handle_data_request(self, message_data: str) -> None:
         """
         Read data request from Slips and collect the data.
@@ -298,9 +317,7 @@ class Trust(Module, multiprocessing.Process):
             utils.save_ip_report_to_db(ip_address, combined_score, combined_confidence, network_score, self.storage_name)
 
     def respond_to_message_request(self, key, reporter):
-        print("message request in parent was called")
         pass
 
     def process_message_report(self, reporter: str, report_time: int, data: dict):
-        
         pass
