@@ -168,7 +168,7 @@ class Module(Module, multiprocessing.Process):
             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
 
-    def detect_unsolicited_arp(self, profileid, twid, daddr, uid, saddr, ts, dst_mac, src_mac, dst_hw, src_hw):
+    def detect_unsolicited_arp(self, profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw):
         """ Unsolicited ARP is used to update the neighbours' ARP caches but can also be used in ARP spoofing """
         if dst_mac=="ff:ff:ff:ff:ff:ff" and dst_hw=="ff:ff:ff:ff:ff:ff" and src_mac != '' and src_hw != '':
             # We're sure this is unsolicited arp
@@ -180,11 +180,39 @@ class Module(Module, multiprocessing.Process):
             detection_info = profileid.split("_")[1]
             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+            return True
 
 
-    def detect_MITM_ARP_attack(self, profileid, twid, daddr, uid, saddr, ts, dst_mac, src_mac, dst_hw, src_hw):
+    def detect_MITM_ARP_attack(self, profileid, twid, uid, saddr, ts, src_mac):
+        """Detects when a MAC with IP A, is trying to tell others that now that MAC is also for IP B (ARP cache attack)"""
 
-        pass
+        # to test this add these 2 flows to arp.log
+        # {"ts":1636305825.755132,"operation":"request","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"request","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
+
+        #todo will we get FPs when an ip changes?
+        # todo what if the ip of the attacker came to us first and we stored it in the db? the original IP of this src mac is now the IP of the attacker?
+
+        # get the original IP of the src mac from the database
+        original_IP = __database__.get_IP_of_MAC(src_mac)
+        # is this IP trying to tell everyone that it's own mac is now used with another IP?
+        if saddr != original_IP:
+            # From our db we know that:
+            # original_IP has src_MAC
+            # now saddr has src_MAC and saddr isn't the same as original_IP
+            # so this is either a MITM ARP attack or the IP address of this src_mac simply changed
+            # todo how to find out which one is it??
+            confidence = 0.2 # low confidence for now
+            threat_level = 90
+            description = f'performing MITM attack.'
+            # self.print(f'{saddr} is claiming to have {src_mac}')
+            type_evidence = 'MITM-ARP-attack'
+            type_detection = 'ip' #srcip
+            detection_info = profileid.split("_")[1]
+            __database__.setEvidence(type_detection, detection_info, type_evidence,
+                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+            return True
+
 
     def run(self):
         # Main loop function
@@ -214,18 +242,16 @@ class Module(Module, multiprocessing.Process):
                     # The Gratuitous ARP is sent as a broadcast, as a way for a node to announce or update its IP to MAC mapping to the entire network.
                     #  Gratuitous ARP shouldn't be marked as an arp scan
                     is_gratuitous = saddr==daddr and (dst_mac=="ff:ff:ff:ff:ff:ff" or dst_mac=="00:00:00:00:00:00" or dst_mac==src_mac)
-
-                    # keep track of the mac address of each IP
                     if is_gratuitous:
+                        # keep track of the mac address of each IP
                         MAC_info = __database__.get_mac_addr_from_profile(profileid)
                         # store the mac of this profile if we don't already have it in the db
                         if not MAC_info:
                             MAC_info = {'MAC':src_mac }
                             __database__.add_mac_addr_to_profile(profileid, MAC_info)
 
-                        if 'reply' in operation:
-                            # for MITM arp attack, the operation has to be reply and the arp has to be gratuitous
-                            self.detect_MITM_ARP_attack(profileid, twid, daddr, uid, saddr, ts, dst_mac, src_mac, dst_hw, src_hw)
+                        # for MITM arp attack, the arp has to be gratuitous
+                        self.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac)
 
                     if not is_gratuitous:
                         # not gratuitous, may be an ARP scan
@@ -233,7 +259,7 @@ class Module(Module, multiprocessing.Process):
 
                     if 'request' in operation:
                         self.check_dstip_outside_localnet(profileid, twid, daddr, uid, saddr, ts)
-                        self.detect_unsolicited_arp(profileid, twid, daddr, uid, saddr, ts, dst_mac, src_mac, dst_hw, src_hw)
+                        self.detect_unsolicited_arp(profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw)
 
                 # if the tw is closed, remove all its entries from the cache dict
                 if message and message['channel'] == 'tw_closed' and type(message['data'])==str:
