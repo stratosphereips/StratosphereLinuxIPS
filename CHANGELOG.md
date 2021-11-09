@@ -4,10 +4,15 @@
 		- Add module to detect leaks of data in the traffic using YARA rules (works on PCAPs only)
 		- Move RiskIQ api key to a separate file in modules/UpdateManager/api_key_secret
 		- Add support for whitelisting MAC addresses
-		- Add a new module for getting RiskIQ info
+		- Add a new module for getting RiskIQ info like passive DNS etc.
 		- Merge geoip, asn and RDNS modules into a single new module called IP_Info
 		- Add detection for multiple connections to google.com on port 80
-		- Add the know list of TOR exit nodes to the TI list
+		- Add the known list of TOR exit nodes to the TI list
+		- Improve DNS without connection and connection without DNS detections
+		- Update our lists of organizations IPs, used for whitelisting
+		- Improve the printing of evidence and alerts
+		- Add SNI/DNS/RDNS to the IP to 'unknown ports' alerts description
+		- Improve ICMP Sweep detections
 - 0.8
     - Slips
 		- Detect PING sweep scan.
