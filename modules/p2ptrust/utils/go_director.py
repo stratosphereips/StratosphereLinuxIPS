@@ -29,7 +29,6 @@ class GoDirector:
                  gopy_channel: str = "p2p_gopy",
                  pygo_channel: str = "p2p_pygo"):
 
-        # todo what is override_p2p
         if override_p2p and not (report_func and request_func):
             raise Exception("Override_p2p set but not provided appropriate functions")
 
@@ -59,11 +58,9 @@ class GoDirector:
             message_contents = data_dict["message_contents"]
 
             if message_type == "peer_update":
-                # update in peers reliability or IP address.
                 self.process_go_update(message_contents)
 
             elif message_type == "go_data":
-                # a peer request or update
                 self.process_go_data(message_contents)
 
             else:
@@ -76,7 +73,7 @@ class GoDirector:
             self.print("Json from the pigeon doesn't contain expected values")
 
     def process_go_data(self, report: dict) -> None:
-        """Process peer updates, requests and reports sent by the go layer
+        """Process data sent by the go layer
 
         The data is expected to be a list of messages received from go peers. They are parsed and inserted into the
          database. If a message does not comply with the format, the reporter's reputation is lowered.
@@ -110,11 +107,9 @@ class GoDirector:
         message_type, data = self.validate_message(message)
 
         if message_type == "report":
-            # a peer reporting an IP
             self.process_message_report(reporter, report_time, data)
 
         elif message_type == "request":
-            # a peer requesting info about an ip
             self.process_message_request(reporter, report_time, data)
 
         elif message_type == "blame":
@@ -182,8 +177,7 @@ class GoDirector:
         """
         Handle data request from a peer
 
-        Details are read from the request, and response is read from slips database.
-        Response data is formatted as json
+        Details are read from the request, and response is read from slips database. Response data is formatted as json
         and sent to the peer that asked.
 
         :param reporter: The peer that sent the request
@@ -222,6 +216,10 @@ class GoDirector:
         :return: None. Result is saved to the database
         """
 
+        if self.override_p2p:
+            self.report_func(reporter, report_time, data)
+            return
+
         # validate keys in message
         try:
             key = data["key"]
@@ -246,13 +244,6 @@ class GoDirector:
         # validate evaluation type
         if evaluation_type not in self.evaluation_processors:
             self.print("Module can't process given evaluation type")
-            return
-
-        # after making sure that the data received from peers is valid,
-        # pass the report to p2ptrust module
-        # to decide what to do with it
-        if self.override_p2p:
-            self.report_func(reporter, report_time, data)
             return
 
         self.evaluation_processors[evaluation_type](reporter, report_time, key_type, key, evaluation)

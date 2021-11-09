@@ -32,7 +32,7 @@ class Database(object):
                           'dns_info_change', 'tw_closed', 'core_messages',
                           'new_blocking', 'new_ssh', 'new_notice', 'new_url',
                           'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                          'new_service', 'new_arp', 'new_MAC',  'new_blame'}
+                          'new_service', 'new_arp', 'new_MAC'}
 
     """ Database object management """
     def __init__(self):
@@ -1669,19 +1669,17 @@ class Database(object):
             # Now get the data, which should be empty, but just in case
             data = self.getIPData(ip)
 
-        for key in iter(ipdata):
-            data_to_store = ipdata[key]
-            # If there is data previously stored, check if we have this key already
-            try:
-                # We modify value in any case, because there might be new info
-                _ = data[key]
-            except KeyError:
-                # There is no data for they key so far.
-                # Publish the changes
-                self.r.publish('ip_info_change', ip)
-            data[key] = data_to_store
-            newdata_str = json.dumps(data)
-            self.rcache.hset('IPsInfo', ip, newdata_str)
+        new_key = False
+        for key, val in ipdata.items():
+            # If the key is new, we will notify publish notification about that
+            if key not in data:
+                new_key = True
+
+            data[key] = val
+
+        self.rcache.hset('IPsInfo', ip, json.dumps(data))
+        if new_key:
+            self.r.publish('ip_info_change', ip)
 
     def setInfoForFile(self, md5: str, filedata: dict):
         """
@@ -1743,6 +1741,7 @@ class Database(object):
         pubsub = self.r.pubsub()
         pubsub.subscribe(channel, ignore_subscribe_messages=ignore_subscribe_messages)
         return pubsub
+
 
     def publish(self, channel, data):
         """ Publish something """
