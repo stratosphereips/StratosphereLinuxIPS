@@ -1,23 +1,16 @@
-import configparser
-from modules.p2ptrust.trust.trustdb import TrustDB
-from modules.p2ptrust.utils.printer import Printer
+from modules.p2ptrust.trust.model import Model
 
 
-class TrustModel:
+class BaseModel(Model):
     """
-    Model for computing reputations of peers and IP addresses
-
-    This class provides a set of methods that get data from the database and compute a reputation based on that. Methods
+    This class implements a set of methods that get data from the database and compute a reputation based on that. Methods
     from this class are requested by the main module process on behalf on SLIPS, when SLIPS wants to know the network's
     opinion on peer or IP address.
     This class only uses data that is already inserted in the database. It doesn't issue any requests to other peers.
     """
 
-    # TODO: this should be made into an interface, so different models can be easily switched.
-    def __init__(self, printer: Printer, trustdb: TrustDB, config: configparser.ConfigParser):
-        self.printer = printer
-        self.trustdb = trustdb
-        self.config = config
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.reliability_weight = 0.7
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
