@@ -540,6 +540,8 @@ class EvidenceProcess(multiprocessing.Process):
                         except IndexError:
                             #  for timestamps like 2018-03-09 22:57:44.781449+02:00
                             flow_datetime = timestamp[:19]
+                        #  change the date separator to /
+                        flow_datetime = flow_datetime.replace('-','/')
 
                     # Print the evidence in the outprocess
                     evidence_to_log = self.print_evidence(profileid,
