@@ -1211,6 +1211,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['dst_mac'] = line.get('dst_mac', '')
             self.column_values['saddr'] = line.get('orig_h','')
             self.column_values['daddr'] = line.get('resp_h','')
+            self.column_values['dst_hw'] = line.get('resp_hw','')
+            self.column_values['src_hw'] = line.get('orig_hw','')
         elif 'known_services' in file_type:
             self.column_values['type'] = 'known_services'
             self.column_values['saddr'] = line.get('host', '')
@@ -2104,6 +2106,9 @@ class ProfilerProcess(multiprocessing.Process):
                         'daddr': self.column_values['daddr'],
                         'saddr': self.column_values['saddr'],
                         'dst_mac': self.column_values['dst_mac'],
+                        'src_mac': self.column_values['src_mac'],
+                        'dst_hw': self.column_values['dst_hw'],
+                        'src_hw': self.column_values['src_hw'],
                         'ts' : starttime,
                         'profileid' : profileid,
                         'twid' : twid,
