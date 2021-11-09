@@ -24,7 +24,7 @@ copyright = '2021, Stratosphere Laboratory'
 author = 'Stratosphere Laboratory'
 
 # The full version, including alpha/beta/rc tags
-release = '0.8'
+release = '0.8.1'
 
 
 # -- General configuration ---------------------------------------------------
