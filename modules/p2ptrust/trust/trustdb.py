@@ -11,7 +11,6 @@ class TrustDB:
 
         self.printer = printer
 
-        print(db_file)
         self.conn = sqlite3.connect(db_file)
         if drop_tables_on_startup:
             self.print("Dropping tables")
@@ -83,13 +82,10 @@ class TrustDB:
                           "VALUES (?, ?, ?, ?);", parameters)
         self.conn.commit()
 
-    def insert_go_score(self, peerid: str, reliability: float, timestamp: int = None):
+    def insert_go_reliability(self, peerid: str, reliability: float, timestamp: int = None):
         if timestamp is None:
             timestamp = datetime.datetime.now()
-        else:
-            k = 3
-        timestamp = time.time()
-        print("#####################Go score timeout: ", timestamp)
+
         parameters = (peerid, reliability, timestamp)
         self.conn.execute("INSERT INTO go_reliability (peerid, reliability, update_time) "
                           "VALUES (?, ?, ?);", parameters)
@@ -98,7 +94,6 @@ class TrustDB:
     def insert_go_ip_pairing(self, peerid: str, ip: str, timestamp: int = None):
         if timestamp is None:
             timestamp = datetime.datetime.now()
-        timestamp = time.time()
 
         parameters = (ip, peerid, timestamp)
         self.conn.execute("INSERT INTO peer_ips (ipaddress, peerid, update_time) "
