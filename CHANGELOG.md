@@ -1,7 +1,22 @@
+-0.8.1
+	-Slips
+		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
+		- Add module to detect leaks of data in the traffic using YARA rules (works on PCAPs only)
+		- Move RiskIQ api key to a separate file in modules/UpdateManager/api_key_secret
+		- Add support for whitelisting MAC addresses
+		- Add a new module for getting RiskIQ info like passive DNS etc.
+		- Merge geoip, asn and RDNS modules into a single new module called IP_Info
+		- Add detection for multiple connections to google.com on port 80
+		- Add the known list of TOR exit nodes to the TI list
+		- Improve DNS without connection and connection without DNS detections
+		- Update our lists of organizations IPs, used for whitelisting
+		- Improve the printing of evidence and alerts
+		- Add SNI/DNS/RDNS to the IP to 'unknown ports' alerts description
+		- Improve ICMP Sweep detections
 - 0.8
     - Slips
 		- Detect PING sweep scan.
-		- The Threat Intelligence feeds are no assigned a confidence value by default (user can change), so you can establish how each list impact your detection.
+		- The Threat Intelligence feeds are now assigned a confidence value by default (user can change), so you can establish how each list impact your detection.
         - Slips now allows you to re-train the machine learning model for flows with your own traffic. You can extend the current model, or start from scratch.
         - Compute the JA3 hash for all TLS connections using a Zeek script.
         - Use JA3 whitelists as detection in the Threat Intelligence module.
@@ -64,17 +79,17 @@
             - https://raw.githubusercontent.com/kwouffe/cryptonote-hunt/master/nsec/full-results-2019-05-15.json
             - https://raw.githubusercontent.com/craiu/mobiletrackers/master/list.txt
         - Add support for URLs checking in the VirusTotal module. The URLs are also cached for performance improving.
-        - Use the RiskIQ site API to download the IoC lists of Phishing domains (https://api.riskiq.net/pt/v2/articles/indicators).
-        - Use the RiskIQ phishing domains for threat intelligence detection.
+        - Use the RiskIQ site API to download the IoC lists of Phishing domains (https://api.riskiq.net/pt/v2/articles/indicators)
+        - Use the RiskIQ phishing domains for threat intelligence detection
         - Implement read the docs stratospherelinuxips.readthedocs.io
-        - Improve how we read binetflow files.
-        - Add some new test datasets to ./datasets folder.
-        - Add requirements.txt.
+        - Improve how we read binetflow files
+        - Add some new test datasets to ./datasets folder
+        - Add requirements.txt
     - Kalipso
-        - Add Reverse DNS to the 'i' hotkey.
-        - Timewindows have correct time and date in the interface.
-        - Large refactoring of code of whole Kalipso.
-        - Improve the documentation.
+        - Add Reverse DNS to the 'i' hotkey
+        - Timewindows have correct time and date in the interface
+        - Large refactoring of code of whole Kalipso
+        - Improve the documentation
 - 0.7.3
 	- Slips 
 		- Added RDNS module to retrieve reverse DNS of the IP

@@ -35,13 +35,13 @@ tr:nth-child(even) {
     <th>Status</th>
   </tr>
   <tr>
-    <td>asn</td>
-    <td>loads and finds the ASN of each IP</td>
+    <td>IP_Info</td>
+    <td>Finds Geolocation, ASN, RDNS info about IPs and MAC vendors.</td>
     <td>✅</td>
   </tr>
   <tr>
-    <td>geoip</td>
-    <td>finds the country and geolocation information of each IP</td>
+    <td>RiskIQ</td>
+    <td>Module to get different information from RiskIQ.</td>
     <td>✅</td>
   </tr>
   <tr>
@@ -77,6 +77,11 @@ tr:nth-child(even) {
   <tr>
     <td>flowalerts</td>
     <td>module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>leak_detector</td>
+    <td>module to  detect leaks of data in the traffic using YARA rules</td>
     <td>✅</td>
   </tr>
   <tr>

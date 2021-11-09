@@ -9,6 +9,8 @@ import subprocess
 from datetime import datetime
 import ipaddress
 import sys
+import validators
+
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -152,9 +154,17 @@ class Database(object):
         Used when mac adddr
         :param MAC_info: dict containing mac address and vendor info
         """
-        MAC_info = json.loads(MAC_info)
+        # MAC_info = json.dumps(MAC_info)
         # Add the MAC addr and vendor to this profile
         self.r.hmset(profileid, MAC_info)
+
+    def get_mac_addr_from_profile(self,profileid) -> str:
+        """
+        Retuns MAC info about a certain profile, doesn't return the vendor
+        return the mac address or None
+        """
+        MAC_info = self.r.hmget(profileid, 'MAC')[0]
+        return MAC_info
 
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
@@ -191,14 +201,14 @@ class Database(object):
     def getTWsfromProfile(self, profileid):
         """
         Receives a profile id and returns the list of all the TW in that profile
-        Returns a list with data or an empty list
+        Returns a list of tuples (twid, ts) or an empty list
         """
         data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
         return data
 
     def getamountTWsfromProfile(self, profileid):
         """
-        Receives a profile id and returns the list of all the TW in that profile
+        Receives a profile id and returns the number of all the TWs in that profile
         """
         return len(self.r.zrange('tws' + profileid, 0, -1, withscores=True))
 
@@ -256,7 +266,7 @@ class Database(object):
         data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
         return data
 
-    def getTWforScore(self, profileid, time):
+    def getTWofTime(self, profileid, time):
         """
         Return the TW id and the time for the TW that includes the given time.
         The score in the DB is the start of the timewindow, so we should search
@@ -957,6 +967,7 @@ class Database(object):
             'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
         }
         """
+
         # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
@@ -997,6 +1008,26 @@ class Database(object):
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
         return True
 
+    def get_evidence_count(self, evidence_type, profileid, twid):
+        """
+        Returns the number of evidence of this type in this profiled and twid
+        :param evidence_type: PortScan, ThreatIntelligence, C&C channels detection etc..
+        """
+        evidence = self.getEvidenceForTW(profileid, twid)
+        count = 0
+        if evidence:
+            evidence = json.loads(evidence)
+            # evidence is a dict of evidence
+            for ev in evidence:
+                # evidence_description is a dicct with type_detection, detection_info and type_evidence as keys
+                evidence_description = json.loads(ev)
+                # count how many evidence of this specific type (evidence_type)
+                evidence_description = evidence_description['type_evidence']
+                if evidence_type in evidence_description:
+                    count +=1
+        return count
+
+
 
     def deleteEvidence(self,profileid, twid, key):
         """ Delete evidence from the database
@@ -1019,6 +1050,19 @@ class Database(object):
         """ Get the evidence for this TW for this Profile """
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
         return data
+
+    def getEvidenceForProfileid(self,profileid):
+        profile_evidence = {}
+        # get all tws for this profileid
+        timewindows = self.getTWsfromProfile(profileid)
+        for twid,ts in timewindows:
+            # get all evidence in this tw
+            tw_evidence = self.getEvidenceForTW(profileid, twid)
+            if tw_evidence:
+                tw_evidence = json.loads(tw_evidence)
+                profile_evidence.update(tw_evidence)
+        return profile_evidence
+
 
     def checkBlockedProfTW(self, profileid, twid):
         """
@@ -1043,12 +1087,13 @@ class Database(object):
         Add a module label to the flow
         """
         flow = self.get_flow(profileid, twid, uid)
-        if flow:
+        if flow and flow[uid]:
             data = json.loads(flow[uid])
             # here we dont care if add new module lablel or changing existing one
             data['module_labels'][module_name] = module_label
             data = json.dumps(data)
             self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
+
 
     def get_module_labels_from_flow(self, profileid, twid, uid):
         """
@@ -1157,7 +1202,7 @@ class Database(object):
         data = self.getDomainData(domain)
         if data is False:
             # If there is no data about this domain
-            # Set this domain for the first time in the IPsInfo
+            # Set this domain for the first time in the DomainsInfo
             # Its VERY important that the data of the first time we see a domain
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
@@ -1340,9 +1385,13 @@ class Database(object):
         """ Subscribe to channel """
         # For when a TW is modified
         pubsub = self.r.pubsub()
-        supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
-                    'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
-                    'new_blocking', 'new_ssh','new_notice','new_url', 'finished_modules', 'new_downloaded_file', 'reload_whitelist', 'new_service',  'new_arp']
+        supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' ,
+                              'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',
+                              'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change',
+                              'dns_info_change', 'tw_closed', 'core_messages',
+                              'new_blocking', 'new_ssh','new_notice','new_url',
+                              'finished_modules', 'new_downloaded_file', 'reload_whitelist',
+                              'new_service',  'new_arp', 'new_MAC']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 pubsub.subscribe(channel)
@@ -1399,6 +1448,19 @@ class Database(object):
                         dict_flow = json.loads(flow)
                         flows.append(dict_flow)
         return flows
+
+    def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) ->dict:
+        all_flows = self.get_all_flows_in_profileid_twid(profileid,twid)
+        if not all_flows:
+            return {}
+        contacted_ips = {}
+        for uid, flow in all_flows.items():
+            # get the daddr of this flow
+            flow = json.loads(flow)
+            daddr = flow['daddr']
+            contacted_ips[daddr] = uid
+        return contacted_ips
+
 
     def get_flow(self, profileid, twid, uid):
         """
@@ -1520,14 +1582,19 @@ class Database(object):
                 sni_ipdata = []
             SNI_port = {'server_name':server_name, 'dport':dport}
             # We do not want any duplicates.
-            if SNI_port['server_name'] not in sni_ipdata:
+            if SNI_port not in sni_ipdata:
                 # Verify that the SNI is equal to any of the domains in the DNS resolution
                 # only add this SNI to our db if it has a DNS resolution
-                resolved_domains = list(self.get_dns_answers().keys())
-                if SNI_port['server_name'] in resolved_domains:
-                    sni_ipdata.append(SNI_port)
-                    self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
-
+                dns_resolutions = self.r.hgetall('DNSresolution')
+                if dns_resolutions:
+                    # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
+                    for ip, resolution in dns_resolutions.items():
+                        resolution = json.loads(resolution)
+                        if SNI_port['server_name'] in resolution['domains']:
+                            # add SNI to our db as it has a DNS resolution
+                            sni_ipdata.append(SNI_port)
+                            self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
+                            break
             # We are giving only new server_name to the threat_intelligence module.
             data_to_send = {
                 'server_name' : server_name,
@@ -1730,14 +1797,14 @@ class Database(object):
         Save in the DB a port with its description
         :param portproto: portnumber + / + protocol
         """
-        self.r.hset('portinfo', portproto, name)
+        self.rcache.hset('portinfo', portproto, name)
 
     def get_port_info(self, portproto: str):
         """
         Retrieve the name of a port
         :param portproto: portnumber + / + protocol
         """
-        return self.r.hget('portinfo', portproto)
+        return self.rcache.hget('portinfo', portproto)
 
     def add_zeek_file(self, filename):
         """ Add an entry to the list of zeek files """
@@ -1816,18 +1883,6 @@ class Database(object):
         """
         self.rcache.hset('IoC_ips', ip, description)
 
-    def get_ip_confidence(self, ip):
-        """ Get the confidence of an IP from Ioc_ips """
-
-        ip_info = json.loads(self.rcache.hget('IoC_ips', ip))
-        return ip_info['confidence']
-
-    def get_domain_confidence(self, domain):
-        """ Get the confidence of a domain from IoC_domains """
-
-        domain_info = json.loads(self.rcache.hget('IoC_domains', domain))
-        return domain_info['confidence']
-
 
     def add_domain_to_IoC(self, domain: str, description: str) -> None:
         """
@@ -1874,41 +1929,84 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query: str, answers: str):
+    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str, profileid: str, twid: str):
         """
-        Save in DB DNS name for each IP
+        Cache DNS answers for each query
+        stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
+        :param ts: epoch time
         """
-        for ans in answers:
-            # get stored DNS resolution from our db
-            data = self.get_dns_resolution(ans)
-            if query not in data:
-                data.append(query)
-            data = json.dumps(data)
-            self.r.hset('DNSresolution', ans, data)
+        #self.print(f'Set DNS resolution for query {query}, answers {answers}, qtype {qtype_name}')
+        # don't store queries ending with arpa as dns resolutions, they're reverse dns
+        if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
+            # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
+            for ip in answers:
+                #self.print(f'IP: {ip}')
+                # Make sure it's an ip not a CNAME
+                if not validators.ipv6(ip) or validators.ipv4(ip):
+                    # it is a CNAME, maybe we can use it later
+                    continue
+                # get stored DNS resolution from our db
+                domains = self.get_dns_resolution(ip)
+                # if the domain(query) we have isn't already in DNSresolution in the db, add it
+                if query not in domains:
+                    domains.append(query)
+                # domains should be a list, not a string!, so don't use json.dumps here
+                ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
+                ip_info = json.dumps(ip_info)
+                # we store ALL dns resolutions seen since starting slips in DNSresolution
+                self.r.hset('DNSresolution', ip, ip_info)
 
-    def get_dns_resolution(self, ip):
+    def get_dns_resolution(self, ip, all_info=False):
         """
         Get DNS name of the IP, a list
+        :param all_info: if provided returns a dict with {ts: .. , 'answers': .. , 'uid':... } of this IP
+        if not returns answers only
+        this function is called for every IP in the timeline of kalipso
         """
-        data = self.r.hget('DNSresolution', ip)
-        if data:
-            data = json.loads(data)
-            return data
+        ip_info = self.r.hget('DNSresolution', ip)
+        if ip_info:
+            ip_info = json.loads(ip_info)
+            if all_info:
+                # return a dict with 'ts' 'uid' 'answers' about this IP
+                return ip_info
+            # return answers only
+            domains = ip_info['domains']
+
+            return domains
         else:
             return []
+
+    def get_all_dns_resolutions(self):
+        dns_resolutions = self.r.hgetall('DNSresolution')
+        if not dns_resolutions:
+            return []
+        else:
+            return dns_resolutions
+
+    def get_last_dns_ts(self):
+        """ returns the timestamp of the last DNS resolution slips read """
+        dns_resolutions = self.get_all_dns_resolutions()
+        if dns_resolutions:
+            # sort resolutions by ts
+            # k_v is a tuple (key, value) , each value is a serialized json dict.
+            sorted_dns_resolutions = sorted(dns_resolutions.items(), key=lambda k_v: json.loads(k_v[1])['ts'])
+            # return the ts of the last dns resolution in our db
+            last_dns_ts = json.loads(sorted_dns_resolutions[-1][1])['ts']
+            return last_dns_ts
 
     def set_passive_dns(self, ip, data):
         """
         Save in DB passive DNS from virus total
         """
-        data = json.dumps(data)
-        self.r.hset('passiveDNS', ip, data)
+        if data:
+            data = json.dumps(data)
+            self.rcache.hset('passiveDNS', ip, data)
 
     def get_passive_dns(self, ip):
         """
         Get passive DNS from virus total
         """
-        data = self.r.hget('passiveDNS', ip)
+        data = self.rcache.hget('passiveDNS', ip)
         if data:
             data = json.loads(data)
             return data
@@ -1978,14 +2076,14 @@ class Database(object):
 
     def search_Domain_in_IoC(self, domain: str) -> str:
         """
-        Search in the dB of malicious domainss and return a
+        Search in the dB of malicious domains and return a
         description if we found a match
         """
-        domain_description = self.rcache.hget('IoC_domains',domain)
+        domain_description = self.rcache.hget('IoC_domains', domain)
         if domain_description == None:
             # try to match subdomain
             ioc_domains = self.rcache.hgetall('IoC_domains')
-            for malicious_domain,description in ioc_domains.items():
+            for malicious_domain, description in ioc_domains.items():
                 if malicious_domain in domain:
                     return description
             return False
@@ -2076,37 +2174,7 @@ class Database(object):
             data = ''
         return data
 
-    def store_dns_answers(self, query: str, answers: list, profileid_twid: str, ts: float, uid: str):
-        """
-        Cache DNS answers for each query
-        stored as {'query':{ts: .. , 'answers': .. , 'uid':... }}
-        :param ts: epoch time
-        """
-        try:
-            # to avoid duplicates, if key exists update it
-            stored_answers = self.get_dns_answers()
-            # try to get the results os this query
-            answers_dict = json.loads(stored_answers[query])
-            # found results for this query, update them
-            answers_dict.update(
-                            {'ts':ts,
-                             'answers': answers,
-                             'uid': uid})
-            answers_dict = json.dumps(answers_dict)
-        except KeyError:
-            # key doesn't exist
-            answers = json.dumps(answers)
-            answers_dict = json.dumps(
-                                    {'ts':ts,
-                                     'answers': answers,
-                                     'uid': uid})
 
-        # we're storing in dns_answers instead of 'DomainsInfo' because domainsInfo is stored in the cache,
-        self.r.hset('dns_answers', query, answers_dict)
-
-    def get_dns_answers(self):
-        """ Returns dns_answers dict {query: {'ts':..,'answers':serialized answers list, 'uid':...}}"""
-        return self.r.hgetall('dns_answers')
 
 
     def set_asn_cache(self, asn, asn_range) -> None:
@@ -2135,16 +2203,28 @@ class Database(object):
         """ returns a dict with module names as keys and pids as values """
         return self.r.hgetall('PIDs')
 
-    def set_whitelist(self,whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
-        """ Store a dict of whitelisted IPs, domains and organizations in the db """
+    def set_whitelist(self,type, whitelist_dict):
+        """
+        Store the whitelist_dict in the given key
+        :param type: supporte types are IPs, domains and organizations
+        :param whitelist_dict: the dict of IPs, domains or orgs to store
+        """
+        self.r.hset("whitelist" , type, json.dumps(whitelist_dict))
 
-        self.r.hset("whitelist" , "IPs", json.dumps(whitelisted_IPs))
-        self.r.hset("whitelist" , "domains", json.dumps(whitelisted_domains))
-        self.r.hset("whitelist" , "organizations", json.dumps(whitelisted_organizations))
-
-    def get_whitelist(self):
-        """ Return dict of 3 keys: IPs, domains and organizations"""
+    def get_all_whitelist(self):
+        """ Return dict of 3 keys: IPs, domains, organizations or mac"""
         return self.r.hgetall('whitelist')
+
+    def get_whitelist(self, key):
+        """
+        Whitelist supports different keys like : IPs domains and organizations
+        this function is used to check if we have any of the above keys whitelisted
+        """
+        whitelist = self.r.hget('whitelist',key)
+        if whitelist:
+            return json.loads(whitelist)
+        else:
+            return False
 
     def save(self,backup_file):
         """

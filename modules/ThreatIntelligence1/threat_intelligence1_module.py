@@ -45,7 +45,7 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_local_threat_intelligence_data = 'modules/ThreatIntelligence1/local_data_files/'
 
-    def set_evidence_ip(self, ip, uid, timestamp, ip_info: dict, profileid='', twid='', ip_state='ip'):
+    def set_evidence_malicious_ip(self, ip, uid, timestamp, ip_info: dict, profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
         :param source_file: the ip source file
@@ -59,8 +59,14 @@ class Module(Module, multiprocessing.Process):
         confidence = ip_info['confidence']
         if not confidence:
             confidence = 0
-        description = f'{ip_info["source"]}: {ip_info["description"]}'
-        alert = True if float(confidence) > 0.5 else False
+
+        dns_resolution = __database__.get_dns_resolution(ip)
+        dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
+
+        description = f'connection to blacklisted IP {ip}{dns_resolution}. Source: {ip_info["source"]}. Description: {ip_info["description"]}'
+        tags = ip_info.get('tags',False)
+        if tags:
+            description += f' tags={tags}'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
@@ -75,10 +81,12 @@ class Module(Module, multiprocessing.Process):
         detection_info = domain
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
         threat_level = 50
-        confidence = domain_info['confidence']
-        description = f'{domain_info["source"]}: {domain_info["description"]}'
-        alert = True if float(confidence) > 0.5 else False
-
+        # when we comment ti_files and run slips, we get the error of not being able to get feed confidence
+        confidence = domain_info.get('confidence', False)
+        tags = domain_info.get('tags', False)
+        if not confidence:
+            confidence = 0.5
+        description = f'connection to the blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
@@ -464,7 +472,7 @@ class Module(Module, multiprocessing.Process):
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_info = json.loads(ip_info)
                             # Set the evidence on this detection
-                            self.set_evidence_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
+                            self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
                             # set malicious IP in IPInfo
                             self.set_maliciousIP_to_IPInfo(ip, ip_info)
                             # set malicious IP in MaliciousIPs

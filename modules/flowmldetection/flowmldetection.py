@@ -174,6 +174,7 @@ class Module(Module, multiprocessing.Process):
             # we dont see all the protocols
             # Also we dont store the Categorizer because the user can retrain
             # with its own data.
+            dataset.proto = dataset.proto.str.lower()
             dataset.proto = dataset.proto.str.replace(r'(^.*tcp.*$)', '0')
             dataset.proto = dataset.proto.str.replace(r'(^.*udp.*$)', '1')
             dataset.proto = dataset.proto.str.replace(r'(^.*icmp.*$)', '2')
@@ -218,7 +219,7 @@ class Module(Module, multiprocessing.Process):
             return dataset
         except Exception as inst:
             # Stop the timer
-            self.print('Error in process_flows()')
+            self.print('Error in process_features()')
             self.print(type(inst))
             self.print(inst)
 
