@@ -2103,6 +2103,7 @@ class ProfilerProcess(multiprocessing.Process):
                         'uid' : self.column_values['uid'],
                         'daddr': self.column_values['daddr'],
                         'saddr': self.column_values['saddr'],
+                        'dst_mac': self.column_values['dst_mac'],
                         'ts' : starttime,
                         'profileid' : profileid,
                         'twid' : twid,
