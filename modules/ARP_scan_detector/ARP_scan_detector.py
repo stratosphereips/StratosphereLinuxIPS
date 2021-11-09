@@ -183,6 +183,7 @@ class Module(Module, multiprocessing.Process):
 
 
     def detect_MITM_ARP_attack(self, profileid, twid, daddr, uid, saddr, ts, dst_mac, src_mac, dst_hw, src_hw):
+
         pass
 
     def run(self):
@@ -213,10 +214,20 @@ class Module(Module, multiprocessing.Process):
                     # The Gratuitous ARP is sent as a broadcast, as a way for a node to announce or update its IP to MAC mapping to the entire network.
                     #  Gratuitous ARP shouldn't be marked as an arp scan
                     is_gratuitous = saddr==daddr and (dst_mac=="ff:ff:ff:ff:ff:ff" or dst_mac=="00:00:00:00:00:00" or dst_mac==src_mac)
+
+                    # keep track of the mac address of each IP
                     if is_gratuitous:
-                        # check MITM ARP attack
-                        self.detect_MITM_ARP_attack(profileid, twid, daddr, uid, saddr, ts, dst_mac, src_mac, dst_hw, src_hw)
-                    else:
+                        MAC_info = __database__.get_mac_addr_from_profile(profileid)
+                        # store the mac of this profile if we don't already have it in the db
+                        if not MAC_info:
+                            MAC_info = {'MAC':src_mac }
+                            __database__.add_mac_addr_to_profile(profileid, MAC_info)
+
+                        if 'reply' in operation:
+                            # for MITM arp attack, the operation has to be reply and the arp has to be gratuitous
+                            self.detect_MITM_ARP_attack(profileid, twid, daddr, uid, saddr, ts, dst_mac, src_mac, dst_hw, src_hw)
+
+                    if not is_gratuitous:
                         # not gratuitous, may be an ARP scan
                         self.check_arp_scan(profileid, twid, daddr, uid, ts, dst_mac, src_mac)
 
