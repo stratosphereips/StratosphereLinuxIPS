@@ -1,3 +1,8 @@
+-0.8.2
+	-Slips
+		- Detect gratoitous ARP
+		- Detect unsolicited ARP
+		- Detect MITM ARP attack
 -0.8.1
 	-Slips
 		- Add 5 new TI feeds (AmnestyTech domains)
