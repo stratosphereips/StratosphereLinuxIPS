@@ -1,3 +1,8 @@
+-0.8.2
+	-Slips
+		- Detect gratoitous ARP
+		- Detect unsolicited ARP
+		- Detect MITM ARP attack
 -0.8.1
 	-Slips
 		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
