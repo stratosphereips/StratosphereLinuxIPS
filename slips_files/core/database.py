@@ -26,6 +26,14 @@ def timing(f):
     return wrap
 
 class Database(object):
+    supported_channels = {'tw_modified', 'evidence_added', 'new_ip', 'new_flow',
+                          'new_dns', 'new_dns_flow', 'new_http', 'new_ssl', 'new_profile',
+                          'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change',
+                          'dns_info_change', 'tw_closed', 'core_messages',
+                          'new_blocking', 'new_ssh', 'new_notice', 'new_url',
+                          'finished_modules', 'new_downloaded_file', 'reload_whitelist',
+                          'new_service', 'new_arp', 'new_MAC'}
+
     """ Database object management """
     def __init__(self):
         # The name is used to print in the outputprocess
@@ -1684,26 +1692,15 @@ class Database(object):
             urldata = json.dumps(urldata)
             self.rcache.hset('URLsInfo', url, urldata)
 
-
-    def subscribe(self, channel):
+    def subscribe(self, channel: str, ignore_subscribe_messages=False):
         """ Subscribe to channel """
         # For when a TW is modified
-        self.pubsub = self.r.pubsub()
-        supported_channels = ['tw_modified', 'evidence_added', 'new_ip',  'new_flow',
-                              'new_dns', 'new_dns_flow', 'new_http', 'new_ssl', 'new_profile',
-                              'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change',
-                              'dns_info_change', 'tw_closed', 'core_messages',
-                              'new_blocking', 'new_ssh', 'new_notice', 'new_url',
-                              'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                              'new_service',  'new_arp', 'new_MAC', 'new_alert', 'new_smtp']
-        for supported_channel in supported_channels:
-            if supported_channel in channel:
-                self.pubsub.subscribe(channel)
-                break
-        else:
-            # channel isn't in supported_channels
+        if channel not in Database.supported_channels:
             return False
-        return self.pubsub
+
+        pubsub = self.r.pubsub()
+        pubsub.subscribe(channel, ignore_subscribe_messages=ignore_subscribe_messages)
+        return pubsub
 
     def publish(self, channel, data):
         """ Publish something """
