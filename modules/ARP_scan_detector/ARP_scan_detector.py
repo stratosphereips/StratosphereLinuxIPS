@@ -172,15 +172,14 @@ class Module(Module, multiprocessing.Process):
                                  threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
             return True
 
-
     def detect_MITM_ARP_attack(self, profileid, twid, uid, saddr, ts, src_mac):
         """Detects when a MAC with IP A, is trying to tell others that now that MAC is also for IP B (ARP cache attack)"""
 
-        # to test this add these 2 flows to arp.log
+        # to test this add these 2 flows to arp.log, these 2 are gratuitous ARP,
+        # first 172.20.7.40 is claiming to have 2e:a4:18:f8:3d:02 then 172.20.7.41 is claiming to have the same MAC
         # {"ts":1636305825.755132,"operation":"request","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
         # {"ts":1636305825.755132,"operation":"request","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
 
-        #todo will we get FPs when an ip changes?
         # todo what if the ip of the attacker came to us first and we stored it in the db? the original IP of this src mac is now the IP of the attacker?
 
         # get the original IP of the src mac from the database
@@ -191,7 +190,11 @@ class Module(Module, multiprocessing.Process):
             # original_IP has src_MAC
             # now saddr has src_MAC and saddr isn't the same as original_IP
             # so this is either a MITM ARP attack or the IP address of this src_mac simply changed
-            # todo how to find out which one is it??
+
+            # when the ip changes, we read dhcp.log and replace the mac of this profile with the new mac,
+            # so probably there won't be false positives??
+
+            # there was no dhcp assiging a new IP to this src_mac, we're sure it's an attack, alert
             confidence = 0.2 # low confidence for now
             threat_level = 90
             description = f'performing MITM attack.'
