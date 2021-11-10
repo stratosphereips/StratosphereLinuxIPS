@@ -11,6 +11,7 @@
   "dependencies": {
     "ansi-colors": "^4.1.1",
     "async": "^3.2.2",
+    "chalk": "~3.0.0",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.10.1",
     "fs": "^0.0.1-security",
