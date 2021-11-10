@@ -46,3 +46,5 @@ geo country and Virus Total summary.
 - q (*kalipso_screen.js*) - exit the hotkey
 - ESC (*kalipso_screen.js*) - exit Kalipso
   
+## Setup
+Install required NPM packages `npm install` and then start it up `npm run start`.

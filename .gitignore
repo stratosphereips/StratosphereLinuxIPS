@@ -129,7 +129,6 @@ logs/
 *.xml
 .idea/StratosphereLinuxIPS.iml
 dump.rdb
-package-lock.json
 modules/blessed/node_modules/
 alerts.*
 nohup.out
@@ -141,3 +140,9 @@ modules/leak_detector/yara_rules/compiled
 
 # Ignore all data from Jetbrains IDE
 .idea
+
+# ignore logs from pigeon
+pigeon_logs
+
+# ignore trustdb
+trustdb.db
