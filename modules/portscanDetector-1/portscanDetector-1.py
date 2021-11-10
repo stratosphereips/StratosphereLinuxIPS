@@ -1,8 +1,13 @@
+
+# Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
-import datetime
 import sys
+
+# Your imports
+import ipaddress
+import datetime
 
 # Port Scan Detector Process
 class PortScanProcess(Module, multiprocessing.Process):
@@ -58,8 +63,9 @@ class PortScanProcess(Module, multiprocessing.Process):
     def check_horizontal_portscan(self, profileid, twid):
 
         saddr = profileid.split(self.fieldseparator)[1]
-        if saddr=='255.255.255.255':
-            # don't report port scans on the broadcast address
+        saddr_obj = ipaddress.ip_address(saddr)
+        if saddr=='255.255.255.255' or saddr_obj.is_multicast :
+            # don't report port scans on the broadcast or multicast addresses
             return False
 
         # Get the list of dports that we connected as client using TCP not established
