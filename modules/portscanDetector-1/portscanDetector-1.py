@@ -56,6 +56,12 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def check_horizontal_portscan(self, profileid, twid):
+
+        saddr = profileid.split(self.fieldseparator)[1]
+        if saddr=='255.255.255.255':
+            # don't report port scans on the broadcast address
+            return False
+
         # Get the list of dports that we connected as client using TCP not established
         direction = 'Dst'
         state = 'NotEstablished'
@@ -110,7 +116,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         # Between 3 and 10 pkts compute a kind of linear grow
                         confidence = pkts_sent / 10.0
                     # Description
-                    description = f'new horizontal port scan to port {dport}/{protocol}. Not Established. From IP: {profileid.split(self.fieldseparator)[1]}. Tot pkts sent all IPs: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
+                    description = f'new horizontal port scan to port {dport}/{protocol}. Not Established. From IP: {saddr}. Tot pkts sent all IPs: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
                     uid = next(iter(dstips.values()))['uid'] # first uid in the dictionary
                     timestamp = next(iter(dstips.values()))['stime']
                     __database__.setEvidence(type_detection, detection_info,type_evidence,
