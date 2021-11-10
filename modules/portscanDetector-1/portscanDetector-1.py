@@ -63,10 +63,15 @@ class PortScanProcess(Module, multiprocessing.Process):
     def check_horizontal_portscan(self, profileid, twid):
 
         saddr = profileid.split(self.fieldseparator)[1]
-        saddr_obj = ipaddress.ip_address(saddr)
-        if saddr=='255.255.255.255' or saddr_obj.is_multicast :
-            # don't report port scans on the broadcast or multicast addresses
-            return False
+        try:
+            saddr_obj = ipaddress.ip_address(saddr)
+            if saddr=='255.255.255.255' or saddr_obj.is_multicast :
+                # don't report port scans on the broadcast or multicast addresses
+                return False
+        except ValueError:
+            # is an ipv6
+            pass
+
 
         # Get the list of dports that we connected as client using TCP not established
         direction = 'Dst'
