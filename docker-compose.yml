@@ -1,0 +1,7 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:alpine
+    container_name: slips_redis
+    ports:
+      - "6379:6379"
