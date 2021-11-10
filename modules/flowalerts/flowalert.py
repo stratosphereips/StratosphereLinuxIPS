@@ -353,7 +353,7 @@ class Module(Module, multiprocessing.Process):
                 self.connections_checked_in_timer_thread.append(uid)
                 params = [daddr, twid, profileid, timestamp, uid]
                 #self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
-                timer = TimerThread(5, self.check_connection_without_dns_resolution, params)
+                timer = TimerThread(15, self.check_connection_without_dns_resolution, params)
                 timer.start()
             elif uid in self.connections_checked_in_timer_thread:
                 # It means we already checked this conn with the Timer process
@@ -412,7 +412,7 @@ class Module(Module, multiprocessing.Process):
             self.dns_checked_in_timer_thread.append(uid)
             params = [ domain, answers, timestamp, profileid, twid, uid]
             #self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
-            timer = TimerThread(5, self.check_dns_resolution_without_connection, params)
+            timer = TimerThread(15, self.check_dns_resolution_without_connection, params)
             timer.start()
         elif uid in self.dns_checked_in_timer_thread:
             # It means we already checked this dns with the Timer process
