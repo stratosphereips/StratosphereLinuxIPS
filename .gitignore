@@ -147,3 +147,10 @@ modules/CESNET/warden.conf
 
 # For RisqIQ credentinals
 credentials
+
+
+# ignore logs from pigeon
+pigeon_logs
+
+# ignore trustdb
+trustdb.db
