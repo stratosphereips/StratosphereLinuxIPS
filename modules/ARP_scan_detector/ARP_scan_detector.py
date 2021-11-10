@@ -49,6 +49,8 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
+        # Threshold to use to detect a port scan. How many ARP minimum are required?
+        self.arp_scan_threshold = 5
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -104,7 +106,7 @@ class Module(Module, multiprocessing.Process):
         # get the keys of cache_arp_requests in a list
         profileids_twids = list(cached_requests.keys())
         # The minimum amount of ARP packets to send to be considered as scan is 3
-        if len(profileids_twids) >=3:
+        if len(profileids_twids) >= self.arp_scan_threshold:
             # check if these requests happened within 30 secs
             # get the first and the last request of the 10
             first_daddr = profileids_twids[0]
