@@ -53,7 +53,7 @@ class Module(Module, multiprocessing.Process):
         :param timestamp: Exact time when the evidence happened
         :param ip_info: is all the info we have about that IP in the db source, confidence, description, etc.
         :param profileid: profile where the alert was generated. It includes the src ip
-        :param twid: name of the timewindow when it happened. 
+        :param twid: name of the timewindow when it happened.
         :param ip_state: If the IP was a srcip or dstip
         '''
 
@@ -81,7 +81,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, profileid='', twid=''):
+    def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, is_subdomain, profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
         :param source_file: is the domain source file
@@ -91,7 +91,14 @@ class Module(Module, multiprocessing.Process):
         type_detection = 'dstdomain'
         detection_info = domain
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
-        confidence = 1
+        # in case of finding a subdomain in our blacklists
+        # print that in the description of the alert and change the confidence accordingly
+        if is_subdomain:
+            confidence = 0.7
+            type = 'sub-domain in this domain'
+        else:
+            confidence = 1
+            type = 'domain'
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
         threat_level = domain_info.get('threat_level', False)
         tags = domain_info.get('tags', False)
@@ -472,7 +479,7 @@ class Module(Module, multiprocessing.Process):
                     # IP is the IP that we want the TI for. It can be a SRC or DST IP
                     ip = data.get('ip')
                     # ip_state will say if it is a srcip or if it was a dst_ip
-                    ip_state = data.get('ip_state') 
+                    ip_state = data.get('ip_state')
                     #self.print(ip)
 
                     # If given an IP, ask for it
@@ -498,11 +505,11 @@ class Module(Module, multiprocessing.Process):
                         domain = data.get('host') or data.get('server_name') or data.get('query')
                         if domain:
                             # Search for this domain in our database of IoC
-                            domain_info = __database__.search_Domain_in_IoC(domain)
+                            domain_info, is_subdomain= __database__.search_Domain_in_IoC(domain)
                             if domain_info != False: # Dont change this condition. This is the only way it works
                                 # If the domain is in the blacklist of IoC. Set an evidence
                                 domain_info = json.loads(domain_info)
-                                self.set_evidence_domain(domain, uid, timestamp, domain_info, profileid, twid)
+                                self.set_evidence_domain(domain, uid, timestamp, domain_info, is_subdomain, profileid, twid)
                                 # set malicious domain in DomainInfo
                                 self.set_maliciousDomain_to_DomainInfo(domain, domain_info)
                                 # set malicious domain in MaliciousDomains
