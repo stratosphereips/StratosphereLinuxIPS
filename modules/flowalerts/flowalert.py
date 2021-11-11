@@ -144,7 +144,7 @@ class Module(Module, multiprocessing.Process):
         type_detection = ip_state
         detection_info = ip
         type_evidence = 'LongConnection'
-        threat_level = 10
+        threat_level = 0.5
         confidence = 0.5
         ip_identification = __database__.getIPIdentification(ip)
         description = 'Long Connection ' + str(duration) + f'. {ip_identification}'
@@ -209,7 +209,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid):
+    def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid, timestamp):
         """
         Check if a duration of the connection is
         above the threshold (more than 25 minutess by default).
@@ -227,6 +227,7 @@ class Module(Module, multiprocessing.Process):
                                                   uid,
                                                   module_name,
                                                   module_label)
+            self.set_evidence_long_connection(daddr, dur, profileid, twid, uid, timestamp, ip_state='ip')
         else:
             # set "flowalerts-long-connection:normal" label in the flow (needed for Ensembling module)
             module_name = "flowalerts-long-connection"
@@ -651,7 +652,7 @@ class Module(Module, multiprocessing.Process):
                     # Do not check the duration of the flow if the daddr or
                     # saddr is multicast.
                     if not ipaddress.ip_address(daddr).is_multicast and not ipaddress.ip_address(saddr).is_multicast:
-                        self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
+                        self.check_long_connection(dur, daddr, saddr, profileid, twid, uid, timestamp)
 
                     # --- Detect unknown destination ports ---
                     if dport:
