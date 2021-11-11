@@ -208,13 +208,17 @@ class Module(Module, multiprocessing.Process):
         total = response.get('total',0)
         score = f'{positives}/{total}'
         self.counter += 1
-        if positives >= 3:
+        if positives:
+            # set the confidence based on the number of AVs marked this file as malicious
+            if positives ==1: confidence =  0.1
+            elif positives ==2: confidence =  0.5
+            elif positives >= 3: confidence = 1
+
             # consider it malicious and alert
             type_detection = 'file'
             detection_info = md5
             type_evidence = "MaliciousDownloadedFile"
             threat_level = 80
-            confidence = 1
             description =  f'Malicious downloaded file {md5} size: {size} from IP: {saddr} Score: {score}'
             if not twid:
                 twid = ''
