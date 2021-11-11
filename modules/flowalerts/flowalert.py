@@ -152,7 +152,7 @@ class Module(Module, multiprocessing.Process):
         Set evidence for self signed certificates.
         '''
         confidence = 0.5
-        threat_level = 30
+        threat_level = 0.3
         type_detection = 'dstip'
         type_evidence = 'SelfSignedCertificate'
         detection_info = ip
@@ -194,7 +194,7 @@ class Module(Module, multiprocessing.Process):
         Set evidence for Invalid SSL certificates.
         '''
         confidence = 0.5
-        threat_level = 20
+        threat_level =  0.2
         type_detection  = 'dstip'
         type_evidence = 'InvalidCertificate'
         detection_info = ip
@@ -294,7 +294,7 @@ class Module(Module, multiprocessing.Process):
         if not port_info and not 'icmp' in proto and not self.is_p2p(dport, proto, daddr):
             # we don't have info about this port
             confidence = 1
-            threat_level = 10
+            threat_level = 0.6
             type_detection  = 'dport'
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
@@ -311,7 +311,7 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_for_port_0_scanning(self, saddr, daddr, direction, profileid, twid, uid, timestamp):
         """ :param direction: 'source' or 'destination' """
         confidence = 0.8
-        threat_level = 20
+        threat_level =  0.5
         type_detection  = 'srcip' if direction == 'source' else 'dstip'
         type_evidence = 'Port0Scanning'
         detection_info = saddr if direction == 'source' else daddr
@@ -363,7 +363,7 @@ class Module(Module, multiprocessing.Process):
                 # (we waited 5 seconds for the dns to arrive after the connection was made)
                 # but still no dns resolution for it. So now alert
                 #self.print(f'Alerting after timer conn without dns on {daddr}, uid {uid}. time {datetime.datetime.now()}')
-                threat_level = 30
+                threat_level = 0.9
                 type_detection  = 'dstip'
                 type_evidence = 'ConnectionWithoutDNS'
                 detection_info = daddr
@@ -380,7 +380,6 @@ class Module(Module, multiprocessing.Process):
                 # This UID will never appear again, so we can remove it and
                 # free some memory
                 self.connections_checked_in_timer_thread.remove(uid)
-
 
     def check_dns_resolution_without_connection(self, domain, answers, timestamp, profileid, twid, uid):
         """
@@ -422,7 +421,7 @@ class Module(Module, multiprocessing.Process):
             # (we waited 5 seconds for the connection to arrive after the dns was made)
             # but still no connection for it. So now alert
             confidence = 0.8
-            threat_level = 30
+            threat_level = 0.3
             type_detection  = 'dstdomain'
             type_evidence = 'DNSWithoutConnection'
             detection_info = domain
@@ -777,7 +776,7 @@ class Module(Module, multiprocessing.Process):
                             # Vertical port scan
                             # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
                             confidence = 1
-                            threat_level = 60
+                            threat_level = 0.6
                             # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
                             description = 'password guessing by Zeek enegine. ' + msg
                             type_evidence = 'Password_Guessing'

@@ -52,7 +52,7 @@ class Module(Module, multiprocessing.Process):
             type_detection = 'user_agent'
             detection_info = user_agent
             type_evidence = 'SuspiciousUserAgent'
-            threat_level = 20
+            threat_level =  0.6
             confidence = 1
             description = f'Suspicious user agent: {user_agent} from host {host}{uri}'
             if not twid:

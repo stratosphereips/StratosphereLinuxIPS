@@ -122,7 +122,7 @@ class Module(Module, multiprocessing.Process):
             if self.diff <= 30.00:
                 # we are sure this is an arp scan
                 confidence = 0.8
-                threat_level = 60
+                threat_level = 0.7
                 description = f'performing an ARP scan. Threat level {threat_level}. Confidence {confidence}.'
                 type_evidence = 'ARPScan'
                 type_detection = 'ip' #srcip
@@ -150,8 +150,8 @@ class Module(Module, multiprocessing.Process):
         local_net = saddr.split('.')[0]
         if not daddr.startswith(local_net):
             # comes here if the IP isn't in any of the local networks
-            confidence = 0.8
-            threat_level = 50
+            confidence = 0.6
+            threat_level =  0.7
             description = f'sending ARP packet to a destination address outside of local network: {daddr}'
             type_evidence = 'ARPScan'
             type_detection = 'ip' #srcip
