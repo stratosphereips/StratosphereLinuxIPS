@@ -367,11 +367,7 @@ class Module(Module, multiprocessing.Process):
                 type_detection  = 'dstip'
                 type_evidence = 'ConnectionWithoutDNS'
                 detection_info = daddr
-                # assume the min number of evidence of this type(in the same profileid_twid) is 0, max is 100
-                # we want to get this on a scale from 0 to 1
-                evidence_count = __database__.get_evidence_count(type_evidence, profileid, twid)
-                # the more the evidence of this type the more confident we are
-                confidence = 1/100*evidence_count
+                confidence = 0.8
                 description = f'a connection without DNS resolution to IP: {daddr}'
                 if not twid:
                     twid = ''
