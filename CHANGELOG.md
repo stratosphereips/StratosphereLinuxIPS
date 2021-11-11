@@ -1,6 +1,7 @@
 -0.8.1
 	-Slips
 		- Add 5 new TI feeds (AmnestyTech domains)
+		- The Threat Intelligence feeds are now assigned a threat level instead of confidence value by default (user can change), so you can establish how each list impact your detection.
 		
 -0.8.1
 	-Slips
