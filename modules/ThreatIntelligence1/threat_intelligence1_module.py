@@ -60,11 +60,10 @@ class Module(Module, multiprocessing.Process):
         type_detection = ip_state
         detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
-        threat_level = 80
-        confidence = ip_info['confidence']
-        if not confidence:
-            confidence = 0
-
+        threat_level = ip_info['threat_level']
+        if not threat_level:
+            threat_level = 80
+        confidence = 1
         dns_resolution = __database__.get_dns_resolution(ip)
         dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
 
@@ -92,12 +91,12 @@ class Module(Module, multiprocessing.Process):
         type_detection = 'dstdomain'
         detection_info = domain
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
-        threat_level = 50
-        # when we comment ti_files and run slips, we get the error of not being able to get feed confidence
-        confidence = domain_info.get('confidence', False)
+        confidence = 1
+        # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
+        threat_level = domain_info.get('threat_level', False)
         tags = domain_info.get('tags', False)
-        if not confidence:
-            confidence = 0.5
+        if not threat_level:
+            threat_level =  50
         description = f'connection to the blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
@@ -252,21 +251,21 @@ class Module(Module, multiprocessing.Process):
                         ip_address = ipaddress.IPv4Address(data)
                         # Is IPv4!
                         # Store the ip in our local dict
-                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name, 'confidence':1})
+                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name, 'threat_level':1})
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
                         try:
                             ip_address = ipaddress.IPv6Address(data)
                             # Is IPv6!
                             # Store the ip in our local dict
-                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name, 'confidence':1})
+                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name, 'threat_level':1})
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
                             if validators.domain(data):
                                 domain = data
                                 # Store the ip in our local dict
-                                malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name, 'confidence':1})
+                                malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name, 'threat_level':1})
                             else:
                                 self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 0, 2)
                                 continue
