@@ -1,5 +1,9 @@
 -0.8.1
 	-Slips
+		- Add 5 new TI feeds (AmnestyTech domains)
+		
+-0.8.1
+	-Slips
 		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
 		- Add module to detect leaks of data in the traffic using YARA rules (works on PCAPs only)
 		- Move RiskIQ api key to a separate file in modules/UpdateManager/api_key_secret
