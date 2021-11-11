@@ -138,7 +138,9 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         type_evidence = 'LongConnection'
         threat_level = 0.5
-        confidence = 0.5
+        # the confidence depends on how long the connection
+        # scale the confidence from 0 to 1, 1 means 24 hours long
+        confidence = 1/(3600*24)*(duration-3600*24)+1
         description = 'Long Connection ' + str(duration)
         if not twid:
             twid = ''
