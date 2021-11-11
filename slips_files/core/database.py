@@ -2079,21 +2079,25 @@ class Database(object):
                 pass
         return timestamp
 
-    def search_Domain_in_IoC(self, domain: str) -> str:
+    def search_Domain_in_IoC(self, domain: str) -> tuple:
         """
         Search in the dB of malicious domains and return a
         description if we found a match
+        returns a tuple (description, is_subdomain)
+        description: description of the subdomain if found
+        bool: True if we found a match for exactly the given domain False if we matched a subdomain
         """
         domain_description = self.rcache.hget('IoC_domains', domain)
         if domain_description == None:
             # try to match subdomain
             ioc_domains = self.rcache.hgetall('IoC_domains')
             for malicious_domain, description in ioc_domains.items():
+                #  if the we contacted images.google.com and we have google.com in our blacklists, we find a match
                 if malicious_domain in domain:
-                    return description
-            return False
+                    return description, True
+            return False, False
         else:
-            return domain_description
+            return domain_description, False
 
     def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
         """

@@ -69,7 +69,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, profileid='', twid=''):
+    def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, is_subdomain, profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
         :param source_file: is the domain source file
@@ -79,13 +79,20 @@ class Module(Module, multiprocessing.Process):
         type_detection = 'dstdomain'
         detection_info = domain
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
-        confidence = 1
+        # in case of finding a subdomain in our blacklists
+        # print that in the description of the alert and change the confidence accordingly
+        if is_subdomain:
+            confidence = 0.7
+            type = 'sub-domain in this domain'
+        else:
+            confidence = 1
+            type = 'domain'
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
         threat_level = domain_info.get('threat_level', False)
         tags = domain_info.get('tags', False)
         if not threat_level:
             threat_level =  50
-        description = f'connection to the blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
+        description = f'connection to a blacklisted {type} {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
@@ -479,11 +486,11 @@ class Module(Module, multiprocessing.Process):
 
                     if domain:
                         # Search for this domain in our database of IoC
-                        domain_info = __database__.search_Domain_in_IoC(domain)
+                        domain_info, is_subdomain = __database__.search_Domain_in_IoC(domain)
                         if domain_info != False: # Dont change this condition. This is the only way it works
                             # If the domain is in the blacklist of IoC. Set an evidence
                             domain_info = json.loads(domain_info)
-                            self.set_evidence_domain(domain, uid, timestamp, domain_info, profileid, twid)
+                            self.set_evidence_domain(domain, uid, timestamp, domain_info, is_subdomain, profileid, twid)
                             # set malicious domain in DomainInfo
                             self.set_maliciousDomain_to_DomainInfo(domain, domain_info)
                             # set malicious domain in MaliciousDomains
