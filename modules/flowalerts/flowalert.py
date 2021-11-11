@@ -430,7 +430,7 @@ class Module(Module, multiprocessing.Process):
             # free some memory
             self.dns_checked_in_timer_thread.remove(uid)
 
-    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
+    def set_evidence_malicious_JA3(self, daddr, profileid, twid, description, uid, timestamp, threat_level):
         """
         :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
         """
@@ -441,6 +441,7 @@ class Module(Module, multiprocessing.Process):
         else:
             type_evidence = 'MaliciousJA3'
         detection_info = daddr
+        confidence = 1
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
@@ -821,18 +822,16 @@ class Module(Module, multiprocessing.Process):
                                 description = malicious_ja3_dict['description']
                                 tags = malicious_ja3_dict['tags']
                                 description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description} [{tags}]'
-                                confidence = malicious_ja3_dict['confidence']
-                                alert = True if float(confidence) > 0.5 else False
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
+                                threat_level = malicious_ja3_dict['threat_level']
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
 
                             if ja3s in malicious_ja3_dict:
                                 malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3s])
                                 description = malicious_ja3_dict['description']
                                 tags = malicious_ja3_dict['tags']
                                 description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description} [{tags}]'
-                                confidence = malicious_ja3_dict['confidence']
-                                alert = True if float(confidence) > 0.5 else False
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
+                                threat_level = malicious_ja3_dict['threat_level']
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
 
                 # ---------------------------- new_service channel
                 elif message['channel'] == 'new_service':
