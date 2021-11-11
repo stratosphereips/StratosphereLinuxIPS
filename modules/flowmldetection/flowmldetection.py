@@ -346,8 +346,8 @@ class Module(Module, multiprocessing.Process):
         """
         Set the evidence that a flow was detected as malicious
         """
-        confidence = 0.6
-        threat_level = 30
+        confidence =  0.1
+        threat_level = 0.2
         type_detection  = 'flow'
         detection_info = str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
         type_evidence = 'MaliciousFlow'
