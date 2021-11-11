@@ -342,6 +342,17 @@ class Module(Module, multiprocessing.Process):
         #if __database__.get_dhcp_servers(daddr):
             #continue
 
+        # to avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
+        # after starting slips because the dns may have happened before starting slips
+        if '-i' in sys.argv:
+            start_time = __database__.get_slips_start_time()
+            now = datetime.datetime.now()
+            diff = now - start_time
+            diff = diff.seconds
+            if not int(diff) >= 120:
+                # less than 2 minutes have passed
+                return False
+
         answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
         if not answers_dict:
             #self.print(f'No DNS resolution in {answers_dict}')
@@ -393,16 +404,15 @@ class Module(Module, multiprocessing.Process):
         Makes sure all cached DNS answers are used in contacted_ips
         :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
-
         # Ignore some domains
         ## - All reverse dns resolutions
         ## - All .local domains
         ## - The wildcard domain *
         ## - Subdomains of cymru.com, since it is used by the ipwhois library to get the ASN of an IP and its range.
-        ## - Domains check from Chrome, like xrvwsrklpqrw 
+        ## - Domains check from Chrome, like xrvwsrklpqrw
         ## - The WPAD domain of windows
         if 'arpa' in domain or '.local' in domain or '*' in domain or '.cymru.com' in domain[-10:] or len(domain.split('.')) == 1 or domain == 'WPAD':
-            return False 
+            return False
 
         # One DNS query may not be answered exactly by UID, but the computer can re-ask the donmain, and the next DNS resolution can be
         # answered. So dont check the UID, check if the domain has an IP
@@ -411,7 +421,7 @@ class Module(Module, multiprocessing.Process):
 
         # It can happen that this domain was already resolved previously, but with other IPs
         # So we get from the DB all the IPs for this domain first and append them to the answers
-        # This happens, for example, when there is 1 DNS resolution with A, then 1 DNS resolution 
+        # This happens, for example, when there is 1 DNS resolution with A, then 1 DNS resolution
         # with AAAA, and the computer chooses the A address. Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
 
@@ -428,7 +438,7 @@ class Module(Module, multiprocessing.Process):
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
         # If contacted_ips is empty it can be because we didnt read yet all the flows.
         # This is automatically captured later in the for loop and we start a Timer
-        
+
         # every dns answer is a list of ips that correspond to a spicific query,
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
@@ -553,7 +563,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
+    def set_evidence_malicious_JA3(self, daddr, profileid, twid, description, uid, timestamp, threat_level):
         """
         :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
         """
@@ -564,6 +574,7 @@ class Module(Module, multiprocessing.Process):
         else:
             type_evidence = 'MaliciousJA3'
         detection_info = daddr
+        confidence = 1
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
@@ -788,7 +799,7 @@ class Module(Module, multiprocessing.Process):
                                                 break
                                     self.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
-                # --- Detect successful SSH connections --- 
+                # --- Detect successful SSH connections ---
                 elif message['channel'] == 'new_ssh' :
                     self.check_ssh(message)
 
@@ -912,21 +923,17 @@ class Module(Module, multiprocessing.Process):
                                 malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3])
                                 description = malicious_ja3_dict['description']
                                 tags = malicious_ja3_dict['tags']
-                                ip_identification = __database__.getIPIdentification(daddr)
-                                description = f'Malicious JA3: {ja3} to daddr {daddr}. {ip_identification}. Description: {description} [{tags}]'
-                                confidence = malicious_ja3_dict['confidence']
-                                alert = True if float(confidence) > 0.5 else False
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
+                                description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description} [{tags}]'
+                                threat_level = malicious_ja3_dict['threat_level']
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
 
                             if ja3s in malicious_ja3_dict:
                                 malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3s])
                                 description = malicious_ja3_dict['description']
                                 tags = malicious_ja3_dict['tags']
-                                ip_identification = __database__.getIPIdentification(daddr)
-                                description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr}. {ip_identification}. Description: {description} [{tags}]'
-                                confidence = malicious_ja3_dict['confidence']
-                                alert = True if float(confidence) > 0.5 else False
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
+                                description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description} [{tags}]'
+                                threat_level = malicious_ja3_dict['threat_level']
+                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
 
                 # --- Learn ports that Zeek knows but Slips doesn't ---
                 elif message['channel'] == 'new_service':
