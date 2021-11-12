@@ -299,7 +299,10 @@ class Module(Module, multiprocessing.Process):
         """ Checks dports that are not in our modules/timeline/services.csv file"""
 
         port_info = __database__.get_port_info(f'{dport}/{proto}')
-        if not port_info and not 'icmp' in proto and not self.is_p2p(dport, proto, daddr):
+        if (not port_info
+            and not 'icmp' in proto
+            and not self.is_p2p(dport, proto, daddr)
+            and not __database__.is_ftp_port(dport)):
             # we don't have info about this port
             confidence = 1
             threat_level = 0.6
