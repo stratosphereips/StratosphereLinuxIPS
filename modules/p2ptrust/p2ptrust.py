@@ -163,7 +163,6 @@ class Trust(Module, multiprocessing.Process):
             executable.extend(rename_with_port_param)
             executable.extend(pygo_channel_param)
             executable.extend(gopy_channel_param)
-            # TODO by lukas: check if this is ok when opening file like that
             outfile = open(self.pigeon_logfile, "+w")
             self.pigeon = subprocess.Popen(executable, cwd=self.data_dir, stdout=outfile)
 
@@ -246,14 +245,12 @@ class Trust(Module, multiprocessing.Process):
             self.print("IP validation failed")
             return
 
-        print(self.storage_name)
         score, confidence = utils.get_ip_info_from_slips(ip_address, self.storage_name)
         if score is None:
             self.print("IP doesn't have any score/confidence values in DB")
             return
 
         # insert data from slips to database
-        # TODO: remove debug timestamps
         self.trust_db.insert_slips_score(ip_address, score, confidence)
 
         # TODO: discuss - only share score if confidence is high enough?
