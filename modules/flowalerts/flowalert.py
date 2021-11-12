@@ -296,7 +296,7 @@ class Module(Module, multiprocessing.Process):
         return False
 
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
-        """ Checks dports that are not in our modules/timeline/services.csv file"""
+        """ Checks dports that are not in any of our slips_files/ports_info/ files"""
 
         port_info = __database__.get_port_info(f'{dport}/{proto}')
         if (not port_info

@@ -56,7 +56,7 @@ class Module(Module, multiprocessing.Process):
         Funciton to read our special file called 'services.csv' and load the known ports from it into the database
         """
         try:
-            f = open('modules/timeline/services.csv')
+            f = open('slips_files/ports_info/services.csv')
             for line in f:
                 name = line.split(',')[0]
                 port = line.split(',')[1]
