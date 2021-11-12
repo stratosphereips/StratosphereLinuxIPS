@@ -1150,6 +1150,9 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'dnp3'
         elif 'ftp' in file_type:
             self.column_values['type'] = 'ftp'
+            self.column_values['used_port'] = line.get("data_channel.resp_p",False)
+            #todo do the same in zeek tabs function
+
         elif 'kerberos' in file_type:
             self.column_values['type'] = 'kerberos'
         elif 'mysql' in file_type:
@@ -1890,7 +1893,7 @@ class ProfilerProcess(multiprocessing.Process):
             if not self.column_values:
                 return True
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
-                                                    'dhcp','files', 'known_services', 'arp'):
+                                                    'dhcp','files', 'known_services', 'arp','ftp'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -2073,6 +2076,11 @@ class ProfilerProcess(multiprocessing.Process):
                                                  self.column_values['scanning_ip'],
                                                  self.column_values['uid']
                                                  )
+                elif flow_type == 'ftp':
+                    used_port = self.column_values['used_port']
+                    if used_port:
+                        __database__.set_ftp_port(used_port)
+
                 elif flow_type == 'files':
                     """" Send files.log data to new_downloaded_file channel in vt module to see if it's malicious """
                     to_send = {
