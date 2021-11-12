@@ -86,7 +86,7 @@ class Module(Module, multiprocessing.Process):
                     try:
                         organization, ip = line[0], line[1]
                         portproto = f'{line[2]}/{line[3].lower()}'
-                        __database__.set_organization_port(organization, ip, portproto)
+                        __database__.set_organization_of_port(organization, ip, portproto)
                     except IndexError:
                         self.print(f"Invalid line: {line} in {ports_info_filepath}. Skipping.",0,1)
                         continue
@@ -333,8 +333,32 @@ class Module(Module, multiprocessing.Process):
 
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
         """ Checks dports that are not in any of our slips_files/ports_info/ files"""
+        portproto = f'{dport}/{proto}'
+        port_info = __database__.get_port_info(portproto)
+        if not port_info:
+            # we don't have port info in our database
+            # is it a port that is known to be used by a specific organization
+            organization_info = __database__.get_organization_of_port(portproto)
+            if organization_info:
+              # there's an organization that's known to use this port, check if the daddr belongs to the range of this org
+                organization_info = json.loads(organization_info)
+                # can be an ip or a range
+                org_ip = organization_info['ip']
+                org_name = organization_info['org_name']
+                # it's an ip and it belongs to this org, consider the port as known
+                if daddr in org_ip: return False
+                # is it a range?
+                try:
+                    # we have the org range in our database, check if the daddr belongs to this range
+                    if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
+                        # it does, consider the port as known
+                        return False
+                except ValueError:
+                    # not a range either??
+                    # consider this port as unknown
+                    pass
 
-        port_info = __database__.get_port_info(f'{dport}/{proto}')
+
         if (not port_info
             and not 'icmp' in proto
             and not self.is_p2p(dport, proto, daddr)
