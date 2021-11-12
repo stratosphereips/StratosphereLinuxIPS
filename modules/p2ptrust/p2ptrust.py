@@ -1,19 +1,20 @@
-import multiprocessing
 import configparser
+import multiprocessing
 import platform
+import shutil
 import signal
 import subprocess
 import time
+from pathlib import Path
 from typing import Dict
 
-from slips_files.core.database import __database__
-from slips_files.common.abstracts import Module
-
-import modules.p2ptrust.trust.trustdb as trustdb
-from modules.p2ptrust.utils.printer import Printer
 import modules.p2ptrust.trust.base_model as reputation_model
-from modules.p2ptrust.utils.go_director import GoDirector
+import modules.p2ptrust.trust.trustdb as trustdb
 import modules.p2ptrust.utils.utils as utils
+from modules.p2ptrust.utils.go_director import GoDirector
+from modules.p2ptrust.utils.printer import Printer
+from slips_files.common.abstracts import Module
+from slips_files.core.database import __database__
 
 
 def validate_slips_data(message_data: str) -> (str, int):
@@ -49,7 +50,7 @@ class Trust(Module, multiprocessing.Process):
     def __init__(self,
                  output_queue: multiprocessing.Queue,
                  config: configparser.ConfigParser,
-                 data_dir: str = "./",  # TODO by martin: Default value by me. What is correct value?
+                 data_dir: str = "./p2ptrust_runtime/",
                  pigeon_port=6668,
                  rename_with_port=False,
                  slips_update_channel="ip_info_change",
@@ -57,11 +58,16 @@ class Trust(Module, multiprocessing.Process):
                  gopy_channel="p2p_gopy",
                  pygo_channel="p2p_pygo",
                  start_pigeon=True,
+                 pigeon_binary="p2p4slips",  # make sure the binary is in $PATH or put there full path
                  pigeon_logfile="pigeon_logs",
+                 pigeon_key_file="pigeon.keys",
                  rename_redis_ip_info=False,
                  rename_sql_db_file=False,
                  override_p2p=False):
         multiprocessing.Process.__init__(self)
+
+        # create data folder
+        Path(data_dir).mkdir(parents=True, exist_ok=True)
 
         self.output_queue = output_queue
         # In case you need to read the slips.conf configuration file for your own configurations
@@ -81,6 +87,7 @@ class Trust(Module, multiprocessing.Process):
         self.pigeon_logfile_raw = pigeon_logfile
         self.start_pigeon = start_pigeon
         self.override_p2p = override_p2p
+        self.data_dir = data_dir
 
         if self.rename_with_port:
             str_port = str(self.port)
@@ -94,6 +101,8 @@ class Trust(Module, multiprocessing.Process):
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
         self.pigeon_logfile = data_dir + self.pigeon_logfile_raw + str_port
+        self.pigeon_key_file = pigeon_key_file
+        self.pigeon_binary = pigeon_binary
 
         self.storage_name = "IPsInfo"
         if rename_redis_ip_info:
@@ -114,11 +123,16 @@ class Trust(Module, multiprocessing.Process):
         # Start the db
         __database__.start(self.config)
 
-        # TODO: do not drop tables on startup
-        sql_db_name = data_dir + "trustdb.db"
+        self.sql_db_name = self.data_dir + "trustdb.db"
         if rename_sql_db_file:
-            sql_db_name += str(pigeon_port)
-        self.trust_db = trustdb.TrustDB(sql_db_name, self.printer, drop_tables_on_startup=True)
+            self.sql_db_name += str(pigeon_port)
+
+    def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
+        self.printer.print(text, verbose, debug)
+
+    def _configure(self):
+        # TODO: do not drop tables on startup
+        self.trust_db = trustdb.TrustDB(self.sql_db_name, self.printer, drop_tables_on_startup=True)
         self.reputation_model = reputation_model.BaseModel(self.printer, self.trust_db, self.config)
 
         self.go_director = GoDirector(self.printer,
@@ -131,12 +145,16 @@ class Trust(Module, multiprocessing.Process):
                                       gopy_channel=self.gopy_channel,
                                       pygo_channel=self.pygo_channel)
 
-        # TODO by martin: redo this if completely
+        self.pigeon = None
         if self.start_pigeon:
-            outfile = open(self.pigeon_logfile, "+w")
-            executable = ["/home/dita/ownCloud/m4.semestr/go/src/github.com/stratosphereips/p2p4slips/p2p4slips"]
+            if not shutil.which(self.pigeon_binary):
+                self.print(f'P2p4slips binary not found in \"{self.pigeon_binary}\". '
+                           f'Did you include it in PATH?. Exiting process.')
+                return
+
+            executable = [self.pigeon_binary]
             port_param = ["-port", str(self.port)]
-            keyfile_param = ["-key-file", "fofobarbarkeys"]
+            keyfile_param = ["-key-file", self.data_dir + self.pigeon_key_file]
             rename_with_port_param = ["-rename-with-port", str(self.rename_with_port).lower()]
             pygo_channel_param = ["-redis-channel-pygo", self.pygo_channel_raw]
             gopy_channel_param = ["-redis-channel-gopy", self.gopy_channel_raw]
@@ -145,13 +163,19 @@ class Trust(Module, multiprocessing.Process):
             executable.extend(rename_with_port_param)
             executable.extend(pygo_channel_param)
             executable.extend(gopy_channel_param)
-
-            self.pigeon = subprocess.Popen(executable, cwd=data_dir)
-
-    def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
-        self.printer.print(text, verbose, debug)
+            # TODO by lukas: check if this is ok when opening file like that
+            outfile = open(self.pigeon_logfile, "+w")
+            self.pigeon = subprocess.Popen(executable, cwd=self.data_dir, stdout=outfile)
 
     def run(self):
+        # configure process
+        self._configure()
+
+        # check if it was possible to start up pigeon
+        if self.start_pigeon and self.pigeon is None:
+            self.print("Module was supposed to start up pigeon but it was not possible to start pigeon! Exiting...")
+            return
+
         pubsub = __database__.r.pubsub()
 
         # callbacks for subscribed channels
@@ -173,7 +197,7 @@ class Trust(Module, multiprocessing.Process):
                     if self.start_pigeon:
                         self.pigeon.send_signal(signal.SIGINT)
 
-                    # TODO by martin: this is from Dita, is it correct way how to do it?
+                    # TODO by martin: this is from Dita, is it correct way how to do it? ---- lukas: lgtm
                     self.trust_db.__del__()
                     break
 
@@ -313,8 +337,10 @@ class Trust(Module, multiprocessing.Process):
             self.print("No data received from network :(")
         else:
             self.print("Network shared some data, saving it now!")
-            self.print("IP: " + ip_address + ", result: [" + str(combined_score) + ", " + str(combined_confidence) + "]")
-            utils.save_ip_report_to_db(ip_address, combined_score, combined_confidence, network_score, self.storage_name)
+            self.print(
+                "IP: " + ip_address + ", result: [" + str(combined_score) + ", " + str(combined_confidence) + "]")
+            utils.save_ip_report_to_db(ip_address, combined_score, combined_confidence, network_score,
+                                       self.storage_name)
 
     def respond_to_message_request(self, key, reporter):
         pass
