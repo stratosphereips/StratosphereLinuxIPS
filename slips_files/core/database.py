@@ -1889,6 +1889,17 @@ class Database(object):
         # check if the given port is used as ftp port
         return port in used_ftp_ports
 
+    def set_organization_port(self, organization, ip: str, portproto: str):
+        """
+        Save in the DB a port with its organization and the ip/ range used by this organization
+        :param portproto: portnumber.lower() + / + protocol
+        :param ip: can be a single org ip, or a range
+        """
+        org_info = {'org_name': organization, 'ip': ip}
+        org_info = json.dumps(org_info)
+        self.rcache.hset('organization_port', portproto, org_info )
+
+
     def add_zeek_file(self, filename):
         """ Add an entry to the list of zeek files """
         self.r.sadd('zeekfiles', filename)
