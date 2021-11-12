@@ -76,16 +76,16 @@ class Module(Module, multiprocessing.Process):
                         continue
 
                     line = line.split(',')
+
                     try:
                         organization, ip = line[0], line[1]
                         portproto = f'{line[2]}/{line[3].lower()}'
-                        print(f'@@@@@@@@@@@@@@@@@@   setting : {organization} , { ip} , {portproto}')
                         __database__.set_organization_port(organization, ip, portproto)
                     except IndexError:
-                        self.print(f"Invalid line: {line} in {file_path}. Skipping.",0,1)
+                        self.print(f"Invalid line: {line} in {ports_info_filepath}. Skipping.",0,1)
                         continue
         except OSError:
-            self.print(f"An error occured while reading {file_path}.",0,1)
+            self.print(f"An error occured while reading {ports_info_filepath}.",0,1)
 
 
     def is_ignored_ip(self, ip) -> bool:
