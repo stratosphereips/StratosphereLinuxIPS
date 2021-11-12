@@ -1,0 +1,5 @@
+# This file has ports that are by default considered unknown to slips,
+# but if it's known to bee used by a specific organizagtion, slips won't consider it 'unknown'.
+# Here we have a list of organizations range/ip and the port it's known to use
+"Organization","IP/IP range","port","protocol"
+Spotify,78.31.8.0/22,4070,tcp
