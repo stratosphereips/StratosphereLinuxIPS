@@ -389,7 +389,11 @@ class Module(Module, multiprocessing.Process):
         :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
 
-        if 'arpa' in domain or '.local' in domain or domain.endswith('debian.pool.ntp.org'):
+        # Ignore some domains
+        ## - All reverse dns resolutions
+        ## - All .local domains
+        ## - 
+        if 'arpa' in domain or '.local' in domain:
             # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
             # queries ending with debian.pool.ntp.org are NTP requests, ignore them
             return #todo
