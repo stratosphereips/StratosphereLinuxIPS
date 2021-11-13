@@ -47,10 +47,12 @@ class Module(Module, multiprocessing.Process):
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = self.get_default_gateway()
-        # Cache list of connections that we already checked in the timer thread (we waited for the dns resolution for these connections)
-        self.connections_checked_in_timer_thread = []
         # Cache list of connections that we already checked in the timer thread (we waited for the connection of these dns resolutions)
-        self.dns_checked_in_timer_thread = []
+        self.connections_checked_in_dns_conn_timer_thread = []
+        # Cache list of connections that we already checked in the timer thread (we waited for the dns resolution for these connections)
+        self.connections_checked_in_conn_dns_timer_thread = []
+        # Cache list of connections that we already checked in the timer thread for ssh check
+        self.connections_checked_in_ssh_timer_thread = []
         # Threshold how much time to wait when capturing in an interface, to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In seconds
@@ -341,15 +343,15 @@ class Module(Module, multiprocessing.Process):
 
             # Create a timer thread that will wait 5 seconds for the dns to arrive and then check again
             #self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
-            if uid not in self.connections_checked_in_timer_thread:
+            if uid not in self.connections_checked_in_conn_dns_timer_thread:
                 # comes here if we haven't started the timer thread for this connection before
                 # mark this connection as checked
-                self.connections_checked_in_timer_thread.append(uid)
+                self.connections_checked_in_conn_dns_timer_thread.append(uid)
                 params = [daddr, twid, profileid, timestamp, uid]
                 #self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
                 timer = TimerThread(15, self.check_connection_without_dns_resolution, params)
                 timer.start()
-            elif uid in self.connections_checked_in_timer_thread:
+            elif uid in self.connections_checked_in_conn_dns_timer_thread:
                 # It means we already checked this conn with the Timer process
                 # (we waited 5 seconds for the dns to arrive after the connection was made)
                 # but still no dns resolution for it. So now alert
@@ -371,10 +373,9 @@ class Module(Module, multiprocessing.Process):
                 # This UID will never appear again, so we can remove it and
                 # free some memory
                 try:
-                    self.connections_checked_in_timer_thread.remove(uid)
+                    self.connections_checked_in_conn_dns_timer_thread.remove(uid)
                 except ValueError:
                     pass
-
 
     def check_dns_resolution_without_connection(self, domain, answers, timestamp, profileid, twid, uid):
         """
@@ -406,15 +407,15 @@ class Module(Module, multiprocessing.Process):
         # don't alert a Connection Without DNS until 5 seconds has passed
         # in real time from the time we received the dns.
         # Create a timer thread that will wait 5 seconds for the connection to arrive and then check again
-        if uid not in self.dns_checked_in_timer_thread:
+        if uid not in self.connections_checked_in_dns_conn_timer_thread:
             # comes here if we haven't started the timer thread for this dns before
             # mark this dns as checked
-            self.dns_checked_in_timer_thread.append(uid)
+            self.connections_checked_in_dns_conn_timer_thread.append(uid)
             params = [ domain, answers, timestamp, profileid, twid, uid]
             #self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
             timer = TimerThread(15, self.check_dns_resolution_without_connection, params)
             timer.start()
-        elif uid in self.dns_checked_in_timer_thread:
+        elif uid in self.connections_checked_in_dns_conn_timer_thread:
             # It means we already checked this dns with the Timer process
             # (we waited 5 seconds for the connection to arrive after the dns was made)
             # but still no connection for it. So now alert
@@ -429,9 +430,90 @@ class Module(Module, multiprocessing.Process):
             # This UID will never appear again, so we can remove it and
             # free some memory
             try:
-                self.dns_checked_in_timer_thread.remove(uid)
+                self.connections_checked_in_dns_conn_timer_thread.remove(uid)
             except ValueError:
                 pass
+
+    def check_ssh(self, message):
+        """
+        Function to check if an SSH connection logged in successfully
+        """
+        try:
+            data = message['data']
+            # Convert from json to dict
+            data = json.loads(data)
+            profileid = data['profileid']
+            twid = data['twid']
+            # Get flow as a json
+            flow = data['flow']
+            # Convert flow to a dict
+            flow_dict = json.loads(flow)
+            timestamp = flow_dict['stime']
+            uid = flow_dict['uid']
+            # Try Zeek method to detect if SSh was successful or not.
+            auth_success = flow_dict['auth_success']
+            if auth_success:
+                original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+                original_flow_uid = next(iter(original_ssh_flow))
+                if original_ssh_flow[original_flow_uid]:
+                    ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
+                    daddr = ssh_flow_dict['daddr']
+                    saddr = ssh_flow_dict['saddr']
+                    size = ssh_flow_dict['allbytes']
+                    self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, timestamp, by='Zeek')
+                    try:
+                        self.connections_checked_in_ssh_timer_thread.remove(uid)
+                    except ValueError:
+                        pass
+                    return True
+                else:
+                    # It can happen that the original SSH flow is not in the DB yet
+                    if uid not in self.connections_checked_in_ssh_timer_thread:
+                        # comes here if we haven't started the timer thread for this connection before
+                        # mark this connection as checked
+                        #self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
+                        self.connections_checked_in_ssh_timer_thread.append(uid)
+                        params = [message]
+                        timer = TimerThread(15, self.check_ssh, params)
+                        timer.start()
+            else:
+                # Try Slips method to detect if SSH was successful.
+                original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+                original_flow_uid = next(iter(original_ssh_flow))
+                if original_ssh_flow[original_flow_uid]:
+                    ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
+                    daddr = ssh_flow_dict['daddr']
+                    saddr = ssh_flow_dict['saddr']
+                    size = ssh_flow_dict['allbytes']
+                    if size > self.ssh_succesful_detection_threshold:
+                        # Set the evidence because there is no
+                        # easier way to show how Slips detected
+                        # the successful ssh and not Zeek
+                        self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, timestamp, by='Slips')
+                        try:
+                            self.connections_checked_in_ssh_timer_thread.remove(uid)
+                        except ValueError:
+                            pass
+                        return True
+                    else:
+                        # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
+                        pass
+                else:
+                    # It can happen that the original SSH flow is not in the DB yet
+                    if uid not in self.connections_checked_in_ssh_timer_thread:
+                        # comes here if we haven't started the timer thread for this connection before
+                        # mark this connection as checked
+                        #self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
+                        self.connections_checked_in_ssh_timer_thread.append(uid)
+                        params = [message]
+                        timer = TimerThread(15, self.check_ssh, params)
+                        timer.start()
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on check_ssh() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
 
     def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
         """
@@ -677,47 +759,7 @@ class Module(Module, multiprocessing.Process):
 
                 # ---------------------------- new_ssh channel
                 elif message['channel'] == 'new_ssh' :
-                    data = message['data']
-                    # Convert from json to dict
-                    data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    # Get flow as a json
-                    flow = data['flow']
-                    # Convert flow to a dict
-                    flow_dict = json.loads(flow)
-                    timestamp = flow_dict['stime']
-                    uid = flow_dict['uid']
-                    # Try Zeek method to detect if SSh was successful or not.
-                    auth_success = flow_dict['auth_success']
-                    if auth_success:
-                        # time.sleep(10) # This logic should be fixed, it stops the whole module.
-                        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
-                        original_flow_uid = next(iter(original_ssh_flow))
-                        if original_ssh_flow[original_flow_uid]:
-                            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
-                            daddr = ssh_flow_dict['daddr']
-                            saddr = ssh_flow_dict['saddr']
-                            size = ssh_flow_dict['allbytes']
-                            self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, timestamp, by='Zeek')
-                    else:
-                        # Try Slips method to detect if SSH was successful.
-                        # time.sleep(10) # This logic should be fixed, it stops the whole module.
-                        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
-                        original_flow_uid = next(iter(original_ssh_flow))
-                        if original_ssh_flow[original_flow_uid]:
-                            ssh_flow_dict = json.loads(original_ssh_flow[original_flow_uid])
-                            daddr = ssh_flow_dict['daddr']
-                            saddr = ssh_flow_dict['saddr']
-                            size = ssh_flow_dict['allbytes']
-                            if size > self.ssh_succesful_detection_threshold:
-                                # Set the evidence because there is no
-                                # easier way to show how Slips detected
-                                # the successful ssh and not Zeek
-                                self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, timestamp, by='Slips')
-                            else:
-                                # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
-                                pass
+                    self.check_ssh(message)
 
                 # ---------------------------- new_notice channel
                 elif message['channel'] == 'new_notice':
