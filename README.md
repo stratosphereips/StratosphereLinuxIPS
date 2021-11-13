@@ -73,7 +73,7 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
 ## How to build Slips docker from Dockerfile:
 
-        cd dockeri/ubuntu-image
+        cd docker/ubuntu-image
         docker build --no-cache -t slips -f Dockerfile .
         docker run -it --rm --net=host -v $(pwd)/../../dataset:/StratosphereLinuxIPS/dataset slips
         ./slips.py -c slips.conf -f dataset/test3.binetflow
