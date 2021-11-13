@@ -370,7 +370,10 @@ class Module(Module, multiprocessing.Process):
                                          description, timestamp, profileid=profileid, twid=twid, uid=uid)
                 # This UID will never appear again, so we can remove it and
                 # free some memory
-                self.connections_checked_in_timer_thread.remove(uid)
+                try:
+                    self.connections_checked_in_timer_thread.remove(uid)
+                except ValueError:
+                    pass
 
 
     def check_dns_resolution_without_connection(self, domain, answers, timestamp, profileid, twid, uid):
@@ -424,7 +427,10 @@ class Module(Module, multiprocessing.Process):
                                  description, timestamp, profileid=profileid, twid=twid, uid=uid)
             # This UID will never appear again, so we can remove it and
             # free some memory
-            self.dns_checked_in_timer_thread.remove(uid)
+            try:
+                self.dns_checked_in_timer_thread.remove(uid)
+            except ValueError:
+                pass
 
     def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
         """
