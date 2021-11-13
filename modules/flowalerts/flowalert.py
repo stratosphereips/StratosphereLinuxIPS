@@ -392,9 +392,8 @@ class Module(Module, multiprocessing.Process):
         # Ignore some domains
         ## - All reverse dns resolutions
         ## - All .local domains
-        ## - 
-        if 'arpa' in domain or '.local' in domain:
-            # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
+        ## - The wildcard domain *
+        if 'arpa' in domain or '.local' in domain or '*' in domain:
             return False 
 
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
