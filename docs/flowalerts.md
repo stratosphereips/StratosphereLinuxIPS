@@ -20,6 +20,10 @@ The detection techniques are:
 
 The details of each detection follows.
 
+
+## Detect long connections
+Detect connections that are long, except the multicast connections.
+
 ## Detect connections without DNS resolution
 This detection will ignore certain IP addresses for which a connection without DNS is ok. The exceptions are:
 
