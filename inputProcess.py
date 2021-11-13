@@ -440,6 +440,7 @@ class InputProcess(multiprocessing.Process):
             # In the case of nfdump, there is no observer
             pass
         return True
+            command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} {self.tcp_inactivity_timeout} local -f {self.packet_filter} {zeek_scripts_dir} > /dev/null 2>&1  &'
 
     def run(self):
         try:
