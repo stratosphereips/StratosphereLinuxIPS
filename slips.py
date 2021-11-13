@@ -726,7 +726,8 @@ if __name__ == '__main__':
                 __database__.setSlipsInternalTime(time_of_last_modified_tw)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
-            outputProcessQueue.put('10|Main|Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+            #outputProcessQueue.put(f'10|Main|Total Number of Profiles in DB so far: {profilesLen}. Modified Profiles in the last TW: {amount_of_modified}. ({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})\r')
+            print(f'Total Number of Profiles in DB so far: {profilesLen}. Modified Profiles in the last TW: {amount_of_modified}. ({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})', end='\r')
 
             # Check if we need to close some TW
             __database__.check_TW_to_close()
