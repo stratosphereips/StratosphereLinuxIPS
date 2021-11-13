@@ -577,10 +577,16 @@ class UpdateFileManager:
         """
 
         try:
+
+            # Check if the file has any content
+            filesize = os.path.getsize(malicious_data_path)
+            if filesize == 0:
+                return False
+
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
-                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
+                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
                 if 'json' in malicious_data_path:
                     filename= malicious_data_path.split('/')[-1]
                     # to support nsec/full-results-2019-05-15.json
@@ -628,6 +634,8 @@ class UpdateFileManager:
 
                 while True:
                     line = malicious_file.readline()
+                    if not line:
+                        break
                     # Try to find the line that has column names
                     for keyword in header_keywords:
                         if line.startswith(keyword):
@@ -651,8 +659,6 @@ class UpdateFileManager:
 
                     if process_line:
                         break
-
-
 
                 # Find in which column is the important info in this TI file (domain or ip)
                 # Store the current position of the TI file
