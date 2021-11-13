@@ -422,7 +422,7 @@ class Module(Module, multiprocessing.Process):
             type_detection  = 'dstdomain'
             type_evidence = 'DNSWithoutConnection'
             detection_info = domain
-            description = f'Domain {domain} resolved with no connection'
+            description = f'domain {domain} resolved with no connection'
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
                                  description, timestamp, profileid=profileid, twid=twid, uid=uid)
             # This UID will never appear again, so we can remove it and
