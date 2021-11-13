@@ -25,7 +25,10 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Detections per Flow**. Explanation on how Slips works to make detections on each flow with different techniques. See :doc:`Flow Alerts <flowalerts>`. 
 
+- **IP Info**. Explanation on how Slips gets information about each IP address for the module IP_Info. See :doc:`IP Info <ipinfo>`.
+
 - **Contributing**. Explanation how to contribute to Slips, and instructions how to implement new detection module in Slips. See :doc:`Contributing <contributing>`. 
+
 
 
 
