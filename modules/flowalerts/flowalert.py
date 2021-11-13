@@ -393,6 +393,9 @@ class Module(Module, multiprocessing.Process):
         if 'arpa' in domain or '.local' in domain or '*' in domain or '.cymru.com' in domain[-10:] or len(domain.split('.')) == 1 or domain == 'WPAD':
             return False 
 
+        # One DNS query may not be answered exactly by UID, but the computer can re-ask the donmain, and the next DNS resolution can be
+        # answered. So dont check the UID, check if the domain has an IP
+
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
         if contacted_ips == {}: return
         # every dns answer is a list of ips that correspond to a spicific query,
@@ -792,8 +795,9 @@ class Module(Module, multiprocessing.Process):
                             detection_info = ip
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                                      threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-                            self.print(description, 3, 0)
+                            #self.print(description, 3, 0)
 
+                        # --- Detect port scans from Zeek logs---
                         # We're looking for port scans in notice.log in the note field
                         if 'Port_Scan' in note:
                             # Vertical port scan
@@ -807,14 +811,14 @@ class Module(Module, multiprocessing.Process):
                             detection_info = flow.get('scanning_ip','')
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-                            self.print(description, 3, 0)
+                            #self.print(description, 3, 0)
 
                         if 'SSL certificate validation failed' in msg:
                             ip = flow['daddr']
                             # get the description inside parenthesis
                             description = msg + ' Destination IP: {}'.format(ip)
                             self.set_evidence_for_invalid_certificates(profileid, twid, ip, description, uid, timestamp)
-                            self.print(description, 3, 0)
+                            #self.print(description, 3, 0)
 
                         if 'Address_Scan' in note:
                             # Horizontal port scan
