@@ -34,6 +34,10 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.malicious_label = __database__.malicious_label
         self.timeout = None
         self.separator = '_'
+        # The minimum amount of ips to scan horizontal scan
+        self.port_scan_minimum_dips_threshold = 5
+        # The minimum amount of ports to scan in vertical scan
+        self.port_scan_minimum_dports_threshold = 5
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -91,7 +95,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 threat_level = 25
                 # Compute the confidence
                 pkts_sent = 0
-                # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dips per port.
+                # We detect a scan every Threshold. So, if threshold is 3, we detect when there are 3, 6, 9, 12, etc. dips per port.
                 # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
                 key = 'dport' + ':' + dport + ':' + type_evidence
                 cache_key = profileid + ':' + twid + ':' + key
@@ -100,14 +104,14 @@ class PortScanProcess(Module, multiprocessing.Process):
                 except KeyError:
                     prev_amount_dips = 0
                 #self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
-                if amount_of_dips % 3 == 0 and prev_amount_dips < amount_of_dips:
+                if amount_of_dips % self.port_scan_minimum_dips_threshold == 0 and prev_amount_dips < amount_of_dips:
                     for dip in dstips:
                         # Get the total amount of pkts sent to the same port to all IPs
                         pkts_sent += dstips[dip]['pkts']
                     if pkts_sent > 10:
                         confidence = 1
                     else:
-                        # Between 3 and 10 pkts compute a kind of linear grow
+                        # Between threshold and 10 pkts compute a kind of linear grow
                         confidence = pkts_sent / 10.0
                     # Description
                     description = f'new horizontal port scan to port {dport}/{protocol}. Not Established. From IP: {profileid.split(self.fieldseparator)[1]}. Tot pkts sent all IPs: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
@@ -152,7 +156,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 except KeyError:
                     prev_amount_dports = 0
                 #self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key, prev_amount_dports, amount_of_dports))
-                if amount_of_dports % 3 == 0 and prev_amount_dports < amount_of_dports:
+                if amount_of_dports % self.port_scan_minimum_dport_threshold == 0 and prev_amount_dports < amount_of_dports:
                     # Compute the confidence
                     pkts_sent = 0
                     for dport in dstports:
@@ -161,7 +165,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     if pkts_sent > 10:
                         confidence = 1
                     else:
-                        # Between 3 and 10 pkts compute a kind of linear grow
+                        # Between threshold and 10 pkts compute a kind of linear grow
                         confidence = pkts_sent / 10.0
                     # Description
                     description = f'new vertical port scan to IP {dstip} from {profileid.split(self.fieldseparator)[1]}. Total {amount_of_dports} dst ports of protocol {protocol}. Not Established. Tot pkts sent all ports: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
