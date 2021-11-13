@@ -386,7 +386,8 @@ class Module(Module, multiprocessing.Process):
         ## - All reverse dns resolutions
         ## - All .local domains
         ## - The wildcard domain *
-        if 'arpa' in domain or '.local' in domain or '*' in domain:
+        ## - Subdomains of cymru.com, since it is used by the ipwhois library to get the ASN of an IP and its range.
+        if 'arpa' in domain or '.local' in domain or '*' in domain or '.cymru.com' in domain[-10:]:
             return False 
 
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
