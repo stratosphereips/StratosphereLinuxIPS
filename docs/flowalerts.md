@@ -48,5 +48,7 @@ The domains that are excepted are:
 - All .local domains
 - The wild card domain *
 - Subdomains of cymru.com, since it is used by the ipwhois library to get the ASN of an IP and its range.
+- Ignore WPAD domain from Windows
+- Ignore domains without a TLD such as the Chrome test domains.
 
 ## Still under construction...
