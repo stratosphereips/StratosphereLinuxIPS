@@ -173,7 +173,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 except KeyError:
                     prev_amount_dports = 0
                 #self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key, prev_amount_dports, amount_of_dports))
-                if amount_of_dports % self.port_scan_minimum_dport_threshold == 0 and prev_amount_dports < amount_of_dports:
+                if amount_of_dports % self.port_scan_minimum_dports_threshold == 0 and prev_amount_dports < amount_of_dports:
                     # Compute the confidence
                     pkts_sent = 0
                     for dport in dstports:
