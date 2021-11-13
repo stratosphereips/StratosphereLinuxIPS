@@ -18,7 +18,7 @@ class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'IP_Info'
     description = 'Get different info about an IP/MAC address'
-    authors = ['Sebastian Garcia']
+    authors = ['Alya Gomaa', 'Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
