@@ -349,3 +349,15 @@ To test your changes to Slips, please run all the unit tests. Fromn the main fol
 ### Plug in a zeek script
 
 Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir.
+
+
+## Running Slips from python
+
+You can run Slips from python using the following script
+
+```py
+import subprocess
+command = './slips.py -f dataset/test3.binetflow -o /data/test'
+args = command.split()
+process = subprocess.run(args, stdout=subprocess.PIPE)
+```
