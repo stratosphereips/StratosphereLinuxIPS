@@ -217,11 +217,15 @@ class UpdateFileManager:
             url = url.replace(';', '')
             url = url.replace('\`', '')
             command = 'curl -m 10 --insecure -s ' + url + ' -o ' + filepath
-            self.print(f'Downloading with curl command: {command}', 0, 6)
-            os.system(command)
-            # Get the time of update
-            self.new_update_time = time.time()
-            return True
+            self.print(f'Downloading with curl command: {command}', 0, 3)
+            # If the command is successful
+            if os.system(command):
+                # Get the time of update
+                self.new_update_time = time.time()
+                return True
+            else:
+                self.print(f'An error occurred while downloading the file {url}.', 1, 0)
+                return False
         except Exception as e:
             self.print(f'An error occurred while downloading the file {url}.', 0, 1)
             self.print(f'Error: {e}', 0, 1)
