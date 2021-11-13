@@ -214,8 +214,16 @@ class UpdateFileManager:
             # This replaces are to be sure that a user can not inject commands in curl
             filepath = filepath.replace(';', '')
             filepath = filepath.replace('\`', '')
+            filepath = filepath.replace('&', '')
+            filepath = filepath.replace('|', '')
+            filepath = filepath.replace('$(', '')
+            filepath = filepath.replace('\n', '')
             url = url.replace(';', '')
             url = url.replace('\`', '')
+            url = url.replace('&', '')
+            url = url.replace('|', '')
+            url = url.replace('$(', '')
+            url = url.replace('\n', '')
             command = 'curl -m 10 --insecure -s ' + url + ' -o ' + filepath
             self.print(f'Downloading with curl command: {command}', 0, 3)
             # If the command is successful
