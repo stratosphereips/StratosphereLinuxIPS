@@ -51,6 +51,10 @@ class Module(Module, multiprocessing.Process):
         self.connections_checked_in_timer_thread = []
         # Cache list of connections that we already checked in the timer thread (we waited for the connection of these dns resolutions)
         self.dns_checked_in_timer_thread = []
+        # Threshold how much time to wait when capturing in an interface, to start reporting connections without DNS
+        # Usually the computer resolved DNS already, so we need to wait a little to report
+        # In seconds
+        self.conn_without_dns_interface_wait_time = 180
 
     def is_ignored_ip(self, ip) -> bool:
         """
@@ -331,7 +335,7 @@ class Module(Module, multiprocessing.Process):
             now = datetime.datetime.now()
             diff = now - start_time
             diff = diff.seconds
-            if not int(diff) >= 120:
+            if not int(diff) >= self.conn_without_dns_interface_wait_time:
                 # less than 2 minutes have passed
                 return False
 
