@@ -479,18 +479,15 @@ if __name__ == '__main__':
         zeek_bro = check_zeek_or_bro()
         if zeek_bro is False:
             # If we do not have bro or zeek, terminate Slips.
-            print('no zeek nor bro')
+            print('Error. No zeek or bro binary found.')
             terminate_slips()
         else:
             prepare_zeek_scripts()
-
-
 
     # See if we have the nfdump, if we need it according to the input type
     if input_type == 'nfdump' and shutil.which('nfdump') is None:
         # If we do not have nfdump, terminate Slips.
         terminate_slips()
-
 
     # Remove default folder for alerts, if exists
     if os.path.exists(args.output):
