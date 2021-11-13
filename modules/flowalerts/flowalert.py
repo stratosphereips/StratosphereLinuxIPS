@@ -328,16 +328,6 @@ class Module(Module, multiprocessing.Process):
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
-        # to avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
-        # after starting slips because the dns may have happened before starting slips
-        if '-i' in sys.argv:
-            start_time = __database__.get_slips_start_time()
-            now = datetime.datetime.now()
-            diff = now - start_time
-            diff = diff.seconds
-            if not int(diff) >= self.conn_without_dns_interface_wait_time:
-                # less than 2 minutes have passed
-                return False
 
         answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
         #self.print(f'Checking DNS of {daddr} {uid}')
@@ -556,7 +546,15 @@ class Module(Module, multiprocessing.Process):
                     # 1- Do not check this for DNS requests
                     # 2- Ignore some IPs like private IPs, multicast, and broadcast
                     if appproto != 'dns' and not self.is_ignored_ip(daddr):
-                        self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
+                        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
+                        # after starting slips because the dns may have happened before starting slips
+                        if '-i' in sys.argv:
+                            start_time = __database__.get_slips_start_time()
+                            now = datetime.datetime.now()
+                            diff = now - start_time
+                            diff = diff.seconds
+                            if int(diff) >= self.conn_without_dns_interface_wait_time:
+                                self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
 
                     # Detect Connection to multiple ports (for RAT)
                     if proto == 'tcp' and state == 'Established':
