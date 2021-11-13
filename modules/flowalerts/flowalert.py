@@ -426,7 +426,7 @@ class Module(Module, multiprocessing.Process):
             # (we waited 5 seconds for the connection to arrive after the dns was made)
             # but still no connection for it. So now alert
             confidence = 0.8
-            threat_level = 30
+            threat_level = 5
             type_detection  = 'dstdomain'
             type_evidence = 'DNSWithoutConnection'
             detection_info = domain
