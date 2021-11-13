@@ -1,3 +1,3 @@
 #!/bin/sh
 cd modules/kalipso
-node kalipso -l 2000
+node kalipso -l 100
