@@ -151,3 +151,5 @@ MQTT,1883,udp,Message Queuing Telemetry Transport Protocol
 secure-mqtt,8883,tcp,Secure MQTT
 secure-mqtt,8883,udp,Secure MQTT
 spotify-p2p-communication,57621,udp,Spotify
+iphone-sync1,3722,udp,iphone-sync
+iphone-sync2,57484,udp,iphone-sync
