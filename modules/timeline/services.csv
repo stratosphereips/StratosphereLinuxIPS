@@ -153,3 +153,4 @@ secure-mqtt,8883,udp,Secure MQTT
 spotify-p2p-communication,57621,udp,Spotify
 iphone-sync1,3722,udp,iphone-sync
 iphone-sync2,57484,udp,iphone-sync
+iphone-sync2,58916,udp,iphone-sync
