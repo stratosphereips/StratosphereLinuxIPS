@@ -395,8 +395,7 @@ class Module(Module, multiprocessing.Process):
         ## - 
         if 'arpa' in domain or '.local' in domain:
             # 'local' is a special-use domain name reserved by the Internet Engineering Task Force (IETF)
-            # queries ending with debian.pool.ntp.org are NTP requests, ignore them
-            return #todo
+            return False 
 
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
         if contacted_ips == {}: return
@@ -406,7 +405,7 @@ class Module(Module, multiprocessing.Process):
         for ip in answers:
             if ip in contacted_ips:
                   # this dns resolution has a connection
-                    return
+                    return False
         # found a query without usage
         # There is no connection for this dns resolution, but it can be that Slips is
         # still reading it from the files.
