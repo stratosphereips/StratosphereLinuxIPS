@@ -227,7 +227,7 @@ class UpdateFileManager:
             command = 'curl -m 10 --insecure -s ' + url + ' -o ' + filepath
             self.print(f'Downloading with curl command: {command}', 0, 3)
             # If the command is successful
-            if os.system(command):
+            if os.system(command) == 0:
                 # Get the time of update
                 self.new_update_time = time.time()
                 return True
