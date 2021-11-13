@@ -281,44 +281,37 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def run(self):
         while True:
-            # try:
-            # Wait for a message from the channel that a TW was modified
-            message = self.c1.get_message(timeout=self.timeout)
-            #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
-            if message['data'] == 'stop_process':
-                # Confirm that the module is done processing
-                __database__.publish('finished_modules', self.name)
-                return True
-            elif message['channel'] == 'tw_modified' and type(message['data'])!=int:
-                # Get the profileid and twid
-                try:
-                    profileid = message['data'].split(':')[0]
-                    twid = message['data'].split(':')[1]
-                    # Start of the port scan detection
-                    self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 3, 0)
-                    # For port scan detection, we will measure different things:
+            try:
+                # Wait for a message from the channel that a TW was modified
+                message = self.c1.get_message(timeout=self.timeout)
+                #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
+                if message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
+                    return True
+                elif message['channel'] == 'tw_modified' and type(message['data'])!=int:
+                    # Get the profileid and twid
+                        profileid = message['data'].split(':')[0]
+                        twid = message['data'].split(':')[1]
+                        # Start of the port scan detection
+                        self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 3, 0)
+                        # For port scan detection, we will measure different things:
 
-                    # 1. Vertical port scan:
-                    # (single IP being scanned for multiple ports)
-                    # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
-                    # 2. Horizontal port scan:
-                    #  (scan against a group of IPs for a single port)
-                    # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip.
-                    # 3. Too many connections???:
-                    # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
-                    # 4. Slow port scan. Same as the others but distributed in multiple time windows
+                        # 1. Vertical port scan:
+                        # (single IP being scanned for multiple ports)
+                        # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
+                        # 2. Horizontal port scan:
+                        #  (scan against a group of IPs for a single port)
+                        # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip.
+                        # 3. Too many connections???:
+                        # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
+                        # 4. Slow port scan. Same as the others but distributed in multiple time windows
 
-                    # Remember that in slips all these port scans can happen for traffic going IN to an IP or going OUT from the IP.
+                        # Remember that in slips all these port scans can happen for traffic going IN to an IP or going OUT from the IP.
 
-                    self.check_horizontal_portscan(profileid, twid)
-                    self.check_vertical_portscan(profileid, twid)
-                    self.check_icmp_sweep(profileid, twid)
-
-                except KeyboardInterrupt:
-                    # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                    continue
-                # except Exception as inst:
-                #     exception_line = sys.exc_info()[2].tb_lineno
-                #     self.print(f'Error in run() line {exception_line}', 0, 1)
-                #     self.print(type(inst), 0, 1)
-                #     self.print(inst, 0, 1)
+                        self.check_horizontal_portscan(profileid, twid)
+                        self.check_vertical_portscan(profileid, twid)
+                        self.check_icmp_sweep(profileid, twid)
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
