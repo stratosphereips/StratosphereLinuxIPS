@@ -502,6 +502,7 @@ class Module(Module, multiprocessing.Process):
                     flow = data['flow']
                     # Convert flow to a dict
                     flow = json.loads(flow)
+
                     # Convert the common fields to something that can
                     # be interpreted
                     uid = next(iter(flow))
@@ -512,26 +513,28 @@ class Module(Module, multiprocessing.Process):
                     origstate = flow_dict['origstate']
                     state = flow_dict['state']
                     timestamp = data['stime']
-                    # stime = flow_dict['ts']
                     sport = flow_dict['sport']
-                    # timestamp = data['stime']
-                    dport = flow_dict.get('dport',None)
+                    dport = flow_dict.get('dport', None)
                     proto = flow_dict.get('proto')
                     appproto = flow_dict.get('appproto', '')
                     if not appproto or appproto == '-':
                         appproto = flow_dict.get('type', '')
+                    # stime = flow_dict['ts']
+                    # timestamp = data['stime']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
+
+                    # --- Detect long Connections ---
                     # Do not check the duration of the flow if the daddr or
-                    # saddr is a  multicast.
+                    # saddr is multicast.
                     if not ipaddress.ip_address(daddr).is_multicast and not ipaddress.ip_address(saddr).is_multicast:
                         self.check_long_connection(dur, daddr, saddr, profileid, twid, uid)
 
-                    # Check unknown port
+                    # --- Detect unknown destination ports ---
                     if dport:
                         self.check_unknown_port(dport, proto.lower(), daddr, profileid, twid, uid, timestamp)
 
-                    # Detect Multiple Reconnection attempts
+                    # --- Detect Multiple Reconnection attempts ---
                     key = saddr + '-' + daddr + ':' + str(dport)
                     if dport != 0 and origstate == 'REJ':
                         current_reconnections = __database__.getReconnectionsForTW(profileid,twid)
@@ -542,12 +545,12 @@ class Module(Module, multiprocessing.Process):
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
 
-                    # Detect Port 0 Scanning
+                    # --- Detect Port 0 Scanning ---
                     if proto != 'igmp' and proto != 'icmp' and  proto != 'ipv6-icmp' and (sport == '0' or dport == '0'):
                         direction = 'source' if sport==0 else 'destination'
                         self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
-                    # Detect if this is a connection without a DNS resolution
+                    # --- Detect if this is a connection without a DNS resolution ---
                     # The exceptions are:
                     # 1- Do not check this for DNS requests
                     # 2- Ignore some IPs like private IPs, multicast, and broadcast
