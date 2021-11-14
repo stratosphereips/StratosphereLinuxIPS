@@ -45,16 +45,16 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_local_threat_intelligence_data = 'modules/ThreatIntelligence1/local_data_files/'
 
-    def set_evidence_malicious_ip(self, ip, uid, timestamp, ip_info: dict, profileid='', twid='', ip_state='ip'):
+    def set_evidence_malicious_ip(self, ip, uid, timestamp, ip_info: dict, profileid='', twid='', ip_state=''):
         '''
-        Set an evidence for malicious IP met in the timewindow
+        Set an evidence for a malicious IP met in the timewindow
         :param ip: the ip source file
         :param uid: Zeek uid of the flow that generated the evidence
         :param timestamp: Exact time when the evidence happened
         :param ip_info: is all the info we have about that IP in the db source, confidence, description, etc.
         :param profileid: profile where the alert was generated. It includes the src ip
         :param twid: name of the timewindow when it happened. 
-        :param ip_sate: 
+        :param ip_state: If the IP was a srcip or dstip
         '''
 
         type_detection = ip_state
@@ -68,10 +68,17 @@ class Module(Module, multiprocessing.Process):
         dns_resolution = __database__.get_dns_resolution(ip)
         dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
 
-        description = f'connection to blacklisted IP {ip}{dns_resolution}. Source: {ip_info["source"]}. Description: {ip_info["description"]}'
+        if 'src' in ip_state:
+            direction = 'from'
+        elif 'dst' in ip_state:
+            direction = 'to'
+
+        description = f'connection {direction} blacklisted IP {ip}{dns_resolution}. Source: {ip_info["source"]}. Description: {ip_info["description"]}'
+
         tags = ip_info.get('tags',False)
         if tags:
             description += f' tags={tags}'
+
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
@@ -462,12 +469,14 @@ class Module(Module, multiprocessing.Process):
                     twid = data.get('twid')
                     timestamp = data.get('stime')
                     uid = data.get('uid')
-                    ip_state = data.get('ip_state') # ip state is either 'srcip' or 'dstip'
                     protocol = data.get('proto')
-                    # Data should contain either an ip or a domain so one of them will be None
+                    # IP is the IP that we want the TI for. It can be a SRC or DST IP
                     ip = data.get('ip')
-                    domain = data.get('host') or data.get('server_name') or data.get('query')
-                    # Check if the new data is an ip or a domain
+                    # ip_state will say if it is a srcip or if it was a dst_ip
+                    ip_state = data.get('ip_state') 
+                    #self.print(ip)
+
+                    # If given an IP, ask for it
                     if ip:
                         # Search for this IP in our database of IoC
                         ip_info = __database__.search_IP_in_IoC(ip)
@@ -483,17 +492,22 @@ class Module(Module, multiprocessing.Process):
                             # set malicious IP in MaliciousIPs
                             self.set_maliciousIP_to_MaliousIPs(ip, profileid, twid)
 
-                    if domain:
-                        # Search for this domain in our database of IoC
-                        domain_info = __database__.search_Domain_in_IoC(domain)
-                        if domain_info != False: # Dont change this condition. This is the only way it works
-                            # If the domain is in the blacklist of IoC. Set an evidence
-                            domain_info = json.loads(domain_info)
-                            self.set_evidence_domain(domain, uid, timestamp, domain_info, profileid, twid)
-                            # set malicious domain in DomainInfo
-                            self.set_maliciousDomain_to_DomainInfo(domain, domain_info)
-                            # set malicious domain in MaliciousDomains
-                            self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
+                    else:
+                        # We were not given an IP. Check if we were given a domain
+
+                        # Process any type of domain. Each connection will have only of of these each time
+                        domain = data.get('host') or data.get('server_name') or data.get('query')
+                        if domain:
+                            # Search for this domain in our database of IoC
+                            domain_info = __database__.search_Domain_in_IoC(domain)
+                            if domain_info != False: # Dont change this condition. This is the only way it works
+                                # If the domain is in the blacklist of IoC. Set an evidence
+                                domain_info = json.loads(domain_info)
+                                self.set_evidence_domain(domain, uid, timestamp, domain_info, profileid, twid)
+                                # set malicious domain in DomainInfo
+                                self.set_maliciousDomain_to_DomainInfo(domain, domain_info)
+                                # set malicious domain in MaliciousDomains
+                                self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
