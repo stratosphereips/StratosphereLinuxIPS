@@ -2027,7 +2027,7 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
                                           saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj),
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
-                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label, flow_type=flow_type)
                 elif 'dns' in flow_type:
                     __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
                     # Add DNS resolution if there are answers for the query
