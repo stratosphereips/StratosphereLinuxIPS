@@ -48,8 +48,13 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_malicious_ip(self, ip, uid, timestamp, ip_info: dict, profileid='', twid='', ip_state='ip'):
         '''
         Set an evidence for malicious IP met in the timewindow
-        :param source_file: the ip source file
-        :param ip_info: is all the info we have about that IP in the db source, confidence , description etc...
+        :param ip: the ip source file
+        :param uid: Zeek uid of the flow that generated the evidence
+        :param timestamp: Exact time when the evidence happened
+        :param ip_info: is all the info we have about that IP in the db source, confidence, description, etc.
+        :param profileid: profile where the alert was generated. It includes the src ip
+        :param twid: name of the timewindow when it happened. 
+        :param ip_sate: 
         '''
 
         type_detection = ip_state
