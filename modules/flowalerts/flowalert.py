@@ -130,7 +130,8 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'SSHSuccessful-by-' + by
         threat_level = 0
         confidence = 0.5
-        description = f'SSH successful to IP {daddr}. From IP {saddr}. Size: {str(size)}. Detection model {by}. Threat level {threat_level}. Confidence {confidence}'
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'SSH successful to IP {daddr}. {ip_identification}. From IP {saddr}. Size: {str(size)}. Detection model {by}. Threat level {threat_level}. Confidence {confidence}'
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence,
@@ -145,7 +146,8 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'LongConnection'
         threat_level = 10
         confidence = 0.5
-        description = 'Long Connection ' + str(duration)
+        ip_identification = __database__.getIPIdentification(ip)
+        description = 'Long Connection ' + str(duration) + f'. {ip_identification}'
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
@@ -301,7 +303,8 @@ class Module(Module, multiprocessing.Process):
             type_detection  = 'dport'
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
-            description = f'Connection to unknown destination port {dport}/{proto.upper()} destination IP {daddr}'
+            ip_identification = __database__.getIPIdentification(daddr)
+            description = f'Connection to unknown destination port {dport}/{proto.upper()} destination IP {daddr}. {ip_identification}'
             # get the sni/reverse dns of this daddr
             ip_info = self.get_ip_info(daddr)
             if ip_info:
@@ -319,9 +322,11 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'Port0Scanning'
         detection_info = saddr if direction == 'source' else daddr
         if direction == 'source':
-            description = f'Port 0 scanning: {saddr} is scanning {daddr}'
+            ip_identification = __database__.getIPIdentification(daddr)
+            description = f'Port 0 scanning: {saddr} is scanning {daddr}. {ip_identification}.'
         else:
-            description = f'Port 0 scanning: {daddr} is scanning {saddr}'
+            ip_identification = __database__.getIPIdentification(saddr)
+            description = f'Port 0 scanning: {daddr} is scanning {saddr}. {ip_identification}'
 
         if not twid:
             twid = ''
@@ -365,7 +370,8 @@ class Module(Module, multiprocessing.Process):
                 evidence_count = __database__.get_evidence_count(type_evidence, profileid, twid)
                 # the more the evidence of this type the more confident we are
                 confidence = 1/100*evidence_count
-                description = f'a connection without DNS resolution to IP: {daddr}'
+                ip_identification = __database__.getIPIdentification(daddr)
+                description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
                 if not twid:
                     twid = ''
                 __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
@@ -565,7 +571,8 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'DataExfiltration'
         detection_info = most_contacted_daddr
         bytes_sent_in_MB = int(total_bytes / (10**6))
-        description = f'possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}. IP contacted {times_contacted} times in the past 1h'
+        ip_identification = __database__.getIPIdentification(most_contacted_daddr)
+        description = f'possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}. {ip_identification}. IP contacted {times_contacted} times in the past 1h'
         timestamp = datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
         if not twid:
             twid = ''
@@ -814,7 +821,8 @@ class Module(Module, multiprocessing.Process):
                             profileid = data['profileid']
                             twid = data['twid']
                             ip = flow['daddr']
-                            description = 'self-signed certificate. Destination IP {}'.format(ip)
+                            ip_identification = __database__.getIPIdentification(ip)
+                            description = f'self-signed certificate. Destination IP {ip}. {ip_identification}'
                             confidence = 0.5
                             threat_level = 30
                             type_detection = 'dstip'
@@ -843,7 +851,8 @@ class Module(Module, multiprocessing.Process):
                         if 'SSL certificate validation failed' in msg:
                             ip = flow['daddr']
                             # get the description inside parenthesis
-                            description = msg + ' Destination IP: {}'.format(ip)
+                            ip_identification = __database__.getIPIdentification(ip)
+                            description = msg + f' Destination IP: {ip}. {ip_identification}'
                             self.set_evidence_for_invalid_certificates(profileid, twid, ip, description, uid, timestamp)
                             #self.print(description, 3, 0)
 
@@ -857,7 +866,7 @@ class Module(Module, multiprocessing.Process):
                             detection_info = flow.get('scanned_port','')
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-                            self.print(description, 3, 0)
+                            #self.print(description, 3, 0)
                         if 'Password_Guessing' in note:
                             # Vertical port scan
                             # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
@@ -870,7 +879,7 @@ class Module(Module, multiprocessing.Process):
                             detection_info = flow.get('scanning_ip','')
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
-                            self.print(description, 3, 0)
+                            #self.print(description, 3, 0)
 
                 # --- Detect maliciuos JA3 TLS servers ---
                 elif message['channel'] == 'new_ssl':
@@ -895,9 +904,10 @@ class Module(Module, multiprocessing.Process):
                             server_name = flow.get('server_name') # returns None if not found
                             # if server_name is not None or not empty
                             if not server_name:
-                                description = 'Self-signed certificate. Destination IP: {}'.format(ip)
+                                ip_identification = __database__.getIPIdentification(ip)
+                                description = f'Self-signed certificate. Destination IP: {ip}. {ip_identification}'
                             else:
-                                description = 'Self-signed certificate. Destination IP: {}, SNI: {}'.format(ip, server_name)
+                                description = f'Self-signed certificate. Destination IP: {ip}, SNI: {server_name}. {ip_identification}'
                             self.set_evidence_self_signed_certificates(profileid,twid, ip, description, uid, timestamp)
                             self.print(description, 3, 0)
 
@@ -910,7 +920,8 @@ class Module(Module, multiprocessing.Process):
                                 malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3])
                                 description = malicious_ja3_dict['description']
                                 tags = malicious_ja3_dict['tags']
-                                description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description} [{tags}]'
+                                ip_identification = __database__.getIPIdentification(daddr)
+                                description = f'Malicious JA3: {ja3} to daddr {daddr}. {ip_identification}. Description: {description} [{tags}]'
                                 confidence = malicious_ja3_dict['confidence']
                                 alert = True if float(confidence) > 0.5 else False
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
@@ -919,7 +930,8 @@ class Module(Module, multiprocessing.Process):
                                 malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3s])
                                 description = malicious_ja3_dict['description']
                                 tags = malicious_ja3_dict['tags']
-                                description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description} [{tags}]'
+                                ip_identification = __database__.getIPIdentification(daddr)
+                                description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr}. {ip_identification}. Description: {description} [{tags}]'
                                 confidence = malicious_ja3_dict['confidence']
                                 alert = True if float(confidence) > 0.5 else False
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
