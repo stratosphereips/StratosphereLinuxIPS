@@ -1139,6 +1139,28 @@ class Database(object):
             # print(f'In the DB: Domain {domain}, and data {data}')
         return data
 
+    def getIPIdentification(self, ip: str):
+        """
+        Return the identification of this IP based
+        on the data stored so far
+        """
+        current_data = self.getIPData(ip)
+        identification = ''
+        if current_data:
+            if 'asn' in current_data.keys():
+                asn = current_data['asn']['asnorg']
+                if 'Unknown' not in asn:
+                    identification += 'AS: ' + current_data['asn']['asnorg'] + ', '
+            if 'SNI' in current_data.keys():
+                SNI = current_data['SNI']
+                if type(SNI) == list:
+                    SNI = SNI[0]
+                identification += 'SNI: ' + SNI['server_name'] + ', '
+            if 'reverse_dns' in current_data.keys():
+                identification += 'rDNS: ' + current_data['reverse_dns'] + ', '
+        identification = identification[:-2]
+        return identification
+
     def getIPData(self, ip: str):
         """
         Return information about this IP
