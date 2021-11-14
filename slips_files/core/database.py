@@ -1502,7 +1502,7 @@ class Database(object):
 
     def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='',
                  daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='',
-                 appproto='', uid='', label=''):
+                 appproto='', uid='', label='', flow_type=''):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
@@ -1526,6 +1526,7 @@ class Database(object):
         data['sbytes'] = sbytes
         data['appproto'] = appproto
         data['label'] = label
+        data['flow_type'] = flow_type
         # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
         data['module_labels'] = {}
         # Convert to json string
