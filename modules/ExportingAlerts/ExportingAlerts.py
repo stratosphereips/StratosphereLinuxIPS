@@ -158,7 +158,6 @@ class Module(Module, multiprocessing.Process):
                 # Sensor name is set in slips.conf
                 text = self.sensor_name + ': ' + msg_to_send
             )
-            self.print("Exported to slack", 1, 0)
         except SlackApiError as e:
             # You will get a SlackApiError if "ok" is False
             assert e.response["error"] , "Problem while exporting to slack." # str like 'invalid_auth', 'channel_not_found'
