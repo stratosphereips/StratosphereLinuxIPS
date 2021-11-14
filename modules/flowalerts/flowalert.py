@@ -636,6 +636,7 @@ class Module(Module, multiprocessing.Process):
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
 
+
                     # --- Detect long Connections ---
                     # Do not check the duration of the flow if the daddr or
                     # saddr is multicast.
@@ -664,7 +665,7 @@ class Module(Module, multiprocessing.Process):
 
                     # --- Detect if this is a connection without a DNS resolution ---
                     # The exceptions are:
-                    # 1- Do not check this for DNS requests
+                    # 1- Do not check for DNS requests
                     # 2- Ignore some IPs like private IPs, multicast, and broadcast
                     if flow_type == 'conn' and appproto != 'dns' and not self.is_ignored_ip(daddr):
                         # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
@@ -678,7 +679,8 @@ class Module(Module, multiprocessing.Process):
                                 self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
                         else:
                                 self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
-                    # Detect Connection to multiple ports (for RAT)
+
+                    # --- Detect Connection to multiple ports (for RAT) ---
                     if proto == 'tcp' and state == 'Established':
                         dport_name = appproto
                         if not dport_name:
@@ -718,7 +720,7 @@ class Module(Module, multiprocessing.Process):
                                     description = "Connection to multiple ports {} of Source IP: {}".format(dstports, saddr)
                                     self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
 
-                    # Detect Data exfiltration
+                    # --- Detect Data exfiltration ---
                     # we’re looking for systems that are transferring large amount of data in 20 mins span
                     all_flows = __database__.get_all_flows_in_profileid(profileid)
                     if all_flows:
@@ -787,11 +789,11 @@ class Module(Module, multiprocessing.Process):
                                                 break
                                     self.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
-                # ---------------------------- new_ssh channel
+                # --- Detect successful SSH connections --- 
                 elif message['channel'] == 'new_ssh' :
                     self.check_ssh(message)
 
-                # ---------------------------- new_notice channel
+                # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
                 elif message['channel'] == 'new_notice':
                     data = message['data']
                     if type(data) == str:
@@ -869,7 +871,8 @@ class Module(Module, multiprocessing.Process):
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
                             self.print(description, 3, 0)
-                # ---------------------------- new_ssl channel
+
+                # --- Detect maliciuos JA3 TLS servers ---
                 elif message['channel'] == 'new_ssl':
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
@@ -921,7 +924,7 @@ class Module(Module, multiprocessing.Process):
                                 alert = True if float(confidence) > 0.5 else False
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, alert, confidence)
 
-                # ---------------------------- new_service channel
+                # --- Learn ports that Zeek knows but Slips doesn't ---
                 elif message['channel'] == 'new_service':
                     data = json.loads(message['data'])
                     # uid = data['uid']
@@ -937,7 +940,7 @@ class Module(Module, multiprocessing.Process):
                         # add to known ports
                         __database__.set_port_info(f'{port}/{proto}', service[0])
 
-                # ---------------------------- new_dns_flow channel
+                # --- Detect DNS resolutions without connection ---
                 elif message['channel'] == 'new_dns_flow':
                     data = json.loads(message["data"])
 

@@ -7,7 +7,6 @@ The detection techniques are:
 - Detect long connections
 - Detect successful SSH connections using Slips technique
 - Detect successful SSH connections using Zeek technique
-- Detect SSH brute forcing using Zeek technique
 - Detect connections without DNS resolution
 - Detect DNS resolutions to IPs that were never used
 - Detect connections to unknown ports
@@ -17,6 +16,7 @@ The detection techniques are:
 - Detect self-signed certificates using Zeek
 - Detect invalid certificates using Zeek
 - Detect multiple reconnection attempts to the same destination port with not established flows
+- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing 
 
 The details of each detection follows.
 
