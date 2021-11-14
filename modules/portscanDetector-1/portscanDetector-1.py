@@ -40,7 +40,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.timeout = None
         self.separator = '_'
         # The minimum amount of ips to scan horizontal scan
-        self.port_scan_minimum_dips_threshold = 3
+        self.port_scan_minimum_dips_threshold = 6
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports_threshold = 6
 
