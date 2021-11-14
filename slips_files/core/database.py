@@ -1300,14 +1300,20 @@ class Database(object):
                     data[key] = data_to_store
                 elif mode == 'add':
                     temp = data[key]
-                    # Should both be lists
-                    temp.append(data_to_store)
-                    data[key] = temp
+                    # Should both be lists, so we can extend
+                    temp.extend(data_to_store)
+                    if type(temp) == list:
+                        data[key] = list(set(temp))
+                    else:
+                        data[key] = temp
                 elif mode == 'leave':
                     return
             except KeyError:
                 # There is no data for they key so far. Add it
-                data[key] = data_to_store
+                if type(data_to_store) == list:
+                    data[key] = list(set(data_to_store))
+                else:
+                    data[key] = data_to_store
             # Store
             newdata_str = json.dumps(data)
             self.rcache.hset('DomainsInfo', domain, newdata_str)
@@ -1951,14 +1957,13 @@ class Database(object):
         2- For each domain, store the ip
         stored in DomainsInfo
         """
-        #self.print(f'Set DNS resolution for query {query}, answers {answers}, qtype {qtype_name}')
         # don't store queries ending with arpa as dns resolutions, they're reverse dns
         if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
             for ip in answers:
                 #self.print(f'IP: {ip}')
                 # Make sure it's an ip not a CNAME
-                if not validators.ipv6(ip) or validators.ipv4(ip):
+                if not validators.ipv6(ip) and not validators.ipv4(ip):
                     # it is a CNAME, maybe we can use it later
                     continue
                 # get stored DNS resolution from our db
@@ -1977,7 +1982,7 @@ class Database(object):
             ips_to_add = []
             for ip in answers:
                 # Make sure it's an ip not a CNAME
-                if not validators.ipv6(ip) or validators.ipv4(ip):
+                if not validators.ipv6(ip) and not validators.ipv4(ip):
                     # it is a CNAME, maybe we can use it later
                     continue
                 ips_to_add.append(ip)
@@ -1985,7 +1990,6 @@ class Database(object):
                 domaindata = {}
                 domaindata['IPs'] = ips_to_add
                 self.setInfoForDomains(domain, domaindata, mode='add')
-
 
     def get_dns_resolution(self, ip, all_info=False):
         """
