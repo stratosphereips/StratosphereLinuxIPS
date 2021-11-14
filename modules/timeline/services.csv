@@ -146,4 +146,8 @@ mysql,3306,tcp,MySQL database system
 mysql,3306,udp,MySQL database system
 vnc-server,5900,tcp,Apple Virtual Network Computing
 vnc-server,5900,udp,Apple Virtual Network Computing
+MQTT,1883,tcp,Message Queuing Telemetry Transport Protocol
+MQTT,1883,udp,Message Queuing Telemetry Transport Protocol
+secure-mqtt,8883,tcp,Secure MQTT
+secure-mqtt,8883,udp,Secure MQTT
 spotify-p2p-communication,57621,udp,Spotify
