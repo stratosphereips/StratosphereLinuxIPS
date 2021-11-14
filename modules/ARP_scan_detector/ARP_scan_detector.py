@@ -152,7 +152,7 @@ class Module(Module, multiprocessing.Process):
             # comes here if the IP isn't in any of the local networks
             confidence = 0.8
             threat_level = 50
-            description = f'sending ARP packet to a destination address outside of local network: {daddr}'
+            description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}'
             type_evidence = 'ARPScan'
             type_detection = 'ip' #srcip
             detection_info = profileid.split("_")[1]
