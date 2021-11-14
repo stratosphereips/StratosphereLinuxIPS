@@ -398,9 +398,26 @@ class Module(Module, multiprocessing.Process):
 
         #self.print(f'The DNS query to {domain} had as answers {answers} ')
 
+        # It can happen that this domain was already resolved previously, but with other IPs
+        # So we get from the DB all the IPs for this domain first and append them to the answers
+        # This happens, for example, when there is 1 DNS resolution with A, then 1 DNS resolution 
+        # with AAAA, and the computer chooses the A address. Therefore, the 2nd DNS resolution
+        # would be treated as 'without connection', but this is false.
+
+        previous_data_for_domain =  __database__.getDomainData(domain)
+        if previous_data_for_domain:
+            try:
+                previous_ips_for_domain =  previous_data_for_domain['IPs']
+                answers.extend(previous_ips_for_domain)
+            except KeyError:
+                pass
+
+        #self.print(f'The extended DNS query to {domain} had as answers {answers} ')
+
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
-        #self.print(f'contacted ips: {contacted_ips}')
-        #if contacted_ips == {}: return False
+        # If contacted_ips is empty it can be because we didnt read yet all the flows.
+        # This is automatically captured later in the for loop and we start a Timer
+        
         # every dns answer is a list of ips that correspond to a spicific query,
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
