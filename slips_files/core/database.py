@@ -508,7 +508,7 @@ class Database(object):
                 'uid': uid
             }
             data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence',data_to_send)
+            self.publish('give_threat_intelligence', data_to_send)
             # Check source ip
             data_to_send = {
                 'ip': str(saddr),
@@ -520,7 +520,7 @@ class Database(object):
                 'uid': uid
             }
             data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence',data_to_send)
+            self.publish('give_threat_intelligence', data_to_send)
             if role == 'Client':
                 # The profile corresponds to the src ip that received this flow
                 # The dstip is here the one receiving data from your profile
@@ -1262,13 +1262,15 @@ class Database(object):
         else:
             return False
 
-    def setInfoForDomains(self, domain: str, domaindata: dict):
+    def setInfoForDomains(self, domain: str, domaindata: dict, mode='leave'):
         """
         Store information for this domain
         We receive a dictionary, such as {'geocountry': 'rumania'} that we are
         going to store for this domain
-        If it was not there before we store it. If it was there before, we
-        overwrite it
+        The mode parameter defines how to deal with the new data
+        - to 'overwrite' the data with the new data
+        - to 'add' the data to the new data
+        - to 'leave' the past data untouched
         """
         # Get the previous info already stored
         data = self.getDomainData(domain)
@@ -1277,28 +1279,40 @@ class Database(object):
             self.setNewDomain(domain)
             # Now get the data, which should be empty, but just in case
             data = self.getDomainData(domain)
+
+        # Let's check each key stored for this domain
         for key in iter(domaindata):
             # domaindata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
             # domaindata can be {'VirusTotal': [1,2,3,4]}
+
             # I think we dont need this anymore of the conversion
             if type(data) == str:
                 # Convert the str to a dict
                 data = json.loads(data)
+
             data_to_store = domaindata[key]
             # If there is data previously stored, check if we have
             # this key already
             try:
-                # If the key is already stored, do not modify it
-                # Check if this decision is ok! or we should modify
-                # the data
+                # Do we have they key alredy?
                 _ = data[key]
+                if mode == 'overwrite':
+                    data[key] = data_to_store
+                elif mode == 'add':
+                    temp = data[key]
+                    # Should both be lists
+                    temp.append(data_to_store)
+                    data[key] = temp
+                elif mode == 'leave':
+                    return
             except KeyError:
                 # There is no data for they key so far. Add it
                 data[key] = data_to_store
-                newdata_str = json.dumps(data)
-                self.rcache.hset('DomainsInfo', domain, newdata_str)
-                # Publish the changes
-                self.r.publish('dns_info_change', domain)
+            # Store
+            newdata_str = json.dumps(data)
+            self.rcache.hset('DomainsInfo', domain, newdata_str)
+            # Publish the changes
+            self.r.publish('dns_info_change', domain)
 
     def setInfoForIPs(self, ip: str, ipdata: dict):
         """
@@ -1604,7 +1618,7 @@ class Database(object):
                 'uid':uid
             }
             data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence',data_to_send)
+            self.publish('give_threat_intelligence', data_to_send)
 
     def add_out_http(self, profileid, twid, stime, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
         """
@@ -1648,7 +1662,7 @@ class Database(object):
                 'uid':uid
             }
         data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence',data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
 
     def add_out_ssh(self, profileid, twid, stime, flowtype, uid, ssh_version, auth_attempts, auth_success, client, server, cipher_alg, mac_alg, compression_alg, kex_alg, host_key_alg, host_key):
         """
@@ -1754,7 +1768,7 @@ class Database(object):
                 'uid': uid
             }
         data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence',data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
@@ -1931,9 +1945,11 @@ class Database(object):
 
     def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str, profileid: str, twid: str):
         """
-        Cache DNS answers for each query
+        Cache DNS answers
+        1- For each ip in the answer, store the domain
         stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
-        :param ts: epoch time
+        2- For each domain, store the ip
+        stored in DomainsInfo
         """
         #self.print(f'Set DNS resolution for query {query}, answers {answers}, qtype {qtype_name}')
         # don't store queries ending with arpa as dns resolutions, they're reverse dns
@@ -1955,6 +1971,21 @@ class Database(object):
                 ip_info = json.dumps(ip_info)
                 # we store ALL dns resolutions seen since starting slips in DNSresolution
                 self.r.hset('DNSresolution', ip, ip_info)
+
+            # Store these IPs for the domain
+            domain = query
+            ips_to_add = []
+            for ip in answers:
+                # Make sure it's an ip not a CNAME
+                if not validators.ipv6(ip) or validators.ipv4(ip):
+                    # it is a CNAME, maybe we can use it later
+                    continue
+                ips_to_add.append(ip)
+            if ips_to_add:
+                domaindata = {}
+                domaindata['IPs'] = ips_to_add
+                self.setInfoForDomains(domain, domaindata, mode='add')
+
 
     def get_dns_resolution(self, ip, all_info=False):
         """
