@@ -617,6 +617,8 @@ class Module(Module, multiprocessing.Process):
                     # be interpreted
                     uid = next(iter(flow))
                     flow_dict = json.loads(flow[uid])
+                    # Flow type is 'conn' or 'dns', etc.
+                    flow_type = flow_dict['flow_type']
                     dur = flow_dict['dur']
                     saddr = flow_dict['saddr']
                     daddr = flow_dict['daddr']
@@ -664,7 +666,7 @@ class Module(Module, multiprocessing.Process):
                     # The exceptions are:
                     # 1- Do not check this for DNS requests
                     # 2- Ignore some IPs like private IPs, multicast, and broadcast
-                    if appproto != 'dns' and not self.is_ignored_ip(daddr):
+                    if flow_type == 'conn' and appproto != 'dns' and not self.is_ignored_ip(daddr):
                         # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
                         # after starting slips because the dns may have happened before starting slips
                         if '-i' in sys.argv:
