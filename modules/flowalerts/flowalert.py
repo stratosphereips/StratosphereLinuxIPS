@@ -396,33 +396,38 @@ class Module(Module, multiprocessing.Process):
         # One DNS query may not be answered exactly by UID, but the computer can re-ask the donmain, and the next DNS resolution can be
         # answered. So dont check the UID, check if the domain has an IP
 
+        #self.print(f'The DNS query to {domain} had as answers {answers} ')
+
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(profileid,twid)
-        if contacted_ips == {}: return
+        #self.print(f'contacted ips: {contacted_ips}')
+        #if contacted_ips == {}: return False
         # every dns answer is a list of ips that correspond to a spicific query,
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
+        if answers == ['']:
+            # If no IPs are in the answer, we can not expect the computer to connect to anything
+            #self.print(f'No ips in the answer, so ignoring')
+            return False
         for ip in answers:
+            #self.print(f'Checking if we have a connection to ip {ip}')
             if ip in contacted_ips:
-                  # this dns resolution has a connection
-                    return False
-        # found a query without usage
-        # There is no connection for this dns resolution, but it can be that Slips is
-        # still reading it from the files.
-        # To give time to Slips to read all the files and get all the flows
-        # don't alert a Connection Without DNS until 5 seconds has passed
-        # in real time from the time we received the dns.
-        # Create a timer thread that will wait 5 seconds for the connection to arrive and then check again
+                # this dns resolution has a connection. We can exit
+                return False
+        #self.print(f'It seems that none of the IPs were contacted')
+        # Found a DNS query which none of its IPs was contacted
+        # It can be that Slips is still reading it from the files. Lets check back in some time
+        # Create a timer thread that will wait some seconds for the connection to arrive and then check again
         if uid not in self.connections_checked_in_dns_conn_timer_thread:
             # comes here if we haven't started the timer thread for this dns before
             # mark this dns as checked
             self.connections_checked_in_dns_conn_timer_thread.append(uid)
             params = [ domain, answers, timestamp, profileid, twid, uid]
-            #self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
+            #self.print(f'Starting the timer to check on {domain}, uid {uid}. time {datetime.datetime.now()}')
             timer = TimerThread(15, self.check_dns_resolution_without_connection, params)
             timer.start()
         elif uid in self.connections_checked_in_dns_conn_timer_thread:
+            #self.print(f'Alerting on {domain}, uid {uid}. time {datetime.datetime.now()}')
             # It means we already checked this dns with the Timer process
-            # (we waited 5 seconds for the connection to arrive after the dns was made)
             # but still no connection for it. So now alert
             confidence = 0.8
             threat_level = 5
@@ -542,9 +547,9 @@ class Module(Module, multiprocessing.Process):
         type_detection  = 'dstip'
         type_evidence = 'DataExfiltration'
         detection_info = most_contacted_daddr
-        bytes_sent_in_MB = total_bytes/(10**6)
-        description = f'Possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}. IP contacted {times_contacted} times in the past 1h'
-        timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
+        bytes_sent_in_MB = int(total_bytes / (10**6))
+        description = f'possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}. IP contacted {times_contacted} times in the past 1h'
+        timestamp = datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
@@ -967,5 +972,3 @@ class TimerThread(threading.Thread):
     def task(self):
         #print(f'Executing the function with {self.parameters} on {datetime.datetime.now()}')
         self.function(*self.parameters)
-
-
