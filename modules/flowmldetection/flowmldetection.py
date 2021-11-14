@@ -163,6 +163,10 @@ class Module(Module, multiprocessing.Process):
                 dataset = dataset.drop('origstate', axis=1)
             except ValueError:
                 pass
+            try:
+                dataset = dataset.drop('flow_type', axis=1)
+            except ValueError:
+                pass
 
             # Convert state to categorical
             dataset.state = dataset.state.str.replace(r'(^.*NotEstablished.*$)', '0')
