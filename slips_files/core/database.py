@@ -10,7 +10,8 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
-
+import platform
+import re
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -1857,6 +1858,27 @@ class Database(object):
         """ Return all entries from the list of zeek files """
         data = self.r.smembers('zeekfiles')
         return data
+
+
+    def get_default_gateway(self):
+        # if we have the gateway in our db , return it
+        stored_gateway = self.r.get('default_gateway')
+
+        if not stored_gateway:
+            # we don't have it in our db, try to get it
+            gateway = False
+            if platform.system() == "Darwin":
+                route_default_result = subprocess.check_output(["route", "get", "default"]).decode()
+                try:
+                    gateway = re.search(r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}", route_default_result).group(0)
+                except AttributeError:
+                    gateway = ''
+
+            elif platform.system() == "Linux":
+                route_default_result = re.findall(r"([\w.][\w.]*'?\w?)", subprocess.check_output(["ip", "route"]).decode())
+                gateway = route_default_result[2]
+
+        return gateway
 
     def set_profile_module_label(self, profileid, module, label):
         """

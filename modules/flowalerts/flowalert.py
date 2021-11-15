@@ -46,7 +46,7 @@ class Module(Module, multiprocessing.Process):
         self.timeout = None
         self.p2p_daddrs = {}
         # get the default gateway
-        self.gateway = self.get_default_gateway()
+        self.gateway = __database__.get_default_gateway()
         # Cache list of connections that we already checked in the timer thread (we waited for the connection of these dns resolutions)
         self.connections_checked_in_dns_conn_timer_thread = []
         # Cache list of connections that we already checked in the timer thread (we waited for the dns resolution for these connections)
@@ -579,20 +579,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid)
 
-    def get_default_gateway(self):
-        gateway = False
-        if platform.system() == "Darwin":
-            route_default_result = subprocess.check_output(["route", "get", "default"]).decode()
-            try:
-                gateway = re.search(r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}", route_default_result).group(0)
-            except AttributeError:
-                gateway = ''
 
-        elif platform.system() == "Linux":
-            route_default_result = re.findall(r"([\w.][\w.]*'?\w?)", subprocess.check_output(["ip", "route"]).decode())
-            gateway = route_default_result[2]
-
-        return gateway
 
     def run(self):
         # Main loop function
