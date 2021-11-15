@@ -336,8 +336,13 @@ class Module(Module, multiprocessing.Process):
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
 
+        # Ignore some IP
+        ## - All dhcp servers. Since is ok to connect to them without a DNS request.
+        # We dont have yet the dhcp in the redis, when is there check it
+        #if __database__.get_dhcp_servers(daddr):
+            #continue
+
         answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
-        #self.print(f'Checking DNS of {daddr} {uid}')
         if not answers_dict:
             #self.print(f'No DNS resolution in {answers_dict}')
             # There is no DNS resolution, but it can be that Slips is
@@ -683,9 +688,9 @@ class Module(Module, multiprocessing.Process):
                             diff = now - start_time
                             diff = diff.seconds
                             if int(diff) >= self.conn_without_dns_interface_wait_time:
-                                self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
+                                self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid, dport, proto)
                         else:
-                                self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
+                                self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid, dport, proto)
 
                     # --- Detect Connection to multiple ports (for RAT) ---
                     if proto == 'tcp' and state == 'Established':
