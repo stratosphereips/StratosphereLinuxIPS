@@ -492,35 +492,40 @@ class Database(object):
             # We send the obj but when accessed as str, it is automatically
             # converted to str
             self.setNewIP(str(ip_as_obj))
+
             #############
             # Try to find evidence for this ip, in case we need to report it
             # Ask the threat intelligence modules, using a channel, that we need info about this IP
             # The threat intelligence module will process it and store the info back in IPsInfo
             # Therefore both ips will be checked for each flow
             # Check destination ip
-            data_to_send = {
-                'ip': str(daddr),
-                'profileid' : str(profileid),
-                'twid' :  str(twid),
-                'proto' : str(proto),
-                'ip_state' : 'dstip',
-                'stime':starttime,
-                'uid': uid
-            }
-            data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence', data_to_send)
-            # Check source ip
-            data_to_send = {
-                'ip': str(saddr),
-                'profileid' : str(profileid),
-                'twid' :  str(twid),
-                'proto' : str(proto),
-                'ip_state' : 'srcip',
-                'stime': starttime,
-                'uid': uid
-            }
-            data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence', data_to_send)
+
+            # BUT don't check if the state is OTH, since it means that we didnt see the true src ip and dst ip
+            if columns['state'] != 'OTH':
+                data_to_send = {
+                    'ip': str(daddr),
+                    'profileid' : str(profileid),
+                    'twid' :  str(twid),
+                    'proto' : str(proto),
+                    'ip_state' : 'dstip',
+                    'stime':starttime,
+                    'uid': uid
+                }
+                data_to_send = json.dumps(data_to_send)
+                self.publish('give_threat_intelligence', data_to_send)
+                # Check source ip
+                data_to_send = {
+                    'ip': str(saddr),
+                    'profileid' : str(profileid),
+                    'twid' :  str(twid),
+                    'proto' : str(proto),
+                    'ip_state' : 'srcip',
+                    'stime': starttime,
+                    'uid': uid
+                }
+                data_to_send = json.dumps(data_to_send)
+                self.publish('give_threat_intelligence', data_to_send)
+
             if role == 'Client':
                 # The profile corresponds to the src ip that received this flow
                 # The dstip is here the one receiving data from your profile
