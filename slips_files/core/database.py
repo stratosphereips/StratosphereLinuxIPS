@@ -1803,6 +1803,9 @@ class Database(object):
             }
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence', data_to_send)
+        
+        # Store this DNS resolution into the Info of the IPs resolved
+        #self.setInfoForIPs(ip, domain)
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
@@ -1989,7 +1992,6 @@ class Database(object):
         if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
             for ip in answers:
-                #self.print(f'IP: {ip}')
                 # Make sure it's an ip not a CNAME
                 if not validators.ipv6(ip) and not validators.ipv4(ip):
                     # it is a CNAME, maybe we can use it later
@@ -2005,7 +2007,7 @@ class Database(object):
                 # we store ALL dns resolutions seen since starting slips in DNSresolution
                 self.r.hset('DNSresolution', ip, ip_info)
 
-            # Store these IPs for the domain
+            # Also store these IPs inside the domain
             domain = query
             ips_to_add = []
             for ip in answers:
