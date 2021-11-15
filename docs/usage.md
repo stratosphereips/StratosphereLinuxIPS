@@ -285,6 +285,13 @@ To disable the creation of log files, there are two options:
 
 You can also change how often Slips creates log files using the ```log_report_time``` variable  in ```slips.conf```.
 
+You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
+
+You can also enable storing a copy of zeek .log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes.
+
+Once slips is done, you will find a copy of your zeek files in ```<output_dir>/zeek_files/``` 
+
+
 We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
 
 Defaut value for both of them is 1
