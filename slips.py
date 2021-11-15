@@ -40,6 +40,7 @@ import errno
 import subprocess
 import re
 from collections import OrderedDict
+from distutils.dir_util import copy_tree
 
 version = '0.8.1'
 
@@ -306,6 +307,21 @@ def shutdown_gracefully(input_information):
             # Give the exact path to save(), this is where the .rdb backup will be
             __database__.save(backups_dir + input_information)
             print(f"[Main] Database saved to {backups_dir}{input_information}" )
+
+
+        # if store_a_copy_of_zeek_files is set to yes in slips.conf, copy the whole zeek_files dir to the output dir
+        try:
+            store_a_copy_of_zeek_files = config.get('parameters', 'store_a_copy_of_zeek_files')
+            store_a_copy_of_zeek_files = False if 'no' in store_a_copy_of_zeek_files.lower() else True
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            store_a_copy_of_zeek_files = False
+
+        if store_a_copy_of_zeek_files:
+            # this is where the copy will be stores
+            zeek_files_path = os.path.join(args.output,'zeek_files')
+            copy_tree("zeek_files", zeek_files_path)
+            print(f"[Main] Stored a copy of zeek files to {zeek_files_path}.")
 
         os._exit(-1)
         return True
