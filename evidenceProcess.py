@@ -317,19 +317,19 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             # Convert each list from str to dict
             whitelisted_IPs = json.loads(whitelist['IPs'])
-        except KeyError:
+        except (IndexError, KeyError):
             pass
         try:
             whitelisted_domains = json.loads(whitelist['domains'])
-        except KeyError:
+        except (IndexError, KeyError):
             pass
         try:
             whitelisted_orgs = json.loads(whitelist['organizations'])
-        except KeyError:
+        except (IndexError, KeyError):
             pass
         try:
             whitelisted_mac = json.loads(whitelist['organizations'])
-        except KeyError:
+        except (IndexError, KeyError):
             pass
 
 
@@ -499,7 +499,15 @@ class EvidenceProcess(multiprocessing.Process):
         return False
 
     def show_popup(self, alert_to_log: str):
-        pass
+        """
+        Function to display a popup with the alert depending on the OS
+        """
+        if platform.system() == 'Linux':
+            os.system(f'notify-send "Slips: {alert_to_log}"')
+        elif platform.system() == 'Darwin':
+            os.system(f'osascript -e "display notification "{alert_to_log}" with title "Slips"" ')
+
+
 
     def run(self):
         while True:
