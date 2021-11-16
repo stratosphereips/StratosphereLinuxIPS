@@ -222,7 +222,7 @@ class UpdateFileManager:
                 self.new_update_time = time.time()
                 return True
             else:
-                self.print(f'An error occurred while downloading the file {url}.', 1, 0)
+                self.print(f'An error occurred while downloading the file {url}.', 0, 1)
                 return False
         except Exception as e:
             self.print(f'An error occurred while downloading the file {url}.', 0, 1)
