@@ -80,8 +80,6 @@ class Trust(Module, multiprocessing.Process):
 
         self.port = pigeon_port
         self.rename_with_port = rename_with_port
-        self.slips_update_channel_raw = slips_update_channel
-        self.p2p_data_request_channel_raw = p2p_data_request_channel
         self.gopy_channel_raw = gopy_channel
         self.pygo_channel_raw = pygo_channel
         self.pigeon_logfile_raw = pigeon_logfile
@@ -96,8 +94,9 @@ class Trust(Module, multiprocessing.Process):
 
         self.printer = Printer(output_queue, self.name + str_port)
 
-        self.slips_update_channel = self.slips_update_channel_raw + str_port
-        self.p2p_data_request_channel = self.p2p_data_request_channel_raw + str_port
+        self.slips_update_channel = slips_update_channel
+        self.p2p_data_request_channel = p2p_data_request_channel
+
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
         self.pigeon_logfile = data_dir + self.pigeon_logfile_raw + str_port
@@ -187,6 +186,11 @@ class Trust(Module, multiprocessing.Process):
         pubsub.subscribe(**callbacks, ignore_subscribe_messages=True)
         try:
             while True:
+                ret_code = self.pigeon.poll()
+                if ret_code is not None:
+                    self.print(f"Pigeon process suddenly terminated with return code {ret_code}. Stopping module.")
+                    return
+
                 # get_message() also let redis library to take execution time and call subscribed callbacks if needed
                 message = pubsub.get_message()
 
@@ -196,7 +200,6 @@ class Trust(Module, multiprocessing.Process):
                     if self.start_pigeon:
                         self.pigeon.send_signal(signal.SIGINT)
 
-                    # TODO by martin: this is from Dita, is it correct way how to do it? ---- lukas: lgtm
                     self.trust_db.__del__()
                     break
 
@@ -230,7 +233,6 @@ class Trust(Module, multiprocessing.Process):
         except Exception as e:
             self.printer.err(f"Exception {e} in data_request_callback")
 
-    # TODO by martin: still need to be checked, I had no time to check this func
     def handle_update(self, ip_address: str) -> None:
         """
         Handle IP scores changing in Slips received from the ip_info_change channel
@@ -245,7 +247,7 @@ class Trust(Module, multiprocessing.Process):
             self.print("IP validation failed")
             return
 
-        score, confidence = utils.get_ip_info_from_slips(ip_address, self.storage_name)
+        score, confidence = utils.get_ip_info_from_slips(ip_address)
         if score is None:
             self.print("IP doesn't have any score/confidence values in DB")
             return
@@ -278,7 +280,6 @@ class Trust(Module, multiprocessing.Process):
         if score > 0.8 and confidence > 0.6:
             utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
 
-    # TODO by martin: still need to be checked, I had no time to check this func
     def handle_data_request(self, message_data: str) -> None:
         """
         Read data request from Slips and collect the data.
