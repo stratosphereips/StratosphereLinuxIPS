@@ -202,13 +202,28 @@ The threat intelligence module reads IoCs from local and remote files.
 
 We update the remote ones regularly. The list of remote threat intelligence files is set in the variables ```ti_files``` variable in slips.conf. You can add your own remote threat intelligence feeds in this variable. Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
 
-Each URL should be added with a confidence, the format is (url,confidence), confidence is on a scale from 0 to 1 how confident are you that this feed has valid IOCs.
+Each URL should be added with a threat_level and a tag, the format is (url,threat_level,tag) 
 
-The lower the confidence the less likely it is for Slips to alert when a malicious IP/domain is found in this feed.
+tag is which category is this feed e.g. phishing, adtrackers, etc..
 
-Be sure the format is correct and only use spaces to separate between tuples and not between urls and confidence.
+threat_level is on a scale from 0 to 1 how malicious the IoCs in this feed are.
+
+The lower the threat_level the less likely it is for Slips to alert when a malicious IP/domain is found in this feed.
+
+Be sure the format is:
+
+link, threat_level=0-1, tags=['tag1','tag2']
 
 The remote files are installed to the path set in the ```download_path_for_local_threat_intelligence```. By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` 
+
+**RiskIQ feeds**
+
+Slips supports getting phishing domains from RiskIQ.
+
+You can add your your email in the configuration file in the ```RiskIQ_email``` parameter
+
+The path of the API key is specified in the ```RiskIQ_key_path``` parameter, 
+in that file there should only be the 64 character RiskIQ API key.
 
 **Local files**
 
@@ -272,6 +287,13 @@ To disable the creation of log files, there are two options:
 
 You can also change how often Slips creates log files using the ```log_report_time``` variable  in ```slips.conf```.
 
+You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
+
+You can also enable storing a copy of zeek .log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes.
+
+Once slips is done, you will find a copy of your zeek files in ```<output_dir>/zeek_files/``` 
+
+
 We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
 
 Defaut value for both of them is 1
@@ -331,8 +353,20 @@ Below is a table showing each level of both.
 # Unit testing
 To test your changes to Slips, please run all the unit tests. Fromn the main folder where slips is installed:
 
-    tests/run_all_tests.py
+    python3 tests/run_all_tests.py
 
 ### Plug in a zeek script
 
 Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir.
+
+
+## Running Slips from python
+
+You can run Slips from python using the following script
+
+```py
+import subprocess
+command = './slips.py -f dataset/test3.binetflow -o /data/test'
+args = command.split()
+process = subprocess.run(args, stdout=subprocess.PIPE)
+```

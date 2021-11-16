@@ -40,8 +40,9 @@ import errno
 import subprocess
 import re
 from collections import OrderedDict
+from distutils.dir_util import copy_tree
 
-version = '0.8'
+version = '0.8.1'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -307,6 +308,21 @@ def shutdown_gracefully(input_information):
             __database__.save(backups_dir + input_information)
             print(f"[Main] Database saved to {backups_dir}{input_information}" )
 
+
+        # if store_a_copy_of_zeek_files is set to yes in slips.conf, copy the whole zeek_files dir to the output dir
+        try:
+            store_a_copy_of_zeek_files = config.get('parameters', 'store_a_copy_of_zeek_files')
+            store_a_copy_of_zeek_files = False if 'no' in store_a_copy_of_zeek_files.lower() else True
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            store_a_copy_of_zeek_files = False
+
+        if store_a_copy_of_zeek_files:
+            # this is where the copy will be stores
+            zeek_files_path = os.path.join(args.output,'zeek_files')
+            copy_tree("zeek_files", zeek_files_path)
+            print(f"[Main] Stored a copy of zeek files to {zeek_files_path}.")
+
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -479,18 +495,15 @@ if __name__ == '__main__':
         zeek_bro = check_zeek_or_bro()
         if zeek_bro is False:
             # If we do not have bro or zeek, terminate Slips.
-            print('no zeek nor bro')
+            print('Error. No zeek or bro binary found.')
             terminate_slips()
         else:
             prepare_zeek_scripts()
-
-
 
     # See if we have the nfdump, if we need it according to the input type
     if input_type == 'nfdump' and shutil.which('nfdump') is None:
         # If we do not have nfdump, terminate Slips.
         terminate_slips()
-
 
     # Remove default folder for alerts, if exists
     if os.path.exists(args.output):
@@ -611,6 +624,9 @@ if __name__ == '__main__':
         if not args.clearblocking and not args.blocking \
                 or (args.blocking and not args.interface): # ignore module if not using interface
             to_ignore.append('blocking')
+
+        # leak detector only works on pcap files
+        if input_type != 'pcap': to_ignore.append('leak_detector')
         try:
             # This 'imports' all the modules somehow, but then we ignore some
             modules_to_call = load_modules(to_ignore)[0]
@@ -620,7 +636,9 @@ if __name__ == '__main__':
                     ModuleProcess = module_class(outputProcessQueue, config)
                     ModuleProcess.start()
                     __database__.store_process_PID(module_name, int(ModuleProcess.pid))
-                    outputProcessQueue.put('10|main|\t\tStarting the module {} ({}) [PID {}]'.format(module_name, modules_to_call[module_name]['description'], ModuleProcess.pid))
+                    outputProcessQueue.put('10|main|\t\tStarting the module {} ({}) [PID {}]'.format(module_name,
+                                                                                                     modules_to_call[module_name]['description'],
+                                                                                                     ModuleProcess.pid))
         except TypeError:
             # There are not modules in the configuration to ignore?
             print('No modules are ignored')
@@ -721,7 +739,8 @@ if __name__ == '__main__':
                 __database__.setSlipsInternalTime(time_of_last_modified_tw)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
-            outputProcessQueue.put('10|Main|Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+            #outputProcessQueue.put(f'10|Main|Total Number of Profiles in DB so far: {profilesLen}. Modified Profiles in the last TW: {amount_of_modified}. ({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})\r')
+            print(f'Total Number of Profiles in DB so far: {profilesLen}. Modified Profiles in the last TW: {amount_of_modified}. ({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})', end='\r')
 
             # Check if we need to close some TW
             __database__.check_TW_to_close()

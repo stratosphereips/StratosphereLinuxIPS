@@ -163,6 +163,10 @@ class Module(Module, multiprocessing.Process):
                 dataset = dataset.drop('origstate', axis=1)
             except ValueError:
                 pass
+            try:
+                dataset = dataset.drop('flow_type', axis=1)
+            except ValueError:
+                pass
 
             # Convert state to categorical
             dataset.state = dataset.state.str.replace(r'(^.*NotEstablished.*$)', '0')
@@ -174,6 +178,7 @@ class Module(Module, multiprocessing.Process):
             # we dont see all the protocols
             # Also we dont store the Categorizer because the user can retrain
             # with its own data.
+            dataset.proto = dataset.proto.str.lower()
             dataset.proto = dataset.proto.str.replace(r'(^.*tcp.*$)', '0')
             dataset.proto = dataset.proto.str.replace(r'(^.*udp.*$)', '1')
             dataset.proto = dataset.proto.str.replace(r'(^.*icmp.*$)', '2')
@@ -218,7 +223,7 @@ class Module(Module, multiprocessing.Process):
             return dataset
         except Exception as inst:
             # Stop the timer
-            self.print('Error in process_flows()')
+            self.print('Error in process_features()')
             self.print(type(inst))
             self.print(inst)
 
@@ -341,8 +346,8 @@ class Module(Module, multiprocessing.Process):
         """
         Set the evidence that a flow was detected as malicious
         """
-        confidence = 0.6
-        threat_level = 30
+        confidence =  0.1
+        threat_level = 0.2
         type_detection  = 'flow'
         detection_info = str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
         type_evidence = 'MaliciousFlow'

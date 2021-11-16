@@ -1,6 +1,6 @@
 <h1 align="center"> 
 
-Slips v0.8
+Slips v0.8.1
 </h1>
 
 Slips is a behavioral-based Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels to provide good visualisation for the analyst.
@@ -11,7 +11,7 @@ Behavioral based Intrusion Prevention System<br><br>
 
 Slips documentation is [here](https://stratospherelinuxips.readthedocs.io/en/develop/) <br>
 
-[Features](#features) — [Slips in action](#slips-in-action) — [Running Slips in a Docker](#running-slips-in-a-docker) — [Authors](#authors) - [How to contribute](#how-to-contribute)
+[Features](#features) — [Running Slips in a Docker](#installation) — [Authors](#people-involved) - [How to contribute](#how-to-contribute)
 </h3>
 
 ## Features
@@ -22,8 +22,6 @@ Slips is a modular software. Each module is designed to perform a specific detec
 
 |   module  |   description | status |
 | ---| --- | :-: |
-| asn | loads and finds the ASN of each IP |✅|
-| geoip | finds the country and geolocation information of each IP |✅|
 | https | training&test of RandomForest to detect malicious https flows |⏳|
 | port scan detector | detects Horizontal and Vertical port scans |✅|
 | threat Intelligence | checks if each IP is in a list of malicious IPs  |✅|
@@ -31,12 +29,14 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | rnn-cc-detection | detects command and control channels using recurrent neural network and the stratosphere behavioral letters |✅|
 | VirusTotal | module to lookup IP address on VirusTotal |✅|
 | flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
-| RDNS | module to get and store the reverse DNS info about IPs  |✅|
+| IP_Info | module to find Geolocation, ASN, RDNS info about IPs and MAC vendors  |✅|
+| RiskIQ | Module to get different information from RiskIQ  |✅|
 | ARPScanDetector | module to check for ARP scans in ARP traffic  |✅|
 | ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|
 | http_analyzer | module to analyze HTTP traffic |✅|
 | blocking | module to block malicious IPs connecting to the device |✅|
 | flowmldetection | module to detect malicious flows using ML pretrained models |✅|
+| leak_detector | module to  detect leaks of data in the traffic using YARA rules |✅|
 
 
 
@@ -73,7 +73,7 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
 ## How to build Slips docker from Dockerfile:
 
-        cd dockeri/ubuntu-image
+        cd docker/ubuntu-image
         docker build --no-cache -t slips -f Dockerfile .
         docker run -it --rm --net=host -v $(pwd)/../../dataset:/StratosphereLinuxIPS/dataset slips
         ./slips.py -c slips.conf -f dataset/test3.binetflow
@@ -83,6 +83,22 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
         docker run -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips:latest
         ./slips.py -c slips.conf -i eno1 -p
 
+
+## If you want to run Slips locally on bare metal
+The easiest way is to use [conda](https://docs.conda.io/en/latest/) for Python environment management. 
+Note that if you want to analyze PCAPs, you need to have either `zeek` or `bro` installed. Check [slips.py](slips.py) and usage of `check_zeek_or_bro` function.
+Slips also needs Redis for interprocess communication, you can either install Redis on bare metal and run `redis-server --daemonize yes` or you can use docker version
+and execute `docker run --rm -d --name slips_redis -p 6379:6379 redis:alpine`.
+```bash
+# clone repository
+git@github.com:stratosphereips/StratosphereLinuxIPS.git && cd StratosphereLinuxIPS
+# create conda environment and download all python dependencies
+conda env create -f conda-environment.yaml
+# activate conda environment
+conda activate slips 
+# and finally run slips
+./slips.py -c slips.conf -f dataset/myfile.pcap
+```
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
 

@@ -22,38 +22,42 @@ RUN apt update && apt install -y --no-install-recommends \
     zeek \
     python3-pip \
 	python3-certifi \
+	python3-dev \
+    build-essential \
 	file \
 	lsof \
 	net-tools \
 	iptables \
 	iproute2 \
 	nfdump \
+	tshark \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Upgrade pip3
 RUN pip3 install --upgrade pip
 
-# Install redis using PIP3
-RUN pip3 install wheel
-RUN pip3 install redis
-RUN pip3 install setuptools
-RUN pip3 install validators
-RUN pip3 install colorama
-RUN pip3 install maxminddb
-RUN pip3 install pandas
-RUN pip3 install sklearn
-RUN pip3 install urllib3
-RUN pip3 install scipy
-RUN pip3 install watchdog
-RUN pip3 install stix2
-RUN pip3 install cabby
-RUN pip3 install ipwhois
-RUN pip3 install pytest
+# To avoid user interaction with tzdata
+ENV DEBIAN_FRONTEND=noninteractive
+
+
+# Requirements for compiling yara
+RUN apt install -y automake libtool make gcc pkg-config
+
+# Compile and install YARA
+RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
+  && tar -zxf v4.1.3.tar.gz \
+  && cd yara-4.1.3 \
+  && ./bootstrap.sh \
+  && ./configure \
+  && make \
+  && make install
+
+# Install Slips python requirements
+RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
+RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby
+RUN pip3 install ipwhois pytest pytest-xdist yara-python
 RUN pip3 install --ignore-installed six
-RUN pip3 install slackclient
-RUN pip3 install tzlocal
-RUN pip3 install psutil
-RUN pip3 install pytest-xdist
+RUN pip3 install --upgrade tensorflow==2.4.1
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git

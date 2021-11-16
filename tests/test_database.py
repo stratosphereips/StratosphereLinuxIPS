@@ -117,11 +117,12 @@ def test_add_flow(database):
     sbytes = 20
     appproto = 'dhcp'
     uid = '1234'
+    flow_type =  ""
     assert database.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
                                           saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj),
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
-                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid) == True
-    assert database.r.hget(profileid + '_' + twid + '_' + 'flows', uid) == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20, "sbytes": 20, "appproto": "dhcp", "label": "", "module_labels": {}}'
+                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, flow_type=flow_type) == True
+    assert database.r.hget(profileid + '_' + twid + '_' + 'flows', uid) == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20, "sbytes": 20, "appproto": "dhcp", "label": "", "flow_type": "", "module_labels": {}}'
 
 
 def test_module_labels(database):

@@ -31,9 +31,9 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'lstm-cc-detection-1'
+    name = 'rnn-cc-detection-1'
     description = 'Detect C&C channels based on behavioral letters'
-    authors = ['Sebastian Garcia', 'Kamila Babayeva']
+    authors = ['Sebastian Garcia', 'Kamila Babayeva', 'Ondrej Lukas']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -82,9 +82,10 @@ class Module(Module, multiprocessing.Process):
         type_detection = 'outTuple'
         detection_info = tupleid
         type_evidence = 'C&C channels detection'
-        threat_level = 30
-        description = 'RNN C&C channels detection, score: ' + str(score) + ', tuple ID:\'' + str(tupleid) +'\''
-
+        threat_level = 0.3
+        tupleid = tupleid.split(':')
+        dstip , port, proto =  tupleid[0], tupleid[1], tupleid[2]
+        description = f'C&C channels detection, destination IP: {dstip} port: {port}/{proto} score: {format(score, ".4f")}'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
@@ -100,7 +101,6 @@ class Module(Module, multiprocessing.Process):
         max_length = 500
 
         # Convert each of the stratosphere letters to an integer. There are 50
-        #vocabulary = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', ',', '.', '+', '*']
         vocabulary = list("abcdefghiABCDEFGHIrstuvwxyzRSTUVWXYZ1234567890,.+*")
         int_of_letters = {}
         for i, letter in enumerate(vocabulary):
@@ -127,7 +127,7 @@ class Module(Module, multiprocessing.Process):
         # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
         return pre_behavioral_model
 
-    def run(self, model_file="modules/lstm-cc-detection-1/rnn_model.h5"):
+    def run(self, model_file="modules/rnn-cc-detection-1/rnn_model.h5"):
         # TODO: set the decision threshold in the function call
         try:
             # Download lstm model

@@ -1,7 +1,7 @@
 .. image:: /images/slips_logo.png
     :align: center
 
-Slips v0.8
+Slips v0.8.1
 ============================
 
 The tool is available on GitHub `here <https://github.com/stratosphereips/StratosphereLinuxIPS/tree/master>`_.
@@ -23,7 +23,14 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Thread Intelligence**. Explanation on how Slips works with the threat intelligence feeds.See :doc:`Threat Intelligence <threatintelligence>`. 
 
+- **Detections per Flow**. Explanation on how Slips works to make detections on each flow with different techniques. See :doc:`Flow Alerts <flowalerts>`. 
+
+- **IP Info**. Explanation on how Slips gets information about each IP address for the module IP_Info. See :doc:`IP Info <ipinfo>`.
+
+- **Exporting**. The exporting module allows Slips to export to Slack and STIX servers. See :doc:`Exporting <exporting>`.
+
 - **Contributing**. Explanation how to contribute to Slips, and instructions how to implement new detection module in Slips. See :doc:`Contributing <contributing>`. 
+
 
 
 
@@ -40,3 +47,4 @@ This documentation gives an overview how Slips works, how to use it and how to h
    contributing
    training
    threatintelligence
+   flowalerts

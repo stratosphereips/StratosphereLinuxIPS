@@ -15,7 +15,7 @@ from datetime import datetime
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'timeline'
-    description = 'Creates kalispo timeline of what happened in the network based on flows and available data'
+    description = 'Creates kalipso timeline of what happened in the network based on flows and available data'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
@@ -56,7 +56,7 @@ class Module(Module, multiprocessing.Process):
         Funciton to read our special file called 'services.csv' and load the known ports from it into the database
         """
         try:
-            f = open('modules/timeline/services.csv')
+            f = open('slips_files/ports_info/services.csv')
             for line in f:
                 name = line.split(',')[0]
                 port = line.split(',')[1]

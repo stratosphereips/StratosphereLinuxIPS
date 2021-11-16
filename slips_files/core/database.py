@@ -9,6 +9,9 @@ import subprocess
 from datetime import datetime
 import ipaddress
 import sys
+import validators
+import platform
+import re
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -152,9 +155,31 @@ class Database(object):
         Used when mac adddr
         :param MAC_info: dict containing mac address and vendor info
         """
-        MAC_info = json.loads(MAC_info)
+        # MAC_info = json.dumps(MAC_info)
         # Add the MAC addr and vendor to this profile
         self.r.hmset(profileid, MAC_info)
+
+    def get_mac_addr_from_profile(self,profileid) -> str:
+        """
+        Retuns MAC info about a certain profile, doesn't return the vendor
+        return the mac address or None
+        """
+        MAC_info = self.r.hmget(profileid, 'MAC')[0]
+        return MAC_info
+
+    def get_IP_of_MAC(self, MAC):
+        """
+        Returns the IP associated with the given MAC in our database
+        """
+        profiles = self.getProfiles()
+        if profiles:
+            # get the mac of every profile we have
+            for profile in profiles:
+                MAC_of_profile = self.get_mac_addr_from_profile(profile)
+                # does this profile has the MAC we're searching for?
+                if MAC_of_profile and MAC in MAC_of_profile:
+                    # found the profile with the wanted mac
+                    return profile.split('_')[1]
 
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
@@ -191,14 +216,14 @@ class Database(object):
     def getTWsfromProfile(self, profileid):
         """
         Receives a profile id and returns the list of all the TW in that profile
-        Returns a list with data or an empty list
+        Returns a list of tuples (twid, ts) or an empty list
         """
         data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
         return data
 
     def getamountTWsfromProfile(self, profileid):
         """
-        Receives a profile id and returns the list of all the TW in that profile
+        Receives a profile id and returns the number of all the TWs in that profile
         """
         return len(self.r.zrange('tws' + profileid, 0, -1, withscores=True))
 
@@ -256,7 +281,7 @@ class Database(object):
         data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
         return data
 
-    def getTWforScore(self, profileid, time):
+    def getTWofTime(self, profileid, time):
         """
         Return the TW id and the time for the TW that includes the given time.
         The score in the DB is the start of the timewindow, so we should search
@@ -482,35 +507,40 @@ class Database(object):
             # We send the obj but when accessed as str, it is automatically
             # converted to str
             self.setNewIP(str(ip_as_obj))
+
             #############
             # Try to find evidence for this ip, in case we need to report it
             # Ask the threat intelligence modules, using a channel, that we need info about this IP
             # The threat intelligence module will process it and store the info back in IPsInfo
             # Therefore both ips will be checked for each flow
             # Check destination ip
-            data_to_send = {
-                'ip': str(daddr),
-                'profileid' : str(profileid),
-                'twid' :  str(twid),
-                'proto' : str(proto),
-                'ip_state' : 'dstip',
-                'stime':starttime,
-                'uid': uid
-            }
-            data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence',data_to_send)
-            # Check source ip
-            data_to_send = {
-                'ip': str(saddr),
-                'profileid' : str(profileid),
-                'twid' :  str(twid),
-                'proto' : str(proto),
-                'ip_state' : 'srcip',
-                'stime': starttime,
-                'uid': uid
-            }
-            data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence',data_to_send)
+
+            # BUT don't check if the state is OTH, since it means that we didnt see the true src ip and dst ip
+            if columns['state'] != 'OTH':
+                data_to_send = {
+                    'ip': str(daddr),
+                    'profileid' : str(profileid),
+                    'twid' :  str(twid),
+                    'proto' : str(proto),
+                    'ip_state' : 'dstip',
+                    'stime':starttime,
+                    'uid': uid
+                }
+                data_to_send = json.dumps(data_to_send)
+                self.publish('give_threat_intelligence', data_to_send)
+                # Check source ip
+                data_to_send = {
+                    'ip': str(saddr),
+                    'profileid' : str(profileid),
+                    'twid' :  str(twid),
+                    'proto' : str(proto),
+                    'ip_state' : 'srcip',
+                    'stime': starttime,
+                    'uid': uid
+                }
+                data_to_send = json.dumps(data_to_send)
+                self.publish('give_threat_intelligence', data_to_send)
+
             if role == 'Client':
                 # The profile corresponds to the src ip that received this flow
                 # The dstip is here the one receiving data from your profile
@@ -957,6 +987,7 @@ class Database(object):
             'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
         }
         """
+
         # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
@@ -971,7 +1002,12 @@ class Database(object):
         #Prepare data for a new evidence
         data = dict()
         data['confidence']= confidence
-        data['threat_level'] = threat_level
+        try:
+            data['threat_level'] = float(threat_level)
+        except ValueError:
+            # no threat level is specified, probably ''
+            threat_level = 0
+
         data['description'] = description
         # key uses dictionary format, so it needs to be converted to json to work as a dict key.
         key_json = json.dumps(key)
@@ -997,6 +1033,26 @@ class Database(object):
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
         return True
 
+    def get_evidence_count(self, evidence_type, profileid, twid):
+        """
+        Returns the number of evidence of this type in this profiled and twid
+        :param evidence_type: PortScan, ThreatIntelligence, C&C channels detection etc..
+        """
+        evidence = self.getEvidenceForTW(profileid, twid)
+        count = 0
+        if evidence:
+            evidence = json.loads(evidence)
+            # evidence is a dict of evidence
+            for ev in evidence:
+                # evidence_description is a dicct with type_detection, detection_info and type_evidence as keys
+                evidence_description = json.loads(ev)
+                # count how many evidence of this specific type (evidence_type)
+                evidence_description = evidence_description['type_evidence']
+                if evidence_type in evidence_description:
+                    count +=1
+        return count
+
+
 
     def deleteEvidence(self,profileid, twid, key):
         """ Delete evidence from the database
@@ -1019,6 +1075,19 @@ class Database(object):
         """ Get the evidence for this TW for this Profile """
         data = self.r.hget(profileid + self.separator + twid, 'Evidence')
         return data
+
+    def getEvidenceForProfileid(self,profileid):
+        profile_evidence = {}
+        # get all tws for this profileid
+        timewindows = self.getTWsfromProfile(profileid)
+        for twid,ts in timewindows:
+            # get all evidence in this tw
+            tw_evidence = self.getEvidenceForTW(profileid, twid)
+            if tw_evidence:
+                tw_evidence = json.loads(tw_evidence)
+                profile_evidence.update(tw_evidence)
+        return profile_evidence
+
 
     def checkBlockedProfTW(self, profileid, twid):
         """
@@ -1043,12 +1112,13 @@ class Database(object):
         Add a module label to the flow
         """
         flow = self.get_flow(profileid, twid, uid)
-        if flow:
+        if flow and flow[uid]:
             data = json.loads(flow[uid])
             # here we dont care if add new module lablel or changing existing one
             data['module_labels'][module_name] = module_label
             data = json.dumps(data)
             self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
+
 
     def get_module_labels_from_flow(self, profileid, twid, uid):
         """
@@ -1093,6 +1163,28 @@ class Database(object):
             data = False
             # print(f'In the DB: Domain {domain}, and data {data}')
         return data
+
+    def getIPIdentification(self, ip: str):
+        """
+        Return the identification of this IP based
+        on the data stored so far
+        """
+        current_data = self.getIPData(ip)
+        identification = ''
+        if current_data:
+            if 'asn' in current_data.keys():
+                asn = current_data['asn']['asnorg']
+                if 'Unknown' not in asn:
+                    identification += 'AS: ' + current_data['asn']['asnorg'] + ', '
+            if 'SNI' in current_data.keys():
+                SNI = current_data['SNI']
+                if type(SNI) == list:
+                    SNI = SNI[0]
+                identification += 'SNI: ' + SNI['server_name'] + ', '
+            if 'reverse_dns' in current_data.keys():
+                identification += 'rDNS: ' + current_data['reverse_dns'] + ', '
+        identification = identification[:-2]
+        return identification
 
     def getIPData(self, ip: str):
         """
@@ -1157,7 +1249,7 @@ class Database(object):
         data = self.getDomainData(domain)
         if data is False:
             # If there is no data about this domain
-            # Set this domain for the first time in the IPsInfo
+            # Set this domain for the first time in the DomainsInfo
             # Its VERY important that the data of the first time we see a domain
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
@@ -1217,13 +1309,15 @@ class Database(object):
         else:
             return False
 
-    def setInfoForDomains(self, domain: str, domaindata: dict):
+    def setInfoForDomains(self, domain: str, domaindata: dict, mode='leave'):
         """
         Store information for this domain
         We receive a dictionary, such as {'geocountry': 'rumania'} that we are
         going to store for this domain
-        If it was not there before we store it. If it was there before, we
-        overwrite it
+        The mode parameter defines how to deal with the new data
+        - to 'overwrite' the data with the new data
+        - to 'add' the data to the new data
+        - to 'leave' the past data untouched
         """
         # Get the previous info already stored
         data = self.getDomainData(domain)
@@ -1232,28 +1326,46 @@ class Database(object):
             self.setNewDomain(domain)
             # Now get the data, which should be empty, but just in case
             data = self.getDomainData(domain)
+
+        # Let's check each key stored for this domain
         for key in iter(domaindata):
             # domaindata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
             # domaindata can be {'VirusTotal': [1,2,3,4]}
+
             # I think we dont need this anymore of the conversion
             if type(data) == str:
                 # Convert the str to a dict
                 data = json.loads(data)
+
             data_to_store = domaindata[key]
             # If there is data previously stored, check if we have
             # this key already
             try:
-                # If the key is already stored, do not modify it
-                # Check if this decision is ok! or we should modify
-                # the data
+                # Do we have they key alredy?
                 _ = data[key]
+                if mode == 'overwrite':
+                    data[key] = data_to_store
+                elif mode == 'add':
+                    temp = data[key]
+                    # Should both be lists, so we can extend
+                    temp.extend(data_to_store)
+                    if type(temp) == list:
+                        data[key] = list(set(temp))
+                    else:
+                        data[key] = temp
+                elif mode == 'leave':
+                    return
             except KeyError:
                 # There is no data for they key so far. Add it
-                data[key] = data_to_store
-                newdata_str = json.dumps(data)
-                self.rcache.hset('DomainsInfo', domain, newdata_str)
-                # Publish the changes
-                self.r.publish('dns_info_change', domain)
+                if type(data_to_store) == list:
+                    data[key] = list(set(data_to_store))
+                else:
+                    data[key] = data_to_store
+            # Store
+            newdata_str = json.dumps(data)
+            self.rcache.hset('DomainsInfo', domain, newdata_str)
+            # Publish the changes
+            self.r.publish('dns_info_change', domain)
 
     def setInfoForIPs(self, ip: str, ipdata: dict):
         """
@@ -1340,9 +1452,13 @@ class Database(object):
         """ Subscribe to channel """
         # For when a TW is modified
         pubsub = self.r.pubsub()
-        supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' , 'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',\
-                    'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',\
-                    'new_blocking', 'new_ssh','new_notice','new_url', 'finished_modules', 'new_downloaded_file', 'reload_whitelist', 'new_service',  'new_arp']
+        supported_channels = ['tw_modified' , 'evidence_added' , 'new_ip' ,  'new_flow' ,
+                              'new_dns', 'new_dns_flow','new_http', 'new_ssl' , 'new_profile',
+                              'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change',
+                              'dns_info_change', 'tw_closed', 'core_messages',
+                              'new_blocking', 'new_ssh','new_notice','new_url',
+                              'finished_modules', 'new_downloaded_file', 'reload_whitelist',
+                              'new_service',  'new_arp', 'new_MAC']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 pubsub.subscribe(channel)
@@ -1400,6 +1516,19 @@ class Database(object):
                         flows.append(dict_flow)
         return flows
 
+    def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) ->dict:
+        all_flows = self.get_all_flows_in_profileid_twid(profileid,twid)
+        if not all_flows:
+            return {}
+        contacted_ips = {}
+        for uid, flow in all_flows.items():
+            # get the daddr of this flow
+            flow = json.loads(flow)
+            daddr = flow['daddr']
+            contacted_ips[daddr] = uid
+        return contacted_ips
+
+
     def get_flow(self, profileid, twid, uid):
         """
         Returns the flow in the specific time
@@ -1420,7 +1549,7 @@ class Database(object):
 
     def add_flow(self, profileid='', twid='', stime='', dur='', saddr='', sport='',
                  daddr='', dport='', proto='', state='', pkts='', allbytes='', spkts='', sbytes='',
-                 appproto='', uid='', label=''):
+                 appproto='', uid='', label='', flow_type=''):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
@@ -1444,6 +1573,7 @@ class Database(object):
         data['sbytes'] = sbytes
         data['appproto'] = appproto
         data['label'] = label
+        data['flow_type'] = flow_type
         # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
         data['module_labels'] = {}
         # Convert to json string
@@ -1520,7 +1650,7 @@ class Database(object):
                 sni_ipdata = []
             SNI_port = {'server_name':server_name, 'dport':dport}
             # We do not want any duplicates.
-            if SNI_port['server_name'] not in sni_ipdata:
+            if SNI_port not in sni_ipdata:
                 # Verify that the SNI is equal to any of the domains in the DNS resolution
                 # only add this SNI to our db if it has a DNS resolution
                 dns_resolutions = self.r.hgetall('DNSresolution')
@@ -1528,7 +1658,7 @@ class Database(object):
                     # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
                     for ip, resolution in dns_resolutions.items():
                         resolution = json.loads(resolution)
-                        if SNI_port['server_name'] in json.loads(resolution['domains']):
+                        if SNI_port['server_name'] in resolution['domains']:
                             # add SNI to our db as it has a DNS resolution
                             sni_ipdata.append(SNI_port)
                             self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
@@ -1542,7 +1672,7 @@ class Database(object):
                 'uid':uid
             }
             data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence',data_to_send)
+            self.publish('give_threat_intelligence', data_to_send)
 
     def add_out_http(self, profileid, twid, stime, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
         """
@@ -1586,7 +1716,7 @@ class Database(object):
                 'uid':uid
             }
         data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence',data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
 
     def add_out_ssh(self, profileid, twid, stime, flowtype, uid, ssh_version, auth_attempts, auth_success, client, server, cipher_alg, mac_alg, compression_alg, kex_alg, host_key_alg, host_key):
         """
@@ -1692,7 +1822,10 @@ class Database(object):
                 'uid': uid
             }
         data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence',data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
+        
+        # Store this DNS resolution into the Info of the IPs resolved
+        #self.setInfoForIPs(ip, domain)
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
@@ -1735,14 +1868,43 @@ class Database(object):
         Save in the DB a port with its description
         :param portproto: portnumber + / + protocol
         """
-        self.r.hset('portinfo', portproto, name)
+        self.rcache.hset('portinfo', portproto, name)
 
     def get_port_info(self, portproto: str):
         """
         Retrieve the name of a port
         :param portproto: portnumber + / + protocol
         """
-        return self.r.hget('portinfo', portproto)
+        return self.rcache.hget('portinfo', portproto)
+
+    def set_ftp_port(self, port):
+        """
+        Stores the used ftp port in our main db (not the cache like set_port_info)
+        """
+        self.r.lpush('used_ftp_ports', str(port))
+
+    def is_ftp_port(self, port):
+        # get all used ftp ports
+        used_ftp_ports = self.r.lrange('used_ftp_ports', 0, -1)
+        # check if the given port is used as ftp port
+        return str(port) in used_ftp_ports
+
+    def set_organization_of_port(self, organization, ip: str, portproto: str):
+        """
+        Save in the DB a port with its organization and the ip/ range used by this organization
+        :param portproto: portnumber.lower() + / + protocol
+        :param ip: can be a single org ip, or a range
+        """
+        org_info = {'org_name': organization, 'ip': ip}
+        org_info = json.dumps(org_info)
+        self.rcache.hset('organization_port', portproto, org_info )
+
+    def get_organization_of_port(self, portproto: str):
+        """
+        Retrieve the organization info that uses this port
+        :param portproto: portnumber.lower() + / + protocol
+        """
+        return self.rcache.hget('organization_port', portproto.lower())
 
     def add_zeek_file(self, filename):
         """ Add an entry to the list of zeek files """
@@ -1752,6 +1914,27 @@ class Database(object):
         """ Return all entries from the list of zeek files """
         data = self.r.smembers('zeekfiles')
         return data
+
+
+    def get_default_gateway(self):
+        # if we have the gateway in our db , return it
+        stored_gateway = self.r.get('default_gateway')
+
+        if not stored_gateway:
+            # we don't have it in our db, try to get it
+            gateway = False
+            if platform.system() == "Darwin":
+                route_default_result = subprocess.check_output(["route", "get", "default"]).decode()
+                try:
+                    gateway = re.search(r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}", route_default_result).group(0)
+                except AttributeError:
+                    gateway = ''
+
+            elif platform.system() == "Linux":
+                route_default_result = re.findall(r"([\w.][\w.]*'?\w?)", subprocess.check_output(["ip", "route"]).decode())
+                gateway = route_default_result[2]
+
+        return gateway
 
     def set_profile_module_label(self, profileid, module, label):
         """
@@ -1821,18 +2004,6 @@ class Database(object):
         """
         self.rcache.hset('IoC_ips', ip, description)
 
-    def get_ip_confidence(self, ip):
-        """ Get the confidence of an IP from Ioc_ips """
-
-        ip_info = json.loads(self.rcache.hget('IoC_ips', ip))
-        return ip_info['confidence']
-
-    def get_domain_confidence(self, domain):
-        """ Get the confidence of a domain from IoC_domains """
-
-        domain_info = json.loads(self.rcache.hget('IoC_domains', domain))
-        return domain_info['confidence']
-
 
     def add_domain_to_IoC(self, domain: str, description: str) -> None:
         """
@@ -1879,26 +2050,46 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str):
+    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str, profileid: str, twid: str):
         """
-        Cache DNS answers for each query
+        Cache DNS answers
+        1- For each ip in the answer, store the domain
         stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
-        :param ts: epoch time
+        2- For each domain, store the ip
+        stored in DomainsInfo
         """
+        # don't store queries ending with arpa as dns resolutions, they're reverse dns
+        if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
+            # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
+            for ip in answers:
+                # Make sure it's an ip not a CNAME
+                if not validators.ipv6(ip) and not validators.ipv4(ip):
+                    # it is a CNAME, maybe we can use it later
+                    continue
+                # get stored DNS resolution from our db
+                domains = self.get_dns_resolution(ip)
+                # if the domain(query) we have isn't already in DNSresolution in the db, add it
+                if query not in domains:
+                    domains.append(query)
+                # domains should be a list, not a string!, so don't use json.dumps here
+                ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
+                ip_info = json.dumps(ip_info)
+                # we store ALL dns resolutions seen since starting slips in DNSresolution
+                self.r.hset('DNSresolution', ip, ip_info)
 
-        for ip in answers:
-            # don't store TXT records in the database
-            if 'TXT' in ip:
-                continue
-            # get stored DNS resolution from our db
-            domains = self.get_dns_resolution(ip=ip)
-            # if the domain(query) we have isn't already in DNSresolution in the db, add it
-            if query not in domains:
-                domains.append(query)
-            domains = json.dumps(domains)
-            ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
-            ip_info = json.dumps(ip_info)
-            self.r.hset('DNSresolution', ip, ip_info)
+            # Also store these IPs inside the domain
+            domain = query
+            ips_to_add = []
+            for ip in answers:
+                # Make sure it's an ip not a CNAME
+                if not validators.ipv6(ip) and not validators.ipv4(ip):
+                    # it is a CNAME, maybe we can use it later
+                    continue
+                ips_to_add.append(ip)
+            if ips_to_add:
+                domaindata = {}
+                domaindata['IPs'] = ips_to_add
+                self.setInfoForDomains(domain, domaindata, mode='add')
 
     def get_dns_resolution(self, ip, all_info=False):
         """
@@ -1914,7 +2105,8 @@ class Database(object):
                 # return a dict with 'ts' 'uid' 'answers' about this IP
                 return ip_info
             # return answers only
-            domains = json.loads(ip_info['domains'])
+            domains = ip_info['domains']
+
             return domains
         else:
             return []
@@ -1926,19 +2118,30 @@ class Database(object):
         else:
             return dns_resolutions
 
+    def get_last_dns_ts(self):
+        """ returns the timestamp of the last DNS resolution slips read """
+        dns_resolutions = self.get_all_dns_resolutions()
+        if dns_resolutions:
+            # sort resolutions by ts
+            # k_v is a tuple (key, value) , each value is a serialized json dict.
+            sorted_dns_resolutions = sorted(dns_resolutions.items(), key=lambda k_v: json.loads(k_v[1])['ts'])
+            # return the ts of the last dns resolution in our db
+            last_dns_ts = json.loads(sorted_dns_resolutions[-1][1])['ts']
+            return last_dns_ts
 
     def set_passive_dns(self, ip, data):
         """
         Save in DB passive DNS from virus total
         """
-        data = json.dumps(data)
-        self.r.hset('passiveDNS', ip, data)
+        if data:
+            data = json.dumps(data)
+            self.rcache.hset('passiveDNS', ip, data)
 
     def get_passive_dns(self, ip):
         """
         Get passive DNS from virus total
         """
-        data = self.r.hget('passiveDNS', ip)
+        data = self.rcache.hget('passiveDNS', ip)
         if data:
             data = json.loads(data)
             return data
@@ -2006,21 +2209,25 @@ class Database(object):
                 pass
         return timestamp
 
-    def search_Domain_in_IoC(self, domain: str) -> str:
+    def search_Domain_in_IoC(self, domain: str) -> tuple:
         """
-        Search in the dB of malicious domainss and return a
+        Search in the dB of malicious domains and return a
         description if we found a match
+        returns a tuple (description, is_subdomain)
+        description: description of the subdomain if found
+        bool: True if we found a match for exactly the given domain False if we matched a subdomain
         """
-        domain_description = self.rcache.hget('IoC_domains',domain)
+        domain_description = self.rcache.hget('IoC_domains', domain)
         if domain_description == None:
             # try to match subdomain
             ioc_domains = self.rcache.hgetall('IoC_domains')
-            for malicious_domain,description in ioc_domains.items():
+            for malicious_domain, description in ioc_domains.items():
+                #  if the we contacted images.google.com and we have google.com in our blacklists, we find a match
                 if malicious_domain in domain:
-                    return description
-            return False
+                    return description, True
+            return False, False
         else:
-            return domain_description
+            return domain_description, False
 
     def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
         """
@@ -2135,16 +2342,28 @@ class Database(object):
         """ returns a dict with module names as keys and pids as values """
         return self.r.hgetall('PIDs')
 
-    def set_whitelist(self,whitelisted_IPs, whitelisted_domains, whitelisted_organizations):
-        """ Store a dict of whitelisted IPs, domains and organizations in the db """
+    def set_whitelist(self,type, whitelist_dict):
+        """
+        Store the whitelist_dict in the given key
+        :param type: supporte types are IPs, domains and organizations
+        :param whitelist_dict: the dict of IPs, domains or orgs to store
+        """
+        self.r.hset("whitelist" , type, json.dumps(whitelist_dict))
 
-        self.r.hset("whitelist" , "IPs", json.dumps(whitelisted_IPs))
-        self.r.hset("whitelist" , "domains", json.dumps(whitelisted_domains))
-        self.r.hset("whitelist" , "organizations", json.dumps(whitelisted_organizations))
-
-    def get_whitelist(self):
-        """ Return dict of 3 keys: IPs, domains and organizations"""
+    def get_all_whitelist(self):
+        """ Return dict of 3 keys: IPs, domains, organizations or mac"""
         return self.r.hgetall('whitelist')
+
+    def get_whitelist(self, key):
+        """
+        Whitelist supports different keys like : IPs domains and organizations
+        this function is used to check if we have any of the above keys whitelisted
+        """
+        whitelist = self.r.hget('whitelist',key)
+        if whitelist:
+            return json.loads(whitelist)
+        else:
+            return False
 
     def save(self,backup_file):
         """
