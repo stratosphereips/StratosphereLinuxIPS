@@ -23,7 +23,7 @@ def has_errors(output_file):
     # we can't redirect stderr to a file and check it because we catch all exceptions in slips
     with open(output_file ,'r') as f:
         for line in f:
-            if '<class' in line:
+            if '<class' in line or 'error' in line:
                 return True
     return False
 
