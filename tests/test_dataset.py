@@ -7,36 +7,6 @@ import pytest
 import  shutil
 alerts_file = 'alerts.json'
 
-
-def get_profiles(output_dir):
-    """ This function parses stdout of slips and determines the total number of profiles
-    this is an alternative for get_profiles(output_dir) because now slips clears the database after stopping
-    :param output_dir: this is where slips_output.txt is, it changes based on the what file we're testing
-    """
-    with open(f'{output_dir}slips_output.txt', 'rb') as f:
-        # iterate from the end of the file
-        f.seek(-2, os.SEEK_END)
-        bytes_read = 0
-        while True:
-            # we reached the beginning of the file or is there more to read?
-            if f.tell() == 0:
-                # no more lines to read
-                return 'Number of profiles not found'
-            # try to find the \n that marks the beginning of the line
-            while f.read(1) != b'\n':
-                f.seek(-2, os.SEEK_CUR)
-            # we reached the beginning of a line, read the line to the right
-            line = f.readline().decode()
-            # check if this line has the number of profiles we need
-            if 'Total Number' in line:
-                line = line.split('.')[0] # Number of Profiles in DB so far: 2
-                profiles = line[line.index(": ")+1:].strip()
-                return int(profiles)
-            # seek to the beginning of the line before the current
-            bytes_read+=len(line)
-            f.seek(-bytes_read, 2)
-            continue
-
 def is_evidence_present(log_file, expected_evidence):
     """ Function to read the log file line by line and returns when it finds the expected evidence """
     with open(log_file, 'r') as f:
@@ -71,7 +41,8 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
-    profiles = get_profiles(output_dir)
+    # profiles = get_profiles(output_dir)
+    profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
@@ -92,7 +63,7 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
-    profiles = get_profiles(output_dir)
+    profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
@@ -114,7 +85,7 @@ def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
-    profiles = get_profiles(output_dir)
+    profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
@@ -133,7 +104,7 @@ def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evid
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
-    profiles = get_profiles(output_dir)
+    profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
@@ -149,7 +120,7 @@ def test_suricata(database, suricata_path,  output_dir):
     command = f'./slips.py -c slips.conf -l -f {suricata_path} -o {output_dir} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
-    profiles = get_profiles(output_dir)
+    profiles = int(database.getProfilesLen())
     expected_evidence = 'vertical port scan'
     assert has_errors(output_file) == False
     assert profiles > 90
@@ -167,7 +138,7 @@ def test_nfdump(database, nfdump_path,  output_dir):
     command = f'./slips.py -c slips.conf -l -f {nfdump_path}  -o {output_dir} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
-    profiles = get_profiles(output_dir)
+    profiles = int(database.getProfilesLen())
     expected_evidence = 'C&C channels detection'
     assert has_errors(output_file) == False
     # make sure slips generated profiles for this file (can't the number of profiles exactly because slips doesn't generate a const number of profiles per file)
