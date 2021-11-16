@@ -492,35 +492,40 @@ class Database(object):
             # We send the obj but when accessed as str, it is automatically
             # converted to str
             self.setNewIP(str(ip_as_obj))
+
             #############
             # Try to find evidence for this ip, in case we need to report it
             # Ask the threat intelligence modules, using a channel, that we need info about this IP
             # The threat intelligence module will process it and store the info back in IPsInfo
             # Therefore both ips will be checked for each flow
             # Check destination ip
-            data_to_send = {
-                'ip': str(daddr),
-                'profileid' : str(profileid),
-                'twid' :  str(twid),
-                'proto' : str(proto),
-                'ip_state' : 'dstip',
-                'stime':starttime,
-                'uid': uid
-            }
-            data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence', data_to_send)
-            # Check source ip
-            data_to_send = {
-                'ip': str(saddr),
-                'profileid' : str(profileid),
-                'twid' :  str(twid),
-                'proto' : str(proto),
-                'ip_state' : 'srcip',
-                'stime': starttime,
-                'uid': uid
-            }
-            data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence', data_to_send)
+
+            # BUT don't check if the state is OTH, since it means that we didnt see the true src ip and dst ip
+            if columns['state'] != 'OTH':
+                data_to_send = {
+                    'ip': str(daddr),
+                    'profileid' : str(profileid),
+                    'twid' :  str(twid),
+                    'proto' : str(proto),
+                    'ip_state' : 'dstip',
+                    'stime':starttime,
+                    'uid': uid
+                }
+                data_to_send = json.dumps(data_to_send)
+                self.publish('give_threat_intelligence', data_to_send)
+                # Check source ip
+                data_to_send = {
+                    'ip': str(saddr),
+                    'profileid' : str(profileid),
+                    'twid' :  str(twid),
+                    'proto' : str(proto),
+                    'ip_state' : 'srcip',
+                    'stime': starttime,
+                    'uid': uid
+                }
+                data_to_send = json.dumps(data_to_send)
+                self.publish('give_threat_intelligence', data_to_send)
+
             if role == 'Client':
                 # The profile corresponds to the src ip that received this flow
                 # The dstip is here the one receiving data from your profile
@@ -1798,6 +1803,9 @@ class Database(object):
             }
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence', data_to_send)
+        
+        # Store this DNS resolution into the Info of the IPs resolved
+        #self.setInfoForIPs(ip, domain)
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
@@ -1984,7 +1992,6 @@ class Database(object):
         if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
             for ip in answers:
-                #self.print(f'IP: {ip}')
                 # Make sure it's an ip not a CNAME
                 if not validators.ipv6(ip) and not validators.ipv4(ip):
                     # it is a CNAME, maybe we can use it later
@@ -2000,7 +2007,7 @@ class Database(object):
                 # we store ALL dns resolutions seen since starting slips in DNSresolution
                 self.r.hset('DNSresolution', ip, ip_info)
 
-            # Store these IPs for the domain
+            # Also store these IPs inside the domain
             domain = query
             ips_to_add = []
             for ip in answers:
