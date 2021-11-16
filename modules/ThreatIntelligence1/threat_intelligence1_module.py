@@ -104,7 +104,7 @@ class Module(Module, multiprocessing.Process):
         tags = domain_info.get('tags', False)
         if not threat_level:
             threat_level =  50
-        description = f'connection to the blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
+        description = f'connection to a blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 

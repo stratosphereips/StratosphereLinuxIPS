@@ -562,7 +562,8 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-    def set_evidence_malicious_JA3(self, daddr, profileid, twid, description, uid, timestamp, threat_level):
+
+    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
         """
         :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
         """
