@@ -62,7 +62,10 @@ class EvidenceProcess(multiprocessing.Process):
             self.logs_jsonfile = False
         self.timeout = None
         # this list will have our local and public ips
-        self.our_ips = self.get_IP()
+        try:
+            self.our_ips = self.get_IP()
+        except Exception:
+            pass
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -572,6 +575,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # Add the evidence to the log files
                     self.addDataToLogFile(flow_datetime + ': ' + evidence_to_log)
                     self.addDataToJSONFile(evidence_dict)
+                    __database__.setEvidenceFoAllProfiles(evidence_dict)
 
 
                     #
