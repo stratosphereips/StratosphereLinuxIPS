@@ -14,8 +14,6 @@ from slips_files.core.database import __database__
 #
 # DATA VALIDATION METHODS
 #
-
-
 def validate_ip_address(ip: str) -> bool:
     """
     Make sure that the given string is a valid IP address
@@ -56,9 +54,6 @@ def validate_timestamp(timestamp: str) -> Union[int, None]:
     return int_timestamp
 
 
-# TODO by Martin: This function is not used
-# TODO However, it's checking if go_reports are in a list (as documentation says that it should be like this)
-# TODO used implementation so far counts only with dict. What is correct way?
 def validate_go_reports(data: str) -> list:
     """
     Process data received from go. It should be a json list dumped as string.
@@ -85,8 +80,7 @@ def validate_go_reports(data: str) -> list:
 # READ DATA FROM REDIS, WRITE DATA TO REDIS
 #
 
-# TODO by Martin: remove second arg when usage of this func in p2ptrust.py is modified and verified
-def get_ip_info_from_slips(ip_address: str, storage_name: str = "") -> (float, float):
+def get_ip_info_from_slips(ip_address: str) -> (float, float):
     """
     Get score and confidence on IP from Slips.
 
@@ -106,35 +100,11 @@ def get_ip_info_from_slips(ip_address: str, storage_name: str = "") -> (float, f
 
     slips_score, slips_confidence = read_data_from_ip_info(ip_info)
     # check that both values were provided
-    # TODO by Martin: Dita does not handle scenario when only conficence is None, is it intentional?
+    # TODO by Martin: Dita does not handle scenario when only confidence is None, is it intentional?
     if slips_score is None:
         return None, None
 
     return slips_score, slips_confidence
-
-
-# TODO by Martin: this func is copied from database.py, refactor usage to the original one everywhere and delete this
-def getIPData(ip, storage_name):
-    """
-    Return information about this IP from the IPs has
-    Returns a dictionary
-    We need to separate these three cases:
-    1- IP is in the DB without data
-    2- IP is in the DB with data
-    3- IP is not in the DB
-    """
-    data = __database__.r.hget(storage_name, ip)
-    if data or data == {}:
-        # This means the IP was in the database, with or without data
-        # Convert the data
-        data = json.loads(data)
-        # print(f'In the DB: IP {ip}, and data {data}')
-    else:
-        # The IP was not in the DB
-        data = False
-        # print(f'In the DB: IP {ip}, and data {data}')
-    # Always return a dictionary
-    return data
 
 
 # parse data from redis
@@ -154,56 +124,20 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
         return None, None
 
 
-# TODO by martin: Following 3 functions should probably be in database.py file
-def save_ip_report_to_db(ip, score, confidence, network_trust, storage_name, timestamp=None):
-    # TODO: because of bugs in the database, I can only save this once.
-
+def save_ip_report_to_db(ip, score, confidence, network_trust, timestamp=None):
     if timestamp is None:
         timestamp = time.time()
 
     report_data = {"score": score, "confidence": confidence, "network_score": network_trust, "timestamp": timestamp}
     wrapped_data = {"p2p4slips": report_data}
 
-    # TODO: remove the first call after database is fixed
-    setNewIP(ip, storage_name)
-    setInfoForIPs(ip, wrapped_data, storage_name)
+    __database__.setInfoForIPs(ip, wrapped_data)
 
-
-# TODO by martin: copied from database.py. Why? I guess remove it
-def setNewIP(ip, storage_name):
-    data = getIPData(ip, storage_name)
-    if data is False:
-        __database__.r.hset(storage_name, ip, '{}')
-        __database__.publish('new_ip', ip)
-
-
-# TODO by martin: copied from database.py. Why? I guess remove it
-def setInfoForIPs(ip, wrapped_data, storage_name):
-    data = getIPData(ip, storage_name)
-
-    if not data:
-        setNewIP(ip, storage_name)
-        data = getIPData(ip, storage_name)
-
-    for key in iter(wrapped_data):
-        if type(data) == str:
-            data = json.loads(data)
-
-        data_to_store = wrapped_data[key]
-        try:
-            _ = data[key]
-        except KeyError:
-            data[key] = data_to_store
-            newdata_str = json.dumps(data)
-            __database__.r.hset(storage_name, ip, newdata_str)
-            # Publish the changes
-            __database__.r.publish('ip_info_change', ip)
 
 
 #
 # SEND COMMUNICATION TO GO
 #
-
 def build_go_message(message_type: str, key_type: str, key: str, evaluation_type: str, evaluation=None) -> dict:
     """
     Assemble parameters to one dictionary, with keys that are expected by the remote peer.
