@@ -141,6 +141,13 @@ class EvidenceProcess(multiprocessing.Process):
             self.detection_threshold = 2
         self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)', 2, 0)
 
+        try:
+            self.popup_alerts = self.config.get('detection', 'popup_alerts')
+            self.popup_alerts = True if 'yes' in self.popup_alerts else False
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified, by default...
+            self.popup_alerts = False
+
     def print_alert(self, profileid, twid, flow_datetime):
         '''
         Function to print alert about the blocked profileid and twid
@@ -634,6 +641,9 @@ class EvidenceProcess(multiprocessing.Process):
 
                                 self.addDataToLogFile(alert_to_log)
                                 self.addDataToJSONFile(alert_dict)
+
+                                #todo
+
                                 # check that the dst ip isn't our own IP
                                 if type_detection=='dstip' and detection_info not in self.our_ips:
                                     #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
