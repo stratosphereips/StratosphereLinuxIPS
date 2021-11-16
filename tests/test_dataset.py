@@ -70,11 +70,11 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
     command = f'./slips.py -c slips.conf -l -f {pcap_path} -o {output_dir} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
+    assert has_errors(output_file) == False
     profiles = get_profiles(output_dir)
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
-    assert has_errors(output_file) == False
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [
@@ -91,11 +91,11 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
     command = f'./slips.py -l -c slips.conf -o {output_dir} -f {binetflow_path}  >  {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
+    assert has_errors(output_file) == False
     profiles = get_profiles(output_dir)
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
-    assert has_errors(output_file) == False
     shutil.rmtree(output_dir)
 
 
@@ -113,11 +113,11 @@ def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,
     command = f'./slips.py -c slips.conf -l -f {zeek_dir_path}  -o {output_dir} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
+    assert has_errors(output_file) == False
     profiles = get_profiles(output_dir)
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
-    assert has_errors(output_file) == False
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize("conn_log_path, expected_profiles, expected_evidence,  output_dir",
@@ -132,11 +132,11 @@ def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evid
     command = f'./slips.py -l -c slips.conf -f {conn_log_path}  -o {output_dir} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
+    assert has_errors(output_file) == False
     profiles = get_profiles(output_dir)
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
-    assert has_errors(output_file) == False
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize('suricata_path,  output_dir',[('dataset/suricata-flows.json','suricata/')])
@@ -151,10 +151,10 @@ def test_suricata(database, suricata_path,  output_dir):
     os.system(command)
     profiles = get_profiles(output_dir)
     expected_evidence = 'vertical port scan'
+    assert has_errors(output_file) == False
     assert profiles > 90
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
-    assert has_errors(output_file) == False
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize('nfdump_path,  output_dir',[('dataset/test.nfdump', 'nfdump/')])
@@ -169,9 +169,9 @@ def test_nfdump(database, nfdump_path,  output_dir):
     os.system(command)
     profiles = get_profiles(output_dir)
     expected_evidence = 'C&C channels detection'
+    assert has_errors(output_file) == False
     # make sure slips generated profiles for this file (can't the number of profiles exactly because slips doesn't generate a const number of profiles per file)
     assert profiles > 0
     log_file = output_dir + alerts_file
     assert is_evidence_present(log_file, expected_evidence) == True
-    assert has_errors(output_file) == False
     shutil.rmtree(output_dir)
