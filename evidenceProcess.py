@@ -21,15 +21,17 @@ import json
 from datetime import datetime
 import configparser
 from os import path
-from colorama import Fore, Back, Style
+from colorama import Fore, Style
 import ipaddress
-import socket
 import sys
 
 #import requests
 import subprocess
 import socket
 import re
+import platform
+import os
+import notify2
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -496,6 +498,9 @@ class EvidenceProcess(multiprocessing.Process):
                             pass
         return False
 
+    def show_popup(self, alert_to_log: str):
+        pass
+
     def run(self):
         while True:
             try:
@@ -642,7 +647,8 @@ class EvidenceProcess(multiprocessing.Process):
                                 self.addDataToLogFile(alert_to_log)
                                 self.addDataToJSONFile(alert_dict)
 
-                                #todo
+                                if self.popup_alerts:
+                                    self.show_popup(alert_to_log)
 
                                 # check that the dst ip isn't our own IP
                                 if type_detection=='dstip' and detection_info not in self.our_ips:
