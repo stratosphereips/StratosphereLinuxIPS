@@ -1881,7 +1881,6 @@ class Database(object):
         """
         Stores the used ftp port in our main db (not the cache like set_port_info)
         """
-        print(f'@@@@@@@@@@@@@@@@@@   setting ftp port: {port}')
         self.r.lpush('used_ftp_ports', str(port))
 
     def is_ftp_port(self, port):
