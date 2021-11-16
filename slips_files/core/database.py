@@ -1881,13 +1881,14 @@ class Database(object):
         """
         Stores the used ftp port in our main db (not the cache like set_port_info)
         """
+        print(f'@@@@@@@@@@@@@@@@@@   setting ftp port: {port}')
         self.r.lpush('used_ftp_ports', str(port))
 
     def is_ftp_port(self, port):
         # get all used ftp ports
         used_ftp_ports = self.r.lrange('used_ftp_ports', 0, -1)
         # check if the given port is used as ftp port
-        return port in used_ftp_ports
+        return str(port) in used_ftp_ports
 
     def set_organization_of_port(self, organization, ip: str, portproto: str):
         """
