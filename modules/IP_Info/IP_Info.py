@@ -238,7 +238,7 @@ class Module(Module, multiprocessing.Process):
     # MAC functions
     def get_vendor(self, mac_addr: str, profileid: str):
         """
-        Get vendor info of a MAC address from our offline database
+        Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
         if not hasattr(self, 'mac_db'):
             return False

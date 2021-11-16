@@ -167,6 +167,20 @@ class Database(object):
         MAC_info = self.r.hmget(profileid, 'MAC')[0]
         return MAC_info
 
+    def get_IP_of_MAC(self, MAC):
+        """
+        Returns the IP associated with the given MAC in our database
+        """
+        profiles = self.getProfiles()
+        if profiles:
+            # get the mac of every profile we have
+            for profile in profiles:
+                MAC_of_profile = self.get_mac_addr_from_profile(profile)
+                # does this profile has the MAC we're searching for?
+                if MAC_of_profile and MAC in MAC_of_profile:
+                    # found the profile with the wanted mac
+                    return profile.split('_')[1]
+
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
         try:
