@@ -1030,8 +1030,16 @@ class Database(object):
         current_evidence_json = json.dumps(current_evidence)
         # Set evidence in the database.
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
-        self.r.hset('evidence'+profileid, twid, current_evidence_json)
         return True
+
+    def setEvidenceFoAllProfiles(self, evidence):
+        """
+        Set evidence for the profile in the same format as json in alerts.json
+
+        Comment: it would be better ot have same format of evidence every where.
+        """
+        evidence = json.dumps(evidence)
+        self.r.sadd('Evidence', evidence)
 
     def get_evidence_count(self, evidence_type, profileid, twid):
         """
