@@ -5,6 +5,10 @@
 		- Detect MITM ARP attack
 		- Add 5 new TI feeds (AmnestyTech domains)
 		- The Threat Intelligence feeds are now assigned a threat level instead of confidence value by default (user can change), so you can establish how each list impact your detection.
+		- Improve unknown ports detections. Now we don't alert for ports that appear in an FTP connection.
+		- Improve threat levels and confidence of all alerts.
+		- Add support for storing a copy of zeek files in the output directory.
+
 -0.8.1
 	-Slips
 		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
