@@ -60,7 +60,7 @@ class Module(Module, multiprocessing.Process):
         type_detection = ip_state
         detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
-        threat_level = ip_info['threat_level']
+        threat_level = ip_info.get('threat_level', '')
         if not threat_level:
             threat_level = 80
         confidence = 1
