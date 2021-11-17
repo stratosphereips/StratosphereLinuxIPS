@@ -144,7 +144,7 @@ class EvidenceProcess(multiprocessing.Process):
         self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)', 2, 0)
 
         try:
-            self.popup_alerts = self.config.get('detection', 'popup_alerts')
+            self.popup_alerts = self.config.get('detection', 'popup_alerts').lower()
             self.popup_alerts = True if 'yes' in self.popup_alerts else False
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified, by default...
