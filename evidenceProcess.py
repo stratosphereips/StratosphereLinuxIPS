@@ -31,7 +31,8 @@ import socket
 import re
 import platform
 import os
-import notify2
+import psutil
+import pwd
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -51,6 +52,9 @@ class EvidenceProcess(multiprocessing.Process):
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
+        if self.popup_alerts:
+            # The way we send notifications differ depending on the user and the OS
+            self.setup_notifications()
         # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
         self.logfile = self.clean_evidence_log_file(output_folder)
@@ -65,6 +69,38 @@ class EvidenceProcess(multiprocessing.Process):
         self.timeout = 0.0000001
         # this list will have our local and public ips
         self.our_ips = self.get_IP()
+
+    def setup_notifications(self):
+        """
+        Get the used display, the user using this display and the uid of this user in case of using Slips as root on linux
+        """
+        # in linux, if the user's not root, notifications command will need extra configurations
+        if platform.system() != 'Linux' or os.geteuid() != 0:
+            self.notify_cmd = 'notify-send '
+            return False
+
+        # Get the used display (if the user has only 1 screen it will be set to 0), if not we should know which screen is slips running on.
+        # A "display" is the address for your screen. Any program that wants to write to your screen has to know the address.
+        used_display = psutil.Process().environ()['DISPLAY']
+
+        # when you login as user x in linux, no user other than x is authorized to write to your display, not even root
+        # now that we're running as root, we dont't have acess to the used_display
+        # get the owner of the used_display, there's no other way than running the 'who' command
+        command = f'who | grep "({used_display})" '
+        cmd_output = os.popen(command).read()
+
+        # make sure we found the user of this used display
+        if len(cmd_output) < 5:
+            # we don't know the user o this display!!, disable alerts for now #todo use psutil?
+            self.popup_alerts = False
+            return
+
+        user = cmd_output.split("\n")[0].split()[0]
+        # get the uid
+        uid = pwd.getpwnam(user).pw_uid
+        # run notify-send as user using the used_display and give it the dbus addr
+        self.notify_cmd = f'sudo -u {user} DISPLAY={used_display} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send '
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -504,6 +540,7 @@ class EvidenceProcess(multiprocessing.Process):
         Function to display a popup with the alert depending on the OS
         """
         if platform.system() == 'Linux':
+            #todo
             os.system(f'notify-send "Slips: {alert_to_log}"')
         elif platform.system() == 'Darwin':
             os.system(f'osascript -e "display notification "{alert_to_log}" with title "Slips"" ')
