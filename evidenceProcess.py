@@ -318,19 +318,20 @@ class EvidenceProcess(multiprocessing.Process):
             # Convert each list from str to dict
             whitelisted_IPs = json.loads(whitelist['IPs'])
         except (IndexError, KeyError):
-            pass
+            whitelisted_IPs = {}
+
         try:
             whitelisted_domains = json.loads(whitelist['domains'])
         except (IndexError, KeyError):
-            pass
+            whitelisted_domains = {}
         try:
             whitelisted_orgs = json.loads(whitelist['organizations'])
         except (IndexError, KeyError):
-            pass
+            whitelisted_orgs = {}
         try:
             whitelisted_mac = json.loads(whitelist['organizations'])
         except (IndexError, KeyError):
-            pass
+            whitelisted_mac = {}
 
 
         # Set data type
