@@ -37,10 +37,10 @@ class Database(object):
         else:
             self.sudo = 'sudo '
 
-    def start(self, config):
-        """ Start the DB. Allow it to read the conf """
-        self.config = config
-        # Read values from the configuration file
+    def read_configuration(self):
+        """
+        Read values from the configuration file
+        """
         try:
             deletePrevdbText = self.config.get('parameters', 'deletePrevdb')
             if deletePrevdbText == 'True':
@@ -65,6 +65,14 @@ class Database(object):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.width = 3600
+
+
+
+
+    def start(self, config):
+        """ Start the DB. Allow it to read the conf """
+        self.config = config
+        self.read_configuration()
         # Create the connection to redis
         if not hasattr(self, 'r'):
             try:
