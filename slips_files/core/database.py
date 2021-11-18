@@ -76,13 +76,13 @@ class Database(object):
                             'MaliciousFlow','SuspiciousUserAgent','multiple_google_connections',
                             'NETWORK_gps_location_leaked','ICMPSweep','Command-and-Control-channels-detection',
                             'ThreatIntelligenceBlacklistDomain','ThreatIntelligenceBlacklistIP','MaliciousDownloadedFile']
-        disabled_detections = []
+        self.disabled_detections = []
         for detection in supported_detections:
             # get the configuration for this alert
             try:
                 is_enabled = self.config.get('EnabledAlerts', detection)
                 if 'no' in is_enabled.lower():
-                    disabled_detections.append(detection)
+                    self.disabled_detections.append(detection)
             except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError, KeyError):
                 # There is a conf, but there is no option, or no section or no configuration file specified
                 # if we failed to read a value, it will be enabled by default.
@@ -991,6 +991,17 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
+    def is_disabled_detection(self, detection) -> bool:
+        """
+        Function to check if the given detection is disabled in slips.conf
+        """
+        for disabled_detection in self.disabled_detections:
+            # we have detections types like 'SSHSuccessful-by-ip' that vary depending on the IP
+            # so we should match 'SSHSuccessful' only in the given detection to know if it's disabled or not
+            if disabled_detection in detection:
+                return True
+        return False
+
     def setEvidence(self, type_detection, detection_info, type_evidence,
                     threat_level, confidence, description, timestamp, profileid='', twid='', uid=''):
         """
@@ -1015,6 +1026,9 @@ class Database(object):
             'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
         }
         """
+
+        if self.is_disabled_detection(type_evidence):
+            return False
 
         # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
