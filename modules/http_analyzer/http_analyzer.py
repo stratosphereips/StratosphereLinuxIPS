@@ -63,13 +63,13 @@ class Module(Module, multiprocessing.Process):
             return True
         return False
 
-    def check_multiple_google_connections(self, uid, host, uri, timestamp, request_body_len,  profileid, twid):
+    def check_multiple_google_connections(self, uid, host, timestamp, request_body_len,  profileid, twid):
         """
         Detects more than 4 empty connections to google.com on port 80
         """
         # to test this wget google.com:80 twice (wget makes multiple connections instead of 1)
 
-        if 'google.com' in host+uri  and request_body_len==0:
+        if host=='google.com' and request_body_len==0:
             self.google_connections_counter +=1
 
         if self.google_connections_counter == self.google_connections_threshold:
@@ -108,7 +108,7 @@ class Module(Module, multiprocessing.Process):
                     user_agent = flow.get('user_agent')
                     request_body_len = flow.get('request_body_len')
                     self.check_suspicious_user_agents(uid, host, uri, timestamp, user_agent, profileid, twid)
-                    self.check_multiple_google_connections(uid, host, uri, timestamp, request_body_len,  profileid, twid)
+                    self.check_multiple_google_connections(uid, host, timestamp, request_body_len,  profileid, twid)
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
