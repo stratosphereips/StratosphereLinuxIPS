@@ -160,7 +160,7 @@ class Module(Module, multiprocessing.Process):
             threat_level =  0.7
             ip_identification = __database__.getIPIdentification(daddr)
             description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
-            type_evidence = 'ARPScan'
+            type_evidence = 'ARPScan-ouside-localnet'
             type_detection = 'ip' #srcip
             detection_info = profileid.split("_")[1]
             __database__.setEvidence(type_detection, detection_info, type_evidence,
