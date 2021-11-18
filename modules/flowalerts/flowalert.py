@@ -196,7 +196,7 @@ class Module(Module, multiprocessing.Process):
 
         type_detection = 'ip'
         detection_info = saddr
-        type_evidence = 'SSHSuccessful-by-' + by
+        type_evidence = 'SSHSuccessful'
         threat_level = 0
         confidence = 0.5
         ip_identification = __database__.getIPIdentification(daddr)

@@ -78,7 +78,7 @@ def test_setEvidence(database):
     type_detection = 'ip'
     detection_info = test_ip
     by = detection_info
-    type_evidence = 'SSHSuccessful-by-' + by
+    type_evidence = 'SSHSuccessful'
     threat_level = 0.01
     confidence = 0.6
     description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip

@@ -160,7 +160,8 @@ class Module(Module, multiprocessing.Process):
                 srcip, dstip, proto, sport, dport, ts = packet_info[0],packet_info[1],packet_info[2],packet_info[3],packet_info[4],packet_info[5]
                 type_detection = 'dstip'
                 detection_info = dstip
-                type_evidence = f'{rule}by{srcip}'
+                # TODO: this needs to be changed if add more rules to the rules/dir
+                type_evidence = 'NETWORK_gps_location_leaked'
                 threat_level = 0.9
                 confidence = 0.9
                 description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
