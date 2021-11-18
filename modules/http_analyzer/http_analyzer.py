@@ -23,6 +23,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_http')
         self.timeout = None
         self.google_connections_counter = 0
+        self.google_connections_threshold = 4
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -64,14 +65,14 @@ class Module(Module, multiprocessing.Process):
 
     def check_multiple_google_connections(self, uid, host, uri, timestamp, request_body_len,  profileid, twid):
         """
-        Detects more than 2 empty connections to google.com on port 80
+        Detects more than 4 empty connections to google.com on port 80
         """
-        # to test this wget google.com:80 once (wget makes multiple connections instead of 1)
+        # to test this wget google.com:80 twice (wget makes multiple connections instead of 1)
 
         if 'google.com' in host+uri  and request_body_len==0:
             self.google_connections_counter +=1
 
-        if self.google_connections_counter ==2:
+        if self.google_connections_counter == self.google_connections_threshold:
             type_detection = 'multiple_google_connections'
             detection_info = profileid.split('_')[0]
             type_evidence = 'multiple_google_connections'
