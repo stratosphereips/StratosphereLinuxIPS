@@ -233,6 +233,12 @@ You can insert your files into the folder specified in the variable ```download_
 
 Slips needs a threshold to determine a connection of a long duration. By default, it is 1500 seconds, and it can be changed in the variable ```long_connection_threshold```
 
+### Enabling and disabling alerts
+
+You can configure which alerts you want to enable/disable in ```slips.conf``` 
+
+Simply change the value of the detection to ```no``` if you want to disable detections of this type.
+
 ### Exporting Alerts
 
 Slips can export alerts to Slack and STIX.

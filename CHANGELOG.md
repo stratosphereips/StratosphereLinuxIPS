@@ -8,6 +8,7 @@
 		- Improve unknown ports detections. Now we don't alert for ports that appear in an FTP connection.
 		- Improve threat levels and confidence of all alerts.
 		- Add support for storing a copy of zeek files in the output directory.
+		- Add support for enabling and disabling detections in slips.conf
 
 -0.8.1
 	-Slips
