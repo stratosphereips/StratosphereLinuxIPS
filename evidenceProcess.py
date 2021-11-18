@@ -76,7 +76,7 @@ class EvidenceProcess(multiprocessing.Process):
         """
         # in linux, if the user's not root, notifications command will need extra configurations
         if platform.system() != 'Linux' or os.geteuid() != 0:
-            self.notify_cmd = 'notify-send '
+            self.notify_cmd = 'notify-send -t 5000 '
             return False
 
         # Get the used display (if the user has only 1 screen it will be set to 0), if not we should know which screen is slips running on.
@@ -99,7 +99,7 @@ class EvidenceProcess(multiprocessing.Process):
         # get the uid
         uid = pwd.getpwnam(user).pw_uid
         # run notify-send as user using the used_display and give it the dbus addr
-        self.notify_cmd = f'sudo -u {user} DISPLAY={used_display} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send '
+        self.notify_cmd = f'sudo -u {user} DISPLAY={used_display} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send -t 5000 '
 
 
     def print(self, text, verbose=1, debug=0):
@@ -540,8 +540,7 @@ class EvidenceProcess(multiprocessing.Process):
         Function to display a popup with the alert depending on the OS
         """
         if platform.system() == 'Linux':
-            #todo
-            os.system(f'notify-send "Slips: {alert_to_log}"')
+            os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
         elif platform.system() == 'Darwin':
             os.system(f'osascript -e "display notification "{alert_to_log}" with title "Slips"" ')
 
