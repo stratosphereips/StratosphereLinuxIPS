@@ -81,7 +81,7 @@ class Module(Module, multiprocessing.Process):
         '''
         type_detection = 'outTuple'
         detection_info = tupleid
-        type_evidence = 'C&C channels detection'
+        type_evidence = 'C&C-channels-detection'
         threat_level = 0.3
         tupleid = tupleid.split(':')
         dstip , port, proto =  tupleid[0], tupleid[1], tupleid[2]
