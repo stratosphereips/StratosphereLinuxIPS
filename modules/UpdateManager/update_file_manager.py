@@ -565,6 +565,12 @@ class UpdateFileManager:
         """
 
         try:
+
+            # Check if the file has any content
+            filesize = os.path.getsize(malicious_data_path)
+            if filesize == 0:
+                return False
+
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
@@ -616,6 +622,8 @@ class UpdateFileManager:
 
                 while True:
                     line = malicious_file.readline()
+                    if not line:
+                        break
                     # Try to find the line that has column names
                     for keyword in header_keywords:
                         if line.startswith(keyword):
