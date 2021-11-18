@@ -991,17 +991,6 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
-    def is_disabled_detection(self, detection) -> bool:
-        """
-        Function to check if the given detection is disabled in slips.conf
-        """
-        for disabled_detection in self.disabled_detections:
-            # we have detections types like 'SSHSuccessful-by-ip' that vary depending on the IP
-            # so we should match 'SSHSuccessful' only in the given detection to know if it's disabled or not
-            if disabled_detection in detection:
-                return True
-        return False
-
     def setEvidence(self, type_detection, detection_info, type_evidence,
                     threat_level, confidence, description, timestamp, profileid='', twid='', uid=''):
         """
@@ -1027,7 +1016,8 @@ class Database(object):
         }
         """
 
-        if self.is_disabled_detection(type_evidence):
+        #ignore evidence if it's disabled in the configuration file
+        if type_evidence in self.disabled_detections:
             return False
 
         # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
