@@ -654,22 +654,20 @@ if __name__ == '__main__':
         guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
         guiProcessThread.start()
         outputProcessQueue.put('quiet')
-    if not args.nologfiles:
-        # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
-        do_logs = read_configuration(config, 'parameters', 'create_log_files')
-        if do_logs == 'yes':
-            # Create a folder for logs
-            logs_folder = create_folder_for_logs()
-            # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
-            logsProcessQueue = Queue()
-            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
-            logsProcessThread.start()
-            outputProcessQueue.put('10|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
-            __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
 
-    # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
-    else:
+    do_logs = read_configuration(config, 'parameters', 'create_log_files')
+    # if -l is provided or create_log_files=no then we don't create log files
+    if args.nologfiles or do_logs == 'no':
         logs_folder = False
+    else:
+        # Create a folder for logs
+        logs_folder = create_folder_for_logs()
+        # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
+        logsProcessQueue = Queue()
+        logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
+        logsProcessThread.start()
+        outputProcessQueue.put('10|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
+        __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
 
     # Evidence thread
     # Create the queue for the evidence thread
