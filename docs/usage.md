@@ -220,10 +220,19 @@ The remote files are installed to the path set in the ```download_path_for_local
 
 Slips supports getting phishing domains from RiskIQ.
 
-You can add your your email in the configuration file in the ```RiskIQ_email``` parameter
+By default your RiskIQ email and API key should be stored in ```modules/RiskIQ/credentials```
 
-The path of the API key is specified in the ```RiskIQ_key_path``` parameter, 
-in that file there should only be the 64 character RiskIQ API key.
+the format of this file should be the following:
+
+```
+example@domain.com
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+```
+
+The hash should be your 64 character API Key.
+
+The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```slips.conf```.
+
 
 **Local files**
 

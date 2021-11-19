@@ -9,6 +9,7 @@
 		- Improve threat levels and confidence of all alerts.
 		- Add support for storing a copy of zeek files in the output directory.
 		- Add support for enabling and disabling detections in slips.conf
+		- Read RiskIQ email and API key from modules/RiskIQ/credentials instead of the configuration file.
 
 -0.8.1
 	-Slips
