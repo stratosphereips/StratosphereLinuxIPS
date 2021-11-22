@@ -1988,15 +1988,20 @@ class ProfilerProcess(multiprocessing.Process):
                 ttls = self.column_values['TTLs']
             elif 'dhcp' in flow_type:
                 # client mac addr and client_addr is optional in zeek, so sometimes it may not be there
-                mac_addr = self.column_values.get('mac',False)
                 client_addr = self.column_values.get('client_addr',False)
                 if client_addr:
                     profileid = get_rev_profile(starttime, client_addr)[0]
+
+                mac_addr = self.column_values.get('mac',False)
                 if mac_addr:
                     # send this to IP_Info module to get vendor info about this MAC
                     to_send = {'MAC': mac_addr,
                                'profileid': profileid}
                     __database__.publish('new_MAC', json.dumps(to_send))
+
+                server_addr = self.column_values.get('server_addr',False)
+                if server_addr:
+                    __database__.store_dhcp_server(server_addr)
 
             # Create the objects of IPs
             try:
