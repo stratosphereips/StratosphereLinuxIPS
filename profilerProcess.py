@@ -945,6 +945,13 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'long'
         elif 'dhcp' in new_line['type']:
             self.column_values['type'] = 'dhcp'
+            #  daddr in dhcp.log is the server_addr at index 3, not 4 like most log files
+            self.column_values['daddr'] = line[3]
+            self.column_values['client_addr'] = line[2] # the same as saddr
+            self.column_values['server_addr'] = line[3]
+            self.column_values['mac'] = line[4] # this is the client mac
+            # self.column_values['host_name'] = line[5]
+
         elif 'dce_rpc' in new_line['type']:
             self.column_values['type'] = 'dce_rpc'
         elif 'dnp3' in new_line['type']:
@@ -1139,7 +1146,7 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'dhcp' in file_type:
             self.column_values['type'] = 'dhcp'
             self.column_values['client_addr'] = line.get('client_addr','')
-            # self.column_values['server_addr'] = line.get('server_addr','')
+            self.column_values['server_addr'] = line.get('server_addr','')
             # self.column_values['host_name'] = line.get('host_name','')
             self.column_values['mac'] = line.get('mac','') # this is the client mac
             # self.column_values['domain'] = line.get('domain','')
