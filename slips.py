@@ -249,8 +249,11 @@ def shutdown_gracefully(input_information):
 
                 if module_name not in finished_modules:
                     finished_modules.append(module_name)
-                    # remove module from the list of opened pids
-                    PIDs.pop(module_name)
+                    try:
+                        # remove module from the list of opened pids
+                        PIDs.pop(module_name)
+                    except KeyError:
+                        continue
                     modules_left = len(list(PIDs.keys()))
                     # to vertically align them when printing
                     module_name = module_name+' '*(20-len(module_name))
