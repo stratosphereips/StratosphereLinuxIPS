@@ -1022,6 +1022,15 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['daddr'] = line[3] #rx_hosts
             self.column_values['size'] = line[13]
             self.column_values['md5'] = line[19]
+        elif 'arp' in new_line['type']:
+            self.column_values['type'] = 'arp'
+            self.column_values['operation'] = line[1]
+            self.column_values['src_mac'] = line[2]
+            self.column_values['dst_mac'] = line[3]
+            self.column_values['saddr'] = line[4]
+            self.column_values['daddr'] = line[5]
+            self.column_values['src_hw'] = line[6]
+            self.column_values['dst_hw'] = line[7]
 
     def process_zeek_input(self, new_line: dict):
         """

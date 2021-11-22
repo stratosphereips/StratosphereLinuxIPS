@@ -105,9 +105,8 @@ class Module(Module, multiprocessing.Process):
                                                                 'ts' : ts}}
             return True
 
-        # get the keys of cache_arp_requests in a list
         profileids_twids = list(cached_requests.keys())
-        # The minimum amount of ARP packets to send to be considered as scan is 3
+        # The minimum amount of ARP packets to send to be considered as scan is 5
         if len(profileids_twids) >= self.arp_scan_threshold:
             # check if these requests happened within 30 secs
             # get the first and the last request of the 10
