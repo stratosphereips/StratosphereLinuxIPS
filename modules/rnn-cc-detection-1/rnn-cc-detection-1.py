@@ -45,13 +45,6 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        # To which channels do you wnat to subscribe? When a message arrives
-        # on the channel the module will wakeup
-        # The options change, so the last list is on the slips/core/database.py
-        # file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
         self.c1 = __database__.subscribe('new_letters')
         self.timeout = None
 

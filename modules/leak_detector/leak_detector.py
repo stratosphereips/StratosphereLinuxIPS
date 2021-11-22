@@ -216,10 +216,10 @@ class Module(Module, multiprocessing.Process):
             self.find_matches()
         except KeyboardInterrupt:
             return True
-        # except Exception as inst:
-        #     exception_line = sys.exc_info()[2].tb_lineno
-        #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
-        #     self.print(str(type(inst)), 0, 1)
-        #     self.print(str(inst.args), 0, 1)
-        #     self.print(str(inst), 0, 1)
-        #     return True
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True

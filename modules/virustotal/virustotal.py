@@ -30,16 +30,11 @@ class Module(Module, multiprocessing.Process):
         # This line might not be needed when running SLIPS, but when VT module is run standalone, it still uses the
         # database and this line is necessary. Do not delete it, instead move it to line 21.
         __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
-        # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
-        # The options change, so the last list is on the slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
-        self.pubsub = __database__.r.pubsub()
-        self.pubsub.subscribe('new_flow')
-        self.pubsub.subscribe('new_dns_flow')
-        self.pubsub.subscribe('new_url')
-        self.pubsub.subscribe('new_downloaded_file')
+        self.c1 = __database__.subscribe('new_flow')
+        self.c2 = __database__.subscribe('new_dns_flow')
+        self.c3 = __database__.subscribe('new_url')
+        self.c4 = __database__.subscribe('new_downloaded_file')
+
         # Read the conf file
         self.__read_configuration()
         self.key = None
@@ -550,6 +545,7 @@ class Module(Module, multiprocessing.Process):
 
         return url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
 
+
     def run(self):
         try:
             if self.key is None:
@@ -567,18 +563,13 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.pubsub.get_message(timeout=None)
-                if not message or message["type"] != "message" or type(message['data']) == int:
-                    # didn't receive a msg on any channel, or received the subscribe msg. keep trying
-                    continue
-                
+                message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-
-                elif message['channel'] == 'new_flow' :
+                if __database__.is_msg_intended_for(message, 'new_flow'):
                     data = message["data"]
                     data = json.loads(data)
                     profileid = data['profileid']
@@ -603,8 +594,9 @@ class Module(Module, multiprocessing.Process):
                         # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                         if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                             self.set_vt_data_in_IPInfo(ip, cached_data)
-                # if timewindows are not updated for a long time, Slips is stopped automatically.
-                elif message['channel'] == 'new_dns_flow':
+
+                message = self.c2.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message["data"]
 
                     data = json.loads(data)
@@ -625,9 +617,10 @@ class Module(Module, multiprocessing.Process):
                         if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                             self.set_domain_data_in_DomainInfo(domain, cached_data)
 
-                elif message['channel'] == 'new_url':
-                    data = message["data"]
 
+                message = self.c3.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_url'):
+                    data = message["data"]
                     data = json.loads(data)
                     profileid = data['profileid']
                     twid = data['twid']
@@ -644,7 +637,8 @@ class Module(Module, multiprocessing.Process):
                         if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                             self.set_url_data_in_URLInfo(url, cached_data)
 
-                elif message['channel'] == 'new_downloaded_file' :
+                message = self.c4.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_downloaded_file'):
                     self.file_info = json.loads(message['data'])
                     file_info = self.file_info.copy()
                     self.scan_file(file_info)

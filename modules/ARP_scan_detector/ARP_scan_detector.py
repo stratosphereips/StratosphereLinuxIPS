@@ -30,9 +30,8 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        self.pubsub = __database__.r.pubsub()
-        self.pubsub.subscribe('new_arp')
-        self.pubsub.subscribe('tw_closed')
+        self.c1 = __database__.subscribe('new_arp')
+        self.c2 = __database__.subscribe('tw_closed')
         self.timeout = None
         self.read_configuration()
         # this dict will categorize arp requests by profileid_twid
@@ -211,17 +210,18 @@ class Module(Module, multiprocessing.Process):
             return True
 
 
+
     def run(self):
         # Main loop function
         while True:
             try:
-                message = self.pubsub.get_message(timeout=None)
+                message = self.c1.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if message and message['channel'] == 'new_arp' and type(message['data'])==str:
+                if __database__.is_msg_intended_for(message, 'new_arp'):
                     flow = json.loads(message['data'])
                     ts = flow['ts']
                     profileid = flow['profileid']
@@ -259,7 +259,8 @@ class Module(Module, multiprocessing.Process):
                         self.detect_unsolicited_arp(profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw)
 
                 # if the tw is closed, remove all its entries from the cache dict
-                if message and message['channel'] == 'tw_closed' and type(message['data'])==str:
+                message = self.c2.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data']
                     # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore
                     # this copy is made to avoid dictionary changed size during iteration err
@@ -268,6 +269,7 @@ class Module(Module, multiprocessing.Process):
                         if profileid_tw in key:
                             self.cache_arp_requests.pop(key)
                             # don't break, keep looking for more keys that belong to the same tw
+
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue

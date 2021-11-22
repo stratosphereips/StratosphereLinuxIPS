@@ -36,13 +36,12 @@ class Module(Module, multiprocessing.Process):
         # Retrieve the labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        self.pubsub = __database__.r.pubsub()
-        self.pubsub.subscribe('new_flow')
-        self.pubsub.subscribe('new_ssh')
-        self.pubsub.subscribe('new_notice')
-        self.pubsub.subscribe('new_ssl')
-        self.pubsub.subscribe('new_service')
-        self.pubsub.subscribe('new_dns_flow')
+        self.c1 = __database__.subscribe('new_flow')
+        self.c2 = __database__.subscribe('new_ssh')
+        self.c3 = __database__.subscribe('new_notice')
+        self.c4 = __database__.subscribe('new_ssl')
+        self.c5 = __database__.subscribe('new_service')
+        self.c6 = __database__.subscribe('new_dns_flow')
         self.timeout = None
         # read our list of ports that are associated to a specific organizations
         ports_info_filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
@@ -93,7 +92,6 @@ class Module(Module, multiprocessing.Process):
         except OSError:
             self.print(f"An error occured while reading {ports_info_filepath}.",0,1)
 
-
     def read_ports_info(self, ports_info_filepath):
         """
         Reads port info from slips_files/ports_info/ports_used_by_specific_orgs.csv
@@ -125,7 +123,6 @@ class Module(Module, multiprocessing.Process):
                         continue
         except OSError:
             self.print(f"An error occured while reading {ports_info_filepath}.",0,1)
-
 
     def is_ignored_ip(self, ip) -> bool:
         """
@@ -692,23 +689,18 @@ class Module(Module, multiprocessing.Process):
                                  confidence, description, timestamp, profileid=profileid, twid=twid)
 
 
-
     def run(self):
         # Main loop function
         while True:
             try:
-                message = self.pubsub.get_message(timeout=None)
-                if not message or message["type"] != "message" or type(message['data']) == int:
-                    # didn't receive a msg on any channel, or received the subscribe msg. keep trying
-                    continue
                 # ---------------------------- new_flow channel
+                message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message['data'] == 'stop_process':
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-
-                elif message['channel'] == 'new_flow':
+                if __database__.is_msg_intended_for(message, 'new_flow'):
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -741,7 +733,6 @@ class Module(Module, multiprocessing.Process):
                     # timestamp = data['stime']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-
 
                     # --- Detect long Connections ---
                     # Do not check the duration of the flow if the daddr or
@@ -896,11 +887,13 @@ class Module(Module, multiprocessing.Process):
                                     self.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # --- Detect successful SSH connections ---
-                elif message['channel'] == 'new_ssh' :
+                message = self.c2.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_ssh'):
                     self.check_ssh(message)
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
-                elif message['channel'] == 'new_notice':
+                message = self.c3.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_notice'):
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
@@ -981,7 +974,8 @@ class Module(Module, multiprocessing.Process):
                             #self.print(description, 3, 0)
 
                 # --- Detect maliciuos JA3 TLS servers ---
-                elif message['channel'] == 'new_ssl':
+                message = self.c4.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_ssl'):
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
                     if type(data) == str:
@@ -1032,7 +1026,8 @@ class Module(Module, multiprocessing.Process):
                                 self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
 
                 # --- Learn ports that Zeek knows but Slips doesn't ---
-                elif message['channel'] == 'new_service':
+                message = self.c5.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_service'):
                     data = json.loads(message['data'])
                     # uid = data['uid']
                     # profileid = data['profileid']
@@ -1048,9 +1043,9 @@ class Module(Module, multiprocessing.Process):
                         __database__.set_port_info(f'{port}/{proto}', service[0])
 
                 # --- Detect DNS resolutions without connection ---
-                elif message['channel'] == 'new_dns_flow':
+                message = self.c6.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
                     data = json.loads(message["data"])
-
                     profileid = data['profileid']
                     twid = data['twid']
                     uid = data['uid']
@@ -1064,13 +1059,13 @@ class Module(Module, multiprocessing.Process):
 
             except KeyboardInterrupt:
                 continue
-            # except Exception as inst:
-                # exception_line = sys.exc_info()[2].tb_lineno
-                # self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                # self.print(str(type(inst)), 0, 1)
-                # self.print(str(inst.args), 0, 1)
-                # self.print(str(inst), 0, 1)
-                # return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
 
 class TimerThread(threading.Thread):
     """Thread that executes 1 task after N seconds. Only to run the process_global_data."""

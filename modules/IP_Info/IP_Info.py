@@ -33,9 +33,8 @@ class Module(Module, multiprocessing.Process):
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        self.pubsub = __database__.r.pubsub()
-        self.pubsub.subscribe('new_ip')
-        self.pubsub.subscribe('new_MAC')
+        self.c1 = __database__.subscribe('new_ip')
+        self.c2 = __database__.subscribe('new_MAC')
         self.timeout = None
         # update asn every 1 month
         self.update_period = 2592000
@@ -268,11 +267,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.pubsub.get_message(timeout=None)
-                if not message or message["type"] != "message" or type(message['data']) == int:
-                    # didn't receive a msg on any channel, or received the subscribe msg. keep trying
-                    continue
-
+                message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time (see at logsProcess.py),
                 # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message['data'] == 'stop_process':
@@ -283,7 +278,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                elif message['channel'] == 'new_ip':
+                if __database__.is_msg_intended_for(message, 'new_ip'):
                     ip = message['data']
                     try:
                         # make sure its a valid ip
@@ -306,15 +301,14 @@ class Module(Module, multiprocessing.Process):
                     update_asn = self.update_asn(cached_ip_info)
                     if update_asn:
                         self.get_asn(ip, cached_ip_info)
-
                     self.get_rdns(ip)
 
-                elif message['channel'] == 'new_MAC':
+                message = self.c2.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_MAC'):
                     data = json.loads(message['data'])
                     mac_addr = data['MAC']
                     profileid = data['profileid']
                     self.get_vendor(mac_addr, profileid)
-
 
             except KeyboardInterrupt:
                 if hasattr(self, 'asn_db'): self.asn_db.close()
