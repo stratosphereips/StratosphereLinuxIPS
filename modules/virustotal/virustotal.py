@@ -432,7 +432,7 @@ class Module(Module, multiprocessing.Process):
             elif response.status == 403:
                 # don't add to the api call queue because the user will have to restart slips anyway
                 # to add a correct API key and the queue wil be erased
-                self.print("Please check that your API key is correct.")
+                self.print("Please check that your API key is correct.", 0, 1)
             else:
                 # if the query was unsuccessful but it is not caused by API limit, abort (this is some unknown error)
                 # X-Api-Message is a comprehensive error description, but it is not always present

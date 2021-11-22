@@ -2397,6 +2397,22 @@ class Database(object):
         else:
             return False
 
+    def store_dhcp_server(self, server_addr):
+        """
+        Store all seen DHCP servers in the database.
+        """
+        # make sure it's a valid ip
+        try:
+            ipaddress.ip_address(server_addr)
+        except ValueError:
+            # not a valid ip skip
+            return False
+        # make sure the server isn't there before adding
+        DHCP_servers = self.r.lrange('DHCP_servers', 0, -1)
+        if server_addr not in DHCP_servers:
+            self.r.lpush('DHCP_servers', server_addr)
+
+
     def save(self,backup_file):
         """
         Save the db to disk.
