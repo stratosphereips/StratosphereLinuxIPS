@@ -152,7 +152,7 @@ class UpdateFileManager:
         try:
             last_update = data['time']
             last_update = float(last_update)
-        except TypeError:
+        except (TypeError,KeyError):
             last_update = float('-inf')
 
         now = time.time()
