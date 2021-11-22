@@ -2,7 +2,7 @@ import os
 import redis
 import time
 import json
-from typing import Tuple, Dict, Set, Callable
+from typing import Tuple
 import configparser
 import traceback
 import subprocess
@@ -12,6 +12,7 @@ import sys
 import validators
 import platform
 import re
+import socket
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -88,7 +89,6 @@ class Database(object):
                 # if we failed to read a value, it will be enabled by default.
                 pass
 
-
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
         self.config = config
@@ -97,9 +97,21 @@ class Database(object):
         if not hasattr(self, 'r'):
             try:
                 # db 0 changes everytime we run slips
-                self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+                self.r = redis.StrictRedis(host='localhost',
+                                           port=6379,
+                                           db=0,
+                                           charset="utf-8",
+                                           socket_keepalive=True,
+                                           retry_on_timeout=True,
+                                           decode_responses=True) #password='password')
                 # db 1 is cache, delete it using -cc flag
-                self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True) #password='password')
+                self.rcache = redis.StrictRedis(host='localhost',
+                                                port=6379,
+                                                db=1,
+                                                charset="utf-8",
+                                                socket_keepalive=True,
+                                                retry_on_timeout=True,
+                                                decode_responses=True) #password='password')
                 if self.deletePrevdb:
                     self.r.flushdb()
             except redis.exceptions.ConnectionError:
