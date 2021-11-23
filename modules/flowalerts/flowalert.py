@@ -1000,10 +1000,10 @@ class Module(Module, multiprocessing.Process):
 
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
+                            ip_identification = __database__.getIPIdentification(ip)
                             server_name = flow.get('server_name') # returns None if not found
                             # if server_name is not None or not empty
                             if not server_name:
-                                ip_identification = __database__.getIPIdentification(ip)
                                 description = f'Self-signed certificate. Destination IP: {ip}. {ip_identification}'
                             else:
                                 description = f'Self-signed certificate. Destination IP: {ip}, SNI: {server_name}. {ip_identification}'
