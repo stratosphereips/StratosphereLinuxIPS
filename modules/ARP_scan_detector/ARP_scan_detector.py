@@ -32,7 +32,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         self.c1 = __database__.subscribe('new_arp')
         self.c2 = __database__.subscribe('tw_closed')
-        self.timeout = None
+        self.timeout = 0.0000001
         self.read_configuration()
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
@@ -99,9 +99,9 @@ class Module(Module, multiprocessing.Process):
             cached_requests.update({daddr: {'uid' : uid,
                                     'ts' : ts}})
         except KeyError:
-            # create the key if it doesn't exist
+            # create the key for this profileid_twid if it doesn't exist
             self.cache_arp_requests[f'{profileid}_{twid}'] = {daddr: {'uid' : uid,
-                                                                'ts' : ts}}
+                                                                      'ts' : ts}}
             return True
 
         profileids_twids = list(cached_requests.keys())
@@ -250,7 +250,7 @@ class Module(Module, multiprocessing.Process):
                         # for MITM arp attack, the arp has to be gratuitous
                         self.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac)
 
-                    if not is_gratuitous:
+                    else:
                         # not gratuitous, may be an ARP scan
                         self.check_arp_scan(profileid, twid, daddr, uid, ts, dst_mac, src_mac)
 

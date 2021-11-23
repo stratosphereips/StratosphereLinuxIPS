@@ -503,7 +503,7 @@ class EvidenceProcess(multiprocessing.Process):
                     __database__.publish('finished_modules','EvidenceProcess')
                     return True
 
-                elif message['channel'] == 'evidence_added' and type(message['data']) is not int:
+                if message['channel'] == 'evidence_added' and type(message['data']) is not int:
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
                     profileid = data.get('profileid')
