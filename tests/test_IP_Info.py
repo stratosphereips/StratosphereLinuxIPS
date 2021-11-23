@@ -51,6 +51,7 @@ def test_get_vendor(outputQueue, database):
     IP_Info = create_IP_Info_instance(outputQueue)
     profileid = 'profile_10.0.2.15'
     mac_addr = '08:00:27:7f:09:e1'
-    mac_info = IP_Info.get_vendor(mac_addr, profileid)
+    host_name = 'FooBar-PC'
+    mac_info = IP_Info.get_vendor(mac_addr, host_name, profileid)
     assert mac_info != False
     assert mac_info['Vendor'] == 'Pcs Systemtechnik GmbH'
