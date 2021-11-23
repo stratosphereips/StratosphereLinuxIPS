@@ -354,8 +354,8 @@ if __name__ == '__main__':
                         help='read a Zeek folder, Argus binetflow, pcapfile or nfdump.')
     parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
                         help='read packets from an interface.')
-    parser.add_argument('-l','--nologfiles',action='store_true',required=False,
-                        help='do not create log files with all the traffic info and detections.')
+    parser.add_argument('-l','--createlogfiles',action='store_true',required=False,
+                        help='create log files with all the traffic info and detections.')
     parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
                         help='packet filter for Zeek. BPF style.')
     parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
@@ -656,10 +656,8 @@ if __name__ == '__main__':
         outputProcessQueue.put('quiet')
 
     do_logs = read_configuration(config, 'parameters', 'create_log_files')
-    # if -l is provided or create_log_files=no then we don't create log files
-    if args.nologfiles or do_logs == 'no':
-        logs_folder = False
-    else:
+    # if -l is provided or create_log_files is yes then we will create log files
+    if args.createlogfiles or do_logs == 'yes':
         # Create a folder for logs
         logs_folder = create_folder_for_logs()
         # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
@@ -668,6 +666,8 @@ if __name__ == '__main__':
         logsProcessThread.start()
         outputProcessQueue.put('10|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
         __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
+    else:
+        logs_folder = False
 
     # Evidence thread
     # Create the queue for the evidence thread
