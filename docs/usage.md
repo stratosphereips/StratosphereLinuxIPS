@@ -296,15 +296,19 @@ If running on a file not an interface, Slips will export to server after analysi
 
 ## Logging
 
-To disable the creation of log files, there are two options:
+To enable the creation of log files, there are two options:
 1. Running Slips with ```-l``` flag. 
-2. Setting ```create_log_files``` to ```no``` in ```slips.conf```.
+2. Setting ```create_log_files``` to ```yes``` in ```slips.conf```.
+
+When logging is enabled, Slips will create a directory with the current date and create 3 summary files for each IP/profile it encounters.
+
+Summaries created contain profile data, complete timeline outgoing actions and timeline of all traffic that involves this IP.
 
 You can also change how often Slips creates log files using the ```log_report_time``` variable  in ```slips.conf```.
 
 You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
 
-You can also enable storing a copy of zeek .log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes.
+You can also enable storing a copy of zeek log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes.
 
 Once slips is done, you will find a copy of your zeek files in ```<output_dir>/zeek_files/``` 
 

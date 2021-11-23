@@ -10,6 +10,7 @@
 		- Add support for storing a copy of zeek files in the output directory.
 		- Add support for enabling and disabling detections in slips.conf
 		- Read RiskIQ email and API key from modules/RiskIQ/credentials instead of the configuration file.
+		- Now log files are disabled by default, use -l or set create_log_files to yes in slips.conf for enabling them. 
 
 -0.8.1
 	-Slips
