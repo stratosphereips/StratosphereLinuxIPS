@@ -298,7 +298,8 @@ class Module(Module, multiprocessing.Process):
         """
         response_key = 'resolutions'
         if response_key in response:
-            return response[response_key]
+            # return the first 10 entries only
+            return response[response_key][:10]
         else:
             return ''
 
