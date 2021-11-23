@@ -39,7 +39,7 @@ class Module(Module, multiprocessing.Process):
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
         self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         # Wait a little so we give time to have something to print
-        self.timeout = None
+        self.timeout = 0.0000001
 
     def read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """

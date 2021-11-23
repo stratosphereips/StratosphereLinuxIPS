@@ -60,7 +60,7 @@ class EvidenceProcess(multiprocessing.Process):
         else:
             self.logs_logfile = False
             self.logs_jsonfile = False
-        self.timeout = None
+        self.timeout = 0.0000001
         # this list will have our local and public ips
         self.our_ips = self.get_IP()
 

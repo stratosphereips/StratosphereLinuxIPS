@@ -42,7 +42,7 @@ class Module(Module, multiprocessing.Process):
         self.c4 = __database__.subscribe('new_ssl')
         self.c5 = __database__.subscribe('new_service')
         self.c6 = __database__.subscribe('new_dns_flow')
-        self.timeout = None
+        self.timeout = 0.0000001
         # read our list of ports that are associated to a specific organizations
         ports_info_filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
         self.read_ports_info(ports_info_filepath)

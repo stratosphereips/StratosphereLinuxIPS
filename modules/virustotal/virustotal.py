@@ -51,7 +51,7 @@ class Module(Module, multiprocessing.Process):
         # Pool manager to make HTTP requests with urllib3
         # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
-        self.timeout = None
+        self.timeout = 0.0000001
         self.counter = 0
         # create the queue thread
         self.api_calls_thread = threading.Thread(target=self.API_calls_thread, daemon=True)

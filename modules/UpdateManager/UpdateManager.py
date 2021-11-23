@@ -47,7 +47,7 @@ class UpdateManager(Module, multiprocessing.Process):
         self.update_manager = UpdateFileManager(self.outputqueue, config)
         # Timer to update the ThreatIntelligence files
         self.timer_manager = InfiniteTimer(self.update_period, self.update_malicious_files)
-        self.timeout = None
+        self.timeout = 0.0000001
 
     def read_configuration(self):
         """ Read the configuration file for what we need """

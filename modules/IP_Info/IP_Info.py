@@ -35,7 +35,7 @@ class Module(Module, multiprocessing.Process):
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
-        self.timeout = None
+        self.timeout = 0.0000001
         # update asn every 1 month
         self.update_period = 2592000
     

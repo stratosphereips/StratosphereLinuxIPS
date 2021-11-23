@@ -32,7 +32,7 @@ class Module(Module, multiprocessing.Process):
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
-        self.timeout = None
+        self.timeout = 0.0000001
         self.__read_configuration()
 
     def __read_configuration(self):

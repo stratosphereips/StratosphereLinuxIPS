@@ -46,7 +46,7 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
-        self.timeout = None
+        self.timeout = 0.0000001
 
     def print(self, text, verbose=1, debug=0):
         """

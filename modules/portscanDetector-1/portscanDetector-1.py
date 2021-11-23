@@ -37,7 +37,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         # Retrieve malicious/benigh labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        self.timeout = None
+        self.timeout = 0.0000001
         self.separator = '_'
         # The minimum amount of ips to scan horizontal scan
         self.port_scan_minimum_dips_threshold = 6

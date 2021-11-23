@@ -21,7 +21,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('new_http')
-        self.timeout = None
+        self.timeout = 0.0000001
         self.google_connections_counter = 0
         self.google_connections_threshold = 4
 
