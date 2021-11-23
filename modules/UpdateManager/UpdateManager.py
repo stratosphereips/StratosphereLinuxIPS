@@ -101,7 +101,7 @@ class UpdateManager(Module, multiprocessing.Process):
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # terminating the timer for the process to be killed
                     self.timer_manager.cancel()
                     # Confirm that the module is done processing

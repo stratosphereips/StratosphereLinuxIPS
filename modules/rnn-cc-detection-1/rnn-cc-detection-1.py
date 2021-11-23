@@ -141,11 +141,12 @@ class Module(Module, multiprocessing.Process):
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                if message['channel'] == 'new_letters' and type(message['data']) is not int:
+
+                if __database__.is_msg_intended_for(message, 'new_letters'):
                     data = message['data']
                     data = json.loads(data)
                     pre_behavioral_model = data['new_symbol']

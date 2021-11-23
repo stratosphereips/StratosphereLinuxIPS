@@ -461,13 +461,13 @@ class Module(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time
                 # (see at logsProcess.py), we will stop slips automatically.
                 # The 'stop_process' line is sent from logsProcess.py.
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
-                elif message['channel'] == 'give_threat_intelligence' and type(message['data']) is not int:
+                if __database__.is_msg_intended_for(message, 'give_threat_intelligence' ):
                     # Data is sent in the channel as a json dict so we need to deserialize it first
                     data = json.loads(message['data'])
                     # Extract data from dict

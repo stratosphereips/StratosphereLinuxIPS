@@ -564,11 +564,13 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
+
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
+
                 if __database__.is_msg_intended_for(message, 'new_flow'):
                     data = message["data"]
                     data = json.loads(data)
@@ -578,7 +580,6 @@ class Module(Module, multiprocessing.Process):
                     flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
                     # there is only one pair key-value in the dictionary
                     for key, value in flow.items():
-                        uid = key
                         flow_data = json.loads(value)
                     ip = flow_data['daddr']
                     cached_data = __database__.getIPData(ip)

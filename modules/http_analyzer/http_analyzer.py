@@ -93,10 +93,11 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     __database__.publish('finished_modules', self.name)
                     return True
-                if message['channel'] == 'new_http' and type(message['data'])== str:
+
+                if __database__.is_msg_intended_for(message, 'new_http'):
                     message = json.loads(message['data'])
                     profileid = message['profileid']
                     twid = message['twid']

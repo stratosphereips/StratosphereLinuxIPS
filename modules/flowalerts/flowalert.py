@@ -664,7 +664,7 @@ class Module(Module, multiprocessing.Process):
                 # ---------------------------- new_flow channel
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True

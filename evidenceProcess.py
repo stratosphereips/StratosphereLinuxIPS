@@ -497,13 +497,13 @@ class EvidenceProcess(multiprocessing.Process):
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     self.logfile.close()
                     self.jsonfile.close()
                     __database__.publish('finished_modules','EvidenceProcess')
                     return True
 
-                if message['channel'] == 'evidence_added' and type(message['data']) is not int:
+                if __database__.is_msg_intended_for(message, 'evidence_added'):
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
                     profileid = data.get('profileid')

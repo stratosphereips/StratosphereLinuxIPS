@@ -368,12 +368,12 @@ class Module(Module, multiprocessing.Process):
                 try:
                     message = self.c1.get_message(timeout=self.timeout)
 
-                    if message['data'] == 'stop_process':
+                    if message and message['data'] == 'stop_process':
                         # Confirm that the module is done processing
                         self.store_model()
                         __database__.publish('finished_modules', self.name)
                         return True
-                    elif message['channel'] == 'new_flow' and message['data'] != 1:
+                    if __database__.is_msg_intended_for(message, 'new_flow'):
                         data = message['data']
                         # Convert from json to dict
                         data = json.loads(data)

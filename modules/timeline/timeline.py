@@ -351,12 +351,14 @@ class Module(Module, multiprocessing.Process):
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message['data'] == 'stop_process':
+                # if timewindows are not updated for a long time (see at logsProcess.py),
+                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                elif message['channel'] == 'new_flow' and type(message['data']) != int :
+
+                if __database__.is_msg_intended_for(message, 'new_flow'):
                     mdata = message['data']
                     # Convert from json to dict
                     mdata = json.loads(mdata)
