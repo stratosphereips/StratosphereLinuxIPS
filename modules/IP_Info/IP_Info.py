@@ -235,12 +235,13 @@ class Module(Module, multiprocessing.Process):
         return data
 
     # MAC functions
-    def get_vendor(self, mac_addr: str, profileid: str):
+    def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
         """
         Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
         if not hasattr(self, 'mac_db'):
             return False
+
 
         # don't look for the vendor again if we already have MAC info about this profileid
         MAC_info = __database__.get_mac_addr_from_profile(profileid)
@@ -248,6 +249,9 @@ class Module(Module, multiprocessing.Process):
             return True
 
         MAC_info = {'MAC': mac_addr}
+        if host_name:
+            MAC_info.update({'host_name': host_name})
+
         oui = mac_addr[:8].upper()
         # parse the mac db and search for this oui
         line = self.mac_db.readline()
@@ -308,7 +312,8 @@ class Module(Module, multiprocessing.Process):
                     data = json.loads(message['data'])
                     mac_addr = data['MAC']
                     profileid = data['profileid']
-                    self.get_vendor(mac_addr, profileid)
+                    host_name = data.get('host_name', False)
+                    self.get_vendor(mac_addr, host_name, profileid)
 
             except KeyboardInterrupt:
                 if hasattr(self, 'asn_db'): self.asn_db.close()

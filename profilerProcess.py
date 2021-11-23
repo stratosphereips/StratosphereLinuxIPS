@@ -950,7 +950,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['client_addr'] = line[2] # the same as saddr
             self.column_values['server_addr'] = line[3]
             self.column_values['mac'] = line[4] # this is the client mac
-            # self.column_values['host_name'] = line[5]
+            self.column_values['host_name'] = line[5]
 
         elif 'dce_rpc' in new_line['type']:
             self.column_values['type'] = 'dce_rpc'
@@ -1156,7 +1156,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'dhcp'
             self.column_values['client_addr'] = line.get('client_addr','')
             self.column_values['server_addr'] = line.get('server_addr','')
-            # self.column_values['host_name'] = line.get('host_name','')
+            self.column_values['host_name'] = line.get('host_name','')
             self.column_values['mac'] = line.get('mac','') # this is the client mac
             # self.column_values['domain'] = line.get('domain','')
             # self.column_values['assigned_addr'] = line.get('assigned_addr','')
@@ -2002,10 +2002,12 @@ class ProfilerProcess(multiprocessing.Process):
                     profileid = get_rev_profile(starttime, client_addr)[0]
 
                 mac_addr = self.column_values.get('mac',False)
+                host_name = self.column_values.get('host_name',False)
                 if mac_addr:
                     # send this to IP_Info module to get vendor info about this MAC
                     to_send = {'MAC': mac_addr,
                                'profileid': profileid}
+                    if host_name: to_send.update({'host_name': host_name})
                     __database__.publish('new_MAC', json.dumps(to_send))
 
                 server_addr = self.column_values.get('server_addr',False)
