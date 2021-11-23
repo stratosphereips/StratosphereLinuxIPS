@@ -285,11 +285,12 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=self.timeout)
                 #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
-                if message['data'] == 'stop_process':
+                if message and  message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                elif message['channel'] == 'tw_modified' and type(message['data'])!=int:
+
+                if __database__.is_msg_intended_for(message, 'tw_modified'):
                     # Get the profileid and twid
                         profileid = message['data'].split(':')[0]
                         twid = message['data'].split(':')[1]
