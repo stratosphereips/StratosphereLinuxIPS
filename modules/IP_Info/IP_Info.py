@@ -12,6 +12,8 @@ import ipaddress
 import ipwhois
 import socket
 import json
+import dns.resolver
+
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
@@ -153,6 +155,14 @@ class Module(Module, multiprocessing.Process):
         except ipwhois.exceptions.ASNRegistryError:
             # ASN lookup failed with no more methods to try
             pass
+        except dns.resolver.NoResolverConfiguration:
+            # ipwhois can't read /etc/resolv.conf
+            # manually specify the dns server
+            # ignore resolv.conf
+            dns.resolver.default_resolver=dns.resolver.Resolver(configure=False)
+            # use google's DNS
+            dns.resolver.default_resolver.nameservers=['8.8.8.8']
+            return False
 
     def get_asn(self, ip, cached_ip_info):
         """ Gets ASN info about IP, either cached or from our offline mmdb """
