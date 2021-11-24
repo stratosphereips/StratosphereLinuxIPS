@@ -54,6 +54,12 @@ class UpdateFileManager:
             for tuple_ in self.ti_feed_tuples:
                 if not url:
                     url = tuple_.replace('\n','')
+                elif url.startswith(';'):
+                    # remove commented lines from the cache db
+                    feed = url.split('/')[-1]
+                    __database__.delete_feed(feed)
+                    # to avoid calling delete_feed again with the same feed
+                    url = ''
                 elif not threat_level:
                     threat_level = tuple_.replace('threat_level=','')
                 elif not tags:

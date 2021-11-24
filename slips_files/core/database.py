@@ -2496,5 +2496,26 @@ class Database(object):
             self.print("{} doesn't exist.".format(backup_file))
             return False
 
+    def delete_feed(self, url: str):
+        """
+        Delete all entries in IoC_domains and IoC_ips that contain the given feed as source
+        """
+        # get the feed name from the given url
+        feed_to_delete = url.split('/')[-1]
+        # get all domains that are read from TI files in our db
+        IoC_domains = self.rcache.hgetall('IoC_domains')
+        for domain, domain_description in IoC_domains.items():
+            domain_description = json.loads(domain_description)
+            if feed_to_delete in domain_description['source']:
+                # this entry has the given feed as source, delete it
+                self.rcache.hdel('IoC_domains', domain)
+
+        # get all IPs that are read from TI files in our db
+        IoC_ips = self.rcache.hgetall('IoC_ips')
+        for ip, ip_description in IoC_ips.items():
+            ip_description = json.loads(ip_description)
+            if feed_to_delete in ip_description['source']:
+                # this entry has the given feed as source, delete it
+                self.rcache.hdel('IoC_ips', ip)
 
 __database__ = Database()
