@@ -1847,7 +1847,19 @@ class Database(object):
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 3, 0)
 
-    def add_out_dns(self, profileid, twid, stime, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls, starttime):
+    def set_nxdomain(self):
+        """
+        Function to increase the nxdomains counter in the db, used for detecting DGA.
+        """
+        nxdomains_ctr = self.r.get("NXDOMAINs")
+        if nxdomains_ctr:
+            nxdomains_ctr = int(nxdomains_ctr) + 1
+        else:
+            nxdomains_ctr = 1
+        self.r.set("NXDOMAINs", nxdomains_ctr)
+
+
+    def add_out_dns(self, profileid, twid, stime, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
         """
         Store in the DB a DNS request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
@@ -1866,8 +1878,9 @@ class Database(object):
 
         # Add DNS resolution to the db if there are answers for the query
         if answers:
-            __database__.set_dns_resolution(query, answers, stime, uid, qtype_name, profileid, twid)
-
+            self.set_dns_resolution(query, answers, stime, uid, qtype_name, profileid, twid)
+        if 'NXDOMAIN' in rcode_name:
+            self.set_nxdomain()
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
