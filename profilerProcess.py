@@ -951,6 +951,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['server_addr'] = line[3]
             self.column_values['mac'] = line[4] # this is the client mac
             self.column_values['host_name'] = line[5]
+            self.column_values['saddr'] = self.column_values['client_addr']
+            self.column_values['daddr'] = self.column_values['server_addr']
 
         elif 'dce_rpc' in new_line['type']:
             self.column_values['type'] = 'dce_rpc'
