@@ -76,7 +76,7 @@ class Database(object):
                             'SelfSignedCertificate','PortScanType1','PortScanType2','Password_Guessing',
                             'MaliciousFlow','SuspiciousUserAgent','multiple_google_connections',
                             'NETWORK_gps_location_leaked','ICMPSweep','Command-and-Control-channels-detection',
-                            'ThreatIntelligenceBlacklistDomain','ThreatIntelligenceBlacklistIP','MaliciousDownloadedFile']
+                            'ThreatIntelligenceBlacklistDomain','ThreatIntelligenceBlacklistIP','MaliciousDownloadedFile','DGA']
         self.disabled_detections = []
         for detection in supported_detections:
             # get the configuration for this alert
@@ -204,12 +204,21 @@ class Database(object):
 
     def add_mac_addr_to_profile(self,profileid, MAC_info):
         """
-        Used when mac adddr
+        Used to associate this profile with it's MAC addr
         :param MAC_info: dict containing mac address and vendor info
         """
-        # MAC_info = json.dumps(MAC_info)
         # Add the MAC addr and vendor to this profile
         self.r.hmset(profileid, MAC_info)
+
+    def mark_profile_as_dhcp(self, profileid):
+        """
+        Used to mark this profile as dhcp server
+        """
+        # check if it's already marked as dhcp
+        is_dhcp_set = self.r.hmget(profileid , 'dhcp')[0]
+        if not is_dhcp_set:
+            self.r.hmset(profileid, {'dhcp': 'true'})
+
 
     def get_mac_addr_from_profile(self,profileid) -> str:
         """
@@ -1015,6 +1024,16 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
+    def is_detection_disabled(self, evidence):
+        """
+        Function to check if detection is disabled in slips.conf
+        """
+        for disabled_evidence in self.disabled_detections:
+            if disabled_evidence in evidence:
+                return True
+        return False
+
+
     def setEvidence(self, type_detection, detection_info, type_evidence,
                     threat_level, confidence, description, timestamp, profileid='', twid='', uid=''):
         """
@@ -1040,8 +1059,8 @@ class Database(object):
         }
         """
 
-        #ignore evidence if it's disabled in the configuration file
-        if type_evidence in self.disabled_detections:
+        # Ignore evidence if it's disabled in the configuration file
+        if self.is_detection_disabled(type_evidence):
             return False
 
         # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
@@ -1857,6 +1876,10 @@ class Database(object):
         data['answers'] = answers
         data['ttls'] = ttls
         data['stime'] = stime
+
+        # Add DNS resolution to the db if there are answers for the query
+        if answers:
+            self.set_dns_resolution(query, answers, stime, uid, qtype_name, profileid, twid)
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
@@ -1868,6 +1891,7 @@ class Database(object):
         to_send['flow'] = data
         to_send['stime'] = stime
         to_send['uid'] = uid
+        to_send['rcode_name'] = rcode_name
         to_send = json.dumps(to_send)
         #publish a dns with its flow
         self.publish('new_dns_flow', to_send)
@@ -2499,5 +2523,26 @@ class Database(object):
             self.print("{} doesn't exist.".format(backup_file))
             return False
 
+    def delete_feed(self, url: str):
+        """
+        Delete all entries in IoC_domains and IoC_ips that contain the given feed as source
+        """
+        # get the feed name from the given url
+        feed_to_delete = url.split('/')[-1]
+        # get all domains that are read from TI files in our db
+        IoC_domains = self.rcache.hgetall('IoC_domains')
+        for domain, domain_description in IoC_domains.items():
+            domain_description = json.loads(domain_description)
+            if feed_to_delete in domain_description['source']:
+                # this entry has the given feed as source, delete it
+                self.rcache.hdel('IoC_domains', domain)
+
+        # get all IPs that are read from TI files in our db
+        IoC_ips = self.rcache.hgetall('IoC_ips')
+        for ip, ip_description in IoC_ips.items():
+            ip_description = json.loads(ip_description)
+            if feed_to_delete in ip_description['source']:
+                # this entry has the given feed as source, delete it
+                self.rcache.hdel('IoC_ips', ip)
 
 __database__ = Database()

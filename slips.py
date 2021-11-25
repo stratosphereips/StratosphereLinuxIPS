@@ -379,7 +379,10 @@ if __name__ == '__main__':
 
     # Read the config file name given from the parameters
     # don't use '%' for interpolation.
-    config = configparser.ConfigParser(interpolation=None)
+    # comment_prefixes are the characters that if found at the beginning
+    # of the line, the line is completely ignored by configparses, by default they are # and ;
+    # set them to # only to support removing commented ti files from the cache db
+    config = configparser.ConfigParser(interpolation=None, comment_prefixes="#")
     try:
         with open(args.config) as source:
             config.read_file(source)

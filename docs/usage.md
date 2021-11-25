@@ -214,6 +214,13 @@ Be sure the format is:
 
 link, threat_level=0-1, tags=['tag1','tag2']
 
+TI files commented using # may be processed as they're still in our database. 
+
+Use ```;``` for commenting TI files in ```slips.conf``` instead of ```#```.
+
+Commented TI files (lines starting with ;) will be completely removed from our database.
+
+
 The remote files are installed to the path set in the ```download_path_for_local_threat_intelligence```. By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` 
 
 **RiskIQ feeds**

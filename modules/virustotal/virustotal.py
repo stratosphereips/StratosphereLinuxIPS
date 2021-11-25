@@ -55,6 +55,8 @@ class Module(Module, multiprocessing.Process):
         self.counter = 0
         # create the queue thread
         self.api_calls_thread = threading.Thread(target=self.API_calls_thread, daemon=True)
+        # this will be true when there's a problem with the API key, then the module will exit
+        self.incorrect_API_key = False
 
     def __read_configuration(self) -> str:
         """ Read the configuration file for what we need """
@@ -429,6 +431,7 @@ class Module(Module, multiprocessing.Process):
                 # don't add to the api call queue because the user will have to restart slips anyway
                 # to add a correct API key and the queue wil be erased
                 self.print("Please check that your API key is correct.", 0, 1)
+                self.incorrect_API_key = True
             else:
                 # if the query was unsuccessful but it is not caused by API limit, abort (this is some unknown error)
                 # X-Api-Message is a comprehensive error description, but it is not always present
@@ -564,6 +567,8 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
+                # exit module if there's a problem with the API key
+                if self.incorrect_API_key: return True
                 message = self.c1.get_message(timeout=self.timeout)
 
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
