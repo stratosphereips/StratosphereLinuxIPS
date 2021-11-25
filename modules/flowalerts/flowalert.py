@@ -59,6 +59,9 @@ class Module(Module, multiprocessing.Process):
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In seconds
         self.conn_without_dns_interface_wait_time = 180
+        self.nxdomains_ctr = 0
+        # if nxdomains are >= this threshold, it's probably DGA
+        self.nxdomains_threshold = 10
 
     def read_ports_info(self, ports_info_filepath):
         """
@@ -623,8 +626,8 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-
     def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
+        # todo description should be constructed in this function not outside D:
         """
         :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
         """
@@ -649,13 +652,41 @@ class Module(Module, multiprocessing.Process):
         detection_info = most_contacted_daddr
         bytes_sent_in_MB = int(total_bytes / (10**6))
         ip_identification = __database__.getIPIdentification(most_contacted_daddr)
-        description = f'possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}. {ip_identification}. IP contacted {times_contacted} times in the past 1h'
+        description = f'possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}.'
+        description+= f'{ip_identification}. IP contacted {times_contacted} times in the past 1h'
         timestamp = datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid)
 
+
+    def detect_DGA(self, rcode_name, stime, profileid, twid, uid):
+        """
+        Detect DGA based on the amount of NXDOMAINs seen in dns.log
+        """
+
+        if not 'NXDOMAIN' in rcode_name:
+            return False
+
+        self.nxdomains_ctr +=1
+        if self.nxdomains_ctr < self.nxdomains_threshold:
+            print(f'@@@@@@@@@@@@@@@@@@  ctr is now {self.nxdomains_ctr}  \n')
+            return False
+        else:
+            print(f'@@@@@@@@@@@@@@@@@@  passed the limit \n')
+        confidence = 0.6
+        threat_level = 80
+        # the srcip performing all the dns queries
+        type_detection  = 'srcip'
+        type_evidence = 'DGA'
+        detection_info = profileid.split('_')[1]
+        description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains_ctr} domains'
+        if not twid: twid = ''
+        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                 confidence, description, stime, profileid=profileid, twid=twid)
+        # reset the counter
+        self.nxdomains_ctr = 0
 
     def run(self):
         # Main loop function
@@ -1018,13 +1049,16 @@ class Module(Module, multiprocessing.Process):
                     twid = data['twid']
                     uid = data['uid']
                     flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-                    domain = flow_data.get('query',False)
-                    answers = flow_data.get('answers',False)
+                    domain = flow_data.get('query', False)
+                    answers = flow_data.get('answers', False)
+                    rcode_name = flow_data.get('rcode_name', False)
                     stime = data.get('stime',False)
+
                     # only check dns without connection if we have answers(we're sure the query is resolved)
                     if answers:
                         self.check_dns_resolution_without_connection(domain, answers, stime, profileid, twid, uid)
-
+                    if rcode_name:
+                        self.detect_DGA(rcode_name, stime, profileid, twid, uid)
             except KeyboardInterrupt:
                 continue
             except Exception as inst:
