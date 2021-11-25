@@ -60,7 +60,7 @@ class Module(Module, multiprocessing.Process):
         # In seconds
         self.conn_without_dns_interface_wait_time = 180
         # this dict will contain the number of nxdomains found in every profile
-        self.nxdomains_ctr = {}
+        self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
         self.nxdomains_threshold = 10
 
@@ -670,27 +670,29 @@ class Module(Module, multiprocessing.Process):
         if not 'NXDOMAIN' in rcode_name:
             return False
 
+        # found NXDOMAIN by this profile
         try:
-            self.nxdomains_ctr[profileid] +=1
-            if self.nxdomains_ctr[profileid] < self.nxdomains_threshold:
+            self.nxdomains[profileid] +=1
+            if self.nxdomains[profileid] < self.nxdomains_threshold:
+                # the counter hasn't reached the threshold yet
                 return False
         except KeyError:
             # first time seeing nxdomain in this profile
-            self.nxdomains_ctr.update({profileid: 1})
+            self.nxdomains.update({profileid: 1})
             return False
 
-        confidence = 0.6
-        threat_level = 80
-        # the srcip performing all the dns queries
-        type_detection  = 'srcip'
-        type_evidence = 'DGA'
-        detection_info = profileid.split('_')[1]
-        description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains_ctr[profileid]} domains'
-        if not twid: twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, stime, profileid=profileid, twid=twid)
-        # reset the counter
-        self.nxdomains_ctr[profileid] = 0
+        # every 10,15,20 .. etc. nxdomains, generate an alert.
+        if self.nxdomains[profileid] % 5 == 0:
+            confidence = 0.6
+            threat_level = 80
+            # the srcip performing all the dns queries
+            type_detection  = 'srcip'
+            type_evidence = 'DGA'
+            detection_info = profileid.split('_')[1]
+            description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains[profileid]} domains'
+            if not twid: twid = ''
+            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                     confidence, description, stime, profileid=profileid, twid=twid)
 
     def run(self):
         # Main loop function
