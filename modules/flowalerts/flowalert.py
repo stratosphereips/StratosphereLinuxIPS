@@ -186,6 +186,7 @@ class Module(Module, multiprocessing.Process):
         # confidence depends on how long the connection
         # scale the confidence from 0 to 1, 1 means 24 hours long
         confidence = 1/(3600*24)*(duration-3600*24)+1
+        confidence = round(confidence, 2)
         ip_identification = __database__.getIPIdentification(ip)
         description = 'Long Connection ' + str(duration) + f'. {ip_identification}'
         if not twid:
@@ -683,7 +684,8 @@ class Module(Module, multiprocessing.Process):
 
         # every 10,15,20 .. etc. nxdomains, generate an alert.
         if self.nxdomains[profileid] % 5 == 0:
-            confidence = 0.6 # todo make the confidence based on the amount of nxdomains
+            confidence = (1/100)*(self.nxdomains[profileid]-100)+1
+            confidence = round(confidence, 2) # for readability
             threat_level = 80
             # the srcip performing all the dns queries
             type_detection  = 'srcip'
