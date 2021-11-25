@@ -2015,6 +2015,7 @@ class ProfilerProcess(multiprocessing.Process):
 
                 if server_addr:
                     __database__.store_dhcp_server(server_addr)
+                    __database__.mark_profile_as_dhcp(profileid)
 
             # Create the objects of IPs
             try:

@@ -204,12 +204,21 @@ class Database(object):
 
     def add_mac_addr_to_profile(self,profileid, MAC_info):
         """
-        Used when mac adddr
+        Used to associate this profile with it's MAC addr
         :param MAC_info: dict containing mac address and vendor info
         """
-        # MAC_info = json.dumps(MAC_info)
         # Add the MAC addr and vendor to this profile
         self.r.hmset(profileid, MAC_info)
+
+    def mark_profile_as_dhcp(self, profileid):
+        """
+        Used to mark this profile as dhcp server
+        """
+        # check if it's already marked as dhcp
+        is_dhcp_set = self.r.hmget(profileid , 'dhcp')[0]
+        if not is_dhcp_set:
+            self.r.hmset(profileid, {'dhcp': 'true'})
+
 
     def get_mac_addr_from_profile(self,profileid) -> str:
         """
