@@ -12,6 +12,7 @@ import ipaddress
 import ipwhois
 import socket
 import json
+from dns.resolver import NoResolverConfiguration
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
@@ -149,6 +150,10 @@ class Module(Module, multiprocessing.Process):
             return True
         except (ipwhois.exceptions.IPDefinedError,ipwhois.exceptions.HTTPLookupError):
             # private ip or RDAP lookup failed. don't cache
+            return False
+        except NoResolverConfiguration:
+            # Resolver configuration could not be read or specified no nameservers
+            self.print('Error: Resolver configuration could not be read or specified no nameservers.')
             return False
         except ipwhois.exceptions.ASNRegistryError:
             # ASN lookup failed with no more methods to try
