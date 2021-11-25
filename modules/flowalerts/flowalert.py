@@ -59,7 +59,8 @@ class Module(Module, multiprocessing.Process):
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In seconds
         self.conn_without_dns_interface_wait_time = 180
-        self.nxdomains_ctr = 0
+        # this dict will contain the number of nxdomains found in every profile
+        self.nxdomains_ctr = {}
         # if nxdomains are >= this threshold, it's probably DGA
         self.nxdomains_threshold = 10
 
@@ -669,24 +670,27 @@ class Module(Module, multiprocessing.Process):
         if not 'NXDOMAIN' in rcode_name:
             return False
 
-        self.nxdomains_ctr +=1
-        if self.nxdomains_ctr < self.nxdomains_threshold:
-            print(f'@@@@@@@@@@@@@@@@@@  ctr is now {self.nxdomains_ctr}  \n')
+        try:
+            self.nxdomains_ctr[profileid] +=1
+            if self.nxdomains_ctr[profileid] < self.nxdomains_threshold:
+                return False
+        except KeyError:
+            # first time seeing nxdomain in this profile
+            self.nxdomains_ctr.update({profileid: 1})
             return False
-        else:
-            print(f'@@@@@@@@@@@@@@@@@@  passed the limit \n')
+
         confidence = 0.6
         threat_level = 80
         # the srcip performing all the dns queries
         type_detection  = 'srcip'
         type_evidence = 'DGA'
         detection_info = profileid.split('_')[1]
-        description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains_ctr} domains'
+        description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains_ctr[profileid]} domains'
         if not twid: twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, stime, profileid=profileid, twid=twid)
         # reset the counter
-        self.nxdomains_ctr = 0
+        self.nxdomains_ctr[profileid] = 0
 
     def run(self):
         # Main loop function
