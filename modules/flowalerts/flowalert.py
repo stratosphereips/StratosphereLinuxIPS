@@ -683,11 +683,11 @@ class Module(Module, multiprocessing.Process):
 
         # every 10,15,20 .. etc. nxdomains, generate an alert.
         if self.nxdomains[profileid] % 5 == 0:
-            confidence = 0.6
+            confidence = 0.6 # todo make the confidence based on the amount of nxdomains
             threat_level = 80
             # the srcip performing all the dns queries
             type_detection  = 'srcip'
-            type_evidence = 'DGA'
+            type_evidence = f'DGA-{self.nxdomains[profileid]}-NXDOMAINs'
             detection_info = profileid.split('_')[1]
             description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains[profileid]} domains'
             if not twid: twid = ''
