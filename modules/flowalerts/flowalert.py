@@ -628,17 +628,28 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
+    def set_evidence_malicious_JA3(self, malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='', ioc=''):
         # todo description should be constructed in this function not outside D:
         """
         :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
         """
-        threat_level = 80
-        type_detection  = 'dstip'
-        if 'JA3s ' in description:
-            type_evidence = 'MaliciousJA3s'
-        else:
+        malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
+        tags = malicious_ja3_dict['tags']
+        ja3_description = malicious_ja3_dict['description']
+        threat_level = malicious_ja3_dict['threat_level']
+
+        if type_ == 'ja3':
+            description = f'Malicious JA3: {ioc} to daddr {daddr}'
             type_evidence = 'MaliciousJA3'
+        elif type_ == 'ja3s':
+            description = f'Malicious JA3s: (possible C&C server): {ioc} to server {daddr} '
+            type_evidence = 'MaliciousJA3s'
+
+        # append daddr identification to the description
+        ip_identification = __database__.getIPIdentification(daddr)
+        description+= f'{ip_identification} description: {ja3_description} {tags}'
+
+        type_detection  = 'dstip'
         detection_info = daddr
         confidence = 1
         if not twid:
@@ -998,6 +1009,7 @@ class Module(Module, multiprocessing.Process):
                         ja3s = flow.get('ja3s',False)
                         profileid = data['profileid']
                         twid = data['twid']
+                        daddr = flow['daddr']
 
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
@@ -1014,23 +1026,11 @@ class Module(Module, multiprocessing.Process):
                         if ja3 or ja3s:
                             # get the dict of malicious ja3 stored in our db
                             malicious_ja3_dict = __database__.get_ja3_in_IoC()
-                            daddr = flow['daddr']
-
                             if ja3 in malicious_ja3_dict:
-                                malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3])
-                                description = malicious_ja3_dict['description']
-                                tags = malicious_ja3_dict['tags']
-                                description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description} [{tags}]'
-                                threat_level = malicious_ja3_dict['threat_level']
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
+                                self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp,  type_='ja3', ioc=ja3)
 
                             if ja3s in malicious_ja3_dict:
-                                malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3s])
-                                description = malicious_ja3_dict['description']
-                                tags = malicious_ja3_dict['tags']
-                                description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description} [{tags}]'
-                                threat_level = malicious_ja3_dict['threat_level']
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
+                                self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='ja3s', ioc=ja3s)
 
                 # --- Learn ports that Zeek knows but Slips doesn't ---
                 message = self.c5.get_message(timeout=self.timeout)
