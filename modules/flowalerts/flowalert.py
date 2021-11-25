@@ -464,13 +464,14 @@ class Module(Module, multiprocessing.Process):
         Makes sure all cached DNS answers are used in contacted_ips
         :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
-        # Ignore some domains
+        # Ignore some domains because its is ok if they do DNS without a connection
         ## - All reverse dns resolutions
         ## - All .local domains
         ## - The wildcard domain *
-        ## - Subdomains of cymru.com, since it is used by the ipwhois library to get the ASN of an IP and its range.
+        ## - Subdomains of cymru.com, since it is used by the ipwhois library in Slips to get the ASN of an IP and its range. This DNS is meant not to have a connection later
         ## - Domains check from Chrome, like xrvwsrklpqrw
         ## - The WPAD domain of windows
+
         if 'arpa' in domain or '.local' in domain or '*' in domain or '.cymru.com' in domain[-10:] or len(domain.split('.')) == 1 or domain == 'WPAD':
             return False
 
