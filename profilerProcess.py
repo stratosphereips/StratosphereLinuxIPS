@@ -1158,6 +1158,8 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['server_addr'] = line.get('server_addr','')
             self.column_values['host_name'] = line.get('host_name','')
             self.column_values['mac'] = line.get('mac','') # this is the client mac
+            self.column_values['saddr'] = self.column_values['client_addr']
+            self.column_values['daddr'] = self.column_values['server_addr']
             # self.column_values['domain'] = line.get('domain','')
             # self.column_values['assigned_addr'] = line.get('assigned_addr','')
         elif 'dce_rpc' in file_type:
@@ -1997,12 +1999,13 @@ class ProfilerProcess(multiprocessing.Process):
                 ttls = self.column_values['TTLs']
             elif 'dhcp' in flow_type:
                 # client mac addr and client_addr is optional in zeek, so sometimes it may not be there
-                client_addr = self.column_values.get('client_addr',False)
+                client_addr = self.column_values.get('client_addr', False)
+                mac_addr = self.column_values.get('mac', False)
+                host_name = self.column_values.get('host_name', False)
+                server_addr = self.column_values.get('server_addr', False)
+
                 if client_addr:
                     profileid = get_rev_profile(starttime, client_addr)[0]
-
-                mac_addr = self.column_values.get('mac',False)
-                host_name = self.column_values.get('host_name',False)
                 if mac_addr:
                     # send this to IP_Info module to get vendor info about this MAC
                     to_send = {'MAC': mac_addr,
@@ -2010,7 +2013,6 @@ class ProfilerProcess(multiprocessing.Process):
                     if host_name: to_send.update({'host_name': host_name})
                     __database__.publish('new_MAC', json.dumps(to_send))
 
-                server_addr = self.column_values.get('server_addr',False)
                 if server_addr:
                     __database__.store_dhcp_server(server_addr)
 
