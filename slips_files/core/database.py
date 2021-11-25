@@ -1573,6 +1573,9 @@ class Database(object):
         return flows
 
     def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) ->dict:
+        """
+        Get all the contacted IPs in a given profile and TW
+        """
         all_flows = self.get_all_flows_in_profileid_twid(profileid,twid)
         if not all_flows:
             return {}
