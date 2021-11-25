@@ -59,6 +59,10 @@ class Module(Module, multiprocessing.Process):
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In seconds
         self.conn_without_dns_interface_wait_time = 180
+        # this dict will contain the number of nxdomains found in every profile
+        self.nxdomains = {}
+        # if nxdomains are >= this threshold, it's probably DGA
+        self.nxdomains_threshold = 10
 
     def read_ports_info(self, ports_info_filepath):
         """
@@ -161,7 +165,7 @@ class Module(Module, multiprocessing.Process):
 
         type_detection = 'ip'
         detection_info = saddr
-        type_evidence = 'SSHSuccessful'
+        type_evidence = f'SSHSuccessful-by-{saddr}'
         threat_level = 0
         confidence = 0.5
         ip_identification = __database__.getIPIdentification(daddr)
@@ -182,6 +186,7 @@ class Module(Module, multiprocessing.Process):
         # confidence depends on how long the connection
         # scale the confidence from 0 to 1, 1 means 24 hours long
         confidence = 1/(3600*24)*(duration-3600*24)+1
+        confidence = round(confidence, 2)
         ip_identification = __database__.getIPIdentification(ip)
         description = 'Long Connection ' + str(duration) + f'. {ip_identification}'
         if not twid:
@@ -623,17 +628,28 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-
-    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
+    def set_evidence_malicious_JA3(self, malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='', ioc=''):
+        # todo description should be constructed in this function not outside D:
         """
         :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
         """
-        threat_level = 80
-        type_detection  = 'dstip'
-        if 'JA3s ' in description:
-            type_evidence = 'MaliciousJA3s'
-        else:
+        malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
+        tags = malicious_ja3_dict['tags']
+        ja3_description = malicious_ja3_dict['description']
+        threat_level = malicious_ja3_dict['threat_level']
+
+        if type_ == 'ja3':
+            description = f'Malicious JA3: {ioc} to daddr {daddr}'
             type_evidence = 'MaliciousJA3'
+        elif type_ == 'ja3s':
+            description = f'Malicious JA3s: (possible C&C server): {ioc} to server {daddr} '
+            type_evidence = 'MaliciousJA3s'
+
+        # append daddr identification to the description
+        ip_identification = __database__.getIPIdentification(daddr)
+        description+= f'{ip_identification} description: {ja3_description} {tags}'
+
+        type_detection  = 'dstip'
         detection_info = daddr
         confidence = 1
         if not twid:
@@ -649,13 +665,47 @@ class Module(Module, multiprocessing.Process):
         detection_info = most_contacted_daddr
         bytes_sent_in_MB = int(total_bytes / (10**6))
         ip_identification = __database__.getIPIdentification(most_contacted_daddr)
-        description = f'possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}. {ip_identification}. IP contacted {times_contacted} times in the past 1h'
+        description = f'possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}.'
+        description+= f'{ip_identification}. IP contacted {times_contacted} times in the past 1h'
         timestamp = datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid)
 
+
+    def detect_DGA(self, rcode_name, stime, profileid, twid, uid):
+        """
+        Detect DGA based on the amount of NXDOMAINs seen in dns.log
+        """
+
+        if not 'NXDOMAIN' in rcode_name:
+            return False
+
+        # found NXDOMAIN by this profile
+        try:
+            self.nxdomains[profileid] +=1
+            if self.nxdomains[profileid] < self.nxdomains_threshold:
+                # the counter hasn't reached the threshold yet
+                return False
+        except KeyError:
+            # first time seeing nxdomain in this profile
+            self.nxdomains.update({profileid: 1})
+            return False
+
+        # every 10,15,20 .. etc. nxdomains, generate an alert.
+        if self.nxdomains[profileid] % 5 == 0:
+            confidence = (1/100)*(self.nxdomains[profileid]-100)+1
+            confidence = round(confidence, 2) # for readability
+            threat_level = 80
+            # the srcip performing all the dns queries
+            type_detection  = 'srcip'
+            type_evidence = f'DGA-{self.nxdomains[profileid]}-NXDOMAINs'
+            detection_info = profileid.split('_')[1]
+            description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains[profileid]} domains'
+            if not twid: twid = ''
+            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
+                                     confidence, description, stime, profileid=profileid, twid=twid)
 
     def run(self):
         # Main loop function
@@ -959,6 +1009,7 @@ class Module(Module, multiprocessing.Process):
                         ja3s = flow.get('ja3s',False)
                         profileid = data['profileid']
                         twid = data['twid']
+                        daddr = flow['daddr']
 
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
@@ -975,23 +1026,11 @@ class Module(Module, multiprocessing.Process):
                         if ja3 or ja3s:
                             # get the dict of malicious ja3 stored in our db
                             malicious_ja3_dict = __database__.get_ja3_in_IoC()
-                            daddr = flow['daddr']
-
                             if ja3 in malicious_ja3_dict:
-                                malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3])
-                                description = malicious_ja3_dict['description']
-                                tags = malicious_ja3_dict['tags']
-                                description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description} [{tags}]'
-                                threat_level = malicious_ja3_dict['threat_level']
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
+                                self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp,  type_='ja3', ioc=ja3)
 
                             if ja3s in malicious_ja3_dict:
-                                malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3s])
-                                description = malicious_ja3_dict['description']
-                                tags = malicious_ja3_dict['tags']
-                                description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description} [{tags}]'
-                                threat_level = malicious_ja3_dict['threat_level']
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
+                                self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='ja3s', ioc=ja3s)
 
                 # --- Learn ports that Zeek knows but Slips doesn't ---
                 message = self.c5.get_message(timeout=self.timeout)
@@ -1018,13 +1057,16 @@ class Module(Module, multiprocessing.Process):
                     twid = data['twid']
                     uid = data['uid']
                     flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-                    domain = flow_data.get('query',False)
-                    answers = flow_data.get('answers',False)
+                    domain = flow_data.get('query', False)
+                    answers = flow_data.get('answers', False)
+                    rcode_name = flow_data.get('rcode_name', False)
                     stime = data.get('stime',False)
+
                     # only check dns without connection if we have answers(we're sure the query is resolved)
                     if answers:
                         self.check_dns_resolution_without_connection(domain, answers, stime, profileid, twid, uid)
-
+                    if rcode_name:
+                        self.detect_DGA(rcode_name, stime, profileid, twid, uid)
             except KeyboardInterrupt:
                 continue
             except Exception as inst:

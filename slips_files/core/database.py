@@ -76,7 +76,7 @@ class Database(object):
                             'SelfSignedCertificate','PortScanType1','PortScanType2','Password_Guessing',
                             'MaliciousFlow','SuspiciousUserAgent','multiple_google_connections',
                             'NETWORK_gps_location_leaked','ICMPSweep','Command-and-Control-channels-detection',
-                            'ThreatIntelligenceBlacklistDomain','ThreatIntelligenceBlacklistIP','MaliciousDownloadedFile']
+                            'ThreatIntelligenceBlacklistDomain','ThreatIntelligenceBlacklistIP','MaliciousDownloadedFile','DGA']
         self.disabled_detections = []
         for detection in supported_detections:
             # get the configuration for this alert
@@ -1024,6 +1024,16 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
+    def is_detection_disabled(self, evidence):
+        """
+        Function to check if detection is disabled in slips.conf
+        """
+        for disabled_evidence in self.disabled_detections:
+            if disabled_evidence in evidence:
+                return True
+        return False
+
+
     def setEvidence(self, type_detection, detection_info, type_evidence,
                     threat_level, confidence, description, timestamp, profileid='', twid='', uid=''):
         """
@@ -1049,8 +1059,8 @@ class Database(object):
         }
         """
 
-        #ignore evidence if it's disabled in the configuration file
-        if type_evidence in self.disabled_detections:
+        # Ignore evidence if it's disabled in the configuration file
+        if self.is_detection_disabled(type_evidence):
             return False
 
         # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
@@ -1863,6 +1873,10 @@ class Database(object):
         data['answers'] = answers
         data['ttls'] = ttls
         data['stime'] = stime
+
+        # Add DNS resolution to the db if there are answers for the query
+        if answers:
+            self.set_dns_resolution(query, answers, stime, uid, qtype_name, profileid, twid)
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
@@ -1874,6 +1888,7 @@ class Database(object):
         to_send['flow'] = data
         to_send['stime'] = stime
         to_send['uid'] = uid
+        to_send['rcode_name'] = rcode_name
         to_send = json.dumps(to_send)
         #publish a dns with its flow
         self.publish('new_dns_flow', to_send)
