@@ -1847,7 +1847,7 @@ class Database(object):
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 3, 0)
 
-    def add_out_dns(self, profileid, twid, stime, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls):
+    def add_out_dns(self, profileid, twid, stime, flowtype, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls, starttime):
         """
         Store in the DB a DNS request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
@@ -1863,6 +1863,11 @@ class Database(object):
         data['answers'] = answers
         data['ttls'] = ttls
         data['stime'] = stime
+
+        # Add DNS resolution to the db if there are answers for the query
+        if answers:
+            __database__.set_dns_resolution(query, answers, stime, uid, qtype_name, profileid, twid)
+
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
