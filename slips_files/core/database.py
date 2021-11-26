@@ -2375,21 +2375,21 @@ class Database(object):
         data = self.r.hget(profileid, 'labeled_as_malicious')
         return data
 
-    def set_malicious_file_info(self, file, data):
+    def set_TI_file_info(self, file, data):
         '''
-        Set/update time and/or e-tag for malicious file
+        Set/update time and/or e-tag for TI file
         '''
         # data = self.get_malicious_file_info(file)
         # for key in file_data:
         # data[key] = file_data[key]
         data = json.dumps(data)
-        self.rcache.hset('malicious_files_info', file, data)
+        self.rcache.hset('TI_files_info', file, data)
 
-    def get_malicious_file_info(self, file):
+    def get_TI_file_info(self, file):
         '''
-        Get malicious file info
+        Get TI file info
         '''
-        data = self.rcache.hget('malicious_files_info', file)
+        data = self.rcache.hget('TI_files_info', file)
         if data:
             data = json.loads(data)
         else:

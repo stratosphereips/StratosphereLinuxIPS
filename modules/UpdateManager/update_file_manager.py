@@ -154,7 +154,7 @@ class UpdateFileManager:
         """
         file_name_to_download = file_to_download.split('/')[-1]
         # Get last timeupdate of the file
-        data = __database__.get_malicious_file_info(file_name_to_download)
+        data = __database__.get_TI_file_info(file_name_to_download)
         try:
             last_update = data['time']
             last_update = float(last_update)
@@ -237,7 +237,7 @@ class UpdateFileManager:
 
             file_name_to_download = link_to_download.split('/')[-1]
             # Get what files are stored in cache db and their E-TAG to compare with current files
-            data = __database__.get_malicious_file_info(file_name_to_download)
+            data = __database__.get_TI_file_info(file_name_to_download)
             try:
                 old_e_tag = data['e-tag']
             except TypeError:
@@ -273,7 +273,7 @@ class UpdateFileManager:
                 malicious_file_info = {}
                 malicious_file_info['e-tag'] = new_e_tag
                 malicious_file_info['time'] = self.new_update_time
-                __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
+                __database__.set_TI_file_info(file_name_to_download, malicious_file_info)
                 return True
             elif new_e_tag and old_e_tag == new_e_tag:
                 self.print(f'File {link_to_download} is still the same. Not downloading the file', 3, 0)
@@ -283,7 +283,7 @@ class UpdateFileManager:
                 malicious_file_info = {}
                 malicious_file_info['e-tag'] = new_e_tag
                 malicious_file_info['time'] = self.new_update_time
-                __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
+                __database__.set_TI_file_info(file_name_to_download, malicious_file_info)
                 return True
             elif not new_e_tag:
                 # Something failed. Do not download
@@ -328,7 +328,7 @@ class UpdateFileManager:
 
             # update the timestamp in the db
             malicious_file_info = {'time': time.time()}
-            __database__.set_malicious_file_info('riskiq_domains', malicious_file_info)
+            __database__.set_TI_file_info('riskiq_domains', malicious_file_info)
             return True
         except Exception as e:
             self.print(f'An error occurred while updating RiskIQ feed.', 0, 1)

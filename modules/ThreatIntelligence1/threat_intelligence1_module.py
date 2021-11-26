@@ -336,7 +336,7 @@ class Module(Module, multiprocessing.Process):
             for localfile in local_ti_files:
                 self.print(f'Loading local TI file {localfile}', 2, 0)
                 # Get what files are stored in cache db and their E-TAG to comapre with current files
-                data = __database__.get_malicious_file_info(localfile)
+                data = __database__.get_TI_file_info(localfile)
                 try:
                     old_hash = data['e-tag']
                 except TypeError:
@@ -362,7 +362,7 @@ class Module(Module, multiprocessing.Process):
                     malicious_file_info = {}
                     malicious_file_info['e-tag'] = new_hash
                     malicious_file_info['time'] = ''
-                    __database__.set_malicious_file_info(localfile, malicious_file_info)
+                    __database__.set_TI_file_info(localfile, malicious_file_info)
                     return True
                 elif not new_hash:
                     # Something failed. Do not download
@@ -407,7 +407,7 @@ class Module(Module, multiprocessing.Process):
         '''
 
         # Retrieve all profiles and twis, where this malicios IP was met.
-        ip_profileid_twid= __database__.get_malicious_ip(ip)
+        ip_profileid_twid = __database__.get_malicious_ip(ip)
         try:
             profile_tws = ip_profileid_twid[profileid]             # a dictionary {profile:set(tw1, tw2)}
             profile_tws = ast.literal_eval(profile_tws)            # set(tw1, tw2)
