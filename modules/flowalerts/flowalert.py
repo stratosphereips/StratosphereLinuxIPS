@@ -123,6 +123,7 @@ class Module(Module, multiprocessing.Process):
             self.long_connection_threshold = int(self.config.get('flowalerts', 'long_connection_threshold'))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
+            # this value is in seconds, =25 mins
             self.long_connection_threshold = 1500
         try:
             self.ssh_succesful_detection_threshold = int(self.config.get('flowalerts', 'ssh_succesful_detection_threshold'))
@@ -188,7 +189,9 @@ class Module(Module, multiprocessing.Process):
         confidence = 1/(3600*24)*(duration-3600*24)+1
         confidence = round(confidence, 2)
         ip_identification = __database__.getIPIdentification(ip)
-        description = 'Long Connection ' + str(duration) + f'. {ip_identification}'
+        # get the duration in minutes
+        duration = int(duration/60)
+        description = f'Long Connection. Connection to: {ip} {ip_identification} took {duration} mins'
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
@@ -254,6 +257,7 @@ class Module(Module, multiprocessing.Process):
         """
         Check if a duration of the connection is
         above the threshold (more than 25 minutess by default).
+        :param dur: duration of the flow in seconds
         """
         if type(dur) == str:
             dur = float(dur)
