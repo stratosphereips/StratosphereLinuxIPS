@@ -12,7 +12,7 @@ import sys
 import validators
 import platform
 import re
-import socket
+import ast
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -2095,19 +2095,41 @@ class Database(object):
         """
         self.rcache.hset('IoC_domains', domain, description)
 
-    def set_malicious_ip(self, ip, profileid_twid):
+    def set_malicious_ip(self, ip, profileid, twid):
         """
         Save in DB malicious IP found in the traffic
         with its profileid and twid
         """
-        self.r.hset('MaliciousIPs', ip, profileid_twid)
+        # Retrieve all profiles and twis, where this malicios IP was met.
+        ip_profileid_twid = self.get_malicious_ip(ip)
+        try:
+            profile_tws = ip_profileid_twid[profileid]             # a dictionary {profile:set(tw1, tw2)}
+            profile_tws = ast.literal_eval(profile_tws)            # set(tw1, tw2)
+            profile_tws.add(twid)
+            ip_profileid_twid[profileid] = str(profile_tws)
+        except KeyError:
+            ip_profileid_twid[profileid] = str({twid})                   # add key-pair to the dict if does not exist
+        data = json.dumps(ip_profileid_twid)
 
-    def set_malicious_domain(self, domain, profileid_twid):
+        self.r.hset('MaliciousIPs', ip, data)
+
+    def set_malicious_domain(self, domain, profileid, twid):
         """
         Save in DB a malicious domain found in the traffic
         with its profileid and twid
         """
-        self.r.hset('MaliciousDomains', domain, profileid_twid)
+        # get all profiles and twis where this IP was met
+        domain_profiled_twid = __database__.get_malicious_domain(domain)
+        try:
+            profile_tws = domain_profiled_twid[profileid]               # a dictionary {profile:set(tw1, tw2)}
+            profile_tws = ast.literal_eval(profile_tws)                 # set(tw1, tw2)
+            profile_tws.add(twid)
+            domain_profiled_twid[profileid] = str(profile_tws)
+        except KeyError:
+            domain_profiled_twid[profileid] = str({twid})               # add key-pair to the dict if does not exist
+        data = json.dumps(domain_profiled_twid)
+
+        self.r.hset('MaliciousDomains', domain, data)
 
     def get_malicious_ip(self, ip):
         """
@@ -2375,21 +2397,21 @@ class Database(object):
         data = self.r.hget(profileid, 'labeled_as_malicious')
         return data
 
-    def set_malicious_file_info(self, file, data):
+    def set_TI_file_info(self, file, data):
         '''
-        Set/update time and/or e-tag for malicious file
+        Set/update time and/or e-tag for TI file
         '''
         # data = self.get_malicious_file_info(file)
         # for key in file_data:
         # data[key] = file_data[key]
         data = json.dumps(data)
-        self.rcache.hset('malicious_files_info', file, data)
+        self.rcache.hset('TI_files_info', file, data)
 
-    def get_malicious_file_info(self, file):
+    def get_TI_file_info(self, file):
         '''
-        Get malicious file info
+        Get TI file info
         '''
-        data = self.rcache.hget('malicious_files_info', file)
+        data = self.rcache.hget('TI_files_info', file)
         if data:
             data = json.loads(data)
         else:

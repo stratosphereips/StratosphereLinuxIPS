@@ -336,7 +336,7 @@ class Module(Module, multiprocessing.Process):
             for localfile in local_ti_files:
                 self.print(f'Loading local TI file {localfile}', 2, 0)
                 # Get what files are stored in cache db and their E-TAG to comapre with current files
-                data = __database__.get_malicious_file_info(localfile)
+                data = __database__.get_TI_file_info(localfile)
                 try:
                     old_hash = data['e-tag']
                 except TypeError:
@@ -362,7 +362,7 @@ class Module(Module, multiprocessing.Process):
                     malicious_file_info = {}
                     malicious_file_info['e-tag'] = new_hash
                     malicious_file_info['time'] = ''
-                    __database__.set_malicious_file_info(localfile, malicious_file_info)
+                    __database__.set_TI_file_info(localfile, malicious_file_info)
                     return True
                 elif not new_hash:
                     # Something failed. Do not download
@@ -376,47 +376,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
 
-    def set_maliciousDomain_to_MaliciousDomains(self, domain, profileid, twid):
-        '''
-        Set malicious domain to DB 'MaliciousDomains' with a profileid and twid where domain was met
-        '''
-        # get all profiles and twis where this IP was met
-        domain_profiled_twid = __database__.get_malicious_domain(domain)
-        try:
-            profile_tws = domain_profiled_twid[profileid]               # a dictionary {profile:set(tw1, tw2)}
-            profile_tws = ast.literal_eval(profile_tws)                 # set(tw1, tw2)
-            profile_tws.add(twid)
-            domain_profiled_twid[profileid] = str(profile_tws)
-        except KeyError:
-            domain_profiled_twid[profileid] = str({twid})               # add key-pair to the dict if does not exist
-        data = json.dumps(domain_profiled_twid)
-        __database__.set_malicious_domain(domain, data)
 
-    def set_maliciousDomain_to_DomainInfo(self, domain, domain_description):
-        '''
-        Set malicious domain in DomainsInfo.
-        '''
-        domain_data = {}
-        # Maybe we should change the key to 'status' or something like that.
-        domain_data['threatintelligence'] = domain_description
-        __database__.setInfoForDomains(domain, domain_data)
-
-    def set_maliciousIP_to_MaliousIPs(self, ip, profileid, twid):
-        '''
-        Set malicious IP in 'MaliciousIPs' key with a profileid and twid.
-        '''
-
-        # Retrieve all profiles and twis, where this malicios IP was met.
-        ip_profileid_twid= __database__.get_malicious_ip(ip)
-        try:
-            profile_tws = ip_profileid_twid[profileid]             # a dictionary {profile:set(tw1, tw2)}
-            profile_tws = ast.literal_eval(profile_tws)            # set(tw1, tw2)
-            profile_tws.add(twid)
-            ip_profileid_twid[profileid] = str(profile_tws)
-        except KeyError:
-            ip_profileid_twid[profileid] = str({twid})                   # add key-pair to the dict if does not exist
-        data = json.dumps(ip_profileid_twid)
-        __database__.set_malicious_ip(ip, data)
 
     def set_maliciousIP_to_IPInfo(self, ip, ip_description):
         '''
@@ -493,11 +453,13 @@ class Module(Module, multiprocessing.Process):
                             ip_info = json.loads(ip_info)
                             # Set the evidence on this detection
                             self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
-                            # set malicious IP in IPInfo
-                            self.set_maliciousIP_to_IPInfo(ip, ip_info)
-                            # set malicious IP in MaliciousIPs
-                            self.set_maliciousIP_to_MaliousIPs(ip, profileid, twid)
 
+                            # mark this ip as malicious in our database
+                            ip_info = {'threatintelligence': ip_info}
+                            __database__.setInfoForIPs(ip, ip_info)
+
+                            # add this ip to our MaliciousIPs hash in the database
+                            __database__.set_malicious_ip(ip, profileid, twid)
                     else:
                         # We were not given an IP. Check if we were given a domain
 
@@ -510,10 +472,13 @@ class Module(Module, multiprocessing.Process):
                                 # If the domain is in the blacklist of IoC. Set an evidence
                                 domain_info = json.loads(domain_info)
                                 self.set_evidence_domain(domain, uid, timestamp, domain_info, is_subdomain, profileid, twid)
-                                # set malicious domain in DomainInfo
-                                self.set_maliciousDomain_to_DomainInfo(domain, domain_info)
-                                # set malicious domain in MaliciousDomains
-                                self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
+
+                                # mark this domain as malicious in our database
+                                domain_info =  {'threatintelligence': domain_info }
+                                __database__.setInfoForDomains(domain, domain_info)
+
+                                # add this domain to our MaliciousDomains hash in the database
+                                __database__.set_malicious_domain(domain, profileid, twid)
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue

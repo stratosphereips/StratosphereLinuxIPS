@@ -1953,6 +1953,10 @@ class ProfilerProcess(multiprocessing.Process):
             self.daddr = self.column_values['daddr']
             profileid = 'profile' + self.id_separator + str(self.saddr)
 
+            if self.saddr == '' and self.daddr == '':
+                # some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log! don't store them in the db
+                return False
+
             # Check if the flow is whitelisted and we should not process
             if self.is_whitelisted():
                 return True
