@@ -1074,6 +1074,7 @@ class Database(object):
         key['type_detection'] = type_detection
         key['detection_info'] = detection_info
         key['type_evidence'] = type_evidence
+        key['description'] = description
         #Prepare data for a new evidence
         data = dict()
         data['confidence']= confidence
@@ -1081,7 +1082,7 @@ class Database(object):
             data['threat_level'] = float(threat_level)
         except ValueError:
             # no threat level is specified, probably ''
-            threat_level = 0
+            data['threat_level'] = 0
 
         data['description'] = description
         # key uses dictionary format, so it needs to be converted to json to work as a dict key.
