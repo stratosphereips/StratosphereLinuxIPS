@@ -91,16 +91,17 @@ class EvidenceProcess(multiprocessing.Process):
 
         # make sure we found the user of this used display
         if len(cmd_output) < 5:
-            # we don't know the user o this display!!, disable alerts for now #todo use psutil?
-            self.popup_alerts = False
-            return
+            # we don't know the user of this display!!, try getting it using psutil
+            # user 0 is the one that owns tty1
+            user = str(psutil.users()[0].name)
+        else:
+            # get the first user from the 'who' command
+            user = cmd_output.split("\n")[0].split()[0]
 
-        user = cmd_output.split("\n")[0].split()[0]
         # get the uid
         uid = pwd.getpwnam(user).pw_uid
         # run notify-send as user using the used_display and give it the dbus addr
         self.notify_cmd = f'sudo -u {user} DISPLAY={used_display} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send -t 5000 '
-
 
     def print(self, text, verbose=1, debug=0):
         """
