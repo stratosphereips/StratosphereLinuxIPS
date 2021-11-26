@@ -200,7 +200,7 @@ class Module(Module, multiprocessing.Process):
             # todo how to find out which one is it??
             confidence = 0.2 # low confidence for now
             threat_level = 90
-            description = f'{saddr} performing MITM attack.'
+            description = f'{saddr} performed a MITM attack. The MAC {src_mac}, now belonging to IP {saddr}, was seen before for IP {original_IP}.'
             # self.print(f'{saddr} is claiming to have {src_mac}')
             type_evidence = 'MITM-ARP-attack'
             type_detection = 'ip' #srcip
