@@ -186,9 +186,10 @@ class EvidenceProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified, by default...
             self.popup_alerts = False
 
-    def print_alert(self, profileid, twid, flow_datetime):
+    def format_blocked_srcip_evidence(self, profileid, twid, flow_datetime):
         '''
-        Function to print alert about the blocked profileid and twid
+        Function to prepare evidence about the blocked profileid and twid
+        This evidence will be written in alerts.log, it won't be displayed in the terminal
         '''
         try:
             now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
@@ -200,9 +201,9 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-    def print_evidence(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
+    def format_evidence_string(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
         '''
-        Function to display evidence according to the detection module.
+        Function to format the evidence to be displayed according to the detection module.
         :return : string with a correct evidence displacement
         '''
         evidence_string = ''
@@ -545,7 +546,24 @@ class EvidenceProcess(multiprocessing.Process):
         elif platform.system() == 'Darwin':
             os.system(f'osascript -e "display notification "{alert_to_log}" with title "Slips"" ')
 
-
+    def format_timestamp(self, timestamp):
+        """
+        Function to unify timestamps printed to log files, notification and cli.
+        :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
+        """
+        if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
+            flow_datetime = datetime.fromtimestamp(timestamp)
+            flow_datetime = flow_datetime.strftime('%Y/%m/%d %H:%M:%S')
+        else:
+            try:
+                # for timestamps like 2021-06-07T12:44:56.654854+0200
+                flow_datetime = timestamp.split('T')[0] +' '+ timestamp.split('T')[1][:8]
+            except IndexError:
+                #  for timestamps like 2018-03-09 22:57:44.781449+02:00
+                flow_datetime = timestamp[:19]
+            #  change the date separator to /
+            flow_datetime = flow_datetime.replace('-','/')
+        return flow_datetime
 
     def run(self):
         while True:
@@ -588,29 +606,18 @@ class EvidenceProcess(multiprocessing.Process):
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
 
-                    if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
-                        flow_datetime = datetime.fromtimestamp(timestamp)
-                        flow_datetime = flow_datetime.strftime('%Y/%m/%d %H:%M:%S')
-                    else:
-                        try:
-                            # for timestamps like 2021-06-07T12:44:56.654854+0200
-                            flow_datetime = timestamp.split('T')[0] +' '+ timestamp.split('T')[1][:8]
-                        except IndexError:
-                            #  for timestamps like 2018-03-09 22:57:44.781449+02:00
-                            flow_datetime = timestamp[:19]
-                        #  change the date separator to /
-                        flow_datetime = flow_datetime.replace('-','/')
+                    flow_datetime = self.format_timestamp(timestamp)
 
-                    # Print the evidence in the outprocess
-                    evidence_to_log = self.print_evidence(profileid,
-                                                          twid,
-                                                          srcip,
-                                                          type_evidence,
-                                                          type_detection,
-                                                          detection_info,
-                                                          description)
-
-                    evidence_dict = {'type': 'evidence',
+                    # prepare evidence for text log file
+                    evidence = self.format_evidence_string(profileid,
+                                                           twid,
+                                                           srcip,
+                                                           type_evidence,
+                                                           type_detection,
+                                                           detection_info,
+                                                           description)
+                    # prepare evidence for json log file
+                    blocked_srcip_dict = {'type': 'evidence',
                                      'profileid': profileid,
                                      'twid': twid,
                                      'timestamp': flow_datetime,
@@ -625,11 +632,11 @@ class EvidenceProcess(multiprocessing.Process):
                         # remove the tag from the description
                         description = description[:description.index('[')][:-5]
                         # add a key in the json evidence with tag
-                        evidence_dict.update({'tags':tag.replace("'",''), 'description': description})
+                        blocked_srcip_dict.update({'tags':tag.replace("'",''), 'description': description})
 
                     # Add the evidence to the log files
-                    self.addDataToLogFile(flow_datetime + ': ' + evidence_to_log)
-                    self.addDataToJSONFile(evidence_dict)
+                    self.addDataToLogFile(flow_datetime + ': ' + evidence)
+                    self.addDataToJSONFile(blocked_srcip_dict)
 
 
                     #
@@ -676,27 +683,26 @@ class EvidenceProcess(multiprocessing.Process):
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
-                                # Differentiate the type of evidence for different detections
-                                # when printing alerts to the terminal print the profileid_twid that generated this alert too
-                                #evidence_to_print = f'{profileid}_{twid} '
-                                evidence_to_print = f'{flow_datetime}: '
-                                evidence_to_print += self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
-                                self.print(f'{Fore.RED}{evidence_to_print}{Style.RESET_ALL}', 1, 0)
-                                # Set an alert about the evidence being blocked
-                                alert_to_log = self.print_alert(profileid, twid, flow_datetime)
-                                alert_dict = {'type':'alert',
+                                # now that this evidence is being printed, it's no longer evidence, it's an alert
+                                alert_to_print = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
+                                self.print(f'{Fore.RED} {flow_datetime}: {alert_to_print}{Style.RESET_ALL}', 1, 0)
+
+                                # Add to log files that this srcip is being blocked
+                                blocked_srcip_to_log = self.format_blocked_srcip_evidence(profileid, twid, flow_datetime)
+                                blocked_srcip_dict = {'type':'alert',
                                               'profileid': profileid,
                                               'twid': twid,
                                               'threat_level':accumulated_threat_level
                                                 }
 
-                                self.addDataToLogFile(alert_to_log)
-                                self.addDataToJSONFile(alert_dict)
+                                self.addDataToLogFile(blocked_srcip_to_log)
+                                self.addDataToJSONFile(blocked_srcip_dict)
 
                                 if self.popup_alerts:
-                                    self.show_popup(evidence_to_print)
+                                    self.show_popup(alert_to_print)
 
-                                # check that the dst ip isn't our own IP
+                                # Send to the blocking module.
+                                # Check that the dst ip isn't our own IP
                                 if type_detection=='dstip' and detection_info not in self.our_ips:
                                     #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
                                     # blocking_data = {
@@ -708,6 +714,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     # __database__.publish('new_blocking', blocking_data)
                                     pass
                                 __database__.markProfileTWAsBlocked(profileid, twid)
+
             except KeyboardInterrupt:
                 self.logfile.close()
                 self.jsonfile.close()
