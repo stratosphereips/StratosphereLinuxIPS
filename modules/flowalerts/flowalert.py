@@ -680,7 +680,7 @@ class Module(Module, multiprocessing.Process):
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
         """
 
-        if not 'NXDOMAIN' in rcode_name:
+        if not 'NXDOMAIN' in rcode_name or 'in-addr.arpa' in query:
             return False
 
         # found NXDOMAIN by this profile
