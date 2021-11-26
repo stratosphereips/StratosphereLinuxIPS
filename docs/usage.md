@@ -123,6 +123,13 @@ And then use ```./kalipso``` to view the loaded database.
 
 This feature isn't supported in docker due to problems with redis on docker.
 
+## Popup notifications
+
+Slips Support displaying popup notifications whenever there's an alert. 
+
+This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```slips.conf``` 
+
+This feature is supported in Linux and mac and not supported in docker.
 
 ## Modifying a configuration file
 

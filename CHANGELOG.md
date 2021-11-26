@@ -4,6 +4,7 @@
 		- Detect unsolicited ARP
 		- Detect MITM ARP attack
 		- Detect DGA
+		- Support popup notifications in Linux and mac. disabled by default. enable it by changing popup_alerts to yes in slips.conf 
 		- Add 5 new TI feeds (AmnestyTech domains)
 		- The Threat Intelligence feeds are now assigned a threat level instead of confidence value by default (user can change), so you can establish how each list impact your detection.
 		- Improve unknown ports detections. Now we don't alert for ports that appear in an FTP connection.
