@@ -21,15 +21,18 @@ import json
 from datetime import datetime
 import configparser
 from os import path
-from colorama import Fore, Back, Style
+from colorama import Fore, Style
 import ipaddress
-import socket
 import sys
 
 #import requests
 import subprocess
 import socket
 import re
+import platform
+import os
+import psutil
+import pwd
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -49,6 +52,9 @@ class EvidenceProcess(multiprocessing.Process):
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
+        if self.popup_alerts:
+            # The way we send notifications differ depending on the user and the OS
+            self.setup_notifications()
         # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
         self.logfile = self.clean_evidence_log_file(output_folder)
@@ -63,6 +69,39 @@ class EvidenceProcess(multiprocessing.Process):
         self.timeout = 0.0000001
         # this list will have our local and public ips
         self.our_ips = self.get_IP()
+
+    def setup_notifications(self):
+        """
+        Get the used display, the user using this display and the uid of this user in case of using Slips as root on linux
+        """
+        # in linux, if the user's not root, notifications command will need extra configurations
+        if platform.system() != 'Linux' or os.geteuid() != 0:
+            self.notify_cmd = 'notify-send -t 5000 '
+            return False
+
+        # Get the used display (if the user has only 1 screen it will be set to 0), if not we should know which screen is slips running on.
+        # A "display" is the address for your screen. Any program that wants to write to your screen has to know the address.
+        used_display = psutil.Process().environ()['DISPLAY']
+
+        # when you login as user x in linux, no user other than x is authorized to write to your display, not even root
+        # now that we're running as root, we dont't have acess to the used_display
+        # get the owner of the used_display, there's no other way than running the 'who' command
+        command = f'who | grep "({used_display})" '
+        cmd_output = os.popen(command).read()
+
+        # make sure we found the user of this used display
+        if len(cmd_output) < 5:
+            # we don't know the user of this display!!, try getting it using psutil
+            # user 0 is the one that owns tty1
+            user = str(psutil.users()[0].name)
+        else:
+            # get the first user from the 'who' command
+            user = cmd_output.split("\n")[0].split()[0]
+
+        # get the uid
+        uid = pwd.getpwnam(user).pw_uid
+        # run notify-send as user using the used_display and give it the dbus addr
+        self.notify_cmd = f'sudo -u {user} DISPLAY={used_display} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send -t 5000 '
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -141,9 +180,22 @@ class EvidenceProcess(multiprocessing.Process):
             self.detection_threshold = 2
         self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)', 2, 0)
 
-    def print_alert(self, profileid, twid, flow_datetime):
+        try:
+            self.popup_alerts = self.config.get('detection', 'popup_alerts').lower()
+            self.popup_alerts = True if 'yes' in self.popup_alerts else False
+
+            # In docker, disable alerts no matter what slips.conf says
+            if os.environ.get('IS_IN_A_DOCKER_CONTAINER', False):
+                self.popup_alerts = False
+
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified, by default...
+            self.popup_alerts = False
+
+    def format_blocked_srcip_evidence(self, profileid, twid, flow_datetime):
         '''
-        Function to print alert about the blocked profileid and twid
+        Function to prepare evidence about the blocked profileid and twid
+        This evidence will be written in alerts.log, it won't be displayed in the terminal
         '''
         try:
             now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
@@ -155,9 +207,9 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-    def print_evidence(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
+    def format_evidence_string(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
         '''
-        Function to display evidence according to the detection module.
+        Function to format the evidence to be displayed according to the detection module.
         :return : string with a correct evidence displacement
         '''
         evidence_string = ''
@@ -308,20 +360,21 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             # Convert each list from str to dict
             whitelisted_IPs = json.loads(whitelist['IPs'])
-        except KeyError:
-            pass
+        except (IndexError, KeyError):
+            whitelisted_IPs = {}
+
         try:
             whitelisted_domains = json.loads(whitelist['domains'])
-        except KeyError:
-            pass
+        except (IndexError, KeyError):
+            whitelisted_domains = {}
         try:
             whitelisted_orgs = json.loads(whitelist['organizations'])
-        except KeyError:
-            pass
+        except (IndexError, KeyError):
+            whitelisted_orgs = {}
         try:
             whitelisted_mac = json.loads(whitelist['organizations'])
-        except KeyError:
-            pass
+        except (IndexError, KeyError):
+            whitelisted_mac = {}
 
 
         # Set data type
@@ -489,6 +542,35 @@ class EvidenceProcess(multiprocessing.Process):
                             pass
         return False
 
+    def show_popup(self, alert_to_log: str):
+        """
+        Function to display a popup with the alert depending on the OS
+        """
+        if platform.system() == 'Linux':
+            #  is notify_cmd is set in setup_notifications function depending on the user
+            os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
+        elif platform.system() == 'Darwin':
+            os.system(f'osascript -e "display notification "{alert_to_log}" with title "Slips"" ')
+
+    def format_timestamp(self, timestamp):
+        """
+        Function to unify timestamps printed to log files, notification and cli.
+        :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
+        """
+        if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
+            flow_datetime = datetime.fromtimestamp(timestamp)
+            flow_datetime = flow_datetime.strftime('%Y/%m/%d %H:%M:%S')
+        else:
+            try:
+                # for timestamps like 2021-06-07T12:44:56.654854+0200
+                flow_datetime = timestamp.split('T')[0] +' '+ timestamp.split('T')[1][:8]
+            except IndexError:
+                #  for timestamps like 2018-03-09 22:57:44.781449+02:00
+                flow_datetime = timestamp[:19]
+            #  change the date separator to /
+            flow_datetime = flow_datetime.replace('-','/')
+        return flow_datetime
+
     def run(self):
         while True:
             try:
@@ -530,29 +612,18 @@ class EvidenceProcess(multiprocessing.Process):
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
 
-                    if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
-                        flow_datetime = datetime.fromtimestamp(timestamp)
-                        flow_datetime = flow_datetime.strftime('%Y/%m/%d %H:%M:%S')
-                    else:
-                        try:
-                            # for timestamps like 2021-06-07T12:44:56.654854+0200
-                            flow_datetime = timestamp.split('T')[0] +' '+ timestamp.split('T')[1][:8]
-                        except IndexError:
-                            #  for timestamps like 2018-03-09 22:57:44.781449+02:00
-                            flow_datetime = timestamp[:19]
-                        #  change the date separator to /
-                        flow_datetime = flow_datetime.replace('-','/')
+                    flow_datetime = self.format_timestamp(timestamp)
 
-                    # Print the evidence in the outprocess
-                    evidence_to_log = self.print_evidence(profileid,
-                                                          twid,
-                                                          srcip,
-                                                          type_evidence,
-                                                          type_detection,
-                                                          detection_info,
-                                                          description)
-
-                    evidence_dict = {'type': 'evidence',
+                    # prepare evidence for text log file
+                    evidence = self.format_evidence_string(profileid,
+                                                           twid,
+                                                           srcip,
+                                                           type_evidence,
+                                                           type_detection,
+                                                           detection_info,
+                                                           description)
+                    # prepare evidence for json log file
+                    blocked_srcip_dict = {'type': 'evidence',
                                      'profileid': profileid,
                                      'twid': twid,
                                      'timestamp': flow_datetime,
@@ -567,11 +638,11 @@ class EvidenceProcess(multiprocessing.Process):
                         # remove the tag from the description
                         description = description[:description.index('[')][:-5]
                         # add a key in the json evidence with tag
-                        evidence_dict.update({'tags':tag.replace("'",''), 'description': description})
+                        blocked_srcip_dict.update({'tags':tag.replace("'",''), 'description': description})
 
                     # Add the evidence to the log files
-                    self.addDataToLogFile(flow_datetime + ': ' + evidence_to_log)
-                    self.addDataToJSONFile(evidence_dict)
+                    self.addDataToLogFile(flow_datetime + ': ' + evidence)
+                    self.addDataToJSONFile(blocked_srcip_dict)
 
 
                     #
@@ -618,23 +689,26 @@ class EvidenceProcess(multiprocessing.Process):
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
-                                # Differentiate the type of evidence for different detections
-                                # when printing alerts to the terminal print the profileid_twid that generated this alert too
-                                #evidence_to_print = f'{profileid}_{twid} '
-                                evidence_to_print = f'{flow_datetime}: '
-                                evidence_to_print += self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
-                                self.print(f'{Fore.RED}{evidence_to_print}{Style.RESET_ALL}', 1, 0)
-                                # Set an alert about the evidence being blocked
-                                alert_to_log = self.print_alert(profileid, twid, flow_datetime)
-                                alert_dict = {'type':'alert',
+                                # now that this evidence is being printed, it's no longer evidence, it's an alert
+                                alert_to_print = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
+                                self.print(f'{Fore.RED} {flow_datetime}: {alert_to_print}{Style.RESET_ALL}', 1, 0)
+
+                                # Add to log files that this srcip is being blocked
+                                blocked_srcip_to_log = self.format_blocked_srcip_evidence(profileid, twid, flow_datetime)
+                                blocked_srcip_dict = {'type':'alert',
                                               'profileid': profileid,
                                               'twid': twid,
                                               'threat_level':accumulated_threat_level
                                                 }
 
-                                self.addDataToLogFile(alert_to_log)
-                                self.addDataToJSONFile(alert_dict)
-                                # check that the dst ip isn't our own IP
+                                self.addDataToLogFile(blocked_srcip_to_log)
+                                self.addDataToJSONFile(blocked_srcip_dict)
+
+                                if self.popup_alerts:
+                                    self.show_popup(alert_to_print)
+
+                                # Send to the blocking module.
+                                # Check that the dst ip isn't our own IP
                                 if type_detection=='dstip' and detection_info not in self.our_ips:
                                     #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
                                     # blocking_data = {
@@ -646,6 +720,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     # __database__.publish('new_blocking', blocking_data)
                                     pass
                                 __database__.markProfileTWAsBlocked(profileid, twid)
+
             except KeyboardInterrupt:
                 self.logfile.close()
                 self.jsonfile.close()
