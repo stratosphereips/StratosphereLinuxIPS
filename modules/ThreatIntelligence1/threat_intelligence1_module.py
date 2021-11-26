@@ -376,21 +376,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
 
-    def set_maliciousDomain_to_MaliciousDomains(self, domain, profileid, twid):
-        '''
-        Set malicious domain to DB 'MaliciousDomains' with a profileid and twid where domain was met
-        '''
-        # get all profiles and twis where this IP was met
-        domain_profiled_twid = __database__.get_malicious_domain(domain)
-        try:
-            profile_tws = domain_profiled_twid[profileid]               # a dictionary {profile:set(tw1, tw2)}
-            profile_tws = ast.literal_eval(profile_tws)                 # set(tw1, tw2)
-            profile_tws.add(twid)
-            domain_profiled_twid[profileid] = str(profile_tws)
-        except KeyError:
-            domain_profiled_twid[profileid] = str({twid})               # add key-pair to the dict if does not exist
-        data = json.dumps(domain_profiled_twid)
-        __database__.set_malicious_domain(domain, data)
+
 
     def set_maliciousIP_to_IPInfo(self, ip, ip_description):
         '''
@@ -469,7 +455,7 @@ class Module(Module, multiprocessing.Process):
                             self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
                             # mark this ip as malicious in our database
                             __database__.setInfoForIPs(ip, {'threatintelligence': ip_info})
-                            # add this ip to our MaliciousIPs key in the database
+                            # add this ip to our MaliciousIPs hash in the database
                             __database__.set_malicious_ip(ip, profileid, twid)
                     else:
                         # We were not given an IP. Check if we were given a domain
@@ -483,10 +469,12 @@ class Module(Module, multiprocessing.Process):
                                 # If the domain is in the blacklist of IoC. Set an evidence
                                 domain_info = json.loads(domain_info)
                                 self.set_evidence_domain(domain, uid, timestamp, domain_info, is_subdomain, profileid, twid)
+
                                 # mark this domain as malicious in our database
                                 __database__.setInfoForDomains(domain, {'threatintelligence': domain_info })
-                                # set malicious domain in MaliciousDomains
-                                self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
+
+                                # add this domain to our MaliciousDomains hash in the database
+                                __database__.set_malicious_domain(domain, profileid, twid)
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue

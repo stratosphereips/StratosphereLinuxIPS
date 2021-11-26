@@ -2113,12 +2113,23 @@ class Database(object):
 
         self.r.hset('MaliciousIPs', ip, data)
 
-    def set_malicious_domain(self, domain, profileid_twid):
+    def set_malicious_domain(self, domain, profileid, twid):
         """
         Save in DB a malicious domain found in the traffic
         with its profileid and twid
         """
-        self.r.hset('MaliciousDomains', domain, profileid_twid)
+        # get all profiles and twis where this IP was met
+        domain_profiled_twid = __database__.get_malicious_domain(domain)
+        try:
+            profile_tws = domain_profiled_twid[profileid]               # a dictionary {profile:set(tw1, tw2)}
+            profile_tws = ast.literal_eval(profile_tws)                 # set(tw1, tw2)
+            profile_tws.add(twid)
+            domain_profiled_twid[profileid] = str(profile_tws)
+        except KeyError:
+            domain_profiled_twid[profileid] = str({twid})               # add key-pair to the dict if does not exist
+        data = json.dumps(domain_profiled_twid)
+
+        self.r.hset('MaliciousDomains', domain, data)
 
     def get_malicious_ip(self, ip):
         """
