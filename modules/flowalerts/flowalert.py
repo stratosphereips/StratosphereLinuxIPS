@@ -1074,13 +1074,13 @@ class Module(Module, multiprocessing.Process):
                         self.detect_DGA(rcode_name, domain, stime, profileid, twid, uid)
             except KeyboardInterrupt:
                 continue
-            # except Exception as inst:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            #     self.print(str(type(inst)), 0, 1)
-            #     self.print(str(inst.args), 0, 1)
-            #     self.print(str(inst), 0, 1)
-            #     return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
 
 class TimerThread(threading.Thread):
     """Thread that executes 1 task after N seconds. Only to run the process_global_data."""
