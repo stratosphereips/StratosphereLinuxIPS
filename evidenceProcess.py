@@ -183,6 +183,11 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             self.popup_alerts = self.config.get('detection', 'popup_alerts').lower()
             self.popup_alerts = True if 'yes' in self.popup_alerts else False
+
+            # In docker, disable alerts no matter what slips.conf says
+            if os.environ.get('IS_IN_A_DOCKER_CONTAINER', False):
+                self.popup_alerts = False
+
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified, by default...
             self.popup_alerts = False
