@@ -540,6 +540,7 @@ class EvidenceProcess(multiprocessing.Process):
         Function to display a popup with the alert depending on the OS
         """
         if platform.system() == 'Linux':
+            #  is notify_cmd is set in setup_notifications function depending on the user
             os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
         elif platform.system() == 'Darwin':
             os.system(f'osascript -e "display notification "{alert_to_log}" with title "Slips"" ')
@@ -693,7 +694,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 self.addDataToJSONFile(alert_dict)
 
                                 if self.popup_alerts:
-                                    self.show_popup(alert_to_log)
+                                    self.show_popup(evidence_to_print)
 
                                 # check that the dst ip isn't our own IP
                                 if type_detection=='dstip' and detection_info not in self.our_ips:
