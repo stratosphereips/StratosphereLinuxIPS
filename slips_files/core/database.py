@@ -370,17 +370,6 @@ class Database(object):
             data = {}
             data[str(twid)] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
-
-            # Add tw in a list of all profiles and tws. List of tws is not sorted.
-            data = self.r.hget("Profiles_TWs", profileid)
-            if not data:
-                data = []
-            else:
-                data = json.loads(data)
-            data.append(str(twid))
-            data = json.dumps(data)
-            self.r.hset("Profiles_TWs", profileid, data)
-
             self.outputqueue.put('04|database|[DB]: Created and added to DB the new older TW with id {}. Time: {} '.format(twid, startoftw))
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
             return twid
@@ -410,15 +399,6 @@ class Database(object):
             data = {}
             data[str(twid)] = float(startoftw)
             self.r.zadd('tws' + profileid, data)
-            # Add tw in a list of all profiles and tws. List of tws is not sorted.
-            data = self.r.hget("Profiles_TWs", profileid)
-            if not data:
-                data = []
-            else:
-                data = json.loads(data)
-            data.append(str(twid))
-            data = json.dumps(data)
-            self.r.hset("Profiles_TWs", profileid, data)
             self.outputqueue.put('04|database|[DB]: Created and added to DB for profile {} on TW with id {}. Time: {} '.format(profileid, twid, startoftw))
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
             return twid
