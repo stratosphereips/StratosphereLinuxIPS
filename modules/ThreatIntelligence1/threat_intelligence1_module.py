@@ -453,8 +453,11 @@ class Module(Module, multiprocessing.Process):
                             ip_info = json.loads(ip_info)
                             # Set the evidence on this detection
                             self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
+
                             # mark this ip as malicious in our database
-                            __database__.setInfoForIPs(ip, {'threatintelligence': ip_info})
+                            ip_info = {'threatintelligence': ip_info}
+                            __database__.setInfoForIPs(ip, ip_info)
+
                             # add this ip to our MaliciousIPs hash in the database
                             __database__.set_malicious_ip(ip, profileid, twid)
                     else:
@@ -471,7 +474,8 @@ class Module(Module, multiprocessing.Process):
                                 self.set_evidence_domain(domain, uid, timestamp, domain_info, is_subdomain, profileid, twid)
 
                                 # mark this domain as malicious in our database
-                                __database__.setInfoForDomains(domain, {'threatintelligence': domain_info })
+                                domain_info =  {'threatintelligence': domain_info }
+                                __database__.setInfoForDomains(domain, domain_info)
 
                                 # add this domain to our MaliciousDomains hash in the database
                                 __database__.set_malicious_domain(domain, profileid, twid)
