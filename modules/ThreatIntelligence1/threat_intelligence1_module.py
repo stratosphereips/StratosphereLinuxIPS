@@ -392,15 +392,6 @@ class Module(Module, multiprocessing.Process):
         data = json.dumps(domain_profiled_twid)
         __database__.set_malicious_domain(domain, data)
 
-    def set_maliciousDomain_to_DomainInfo(self, domain, domain_description):
-        '''
-        Set malicious domain in DomainsInfo.
-        '''
-        domain_data = {}
-        # Maybe we should change the key to 'status' or something like that.
-        domain_data['threatintelligence'] = domain_description
-        __database__.setInfoForDomains(domain, domain_data)
-
     def set_maliciousIP_to_IPInfo(self, ip, ip_description):
         '''
         Set malicious IP in IPsInfo.
@@ -492,8 +483,8 @@ class Module(Module, multiprocessing.Process):
                                 # If the domain is in the blacklist of IoC. Set an evidence
                                 domain_info = json.loads(domain_info)
                                 self.set_evidence_domain(domain, uid, timestamp, domain_info, is_subdomain, profileid, twid)
-                                # set malicious domain in DomainInfo
-                                self.set_maliciousDomain_to_DomainInfo(domain, domain_info)
+                                # mark this domain as malicious in our database
+                                __database__.setInfoForDomains(domain, {'threatintelligence': domain_info })
                                 # set malicious domain in MaliciousDomains
                                 self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
             except KeyboardInterrupt:
