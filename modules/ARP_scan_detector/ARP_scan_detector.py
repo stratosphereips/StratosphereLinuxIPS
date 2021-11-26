@@ -183,15 +183,16 @@ class Module(Module, multiprocessing.Process):
         """Detects when a MAC with IP A, is trying to tell others that now that MAC is also for IP B (ARP cache attack)"""
 
         # to test this add these 2 flows to arp.log
-        # {"ts":1636305825.755132,"operation":"request","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
-        # {"ts":1636305825.755132,"operation":"request","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
 
         #todo will we get FPs when an ip changes?
         # todo what if the ip of the attacker came to us first and we stored it in the db? the original IP of this src mac is now the IP of the attacker?
 
         # get the original IP of the src mac from the database
         original_IP = __database__.get_IP_of_MAC(src_mac)
-        # is this IP trying to tell everyone that it's own mac is now used with another IP?
+        # is this saddr trying to tell everyone that this it owns this src_mac
+        # even though we know this src_mac is associated with another IP (original_IP)?
         if saddr != original_IP:
             # From our db we know that:
             # original_IP has src_MAC
@@ -200,7 +201,7 @@ class Module(Module, multiprocessing.Process):
             # todo how to find out which one is it??
             confidence = 0.2 # low confidence for now
             threat_level = 90
-            description = f'{saddr} performed a MITM attack. The MAC {src_mac}, now belonging to IP {saddr}, was seen before for IP {original_IP}.'
+            description = f'{saddr} performing a MITM ARP attack. The MAC {src_mac}, now belonging to IP {saddr}, was seen before for IP {original_IP}.'
             # self.print(f'{saddr} is claiming to have {src_mac}')
             type_evidence = 'MITM-ARP-attack'
             type_detection = 'ip' #srcip
@@ -248,8 +249,9 @@ class Module(Module, multiprocessing.Process):
                             __database__.add_mac_addr_to_profile(profileid, MAC_info)
 
                         # for MITM arp attack, the arp has to be gratuitous
-                        self.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac)
-
+                        # and it has to be a reply operation, not a request
+                        if 'reply' in operation:
+                            self.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac)
                     else:
                         # not gratuitous, may be an ARP scan
                         self.check_arp_scan(profileid, twid, daddr, uid, ts, dst_mac, src_mac)
