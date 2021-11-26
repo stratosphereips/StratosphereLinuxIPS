@@ -675,7 +675,7 @@ class Module(Module, multiprocessing.Process):
                                  confidence, description, timestamp, profileid=profileid, twid=twid)
 
 
-    def detect_DGA(self, rcode_name, stime, profileid, twid, uid):
+    def detect_DGA(self, rcode_name, query, stime, profileid, twid, uid):
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
         """
@@ -1067,16 +1067,16 @@ class Module(Module, multiprocessing.Process):
                     if answers:
                         self.check_dns_resolution_without_connection(domain, answers, stime, profileid, twid, uid)
                     if rcode_name:
-                        self.detect_DGA(rcode_name, stime, profileid, twid, uid)
+                        self.detect_DGA(rcode_name, domain, stime, profileid, twid, uid)
             except KeyboardInterrupt:
                 continue
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
+            # except Exception as inst:
+            #     exception_line = sys.exc_info()[2].tb_lineno
+            #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            #     self.print(str(type(inst)), 0, 1)
+            #     self.print(str(inst.args), 0, 1)
+            #     self.print(str(inst), 0, 1)
+            #     return True
 
 class TimerThread(threading.Thread):
     """Thread that executes 1 task after N seconds. Only to run the process_global_data."""
