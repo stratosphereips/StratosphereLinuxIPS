@@ -12,7 +12,7 @@ import sys
 import validators
 import platform
 import re
-import socket
+import ast
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -2095,12 +2095,23 @@ class Database(object):
         """
         self.rcache.hset('IoC_domains', domain, description)
 
-    def set_malicious_ip(self, ip, profileid_twid):
+    def set_malicious_ip(self, ip, profileid, twid):
         """
         Save in DB malicious IP found in the traffic
         with its profileid and twid
         """
-        self.r.hset('MaliciousIPs', ip, profileid_twid)
+        # Retrieve all profiles and twis, where this malicios IP was met.
+        ip_profileid_twid = self.get_malicious_ip(ip)
+        try:
+            profile_tws = ip_profileid_twid[profileid]             # a dictionary {profile:set(tw1, tw2)}
+            profile_tws = ast.literal_eval(profile_tws)            # set(tw1, tw2)
+            profile_tws.add(twid)
+            ip_profileid_twid[profileid] = str(profile_tws)
+        except KeyError:
+            ip_profileid_twid[profileid] = str({twid})                   # add key-pair to the dict if does not exist
+        data = json.dumps(ip_profileid_twid)
+
+        self.r.hset('MaliciousIPs', ip, data)
 
     def set_malicious_domain(self, domain, profileid_twid):
         """

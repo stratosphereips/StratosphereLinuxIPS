@@ -401,23 +401,6 @@ class Module(Module, multiprocessing.Process):
         domain_data['threatintelligence'] = domain_description
         __database__.setInfoForDomains(domain, domain_data)
 
-    def set_maliciousIP_to_MaliousIPs(self, ip, profileid, twid):
-        '''
-        Set malicious IP in 'MaliciousIPs' key with a profileid and twid.
-        '''
-
-        # Retrieve all profiles and twis, where this malicios IP was met.
-        ip_profileid_twid = __database__.get_malicious_ip(ip)
-        try:
-            profile_tws = ip_profileid_twid[profileid]             # a dictionary {profile:set(tw1, tw2)}
-            profile_tws = ast.literal_eval(profile_tws)            # set(tw1, tw2)
-            profile_tws.add(twid)
-            ip_profileid_twid[profileid] = str(profile_tws)
-        except KeyError:
-            ip_profileid_twid[profileid] = str({twid})                   # add key-pair to the dict if does not exist
-        data = json.dumps(ip_profileid_twid)
-        __database__.set_malicious_ip(ip, data)
-
     def set_maliciousIP_to_IPInfo(self, ip, ip_description):
         '''
         Set malicious IP in IPsInfo.
@@ -495,9 +478,8 @@ class Module(Module, multiprocessing.Process):
                             self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
                             # mark this ip as malicious in our database
                             __database__.setInfoForIPs(ip, {'threatintelligence': ip_info})
-                            # set malicious IP in MaliciousIPs
-                            self.set_maliciousIP_to_MaliousIPs(ip, profileid, twid)
-
+                            # add this ip to our MaliciousIPs key in the database
+                            __database__.set_malicious_ip(ip, profileid, twid)
                     else:
                         # We were not given an IP. Check if we were given a domain
 
