@@ -550,7 +550,7 @@ class EvidenceProcess(multiprocessing.Process):
             #  is notify_cmd is set in setup_notifications function depending on the user
             os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
         elif platform.system() == 'Darwin':
-            os.system(f'osascript -e "display notification "{alert_to_log}" with title "Slips"" ')
+            os.system(f"osascript -e 'display notification \"{alert_to_log}\" with title \"Slips\"' ")
 
     def format_timestamp(self, timestamp):
         """
