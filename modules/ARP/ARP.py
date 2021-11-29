@@ -143,13 +143,14 @@ class Module(Module, multiprocessing.Process):
 
         daddr_as_obj = ipaddress.IPv4Address(daddr)
         if daddr_as_obj.is_multicast or daddr_as_obj.is_link_local:
-            # The ARP to ‘outside’ the network should not dettect multicast or link-local addresses.
+            # The ARP to ‘outside’ the network should not detect multicast or link-local addresses.
             return False
 
         for network in self.home_network:
             if daddr_as_obj in network:
                 # IP is in this local network, don't alert
                 return False
+
         # to prevent ARP alerts from one IP to itself
         local_net = saddr.split('.')[0]
         if not daddr.startswith(local_net):
@@ -163,6 +164,8 @@ class Module(Module, multiprocessing.Process):
             detection_info = profileid.split("_")[1]
             __database__.setEvidence(type_detection, detection_info, type_evidence,
                                  threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+            return True
+
 
     def detect_unsolicited_arp(self, profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw):
         """ Unsolicited ARP is used to update the neighbours' ARP caches but can also be used in ARP spoofing """
@@ -258,6 +261,8 @@ class Module(Module, multiprocessing.Process):
 
                     if 'request' in operation:
                         self.check_dstip_outside_localnet(profileid, twid, daddr, uid, saddr, ts)
+                    elif 'reply' in operation:
+                        # Unsolicited ARPs should be of type reply only, not request
                         self.detect_unsolicited_arp(profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw)
 
                 # if the tw is closed, remove all its entries from the cache dict
