@@ -960,6 +960,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'dnp3'
         elif 'ftp' in new_line['type']:
             self.column_values['type'] = 'ftp'
+            self.column_values['used_port'] = line[17]
         elif 'kerberos' in new_line['type']:
             self.column_values['type'] = 'kerberos'
         elif 'mysql' in new_line['type']:
