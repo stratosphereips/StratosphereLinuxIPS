@@ -16,8 +16,8 @@ import ipaddress
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'ARPScanDetector'
-    description = 'Detect ARP scans'
+    name = 'ARP'
+    description = 'Detect ARP attacks'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):

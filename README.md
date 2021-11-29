@@ -31,7 +31,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
 | IP_Info | module to find Geolocation, ASN, RDNS info about IPs and MAC vendors  |✅|
 | RiskIQ | Module to get different information from RiskIQ  |✅|
-| ARPScanDetector | module to check for ARP scans in ARP traffic  |✅|
+| ARP | module to check for ARP attacks in ARP traffic  |✅|
 | ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|
 | http_analyzer | module to analyze HTTP traffic |✅|
 | blocking | module to block malicious IPs connecting to the device |✅|
