@@ -35,13 +35,33 @@ tr:nth-child(even) {
     <th>Status</th>
   </tr>
   <tr>
+    <td>ARP Detection</td>
+    <td>Finds ARP scans and MITM with ARP in the local networrk.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>Exporting</td>
+    <td>Exports Slips alerts to Slack servers and STIX servers.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>IP_Info</td>
-    <td>Finds Geolocation, ASN, RDNS info about IPs and MAC vendors.</td>
+    <td>Finds Geolocation country, and ASN for an IP address.</td>
     <td>✅</td>
   </tr>
   <tr>
     <td>RiskIQ</td>
-    <td>Module to get different information from RiskIQ.</td>
+    <td>Finds information from RiskIQ, such as passive DNS for domains and downloads the Threat Intelligence feed.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>Update</td>
+    <td>Takes care of downloading each of the files used by Slips, but only if there is a need to update them. It stores and checks the ETags of remote files to know if they changed. It can be configured to update each file with a different frequency. Most importantly it updates all the Threat Intelligence feeds.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>Threat Intelligence</td>
+    <td>Checks if any domain or IP is included in Threat Intelligence feeds. Domains include DNS requests, DNS replies, HTTP hostnames, and TLS SNI. IPs include source and destination IPs, both IPv4 and IPv6. </td>
     <td>✅</td>
   </tr>
   <tr>
@@ -76,7 +96,7 @@ tr:nth-child(even) {
   </tr>
   <tr>
     <td>flowalerts</td>
-    <td>module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh</td>
+    <td>Finds malicious behaviours by analyzing only one flow. Now detects: self-signed certificates, TLS certificates which validation failed, vertical port scans detected by Zeek (contrary to detected by Slips), horizontal port scans detected by Zeek (contrary to detected by Slips), password guessing in SSH as detected by Zeek, long connection, successful ssh</td>
     <td>✅</td>
   </tr>
   <tr>
@@ -96,7 +116,7 @@ tr:nth-child(even) {
   </tr>
   <tr>
     <td>blocking</td>
-    <td>module to block malicious IPs connecting to the device</td>
+    <td>Blocks the alerted IPs in the Linux iptables Firewall.</td>
     <td>✅</td>
   </tr>
   <tr>
