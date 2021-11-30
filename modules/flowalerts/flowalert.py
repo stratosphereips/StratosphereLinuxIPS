@@ -687,30 +687,30 @@ class Module(Module, multiprocessing.Process):
         if not 'NXDOMAIN' in rcode_name or 'in-addr.arpa' in query:
             return False
 
+        profileid_twid = f'{profileid}_{twid}'
+
         # found NXDOMAIN by this profile
         try:
-            self.nxdomains[profileid] +=1
-            if self.nxdomains[profileid] < self.nxdomains_threshold:
-                # the counter hasn't reached the threshold yet
-                return False
+            self.nxdomains[profileid_twid] +=1
         except KeyError:
-            # first time seeing nxdomain in this profile
-            self.nxdomains.update({profileid: 1})
+            # first time seeing nxdomain in this profile and tw
+            self.nxdomains.update({profileid_twid: 1})
             return False
 
         # every 10,15,20 .. etc. nxdomains, generate an alert.
-        if self.nxdomains[profileid] % 5 == 0:
-            confidence = (1/100)*(self.nxdomains[profileid]-100)+1
+        if self.nxdomains[profileid_twid] % 5 == 0 and self.nxdomains[profileid_twid] >= self.nxdomains_threshold:
+            confidence = (1/100)*(self.nxdomains[profileid_twid]-100)+1
             confidence = round(confidence, 2) # for readability
             threat_level = 80
             # the srcip performing all the dns queries
             type_detection  = 'srcip'
-            type_evidence = f'DGA-{self.nxdomains[profileid]}-NXDOMAINs'
+            type_evidence = f'DGA-{self.nxdomains[profileid_twid]}-NXDOMAINs'
             detection_info = profileid.split('_')[1]
-            description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains[profileid]} domains'
+            description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains[profileid_twid]} domains'
             if not twid: twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                      confidence, description, stime, profileid=profileid, twid=twid)
+            return True
 
     def run(self):
         # Main loop function
