@@ -366,7 +366,7 @@ class UpdateFileManager:
                     self.print(f'Successfully updated remote file {file_to_download}.', 1, 0)
                     self.loaded_ti_files +=1
                 else:
-                    self.print(f'An error occured during downloading file {file_to_download}. Updating was aborted.', 0, 1)
+                    self.print(f'An error occurred during downloading file {file_to_download}. Updating was aborted.', 0, 1)
                     continue
             else:
                 self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
@@ -380,7 +380,7 @@ class UpdateFileManager:
             if self.update_riskiq_feed():
                 self.print('Successfully updated RiskIQ domains.', 1, 0)
             else:
-                self.print(f'An error occured while updating RiskIQ domains. Updating was aborted.', 0, 1)
+                self.print(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
 
     def __delete_old_source_IPs(self, file):
         """
