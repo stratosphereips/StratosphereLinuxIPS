@@ -931,6 +931,8 @@ class Module(Module, multiprocessing.Process):
                         uid = data['uid']
                         msg = flow['msg']
                         note = flow['note']
+
+                        # --- Self signed CERTS ---
                         # We're looking for self signed certs in notice.log in the 'msg' field
                         if 'self signed' in msg or 'self-signed' in msg:
                             profileid = data['profileid']
