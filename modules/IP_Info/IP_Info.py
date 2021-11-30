@@ -300,6 +300,7 @@ class Module(Module, multiprocessing.Process):
                     return True
 
                 if __database__.is_msg_intended_for(message, 'new_ip'):
+                    # Get the IP from the message
                     ip = message['data']
                     try:
                         # make sure its a valid ip
@@ -310,15 +311,21 @@ class Module(Module, multiprocessing.Process):
                         # not a valid ip skip
                         continue
 
-                    # do we have cached info about this ip in redis?
+                    # Do we have cached info about this ip in redis?
+                    # If yes, load it
                     cached_ip_info = __database__.getIPData(ip)
                     if not cached_ip_info:
                         cached_ip_info = {}
-
+                    
+                    # ------ GeoCountry -------
+                    # Get the geocountry
                     if cached_ip_info == {} or 'geocountry' not in cached_ip_info:
                         self.get_geocountry(ip)
 
-                    # Check if a month has passed since last time we updated asn
+                    # ------ ASN -------
+                    # Get the ASN
+                    # Before returning, update the ASN for this IP if more than 1 month 
+                    # passed since last ASN update on this IP 
                     update_asn = self.update_asn(cached_ip_info)
                     if update_asn:
                         self.get_asn(ip, cached_ip_info)
