@@ -634,7 +634,7 @@ class EvidenceProcess(multiprocessing.Process):
                                      'detected_ip': srcip,
                                      'detection_module':type_evidence,
                                      'detection_info':str(type_detection) + ' ' + str(detection_info),
-                                     'description':description
+                                     'description':description,
                                      }
 
                     # TI alerts are the only ones that have tags,
@@ -652,32 +652,31 @@ class EvidenceProcess(multiprocessing.Process):
                     #
                     # Analysis of evidence for blocking or not
                     # This is done every time we receive 1 new evidence
-                    # 
+                    #
 
                     # Get all the evidence for the TW
-                    evidence = __database__.getEvidenceForTW(profileid, twid)
+                    tw_evidence = __database__.getEvidenceForTW(profileid, twid)
 
                     # Important! It may happen that the evidence is not related to a profileid and twid.
                     # For example when the evidence is on some src IP attacking our home net, and we are not creating
                     # profiles for attackers
-                    if evidence:
-                        evidence = json.loads(evidence)
-                        # self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
+                    if tw_evidence:
+                        tw_evidence = json.loads(tw_evidence)
+
+                        # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
                         srcip = profileid.split(self.separator)[1]
-                        for key in evidence:
-                            # Deserialize key data
-                            key_json = json.loads(key)
-                            type_detection = key_json.get('type_detection')
-                            detection_info = key_json.get('detection_info')
-                            type_evidence = key_json.get('type_evidence')
+                        for evidence in tw_evidence.values():
+                            # Deserialize evidence
+                            evidence = json.loads(evidence)
 
-                            # Deserialize evidence data
-                            data = evidence[key]
-                            confidence = float(data.get('confidence'))
-                            threat_level = data.get('threat_level')
-                            description = data.get('description')
+                            type_detection = evidence.get('type_detection')
+                            detection_info = evidence.get('detection_info')
+                            type_evidence = evidence.get('type_evidence')
+                            confidence = float(evidence.get('confidence'))
+                            threat_level = evidence.get('threat_level')
+                            description = evidence.get('description')
 
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence

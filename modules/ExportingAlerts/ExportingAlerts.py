@@ -372,8 +372,10 @@ class Module(Module, multiprocessing.Process):
                             if not sent_to_slack:
                                 self.print("Problem in send_to_slack()", 0, 3)
                         if 'stix' in self.export_to:
-                            msg_to_send = (evidence['type_evidence'],evidence['type_detection'],
-                                                evidence['detection_info'], description)
+                            msg_to_send = (evidence['type_evidence'],
+                                           evidence['type_detection'],
+                                           evidence['detection_info'],
+                                           description)
                             # This thread is responsible for waiting n seconds before each push to the stix server
                             # it starts the timer when the first alert happens
                             # push_delay should be an int when slips is running using -i
