@@ -598,12 +598,11 @@ class EvidenceProcess(multiprocessing.Process):
                     detection_info = data.get('detection_info') # example: ip, port, inTuple, outTuple, domain
                     type_evidence = data.get('type_evidence') # example: PortScan, ThreatIntelligence, etc..
                     # evidence data
-                    evidence_data = data.get('data')
-                    description = evidence_data.get('description')
+                    description = data.get('description')
                     timestamp = data.get('stime')
                     uid = data.get('uid')
                     # in case of blacklisted ip evidence, we add the tag to the description like this [tag]
-                    tag = data.get('tags',False)
+                    tags = data.get('tags',False)
 
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
@@ -638,12 +637,11 @@ class EvidenceProcess(multiprocessing.Process):
                                      'description':description
                                      }
 
-                    # What tag is this??? TI tag?
-                    if tag:
-                        # remove the tag from the description
-                        description = description[:description.index('[')][:-5]
+                    # TI alerts are the only ones that have tags,
+                    # update the dict if this is the case
+                    if tags:
                         # add a key in the json evidence with tag
-                        blocked_srcip_dict.update({'tags':tag.replace("'",''), 'description': description})
+                        blocked_srcip_dict.update({'tags':tags})
 
                     # Add the evidence to the log files
                     self.addDataToLogFile(flow_datetime + ': ' + evidence)
