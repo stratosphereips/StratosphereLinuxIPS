@@ -136,7 +136,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     uid = next(iter(dstips.values()))['uid'] # first uid in the dictionary
                     timestamp = next(iter(dstips.values()))['stime']
                     __database__.setEvidence(type_detection, detection_info,type_evidence,
-                                             threat_level, confidence, description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+                                             threat_level, confidence, description, timestamp, category, conn_count=pkts_sent , profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                     self.print(description, 3, 0)
@@ -191,7 +191,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     uid = data[dstip]['uid']
                     timestamp = data[dstip]['stime']
                     __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                             threat_level, confidence, description, timestamp, category,
+                                             threat_level, confidence, description, timestamp, category, conn_count=pkts_sent,
                                              profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
@@ -250,7 +250,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             description = f'performing PING sweep. {scanned_dstips} different IPs scanned'
             timestamp = icmp_requests[dip]['stime']
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                 confidence, description, timestamp, category, profileid=profileid, twid=twid)
+                 confidence, description, timestamp, category, conn_count=pkts_sent, profileid=profileid, twid=twid)
 
             # cache the amount of dips to make sure we don't detect
             # the same amount of dips twice.

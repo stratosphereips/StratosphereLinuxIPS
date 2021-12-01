@@ -408,11 +408,11 @@ class Module(Module, multiprocessing.Process):
         else:
             ip_identification = __database__.getIPIdentification(saddr)
             description = f'Port 0 scanning: {daddr} is scanning {saddr}. {ip_identification}'
-
+        conn_count = 1
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+                                 confidence, description, timestamp, category, conn_count=conn_count,profileid=profileid, twid=twid, uid=uid)
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
@@ -976,9 +976,10 @@ class Module(Module, multiprocessing.Process):
                             type_evidence = 'PortScanType1'
                             category = 'Recon.Scanning'
                             type_detection = 'dstip'
+                            conn_count = int(msg.split("scanned")[1].split("ports")[0])
                             detection_info = flow.get('scanning_ip','')
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+                                                 threat_level, confidence, description, timestamp, category, conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
                             #self.print(description, 3, 0)
 
                         if 'SSL certificate validation failed' in msg:
@@ -991,6 +992,7 @@ class Module(Module, multiprocessing.Process):
 
                         if 'Address_Scan' in note:
                             # Horizontal port scan
+                            # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
                             confidence = 1
                             threat_level = 60
                             description = 'horizontal port scan by Zeek engine. ' + msg
@@ -998,8 +1000,10 @@ class Module(Module, multiprocessing.Process):
                             type_detection = 'dport'
                             detection_info = flow.get('scanned_port','')
                             category = 'Recon.Scanning'
+                            # get the number of unique hosts scanned on a specific port
+                            conn_count = int(msg.split("least")[1].split("unique")[0])
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+                                                 threat_level, confidence, description, timestamp, category, conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
 
                             #self.print(description, 3, 0)
                         if 'Password_Guessing' in note:
@@ -1013,8 +1017,9 @@ class Module(Module, multiprocessing.Process):
                             type_evidence = 'Password_Guessing'
                             type_detection = 'dstip'
                             detection_info = flow.get('scanning_ip','')
+                            conn_count = int(msg.split("in ")[1].split("connections")[0])
                             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+                                                 threat_level, confidence, description, timestamp, category, conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
                             #self.print(description, 3, 0)
 
                 # --- Detect maliciuos JA3 TLS servers ---
