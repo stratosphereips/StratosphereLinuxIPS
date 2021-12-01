@@ -34,6 +34,7 @@ import os
 import psutil
 import pwd
 from uuid import uuid4
+import pprint
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -262,11 +263,10 @@ class EvidenceProcess(multiprocessing.Process):
 
     def addDataToJSONFile(self, data):
         """
-        Add a new evidence line to the file.
+        Add a new evidence line to our alerts.json file.
         """
         try:
-            data_json = json.dumps(data)
-            self.jsonfile.write(data_json)
+            pprint.pprint(data, stream=self.jsonfile, sort_dicts=False) #todo add pprint to dockerfiles and install.sh
             self.jsonfile.write('\n')
             self.jsonfile.flush()
         except KeyboardInterrupt:
