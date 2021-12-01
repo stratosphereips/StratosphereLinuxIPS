@@ -33,6 +33,7 @@ import platform
 import os
 import psutil
 import pwd
+from uuid import uuid4
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -561,8 +562,6 @@ class EvidenceProcess(multiprocessing.Process):
             except IndexError:
                 #  for timestamps like 2018-03-09 22:57:44.781449+02:00
                 flow_datetime = timestamp[:19]
-            #  change the date separator to /
-            flow_datetime = flow_datetime.replace('/','-')
         return flow_datetime
 
     def add_to_log_folder(self, data):
@@ -574,11 +573,73 @@ class EvidenceProcess(multiprocessing.Process):
         self.logs_jsonfile.write('\n')
         self.logs_jsonfile.flush()
 
-    def IDEA_format(self, srcip, type_evidence, type_detection, detection_info, description, flow_datetime, confidence, threat_level, tags):
+
+    def IDEA_format(self, srcip, type_evidence, type_detection, detection_info, description, flow_datetime, confidence, threat_level, tags, category, conn_count):
         """
         Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
         """
-        pass
+        #todo destination IP is embedded in the descriptipon, make it a setevidence parameter
+        IDEA_dict = {'Format': 'IDEA0',
+                     'ID': str(uuid4()),
+                     'EventTime': flow_datetime.replace(' ','T')+'Z',
+                     'DetectTime': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ'),
+                     'Category': category,
+                     'Confidence': confidence,
+                     'Note' : description,
+                     'Source': [{
+                         # if teh evidence has a subcategory, use it
+                         'Type': category.split('.')[1] if '.' in category else category,
+                         'IP4': srcip,
+                        }],
+                     }
+
+        # some evidence have a dst ip
+        if 'dstip' in type_detection:
+            IDEA_dict.update({'Target': {
+                'IP4': detection_info
+            }})
+            # try tot extract the hostname/SNI/rDNS  of the dstip form the description if available
+            hostname = False
+            try:
+                hostname = description.split('rDNS: ')[1]
+            except IndexError:
+                pass
+            try:
+                hostname = description.split('SNI: ')[1]
+            except IndexError:
+                pass
+            if hostname:
+                IDEA_dict['Target'].update({'Hostname': hostname})
+
+        # only evidence of type scanning have conn_count
+        if conn_count: IDEA_dict.update({'ConnCount': conn_count})
+
+        # todo when exporting to warden server, this should be added
+        #      "Node": [
+       #    {
+       #       "Name": "cz.cesnet.kippo-honey",
+       #       "Type": ["Protocol", "Honeypot"],
+       #       "SW": ["Kippo"],
+       #       "AggrWin": "00:05:00"
+       #    }
+       # ]
+
+
+        # todo add this to  milicious files alerts
+       #  "Attach": [
+       #    {
+       #       "Handle": "att1",
+       #       "FileName": ["killemall"],
+       #       "Type": ["Malware"],
+       #       "ContentType": "application/octet-stream",
+       #       "Hash": ["sha1:0c4a38c3569f0cc632e74f4c"],
+       #       "Size": 46,
+       #       "Ref": ["Trojan-Spy:W32/FinSpy.A"],
+       #       "ContentEncoding": "base64",
+       #       "Content": "TVpqdXN0a2lkZGluZwo="
+       #    }
+       # ]
+        return IDEA_dict
 
     def run(self):
         while True:
@@ -611,6 +672,8 @@ class EvidenceProcess(multiprocessing.Process):
                     tags = data.get('tags',False)
                     confidence = data.get('confidence',False)
                     threat_level = data.get('threat_level',False)
+                    category = data.get('category',False)
+                    conn_count = data.get('conn_count',False)
 
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
@@ -643,13 +706,14 @@ class EvidenceProcess(multiprocessing.Process):
                                     flow_datetime,
                                     confidence,
                                     threat_level,
-                                    tags)
+                                    tags,
+                                    category,
+                                    conn_count)
 
                     # Add the evidence to the log files
                     self.addDataToLogFile(flow_datetime + ': ' + evidence)
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
-
 
                     #
                     # Analysis of evidence for blocking or not
