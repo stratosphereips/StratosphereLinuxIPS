@@ -54,12 +54,13 @@ class Module(Module, multiprocessing.Process):
             detection_info = user_agent
             type_evidence = 'SuspiciousUserAgent'
             threat_level =  0.6
+            category = 'Anomaly.Behaviour'
             confidence = 1
             description = f'Suspicious user agent: {user_agent} from host {host}{uri}'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                     confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                                     confidence, description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
             return True
         return False
 
@@ -77,12 +78,13 @@ class Module(Module, multiprocessing.Process):
             detection_info = profileid.split('_')[0]
             type_evidence = 'multiple_google_connections'
             threat_level = 20
+            category = 'Anomaly.Connection'
             confidence = 1
             description = f'multiple empty HTTP connections to google.com'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                     confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                                     confidence, description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
             # reset the counter
             self.google_connections_counter=0
             return True

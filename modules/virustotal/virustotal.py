@@ -217,10 +217,11 @@ class Module(Module, multiprocessing.Process):
             type_evidence = "MaliciousDownloadedFile"
             threat_level = 80
             description =  f'Malicious downloaded file {md5} size: {size} from IP: {saddr} Score: {score}'
+            category = 'Malware'
             if not twid:
                 twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                     threat_level, confidence, description, ts , profileid=profileid, twid=twid, uid=uid)
+                                     threat_level, confidence, description, ts, category, profileid=profileid, twid=twid, uid=uid)
             return 'malicious'
         return 'benign'
 

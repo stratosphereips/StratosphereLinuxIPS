@@ -349,6 +349,7 @@ class Module(Module, multiprocessing.Process):
         confidence =  0.1
         threat_level = 0.2
         type_detection  = 'flow'
+        category = 'Anomaly.Traffic'
         detection_info = str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
         type_evidence = 'MaliciousFlow'
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport}'
@@ -356,7 +357,7 @@ class Module(Module, multiprocessing.Process):
         if not twid:
             twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid)
+                                 confidence, description, timestamp, category, profileid=profileid, twid=twid)
 
     def run(self):
         # Load the model first
