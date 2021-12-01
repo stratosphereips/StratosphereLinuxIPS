@@ -553,7 +553,7 @@ class EvidenceProcess(multiprocessing.Process):
         """
         if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
             flow_datetime = datetime.fromtimestamp(timestamp)
-            flow_datetime = flow_datetime.strftime('%Y/%m/%d %H:%M:%S')
+            flow_datetime = flow_datetime.strftime('%Y-%m-%d %H:%M:%S')
         else:
             try:
                 # for timestamps like 2021-06-07T12:44:56.654854+0200
@@ -562,7 +562,7 @@ class EvidenceProcess(multiprocessing.Process):
                 #  for timestamps like 2018-03-09 22:57:44.781449+02:00
                 flow_datetime = timestamp[:19]
             #  change the date separator to /
-            flow_datetime = flow_datetime.replace('-','/')
+            flow_datetime = flow_datetime.replace('/','-')
         return flow_datetime
 
     def add_to_log_folder(self, data):
