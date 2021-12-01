@@ -1035,7 +1035,7 @@ class Database(object):
 
 
     def setEvidence(self, type_detection, detection_info, type_evidence,
-                    threat_level, confidence, description, timestamp, profileid='', twid='', uid=''):
+                    threat_level, confidence, description, timestamp, category, profileid='', twid='', uid=''):
         """
         Set the evidence for this Profile and Timewindow.
         Parameters:
@@ -1049,7 +1049,7 @@ class Database(object):
         threat_level: determine the importance of the evidence.
         confidence: determine the confidence of the detection. (How sure you are that this is what you say it is.)
         uid: needed to get the flow from the database
-        alert: do we want to generate an alert for this evidence or not
+        category: what is this evidence category according to IDEA categories
         Example:
         The evidence is stored as a dict.
         {
@@ -1080,7 +1080,8 @@ class Database(object):
                 'stime': timestamp,
                 'uid' : uid,
                 'confidence' : confidence,
-                'threat_level': threat_level
+                'threat_level': threat_level,
+                'category': category
             }
         evidence_to_send = json.dumps(evidence_to_send)
         # It is done to ignore repetition of the same evidence sent.
