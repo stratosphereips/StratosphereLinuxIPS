@@ -574,6 +574,12 @@ class EvidenceProcess(multiprocessing.Process):
         self.logs_jsonfile.write('\n')
         self.logs_jsonfile.flush()
 
+    def IDEA_format(self, srcip, type_evidence, type_detection, detection_info, description, flow_datetime, confidence, threat_level, tags):
+        """
+        Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
+        """
+        pass
+
     def run(self):
         while True:
             try:
@@ -603,6 +609,8 @@ class EvidenceProcess(multiprocessing.Process):
                     uid = data.get('uid')
                     # in case of blacklisted ip evidence, we add the tag to the description like this [tag]
                     tags = data.get('tags',False)
+                    confidence = data.get('confidence',False)
+                    threat_level = data.get('threat_level',False)
 
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
@@ -627,26 +635,20 @@ class EvidenceProcess(multiprocessing.Process):
                                                            detection_info,
                                                            description)
                     # prepare evidence for json log file
-                    blocked_srcip_dict = {'type': 'evidence',
-                                     'profileid': profileid,
-                                     'twid': twid,
-                                     'timestamp': flow_datetime,
-                                     'detected_ip': srcip,
-                                     'detection_module':type_evidence,
-                                     'detection_info':str(type_detection) + ' ' + str(detection_info),
-                                     'description':description,
-                                     }
-
-                    # TI alerts are the only ones that have tags,
-                    # update the dict if this is the case
-                    if tags:
-                        # add a key in the json evidence with tag
-                        blocked_srcip_dict.update({'tags':tags})
+                    IDEA_dict = self.IDEA_format(srcip,
+                                    type_evidence,
+                                    type_detection,
+                                    detection_info,
+                                    description,
+                                    flow_datetime,
+                                    confidence,
+                                    threat_level,
+                                    tags)
 
                     # Add the evidence to the log files
                     self.addDataToLogFile(flow_datetime + ': ' + evidence)
-                    self.addDataToJSONFile(blocked_srcip_dict)
-                    self.add_to_log_folder(blocked_srcip_dict)
+                    self.addDataToJSONFile(IDEA_dict)
+                    self.add_to_log_folder(IDEA_dict)
 
 
                     #
@@ -702,7 +704,7 @@ class EvidenceProcess(multiprocessing.Process):
                                               'profileid': profileid,
                                               'twid': twid,
                                               'threat_level':accumulated_threat_level
-                                                }
+                                                } #todo this needs to bee idea too
 
                                 self.addDataToLogFile(blocked_srcip_to_log)
                                 self.addDataToJSONFile(blocked_srcip_dict)
