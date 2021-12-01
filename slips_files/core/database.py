@@ -1085,7 +1085,9 @@ class Database(object):
             evidence_to_send = {
                 'profileid': str(profileid),
                 'twid': str(twid),
-                'key': key,
+                'type_detection' : type_detection,
+                'detection_info' : detection_info ,
+                'type_evidence' : type_evidence,
                 'data': data,
                 'description': description,
                 'stime': timestamp,

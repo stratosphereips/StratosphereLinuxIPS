@@ -259,7 +259,6 @@ class EvidenceProcess(multiprocessing.Process):
             open(output_folder  + 'alerts.json', 'w').close()
         return open(output_folder + 'alerts.json', 'a')
 
-
     def addDataToJSONFile(self, data):
         """
         Add a new evidence line to the file.
@@ -595,11 +594,9 @@ class EvidenceProcess(multiprocessing.Process):
                     profileid = data.get('profileid')
                     srcip = profileid.split(self.separator)[1]
                     twid = data.get('twid')
-                    # Key data
-                    key = data.get('key')
-                    type_detection = key.get('type_detection') # example: dstip srcip dport sport dstdomain
-                    detection_info = key.get('detection_info') # example: ip, port, inTuple, outTuple, domain
-                    type_evidence = key.get('type_evidence') # example: PortScan, ThreatIntelligence, etc..
+                    type_detection = data.get('type_detection') # example: dstip srcip dport sport dstdomain
+                    detection_info = data.get('detection_info') # example: ip, port, inTuple, outTuple, domain
+                    type_evidence = data.get('type_evidence') # example: PortScan, ThreatIntelligence, etc..
                     # evidence data
                     evidence_data = data.get('data')
                     description = evidence_data.get('description')
@@ -613,6 +610,10 @@ class EvidenceProcess(multiprocessing.Process):
                     if flow and self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
+                        key = {'type_detection' : type_detection,
+                                'detection_info' : detection_info ,
+                                'type_evidence' : type_evidence,
+                                'description': description}
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
 
