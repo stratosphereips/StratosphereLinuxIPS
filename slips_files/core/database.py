@@ -1062,46 +1062,32 @@ class Database(object):
             current_evidence = json.loads(current_evidence)
         else:
             current_evidence = {}
-        # Prepare key for a new evidence
-        key = dict()
-        key['type_detection'] = type_detection
-        key['detection_info'] = detection_info
-        key['type_evidence'] = type_evidence
-        key['description'] = description
-        #Prepare data for a new evidence
-        data = dict()
-        data['confidence']= confidence
-        try:
-            data['threat_level'] = float(threat_level)
-        except ValueError:
-            # no threat level is specified, probably ''
-            data['threat_level'] = 0
 
-        data['description'] = description
-        # key uses dictionary format, so it needs to be converted to json to work as a dict key.
-        key_json = json.dumps(key)
-        # It is done to ignore repetition of the same evidence sent.
-        if key_json not in current_evidence.keys():
-            evidence_to_send = {
+        evidence_to_send = {
                 'profileid': str(profileid),
                 'twid': str(twid),
                 'type_detection' : type_detection,
                 'detection_info' : detection_info ,
                 'type_evidence' : type_evidence,
-                'data': data,
                 'description': description,
                 'stime': timestamp,
                 'uid' : uid,
-                'confidence' : confidence
+                'confidence' : confidence,
+                'threat_level': threat_level
             }
-            evidence_to_send = json.dumps(evidence_to_send)
+        evidence_to_send = json.dumps(evidence_to_send)
+        # It is done to ignore repetition of the same evidence sent.
+        if description not in current_evidence.keys():
             self.publish('evidence_added', evidence_to_send)
 
-        current_evidence[key_json] = data
-        current_evidence_json = json.dumps(current_evidence)
+        # update the our current evidence for this profileid and twid
+        current_evidence.update({description : evidence_to_send})
+
         # Set evidence in the database.
-        self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
-        self.r.hset('evidence'+profileid, twid, current_evidence_json)
+        current_evidence = json.dumps(current_evidence)
+        self.r.hset(profileid + self.separator + twid, 'Evidence', current_evidence)
+        self.r.hset('evidence'+profileid, twid, current_evidence)
+
         return True
 
     def get_evidence_count(self, evidence_type, profileid, twid):
