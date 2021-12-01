@@ -269,11 +269,6 @@ class EvidenceProcess(multiprocessing.Process):
             self.jsonfile.write(data_json)
             self.jsonfile.write('\n')
             self.jsonfile.flush()
-            # If logs folder are enabled, write alerts in the folder as well
-            if self.logs_jsonfile:
-                self.logs_jsonfile.write(data_json)
-                self.logs_jsonfile.write('\n')
-                self.logs_jsonfile.flush()
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -571,6 +566,15 @@ class EvidenceProcess(multiprocessing.Process):
             flow_datetime = flow_datetime.replace('-','/')
         return flow_datetime
 
+    def add_to_log_folder(self, data):
+        # If logs folder is enabled (using -l), write alerts in the folder as well
+        if not self.logs_jsonfile:
+            return False
+        data_json = json.dumps(data)
+        self.logs_jsonfile.write(data_json)
+        self.logs_jsonfile.write('\n')
+        self.logs_jsonfile.flush()
+
     def run(self):
         while True:
             try:
@@ -643,6 +647,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # Add the evidence to the log files
                     self.addDataToLogFile(flow_datetime + ': ' + evidence)
                     self.addDataToJSONFile(blocked_srcip_dict)
+                    self.add_to_log_folder(blocked_srcip_dict)
 
 
                     #
@@ -703,6 +708,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                                 self.addDataToLogFile(blocked_srcip_to_log)
                                 self.addDataToJSONFile(blocked_srcip_dict)
+                                self.add_to_log_folder(blocked_srcip_dict)
 
                                 if self.popup_alerts:
                                     self.show_popup(alert_to_print)
