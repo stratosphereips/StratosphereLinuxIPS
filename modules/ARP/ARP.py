@@ -125,10 +125,12 @@ class Module(Module, multiprocessing.Process):
                 threat_level = 0.7
                 description = f'{saddr} performing an ARP scan. Threat level {threat_level}. Confidence {confidence}.'
                 type_evidence = 'ARPScan'
+                # category of this evidence according to idea categories
+                category = 'Recon.Scanning' #todo document this
                 type_detection = 'ip' #srcip
                 detection_info = profileid.split("_")[1]
                 __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                     threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                                     threat_level, confidence, description, ts, category, profileid=profileid, twid=twid, uid=uid)
                 # after we set evidence, clear the dict so we can detect if it does another scan
                 self.cache_arp_requests.pop(f'{profileid}_{twid}')
                 return True
@@ -160,10 +162,11 @@ class Module(Module, multiprocessing.Process):
             ip_identification = __database__.getIPIdentification(daddr)
             description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
             type_evidence = 'ARP-ouside-localnet'
+            category = 'Anomaly.Behaviour'
             type_detection = 'ip' #srcip
             detection_info = profileid.split("_")[1]
             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                                 threat_level, confidence, description, ts, category,  profileid=profileid, twid=twid, uid=uid)
             return True
 
 
@@ -175,10 +178,12 @@ class Module(Module, multiprocessing.Process):
             threat_level = 50
             description = f'detected sending unsolicited ARP'
             type_evidence = 'UnsolicitedARP'
+            # This may be ARP spoofing
+            category = 'Information.UnauthorizedAccess'
             type_detection = 'ip' #srcip
             detection_info = profileid.split("_")[1]
             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                                 threat_level, confidence, description, ts, category, profileid=profileid, twid=twid, uid=uid)
             return True
 
 
@@ -207,10 +212,12 @@ class Module(Module, multiprocessing.Process):
             description = f'{saddr} performing a MITM ARP attack. The MAC {src_mac}, now belonging to IP {saddr}, was seen before for IP {original_IP}.'
             # self.print(f'{saddr} is claiming to have {src_mac}')
             type_evidence = 'MITM-ARP-attack'
+            # This may be ARP spoofing
+            category = 'Information.UnauthorizedAccess'
             type_detection = 'ip' #srcip
             detection_info = profileid.split("_")[1]
             __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                                 threat_level, confidence, description, ts, category, profileid=profileid, twid=twid, uid=uid)
             return True
 
 

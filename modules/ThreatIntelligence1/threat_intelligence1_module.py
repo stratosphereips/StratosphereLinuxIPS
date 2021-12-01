@@ -64,6 +64,7 @@ class Module(Module, multiprocessing.Process):
         if not threat_level:
             threat_level = 80
         confidence = 1
+        category = 'Attempt.Exploit'
         dns_resolution = __database__.get_dns_resolution(ip)
         dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
 
@@ -79,7 +80,7 @@ class Module(Module, multiprocessing.Process):
             description += f' tags={tags}'
 
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                                 threat_level, confidence, description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, is_subdomain, profileid='', twid=''):
         '''
@@ -90,6 +91,7 @@ class Module(Module, multiprocessing.Process):
 
         type_detection = 'dstdomain'
         detection_info = domain
+        category = 'Attempt.Exploit'
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
         # in case of finding a subdomain in our blacklists
         # print that in the description of the alert and change the confidence accordingly
@@ -106,7 +108,7 @@ class Module(Module, multiprocessing.Process):
             threat_level =  50
         description = f'connection to a blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                                 threat_level, confidence, description, timestamp, category , profileid=profileid, twid=twid, uid=uid)
 
     def print(self, text, verbose=1, debug=0):
         """

@@ -163,6 +163,7 @@ class Module(Module, multiprocessing.Process):
                 # TODO: this needs to be changed if add more rules to the rules/dir
                 type_evidence = 'NETWORK_gps_location_leaked'
                 threat_level = 0.9
+                category = 'Information.UnauthorizedAccess'
                 confidence = 0.9
                 description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
                 # generate a random uid
@@ -179,7 +180,7 @@ class Module(Module, multiprocessing.Process):
                     if twid:
                         twid = twid[0]
                         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                                                 threat_level, confidence, description, ts, category, profileid=profileid, twid=twid, uid=uid)
 
     def compile_and_save_rules(self):
         """

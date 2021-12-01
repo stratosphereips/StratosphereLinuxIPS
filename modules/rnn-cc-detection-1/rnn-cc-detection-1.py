@@ -76,11 +76,13 @@ class Module(Module, multiprocessing.Process):
         detection_info = tupleid
         type_evidence = 'Command-and-Control-channels-detection'
         threat_level = 0.3
+        categroy =  'Intrusion.Botnet'
         tupleid = tupleid.split(':')
         dstip , port, proto =  tupleid[0], tupleid[1], tupleid[2]
         description = f'C&C channels detection, destination IP: {dstip} port: {port}/{proto} score: {format(score, ".4f")}'
         __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                                 threat_level, confidence, description, timestamp, categroy,
+                                 profileid=profileid, twid=twid, uid=uid)
 
     def convert_input_for_module(self, pre_behavioral_model):
         """

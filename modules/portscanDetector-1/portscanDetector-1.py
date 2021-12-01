@@ -110,6 +110,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 detection_info = dport
                 # Threat level
                 threat_level = 0.7
+                category = 'Recon.Scanning'
                 # Compute the confidence
                 pkts_sent = 0
                 # We detect a scan every Threshold. So, if threshold is 3, we detect when there are 3, 6, 9, 12, etc. dips per port.
@@ -135,7 +136,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     uid = next(iter(dstips.values()))['uid'] # first uid in the dictionary
                     timestamp = next(iter(dstips.values()))['stime']
                     __database__.setEvidence(type_detection, detection_info,type_evidence,
-                                             threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                                             threat_level, confidence, description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                     self.print(description, 3, 0)
@@ -165,6 +166,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 key = 'dstip' + ':' + dstip + ':' + type_evidence
                 # Threat level
                 threat_level = 0.7
+                category = 'Recon.Scanning'
                 # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dports per dip.
                 # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
                 cache_key = profileid + ':' + twid + ':' + key
@@ -189,7 +191,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                     uid = data[dstip]['uid']
                     timestamp = data[dstip]['stime']
                     __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                             threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                                             threat_level, confidence, description, timestamp, category,
+                                             profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                     self.print(description, 3, 0)
@@ -237,6 +240,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             else:
                 confidence = pkts_sent / 10.0
             threat_level = 25
+            category = 'Recon.Scanning'
             # type_detection is set to dstip even though the srcip is the one performing the scan
             # because setEvidence doesn't alert on the same key twice, so we have to send different keys to be able
             # to generate an alert every 5,10,15,.. scans
@@ -246,7 +250,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             description = f'performing PING sweep. {scanned_dstips} different IPs scanned'
             timestamp = icmp_requests[dip]['stime']
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                 confidence, description, timestamp, profileid=profileid, twid=twid)
+                 confidence, description, timestamp, category, profileid=profileid, twid=twid)
 
             # cache the amount of dips to make sure we don't detect
             # the same amount of dips twice.
