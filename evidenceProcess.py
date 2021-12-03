@@ -266,7 +266,7 @@ class EvidenceProcess(multiprocessing.Process):
         Add a new evidence line to our alerts.json file.
         """
         try:
-            pprint.pprint(data, stream=self.jsonfile, sort_dicts=False) #todo add pprint to dockerfiles and install.sh
+            pprint.pprint(data, stream=self.jsonfile, sort_dicts=False)
             self.jsonfile.write('\n')
             self.jsonfile.flush()
         except KeyboardInterrupt:
@@ -578,7 +578,7 @@ class EvidenceProcess(multiprocessing.Process):
         """
         Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
         """
-        #todo destination IP is embedded in the descriptipon, make it a setevidence parameter
+
         IDEA_dict = {'Format': 'IDEA0',
                      'ID': str(uuid4()),
                      'EventTime': flow_datetime.replace(' ','T')+'Z',
@@ -594,7 +594,7 @@ class EvidenceProcess(multiprocessing.Process):
                      }
 
         # some evidence have a dst ip
-        if 'dstip' in type_detection:
+        if 'dstip' in type_detection or 'dip' in type_detection:
             IDEA_dict.update({'Target': {
                 'IP4': detection_info
             }})
@@ -611,8 +611,21 @@ class EvidenceProcess(multiprocessing.Process):
             if hostname:
                 IDEA_dict['Target'].update({'Hostname': hostname})
 
+
         # only evidence of type scanning have conn_count
         if conn_count: IDEA_dict.update({'ConnCount': conn_count})
+
+        if 'MaliciousDownloadedFile' in type_evidence:
+            IDEA_dict.update({
+                'Attach': [
+                    {
+                        'Type': ["Malware"],
+                        "Hash": [f'md5:{detection_info}'],
+                        "Size": int(description.split("size:")[1].split("from")[0])
+
+                    }
+                ]
+            })
 
         # todo when exporting to warden server, this should be added
         #      "Node": [
@@ -624,21 +637,6 @@ class EvidenceProcess(multiprocessing.Process):
        #    }
        # ]
 
-
-        # todo add this to  milicious files alerts
-       #  "Attach": [
-       #    {
-       #       "Handle": "att1",
-       #       "FileName": ["killemall"],
-       #       "Type": ["Malware"],
-       #       "ContentType": "application/octet-stream",
-       #       "Hash": ["sha1:0c4a38c3569f0cc632e74f4c"],
-       #       "Size": 46,
-       #       "Ref": ["Trojan-Spy:W32/FinSpy.A"],
-       #       "ContentEncoding": "base64",
-       #       "Content": "TVpqdXN0a2lkZGluZwo="
-       #    }
-       # ]
         return IDEA_dict
 
     def run(self):
