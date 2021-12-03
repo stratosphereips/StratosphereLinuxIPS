@@ -574,11 +574,13 @@ class EvidenceProcess(multiprocessing.Process):
         self.logs_jsonfile.flush()
 
 
-    def IDEA_format(self, srcip, type_evidence, type_detection, detection_info, description, flow_datetime, confidence, threat_level, tags, category, conn_count):
+    def IDEA_format(self, srcip, type_evidence, type_detection,
+                    detection_info, description, flow_datetime,
+                    confidence, threat_level, tags,
+                    category, conn_count, source_target_tag):
         """
         Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
         """
-
         IDEA_dict = {'Format': 'IDEA0',
                      'ID': str(uuid4()),
                      'EventTime': flow_datetime.replace(' ','T')+'Z',
@@ -587,18 +589,18 @@ class EvidenceProcess(multiprocessing.Process):
                      'Confidence': confidence,
                      'Note' : description,
                      'Source': [{
-                         # if teh evidence has a subcategory, use it
-                         'Type': category.split('.')[1] if '.' in category else category,
                          'IP4': srcip,
-                        }],
+                        }]
                      }
+
+        # update the srcip description if specified in the evidence
+        if source_target_tag:
+            IDEA_dict['Source'][0].update({'Type': source_target_tag })
 
         # some evidence have a dst ip
         if 'dstip' in type_detection or 'dip' in type_detection:
-            IDEA_dict.update({'Target': {
-                'IP4': detection_info
-            }})
-            # try tot extract the hostname/SNI/rDNS  of the dstip form the description if available
+            IDEA_dict.update({'Target': [{'IP4': detection_info}] })
+            # try to extract the hostname/SNI/rDNS of the dstip form the description if available
             hostname = False
             try:
                 hostname = description.split('rDNS: ')[1]
@@ -609,8 +611,10 @@ class EvidenceProcess(multiprocessing.Process):
             except IndexError:
                 pass
             if hostname:
-                IDEA_dict['Target'].update({'Hostname': hostname})
-
+                IDEA_dict['Target'][0].update({'Hostname': hostname})
+            # update the dstip description if specified in the evidence
+            if source_target_tag:
+                IDEA_dict['Target'][0].update({'Type': source_target_tag })
 
         # only evidence of type scanning have conn_count
         if conn_count: IDEA_dict.update({'ConnCount': conn_count})
@@ -636,7 +640,6 @@ class EvidenceProcess(multiprocessing.Process):
        #       "AggrWin": "00:05:00"
        #    }
        # ]
-
         return IDEA_dict
 
     def run(self):
@@ -672,6 +675,7 @@ class EvidenceProcess(multiprocessing.Process):
                     threat_level = data.get('threat_level',False)
                     category = data.get('category',False)
                     conn_count = data.get('conn_count',False)
+                    source_target_tag = data.get('source_target_tag',False)
 
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
@@ -706,7 +710,8 @@ class EvidenceProcess(multiprocessing.Process):
                                     threat_level,
                                     tags,
                                     category,
-                                    conn_count)
+                                    conn_count,
+                                    source_target_tag)
 
                     # Add the evidence to the log files
                     self.addDataToLogFile(flow_datetime + ': ' + evidence)
