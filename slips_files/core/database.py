@@ -1029,6 +1029,7 @@ class Database(object):
 
     def setEvidence(self, type_evidence, type_detection, detection_info,
                     threat_level, confidence, description, timestamp, category,
+                    source_target_tag=False,
                     conn_count=False, profileid='', twid='', uid=''):
         """
         Set the evidence for this Profile and Timewindow.
@@ -1046,7 +1047,7 @@ class Database(object):
             if the type_detection is srcip this describes the source ip,
             if the type_detection is dstip this describes the dst ip.
             supported source and dst types are in the SourceTargetTag section https://idea.cesnet.cz/en/classifications
-
+            this is a keyword/optional argument because it shouldn't be used with dports and sports type_detection
         """
 
         # Ignore evidence if it's disabled in the configuration file
@@ -1076,14 +1077,16 @@ class Database(object):
         # not all evidence requires a conn_coun, scans only
         if conn_count: evidence_to_send.update({'conn_count': conn_count })
 
+        # source_target_tag is defined only if type_detection is srcip or dstip
+        if source_target_tag: evidence_to_send.update({'source_target_tag': source_target_tag })
+
         evidence_to_send = json.dumps(evidence_to_send)
         # This is done to ignore repetition of the same evidence sent.
         if description not in current_evidence.keys():
             self.publish('evidence_added', evidence_to_send)
 
-        # update the our current evidence for this profileid and twid
+        # update the our current evidence for this profileid and twid. now the description is used as the key
         current_evidence.update({description : evidence_to_send})
-
         # Set evidence in the database.
         current_evidence = json.dumps(current_evidence)
         self.r.hset(profileid + self.separator + twid, 'Evidence', current_evidence)
