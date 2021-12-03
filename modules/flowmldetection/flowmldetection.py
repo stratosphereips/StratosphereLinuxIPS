@@ -356,8 +356,8 @@ class Module(Module, multiprocessing.Process):
         timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, category, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid)
 
     def run(self):
         # Load the model first

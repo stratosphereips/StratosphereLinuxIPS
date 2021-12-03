@@ -127,12 +127,12 @@ class Module(Module, multiprocessing.Process):
                 type_evidence = 'ARPScan'
                 # category of this evidence according to idea categories
                 category = 'Recon.Scanning'
-                type_detection = 'ip' #srcip
+                type_detection = 'srcip'
                 detection_info = profileid.split("_")[1]
                 conn_count = len(profileids_twids)
-                __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                         threat_level, confidence, description, ts, category,
-                                         conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
+                __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                         description, ts, category, conn_count=conn_count, profileid=profileid,
+                                         twid=twid, uid=uid)
                 # after we set evidence, clear the dict so we can detect if it does another scan
                 self.cache_arp_requests.pop(f'{profileid}_{twid}')
                 return True
@@ -167,8 +167,8 @@ class Module(Module, multiprocessing.Process):
             category = 'Anomaly.Behaviour'
             type_detection = 'ip' #srcip
             detection_info = profileid.split("_")[1]
-            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, ts, category,  profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
             return True
 
 
@@ -184,8 +184,8 @@ class Module(Module, multiprocessing.Process):
             category = 'Information'
             type_detection = 'ip' #srcip
             detection_info = profileid.split("_")[1]
-            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, ts, category, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
             return True
 
 
@@ -218,9 +218,8 @@ class Module(Module, multiprocessing.Process):
             category = 'Recon'
             type_detection = 'ip' #srcip
             detection_info = profileid.split("_")[1]
-            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, ts, category,
-                                 profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
             return True
 
 

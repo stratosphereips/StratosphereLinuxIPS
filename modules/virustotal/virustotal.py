@@ -220,10 +220,8 @@ class Module(Module, multiprocessing.Process):
             category = 'Malware'
             if not twid:
                 twid = ''
-            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                     threat_level, confidence,
-                                     description, ts, category,
-                                     profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
             return 'malicious'
         return 'benign'
 

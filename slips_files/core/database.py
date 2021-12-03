@@ -1034,31 +1034,26 @@ class Database(object):
         return False
 
 
-    def setEvidence(self, type_detection, detection_info, type_evidence,
+    def setEvidence(self, type_evidence, type_detection, detection_info,
                     threat_level, confidence, description, timestamp, category,
                     conn_count=False, profileid='', twid='', uid=''):
         """
         Set the evidence for this Profile and Timewindow.
-        Parameters:
-            key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans,
-                 then this would be the port used. The idea is that you can later update
-                 this specific detection when it evolves. Examples of keys are:
-                 'dport:1234' for all the evidences regarding this dport,
-                 'dip:1.1.1.1' for all the evidences regarding that dst ip
-        type_detection: the value that is important: dport, dip, flow
-        type_evidence: determine the type of evidenc. E.g. PortScan, ThreatIntelligence
-        threat_level: determine the importance of the evidence.
-        confidence: determine the confidence of the detection. (How sure you are that this is what you say it is.)
+
+        type_evidence: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
+        type_detection: the type of value causing the detection e.g. dport, dip, flow
+        detection_info: the actual dstip or dstport. e.g. 1.1.1.1 or 443
+        threat_level: determine the importance of the evidence on a scale from 0 to 1.
+        confidence: determine the confidence of the detection on a scale from 0 to 1. (How sure you are that this is what you say it is.)
         uid: needed to get the flow from the database
         category: what is this evidence category according to IDEA categories
-        conn_count: the number of packets/flows caused considered as a scan
-        Example:
-        The evidence is stored as a dict.
-        {
-            'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'],
-            'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1']
-            'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
-        }
+        conn_count: the number of packets/flows/nxdomains that formed this scan/sweep/DGA.
+
+        source_target_tag:
+            if the type_detection is srcip this describes the source ip,
+            if the type_detection is dstip this describes the dst ip.
+            supported source and dst types are in the SourceTargetTag section https://idea.cesnet.cz/en/classifications
+
         """
 
         # Ignore evidence if it's disabled in the configuration file

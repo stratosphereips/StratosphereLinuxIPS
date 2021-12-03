@@ -79,8 +79,8 @@ class Module(Module, multiprocessing.Process):
         if tags:
             description += f' tags={tags}'
 
-        __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, is_subdomain, profileid='', twid=''):
         '''
@@ -107,8 +107,8 @@ class Module(Module, multiprocessing.Process):
         if not threat_level:
             threat_level =  50
         description = f'connection to a blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
-        __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, category , profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def print(self, text, verbose=1, debug=0):
         """
