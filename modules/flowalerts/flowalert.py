@@ -169,7 +169,7 @@ class Module(Module, multiprocessing.Process):
         type_evidence = f'SSHSuccessful-by-{saddr}'
         threat_level = 0
         confidence = 0.5
-        category = 'Anomaly.Connection'
+        category = 'Infomation'
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'SSH successful to IP {daddr}. {ip_identification}. From IP {saddr}. Size: {str(size)}. Detection model {by}. Threat level {threat_level}. Confidence {confidence}'
         if not twid:
@@ -205,7 +205,7 @@ class Module(Module, multiprocessing.Process):
         '''
         confidence = 0.5
         threat_level = 0.3
-        category = 'Fraud'
+        category = 'Anomaly.Behaviour'
         type_detection = 'dstip'
         type_evidence = 'SelfSignedCertificate'
         detection_info = ip
@@ -250,7 +250,7 @@ class Module(Module, multiprocessing.Process):
         '''
         confidence = 0.5
         threat_level =  0.2
-        category = 'Vulnerable.Open'
+        category = "Anomaly.Behaviour"
         type_detection  = 'dstip'
         type_evidence = 'InvalidCertificate'
         detection_info = ip
@@ -656,7 +656,7 @@ class Module(Module, multiprocessing.Process):
         if type_ == 'ja3':
             description = f'Malicious JA3: {ioc} to daddr {daddr}'
             type_evidence = 'MaliciousJA3'
-            category =  'Intrusion.UserCompromise'
+            category =  'Intrusion.Botnet'
         elif type_ == 'ja3s':
             description = f'Malicious JA3s: (possible C&C server): {ioc} to server {daddr} '
             type_evidence = 'MaliciousJA3s'
@@ -677,7 +677,7 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_data_exfiltration(self, most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
         confidence = 0.6
         threat_level = 60
-        category = 'Information.UnauthorizedAccess'
+        category = 'Malware'
         type_detection  = 'dstip'
         type_evidence = 'DataExfiltration'
         detection_info = most_contacted_daddr
@@ -956,7 +956,7 @@ class Module(Module, multiprocessing.Process):
                             description = f'self-signed certificate. Destination IP {ip}. {ip_identification}'
                             confidence = 0.5
                             threat_level = 30
-                            category = "Fraud"
+                            category = "Anomaly.Behaviour"
                             type_detection = 'dstip'
                             type_evidence = 'SelfSignedCertificate'
                             detection_info = ip

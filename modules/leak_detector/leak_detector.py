@@ -163,7 +163,7 @@ class Module(Module, multiprocessing.Process):
                 # TODO: this needs to be changed if add more rules to the rules/dir
                 type_evidence = 'NETWORK_gps_location_leaked'
                 threat_level = 0.9
-                category = 'Information.UnauthorizedAccess'
+                category = 'Malware'
                 confidence = 0.9
                 description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
                 # generate a random uid
