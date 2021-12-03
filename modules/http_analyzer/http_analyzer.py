@@ -50,8 +50,9 @@ class Module(Module, multiprocessing.Process):
 
         suspicious_user_agents = ('httpsend', 'chm_msdn', 'pb')
         if user_agent.lower() in suspicious_user_agents:
-            type_detection = 'user_agent'
-            detection_info = user_agent
+            type_detection = 'srcip'
+            source_target_tag = 'UsingSuspiciousUserAgent'
+            detection_info = profileid.split("_")[1]
             type_evidence = 'SuspiciousUserAgent'
             threat_level =  0.6
             category = 'Anomaly.Behaviour'
@@ -60,7 +61,8 @@ class Module(Module, multiprocessing.Process):
             if not twid:
                 twid = ''
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+                                     description, timestamp, category,source_target_tag=source_target_tag,
+                                     profileid=profileid, twid=twid, uid=uid)
             return True
         return False
 
@@ -74,9 +76,9 @@ class Module(Module, multiprocessing.Process):
             self.google_connections_counter +=1
 
         if self.google_connections_counter == self.google_connections_threshold:
-            type_detection = 'multiple_google_connections'
-            detection_info = profileid.split('_')[0]
             type_evidence = 'multiple_google_connections'
+            type_detection = 'srcip'
+            detection_info = profileid.split('_')[0]
             threat_level = 20
             category = 'Anomaly.Connection'
             confidence = 1
