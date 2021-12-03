@@ -1044,6 +1044,7 @@ class Database(object):
         conn_count: the number of packets/flows/nxdomains that formed this scan/sweep/DGA.
 
         source_target_tag:
+            this is the IDEA category of the source and dst ip used in the evidence
             if the type_detection is srcip this describes the source ip,
             if the type_detection is dstip this describes the dst ip.
             supported source and dst types are in the SourceTargetTag section https://idea.cesnet.cz/en/classifications
