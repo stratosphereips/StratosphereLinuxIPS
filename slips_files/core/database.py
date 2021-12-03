@@ -1036,7 +1036,7 @@ class Database(object):
 
     def setEvidence(self, type_detection, detection_info, type_evidence,
                     threat_level, confidence, description, timestamp, category,
-                    daddr=False, conn_count=False, profileid='', twid='', uid=''):
+                    conn_count=False, profileid='', twid='', uid=''):
         """
         Set the evidence for this Profile and Timewindow.
         Parameters:
@@ -1052,7 +1052,6 @@ class Database(object):
         uid: needed to get the flow from the database
         category: what is this evidence category according to IDEA categories
         conn_count: the number of packets/flows caused considered as a scan
-        daddr: the daddr causing this evidence. not all evidence have destination addresses (for example scans)
         Example:
         The evidence is stored as a dict.
         {
@@ -1088,8 +1087,6 @@ class Database(object):
             }
         # not all evidence requires a conn_coun, scans only
         if conn_count: evidence_to_send.update({'conn_count': conn_count })
-        # not all evidence have daddr.
-        if daddr: evidence_to_send.update({'daddr': daddr })
 
         evidence_to_send = json.dumps(evidence_to_send)
         # This is done to ignore repetition of the same evidence sent.
