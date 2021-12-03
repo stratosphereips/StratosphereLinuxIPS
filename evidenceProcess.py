@@ -576,8 +576,7 @@ class EvidenceProcess(multiprocessing.Process):
 
     def IDEA_format(self, srcip, type_evidence, type_detection,
                     detection_info, description, flow_datetime,
-                    confidence, threat_level, tags,
-                    category, conn_count, source_target_tag):
+                    confidence, category, conn_count, source_target_tag):
         """
         Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
         """
@@ -707,8 +706,6 @@ class EvidenceProcess(multiprocessing.Process):
                                     description,
                                     flow_datetime,
                                     confidence,
-                                    threat_level,
-                                    tags,
                                     category,
                                     conn_count,
                                     source_target_tag)
