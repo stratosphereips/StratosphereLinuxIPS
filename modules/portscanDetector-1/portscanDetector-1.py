@@ -135,8 +135,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                     description = f'new horizontal port scan to port {dport}/{protocol}. From {saddr} to {amount_of_dips} unique dst IPs. Tot pkts: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
                     uid = next(iter(dstips.values()))['uid'] # first uid in the dictionary
                     timestamp = next(iter(dstips.values()))['stime']
-                    __database__.setEvidence(type_detection, detection_info,type_evidence,
-                                             threat_level, confidence, description, timestamp, category, conn_count=pkts_sent , profileid=profileid, twid=twid, uid=uid)
+                    __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                             description, timestamp, category, conn_count=pkts_sent,
+                                             profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                     self.print(description, 3, 0)
@@ -190,8 +191,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                     description = f'new vertical port scan to IP {dstip} from {profileid.split(self.fieldseparator)[1]}. Total {amount_of_dports} dst ports of protocol {protocol}. Not Established. Tot pkts sent all ports: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
                     uid = data[dstip]['uid']
                     timestamp = data[dstip]['stime']
-                    __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                             threat_level, confidence, description, timestamp, category, conn_count=pkts_sent,
+                    __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                             description, timestamp, category, conn_count=pkts_sent,
                                              profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
@@ -249,8 +250,9 @@ class PortScanProcess(Module, multiprocessing.Process):
             detection_info = dip
             description = f'performing PING sweep. {scanned_dstips} different IPs scanned'
             timestamp = icmp_requests[dip]['stime']
-            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                 confidence, description, timestamp, category, conn_count=pkts_sent, profileid=profileid, twid=twid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, timestamp, category, conn_count=pkts_sent, profileid=profileid,
+                                     twid=twid)
 
             # cache the amount of dips to make sure we don't detect
             # the same amount of dips twice.
