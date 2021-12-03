@@ -128,10 +128,11 @@ class Module(Module, multiprocessing.Process):
                 # category of this evidence according to idea categories
                 category = 'Recon.Scanning'
                 type_detection = 'srcip'
+                source_target_tag = 'Recon' # srcip description
                 detection_info = profileid.split("_")[1]
                 conn_count = len(profileids_twids)
                 __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                         description, ts, category, conn_count=conn_count, profileid=profileid,
+                                         description, ts, category, source_target_tag=source_target_tag, conn_count=conn_count, profileid=profileid,
                                          twid=twid, uid=uid)
                 # after we set evidence, clear the dict so we can detect if it does another scan
                 self.cache_arp_requests.pop(f'{profileid}_{twid}')
@@ -165,7 +166,7 @@ class Module(Module, multiprocessing.Process):
             description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
             type_evidence = 'ARP-ouside-localnet'
             category = 'Anomaly.Behaviour'
-            type_detection = 'ip' #srcip
+            type_detection = 'srcip'
             detection_info = profileid.split("_")[1]
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                      description, ts, category, profileid=profileid, twid=twid, uid=uid)
@@ -182,10 +183,11 @@ class Module(Module, multiprocessing.Process):
             type_evidence = 'UnsolicitedARP'
             # This may be ARP spoofing
             category = 'Information'
-            type_detection = 'ip' #srcip
+            type_detection = 'srcip'
+            source_target_tag = 'Recon' # srcip description
             detection_info = profileid.split("_")[1]
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
+                                     description, ts, category,source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
             return True
 
 
@@ -216,10 +218,11 @@ class Module(Module, multiprocessing.Process):
             type_evidence = 'MITM-ARP-attack'
             # This may be ARP spoofing
             category = 'Recon'
-            type_detection = 'ip' #srcip
+            type_detection = 'srcip'
+            source_target_tag = 'MITM'
             detection_info = profileid.split("_")[1]
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
+                                     description, ts, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
             return True
 
 
