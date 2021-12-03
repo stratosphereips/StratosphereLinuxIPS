@@ -573,9 +573,9 @@ class UpdateFileManager:
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
+                # to support nsec/full-results-2019-05-15.json
                 if 'json' in malicious_data_path:
                     filename= malicious_data_path.split('/')[-1]
-                    # to support nsec/full-results-2019-05-15.json
                     try:
                         file = json.loads(malicious_file.read())
                         for description,iocs in file.items():
@@ -615,7 +615,9 @@ class UpdateFileManager:
                 # if any keyword of the following is present in a line
                 # then this line should be ignored by slips
                 # either a not supported ioc type or a header line etc.
-                header_keywords = ('type', 'first_seen_utc', 'ip_v4','"domain"','#"type"','#fields')
+                # make sure the header keywords are lowercase because
+                # we convert lines to lowercase when comparing
+                header_keywords = ('type', 'first_seen_utc', 'ip_v4','"domain"','#"type"','#fields', "number")
                 ignored_IoCs = ('email', 'url', 'file_hash')
 
                 while True:
