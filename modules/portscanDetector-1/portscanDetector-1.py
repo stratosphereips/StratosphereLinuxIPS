@@ -160,11 +160,13 @@ class PortScanProcess(Module, multiprocessing.Process):
                 amount_of_dports = len(dstports)
                 #self.print('Vertical Portscan check. Amount of dports: {}. Threshold=3'.format(amount_of_dports), 3, 0)
                 # Type of evidence
-                type_detection = 'dstip'
-                detection_info = dstip
+                type_detection = 'srcip'
+                srcip = profileid.split(self.fieldseparator)[1]
+                detection_info = srcip
                 type_evidence = 'PortScanType1'
                 # Key
                 key = 'dstip' + ':' + dstip + ':' + type_evidence
+                source_target_tag = ''
                 # Threat level
                 threat_level = 0.7
                 category = 'Recon.Scanning'
@@ -188,7 +190,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         # Between threshold and 10 pkts compute a kind of linear grow
                         confidence = pkts_sent / 10.0
                     # Description
-                    description = f'new vertical port scan to IP {dstip} from {profileid.split(self.fieldseparator)[1]}. Total {amount_of_dports} dst ports of protocol {protocol}. Not Established. Tot pkts sent all ports: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
+                    description = f'new vertical port scan to IP {dstip} from {srcip}. Total {amount_of_dports} dst ports of protocol {protocol}. Not Established. Tot pkts sent all ports: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
                     uid = data[dstip]['uid']
                     timestamp = data[dstip]['stime']
                     __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
@@ -244,15 +246,17 @@ class PortScanProcess(Module, multiprocessing.Process):
             category = 'Recon.Scanning'
             # type_detection is set to dstip even though the srcip is the one performing the scan
             # because setEvidence doesn't alert on the same key twice, so we have to send different keys to be able
-            # to generate an alert every 5,10,15,.. scans
-            type_detection = 'dstip'
+            # to generate an alert every 5,10,15,.. scans #todo test this
+            type_detection = 'srcip'
             # this is the last dip scanned
-            detection_info = dip
+            detection_info = srcip
+            source_target_tag = 'Recon'
             description = f'performing PING sweep. {scanned_dstips} different IPs scanned'
             timestamp = icmp_requests[dip]['stime']
-            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                     description, timestamp, category, conn_count=pkts_sent, profileid=profileid,
-                                     twid=twid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                     threat_level, confidence, description,
+                                     timestamp, category, source_target_tag=source_target_tag,
+                                     conn_count=pkts_sent, profileid=profileid, twid=twid)
 
             # cache the amount of dips to make sure we don't detect
             # the same amount of dips twice.
