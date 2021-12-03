@@ -721,9 +721,11 @@ class Module(Module, multiprocessing.Process):
             type_evidence = f'DGA-{self.nxdomains[profileid_twid]}-NXDOMAINs'
             detection_info = profileid.split('_')[1]
             description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains[profileid_twid]} domains'
+            conn_count = self.nxdomains[profileid_twid]
             if not twid: twid = ''
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                     confidence, description, stime, category,  profileid=profileid, twid=twid)
+                                     confidence, description, stime, category,
+                                     conn_count=conn_count, profileid=profileid, twid=twid)
             return True
 
     def run(self):
