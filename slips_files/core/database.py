@@ -2568,4 +2568,22 @@ class Database(object):
                 # this entry has the given feed as source, delete it
                 self.rcache.hdel('IoC_ips', ip)
 
+
+    def start_profiling(self):
+        print("-"*30+ " Started profiling")
+        import cProfile
+        profile = cProfile.Profile()
+        profile.enable()
+        return profile
+
+    def end_profiling(self, profile):
+        import pstats, io
+        profile.disable()
+        s = io.StringIO()
+        sortby = pstats.SortKey.CUMULATIVE
+        ps = pstats.Stats(profile, stream=s).sort_stats(sortby)
+        ps.print_stats()
+        print(s.getvalue())
+        print("-"*30+ " Done profiling")
+
 __database__ = Database()
