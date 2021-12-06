@@ -250,7 +250,6 @@ class Module(Module, multiprocessing.Process):
                 ioc_type = self.get_ioc_type(ioc)
                 if ioc_type is 'ip':
                     cached_data = __database__.getIPData(ioc)
-                    self.set_vt_data_in_IPInfo(ioc,cached_data)
                     # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
                     ip_addr = ipaddress.ip_address(ioc)
                     # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
@@ -262,6 +261,7 @@ class Module(Module, multiprocessing.Process):
                     cached_data = __database__.getDomainData(ioc)
                     if not cached_data or 'VirusTotal' not in cached_data:
                         self.set_domain_data_in_DomainInfo(ioc, cached_data)
+
 
                 elif ioc_type is 'url':
                     cached_data = __database__.getURLData(ioc)
@@ -392,6 +392,9 @@ class Module(Module, multiprocessing.Process):
         :param save_data: False by default. Set to True to save each request json in a file named ip.txt
         :return: Response object
         """
+        if self.incorrect_API_key == True:
+            return {}
+
         params = {'apikey': self.key}
         ioc_type = self.get_ioc_type(ioc)
         if ioc_type is 'ip':
