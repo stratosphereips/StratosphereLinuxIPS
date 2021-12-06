@@ -1165,6 +1165,12 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['daddr'] = self.column_values['server_addr']
             # self.column_values['domain'] = line.get('domain','')
             # self.column_values['assigned_addr'] = line.get('assigned_addr','')
+
+             # Some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log use the mac address instead
+            if (self.column_values['saddr'] == '' and self.column_values['daddr'] == ''
+                and self.column_values.get('mac', False) ):
+                self.column_values['saddr'] = self.column_values['mac']
+
         elif 'dce_rpc' in file_type:
             self.column_values['type'] = 'dce_rpc'
         elif 'dnp3' in file_type:
