@@ -332,6 +332,10 @@ def shutdown_gracefully(input_information):
         return False
 
 
+def is_debugger_active() -> bool:
+    """Return if the debugger is currently active"""
+    gettrace = getattr(sys, 'gettrace', lambda : None)
+    return gettrace() is not None
 
 ####################
 # Main
@@ -781,7 +785,8 @@ if __name__ == '__main__':
             # If there were no modified TW in the last timewindow time,
             # then start counting down
             else:
-                if amount_of_modified == 0:
+                # don't shutdown slips if it's being debugged
+                if amount_of_modified == 0 and not is_debugger_active():
                     # print('Counter to stop Slips. Amount of modified
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:
