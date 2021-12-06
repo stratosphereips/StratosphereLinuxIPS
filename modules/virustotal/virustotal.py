@@ -232,6 +232,9 @@ class Module(Module, multiprocessing.Process):
         """
 
         while True:
+            # do not attempt to make more api calls if we already know that the api key is incorrect
+            if self.incorrect_API_key == True:
+                return False
             # wait until the queue is populated
             if not self.api_call_queue: time.sleep(30)
             # wait the api limit
@@ -567,12 +570,11 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                # exit module if there's a problem with the API key
-                if self.incorrect_API_key: return True
                 message = self.c1.get_message(timeout=self.timeout)
 
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
-                if message and message['data'] == 'stop_process':
+                # exit module if there's a problem with the API key
+                if (message and message['data'] == 'stop_process') or self.incorrect_API_key == True:
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
