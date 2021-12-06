@@ -71,7 +71,7 @@ class Database(object):
         # Detection that are not in this list or not in slips.conf EnabledAlerts sections are enabled by default.
         supported_detections = ['ARPScan','ARP-ouside-localnet','UnsolicitedARP','MITM-ARP-attack',
                             'SSHSuccessful','LongConnection','MultipleReconnectionAttempts',
-                            'ConnectionToMultiplePorts','InvalidCertificate','UnknownPort','Port0Scanning',
+                            'ConnectionToMultiplePorts','InvalidCertificate','UnknownPort','Port0Connection',
                             'ConnectionWithoutDNS','DNSWithoutConnection','MaliciousJA3','DataExfiltration',
                             'SelfSignedCertificate','PortScanType1','PortScanType2','Password_Guessing',
                             'MaliciousFlow','SuspiciousUserAgent','multiple_google_connections',

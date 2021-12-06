@@ -387,22 +387,21 @@ class Module(Module, multiprocessing.Process):
             __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                      confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_for_port_0_scanning(self, saddr, daddr, direction, profileid, twid, uid, timestamp):
+    def set_evidence_for_port_0_connection(self, saddr, daddr, direction, profileid, twid, uid, timestamp):
         """ :param direction: 'source' or 'destination' """
         confidence = 0.8
         threat_level =  0.5
         type_detection  = 'srcip' if direction == 'source' else 'dstip'
-        type_evidence = 'Port0Scanning'
+        type_evidence = 'Port0Connection'
         detection_info = saddr if direction == 'source' else daddr
         if direction == 'source':
             ip_identification = __database__.getIPIdentification(daddr)
-            description = f'Port 0 scanning: {saddr} is scanning {daddr}. {ip_identification}.'
+            description = f'Connection on port 0 from {saddr} to {daddr}. {ip_identification}.'
         else:
             ip_identification = __database__.getIPIdentification(saddr)
-            description = f'Port 0 scanning: {daddr} is scanning {saddr}. {ip_identification}'
+            description = f'Connection on port 0 from {daddr} to {saddr}. {ip_identification}'
 
-        if not twid:
-            twid = ''
+        if not twid: twid = ''
         __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
                                  confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
 
@@ -746,6 +745,7 @@ class Module(Module, multiprocessing.Process):
                     origstate = flow_dict['origstate']
                     state = flow_dict['state']
                     timestamp = data['stime']
+                    # ports are of type int
                     sport = flow_dict['sport']
                     dport = flow_dict.get('dport', None)
                     proto = flow_dict.get('proto')
@@ -778,10 +778,10 @@ class Module(Module, multiprocessing.Process):
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
 
-                    # --- Detect Port 0 Scanning ---
-                    if proto != 'igmp' and proto != 'icmp' and  proto != 'ipv6-icmp' and (sport == '0' or dport == '0'):
+                    # --- Detect Connection to port 0 ---
+                    if proto not in ('igmp', 'icmp', 'ipv6-icmp') and (sport == 0 or dport == 0):
                         direction = 'source' if sport==0 else 'destination'
-                        self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
+                        self.set_evidence_for_port_0_connection(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
                     # --- Detect if this is a connection without a DNS resolution ---
                     # The exceptions are:
