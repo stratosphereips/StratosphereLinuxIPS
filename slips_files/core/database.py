@@ -67,27 +67,15 @@ class Database(object):
             # configuration file specified
             self.width = 3600
 
-        # Read enabled detections from slips.conf
-        # Detection that are not in this list or not in slips.conf EnabledAlerts sections are enabled by default.
-        supported_detections = ['ARPScan','ARP-ouside-localnet','UnsolicitedARP','MITM-ARP-attack',
-                            'SSHSuccessful','LongConnection','MultipleReconnectionAttempts',
-                            'ConnectionToMultiplePorts','InvalidCertificate','UnknownPort','Port0Connection',
-                            'ConnectionWithoutDNS','DNSWithoutConnection','MaliciousJA3','DataExfiltration',
-                            'SelfSignedCertificate','PortScanType1','PortScanType2','Password_Guessing',
-                            'MaliciousFlow','SuspiciousUserAgent','multiple_google_connections',
-                            'NETWORK_gps_location_leaked','ICMPSweep','Command-and-Control-channels-detection',
-                            'ThreatIntelligenceBlacklistDomain','ThreatIntelligenceBlacklistIP','MaliciousDownloadedFile','DGA']
-        self.disabled_detections = []
-        for detection in supported_detections:
-            # get the configuration for this alert
-            try:
-                is_enabled = self.config.get('EnabledAlerts', detection)
-                if 'no' in is_enabled.lower():
-                    self.disabled_detections.append(detection)
-            except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError, KeyError):
-                # There is a conf, but there is no option, or no section or no configuration file specified
-                # if we failed to read a value, it will be enabled by default.
-                pass
+        # Read disabled detections from slips.conf
+        # get the configuration for this alert
+        try:
+            self.disabled_detections = self.config.get('DisabledAlerts', 'disabled_detections')
+            self.disabled_detections = self.disabled_detections.replace('[','').replace(']','').split()
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError, KeyError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            # if we failed to read a value, it will be enabled by default.
+            self.disabled_detections  = []
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -1028,8 +1016,13 @@ class Database(object):
         """
         Function to check if detection is disabled in slips.conf
         """
-        for disabled_evidence in self.disabled_detections:
-            if disabled_evidence in evidence:
+        for disabled_detection in self.disabled_detections:
+            # when we disable a detection , we add 'SSHSuccessful' in slips.conf,
+            # however our evidence can depend on an addr, for example 'SSHSuccessful-by-addr'.
+            # check if any disabled detection is a part of our evidence.
+            # for example 'SSHSuccessful' is a part of 'SSHSuccessful-by-addr' so if  'SSHSuccessful'
+            # is disabled,  'SSHSuccessful-by-addr' should also be disabled
+            if disabled_detection in evidence:
                 return True
         return False
 
