@@ -260,7 +260,16 @@ Slips needs a threshold to determine a connection of a long duration. By default
 
 You can configure which alerts you want to enable/disable in ```slips.conf``` 
 
-Simply change the value of the detection to ```no``` if you want to disable detections of this type.
+Simply add the detection you want to disable in the ```disabled_detections``` list and slips will not generate any alerts of this type.
+
+Supported detections are:
+
+
+ARPScan, ARP-ouside-localnet, UnsolicitedARP, MITM-ARP-attack, SSHSuccessful, LongConnection, MultipleReconnectionAttempts,
+ConnectionToMultiplePorts, InvalidCertificate, UnknownPort, Port0Connection, ConnectionWithoutDNS, DNSWithoutConnection,
+MaliciousJA3, DataExfiltration, SelfSignedCertificate, PortScanType1, PortScanType2, Password_Guessing, MaliciousFlow,
+SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, ICMPSweep, Command-and-Control-channels-detection,
+ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP, MaliciousDownloadedFile, DGA
 
 ### Exporting Alerts
 
