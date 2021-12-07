@@ -23,6 +23,7 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
+        self.read_configuration()
         self.c1 = __database__.subscribe('new_ip')
         self.timeout = 0.0000001
 
@@ -48,10 +49,27 @@ class Module(Module, multiprocessing.Process):
 
 
     def read_configuration(self):
-        send_to_warden = self.config.get('CESNET', 'send_alerts').lower()
-        receive_from_warden = self.config.get('CESNET', 'receive_alerts').lower()
-        # receive_from_warden = self.config.get('CESNET', 'receive_alerts').lower()
+        """ Read importing/exporting preferences from slips.conf """
 
+        send_to_warden = self.config.get('CESNET', 'send_alerts').lower()
+        if send_to_warden == 'yes':
+            # how often should we push to the server?
+            try:
+                self.push_delay = int(self.config.get('CESNET', 'push_delay'))
+            except ValueError:
+                # By default push every 1 day
+                self.push_delay = 86400
+
+        receive_from_warden = self.config.get('CESNET', 'receive_alerts').lower()
+        if receive_from_warden == 'yes':
+            # how often should we get alerts from the server?
+            try:
+                self.receive_delay = int(self.config.get('CESNET', 'receive_delay'))
+            except ValueError:
+                # By default push every 1 day
+                self.receive_delay = 86400
+
+        self.configuration_file = self.config.get('CESNET', 'configuration_file')
 
 
     def run(self):
