@@ -600,7 +600,6 @@ def format_time(year, month, day, hour, minute, second, microsec=0, utcoffset=No
 
 
 def read_cfg(cfgfile):
-    abspath = path.join(path.dirname(__file__), cfgfile)
-    with open(abspath, "r") as f:
+    with open(cfgfile, "r") as f:
         stripcomments = "\n".join((l for l in f if not l.lstrip().startswith(("#", "//"))))
         return json.loads(stripcomments)
