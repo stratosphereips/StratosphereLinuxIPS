@@ -84,6 +84,40 @@ class Module(Module, multiprocessing.Process):
             self.stop_module = True
 
 
+
+
+    def export_alerts(self):
+        alerts_path = os.path.join(self.output_dir, 'alerts.json')
+        # Get the data that we want to send
+        while True:
+            try:
+                with open(alerts_path, 'r') as f:
+                    line = f.readline()
+                    json_alert  = ''
+                    while line not in ('\n',''):
+                        json_alert += line
+                        if json_alert.endswith('}\n'):
+                            # reached the end of 1 alert
+                            # convert all single quotes to double quotes to be able to convert to json
+                            json_alert = json_alert.replace("'",'"')
+                            json_alert = json.loads(json_alert)
+                              # todo when exporting to warden server, this should be added
+                            #      "Node": [
+                           #    {
+                           #       "Name": "cz.cesnet.kippo-honey",
+                           #       "Type": ["Protocol", "Honeypot"],
+                           #       "SW": ["Kippo"],
+                           #       "AggrWin": "00:05:00"
+                           #    }
+                           # ]
+                            return True
+                        line = f.readline()
+            except FileNotFoundError:
+                # no alerts.json yet, wail 10 secs and try again
+                time.sleep(10)
+                continue
+
+
     def run(self):
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
