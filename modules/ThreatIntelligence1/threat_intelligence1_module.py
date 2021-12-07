@@ -60,9 +60,14 @@ class Module(Module, multiprocessing.Process):
         type_detection = ip_state
         detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
-        threat_level = ip_info['threat_level']
-        if not threat_level:
-            threat_level = 80
+
+        try:
+            threat_level = float(ip_info.get('threat_level', False))
+            if not threat_level:
+                raise ValueError
+        except ValueError:
+            threat_level =  80
+
         confidence = 1
         category = 'Attempt.Exploit'
         dns_resolution = __database__.get_dns_resolution(ip)
@@ -107,15 +112,19 @@ class Module(Module, multiprocessing.Process):
             confidence = 1
             # type = 'domain'
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
-        threat_level = domain_info.get('threat_level', False)
+        try:
+            threat_level = float(domain_info.get('threat_level', False))
+            if not threat_level:
+                raise ValueError
+        except ValueError:
+            threat_level =  50
         tags = domain_info.get('tags', False)
         if tags:
             source_target_tag = tags.capitalize()
         else:
             source_target_tag = "BlacklistedDomain"
 
-        if not threat_level:
-            threat_level =  50
+
         description = f'connection to a blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description, timestamp,
