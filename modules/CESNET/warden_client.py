@@ -320,7 +320,6 @@ class Client(object):
             if self.url.scheme=="https":
                 conn = HTTPSConnection(
                     self.url.netloc,
-                    strict = False,
                     key_file = self.keyfile,
                     cert_file = self.certfile,
                     timeout = self.timeout,
@@ -328,10 +327,7 @@ class Client(object):
                     ca_certs = self.cafile,
                     ssl_version = self.sslversion)
             elif self.url.scheme=="http":
-                conn = http.client.HTTPConnection(
-                    self.url.netloc,
-                    strict = False,
-                    timeout = self.timeout)
+                conn = http.client.HTTPConnection(self.url.netloc, timeout = self.timeout)
             else:
                 return Error(message="Don't know how to connect to \"%s\"" % self.url.scheme,
                         url=self.url.geturl())
