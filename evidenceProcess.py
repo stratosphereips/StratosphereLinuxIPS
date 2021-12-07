@@ -261,12 +261,23 @@ class EvidenceProcess(multiprocessing.Process):
             open(output_folder  + 'alerts.json', 'w').close()
         return open(output_folder + 'alerts.json', 'a')
 
-    def addDataToJSONFile(self, data):
+    def addDataToJSONFile(self, IDEA_dict: dict):
         """
-        Add a new evidence line to our alerts.json file.
+        Add a new evidence line to our alerts.json file in json IDEA format.
+        :param IDEA_dict: dict containing 1 alert
         """
         try:
-            pprint.pprint(data, stream=self.jsonfile, sort_dicts=False)
+            json_alert = '{\n'
+            for key_,val in IDEA_dict.items():
+                if type(val) ==str:
+                    # strings in json should be in double quotes instead of single quotes
+                   json_alert += f'"{key_}": "{val}",\n'
+                else:
+                    # int and float values should be printed as they are
+                    json_alert += f'"{key_}": {val},\n'
+            # remove the last comma and close the dict
+            json_alert = json_alert[:-2] +  '\n}\n'
+            self.jsonfile.write(json_alert)
             self.jsonfile.write('\n')
             self.jsonfile.flush()
         except KeyboardInterrupt:
