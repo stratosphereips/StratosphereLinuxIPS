@@ -6,8 +6,8 @@
 
 import json, ssl, socket, logging, logging.handlers, time
 import http.client
-# from urlparse import urlparse # #from urllib.parse import urlparse
-from urllib import urlencode
+from urllib.parse import urlparse
+from urllib.parse import urlencode
 from sys import stderr, exc_info
 from traceback import format_tb
 from os import path
