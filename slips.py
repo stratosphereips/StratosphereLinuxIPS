@@ -630,6 +630,11 @@ if __name__ == '__main__':
         export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ","").lower()
         if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
             to_ignore.append('ExportingAlerts')
+        # ignore CESNET sharing module if send and receive are are disabled in slips.conf
+        send_to_warden = config.get('CESNET', 'send_alerts').lower()
+        receive_from_warden = config.get('CESNET', 'receive_alerts').lower()
+        if 'no' in send_to_warden  and 'no' in receive_from_warden:
+            to_ignore.append('CESNET')
         # don't run blocking module unless specified
         if not args.clearblocking and not args.blocking \
                 or (args.blocking and not args.interface): # ignore module if not using interface
