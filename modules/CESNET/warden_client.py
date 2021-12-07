@@ -4,8 +4,9 @@
 # Copyright (C) 2011-2015 Cesnet z.s.p.o
 # Use of this source is governed by a 3-clause BSD-style license, see LICENSE file.
 
-import json, httplib, ssl, socket, logging, logging.handlers, time
-from urlparse import urlparse
+import json, ssl, socket, logging, logging.handlers, time
+import http.client
+# from urlparse import urlparse # #from urllib.parse import urlparse
 from urllib import urlencode
 from sys import stderr, exc_info
 from traceback import format_tb
@@ -15,7 +16,7 @@ from operator import itemgetter
 
 VERSION = "3.0-beta2"
 
-class HTTPSConnection(httplib.HTTPSConnection):
+class HTTPSConnection(http.client.HTTPSConnection):
     '''
     Overridden to allow peer certificate validation, configuration
     of SSL/ TLS version and cipher selection.  See:
@@ -27,7 +28,7 @@ class HTTPSConnection(httplib.HTTPSConnection):
         self.ca_certs = kwargs.pop('ca_certs',None)
         self.ssl_version = kwargs.pop('ssl_version',ssl.PROTOCOL_SSLv23)
 
-        httplib.HTTPSConnection.__init__(self,host,**kwargs)
+        http.client.HTTPSConnection.__init__(self,host,**kwargs)
 
     def connect(self):
         sock = socket.create_connection( (self.host, self.port), self.timeout)
@@ -327,7 +328,7 @@ class Client(object):
                     ca_certs = self.cafile,
                     ssl_version = self.sslversion)
             elif self.url.scheme=="http":
-                conn = httplib.HTTPConnection(
+                conn = http.client.HTTPConnection(
                     self.url.netloc,
                     strict = False,
                     timeout = self.timeout)
@@ -406,7 +407,7 @@ class Client(object):
 
         conn.close()
 
-        if res.status==httplib.OK:
+        if res.status==http.client.OK:
             try:
                 data = json.loads(response_data)
             except:
