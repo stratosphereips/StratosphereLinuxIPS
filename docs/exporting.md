@@ -4,6 +4,7 @@ The exporting module allows Slips to export alerts and evidence to other systems
 
 - Slack
 - STIX Servers
+- Warden servers
 
 
 ## Slack
@@ -28,4 +29,29 @@ You can do this by going to the channel, then clicking on the channel's name. Th
     [ExportingAlerts]
     export_to = [slack]
     slack_channel_name = SlipsAlertsChannel
+
+
+
+## CESNET Sharing
+
+Slips supports exporting alerts to warden servers, as well as importing alerts.
+
+To enable the module, set ```send_alerts``` and/or ```receive_alerts``` to ```yes``` in slips.conf
+
+The default configuration file path in specified in the ```configuration_file``` variable in ```slips.conf```
+
+The default path is ```modules/CESNET/warden.conf```
+
+The format of ```warden.conf``` should be the following:
+
+    {
+       "url": "https://example.com/warden3",
+       "certfile": "cert.pem",
+       "keyfile": "key.pem",
+       "cafile": "/etc/ssl/certs/DigiCert_Assured_ID_Root_CA.pem",
+       "timeout": 600,
+       "errlog": {"file": "/var/log/warden.err", "level": "debug"},
+       "filelog": {"file": "/var/log/warden.log", "level": "warning"},
+       "name": "com.example.warden.test"
+    }
 
