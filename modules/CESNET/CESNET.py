@@ -5,8 +5,10 @@ from slips_files.core.database import __database__
 import sys
 
 # Your imports
-from ..CESNET.warden_client import Client, Error, read_cfg, format_timestamp
+from ..CESNET.warden_client import Client, read_cfg, Error, format_timestamp
 import os
+import json
+import time
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -27,6 +29,7 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
         self.c1 = __database__.subscribe('new_ip')
         self.timeout = 0.0000001
+        self.stop_module = False
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -53,16 +56,21 @@ class Module(Module, multiprocessing.Process):
         """ Read importing/exporting preferences from slips.conf """
 
         self.send_to_warden = self.config.get('CESNET', 'send_alerts').lower()
-        if self.send_to_warden == 'yes':
+        if 'yes' in self.send_to_warden:
             # how often should we push to the server?
             try:
                 self.push_delay = int(self.config.get('CESNET', 'push_delay'))
             except ValueError:
                 # By default push every 1 day
                 self.push_delay = 86400
+            # get the output dir, this is where the alerts we want to push are stored
+            self.output_dir = 'output/'
+            if '-o' in sys.argv:
+                self.output_dir = sys.argv[sys.argv.index('-o')+1]
+
 
         self.receive_from_warden = self.config.get('CESNET', 'receive_alerts').lower()
-        if self.receive_from_warden == 'yes':
+        if 'yes' in self.receive_from_warden:
             # how often should we get alerts from the server?
             try:
                 self.receive_delay = int(self.config.get('CESNET', 'receive_delay'))
@@ -80,4 +88,24 @@ class Module(Module, multiprocessing.Process):
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
             return False
+        # create the warden client
+        wclient = Client(**read_cfg(self.configuration_file))
+
+        info = wclient.getDebug()
+        # All methods return something.
+        # If you want to catch possible errors (for example implement some
+        # form of persistent retry, or save failed events for later, you may
+        # check for Error instance and act based on contained info.
+        # If you want just to be informed, this is not necessary, just
+        # configure logging correctly and check logs.
+        if isinstance(info, Error):
+            self.print(info, 0, 1)
+
+        info = wclient.getInfo()
+        self.print(info, 0, 1)
+
+        if 'yes' in self.send_to_warden:
+            self.export_alerts()
+
+
 
