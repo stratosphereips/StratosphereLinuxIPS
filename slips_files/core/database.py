@@ -2572,7 +2572,10 @@ class Database(object):
         """
         time =  self.r.hget('Warden','push')
         if time:
-            return float(time)
+            time = float(time)
+        else:
+            time = float('-inf')
+        return time
 
     def get_last_warden_pull_time(self):
         """
@@ -2580,6 +2583,9 @@ class Database(object):
         """
         time = self.r.hget('Warden','pull')
         if time:
-            return float(time)
+            time = float(time)
+        else:
+            time = float('-inf')
+        return time
 
 __database__ = Database()
