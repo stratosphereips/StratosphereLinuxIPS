@@ -278,7 +278,7 @@ class EvidenceProcess(multiprocessing.Process):
             # remove the last comma and close the dict
             json_alert = json_alert[:-2] +  '\n}\n'
             self.jsonfile.write(json_alert)
-            self.jsonfile.write('\n')
+            # empty lines or line containing '\n' mark the end of the file for the cesnet sharing module. don't add any
             self.jsonfile.flush()
         except KeyboardInterrupt:
             return True
@@ -562,18 +562,20 @@ class EvidenceProcess(multiprocessing.Process):
         """
         Function to unify timestamps printed to log files, notification and cli.
         :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
+        returns the date and time in RFC3339 format (IDEA standard)
         """
         if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
-            flow_datetime = datetime.fromtimestamp(timestamp)
-            flow_datetime = flow_datetime.strftime('%Y-%m-%d %H:%M:%S')
-        else:
-            try:
-                # for timestamps like 2021-06-07T12:44:56.654854+0200
-                flow_datetime = timestamp.split('T')[0] +' '+ timestamp.split('T')[1][:8]
-            except IndexError:
-                #  for timestamps like 2018-03-09 22:57:44.781449+02:00
-                flow_datetime = timestamp[:19]
-        return flow_datetime
+            timestamp = datetime.fromtimestamp(timestamp).astimezone().isoformat()
+        elif ' ' in timestamp:
+            timestamp = timestamp.replace('/','-')
+            dt_string = "2020-12-18 3:11:09"
+            # format of incoming ts
+            format = "%Y-%m-%d %H:%M:%S"
+            # convert to datetime obj
+            timestamp = datetime.strptime(dt_string, format)
+            # convert to iso format
+            timestamp = timestamp.astimezone().isoformat()
+        return timestamp
 
     def add_to_log_folder(self, data):
         # If logs folder is enabled (using -l), write alerts in the folder as well
@@ -595,11 +597,11 @@ class EvidenceProcess(multiprocessing.Process):
                      'ID': str(uuid4()),
                      'EventTime': flow_datetime.replace(' ','T')+'Z',
                      'DetectTime': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ'),
-                     'Category': category,
+                     'Category': [category],
                      'Confidence': confidence,
                      'Note' : description,
                      'Source': [{
-                         'IP4': srcip,
+                         'IP4': [srcip],
                         }]
                      }
 
@@ -609,7 +611,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         # some evidence have a dst ip
         if 'dstip' in type_detection or 'dip' in type_detection:
-            IDEA_dict.update({'Target': [{'IP4': detection_info}] })
+            IDEA_dict.update({'Target': [{'IP4': [detection_info]}] })
             # try to extract the hostname/SNI/rDNS of the dstip form the description if available
             hostname = False
             try:
@@ -641,15 +643,6 @@ class EvidenceProcess(multiprocessing.Process):
                 ]
             })
 
-        # todo when exporting to warden server, this should be added
-        #      "Node": [
-       #    {
-       #       "Name": "cz.cesnet.kippo-honey",
-       #       "Type": ["Protocol", "Honeypot"],
-       #       "SW": ["Kippo"],
-       #       "AggrWin": "00:05:00"
-       #    }
-       # ]
         return IDEA_dict
 
     def run(self):
