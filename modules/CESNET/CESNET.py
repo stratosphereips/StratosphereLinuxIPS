@@ -86,36 +86,45 @@ class Module(Module, multiprocessing.Process):
 
 
 
-    def export_alerts(self):
+    def export_alerts(self, wclient):
+
+        # [1] read all alerts from alerts.json
         alerts_path = os.path.join(self.output_dir, 'alerts.json')
+        # this will contain a list of dicts, each dict is an alert in the IDEA format
+        # and each dict will contain node information
+        alerts_list = []
+
+        # wait until alerts.json is populated
+        time.sleep(10) #todo use push_Delay
+
         # Get the data that we want to send
-        while True:
-            try:
-                with open(alerts_path, 'r') as f:
-                    line = f.readline()
-                    json_alert  = ''
-                    while line not in ('\n',''):
-                        json_alert += line
-                        if json_alert.endswith('}\n'):
-                            # reached the end of 1 alert
-                            # convert all single quotes to double quotes to be able to convert to json
-                            json_alert = json_alert.replace("'",'"')
-                            json_alert = json.loads(json_alert)
-                              # todo when exporting to warden server, this should be added
-                            #      "Node": [
-                           #    {
-                           #       "Name": "cz.cesnet.kippo-honey",
-                           #       "Type": ["Protocol", "Honeypot"],
-                           #       "SW": ["Kippo"],
-                           #       "AggrWin": "00:05:00"
-                           #    }
-                           # ]
-                            return True
-                        line = f.readline()
-            except FileNotFoundError:
-                # no alerts.json yet, wail 10 secs and try again
-                time.sleep(10)
-                continue
+        with open(alerts_path, 'r') as f:
+            line = f.readline()
+            alert  = ''
+            while line not in ('\n',''):
+                alert += line
+
+
+                if line.endswith('}\n'):
+                    # reached the end of 1 alert
+                    # convert all single quotes to double quotes to be able to convert to json
+                    alert = alert.replace("'",'"')
+                    # convert to dict to be able to add node name
+                    json_alert = json.loads(alert)
+                    # add Node info to the alert
+                    json_alert.update({"Node": self.node_info})
+
+                    alerts_list.append(json_alert)
+                    alert = ''
+
+                # read thhe next alert
+                line = f.readline()
+
+
+        # [2] Upload to warden server
+        self.print(f"Uploading {len(alerts_list)} events to warden server.")
+        ret = wclient.sendEvents(alerts_list)
+        self.print(ret)
 
 
     def run(self):
@@ -138,8 +147,11 @@ class Module(Module, multiprocessing.Process):
         info = wclient.getInfo()
         self.print(info, 0, 1)
 
+        self.node_info = [{
+            "Name": wclient.name,
+            "Type": ["IDS/IPS"],
+            "SW": ['Slips']
+        }]
+
         if 'yes' in self.send_to_warden:
-            self.export_alerts()
-
-
-
+            self.export_alerts(wclient)
