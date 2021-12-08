@@ -777,7 +777,7 @@ class EvidenceProcess(multiprocessing.Process):
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # now that this evidence is being printed, it's no longer evidence, it's an alert
                                 alert_to_print = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
-                                human_readable_datetime = datetime.strptime(flow_datetime[:flow_datetime.index('+')], '%Y-%m-%dT%H:%M:%S.%f').strftime("%Y/%m/%d %H:%M:%S")
+                                human_readable_datetime = datetime.strptime(flow_datetime, '%Y-%m-%dT%H:%M:%S.%f%z').strftime("%Y/%m/%d %H:%M:%S")
                                 self.print(f'{Fore.RED} {human_readable_datetime}: {alert_to_print}{Style.RESET_ALL}', 1, 0)
 
                                 # Add to log files that this srcip is being blocked
@@ -789,7 +789,9 @@ class EvidenceProcess(multiprocessing.Process):
                                                 } #todo this needs to bee idea too
 
                                 self.addDataToLogFile(blocked_srcip_to_log)
-                                self.addDataToJSONFile(blocked_srcip_dict)
+                                # alerts.json should only contain alerts in idea format,
+                                # blocked srcips should only be printed in alerts.log
+                                # self.addDataToJSONFile(blocked_srcip_dict)
                                 self.add_to_log_folder(blocked_srcip_dict)
 
                                 if self.popup_alerts:
