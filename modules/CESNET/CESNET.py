@@ -132,7 +132,8 @@ class Module(Module, multiprocessing.Process):
         #group = ['cz.tul.ward.kippo','cz.vsb.buldog.kippo', 'cz.zcu.civ.afrodita','cz.vutbr.net.bee.hpscan']
         group = []
         nogroup = []
-        #todo how many event to poll?
+        #todo how many events to poll?
+        self.print(f"Getting 10 events to warden server.")
         ret = wclient.getEvents(count=10, cat=cat, nocat=nocat, tag=tag, notag=notag, group=group, nogroup=nogroup)
         self.print(f"Got {len(ret)} events")
 
@@ -165,13 +166,35 @@ class Module(Module, multiprocessing.Process):
 
         while True:
             try:
-                now = time.time()
-                if 'yes' in self.send_to_warden:
+                message = self.c1.get_message(timeout=self.timeout)
+                # Check that the message is for you. Probably unnecessary...
+                if message and message['data'] == 'stop_process':
+                    # If running on a file not an interface,
+                    # slips will push as soon as it finishes the analysis.
+                    if 'yes' in self.send_to_warden:
+                        #todo the module is being killed and doesnt have enough time to export !!
+                        self.export_alerts(wclient)
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
+                    return True
+
+                if 'yes' in self.receive_from_warden:
+                    last_update = __database__.get_last_warden_poll_time()
+                    now = time.time()
+                    # did we wait the poll_delay period since last poll?
+                    if last_update + self.poll_delay < now:
+                        self.import_alerts(wclient)
+                        # set last poll time to now
+                        __database__.set_last_warden_poll_time(now)
+
+                # in case of an interface, push every push_delay time
+                if 'yes' in self.send_to_warden and '-i' in sys.argv :
                     last_update = __database__.get_last_warden_push_time()
 
                     # first push should be push_delay after slips starts (for example 1h after starting)
                     # so that slips has enough time to generate alerts
                     start_time  = float(__database__.get_slips_start_time().strftime('%s'))
+                    now = time.time()
                     first_push = now >= start_time + self.push_delay
 
                     # did we wait the push_delay period since last update?
@@ -179,18 +202,8 @@ class Module(Module, multiprocessing.Process):
 
                     if first_push and push_period_passed:
                         self.export_alerts(wclient)
-                         # set last push time to now
+                        # set last push time to now
                         __database__.set_last_warden_push_time(now)
-
-                if 'yes' in self.receive_from_warden:
-                    last_update = __database__.get_last_warden_poll_time()
-
-                    # did we wait the poll_delay period since last poll?
-                    if last_update + self.poll_delay < now:
-                        self.import_alerts(wclient)
-
-                        # set last poll time to now
-                        __database__.set_last_warden_poll_time(now)
 
                     # start the module again when the min of the delays has passed
                     time.sleep(min(self.push_delay, self.poll_delay))
