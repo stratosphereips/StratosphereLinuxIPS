@@ -777,7 +777,13 @@ class EvidenceProcess(multiprocessing.Process):
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # now that this evidence is being printed, it's no longer evidence, it's an alert
                                 alert_to_print = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
-                                human_readable_datetime = datetime.strptime(flow_datetime, '%Y-%m-%dT%H:%M:%S.%f%z').strftime("%Y/%m/%d %H:%M:%S")
+                                if '.' in flow_datetime:
+                                    format = '%Y-%m-%dT%H:%M:%S.%f%z'
+                                else:
+                                    # e.g  2020-12-18T03:11:09+02:00
+                                    format = '%Y-%m-%dT%H:%M:%S%z'
+                                human_readable_datetime = datetime.strptime(flow_datetime, format).strftime("%Y/%m/%d %H:%M:%S")
+
                                 self.print(f'{Fore.RED} {human_readable_datetime}: {alert_to_print}{Style.RESET_ALL}', 1, 0)
 
                                 # Add to log files that this srcip is being blocked
