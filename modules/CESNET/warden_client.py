@@ -346,7 +346,7 @@ class Client(object):
             kwargs["secret"] = self.secret
 
         if kwargs:
-            for k in kwargs.keys():
+            for k in list(kwargs.keys()):
                 if kwargs[k] is None:
                     del kwargs[k]
             argurl = "?" + urlencode(kwargs, doseq=True)
