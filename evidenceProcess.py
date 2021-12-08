@@ -603,13 +603,28 @@ class EvidenceProcess(multiprocessing.Process):
                      'Source': [{}]
                      }
 
+        # is the srcip ipv4/ipv6 or mac?
+        if validators.ipv4(srcip):
+            IDEA_dict['Source'][0].update({'IP4': [srcip]})
+        elif validators.ipv6(srcip):
+            IDEA_dict['Source'][0].update({'IP6': [srcip]})
+        elif validators.mac_address(srcip):
+            IDEA_dict['Source'][0].update({'MAC': [srcip]})
+
         # update the srcip description if specified in the evidence
         if source_target_tag:
             IDEA_dict['Source'][0].update({'Type': [source_target_tag] })
 
         # some evidence have a dst ip
         if 'dstip' in type_detection or 'dip' in type_detection:
-            IDEA_dict.update({'Target': [{'IP4': [detection_info]}] })
+            # is the dstip ipv4/ipv6 or mac?
+            if validators.ipv4(detection_info):
+                IDEA_dict['Target'][0].update({'IP4': [detection_info]})
+            elif validators.ipv6(detection_info):
+                IDEA_dict['Target'][0].update({'IP6': [detection_info]})
+            elif validators.mac_address(detection_info):
+                IDEA_dict['Target'][0].update({'MAC': [detection_info]})
+
             # try to extract the hostname/SNI/rDNS of the dstip form the description if available
             hostname = False
             try:
