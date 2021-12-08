@@ -619,11 +619,11 @@ class EvidenceProcess(multiprocessing.Process):
         if 'dstip' in type_detection or 'dip' in type_detection:
             # is the dstip ipv4/ipv6 or mac?
             if validators.ipv4(detection_info):
-                IDEA_dict['Target'][0].update({'IP4': [detection_info]})
+                IDEA_dict['Target'] = [{'IP4': [detection_info]}]
             elif validators.ipv6(detection_info):
-                IDEA_dict['Target'][0].update({'IP6': [detection_info]})
+                IDEA_dict['Target'] = [{'IP6': [detection_info]}]
             elif validators.mac_address(detection_info):
-                IDEA_dict['Target'][0].update({'MAC': [detection_info]})
+                IDEA_dict['Target'] = [{'MAC': [detection_info]}]
 
             # try to extract the hostname/SNI/rDNS of the dstip form the description if available
             hostname = False
