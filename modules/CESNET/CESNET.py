@@ -73,10 +73,10 @@ class Module(Module, multiprocessing.Process):
         if 'yes' in self.receive_from_warden:
             # how often should we get alerts from the server?
             try:
-                self.receive_delay = int(self.config.get('CESNET', 'receive_delay'))
+                self.poll_delay = int(self.config.get('CESNET', 'receive_delay'))
             except ValueError:
                 # By default push every 1 day
-                self.receive_delay = 86400
+                self.poll_delay = 86400
 
         self.configuration_file = self.config.get('CESNET', 'configuration_file')
         if not os.path.exists(self.configuration_file):
@@ -151,14 +151,14 @@ class Module(Module, multiprocessing.Process):
 
         while True:
             try:
+                now = time.time()
                 if 'yes' in self.send_to_warden:
-                    now = time.time()
                     last_update = __database__.get_last_warden_push_time()
 
                     # first push should be push_delay after slips starts (for example 1h after starting)
                     # so that slips has enough time to generate alerts
                     start_time  = float(__database__.get_slips_start_time().strftime('%s'))
-                    first_push = now >= start_time+self.push_delay
+                    first_push = now >= start_time + self.push_delay
 
                     # did we wait the push_delay period since last update?
                     push_period_passed = last_update + self.push_delay < now
@@ -169,17 +169,17 @@ class Module(Module, multiprocessing.Process):
                         __database__.set_last_warden_push_time(now)
 
                 if 'yes' in self.receive_from_warden:
-                    last_update = __database__.get_last_warden_pull_time()
+                    last_update = __database__.get_last_warden_poll_time()
 
-                    # did we wait the pull_delay period since last pull?
-                    if last_update + self.pull_delay < now:
+                    # did we wait the poll_delay period since last poll?
+                    if last_update + self.poll_delay < now:
                         self.import_alerts(wclient)
 
-                        # set last pull time to now
-                        __database__.set_last_warden_pull_time(now)
+                        # set last poll time to now
+                        __database__.set_last_warden_poll_time(now)
 
                     # start the module again when the min of the delays has passed
-                    time.sleep(min(self.push_delay, self.receive_delay))
+                    time.sleep(min(self.push_delay, self.poll_delay))
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it

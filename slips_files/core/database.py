@@ -2560,11 +2560,11 @@ class Database(object):
         """
         self.r.hset('Warden','push',time)
 
-    def set_last_warden_pull_time(self, time):
+    def set_last_warden_poll_time(self, time):
         """
         :param time: epoch
         """
-        self.r.hset('Warden','pull',time)
+        self.r.hset('Warden','poll',time)
 
     def get_last_warden_push_time(self):
         """
@@ -2577,11 +2577,11 @@ class Database(object):
             time = float('-inf')
         return time
 
-    def get_last_warden_pull_time(self):
+    def get_last_warden_poll_time(self):
         """
-        returns epoch time of last pull
+        returns epoch time of last poll
         """
-        time = self.r.hget('Warden','pull')
+        time = self.r.hget('Warden','poll')
         if time:
             time = float(time)
         else:
