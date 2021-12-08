@@ -18,7 +18,7 @@
 import multiprocessing
 from slips_files.core.database import __database__
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 import configparser
 from os import path
 from colorama import Fore, Style
@@ -34,7 +34,7 @@ import os
 import psutil
 import pwd
 from uuid import uuid4
-import pprint
+import validators
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -595,19 +595,17 @@ class EvidenceProcess(multiprocessing.Process):
         """
         IDEA_dict = {'Format': 'IDEA0',
                      'ID': str(uuid4()),
-                     'EventTime': flow_datetime.replace(' ','T')+'Z',
-                     'DetectTime': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ'),
+                     'DetectTime': flow_datetime,
+                     'EventTime': datetime.now(timezone.utc).isoformat(),
                      'Category': [category],
                      'Confidence': confidence,
                      'Note' : description,
-                     'Source': [{
-                         'IP4': [srcip],
-                        }]
+                     'Source': [{}]
                      }
 
         # update the srcip description if specified in the evidence
         if source_target_tag:
-            IDEA_dict['Source'][0].update({'Type': source_target_tag })
+            IDEA_dict['Source'][0].update({'Type': [source_target_tag] })
 
         # some evidence have a dst ip
         if 'dstip' in type_detection or 'dip' in type_detection:
@@ -626,7 +624,7 @@ class EvidenceProcess(multiprocessing.Process):
                 IDEA_dict['Target'][0].update({'Hostname': hostname})
             # update the dstip description if specified in the evidence
             if source_target_tag:
-                IDEA_dict['Target'][0].update({'Type': source_target_tag })
+                IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
 
         # only evidence of type scanning have conn_count
         if conn_count: IDEA_dict.update({'ConnCount': conn_count})
@@ -764,7 +762,8 @@ class EvidenceProcess(multiprocessing.Process):
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # now that this evidence is being printed, it's no longer evidence, it's an alert
                                 alert_to_print = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
-                                self.print(f'{Fore.RED} {flow_datetime}: {alert_to_print}{Style.RESET_ALL}', 1, 0)
+                                human_readable_datetime = datetime.strptime(flow_datetime[:flow_datetime.index('+')], '%Y-%m-%dT%H:%M:%S.%f').strftime("%Y/%m/%d %H:%M:%S")
+                                self.print(f'{Fore.RED} {human_readable_datetime}: {alert_to_print}{Style.RESET_ALL}', 1, 0)
 
                                 # Add to log files that this srcip is being blocked
                                 blocked_srcip_to_log = self.format_blocked_srcip_evidence(profileid, twid, flow_datetime)
