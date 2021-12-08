@@ -14,6 +14,8 @@
 		- Read RiskIQ email and API key from modules/RiskIQ/credentials instead of the configuration file.
 		- Now log files are disabled by default, use -l or set create_log_files to yes in slips.conf for enabling them. 
 		- Support commenting TI files in slips.conf: when TI files are commented using ; in slips.conf, they are completely removed from our database.
+		- Now slips generates alerts in IDEA format by default in alerts.json
+		- Support importing and exporting alerts to warden servers. (CESNET sharing module)
 -0.8.1
 	-Slips
 		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
