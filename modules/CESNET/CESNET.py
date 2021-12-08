@@ -84,8 +84,6 @@ class Module(Module, multiprocessing.Process):
             self.stop_module = True
 
 
-
-
     def export_alerts(self, wclient):
 
         # [1] read all alerts from alerts.json
@@ -94,31 +92,27 @@ class Module(Module, multiprocessing.Process):
         # and each dict will contain node information
         alerts_list = []
 
-        # wait until alerts.json is populated
-        time.sleep(10) #todo use push_Delay
-
+        alert= ''
         # Get the data that we want to send
         with open(alerts_path, 'r') as f:
-            line = f.readline()
-            alert  = ''
-            while line not in ('\n',''):
+            for line in f:
                 alert += line
-
-
                 if line.endswith('}\n'):
                     # reached the end of 1 alert
                     # convert all single quotes to double quotes to be able to convert to json
                     alert = alert.replace("'",'"')
+
                     # convert to dict to be able to add node name
                     json_alert = json.loads(alert)
                     # add Node info to the alert
                     json_alert.update({"Node": self.node_info})
 
+                    #todo for now we can only send test category
+                    json_alert.update({"Category": ['Test']})
+
                     alerts_list.append(json_alert)
                     alert = ''
 
-                # read thhe next alert
-                line = f.readline()
 
 
         # [2] Upload to warden server
@@ -149,9 +143,42 @@ class Module(Module, multiprocessing.Process):
 
         self.node_info = [{
             "Name": wclient.name,
-            "Type": ["IDS/IPS"],
+            "Type": ["IPS"],
             "SW": ['Slips']
         }]
 
-        if 'yes' in self.send_to_warden:
-            self.export_alerts(wclient)
+        while True:
+            try:
+                now = time.time()
+                last_update = __database__.get_last_warden_push_time()
+                if not last_update:
+                    # first time pushing , set last push time to now
+                    __database__.set_last_warden_push_time(now)
+                    last_update = float('-inf')
+
+                # first push should be push_delay after slips starts (for example 1h after starting)
+                # so that slips has enough time to generate alerts
+                start_time  = float(__database__.get_slips_start_time().strftime('%s'))
+                first_push = now >= start_time+self.push_delay
+
+                # did we wait the push_delay period since last update?
+                push_period_passed = last_update + self.push_delay < now
+
+                if 'yes' in self.send_to_warden and first_push and push_period_passed:
+                    self.export_alerts(wclient)
+
+                # start the module again when the min of the delays has passed
+                time.sleep(min(self.push_delay, self.receive_delay))
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
+
+
+
