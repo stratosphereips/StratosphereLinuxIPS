@@ -599,7 +599,7 @@ class EvidenceProcess(multiprocessing.Process):
                      'EventTime': datetime.now(timezone.utc).isoformat(),
                      'Category': [category],
                      'Confidence': confidence,
-                     'Note' : description,
+                     'Note' : description.replace('"','\"').replace("'",'\''),
                      'Source': [{}]
                      }
 
@@ -636,7 +636,7 @@ class EvidenceProcess(multiprocessing.Process):
             except IndexError:
                 pass
             if hostname:
-                IDEA_dict['Target'][0].update({'Hostname': hostname})
+                IDEA_dict['Target'][0].update({'Hostname': [hostname]})
             # update the dstip description if specified in the evidence
             if source_target_tag:
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
