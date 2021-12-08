@@ -55,3 +55,18 @@ The format of ```warden.conf``` should be the following:
        "name": "com.example.warden.test"
     }
 
+To get the key and the certificate, you need to run ```warden_apply.sh``` with you registered client_name and password.
+
+The ```name``` key is your registered warden node name. 
+
+You can change how much time to wait be before pushing alerts to warden server (in seconds). this is used when slips is running non-stop (e.g with -i )
+
+If running on a file (a PCAP, binetflow, suricata ..etc.) not an interface, slips will export alerts to server after the analysis is done slips will push as soon as it finished the analysis.
+
+By default slips will push every 1 day, you can change this by changing the ```push_delay``` value in ```slips.conf```
+    
+
+You can change how often we get alerts from warden server
+
+By default Slips receives alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
+
