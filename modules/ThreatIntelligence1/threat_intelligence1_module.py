@@ -80,7 +80,7 @@ class Module(Module, multiprocessing.Process):
 
         description = f'connection {direction} blacklisted IP {ip}{dns_resolution}. Source: {ip_info["source"]}. Description: {ip_info["description"]}'
 
-        tags = ip_info.get('tags',False)
+        tags = ip_info.get('tags',False).replace("[",'').replace(']','').replace("'",'')
         if tags:
             description += f' tags={tags}'
             source_target_tag = tags.capitalize()
@@ -118,7 +118,7 @@ class Module(Module, multiprocessing.Process):
                 raise ValueError
         except ValueError:
             threat_level =  50
-        tags = domain_info.get('tags', False)
+        tags = domain_info.get('tags', False).replace("[",'').replace(']','').replace("'",'')
         if tags:
             source_target_tag = tags.capitalize()
         else:
