@@ -2554,4 +2554,32 @@ class Database(object):
                 # this entry has the given feed as source, delete it
                 self.rcache.hdel('IoC_ips', ip)
 
+    def set_last_warden_push_time(self, time):
+        """
+        :param time: epoch
+        """
+        self.r.hset('Warden','push',time)
+
+    def set_last_warden_pull_time(self, time):
+        """
+        :param time: epoch
+        """
+        self.r.hset('Warden','pull',time)
+
+    def get_last_warden_push_time(self):
+        """
+        returns epoch time of last push
+        """
+        time =  self.r.hget('Warden','push')
+        if time:
+            return float(time)
+
+    def get_last_warden_pull_time(self):
+        """
+        returns epoch time of last pull
+        """
+        time = self.r.hget('Warden','pull')
+        if time:
+            return float(time)
+
 __database__ = Database()
