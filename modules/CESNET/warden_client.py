@@ -26,7 +26,6 @@ class HTTPSConnection(http.client.HTTPSConnection):
     def __init__(self, host, **kwargs):
         self.ciphers = kwargs.pop('ciphers',None)
         self.ca_certs = kwargs.pop('ca_certs',None)
-        self.ssl_version = kwargs.pop('ssl_version',ssl.PROTOCOL_SSLv23)
 
         http.client.HTTPSConnection.__init__(self,host,**kwargs)
 
@@ -42,8 +41,7 @@ class HTTPSConnection(http.client.HTTPSConnection):
             keyfile = self.key_file,
             certfile = self.cert_file,
             ca_certs = self.ca_certs,
-            cert_reqs = ssl.CERT_REQUIRED if self.ca_certs else ssl.CERT_NONE,
-            ssl_version = self.ssl_version)
+            cert_reqs = ssl.CERT_REQUIRED if self.ca_certs else ssl.CERT_NONE)
 
 
 
@@ -242,8 +240,6 @@ class Client(object):
         self.pause = int(pause)
 
         self.ciphers = 'TLS_RSA_WITH_AES_256_CBC_SHA'
-        self.sslversion = ssl.PROTOCOL_TLSv1
-
         self.getInfo()  # Call to align limits with server opinion
 
 
@@ -324,8 +320,7 @@ class Client(object):
                     cert_file = self.certfile,
                     timeout = self.timeout,
                     ciphers = self.ciphers,
-                    ca_certs = self.cafile,
-                    ssl_version = self.sslversion)
+                    ca_certs = self.cafile)
             elif self.url.scheme=="http":
                 conn = http.client.HTTPConnection(self.url.netloc, timeout = self.timeout)
             else:
@@ -338,8 +333,7 @@ class Client(object):
                     key_file=self.keyfile,
                     cert_file=self.certfile,
                     cafile=self.cafile,
-                    ciphers=self.ciphers,
-                    ssl_version=self.sslversion)
+                    ciphers=self.ciphers)
 
         return conn
 
