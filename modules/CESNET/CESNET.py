@@ -113,15 +113,29 @@ class Module(Module, multiprocessing.Process):
                     alerts_list.append(json_alert)
                     alert = ''
 
-
-
         # [2] Upload to warden server
         self.print(f"Uploading {len(alerts_list)} events to warden server.")
         ret = wclient.sendEvents(alerts_list)
         self.print(ret)
 
     def import_alerts(self, wclient):
-        pass
+        # cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
+        # 'Fraud.Scam', 'Malware.Virus', 'Information', 'Fraud.Scam']
+        #todo we're only allowed to poll test category for now
+        cat = ['Test']
+        nocat = []
+
+        #tag = ['Log', 'Data','Flow', 'Datagram']
+        tag = []
+        notag = []
+
+        #group = ['cz.tul.ward.kippo','cz.vsb.buldog.kippo', 'cz.zcu.civ.afrodita','cz.vutbr.net.bee.hpscan']
+        group = []
+        nogroup = []
+        #todo how many event to poll?
+        ret = wclient.getEvents(count=10, cat=cat, nocat=nocat, tag=tag, notag=notag, group=group, nogroup=nogroup)
+        self.print(f"Got {len(ret)} events")
+
 
     def run(self):
         # Stop module if the configuration file is invalid or not found
