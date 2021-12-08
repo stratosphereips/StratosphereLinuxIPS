@@ -120,6 +120,8 @@ class Module(Module, multiprocessing.Process):
         ret = wclient.sendEvents(alerts_list)
         self.print(ret)
 
+    def import_alerts(self, wclient):
+        pass
 
     def run(self):
         # Stop module if the configuration file is invalid or not found
@@ -149,26 +151,36 @@ class Module(Module, multiprocessing.Process):
 
         while True:
             try:
-                now = time.time()
-                last_update = __database__.get_last_warden_push_time()
-                if not last_update:
-                    # first time pushing , set last push time to now
-                    __database__.set_last_warden_push_time(now)
-                    last_update = float('-inf')
+                if 'yes' in self.send_to_warden:
+                    now = time.time()
+                    last_update = __database__.get_last_warden_push_time()
 
-                # first push should be push_delay after slips starts (for example 1h after starting)
-                # so that slips has enough time to generate alerts
-                start_time  = float(__database__.get_slips_start_time().strftime('%s'))
-                first_push = now >= start_time+self.push_delay
+                    # first push should be push_delay after slips starts (for example 1h after starting)
+                    # so that slips has enough time to generate alerts
+                    start_time  = float(__database__.get_slips_start_time().strftime('%s'))
+                    first_push = now >= start_time+self.push_delay
 
-                # did we wait the push_delay period since last update?
-                push_period_passed = last_update + self.push_delay < now
+                    # did we wait the push_delay period since last update?
+                    push_period_passed = last_update + self.push_delay < now
 
-                if 'yes' in self.send_to_warden and first_push and push_period_passed:
-                    self.export_alerts(wclient)
+                    if first_push and push_period_passed:
+                        self.export_alerts(wclient)
+                         # set last push time to now
+                        __database__.set_last_warden_push_time(now)
 
-                # start the module again when the min of the delays has passed
-                time.sleep(min(self.push_delay, self.receive_delay))
+                if 'yes' in self.receive_from_warden:
+                    last_update = __database__.get_last_warden_pull_time()
+
+                    # did we wait the pull_delay period since last pull?
+                    if last_update + self.pull_delay < now:
+                        self.import_alerts(wclient)
+
+                        # set last pull time to now
+                        __database__.set_last_warden_pull_time(now)
+
+                    # start the module again when the min of the delays has passed
+                    time.sleep(min(self.push_delay, self.receive_delay))
+
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
