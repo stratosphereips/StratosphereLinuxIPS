@@ -172,6 +172,11 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
+    <td>CESNET</td>
+    <td>Send and receive alerts from warden servers.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>RiskIQ</td>
     <td>Module to get different information from RiskIQ.</td>
     <td>✅</td>

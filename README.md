@@ -30,6 +30,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | VirusTotal | module to lookup IP address on VirusTotal |✅|
 | flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
 | IP_Info | module to find Geolocation, ASN, RDNS info about IPs and MAC vendors  |✅|
+| CESNET | Send and receive alerts from warden servers |✅|
 | RiskIQ | Module to get different information from RiskIQ  |✅|
 | ARP | module to check for ARP attacks in ARP traffic  |✅|
 | ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|

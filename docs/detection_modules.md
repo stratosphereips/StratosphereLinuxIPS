@@ -50,6 +50,11 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
+    <td>CESNET</td>
+    <td>Send and receive alerts from warden servers.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>RiskIQ</td>
     <td>Finds information from RiskIQ, such as passive DNS for domains and downloads the Threat Intelligence feed.</td>
     <td>✅</td>
