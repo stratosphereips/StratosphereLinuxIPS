@@ -69,7 +69,7 @@ class Module(Module, multiprocessing.Process):
             threat_level =  80
 
         confidence = 1
-        category = 'Attempt.Exploit'
+        category = 'Anomaly.Traffic'
         dns_resolution = __database__.get_dns_resolution(ip)
         dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
 
@@ -101,7 +101,7 @@ class Module(Module, multiprocessing.Process):
 
         type_detection = 'dstdomain'
         detection_info = domain
-        category = 'Attempt.Exploit'
+        category = 'Anomaly.Traffic'
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
         # in case of finding a subdomain in our blacklists
         # print that in the description of the alert and change the confidence accordingly
