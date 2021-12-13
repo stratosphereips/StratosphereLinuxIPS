@@ -26,6 +26,11 @@ __pycache__/
 .pytest_cache/
 *.pyc
 
+# CESNET module logs
+*.log
+
+node_modules/
+
 # redis backups
 redis_backups/*.rdb
 
