@@ -6,8 +6,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Blocking module requirement to avoid using sudo
 ENV IS_IN_A_DOCKER_CONTAINER True
 
-# destionation dir for slips
-ENV SLIPS_DIR /slips
+# destionation dir for slips inside the container
+ENV SLIPS_DIR /Slips
 
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
@@ -52,7 +52,7 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
   && make install
 
 
-# Download and unpack Slips.
+# Copy slips from the current directory into slips dir inside the container
 COPY . ${SLIPS_DIR}/
 RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 
