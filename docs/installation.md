@@ -10,7 +10,7 @@ Slips can be run inside a Docker. There is a prepared docker image with Slips av
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
-	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+	docker run -it --rm --net=host stratosphereips/slips:latest
 	./slips.py -c slips.conf -r dataset/myfile.pcap
 
 ### Building the docker with Slips from the Dockerfile
@@ -23,7 +23,7 @@ If you cloned Slips in '~/code/StratosphereLinuxIPS', then you can build the Doc
 
 	cd ~/code/StratosphereLinuxIPS/docker
 	docker build --no-cache -t slips -f Dockerfile .
-	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
+	docker run -it --rm --net=host slips
 	./slips.py -c slips.conf -f dataset/test3.binetflow
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
