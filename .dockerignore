@@ -14,7 +14,7 @@ Datasett/
 ENV/*
 
 # compiled yara rules
-modules/leak_detector/yara_rules/compiled/*
+modules/leak_detector/yara_rules/compiled/
 
 # api keys
 modules/RiskIQ/api_key_secret
@@ -28,6 +28,7 @@ __pycache__/
 
 # CESNET module logs
 *.log
+modules/CESNET/*.log
 
 node_modules/
 
