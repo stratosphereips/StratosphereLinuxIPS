@@ -1,6 +1,8 @@
 # slips generated alerts
 output/alerts.log
 output/alerts.json
+2021-*/
+2022-*/
 
 
 # zeek log files
