@@ -85,13 +85,18 @@ class Database(object):
         if not hasattr(self, 'r'):
             try:
                 # db 0 changes everytime we run slips
+                # set health_check_interval to avoid redis ConnectionReset errors:
+                # if the connection is idle for more than 30 seconds,
+                # a round trip PING/PONG will be attempted before next redis cmd.
+                # If the PING/PONG fails, the connection will reestablished
                 self.r = redis.StrictRedis(host='localhost',
                                            port=6379,
                                            db=0,
                                            charset="utf-8",
                                            socket_keepalive=True,
                                            retry_on_timeout=True,
-                                           decode_responses=True) #password='password')
+                                           decode_responses=True,
+                                           health_check_interval=30)#password='password')
                 # db 1 is cache, delete it using -cc flag
                 self.rcache = redis.StrictRedis(host='localhost',
                                                 port=6379,
@@ -99,7 +104,8 @@ class Database(object):
                                                 charset="utf-8",
                                                 socket_keepalive=True,
                                                 retry_on_timeout=True,
-                                                decode_responses=True) #password='password')
+                                                decode_responses=True,
+                                                health_check_interval=30)#password='password')
                 if self.deletePrevdb:
                     self.r.flushdb()
             except redis.exceptions.ConnectionError:
