@@ -39,7 +39,7 @@ class Module(Module, multiprocessing.Process):
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
         self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         # Wait a little so we give time to have something to print
-        self.timeout = None
+        self.timeout = 0.0000001
 
     def read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -56,7 +56,7 @@ class Module(Module, multiprocessing.Process):
         Funciton to read our special file called 'services.csv' and load the known ports from it into the database
         """
         try:
-            f = open('modules/timeline/services.csv')
+            f = open('slips_files/ports_info/services.csv')
             for line in f:
                 name = line.split(',')[0]
                 port = line.split(',')[1]
@@ -351,12 +351,14 @@ class Module(Module, multiprocessing.Process):
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message['data'] == 'stop_process':
+                # if timewindows are not updated for a long time (see at logsProcess.py),
+                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                elif message['channel'] == 'new_flow' and type(message['data']) != int :
+
+                if __database__.is_msg_intended_for(message, 'new_flow'):
                     mdata = message['data']
                     # Convert from json to dict
                     mdata = json.loads(mdata)

@@ -425,13 +425,14 @@ class LogsProcess(multiprocessing.Process):
                     evidence = json.loads(evidence)
                     self.addDataToFile(profilefolder + '/' + twlog, 'Evidence of detections in this TW:',
                                        file_mode='a+', data_type='text')
-                    for key in evidence:
-                        key_json = json.loads(key)
-                        key_values = ':'.join(str(key_json.values()))
+                    for key, evidence_details in evidence.items():
+                        evidence_details = json.loads(evidence_details)
+                        # example of a key  'dport:32432:PortScanType1'
+                        key = f'{evidence_details["type_detection"]}:{evidence_details["detection_info"]}:{evidence_details["type_evidence"]}'
                         self.addDataToFile(profilefolder + '/' + twlog,
                                            '\tEvidence Description: {}. Confidence: {}. Threat Level: {} (key:{})'.format(
-                                               evidence[key].get('description'), evidence[key].get('confidence'),
-                                               evidence[key].get('threat_level'), key_values,
+                                               evidence_details.get('description'), evidence_details.get('confidence'),
+                                               evidence_details.get('threat_level'), key,
                                                file_mode='a+', data_type='text'))
 
                 # Add free line between tuple info and information about ports and IP.
@@ -510,9 +511,9 @@ class LogsProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            self.outputqueue.put('01|logs|\t[Logs] Error in process_global_data in LogsProcess')
-            self.outputqueue.put('01|logs|\t[Logs] {}'.format(type(inst)))
-            self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))
+            self.outputqueue.put('01|[Logs] Error in process_global_data in LogsProcess')
+            self.outputqueue.put(f'01|[Logs] {type(inst)}')
+            self.outputqueue.put('01|[Logs] {}'.format(inst))
             sys.exit(1)
 
 

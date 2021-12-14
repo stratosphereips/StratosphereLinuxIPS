@@ -172,6 +172,11 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
+    <td>CESNET</td>
+    <td>Send and receive alerts from warden servers.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
     <td>RiskIQ</td>
     <td>Module to get different information from RiskIQ.</td>
     <td>✅</td>
@@ -182,8 +187,8 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>ARPScanDetector</td>
-    <td>module to check for ARP scans in ARP traffic</td>
+    <td>ARP</td>
+    <td>module to check for ARP attacks in ARP traffic</td>
     <td>✅</td>
   </tr>
   <tr>

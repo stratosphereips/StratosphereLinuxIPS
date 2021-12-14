@@ -1,8 +1,13 @@
+
+# Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
-import datetime
 import sys
+
+# Your imports
+import ipaddress
+import datetime
 
 # Port Scan Detector Process
 class PortScanProcess(Module, multiprocessing.Process):
@@ -32,8 +37,12 @@ class PortScanProcess(Module, multiprocessing.Process):
         # Retrieve malicious/benigh labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        self.timeout = None
+        self.timeout = 0.0000001
         self.separator = '_'
+        # The minimum amount of ips to scan horizontal scan
+        self.port_scan_minimum_dips_threshold = 6
+        # The minimum amount of ports to scan in vertical scan
+        self.port_scan_minimum_dports_threshold = 6
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -56,6 +65,18 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def check_horizontal_portscan(self, profileid, twid):
+
+        saddr = profileid.split(self.fieldseparator)[1]
+        try:
+            saddr_obj = ipaddress.ip_address(saddr)
+            if saddr=='255.255.255.255' or saddr_obj.is_multicast :
+                # don't report port scans on the broadcast or multicast addresses
+                return False
+        except ValueError:
+            # is an ipv6
+            pass
+
+
         # Get the list of dports that we connected as client using TCP not established
         direction = 'Dst'
         state = 'NotEstablished'
@@ -85,13 +106,16 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # Type of evidence
                 type_evidence = 'PortScanType2'
                 # Key
-                type_detection = 'dport'
-                detection_info = dport
+                type_detection = 'srcip'
+                srcip = profileid.split(self.fieldseparator)[1]
+                source_target_tag = 'Recon'
+                detection_info = srcip
                 # Threat level
-                threat_level = 25
+                threat_level = 0.7
+                category = 'Recon.Scanning'
                 # Compute the confidence
                 pkts_sent = 0
-                # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dips per port.
+                # We detect a scan every Threshold. So, if threshold is 3, we detect when there are 3, 6, 9, 12, etc. dips per port.
                 # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
                 key = 'dport' + ':' + dport + ':' + type_evidence
                 cache_key = profileid + ':' + twid + ':' + key
@@ -100,21 +124,25 @@ class PortScanProcess(Module, multiprocessing.Process):
                 except KeyError:
                     prev_amount_dips = 0
                 #self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
-                if amount_of_dips % 3 == 0 and prev_amount_dips < amount_of_dips:
+                if amount_of_dips % self.port_scan_minimum_dips_threshold == 0 and prev_amount_dips < amount_of_dips:
                     for dip in dstips:
                         # Get the total amount of pkts sent to the same port to all IPs
                         pkts_sent += dstips[dip]['pkts']
                     if pkts_sent > 10:
                         confidence = 1
                     else:
-                        # Between 3 and 10 pkts compute a kind of linear grow
+                        # Between threshold and 10 pkts compute a kind of linear grow
                         confidence = pkts_sent / 10.0
                     # Description
-                    description = f'new horizontal port scan to port {dport}/{protocol}. Not Established. From IP: {profileid.split(self.fieldseparator)[1]}. Tot pkts sent all IPs: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
+                    description = (f'new horizontal port scan to port {dport}/{protocol}. '
+                                   f'From {saddr} to {amount_of_dips} unique dst IPs. '
+                                   f'Tot pkts: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}')
                     uid = next(iter(dstips.values()))['uid'] # first uid in the dictionary
                     timestamp = next(iter(dstips.values()))['stime']
-                    __database__.setEvidence(type_detection, detection_info,type_evidence,
-                                             threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                    __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                             description, timestamp, category, conn_count=pkts_sent,
+                                             source_target_tag=source_target_tag,
+                                             profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                     self.print(description, 3, 0)
@@ -137,13 +165,16 @@ class PortScanProcess(Module, multiprocessing.Process):
                 amount_of_dports = len(dstports)
                 #self.print('Vertical Portscan check. Amount of dports: {}. Threshold=3'.format(amount_of_dports), 3, 0)
                 # Type of evidence
-                type_detection = 'dstip'
-                detection_info = dstip
+                type_detection = 'srcip'
+                srcip = profileid.split(self.fieldseparator)[1]
+                detection_info = srcip
                 type_evidence = 'PortScanType1'
                 # Key
                 key = 'dstip' + ':' + dstip + ':' + type_evidence
+                source_target_tag = 'Recon'
                 # Threat level
-                threat_level = 25
+                threat_level = 0.7
+                category = 'Recon.Scanning'
                 # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dports per dip.
                 # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
                 cache_key = profileid + ':' + twid + ':' + key
@@ -152,7 +183,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 except KeyError:
                     prev_amount_dports = 0
                 #self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key, prev_amount_dports, amount_of_dports))
-                if amount_of_dports % 3 == 0 and prev_amount_dports < amount_of_dports:
+                if amount_of_dports % self.port_scan_minimum_dports_threshold == 0 and prev_amount_dports < amount_of_dports:
                     # Compute the confidence
                     pkts_sent = 0
                     for dport in dstports:
@@ -161,14 +192,16 @@ class PortScanProcess(Module, multiprocessing.Process):
                     if pkts_sent > 10:
                         confidence = 1
                     else:
-                        # Between 3 and 10 pkts compute a kind of linear grow
+                        # Between threshold and 10 pkts compute a kind of linear grow
                         confidence = pkts_sent / 10.0
                     # Description
-                    description = f'new vertical port scan to IP {dstip} from {profileid.split(self.fieldseparator)[1]}. Total {amount_of_dports} dst ports of protocol {protocol}. Not Established. Tot pkts sent all ports: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
+                    description = f'new vertical port scan to IP {dstip} from {srcip}. Total {amount_of_dports} dst ports of protocol {protocol}. Not Established. Tot pkts sent all ports: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
                     uid = data[dstip]['uid']
                     timestamp = data[dstip]['stime']
-                    __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                             threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                    __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                             description, timestamp, category, conn_count=pkts_sent,
+                                             source_target_tag=source_target_tag,
+                                             profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
                     self.print(description, 3, 0)
@@ -216,16 +249,20 @@ class PortScanProcess(Module, multiprocessing.Process):
             else:
                 confidence = pkts_sent / 10.0
             threat_level = 25
+            category = 'Recon.Scanning'
             # type_detection is set to dstip even though the srcip is the one performing the scan
             # because setEvidence doesn't alert on the same key twice, so we have to send different keys to be able
-            # to generate an alert every 5,10,15,.. scans
-            type_detection = 'dstip'
+            # to generate an alert every 5,10,15,.. scans #todo test this
+            type_detection = 'srcip'
             # this is the last dip scanned
-            detection_info = dip
+            detection_info = srcip
+            source_target_tag = 'Recon'
             description = f'performing PING sweep. {scanned_dstips} different IPs scanned'
             timestamp = icmp_requests[dip]['stime']
-            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                 confidence, description, timestamp, profileid=profileid, twid=twid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                     threat_level, confidence, description,
+                                     timestamp, category, source_target_tag=source_target_tag,
+                                     conn_count=pkts_sent, profileid=profileid, twid=twid)
 
             # cache the amount of dips to make sure we don't detect
             # the same amount of dips twice.
@@ -260,44 +297,38 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def run(self):
         while True:
-            # try:
-            # Wait for a message from the channel that a TW was modified
-            message = self.c1.get_message(timeout=self.timeout)
-            #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
-            if message['data'] == 'stop_process':
-                # Confirm that the module is done processing
-                __database__.publish('finished_modules', self.name)
-                return True
-            elif message['channel'] == 'tw_modified' and type(message['data'])!=int:
-                # Get the profileid and twid
-                try:
-                    profileid = message['data'].split(':')[0]
-                    twid = message['data'].split(':')[1]
-                    # Start of the port scan detection
-                    self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 3, 0)
-                    # For port scan detection, we will measure different things:
+            try:
+                # Wait for a message from the channel that a TW was modified
+                message = self.c1.get_message(timeout=self.timeout)
+                #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
+                if message and  message['data'] == 'stop_process':
+                    # Confirm that the module is done processing
+                    __database__.publish('finished_modules', self.name)
+                    return True
 
-                    # 1. Vertical port scan:
-                    # (single IP being scanned for multiple ports)
-                    # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
-                    # 2. Horizontal port scan:
-                    #  (scan against a group of IPs for a single port)
-                    # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip.
-                    # 3. Too many connections???:
-                    # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
-                    # 4. Slow port scan. Same as the others but distributed in multiple time windows
+                if __database__.is_msg_intended_for(message, 'tw_modified'):
+                    # Get the profileid and twid
+                        profileid = message['data'].split(':')[0]
+                        twid = message['data'].split(':')[1]
+                        # Start of the port scan detection
+                        self.print('Running the detection of portscans in profile {} TW {}'.format(profileid, twid), 3, 0)
+                        # For port scan detection, we will measure different things:
 
-                    # Remember that in slips all these port scans can happen for traffic going IN to an IP or going OUT from the IP.
+                        # 1. Vertical port scan:
+                        # (single IP being scanned for multiple ports)
+                        # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
+                        # 2. Horizontal port scan:
+                        #  (scan against a group of IPs for a single port)
+                        # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip.
+                        # 3. Too many connections???:
+                        # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
+                        # 4. Slow port scan. Same as the others but distributed in multiple time windows
 
-                    self.check_horizontal_portscan(profileid, twid)
-                    self.check_vertical_portscan(profileid, twid)
-                    self.check_icmp_sweep(profileid, twid)
+                        # Remember that in slips all these port scans can happen for traffic going IN to an IP or going OUT from the IP.
 
-                except KeyboardInterrupt:
-                    # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                    continue
-                # except Exception as inst:
-                #     exception_line = sys.exc_info()[2].tb_lineno
-                #     self.print(f'Error in run() line {exception_line}', 0, 1)
-                #     self.print(type(inst), 0, 1)
-                #     self.print(inst, 0, 1)
+                        self.check_horizontal_portscan(profileid, twid)
+                        self.check_vertical_portscan(profileid, twid)
+                        self.check_icmp_sweep(profileid, twid)
+            except KeyboardInterrupt:
+                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
+                continue

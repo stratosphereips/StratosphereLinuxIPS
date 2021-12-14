@@ -1,3 +1,24 @@
+-0.8.2
+	-Slips
+		- Detect gratoitous ARP
+		- Detect unsolicited ARP
+		- Detect MITM ARP attack
+		- Detect DGA
+		- Support popup notifications in Linux and mac. disabled by default. enable it by changing popup_alerts to yes in slips.conf 
+		- Add 5 new TI feeds (AmnestyTech domains)
+		- The Threat Intelligence feeds are now assigned a threat level instead of confidence value by default (user can change), so you can establish how each list impact your detection.
+		- Improve unknown ports detections. Now we don't alert for ports that appear in an FTP connection.
+		- Improve threat levels and confidence of all alerts.
+		- Add support for storing a copy of zeek files in the output directory.
+		- Add support for enabling and disabling detections in slips.conf
+		- Read RiskIQ email and API key from modules/RiskIQ/credentials instead of the configuration file.
+		- Now log files are disabled by default, use -l or set create_log_files to yes in slips.conf for enabling them. 
+		- Support commenting TI files in slips.conf: when TI files are commented using ; in slips.conf, they are completely removed from our database.
+		- Now slips generates alerts in IDEA format by default in alerts.json
+		- Support importing and exporting alerts to warden servers. (CESNET sharing module)
+		- Fix redis closing connection errors
+		- Optimize our docker image
+
 -0.8.1
 	-Slips
 		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..

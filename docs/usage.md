@@ -123,6 +123,13 @@ And then use ```./kalipso``` to view the loaded database.
 
 This feature isn't supported in docker due to problems with redis on docker.
 
+## Popup notifications
+
+Slips Support displaying popup notifications whenever there's an alert. 
+
+This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```slips.conf``` 
+
+This feature is supported in Linux and mac and not supported in docker.
 
 ## Modifying a configuration file
 
@@ -202,15 +209,24 @@ The threat intelligence module reads IoCs from local and remote files.
 
 We update the remote ones regularly. The list of remote threat intelligence files is set in the variables ```ti_files``` variable in slips.conf. You can add your own remote threat intelligence feeds in this variable. Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
 
-Each URL should be added with a confidence and a tag, the format is (url,confidence,tag) 
+Each URL should be added with a threat_level and a tag, the format is (url,threat_level,tag) 
 
 tag is which category is this feed e.g. phishing, adtrackers, etc..
 
-confidence is on a scale from 0 to 1 how confident are you that this feed has valid IOCs.
+threat_level is on a scale from 0 to 1 how malicious the IoCs in this feed are.
 
-The lower the confidence the less likely it is for Slips to alert when a malicious IP/domain is found in this feed.
+The lower the threat_level the less likely it is for Slips to alert when a malicious IP/domain is found in this feed.
 
-Be sure the format is correct and only use spaces to separate between tuples and not between urls and confidence.
+Be sure the format is:
+
+link, threat_level=0-1, tags=['tag1','tag2']
+
+TI files commented using # may be processed as they're still in our database. 
+
+Use ```;``` for commenting TI files in ```slips.conf``` instead of ```#```.
+
+Commented TI files (lines starting with ;) will be completely removed from our database.
+
 
 The remote files are installed to the path set in the ```download_path_for_local_threat_intelligence```. By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` 
 
@@ -218,10 +234,19 @@ The remote files are installed to the path set in the ```download_path_for_local
 
 Slips supports getting phishing domains from RiskIQ.
 
-You can add your your email in the configuration file in the ```RiskIQ_email``` parameter
+By default your RiskIQ email and API key should be stored in ```modules/RiskIQ/credentials```
 
-The path of the API key is specified in the ```RiskIQ_key_path``` parameter, 
-in that file there should only be the 64 character RiskIQ API key.
+the format of this file should be the following:
+
+```
+example@domain.com
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+```
+
+The hash should be your 64 character API Key.
+
+The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```slips.conf```.
+
 
 **Local files**
 
@@ -230,6 +255,21 @@ You can insert your files into the folder specified in the variable ```download_
 ### Flowalerts
 
 Slips needs a threshold to determine a connection of a long duration. By default, it is 1500 seconds, and it can be changed in the variable ```long_connection_threshold```
+
+### Enabling and disabling alerts
+
+You can configure which alerts you want to enable/disable in ```slips.conf``` 
+
+Simply add the detection you want to disable in the ```disabled_detections``` list and slips will not generate any alerts of this type.
+
+Supported detections are:
+
+
+ARPScan, ARP-ouside-localnet, UnsolicitedARP, MITM-ARP-attack, SSHSuccessful, LongConnection, MultipleReconnectionAttempts,
+ConnectionToMultiplePorts, InvalidCertificate, UnknownPort, Port0Connection, ConnectionWithoutDNS, DNSWithoutConnection,
+MaliciousJA3, DataExfiltration, SelfSignedCertificate, PortScanType1, PortScanType2, Password_Guessing, MaliciousFlow,
+SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, ICMPSweep, Command-and-Control-channels-detection,
+ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP, MaliciousDownloadedFile, DGA
 
 ### Exporting Alerts
 
@@ -279,11 +319,22 @@ If running on a file not an interface, Slips will export to server after analysi
 
 ## Logging
 
-To disable the creation of log files, there are two options:
+To enable the creation of log files, there are two options:
 1. Running Slips with ```-l``` flag. 
-2. Setting ```create_log_files``` to ```no``` in ```slips.conf```.
+2. Setting ```create_log_files``` to ```yes``` in ```slips.conf```.
+
+When logging is enabled, Slips will create a directory with the current date and create 3 summary files for each IP/profile it encounters.
+
+Summaries created contain profile data, complete timeline outgoing actions and timeline of all traffic that involves this IP.
 
 You can also change how often Slips creates log files using the ```log_report_time``` variable  in ```slips.conf```.
+
+You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
+
+You can also enable storing a copy of zeek log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes.
+
+Once slips is done, you will find a copy of your zeek files in ```<output_dir>/zeek_files/``` 
+
 
 We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
 
@@ -349,3 +400,15 @@ To test your changes to Slips, please run all the unit tests. Fromn the main fol
 ### Plug in a zeek script
 
 Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir.
+
+
+## Running Slips from python
+
+You can run Slips from python using the following script
+
+```py
+import subprocess
+command = './slips.py -f dataset/test3.binetflow -o /data/test'
+args = command.split()
+process = subprocess.run(args, stdout=subprocess.PIPE)
+```

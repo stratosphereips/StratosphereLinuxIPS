@@ -38,7 +38,7 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        self.timeout = None
+        self.timeout = 0.0000001
         # this module is only loaded when a pcap is given get the pcap path
         try:
             self.pcap = sys.argv[sys.argv.index('-f')+1]
@@ -160,9 +160,12 @@ class Module(Module, multiprocessing.Process):
                 srcip, dstip, proto, sport, dport, ts = packet_info[0],packet_info[1],packet_info[2],packet_info[3],packet_info[4],packet_info[5]
                 type_detection = 'dstip'
                 detection_info = dstip
-                type_evidence = f'{rule}by{srcip}'
-                threat_level = 0.9
+                source_target_tag = 'CC'
+                # TODO: this needs to be changed if add more rules to the rules/dir
+                type_evidence = 'NETWORK_gps_location_leaked'
+                category = 'Malware'
                 confidence = 0.9
+                threat_level = 0.9
                 description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
                 # generate a random uid
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
@@ -177,8 +180,10 @@ class Module(Module, multiprocessing.Process):
 
                     if twid:
                         twid = twid[0]
-                        __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                                 threat_level, confidence, description, ts,
+                                                 category, source_target_tag=source_target_tag,
+                                                 profileid=profileid, twid=twid, uid=uid)
 
     def compile_and_save_rules(self):
         """
@@ -202,7 +207,9 @@ class Module(Module, multiprocessing.Process):
             # load the compiled rules
             rule = yara.load(compiled_rule_path)
             # call set_evidence_yara_match when a match is found
-            matches = rule.match(self.pcap, callback=self.set_evidence_yara_match, which_callbacks=yara.CALLBACK_MATCHES)
+            matches = rule.match(self.pcap,
+                                 callback=self.set_evidence_yara_match,
+                                 which_callbacks=yara.CALLBACK_MATCHES)
 
 
     def run(self):
@@ -215,10 +222,10 @@ class Module(Module, multiprocessing.Process):
             self.find_matches()
         except KeyboardInterrupt:
             return True
-        # except Exception as inst:
-        #     exception_line = sys.exc_info()[2].tb_lineno
-        #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
-        #     self.print(str(type(inst)), 0, 1)
-        #     self.print(str(inst.args), 0, 1)
-        #     self.print(str(inst), 0, 1)
-        #     return True
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True

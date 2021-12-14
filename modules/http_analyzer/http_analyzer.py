@@ -21,8 +21,9 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('new_http')
-        self.timeout = None
+        self.timeout = 0.0000001
         self.google_connections_counter = 0
+        self.google_connections_threshold = 4
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -49,39 +50,43 @@ class Module(Module, multiprocessing.Process):
 
         suspicious_user_agents = ('httpsend', 'chm_msdn', 'pb')
         if user_agent.lower() in suspicious_user_agents:
-            type_detection = 'user_agent'
-            detection_info = user_agent
+            type_detection = 'srcip'
+            source_target_tag = 'UsingSuspiciousUserAgent'
+            detection_info = profileid.split("_")[1]
             type_evidence = 'SuspiciousUserAgent'
-            threat_level = 20
+            threat_level =  0.6
+            category = 'Anomaly.Behaviour'
             confidence = 1
             description = f'Suspicious user agent: {user_agent} from host {host}{uri}'
             if not twid:
                 twid = ''
-            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                     confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, timestamp, category,source_target_tag=source_target_tag,
+                                     profileid=profileid, twid=twid, uid=uid)
             return True
         return False
 
-    def check_multiple_google_connections(self, uid, host, uri, timestamp, request_body_len,  profileid, twid):
+    def check_multiple_google_connections(self, uid, host, timestamp, request_body_len,  profileid, twid):
         """
-        Detects more than 2 empty connections to google.com on port 80
+        Detects more than 4 empty connections to google.com on port 80
         """
-        # to test this wget google.com:80 once (wget makes multiple connections instead of 1)
+        # to test this wget google.com:80 twice (wget makes multiple connections instead of 1)
 
-        if 'google.com' in host+uri  and request_body_len==0:
+        if host=='google.com' and request_body_len==0:
             self.google_connections_counter +=1
 
-        if self.google_connections_counter ==2:
-            type_detection = 'multiple_google_connections'
-            detection_info = profileid.split('_')[0]
+        if self.google_connections_counter == self.google_connections_threshold:
             type_evidence = 'multiple_google_connections'
+            type_detection = 'srcip'
+            detection_info = profileid.split('_')[0]
             threat_level = 20
+            category = 'Anomaly.Connection'
             confidence = 1
             description = f'multiple empty HTTP connections to google.com'
             if not twid:
                 twid = ''
-            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                     confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
             # reset the counter
             self.google_connections_counter=0
             return True
@@ -92,10 +97,11 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     __database__.publish('finished_modules', self.name)
                     return True
-                if message['channel'] == 'new_http' and type(message['data'])== str:
+
+                if __database__.is_msg_intended_for(message, 'new_http'):
                     message = json.loads(message['data'])
                     profileid = message['profileid']
                     twid = message['twid']
@@ -107,7 +113,7 @@ class Module(Module, multiprocessing.Process):
                     user_agent = flow.get('user_agent')
                     request_body_len = flow.get('request_body_len')
                     self.check_suspicious_user_agents(uid, host, uri, timestamp, user_agent, profileid, twid)
-                    self.check_multiple_google_connections(uid, host, uri, timestamp, request_body_len,  profileid, twid)
+                    self.check_multiple_google_connections(uid, host, timestamp, request_body_len,  profileid, twid)
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it

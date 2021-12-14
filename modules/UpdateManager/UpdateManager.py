@@ -47,7 +47,7 @@ class UpdateManager(Module, multiprocessing.Process):
         self.update_manager = UpdateFileManager(self.outputqueue, config)
         # Timer to update the ThreatIntelligence files
         self.timer_manager = InfiniteTimer(self.update_period, self.update_malicious_files)
-        self.timeout = None
+        self.timeout = 0.0000001
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -101,7 +101,7 @@ class UpdateManager(Module, multiprocessing.Process):
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # terminating the timer for the process to be killed
                     self.timer_manager.cancel()
                     # Confirm that the module is done processing

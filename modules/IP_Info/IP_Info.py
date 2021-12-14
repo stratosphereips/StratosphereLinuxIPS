@@ -12,13 +12,14 @@ import ipaddress
 import ipwhois
 import socket
 import json
+from dns.resolver import NoResolverConfiguration
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'IP_Info'
     description = 'Get different info about an IP/MAC address'
-    authors = ['Sebastian Garcia']
+    authors = ['Alya Gomaa', 'Sebastian Garcia']
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
@@ -33,10 +34,9 @@ class Module(Module, multiprocessing.Process):
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        self.pubsub = __database__.r.pubsub()
-        self.pubsub.subscribe('new_ip')
-        self.pubsub.subscribe('new_MAC')
-        self.timeout = None
+        self.c1 = __database__.subscribe('new_ip')
+        self.c2 = __database__.subscribe('new_MAC')
+        self.timeout = 0.0000001
         # update asn every 1 month
         self.update_period = 2592000
     
@@ -151,9 +151,21 @@ class Module(Module, multiprocessing.Process):
         except (ipwhois.exceptions.IPDefinedError,ipwhois.exceptions.HTTPLookupError):
             # private ip or RDAP lookup failed. don't cache
             return False
+        except NoResolverConfiguration:
+            # Resolver configuration could not be read or specified no nameservers
+            self.print('Error: Resolver configuration could not be read or specified no nameservers.')
+            return False
         except ipwhois.exceptions.ASNRegistryError:
             # ASN lookup failed with no more methods to try
             pass
+        except dns.resolver.NoResolverConfiguration:
+            # ipwhois can't read /etc/resolv.conf
+            # manually specify the dns server
+            # ignore resolv.conf
+            dns.resolver.default_resolver=dns.resolver.Resolver(configure=False)
+            # use google's DNS
+            dns.resolver.default_resolver.nameservers=['8.8.8.8']
+            return False
 
     def get_asn(self, ip, cached_ip_info):
         """ Gets ASN info about IP, either cached or from our offline mmdb """
@@ -236,12 +248,13 @@ class Module(Module, multiprocessing.Process):
         return data
 
     # MAC functions
-    def get_vendor(self, mac_addr: str, profileid: str):
+    def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
         """
-        Get vendor info of a MAC address from our offline database
+        Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
         if not hasattr(self, 'mac_db'):
             return False
+
 
         # don't look for the vendor again if we already have MAC info about this profileid
         MAC_info = __database__.get_mac_addr_from_profile(profileid)
@@ -249,6 +262,9 @@ class Module(Module, multiprocessing.Process):
             return True
 
         MAC_info = {'MAC': mac_addr}
+        if host_name:
+            MAC_info.update({'host_name': host_name})
+
         oui = mac_addr[:8].upper()
         # parse the mac db and search for this oui
         line = self.mac_db.readline()
@@ -264,26 +280,27 @@ class Module(Module, multiprocessing.Process):
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
         return MAC_info
 
+    def close_dbs(self):
+        """ function to close the databases when there's an error or when shutting down"""
+        if hasattr(self, 'asn_db'): self.asn_db.close()
+        if hasattr(self, 'country_db'): self.country_db.close()
+        if hasattr(self, 'mac_db'): self.mac_db.close()
+
     def run(self):
         # Main loop function
         while True:
             try:
-                message = self.pubsub.get_message(timeout=None)
-                if not message or message["type"] != "message" or type(message['data']) == int:
-                    # didn't receive a msg on any channel, or received the subscribe msg. keep trying
-                    continue
-
+                message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time (see at logsProcess.py),
                 # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message['data'] == 'stop_process':
-                    if hasattr(self, 'asn_db'): self.asn_db.close()
-                    if hasattr(self, 'country_db'): self.country_db.close()
-                    if hasattr(self, 'mac_db'): self.mac_db.close()
+                if message and message['data'] == 'stop_process':
+                    self.close_dbs()
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                elif message['channel'] == 'new_ip':
+                if __database__.is_msg_intended_for(message, 'new_ip'):
+                    # Get the IP from the message
                     ip = message['data']
                     try:
                         # make sure its a valid ip
@@ -294,32 +311,36 @@ class Module(Module, multiprocessing.Process):
                         # not a valid ip skip
                         continue
 
-                    # do we have cached info about this ip in redis?
+                    # Do we have cached info about this ip in redis?
+                    # If yes, load it
                     cached_ip_info = __database__.getIPData(ip)
                     if not cached_ip_info:
                         cached_ip_info = {}
-
+                    
+                    # ------ GeoCountry -------
+                    # Get the geocountry
                     if cached_ip_info == {} or 'geocountry' not in cached_ip_info:
                         self.get_geocountry(ip)
 
-                    # Check if a month has passed since last time we updated asn
+                    # ------ ASN -------
+                    # Get the ASN
+                    # Before returning, update the ASN for this IP if more than 1 month 
+                    # passed since last ASN update on this IP 
                     update_asn = self.update_asn(cached_ip_info)
                     if update_asn:
                         self.get_asn(ip, cached_ip_info)
-
                     self.get_rdns(ip)
 
-                elif message['channel'] == 'new_MAC':
+                message = self.c2.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_MAC'):
                     data = json.loads(message['data'])
                     mac_addr = data['MAC']
                     profileid = data['profileid']
-                    self.get_vendor(mac_addr, profileid)
-
+                    host_name = data.get('host_name', False)
+                    self.get_vendor(mac_addr, host_name, profileid)
 
             except KeyboardInterrupt:
-                if hasattr(self, 'asn_db'): self.asn_db.close()
-                if hasattr(self, 'country_db'): self.country_db.close()
-                if hasattr(self, 'mac_db'): self.mac_db.close()
+                self.close_dbs()
                 continue
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
@@ -327,7 +348,5 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
-                if self.asn_db: self.asn_db.close()
-                if self.country_db: self.country_db.close()
-                if hasattr(self, 'mac_db'): self.mac_db.close()
+                self.close_dbs()
                 return True

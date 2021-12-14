@@ -945,12 +945,22 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'long'
         elif 'dhcp' in new_line['type']:
             self.column_values['type'] = 'dhcp'
+            #  daddr in dhcp.log is the server_addr at index 3, not 4 like most log files
+            self.column_values['daddr'] = line[3]
+            self.column_values['client_addr'] = line[2] # the same as saddr
+            self.column_values['server_addr'] = line[3]
+            self.column_values['mac'] = line[4] # this is the client mac
+            self.column_values['host_name'] = line[5]
+            self.column_values['saddr'] = self.column_values['client_addr']
+            self.column_values['daddr'] = self.column_values['server_addr']
+
         elif 'dce_rpc' in new_line['type']:
             self.column_values['type'] = 'dce_rpc'
         elif 'dnp3' in new_line['type']:
             self.column_values['type'] = 'dnp3'
         elif 'ftp' in new_line['type']:
             self.column_values['type'] = 'ftp'
+            self.column_values['used_port'] = line[17]
         elif 'kerberos' in new_line['type']:
             self.column_values['type'] = 'kerberos'
         elif 'mysql' in new_line['type']:
@@ -1015,6 +1025,15 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['daddr'] = line[3] #rx_hosts
             self.column_values['size'] = line[13]
             self.column_values['md5'] = line[19]
+        elif 'arp' in new_line['type']:
+            self.column_values['type'] = 'arp'
+            self.column_values['operation'] = line[1]
+            self.column_values['src_mac'] = line[2]
+            self.column_values['dst_mac'] = line[3]
+            self.column_values['saddr'] = line[4]
+            self.column_values['daddr'] = line[5]
+            self.column_values['src_hw'] = line[6]
+            self.column_values['dst_hw'] = line[7]
 
     def process_zeek_input(self, new_line: dict):
         """
@@ -1139,17 +1158,28 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'dhcp' in file_type:
             self.column_values['type'] = 'dhcp'
             self.column_values['client_addr'] = line.get('client_addr','')
-            # self.column_values['server_addr'] = line.get('server_addr','')
-            # self.column_values['host_name'] = line.get('host_name','')
+            self.column_values['server_addr'] = line.get('server_addr','')
+            self.column_values['host_name'] = line.get('host_name','')
             self.column_values['mac'] = line.get('mac','') # this is the client mac
+            self.column_values['saddr'] = self.column_values['client_addr']
+            self.column_values['daddr'] = self.column_values['server_addr']
             # self.column_values['domain'] = line.get('domain','')
             # self.column_values['assigned_addr'] = line.get('assigned_addr','')
+
+             # Some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log use the mac address instead
+            if (self.column_values['saddr'] == '' and self.column_values['daddr'] == ''
+                and self.column_values.get('mac', False) ):
+                self.column_values['saddr'] = self.column_values['mac']
+
         elif 'dce_rpc' in file_type:
             self.column_values['type'] = 'dce_rpc'
         elif 'dnp3' in file_type:
             self.column_values['type'] = 'dnp3'
         elif 'ftp' in file_type:
             self.column_values['type'] = 'ftp'
+            self.column_values['used_port'] = line.get("data_channel.resp_p",False)
+            #todo do the same in zeek tabs function
+
         elif 'kerberos' in file_type:
             self.column_values['type'] = 'kerberos'
         elif 'mysql' in file_type:
@@ -1211,6 +1241,9 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['dst_mac'] = line.get('dst_mac', '')
             self.column_values['saddr'] = line.get('orig_h','')
             self.column_values['daddr'] = line.get('resp_h','')
+            self.column_values['dst_hw'] = line.get('resp_hw','')
+            self.column_values['src_hw'] = line.get('orig_hw','')
+            self.column_values['operation'] = line.get('operation','')
         elif 'known_services' in file_type:
             self.column_values['type'] = 'known_services'
             self.column_values['saddr'] = line.get('host', '')
@@ -1887,7 +1920,7 @@ class ProfilerProcess(multiprocessing.Process):
             if not self.column_values:
                 return True
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
-                                                    'dhcp','files', 'known_services', 'arp'):
+                                                    'dhcp','files', 'known_services', 'arp','ftp'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -1926,6 +1959,10 @@ class ProfilerProcess(multiprocessing.Process):
             self.saddr = self.column_values['saddr']
             self.daddr = self.column_values['daddr']
             profileid = 'profile' + self.id_separator + str(self.saddr)
+
+            if self.saddr == '' and self.daddr == '':
+                # some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log! don't store them in the db
+                return False
 
             # Check if the flow is whitelisted and we should not process
             if self.is_whitelisted():
@@ -1975,15 +2012,23 @@ class ProfilerProcess(multiprocessing.Process):
                 ttls = self.column_values['TTLs']
             elif 'dhcp' in flow_type:
                 # client mac addr and client_addr is optional in zeek, so sometimes it may not be there
-                mac_addr = self.column_values.get('mac',False)
-                client_addr = self.column_values.get('client_addr',False)
+                client_addr = self.column_values.get('client_addr', False)
+                mac_addr = self.column_values.get('mac', False)
+                host_name = self.column_values.get('host_name', False)
+                server_addr = self.column_values.get('server_addr', False)
+
                 if client_addr:
                     profileid = get_rev_profile(starttime, client_addr)[0]
                 if mac_addr:
                     # send this to IP_Info module to get vendor info about this MAC
                     to_send = {'MAC': mac_addr,
                                'profileid': profileid}
+                    if host_name: to_send.update({'host_name': host_name})
                     __database__.publish('new_MAC', json.dumps(to_send))
+
+                if server_addr:
+                    __database__.store_dhcp_server(server_addr)
+                    __database__.mark_profile_as_dhcp(profileid)
 
             # Create the objects of IPs
             try:
@@ -2027,12 +2072,10 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
                                           saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj),
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
-                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label)
+                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label, flow_type=flow_type)
                 elif 'dns' in flow_type:
                     __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
-                    # Add DNS resolution if there are answers for the query
-                    if answers:
-                        __database__.set_dns_resolution(query, answers, starttime, uid, qtype_name, profileid, twid)
+
 
                 elif flow_type == 'http':
 
@@ -2070,6 +2113,11 @@ class ProfilerProcess(multiprocessing.Process):
                                                  self.column_values['scanning_ip'],
                                                  self.column_values['uid']
                                                  )
+                elif flow_type == 'ftp':
+                    used_port = self.column_values['used_port']
+                    if used_port:
+                        __database__.set_ftp_port(used_port)
+
                 elif flow_type == 'files':
                     """" Send files.log data to new_downloaded_file channel in vt module to see if it's malicious """
                     to_send = {
@@ -2103,6 +2151,11 @@ class ProfilerProcess(multiprocessing.Process):
                         'uid' : self.column_values['uid'],
                         'daddr': self.column_values['daddr'],
                         'saddr': self.column_values['saddr'],
+                        'dst_mac': self.column_values['dst_mac'],
+                        'src_mac': self.column_values['src_mac'],
+                        'dst_hw': self.column_values['dst_hw'],
+                        'src_hw': self.column_values['src_hw'],
+                        'operation': self.column_values['operation'],
                         'ts' : starttime,
                         'profileid' : profileid,
                         'twid' : twid,
@@ -2637,15 +2690,11 @@ class ProfilerProcess(multiprocessing.Process):
         while True:
             try:
                 line = self.inputqueue.get()
-                if line == 'stop':
+                if 'stop' in line:
+                    # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                     # can't use self.name because multiprocessing library adds the child number to the name so it's not const
                     __database__.publish('finished_modules', 'ProfilerProcess')
                     self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 2,0)
-                    return True
-                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                elif 'stop_process' in line:
-                    __database__.publish('finished_modules', 'ProfilerProcess')
-                    self.print("Stopping Profiler Process. Received {} lines ({})", 2,0)
                     return True
                 else:
                     # Received new input data

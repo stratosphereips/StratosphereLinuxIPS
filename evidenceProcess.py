@@ -18,18 +18,23 @@
 import multiprocessing
 from slips_files.core.database import __database__
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 import configparser
 from os import path
-from colorama import Fore, Back, Style
+from colorama import Fore, Style
 import ipaddress
-import socket
 import sys
 
 #import requests
 import subprocess
 import socket
 import re
+import platform
+import os
+import psutil
+import pwd
+from uuid import uuid4
+import validators
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -49,6 +54,9 @@ class EvidenceProcess(multiprocessing.Process):
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
+        if self.popup_alerts:
+            # The way we send notifications differ depending on the user and the OS
+            self.setup_notifications()
         # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
         self.logfile = self.clean_evidence_log_file(output_folder)
@@ -60,9 +68,42 @@ class EvidenceProcess(multiprocessing.Process):
         else:
             self.logs_logfile = False
             self.logs_jsonfile = False
-        self.timeout = None
+        self.timeout = 0.0000001
         # this list will have our local and public ips
         self.our_ips = self.get_IP()
+
+    def setup_notifications(self):
+        """
+        Get the used display, the user using this display and the uid of this user in case of using Slips as root on linux
+        """
+        # in linux, if the user's not root, notifications command will need extra configurations
+        if platform.system() != 'Linux' or os.geteuid() != 0:
+            self.notify_cmd = 'notify-send -t 5000 '
+            return False
+
+        # Get the used display (if the user has only 1 screen it will be set to 0), if not we should know which screen is slips running on.
+        # A "display" is the address for your screen. Any program that wants to write to your screen has to know the address.
+        used_display = psutil.Process().environ()['DISPLAY']
+
+        # when you login as user x in linux, no user other than x is authorized to write to your display, not even root
+        # now that we're running as root, we dont't have acess to the used_display
+        # get the owner of the used_display, there's no other way than running the 'who' command
+        command = f'who | grep "({used_display})" '
+        cmd_output = os.popen(command).read()
+
+        # make sure we found the user of this used display
+        if len(cmd_output) < 5:
+            # we don't know the user of this display!!, try getting it using psutil
+            # user 0 is the one that owns tty1
+            user = str(psutil.users()[0].name)
+        else:
+            # get the first user from the 'who' command
+            user = cmd_output.split("\n")[0].split()[0]
+
+        # get the uid
+        uid = pwd.getpwnam(user).pw_uid
+        # run notify-send as user using the used_display and give it the dbus addr
+        self.notify_cmd = f'sudo -u {user} DISPLAY={used_display} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send -t 5000 '
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -139,11 +180,24 @@ class EvidenceProcess(multiprocessing.Process):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified, by default...
             self.detection_threshold = 2
-        self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)')
+        self.print(f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)', 2, 0)
 
-    def print_alert(self, profileid, twid, flow_datetime):
+        try:
+            self.popup_alerts = self.config.get('detection', 'popup_alerts').lower()
+            self.popup_alerts = True if 'yes' in self.popup_alerts else False
+
+            # In docker, disable alerts no matter what slips.conf says
+            if os.environ.get('IS_IN_A_DOCKER_CONTAINER', False):
+                self.popup_alerts = False
+
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified, by default...
+            self.popup_alerts = False
+
+    def format_blocked_srcip_evidence(self, profileid, twid, flow_datetime):
         '''
-        Function to print alert about the blocked profileid and twid
+        Function to prepare evidence about the blocked profileid and twid
+        This evidence will be written in alerts.log, it won't be displayed in the terminal
         '''
         try:
             now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
@@ -155,9 +209,9 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-    def print_evidence(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
+    def format_evidence_string(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
         '''
-        Function to display evidence according to the detection module.
+        Function to format the evidence to be displayed according to the detection module.
         :return : string with a correct evidence displacement
         '''
         evidence_string = ''
@@ -207,21 +261,25 @@ class EvidenceProcess(multiprocessing.Process):
             open(output_folder  + 'alerts.json', 'w').close()
         return open(output_folder + 'alerts.json', 'a')
 
-
-    def addDataToJSONFile(self, data):
+    def addDataToJSONFile(self, IDEA_dict: dict):
         """
-        Add a new evidence line to the file.
+        Add a new evidence line to our alerts.json file in json IDEA format.
+        :param IDEA_dict: dict containing 1 alert
         """
         try:
-            data_json = json.dumps(data)
-            self.jsonfile.write(data_json)
-            self.jsonfile.write('\n')
+            json_alert = '{\n'
+            for key_,val in IDEA_dict.items():
+                if type(val) ==str:
+                    # strings in json should be in double quotes instead of single quotes
+                   json_alert += f'"{key_}": "{val}",\n'
+                else:
+                    # int and float values should be printed as they are
+                    json_alert += f'"{key_}": {val},\n'
+            # remove the last comma and close the dict
+            json_alert = json_alert[:-2] +  '\n}\n'
+            self.jsonfile.write(json_alert)
+            # empty lines or line containing '\n' mark the end of the file for the cesnet sharing module. don't add any
             self.jsonfile.flush()
-            # If logs folder are enabled, write alerts in the folder as well
-            if self.logs_jsonfile:
-                self.logs_jsonfile.write(data_json)
-                self.logs_jsonfile.write('\n')
-                self.logs_jsonfile.flush()
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -308,20 +366,21 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             # Convert each list from str to dict
             whitelisted_IPs = json.loads(whitelist['IPs'])
-        except IndexError:
-            pass
+        except (IndexError, KeyError):
+            whitelisted_IPs = {}
+
         try:
             whitelisted_domains = json.loads(whitelist['domains'])
-        except IndexError:
-            pass
+        except (IndexError, KeyError):
+            whitelisted_domains = {}
         try:
             whitelisted_orgs = json.loads(whitelist['organizations'])
-        except IndexError:
-            pass
+        except (IndexError, KeyError):
+            whitelisted_orgs = {}
         try:
             whitelisted_mac = json.loads(whitelist['organizations'])
-        except IndexError:
-            pass
+        except (IndexError, KeyError):
+            whitelisted_mac = {}
 
 
         # Set data type
@@ -489,6 +548,116 @@ class EvidenceProcess(multiprocessing.Process):
                             pass
         return False
 
+    def show_popup(self, alert_to_log: str):
+        """
+        Function to display a popup with the alert depending on the OS
+        """
+        if platform.system() == 'Linux':
+            #  is notify_cmd is set in setup_notifications function depending on the user
+            os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
+        elif platform.system() == 'Darwin':
+            os.system(f"osascript -e 'display notification \"{alert_to_log}\" with title \"Slips\"' ")
+
+    def format_timestamp(self, timestamp):
+        """
+        Function to unify timestamps printed to log files, notification and cli.
+        :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
+        returns the date and time in RFC3339 format (IDEA standard)
+        """
+        if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
+            timestamp = datetime.fromtimestamp(timestamp).astimezone().isoformat()
+        elif ' ' in timestamp:
+            timestamp = timestamp.replace('/','-')
+            dt_string = "2020-12-18 3:11:09"
+            # format of incoming ts
+            format = "%Y-%m-%d %H:%M:%S"
+            # convert to datetime obj
+            timestamp = datetime.strptime(dt_string, format)
+            # convert to iso format
+            timestamp = timestamp.astimezone().isoformat()
+        return timestamp
+
+    def add_to_log_folder(self, data):
+        # If logs folder is enabled (using -l), write alerts in the folder as well
+        if not self.logs_jsonfile:
+            return False
+        data_json = json.dumps(data)
+        self.logs_jsonfile.write(data_json)
+        self.logs_jsonfile.write('\n')
+        self.logs_jsonfile.flush()
+
+
+    def IDEA_format(self, srcip, type_evidence, type_detection,
+                    detection_info, description, flow_datetime,
+                    confidence, category, conn_count, source_target_tag):
+        """
+        Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
+        """
+        IDEA_dict = {'Format': 'IDEA0',
+                     'ID': str(uuid4()),
+                     'DetectTime': flow_datetime,
+                     'EventTime': datetime.now(timezone.utc).isoformat(),
+                     'Category': [category],
+                     'Confidence': confidence,
+                     'Note' : description.replace('"','\"').replace("'",'\''),
+                     'Source': [{}]
+                     }
+
+        # is the srcip ipv4/ipv6 or mac?
+        if validators.ipv4(srcip):
+            IDEA_dict['Source'][0].update({'IP4': [srcip]})
+        elif validators.ipv6(srcip):
+            IDEA_dict['Source'][0].update({'IP6': [srcip]})
+        elif validators.mac_address(srcip):
+            IDEA_dict['Source'][0].update({'MAC': [srcip]})
+
+        # update the srcip description if specified in the evidence
+        if source_target_tag:
+            IDEA_dict['Source'][0].update({'Type': [source_target_tag] })
+
+        # some evidence have a dst ip
+        if 'dstip' in type_detection or 'dip' in type_detection:
+            # is the dstip ipv4/ipv6 or mac?
+            if validators.ipv4(detection_info):
+                IDEA_dict['Target'] = [{'IP4': [detection_info]}]
+            elif validators.ipv6(detection_info):
+                IDEA_dict['Target'] = [{'IP6': [detection_info]}]
+            elif validators.mac_address(detection_info):
+                IDEA_dict['Target'] = [{'MAC': [detection_info]}]
+
+            # try to extract the hostname/SNI/rDNS of the dstip form the description if available
+            hostname = False
+            try:
+                hostname = description.split('rDNS: ')[1]
+            except IndexError:
+                pass
+            try:
+                hostname = description.split('SNI: ')[1]
+            except IndexError:
+                pass
+            if hostname:
+                IDEA_dict['Target'][0].update({'Hostname': [hostname]})
+            # update the dstip description if specified in the evidence
+            if source_target_tag:
+                IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
+
+        # only evidence of type scanning have conn_count
+        if conn_count: IDEA_dict.update({'ConnCount': conn_count})
+
+        if 'MaliciousDownloadedFile' in type_evidence:
+            IDEA_dict.update({
+                'Attach': [
+                    {
+                        'Type': ["Malware"],
+                        "Hash": [f'md5:{detection_info}'],
+                        "Size": int(description.split("size:")[1].split("from")[0])
+
+                    }
+                ]
+            })
+
+        return IDEA_dict
+
     def run(self):
         while True:
             try:
@@ -497,110 +666,100 @@ class EvidenceProcess(multiprocessing.Process):
                 # Wait for a message from the channel that a TW was modified
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     self.logfile.close()
                     self.jsonfile.close()
                     __database__.publish('finished_modules','EvidenceProcess')
                     return True
 
-                elif message['channel'] == 'evidence_added' and type(message['data']) is not int:
+                if __database__.is_msg_intended_for(message, 'evidence_added'):
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
                     profileid = data.get('profileid')
                     srcip = profileid.split(self.separator)[1]
                     twid = data.get('twid')
-                    # Key data
-                    key = data.get('key')
-                    type_detection = key.get('type_detection') # example: dstip srcip dport sport dstdomain
-                    detection_info = key.get('detection_info') # example: ip, port, inTuple, outTuple, domain
-                    type_evidence = key.get('type_evidence') # example: PortScan, ThreatIntelligence, etc..
+                    type_detection = data.get('type_detection') # example: dstip srcip dport sport dstdomain
+                    detection_info = data.get('detection_info') # example: ip, port, inTuple, outTuple, domain
+                    type_evidence = data.get('type_evidence') # example: PortScan, ThreatIntelligence, etc..
                     # evidence data
-                    evidence_data = data.get('data')
-                    description = evidence_data.get('description')
+                    description = data.get('description')
                     timestamp = data.get('stime')
                     uid = data.get('uid')
                     # in case of blacklisted ip evidence, we add the tag to the description like this [tag]
-                    tag = data.get('tags',False)
+                    tags = data.get('tags',False)
+                    confidence = data.get('confidence',False)
+                    threat_level = data.get('threat_level',False)
+                    category = data.get('category',False)
+                    conn_count = data.get('conn_count',False)
+                    source_target_tag = data.get('source_target_tag',False)
 
                     # Ignore alert if ip is whitelisted
                     flow = __database__.get_flow(profileid,twid,uid)
                     if flow and self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
+                        key = {'type_detection' : type_detection,
+                                'detection_info' : detection_info ,
+                                'type_evidence' : type_evidence,
+                                'description': description}
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
 
-                    if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
-                        flow_datetime = datetime.fromtimestamp(timestamp)
-                        flow_datetime = flow_datetime.strftime('%Y/%m/%d %H:%M:%S')
-                    else:
-                        try:
-                            # for timestamps like 2021-06-07T12:44:56.654854+0200
-                            flow_datetime = timestamp.split('T')[0] +' '+ timestamp.split('T')[1][:8]
-                        except IndexError:
-                            #  for timestamps like 2018-03-09 22:57:44.781449+02:00
-                            flow_datetime = timestamp[:19]
+                    flow_datetime = self.format_timestamp(timestamp)
 
-                    # Print the evidence in the outprocess
-                    evidence_to_log = self.print_evidence(profileid,
-                                                          twid,
-                                                          srcip,
-                                                          type_evidence,
-                                                          type_detection,
-                                                          detection_info,
-                                                          description)
-
-                    evidence_dict = {'type': 'evidence',
-                                     'profileid': profileid,
-                                     'twid': twid,
-                                     'timestamp': flow_datetime,
-                                     'detected_ip': srcip,
-                                     'detection_module':type_evidence,
-                                     'detection_info':str(type_detection) + ' ' + str(detection_info),
-                                     'description':description
-                                     }
-
-                    # What tag is this??? TI tag?
-                    if tag:
-                        # remove the tag from the description
-                        description = description[:description.index('[')][:-5]
-                        # add a key in the json evidence with tag
-                        evidence_dict.update({'tags':tag.replace("'",''), 'description': description})
+                    # prepare evidence for text log file
+                    evidence = self.format_evidence_string(profileid,
+                                                           twid,
+                                                           srcip,
+                                                           type_evidence,
+                                                           type_detection,
+                                                           detection_info,
+                                                           description)
+                    # prepare evidence for json log file
+                    IDEA_dict = self.IDEA_format(srcip,
+                                    type_evidence,
+                                    type_detection,
+                                    detection_info,
+                                    description,
+                                    flow_datetime,
+                                    confidence,
+                                    category,
+                                    conn_count,
+                                    source_target_tag)
 
                     # Add the evidence to the log files
-                    self.addDataToLogFile(flow_datetime + ': ' + evidence_to_log)
-                    self.addDataToJSONFile(evidence_dict)
-
+                    self.addDataToLogFile(flow_datetime + ': ' + evidence)
+                    self.addDataToJSONFile(IDEA_dict)
+                    self.add_to_log_folder(IDEA_dict)
 
                     #
                     # Analysis of evidence for blocking or not
                     # This is done every time we receive 1 new evidence
-                    # 
+                    #
 
                     # Get all the evidence for the TW
-                    evidence = __database__.getEvidenceForTW(profileid, twid)
+                    tw_evidence = __database__.getEvidenceForTW(profileid, twid)
 
                     # Important! It may happen that the evidence is not related to a profileid and twid.
                     # For example when the evidence is on some src IP attacking our home net, and we are not creating
                     # profiles for attackers
-                    if evidence:
-                        evidence = json.loads(evidence)
-                        # self.print(f'Evidence: {evidence}. Profileid {profileid}, twid {twid}')
+                    if tw_evidence:
+                        tw_evidence = json.loads(tw_evidence)
+
+                        # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
                         srcip = profileid.split(self.separator)[1]
-                        for key in evidence:
-                            # Deserialize key data
-                            key_json = json.loads(key)
-                            type_detection = key_json.get('type_detection')
-                            detection_info = key_json.get('detection_info')
-                            type_evidence = key_json.get('type_evidence')
+                        for evidence in tw_evidence.values():
+                            # Deserialize evidence
+                            evidence = json.loads(evidence)
 
-                            # Deserialize evidence data
-                            data = evidence[key]
-                            confidence = float(data.get('confidence'))
-                            threat_level = data.get('threat_level')
-                            description = data.get('description')
+                            type_detection = evidence.get('type_detection')
+                            detection_info = evidence.get('detection_info')
+                            type_evidence = evidence.get('type_evidence')
+                            confidence = float(evidence.get('confidence'))
+                            threat_level = evidence.get('threat_level')
+                            description = evidence.get('description')
 
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
@@ -616,23 +775,36 @@ class EvidenceProcess(multiprocessing.Process):
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
-                                # Differentiate the type of evidence for different detections
-                                # when printing alerts to the terminal print the profileid_twid that generated this alert too
-                                #evidence_to_print = f'{profileid}_{twid} '
-                                evidence_to_print = f'{flow_datetime}: '
-                                evidence_to_print += self.print_evidence(profileid, twid, srcip, type_evidence, type_detection,detection_info, description)
-                                self.print(f'{Fore.RED}{evidence_to_print}{Style.RESET_ALL}', 1, 0)
-                                # Set an alert about the evidence being blocked
-                                alert_to_log = self.print_alert(profileid, twid, flow_datetime)
-                                alert_dict = {'type':'alert',
+                                # now that this evidence is being printed, it's no longer evidence, it's an alert
+                                alert_to_print = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
+                                if '.' in flow_datetime:
+                                    format = '%Y-%m-%dT%H:%M:%S.%f%z'
+                                else:
+                                    # e.g  2020-12-18T03:11:09+02:00
+                                    format = '%Y-%m-%dT%H:%M:%S%z'
+                                human_readable_datetime = datetime.strptime(flow_datetime, format).strftime("%Y/%m/%d %H:%M:%S")
+
+                                self.print(f'{Fore.RED} {human_readable_datetime}: {alert_to_print}{Style.RESET_ALL}', 1, 0)
+
+                                # Add to log files that this srcip is being blocked
+                                blocked_srcip_to_log = self.format_blocked_srcip_evidence(profileid, twid, flow_datetime)
+                                blocked_srcip_dict = {'type':'alert',
                                               'profileid': profileid,
                                               'twid': twid,
                                               'threat_level':accumulated_threat_level
-                                                }
+                                                } #todo this needs to bee idea too
 
-                                self.addDataToLogFile(alert_to_log)
-                                self.addDataToJSONFile(alert_dict)
-                                # check that the dst ip isn't our own IP
+                                self.addDataToLogFile(blocked_srcip_to_log)
+                                # alerts.json should only contain alerts in idea format,
+                                # blocked srcips should only be printed in alerts.log
+                                # self.addDataToJSONFile(blocked_srcip_dict)
+                                self.add_to_log_folder(blocked_srcip_dict)
+
+                                if self.popup_alerts:
+                                    self.show_popup(alert_to_print)
+
+                                # Send to the blocking module.
+                                # Check that the dst ip isn't our own IP
                                 if type_detection=='dstip' and detection_info not in self.our_ips:
                                     #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
                                     # blocking_data = {
@@ -644,6 +816,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     # __database__.publish('new_blocking', blocking_data)
                                     pass
                                 __database__.markProfileTWAsBlocked(profileid, twid)
+
             except KeyboardInterrupt:
                 self.logfile.close()
                 self.jsonfile.close()

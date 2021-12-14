@@ -40,8 +40,9 @@ import errno
 import subprocess
 import re
 from collections import OrderedDict
+from distutils.dir_util import copy_tree
 
-version = '0.8.1'
+version = '0.8.2'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -232,7 +233,6 @@ def shutdown_gracefully(input_information):
 
         # get dict of PIDs spawned by slips
         PIDs = __database__.get_PIDs()
-
         # timeout variable so we don't loop forever
         max_loops = 130
         # loop until all loaded modules are finished
@@ -241,15 +241,19 @@ def shutdown_gracefully(input_information):
             message = c1.get_message(timeout=0.01)
             if message and message['data'] == 'stop_process':
                 continue
-            if message and message['channel'] == 'finished_modules' and type(message['data']) is not int:
+            if message and message['channel'] == 'finished_modules' and type(message['data']) == str:
                 # all modules must reply with their names in this channel after
                 # receiving the stop_process msg
                 # to confirm that all processing is done and we can safely exit now
                 module_name = message['data']
+
                 if module_name not in finished_modules:
                     finished_modules.append(module_name)
-                    # remove module from the list of opened pids
-                    PIDs.pop(module_name)
+                    try:
+                        # remove module from the list of opened pids
+                        PIDs.pop(module_name)
+                    except KeyError:
+                        continue
                     modules_left = len(list(PIDs.keys()))
                     # to vertically align them when printing
                     module_name = module_name+' '*(20-len(module_name))
@@ -307,12 +311,31 @@ def shutdown_gracefully(input_information):
             __database__.save(backups_dir + input_information)
             print(f"[Main] Database saved to {backups_dir}{input_information}" )
 
+
+        # if store_a_copy_of_zeek_files is set to yes in slips.conf, copy the whole zeek_files dir to the output dir
+        try:
+            store_a_copy_of_zeek_files = config.get('parameters', 'store_a_copy_of_zeek_files')
+            store_a_copy_of_zeek_files = False if 'no' in store_a_copy_of_zeek_files.lower() else True
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            store_a_copy_of_zeek_files = False
+
+        if store_a_copy_of_zeek_files:
+            # this is where the copy will be stores
+            zeek_files_path = os.path.join(args.output,'zeek_files')
+            copy_tree("zeek_files", zeek_files_path)
+            print(f"[Main] Stored a copy of zeek files to {zeek_files_path}.")
+
         os._exit(-1)
         return True
     except KeyboardInterrupt:
         return False
 
 
+def is_debugger_active() -> bool:
+    """Return if the debugger is currently active"""
+    gettrace = getattr(sys, 'gettrace', lambda : None)
+    return gettrace() is not None
 
 ####################
 # Main
@@ -338,8 +361,8 @@ if __name__ == '__main__':
                         help='read a Zeek folder, Argus binetflow, pcapfile or nfdump.')
     parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
                         help='read packets from an interface.')
-    parser.add_argument('-l','--nologfiles',action='store_true',required=False,
-                        help='do not create log files with all the traffic info and detections.')
+    parser.add_argument('-l','--createlogfiles',action='store_true',required=False,
+                        help='create log files with all the traffic info and detections.')
     parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
                         help='packet filter for Zeek. BPF style.')
     parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
@@ -360,7 +383,10 @@ if __name__ == '__main__':
 
     # Read the config file name given from the parameters
     # don't use '%' for interpolation.
-    config = configparser.ConfigParser(interpolation=None)
+    # comment_prefixes are the characters that if found at the beginning
+    # of the line, the line is completely ignored by configparses, by default they are # and ;
+    # set them to # only to support removing commented ti files from the cache db
+    config = configparser.ConfigParser(interpolation=None, comment_prefixes="#")
     try:
         with open(args.config) as source:
             config.read_file(source)
@@ -479,18 +505,15 @@ if __name__ == '__main__':
         zeek_bro = check_zeek_or_bro()
         if zeek_bro is False:
             # If we do not have bro or zeek, terminate Slips.
-            print('no zeek nor bro')
+            print('Error. No zeek or bro binary found.')
             terminate_slips()
         else:
             prepare_zeek_scripts()
-
-
 
     # See if we have the nfdump, if we need it according to the input type
     if input_type == 'nfdump' and shutil.which('nfdump') is None:
         # If we do not have nfdump, terminate Slips.
         terminate_slips()
-
 
     # Remove default folder for alerts, if exists
     if os.path.exists(args.output):
@@ -607,6 +630,11 @@ if __name__ == '__main__':
         export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ","").lower()
         if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
             to_ignore.append('ExportingAlerts')
+        # ignore CESNET sharing module if send and receive are are disabled in slips.conf
+        send_to_warden = config.get('CESNET', 'send_alerts').lower()
+        receive_from_warden = config.get('CESNET', 'receive_alerts').lower()
+        if 'no' in send_to_warden  and 'no' in receive_from_warden:
+            to_ignore.append('CESNET')
         # don't run blocking module unless specified
         if not args.clearblocking and not args.blocking \
                 or (args.blocking and not args.interface): # ignore module if not using interface
@@ -641,20 +669,18 @@ if __name__ == '__main__':
         guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
         guiProcessThread.start()
         outputProcessQueue.put('quiet')
-    if not args.nologfiles:
-        # By parameter, this is True. Then check the conf. Only create the logs if the conf file says True
-        do_logs = read_configuration(config, 'parameters', 'create_log_files')
-        if do_logs == 'yes':
-            # Create a folder for logs
-            logs_folder = create_folder_for_logs()
-            # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
-            logsProcessQueue = Queue()
-            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
-            logsProcessThread.start()
-            outputProcessQueue.put('10|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
-            __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
 
-    # If args.nologfiles is False, then we don't want log files, independently of what the conf says.
+    do_logs = read_configuration(config, 'parameters', 'create_log_files')
+    # if -l is provided or create_log_files is yes then we will create log files
+    if args.createlogfiles or do_logs == 'yes':
+        # Create a folder for logs
+        logs_folder = create_folder_for_logs()
+        # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
+        logsProcessQueue = Queue()
+        logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
+        logsProcessThread.start()
+        outputProcessQueue.put('10|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
+        __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
     else:
         logs_folder = False
 
@@ -674,7 +700,7 @@ if __name__ == '__main__':
     # Create the profile thread and start it
     profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
     profilerProcessThread.start()
-    outputProcessQueue.put('10|main|Started profiler thread [PID {}]'.format(profilerProcessThread.pid))
+    outputProcessQueue.put('10|main|Started Profiler thread [PID {}]'.format(profilerProcessThread.pid))
     __database__.store_process_PID('ProfilerProcess', int(profilerProcessThread.pid))
 
     c1 = __database__.subscribe('finished_modules')
@@ -726,7 +752,8 @@ if __name__ == '__main__':
                 __database__.setSlipsInternalTime(time_of_last_modified_tw)
             # How many profiles we have?
             profilesLen = str(__database__.getProfilesLen())
-            outputProcessQueue.put('10|Main|Total Number of Profiles in DB so far: {}. Modified Profiles in the last TW: {}. ({})'.format(profilesLen, amount_of_modified, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+            #outputProcessQueue.put(f'10|Main|Total Number of Profiles in DB so far: {profilesLen}. Modified Profiles in the last TW: {amount_of_modified}. ({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})\r')
+            print(f'Total Number of Profiles in DB so far: {profilesLen}. Modified Profiles in the last TW: {amount_of_modified}. ({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})', end='\r')
 
             # Check if we need to close some TW
             __database__.check_TW_to_close()
@@ -763,7 +790,8 @@ if __name__ == '__main__':
             # If there were no modified TW in the last timewindow time,
             # then start counting down
             else:
-                if amount_of_modified == 0:
+                # don't shutdown slips if it's being debugged
+                if amount_of_modified == 0 and not is_debugger_active():
                     # print('Counter to stop Slips. Amount of modified
                     # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                     if minimum_intervals_to_wait == 0:

@@ -44,10 +44,10 @@ function set_session(c: connection)
   }
 }
 
-# SPA: The sender protocol address. (orig_h here)
-# SHA: The sender hardware address.
-# TPA: The target protocol address. (resp_h here)
-# THA: The target hardware address.
+# SPA: The sender protocol address. aka src IP (orig_h here)
+# SHA: The sender hardware address. aka sender eth
+# TPA: The target protocol address. aka dst IP (resp_h here)
+# THA: The target hardware address. aka receiver eth
 event arp_request(src_mac: string, dst_mac: string, orig_h: addr, SHA: string, resp_h: addr, THA: string) &priority=5
 {
     local info: Info;
@@ -59,7 +59,23 @@ event arp_request(src_mac: string, dst_mac: string, orig_h: addr, SHA: string, r
 		info$resp_h       = resp_h;
         info$orig_hw      = SHA;
         info$resp_hw      = THA;
-{
+
     Log::write(ARP::LOG, info);
-  }
+
+}
+
+
+event arp_reply(src_mac: string, dst_mac: string, orig_h: addr, SHA: string, resp_h: addr, THA: string)
+{
+    local info: Info;
+        info$ts        = network_time();
+        info$operation = "reply";
+        info$src_mac   = src_mac;
+        info$dst_mac   = dst_mac;
+        info$orig_h       = orig_h;
+        info$resp_h       = resp_h;
+        info$orig_hw      = SHA;
+        info$resp_hw      = THA;
+
+    Log::write(ARP::LOG, info);
 }
