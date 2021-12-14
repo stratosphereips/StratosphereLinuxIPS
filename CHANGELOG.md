@@ -16,6 +16,9 @@
 		- Support commenting TI files in slips.conf: when TI files are commented using ; in slips.conf, they are completely removed from our database.
 		- Now slips generates alerts in IDEA format by default in alerts.json
 		- Support importing and exporting alerts to warden servers. (CESNET sharing module)
+		- Fix redis closing connection errors
+		- Optimize our docker image
+
 -0.8.1
 	-Slips
 		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
