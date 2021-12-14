@@ -42,7 +42,7 @@ import re
 from collections import OrderedDict
 from distutils.dir_util import copy_tree
 
-version = '0.8.1'
+version = '0.8.2'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'

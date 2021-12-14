@@ -32,8 +32,6 @@ __pycache__/
 *.log
 modules/CESNET/*.log
 
-node_modules/
-
 # redis backups
 redis_backups/*.rdb
 
