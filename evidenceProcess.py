@@ -240,8 +240,8 @@ class EvidenceProcess(multiprocessing.Process):
             evidence_string = f'Detected {description}.'
 
         # Add the srcip to the evidence
-        #evidence_string = f'IP: {ip} (DNS:{dns_resolution_ip}). ' + evidence_string
-        evidence_string = f'Src IP {ip:15}. ' + evidence_string
+        # evidence_string = f'IP: {ip} (DNS:{dns_resolution_ip}). ' + evidence_string
+        # evidence_string = f'Src IP {ip:15}. ' + evidence_string
 
         return evidence_string
 
@@ -658,6 +658,43 @@ class EvidenceProcess(multiprocessing.Process):
 
         return IDEA_dict
 
+    def format_evidence_causing_this_alert(self, all_evidence, profileid, twid, flow_datetime) -> str:
+        """
+        Function to format the string with all evidence causing an alert
+        """
+        # alerts in slips consists of several evidence, each evidence has a threat_level
+        # once we reach a certain threshold of accumulated threat_levels, we produce an alert
+        # Now instead of printing the last evidence only, we print all of them
+
+
+        srcip = profileid.split(self.separator)[1]
+        alert_to_print = f'Infected IP {srcip} on {twid} given the following evidence:\n\t IP {srcip}\n'
+
+        for evidence in all_evidence.values():
+            # Deserialize evidence
+            evidence = json.loads(evidence)
+            type_detection = evidence.get('type_detection')
+            detection_info = evidence.get('detection_info')
+            type_evidence = evidence.get('type_evidence')
+            description = evidence.get('description')
+
+            # format the string of this evidence only: for example Detected C&C channels detection, destination IP:xyz
+            evidence_string = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
+
+            alert_to_print += f'\t\t {evidence_string}\n'
+
+        # the datetime printed will be of the last evidence only
+        if '.' in flow_datetime:
+            format = '%Y-%m-%dT%H:%M:%S.%f%z'
+        else:
+            # e.g  2020-12-18T03:11:09+02:00
+            format = '%Y-%m-%dT%H:%M:%S%z'
+        human_readable_datetime = datetime.strptime(flow_datetime, format).strftime("%Y/%m/%d %H:%M:%S")
+        alert_to_print = f'{human_readable_datetime} {alert_to_print}'
+        return alert_to_print
+
+
+
     def run(self):
         while True:
             try:
@@ -776,15 +813,10 @@ class EvidenceProcess(multiprocessing.Process):
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
                                 # now that this evidence is being printed, it's no longer evidence, it's an alert
-                                alert_to_print = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
-                                if '.' in flow_datetime:
-                                    format = '%Y-%m-%dT%H:%M:%S.%f%z'
-                                else:
-                                    # e.g  2020-12-18T03:11:09+02:00
-                                    format = '%Y-%m-%dT%H:%M:%S%z'
-                                human_readable_datetime = datetime.strptime(flow_datetime, format).strftime("%Y/%m/%d %H:%M:%S")
+                                # alert_to_print = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
 
-                                self.print(f'{Fore.RED} {human_readable_datetime}: {alert_to_print}{Style.RESET_ALL}', 1, 0)
+                                alert_to_print = self.format_evidence_causing_this_alert(tw_evidence, profileid, twid, flow_datetime)
+                                self.print(f'{Fore.RED} {alert_to_print}{Style.RESET_ALL}', 1, 0)
 
                                 # Add to log files that this srcip is being blocked
                                 blocked_srcip_to_log = self.format_blocked_srcip_evidence(profileid, twid, flow_datetime)
@@ -792,7 +824,7 @@ class EvidenceProcess(multiprocessing.Process):
                                               'profileid': profileid,
                                               'twid': twid,
                                               'threat_level':accumulated_threat_level
-                                                } #todo this needs to bee idea too
+                                                }
 
                                 self.addDataToLogFile(blocked_srcip_to_log)
                                 # alerts.json should only contain alerts in idea format,
