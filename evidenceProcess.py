@@ -770,7 +770,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     source_target_tag)
 
                     # Add the evidence to the log files
-                    self.addDataToLogFile(flow_datetime + ': ' + evidence)
+                    self.addDataToLogFile(flow_datetime +  f': Src IP {srcip:15}. ' + evidence[2:])
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
 
