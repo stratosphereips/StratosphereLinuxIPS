@@ -682,12 +682,12 @@ class Module(Module, multiprocessing.Process):
         threat_level = 60
         type_detection  = 'dstip'
         source_target_tag = 'OriginMalware'
-        type_evidence = 'DataExfiltration'
+        type_evidence = 'DataUpload'
         category = 'Malware'
         detection_info = most_contacted_daddr
         bytes_sent_in_MB = int(total_bytes / (10**6))
         ip_identification = __database__.getIPIdentification(most_contacted_daddr)
-        description = f'possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}.'
+        description = f'possible data upload. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}.'
         description+= f'{ip_identification}. IP contacted {times_contacted} times in the past 1h'
         timestamp = datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
         if not twid:
