@@ -381,6 +381,8 @@ class UpdateFileManager:
                 self.print('Successfully updated RiskIQ domains.', 1, 0)
             else:
                 self.print(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
+        time.sleep(0.5)
+        print('-'*30)
 
     def __delete_old_source_IPs(self, file):
         """

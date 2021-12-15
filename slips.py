@@ -219,6 +219,7 @@ def shutdown_gracefully(input_information):
     """
 
     try:
+        print('\n'+'-'*32)
         print('Stopping Slips')
         # Stop the modules that are subscribed to channels
         __database__.publish_stop()
@@ -345,7 +346,8 @@ if __name__ == '__main__':
     alerts_default_path = 'output/'
 
     print('Slips. Version {}'.format(version))
-    print('https://stratosphereips.org\n')
+    print('https://stratosphereips.org')
+    print('-'*30)
 
     # Parse the parameters
     slips_conf_path = get_cwd() + 'slips.conf'
@@ -712,6 +714,8 @@ if __name__ == '__main__':
     inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
     inputProcess.start()
     outputProcessQueue.put('10|main|Started input thread [PID {}]'.format(inputProcess.pid))
+    time.sleep(0.5)
+    print('-'*30)
     __database__.store_process_PID('inputProcess', int(inputProcess.pid))
 
 

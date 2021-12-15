@@ -668,7 +668,7 @@ class EvidenceProcess(multiprocessing.Process):
 
 
         srcip = profileid.split(self.separator)[1]
-        alert_to_print = f'IP {srcip} is infected on {twid} given the following evidence:\n'
+        alert_to_print = f'IP {srcip} is infected in {twid} given the following evidence:\n'
 
         for evidence in all_evidence.values():
             # Deserialize evidence
