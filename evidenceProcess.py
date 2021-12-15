@@ -226,24 +226,24 @@ class EvidenceProcess(multiprocessing.Process):
         srcip = profileid.split('_')[1]
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
-            evidence_string = f'Detected {description}.'
+            evidence_string = f'Detected {description}'
             if detection_type == 'srcip':
                 ip = srcip
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
             ip = srcip
-            evidence_string = f'Detected {description}.'
+            evidence_string = f'Detected {description}'
 
         elif detection_module == 'SSHSuccessful':
-            evidence_string = f'Did a successful SSH. {description}.'
+            evidence_string = f'Did a successful SSH. {description}'
         else:
-            evidence_string = f'Detected {description}.'
+            evidence_string = f'Detected {description}'
 
         # Add the srcip to the evidence
         # evidence_string = f'IP: {ip} (DNS:{dns_resolution_ip}). ' + evidence_string
         # evidence_string = f'Src IP {ip:15}. ' + evidence_string
 
-        return evidence_string
+        return f'• {evidence_string}'
 
     def clean_evidence_log_file(self, output_folder):
         '''
@@ -668,7 +668,7 @@ class EvidenceProcess(multiprocessing.Process):
 
 
         srcip = profileid.split(self.separator)[1]
-        alert_to_print = f'Infected IP {srcip} on {twid} given the following evidence:\n\t IP {srcip}\n'
+        alert_to_print = f'IP {srcip} is infected on {twid} given the following evidence:\n'
 
         for evidence in all_evidence.values():
             # Deserialize evidence
@@ -680,6 +680,11 @@ class EvidenceProcess(multiprocessing.Process):
 
             # format the string of this evidence only: for example Detected C&C channels detection, destination IP:xyz
             evidence_string = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
+
+            # if the evidence takes more than 1 line in the terminal, split it into 2 lines
+            if len(evidence_string)>107:
+                evidence_string = evidence_string[:107]+'\n\t\t   '+ evidence_string[107:]
+                evidence_string.replace('\n\t\t   .','\n\t\t   ')
 
             alert_to_print += f'\t\t {evidence_string}\n'
 
