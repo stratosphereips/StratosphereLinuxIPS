@@ -46,7 +46,7 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def check_suspicious_user_agents(self, uid, host, uri, timestamp, user_agent, profileid, twid):
-        '''Check unusual user agents and set evidence'''
+        ''' Check unusual user agents and set evidence '''
 
         suspicious_user_agents = ('httpsend', 'chm_msdn', 'pb')
         if user_agent.lower() in suspicious_user_agents:
@@ -54,7 +54,7 @@ class Module(Module, multiprocessing.Process):
             source_target_tag = 'UsingSuspiciousUserAgent'
             detection_info = profileid.split("_")[1]
             type_evidence = 'SuspiciousUserAgent'
-            threat_level =  0.6
+            threat_level = 'high'
             category = 'Anomaly.Behaviour'
             confidence = 1
             description = f'Suspicious user agent: {user_agent} from host {host}{uri}'
@@ -79,14 +79,15 @@ class Module(Module, multiprocessing.Process):
             type_evidence = 'multiple_google_connections'
             type_detection = 'srcip'
             detection_info = profileid.split('_')[0]
-            threat_level = 20
+            threat_level = 'medium'
             category = 'Anomaly.Connection'
             confidence = 1
             description = f'multiple empty HTTP connections to google.com'
             if not twid:
                 twid = ''
-            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                     threat_level, confidence, description, timestamp,
+                                     category, profileid=profileid, twid=twid, uid=uid)
             # reset the counter
             self.google_connections_counter=0
             return True

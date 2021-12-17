@@ -9,8 +9,6 @@ import json
 import configparser
 import ipaddress
 import datetime
-import subprocess
-import re
 import sys
 import socket
 import validators
@@ -156,7 +154,9 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-    def set_evidence_ssh_successful(self, profileid, twid, saddr, daddr, size, uid, timestamp, by='', ip_state='ip'):
+    def set_evidence_ssh_successful(self, profileid, twid, saddr,
+                                    daddr, size, uid, timestamp,
+                                    by='', ip_state='ip'):
         """
         Set an evidence for a successful SSH login.
         This is not strictly a detection, but we don't have
@@ -167,24 +167,28 @@ class Module(Module, multiprocessing.Process):
         type_detection = 'srcip'
         detection_info = saddr
         type_evidence = f'SSHSuccessful-by-{saddr}'
-        threat_level = 0
+        threat_level = 'info'
         confidence = 0.5
         category = 'Infomation'
         ip_identification = __database__.getIPIdentification(daddr)
-        description = f'SSH successful to IP {daddr}. {ip_identification}. From IP {saddr}. Size: {str(size)}. Detection model {by}. Threat level {threat_level}. Confidence {confidence}'
+        description = f'SSH successful to IP {daddr}. {ip_identification}. ' \
+                      f'From IP {saddr}. Size: {str(size)}. Detection model {by}.' \
+                      f' Confidence {confidence}'
         if not twid:
             twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_long_connection(self, ip, duration, profileid, twid, uid, timestamp, ip_state='ip'):
+    def set_evidence_long_connection(self, ip, duration, profileid, twid,
+                                     uid, timestamp, ip_state='ip'):
         '''
         Set an evidence for a long connection.
         '''
         type_detection = ip_state
         detection_info = ip
         type_evidence = 'LongConnection'
-        threat_level = 0.5
+        threat_level = 'low'
         category = 'Anomaly.Connection'
         # confidence depends on how long the connection
         # scale the confidence from 0 to 1, 1 means 24 hours long
@@ -196,22 +200,26 @@ class Module(Module, multiprocessing.Process):
         description = f'Long Connection. Connection to: {ip} {ip_identification} took {duration} mins'
         if not twid:
             twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid,
+                                 twid=twid, uid=uid)
 
-    def set_evidence_self_signed_certificates(self, profileid, twid, ip, description, uid, timestamp, ip_state='ip'):
+    def set_evidence_self_signed_certificates(self, profileid, twid, ip,
+                                              description, uid, timestamp, ip_state='ip'):
         '''
         Set evidence for self signed certificates.
         '''
         confidence = 0.5
-        threat_level = 0.3
+        threat_level = 'low'
         category = 'Anomaly.Behaviour'
         type_detection = 'dstip'
         type_evidence = 'SelfSignedCertificate'
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_for_multiple_reconnection_attempts(self,profileid, twid, ip, description, uid, timestamp):
@@ -219,29 +227,32 @@ class Module(Module, multiprocessing.Process):
         Set evidence for Reconnection Attempts.
         '''
         confidence = 0.5
-        threat_level = 20
+        threat_level = 'medium'
         category = 'Anomaly.Traffic'
         type_detection  = 'dstip'
         type_evidence = 'MultipleReconnectionAttempts'
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid,
+                                 twid=twid, uid=uid)
 
     def set_evidence_for_connection_to_multiple_ports(self,profileid, twid, ip, description, uid, timestamp):
         '''
         Set evidence for connection to multiple ports.
         '''
         confidence = 0.5
-        threat_level = 20
+        threat_level = 'medium'
         category = 'Anomaly.Connection'
         type_detection  = 'dstip'
         type_evidence = 'ConnectionToMultiplePorts'
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_for_invalid_certificates(self, profileid, twid, ip, description, uid, timestamp):
@@ -249,14 +260,15 @@ class Module(Module, multiprocessing.Process):
         Set evidence for Invalid SSL certificates.
         '''
         confidence = 0.5
-        threat_level =  0.2
+        threat_level = 'low'
         category = "Anomaly.Behaviour"
         type_detection  = 'dstip'
         type_evidence = 'InvalidCertificate'
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid, timestamp):
@@ -378,41 +390,48 @@ class Module(Module, multiprocessing.Process):
             and not __database__.is_ftp_port(dport)):
             # we don't have info about this port
             confidence = 1
-            threat_level = 0.6
+            threat_level = 'high'
             category = 'Anomaly.Connection'
             type_detection  = 'dport'
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
             ip_identification = __database__.getIPIdentification(daddr)
-            description = f'Connection to unknown destination port {dport}/{proto.upper()} destination IP {daddr}. {ip_identification}'
+            description = f'Connection to unknown destination port {dport}/{proto.upper()} ' \
+                          f'destination IP {daddr}. {ip_identification}'
             # get the sni/reverse dns of this daddr
             ip_info = self.get_ip_info(daddr)
             if ip_info:
                 description += f' ({ip_info})'
             if not twid:
                 twid = ''
-            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                     threat_level, confidence, description,
+                                     timestamp, category, profileid=profileid,
+                                     twid=twid, uid=uid)
 
     def set_evidence_for_port_0_connection(self, saddr, daddr, direction, profileid, twid, uid, timestamp):
         """ :param direction: 'source' or 'destination' """
         confidence = 0.8
-        threat_level =  0.5
+        threat_level = 'high'
         category = 'Anomaly.Connection'
         type_detection  = 'srcip' if direction == 'source' else 'dstip'
         source_target_tag = "Recon"
         type_evidence = 'Port0Connection'
         detection_info = saddr if direction == 'source' else daddr
+
         if direction == 'source':
             ip_identification = __database__.getIPIdentification(daddr)
             description = f'Connection on port 0 from {saddr} to {daddr}. {ip_identification}.'
         else:
             ip_identification = __database__.getIPIdentification(saddr)
             description = f'Connection on port 0 from {daddr} to {saddr}. {ip_identification}'
+
         conn_count = 1
         if not twid: twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag,
+                                 conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
@@ -423,7 +442,8 @@ class Module(Module, multiprocessing.Process):
         #if __database__.get_dhcp_servers(daddr):
             #continue
 
-        # to avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
+        # to avoid false positives in case of an interface don't alert
+        # ConnectionWithoutDNS until 2 minutes has passed
         # after starting slips because the dns may have happened before starting slips
         if '-i' in sys.argv:
             start_time = __database__.get_slips_start_time()
@@ -450,15 +470,17 @@ class Module(Module, multiprocessing.Process):
                 # mark this connection as checked
                 self.connections_checked_in_conn_dns_timer_thread.append(uid)
                 params = [daddr, twid, profileid, timestamp, uid]
-                #self.print(f'Starting the timer to check on {daddr}, uid {uid}. time {datetime.datetime.now()}')
+                #self.print(f'Starting the timer to check on {daddr}, uid {uid}.
+                # time {datetime.datetime.now()}')
                 timer = TimerThread(15, self.check_connection_without_dns_resolution, params)
                 timer.start()
             elif uid in self.connections_checked_in_conn_dns_timer_thread:
                 # It means we already checked this conn with the Timer process
                 # (we waited 5 seconds for the dns to arrive after the connection was made)
                 # but still no dns resolution for it. So now alert
-                #self.print(f'Alerting after timer conn without dns on {daddr}, uid {uid}. time {datetime.datetime.now()}')
-                threat_level = 0.9
+                #self.print(f'Alerting after timer conn without dns on {daddr},
+                # uid {uid}. time {datetime.datetime.now()}')
+                threat_level = 'high'
                 category = 'Anomaly.Connection'
                 type_detection  = 'dstip'
                 source_target_tag = 'Malware'
@@ -469,8 +491,10 @@ class Module(Module, multiprocessing.Process):
                 description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
                 if not twid:
                     twid = ''
-                __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                         description, timestamp, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
+                __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                         threat_level, confidence, description,
+                                         timestamp, category, source_target_tag=source_target_tag,
+                                         profileid=profileid, twid=twid, uid=uid)
                 # This UID will never appear again, so we can remove it and
                 # free some memory
                 try:
@@ -548,7 +572,7 @@ class Module(Module, multiprocessing.Process):
             # It means we already checked this dns with the Timer process
             # but still no connection for it. So now alert
             confidence = 0.8
-            threat_level = 0.3
+            threat_level = 'low'
             category = 'Anomaly.Traffic'
             type_detection  = 'dstdomain'
             type_evidence = 'DNSWithoutConnection'
@@ -674,12 +698,14 @@ class Module(Module, multiprocessing.Process):
         confidence = 1
         if not twid:
             twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_data_exfiltration(self, most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
         confidence = 0.6
-        threat_level = 60
+        threat_level = 'high'
         type_detection  = 'dstip'
         source_target_tag = 'OriginMalware'
         type_evidence = 'DataUpload'
@@ -716,10 +742,11 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # every 10,15,20 .. etc. nxdomains, generate an alert.
-        if self.nxdomains[profileid_twid] % 5 == 0 and self.nxdomains[profileid_twid] >= self.nxdomains_threshold:
+        if (self.nxdomains[profileid_twid] % 5 == 0 and
+            self.nxdomains[profileid_twid] >= self.nxdomains_threshold):
             confidence = (1/100)*(self.nxdomains[profileid_twid]-100)+1
             confidence = round(confidence, 2) # for readability
-            threat_level = 80
+            threat_level = 'high'
             category = 'Intrusion.Botnet'
             # the srcip performing all the dns queries
             type_detection  = 'srcip'
@@ -964,13 +991,14 @@ class Module(Module, multiprocessing.Process):
                             ip_identification = __database__.getIPIdentification(ip)
                             description = f'self-signed certificate. Destination IP {ip}. {ip_identification}'
                             confidence = 0.5
-                            threat_level = 30
+                            threat_level = 'low'
                             category = "Anomaly.Behaviour"
                             type_detection = 'dstip'
                             type_evidence = 'SelfSignedCertificate'
                             detection_info = ip
-                            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
-                                                     confidence, description, timestamp, category, profileid=profileid,
+                            __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                                     threat_level, confidence, description,
+                                                     timestamp, category, profileid=profileid,
                                                      twid=twid, uid=uid)
                             #self.print(description, 3, 0)
 
@@ -980,7 +1008,7 @@ class Module(Module, multiprocessing.Process):
                             # Vertical port scan
                             # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
                             confidence = 1
-                            threat_level = 60
+                            threat_level = 'medium'
                             # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
                             description = 'vertical port scan by Zeek engine. ' + msg
                             type_evidence = 'PortScanType1'
@@ -1000,14 +1028,15 @@ class Module(Module, multiprocessing.Process):
                             # get the description inside parenthesis
                             ip_identification = __database__.getIPIdentification(ip)
                             description = msg + f' Destination IP: {ip}. {ip_identification}'
-                            self.set_evidence_for_invalid_certificates(profileid, twid, ip, description, uid, timestamp)
+                            self.set_evidence_for_invalid_certificates(profileid, twid, ip,
+                                                                       description, uid, timestamp)
                             #self.print(description, 3, 0)
 
                         if 'Address_Scan' in note:
                             # Horizontal port scan
                             # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
                             confidence = 1
-                            threat_level = 60
+                            threat_level = 'medium'
                             description = 'horizontal port scan by Zeek engine. ' + msg
                             type_evidence = 'PortScanType2'
                             type_detection = 'dport'
@@ -1026,7 +1055,7 @@ class Module(Module, multiprocessing.Process):
                             # Vertical port scan
                             # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
                             confidence = 1
-                            threat_level = 0.6
+                            threat_level = 'high'
                             category = 'Attempt.Login'
                             # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
                             description = 'password guessing by Zeek enegine. ' + msg

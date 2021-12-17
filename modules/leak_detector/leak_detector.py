@@ -1,16 +1,3 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
-
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
@@ -157,7 +144,9 @@ class Module(Module, multiprocessing.Process):
             # we now know there's a match at offset x, we need to know offset x belongs to which packet
             packet_info = self.get_packet_info(offset)
             if packet_info:
-                srcip, dstip, proto, sport, dport, ts = packet_info[0],packet_info[1],packet_info[2],packet_info[3],packet_info[4],packet_info[5]
+                srcip, dstip, proto, sport, dport, ts = packet_info[0], packet_info[1], \
+                                                        packet_info[2],packet_info[3], \
+                                                        packet_info[4],packet_info[5]
                 type_detection = 'dstip'
                 detection_info = dstip
                 source_target_tag = 'CC'
@@ -165,7 +154,7 @@ class Module(Module, multiprocessing.Process):
                 type_evidence = 'NETWORK_gps_location_leaked'
                 category = 'Malware'
                 confidence = 0.9
-                threat_level = 0.9
+                threat_level = 'high'
                 description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
                 # generate a random uid
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
