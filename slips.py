@@ -219,7 +219,7 @@ def shutdown_gracefully(input_information):
     """
 
     try:
-        print('\n'+'-'*32)
+        print('\n'+'-'*30)
         print('Stopping Slips')
         # Stop the modules that are subscribed to channels
         __database__.publish_stop()
