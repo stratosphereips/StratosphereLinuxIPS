@@ -9,6 +9,7 @@ import json
 import configparser
 import ipaddress
 import datetime
+import time
 import sys
 import socket
 import validators
@@ -468,7 +469,14 @@ class Module(Module, multiprocessing.Process):
                 source_target_tag = 'Malware'
                 type_evidence = 'ConnectionWithoutDNS'
                 detection_info = daddr
+                # the first 5 hours the confidence of connection w/o dns
+                # is 0.1  in case of interface only, until slips learns all the dns
+                start_time = __database__.get_slips_start_time()
+                now = time.time()
                 confidence = 0.8
+                if '-i' in sys.argv and (now - start_time < 18000):
+                    confidence = 0.1
+
                 ip_identification = __database__.getIPIdentification(daddr)
                 description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
                 if not twid:
