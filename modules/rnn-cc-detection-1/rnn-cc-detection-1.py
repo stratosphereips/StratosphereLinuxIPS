@@ -67,7 +67,7 @@ class Module(Module, multiprocessing.Process):
         categroy =  'Intrusion.Botnet'
         tupleid = tupleid.split(':')
         dstip , port, proto =  tupleid[0], tupleid[1], tupleid[2]
-        description = f'C&C channels detection, destination IP: {dstip} port: {port}/{proto} score: {format(score, ".4f")}'
+        description = f'C&C channel, destination IP: {dstip} port: {port}/{proto} score: {format(score, ".4f")}'
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description, timestamp,
                                  categroy, source_target_tag=source_target_tag,

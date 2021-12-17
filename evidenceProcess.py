@@ -71,6 +71,16 @@ class EvidenceProcess(multiprocessing.Process):
         self.timeout = 0.0000001
         # this list will have our local and public ips
         self.our_ips = self.get_IP()
+        # all evidence slips detects has threat levels of strings
+        # each string should have a corresponding int value to be able to calculate
+        # the accumulated threat level and alert
+        self.threat_levels = {
+            'info': 0,
+            'low' : 0.2,
+            'medium': 0.5,
+            'high': 0.8,
+            'critical': 1
+        }
 
     def setup_notifications(self):
         """
@@ -747,11 +757,11 @@ class EvidenceProcess(multiprocessing.Process):
                     uid = data.get('uid')
                     # in case of blacklisted ip evidence, we add the tag to the description like this [tag]
                     tags = data.get('tags',False)
-                    confidence = data.get('confidence',False)
-                    threat_level = data.get('threat_level',False)
+                    confidence = data.get('confidence', False)
+                    threat_level = data.get('threat_level', False)
                     category = data.get('category',False)
                     conn_count = data.get('conn_count',False)
-                    source_target_tag = data.get('source_target_tag',False)
+                    source_target_tag = data.get('source_target_tag', False)
 
                     # Ignore alert if IP is whitelisted
                     flow = __database__.get_flow(profileid, twid, uid)
@@ -820,6 +830,13 @@ class EvidenceProcess(multiprocessing.Process):
                             type_evidence = evidence.get('type_evidence')
                             confidence = float(evidence.get('confidence'))
                             threat_level = evidence.get('threat_level')
+                            # each threat level is a string, get the numericial value of it
+                            try:
+                                threat_level = self.threat_levels[threat_level.lower()]
+                            except KeyError:
+                                self.print(f"Evidence of type {type_evidence} has an invalid threat level {threat_level}", 0 , 1)
+                                threat_level = 0
+
                             description = evidence.get('description')
 
                             # Compute the moving average of evidence
