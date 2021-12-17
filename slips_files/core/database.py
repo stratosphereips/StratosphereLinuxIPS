@@ -1131,9 +1131,8 @@ class Database(object):
 
 
 
-    def deleteEvidence(self,profileid, twid, key):
+    def deleteEvidence(self,profileid, twid, description):
         """ Delete evidence from the database
-        key is a dict with type_detection, detection_info, type_evidence as keys
         """
 
         current_evidence = self.getEvidenceForTW(profileid, twid)
@@ -1141,9 +1140,8 @@ class Database(object):
             current_evidence = json.loads(current_evidence)
         else:
             current_evidence = {}
-        key_json = json.dumps(key)
         # Delete the key regardless of whether it is in the dictionary
-        current_evidence.pop(key_json, None)
+        current_evidence.pop(description, None)
         current_evidence_json = json.dumps(current_evidence)
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
