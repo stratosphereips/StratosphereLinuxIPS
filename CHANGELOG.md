@@ -1,3 +1,6 @@
+-0.8.3
+		- More accurate threat levels, now they're strings instead of values
+
 -0.8.2
 	-Slips
 		- Detect gratoitous ARP
