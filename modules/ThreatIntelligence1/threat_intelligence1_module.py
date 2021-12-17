@@ -40,7 +40,8 @@ class Module(Module, multiprocessing.Process):
         # Get the time of log report
         try:
             # Read the path to where to store and read the malicious files
-            self.path_to_local_threat_intelligence_data = self.config.get('threatintelligence', 'download_path_for_local_threat_intelligence')
+            self.path_to_local_threat_intelligence_data = self.config.get('threatintelligence',
+                                                                          'download_path_for_local_threat_intelligence')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_local_threat_intelligence_data = 'modules/ThreatIntelligence1/local_data_files/'
@@ -61,7 +62,7 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
 
-        threat_level = ip_info.get('threat_level', 'high')
+        threat_level = ip_info.get('threat_level', 'medium')
 
         confidence = 1
         category = 'Anomaly.Traffic'
@@ -281,7 +282,7 @@ class Module(Module, multiprocessing.Process):
                         # Store the ip in our local dict
                         malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
                                                                           'source':data_file_name,
-                                                                          'threat_level':1})
+                                                                          'threat_level':'medium'})
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
                         try:
@@ -290,7 +291,7 @@ class Module(Module, multiprocessing.Process):
                             # Store the ip in our local dict
                             malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
                                                                               'source':data_file_name,
-                                                                              'threat_level':1})
+                                                                              'threat_level':'medium'})
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
@@ -299,7 +300,7 @@ class Module(Module, multiprocessing.Process):
                                 # Store the ip in our local dict
                                 malicious_domains_dict[str(domain)] = json.dumps({'description': description,
                                                                                   'source':data_file_name,
-                                                                                  'threat_level':1})
+                                                                                  'threat_level':'high'})
                             else:
                                 self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 0, 2)
                                 continue
