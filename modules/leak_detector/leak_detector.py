@@ -144,7 +144,9 @@ class Module(Module, multiprocessing.Process):
             # we now know there's a match at offset x, we need to know offset x belongs to which packet
             packet_info = self.get_packet_info(offset)
             if packet_info:
-                srcip, dstip, proto, sport, dport, ts = packet_info[0],packet_info[1],packet_info[2],packet_info[3],packet_info[4],packet_info[5]
+                srcip, dstip, proto, sport, dport, ts = packet_info[0], packet_info[1], \
+                                                        packet_info[2],packet_info[3], \
+                                                        packet_info[4],packet_info[5]
                 type_detection = 'dstip'
                 detection_info = dstip
                 source_target_tag = 'CC'
@@ -152,7 +154,7 @@ class Module(Module, multiprocessing.Process):
                 type_evidence = 'NETWORK_gps_location_leaked'
                 category = 'Malware'
                 confidence = 0.9
-                threat_level = 0.9
+                threat_level = 'high'
                 description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
                 # generate a random uid
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')

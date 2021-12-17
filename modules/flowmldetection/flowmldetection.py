@@ -32,7 +32,6 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, config):
         multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
@@ -347,7 +346,7 @@ class Module(Module, multiprocessing.Process):
         Set the evidence that a flow was detected as malicious
         """
         confidence =  0.1
-        threat_level = 0.2
+        threat_level = 'low'
         type_detection  = 'flow'
         category = 'Anomaly.Traffic'
         detection_info = str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
@@ -356,7 +355,8 @@ class Module(Module, multiprocessing.Process):
         timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
         if not twid:
             twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid)
 
     def run(self):
