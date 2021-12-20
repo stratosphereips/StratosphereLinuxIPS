@@ -27,10 +27,10 @@ def test_load_malicious_datafile(outputQueue):
     # get the first local threat intel file in local_data_files
     import os
     filename = os.listdir('modules/ThreatIntelligence1/local_data_files')[0]
-    assert threatintel.load_malicious_datafile(dir_ + filename) == True
+    assert threatintel.parse_ti_file(dir_ + filename) == True
 
 def test_load_malicious_local_files(outputQueue):
     threatintel = create_threatintel_instance(outputQueue)
     dir_ = threatintel.path_to_local_threat_intelligence_data
-    assert threatintel.load_malicious_local_files(dir_) == True
+    assert threatintel.check_local_ti_files(dir_) == True
 
