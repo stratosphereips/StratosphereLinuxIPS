@@ -3,8 +3,6 @@
 # Here we have a list of organizations range/ip and the port it's known to use
 "Organization","IP/IP range","port","protocol"
 Spotify,78.31.8.0/22,4070,tcp
-16384,16403,udp
-16384,16403,udp
 Apple,"",16384,udp
 Apple,"",16385,udp
 Apple,"",16386,udp
@@ -25,14 +23,11 @@ Apple,"",16400,udp
 Apple,"",16401,udp
 Apple,"",16402,udp
 Apple,"",16403,udp
-16384,16387,udp
-16384,16387,udp
 Apple,"",16384,udp
 Apple,"",16385,udp
 Apple,"",16386,udp
 Apple,"",16387,udp
-16393,16402,udp
-16393,16402,udp
+Apple,"",16402,udp
 Apple,"",16393,udp
 Apple,"",16394,udp
 Apple,"",16395,udp
@@ -43,8 +38,7 @@ Apple,"",16399,udp
 Apple,"",16400,udp
 Apple,"",16401,udp
 Apple,"",16402,udp
-16403,16472,udp
-16403,16472,udp
+Apple,"",16472,udp
 Apple,"",16403,udp
 Apple,"",16404,udp
 Apple,"",16405,udp
@@ -114,9 +108,6 @@ Apple,"",16468,udp
 Apple,"",16469,udp
 Apple,"",16470,udp
 Apple,"",16471,udp
-Apple,"",16472,udp
-24000,24999,tcp
-24000,24999,tcp
 Apple,"",24000,tcp
 Apple,"",24001,tcp
 Apple,"",24002,tcp
@@ -1117,8 +1108,6 @@ Apple,"",24996,tcp
 Apple,"",24997,tcp
 Apple,"",24998,tcp
 Apple,"",24999,tcp
-42000,42999,tcp
-42000,42999,tcp
 Apple,"",42000,tcp
 Apple,"",42001,tcp
 Apple,"",42002,tcp
@@ -2119,8 +2108,6 @@ Apple,"",42996,tcp
 Apple,"",42997,tcp
 Apple,"",42998,tcp
 Apple,"",42999,tcp
-49152,65535,tcp
-49152,65535,tcp
 Apple,"",49152,tcp
 Apple,"",49153,tcp
 Apple,"",49154,tcp
@@ -18505,8 +18492,6 @@ Apple,"",65532,tcp
 Apple,"",65533,tcp
 Apple,"",65534,tcp
 Apple,"",65535,tcp
-49152,65535,udp
-49152,65535,udp
 Apple,"",49152,udp
 Apple,"",49153,udp
 Apple,"",49154,udp
@@ -34891,8 +34876,6 @@ Apple,"",65532,udp
 Apple,"",65533,udp
 Apple,"",65534,udp
 Apple,"",65535,udp
-600,1023,tcp
-600,1023,tcp
 Apple,"",600,tcp
 Apple,"",601,tcp
 Apple,"",602,tcp
@@ -35317,8 +35300,6 @@ Apple,"",1020,tcp
 Apple,"",1021,tcp
 Apple,"",1022,tcp
 Apple,"",1023,tcp
-600,1023,udp
-600,1023,udp
 Apple,"",600,udp
 Apple,"",601,udp
 Apple,"",602,udp
@@ -35765,12 +35746,8 @@ Apple,"",3494,udp
 Apple,"",3495,udp
 Apple,"",3496,udp
 Apple,"",3497,udp
-5897,5898,udp
-5897,5898,udp
 Apple,"",5897,udp
 Apple,"",5898,udp
-6970,9999,udp
-6970,9999,udp
 Apple,"",6970,udp
 Apple,"",6971,udp
 Apple,"",6972,udp
