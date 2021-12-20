@@ -188,7 +188,7 @@ class ProfilerProcess(multiprocessing.Process):
 
                     try:
                         organization, ip = line[0], line[1]
-                        portproto = f'{line[2]}/{line[3].lower()}'
+                        portproto = f'{line[2]}/{line[3].lower().strip()}'
                         __database__.set_organization_of_port(organization, ip, portproto)
                     except IndexError:
                         self.print(f"Invalid line: {line} line number: {line_number} in {ports_info_filepath}. Skipping.",0,1)
