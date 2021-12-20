@@ -190,119 +190,81 @@ class Module(Module, multiprocessing.Process):
             data_file_name = ti_file_path.split('/')[-1]
             malicious_ips_dict = {}
             malicious_domains_dict = {}
-            with open(ti_file_path) as malicious_file:
+            # used for debugging
+            line_number = 0
+            with open(ti_file_path) as local_ti_file:
 
-                self.print('Reading next lines in the file {} for IoC'.format(ti_file_path), 2, 0)
+                self.print('Reading next lines in the local file {} for IoC'.format(ti_file_path), 2, 0)
 
-                # Remove comments and find the description column if possible
-                description_column = None
+                # skip comments
                 while True:
-                    line = malicious_file.readline()
-                    # break while statement if it is not a comment line
-                    # i.e. does not startwith #
-                    if line.startswith('#'):
-                        # looks like the colums names, search where is the
-                        # description column
-                        for name_column in line.split(','):
-                            if name_column.lower().startswith('desc'):
-                                description_column = line.split(',').index(name_column)
-                    if not line.startswith('#') and not line.startswith('"type"'):
+                    line_number+=1
+                    line = local_ti_file.readline()
+                    if not line.startswith('#'):
                         break
 
-                #
-                # Find in which column is the imporant info in this
-                # TI file (domain or ip)
-                #
-
-                # Store the current position of the TI file
-                current_file_position = malicious_file.tell()
-
-                # temp_line = malicious_file.readline()
-                data = line.replace("\n","").replace("\"","").split(",")
-                amount_of_columns = len(line.split(","))
-                if description_column is None:
-                    description_column = amount_of_columns - 1
-                # Search the first column that is an IPv4, IPv6 or domain
-                for column in range(amount_of_columns):
-                    # Check if ip is valid.
-                    try:
-                        ip_address = ipaddress.IPv4Address(data[column].strip())
-                        # Is IPv4! let go
-                        data_column = column
-                        self.print(f'The data is on column {column} and is ipv4: {ip_address}', 2, 0)
-                        break
-                    except ipaddress.AddressValueError:
-                        # Is it ipv6?
-                        try:
-                            ip_address = ipaddress.IPv6Address(data[column].strip())
-                            # Is IPv6! let go
-                            data_column = column
-                            self.print(f'The data is on column {column} and is ipv6: {ip_address}', 2,0)
-                            break
-                        except ipaddress.AddressValueError:
-                            # It does not look as IP address.
-                            # So it should be a domain
-                            if validators.domain(data[column].strip()):
-                                data_column = column
-                                self.print(f'The data is on column {column} and is domain: {data[column]}', 2,0)
-                                break
-                            else:
-                                # Some string that is not a domain
-                                data_column = None
-                                pass
-                if data_column is None:
-                    self.print(f'Error while reading the TI file {malicious_file}. Could not find a column with an IP or domain', 0, 2)
-                    return False
-
-                # Now that we read the first line, go back so we
-                # can process it
-                malicious_file.seek(current_file_position)
-
-                for line in malicious_file:
+                for line in local_ti_file:
+                    line_number+=1
                     # The format of the file should be
-                    # "0", "103.15.53.231","90", "Karel from our village. He is bad guy."
-                    # So the second column will be used as important data with
-                    # an IP or domain
-                    # In the case of domains can be
-                    # domain,www.netspy.net,NetSpy
+                    # "103.15.53.231","critical", "Karel from our village. He is bad guy."
+                    data = line.replace("\n","").replace("\"","").split(",")
 
-                    # Separate the lines like CSV
-                    # In the new format the ip is in the second position.
-                    # And surronded by "
-                    data = line.replace("\n","").replace("\"","").split(",")[data_column].strip()
+                    # the column order is hardcoded because it's owr own ti file and we know the format,
+                    # we shouldn't be trying to find it
+                    ioc, threat_level, description,  = data[0], data [1].lower(), data[2]
 
-                    description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
-                    self.print('\tRead Data {}: {}'.format(data, description), 2, 0)
-
-                    # Check if ip is valid.
+                    # is the IoC an IPv4, IPv6 or domain?
                     try:
-                        ip_address = ipaddress.IPv4Address(data)
-                        # Is IPv4!
+                        ip_address = ipaddress.IPv4Address(ioc.strip())
                         # Store the ip in our local dict
                         malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
-                                                                          'source':data_file_name,
-                                                                          'threat_level':'medium'})
+                                                                          'source': data_file_name,
+                                                                          'threat_level': threat_level})
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
                         try:
-                            ip_address = ipaddress.IPv6Address(data)
-                            # Is IPv6!
-                            # Store the ip in our local dict
-                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
-                                                                              'source':data_file_name,
-                                                                              'threat_level':'medium'})
+                            ip_address = ipaddress.IPv6Address(ioc.strip())
+                            # Is IPv6! let go
+                            self.print(f'The data is in line {line_number} and is ipv6: {ip_address}', 2,0)
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
-                            if validators.domain(data):
-                                domain = data
-                                # Store the ip in our local dict
-                                malicious_domains_dict[str(domain)] = json.dumps({'description': description,
-                                                                                  'source':data_file_name,
-                                                                                  'threat_level':'high'})
+                            if validators.domain(ioc.strip()):
+                                self.print(f'The data is in line {line_number}  and is domain: {ioc}', 2,0)
                             else:
-                                self.print('The data {} is not valid. It was found in {}.'.format(data, ti_file_path), 0, 2)
-                                continue
+                                # invalid ioc, skip it
+                                self.print(f'Error while reading the TI file {local_ti_file}.'
+                                           f' Line {line_number} has invalid data', 0, 2)
+
+
+                    self.print('\tRead Data {}: {}'.format(data, description), 2, 0)
+
+                    # # Check if ip is valid.
+                    # try:
+                    #     ip_address = ipaddress.IPv4Address(data)
+                    #     # Is IPv4!
+                    #
+                    # except ipaddress.AddressValueError:
+                    #     # Is it ipv6?
+                    #     try:
+                    #         ip_address = ipaddress.IPv6Address(data)
+                    #         # Is IPv6!
+                    #         # Store the ip in our local dict
+                    #         malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
+                    #                                                           'source':data_file_name,
+                    #                                                           'threat_level':'medium'})
+                    #     except ipaddress.AddressValueError:
+                    #         # It does not look as IP address.
+                    #         # So it should be a domain
+                    #         if validators.domain(data):
+                    #             domain = data
+                    #             # Store the ip in our local dict
+                    #             malicious_domains_dict[str(domain)] = json.dumps({'description': description,
+                    #                                                               'source':data_file_name,
+                    #                                                               'threat_level':'high'})
+                    #         else:
+                    #             self.print('The data {} is not valid. It was found in {}.'.format(data, ti_file_path), 0, 2)
+                    #             continue
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
