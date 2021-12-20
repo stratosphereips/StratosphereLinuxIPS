@@ -179,21 +179,20 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst), 0, 0)
             return False
 
-    def load_malicious_datafile(self, malicious_data_path: str) -> bool:
+    def parse_ti_file(self, ti_file_path: str) -> bool:
         """
-        Read all the files holding IP addresses and a description and put the
-        info in a large dict.
-        This also helps in having unique ioc accross files
+        Read all the files holding IP addresses and a description and store in the db.
+        This also helps in having unique ioc across files
         Returns nothing, but the dictionary should be filled
-        :param malicious_data_path: path_to local threat intel files/localfile
+        :param ti_file_path: path_to local threat intel file
         """
         try:
-            data_file_name = malicious_data_path.split('/')[-1]
+            data_file_name = ti_file_path.split('/')[-1]
             malicious_ips_dict = {}
             malicious_domains_dict = {}
-            with open(malicious_data_path) as malicious_file:
+            with open(ti_file_path) as malicious_file:
 
-                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 2, 0)
+                self.print('Reading next lines in the file {} for IoC'.format(ti_file_path), 2, 0)
 
                 # Remove comments and find the description column if possible
                 description_column = None
@@ -201,7 +200,7 @@ class Module(Module, multiprocessing.Process):
                     line = malicious_file.readline()
                     # break while statement if it is not a comment line
                     # i.e. does not startwith #
-                    if line.startswith('#"type"'):
+                    if line.startswith('#'):
                         # looks like the colums names, search where is the
                         # description column
                         for name_column in line.split(','):
@@ -302,7 +301,7 @@ class Module(Module, multiprocessing.Process):
                                                                                   'source':data_file_name,
                                                                                   'threat_level':'high'})
                             else:
-                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 0, 2)
+                                self.print('The data {} is not valid. It was found in {}.'.format(data, ti_file_path), 0, 2)
                                 continue
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
@@ -313,7 +312,7 @@ class Module(Module, multiprocessing.Process):
             return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on load_malicious_datafile() line {exception_line}', 0, 1)
+            self.print(f'Problem on parse_ti_file() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -357,26 +356,34 @@ class Module(Module, multiprocessing.Process):
         self.__delete_old_source_IPs(data_file)
         self.__delete_old_source_Domains(data_file)
 
-    def load_malicious_local_files(self, path_to_files: str) -> bool:
-        """ Checks if a local malicious file was changed based on it's hash, if so, update its content and delete old data"""
+    def check_local_ti_files(self, path_to_files: str) -> bool:
+        """
+        Checks if a local TI file was changed based
+        on it's hash, if so, update its content and delete old data
+        """
         try:
             local_ti_files = os.listdir(path_to_files)
             for localfile in local_ti_files:
                 self.print(f'Loading local TI file {localfile}', 2, 0)
                 # Get what files are stored in cache db and their E-TAG to comapre with current files
                 data = __database__.get_TI_file_info(localfile)
-                try:
-                    old_hash = data['e-tag']
-                except TypeError:
-                    old_hash = ''
-                # In the case of the local file, we dont store the e-tag but
-                # the hash
+
+                old_hash = data.get('e-tag',False)
+
+                # In the case of the local file, we dont store the e-tag
+                # we calculate the hash
                 new_hash = self.get_hash_from_file(path_to_files + '/' + localfile)
+
+                if not new_hash:
+                    # Something failed. Do not download
+                    self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 3)
+                    return False
+
                 if old_hash == new_hash:
                     # The 2 hashes are identical. File is up to date.
                     self.print(f'File {localfile} is up to date.', 2, 0)
                     return True
-                elif new_hash and old_hash != new_hash:
+                elif old_hash != new_hash:
                     # Our malicious file was changed. Load the new one
                     self.print(f'Updating the local TI file {localfile}', 2, 0)
                     if old_hash:
@@ -384,7 +391,7 @@ class Module(Module, multiprocessing.Process):
                         # Delete previous data of this file.
                         self.__delete_old_source_data_from_database(localfile)
                     # Load updated data to the database
-                    self.load_malicious_datafile(path_to_files + '/' + localfile)
+                    self.parse_ti_file(path_to_files + '/' + localfile)
 
                     # Store the new etag and time of file in the database
                     malicious_file_info = {}
@@ -392,10 +399,6 @@ class Module(Module, multiprocessing.Process):
                     malicious_file_info['time'] = ''
                     __database__.set_TI_file_info(localfile, malicious_file_info)
                     return True
-                elif not new_hash:
-                    # Something failed. Do not download
-                    self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 3)
-                    return False
 
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -431,7 +434,7 @@ class Module(Module, multiprocessing.Process):
         try:
             # Load the local Threat Intelligence files that are stored in the local folder
             # The remote files are being loaded by the UpdateManager
-            if not self.load_malicious_local_files(self.path_to_local_threat_intelligence_data):
+            if not self.check_local_ti_files(self.path_to_local_threat_intelligence_data):
                 self.print(f'Could not load the local file of TI data {self.path_to_local_threat_intelligence_data}')
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
