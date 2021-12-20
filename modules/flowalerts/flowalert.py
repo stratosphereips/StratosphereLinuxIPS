@@ -356,32 +356,41 @@ class Module(Module, multiprocessing.Process):
 
         return False
 
+    def port_belongs_to_an_org(self, daddr, portproto, profileid):
+        """
+        checks weather a port is known to be used by a specific organization or not
+        """
+        organization_info = __database__.get_organization_of_port(portproto)
+        if organization_info:
+          # there's an organization that's known to use this port, check if the daddr belongs to the range of this org
+            organization_info = json.loads(organization_info)
+            # can be an ip or a range
+            org_ip = organization_info['ip']
+            # org_name = organization_info['org_name']
+            # it's an ip and it belongs to this org, consider the port as known
+            if daddr in org_ip: return False
+            # is it a range?
+            try:
+                # we have the org range in our database, check if the daddr belongs to this range
+                if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
+                    # it does, consider the port as known
+                    return False
+            except ValueError:
+                # not a range either??
+                # consider this port as unknown
+                pass
+
+        return False
+
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
-        """ Checks dports that are not in any of our slips_files/ports_info/ files"""
+        """ Checks dports that are not in our slips_files/ports_info/ files"""
         portproto = f'{dport}/{proto}'
         port_info = __database__.get_port_info(portproto)
         if not port_info:
             # we don't have port info in our database
             # is it a port that is known to be used by a specific organization
-            organization_info = __database__.get_organization_of_port(portproto)
-            if organization_info:
-              # there's an organization that's known to use this port, check if the daddr belongs to the range of this org
-                organization_info = json.loads(organization_info)
-                # can be an ip or a range
-                org_ip = organization_info['ip']
-                org_name = organization_info['org_name']
-                # it's an ip and it belongs to this org, consider the port as known
-                if daddr in org_ip: return False
-                # is it a range?
-                try:
-                    # we have the org range in our database, check if the daddr belongs to this range
-                    if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
-                        # it does, consider the port as known
-                        return False
-                except ValueError:
-                    # not a range either??
-                    # consider this port as unknown
-                    pass
+            if self.port_belongs_to_an_org(daddr, portproto, profileid):
+                return False
 
 
         if (not port_info
