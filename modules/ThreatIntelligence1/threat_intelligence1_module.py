@@ -213,6 +213,10 @@ class Module(Module, multiprocessing.Process):
                     # we shouldn't be trying to find it
                     ioc, threat_level, description,  = data[0], data [1].lower(), data[2]
 
+                    # validate the threat level taken from the user
+                    if threat_level not in ('info', 'low', 'medium', 'high', 'critical'):
+                        threat_level = 'medium'
+
                     # is the IoC an IPv4, IPv6 or domain?
                     try:
                         ip_address = ipaddress.IPv4Address(ioc.strip())
@@ -224,8 +228,8 @@ class Module(Module, multiprocessing.Process):
                         # Is it ipv6?
                         try:
                             ip_address = ipaddress.IPv6Address(ioc.strip())
-                            # Is IPv6! let go
-                            self.print(f'The data is in line {line_number} and is ipv6: {ip_address}', 2,0)
+                            self.print(f'The data in line {line_number} is valid and is ipv6: {ip_address}', 2,0)
+
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
