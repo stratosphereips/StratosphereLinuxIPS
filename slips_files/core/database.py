@@ -2408,7 +2408,7 @@ class Database(object):
         if data:
             data = json.loads(data)
         else:
-            data = ''
+            data = {}
         return data
 
 

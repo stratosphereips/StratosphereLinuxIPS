@@ -238,10 +238,7 @@ class UpdateFileManager:
             file_name_to_download = link_to_download.split('/')[-1]
             # Get what files are stored in cache db and their E-TAG to compare with current files
             data = __database__.get_TI_file_info(file_name_to_download)
-            try:
-                old_e_tag = data['e-tag']
-            except TypeError:
-                old_e_tag = ''
+            old_e_tag = data.get('e-tag', '')
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
             new_e_tag = self.get_e_tag_from_web(link_to_download)
