@@ -41,9 +41,6 @@ class Module(Module, multiprocessing.Process):
         self.c5 = __database__.subscribe('new_service')
         self.c6 = __database__.subscribe('new_dns_flow')
         self.timeout = 0.0000001
-        # read our list of ports that are associated to a specific organizations
-        ports_info_filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
-        self.read_ports_info(ports_info_filepath)
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = __database__.get_default_gateway()
@@ -61,38 +58,6 @@ class Module(Module, multiprocessing.Process):
         self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
         self.nxdomains_threshold = 10
-
-    def read_ports_info(self, ports_info_filepath):
-        """
-        Reads port info from slips_files/ports_info/ports_used_by_specific_orgs.csv
-        and store it in the db
-        """
-
-        # there are ports that are by default considered unknown to slips,
-        # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
-        # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
-
-        try:
-            with open(ports_info_filepath,'r') as f:
-                while True:
-                    line = f.readline()
-                    # reached the end of file
-                    if not line: break
-                    # skip the header and the comments at the begining
-                    if line.startswith('#') or line.startswith('"Organization"'):
-                        continue
-
-                    line = line.split(',')
-
-                    try:
-                        organization, ip = line[0], line[1]
-                        portproto = f'{line[2]}/{line[3].lower()}'
-                        __database__.set_organization_of_port(organization, ip, portproto)
-                    except IndexError:
-                        self.print(f"Invalid line: {line} in {ports_info_filepath}. Skipping.",0,1)
-                        continue
-        except OSError:
-            self.print(f"An error occured while reading {ports_info_filepath}.",0,1)
 
     def is_ignored_ip(self, ip) -> bool:
         """
