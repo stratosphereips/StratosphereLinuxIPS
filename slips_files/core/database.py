@@ -1989,6 +1989,8 @@ class Database(object):
         Retrieve the organization info that uses this port
         :param portproto: portnumber.lower() + / + protocol
         """
+        # this key is used to store the ports the are known to be used
+        #  by certain organizations
         return self.rcache.hget('organization_port', portproto.lower())
 
     def add_zeek_file(self, filename):
