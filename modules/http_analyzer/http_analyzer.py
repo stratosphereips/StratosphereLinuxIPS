@@ -22,8 +22,8 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         self.c1 = __database__.subscribe('new_http')
         self.timeout = 0.0000001
-        self.google_connections_counter = 0
-        self.google_connections_threshold = 4
+        self.connections_counter = 0
+        self.empty_connections_threshold = 4
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -66,17 +66,17 @@ class Module(Module, multiprocessing.Process):
             return True
         return False
 
-    def check_multiple_google_connections(self, uid, host, timestamp, request_body_len,  profileid, twid):
+    def check_multiple_empty_connections(self, uid, host, timestamp, request_body_len, profileid, twid):
         """
-        Detects more than 4 empty connections to google.com on port 80
+        Detects more than 4 empty connections to google,  on port 80
         """
         # to test this wget google.com:80 twice (wget makes multiple connections instead of 1)
 
         if host=='google.com' and request_body_len==0:
-            self.google_connections_counter +=1
+            self.connections_counter +=1
 
-        if self.google_connections_counter == self.google_connections_threshold:
-            type_evidence = 'multiple_google_connections'
+        if self.connections_counter == self.empty_connections_threshold:
+            type_evidence = 'multiple_connections'
             type_detection = 'srcip'
             detection_info = profileid.split('_')[0]
             threat_level = 20
@@ -88,7 +88,7 @@ class Module(Module, multiprocessing.Process):
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                      description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
             # reset the counter
-            self.google_connections_counter=0
+            self.connections_counter=0
             return True
         return False
 
@@ -113,7 +113,7 @@ class Module(Module, multiprocessing.Process):
                     user_agent = flow.get('user_agent')
                     request_body_len = flow.get('request_body_len')
                     self.check_suspicious_user_agents(uid, host, uri, timestamp, user_agent, profileid, twid)
-                    self.check_multiple_google_connections(uid, host, timestamp, request_body_len,  profileid, twid)
+                    self.check_multiple_empty_connections(uid, host, timestamp, request_body_len, profileid, twid)
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
