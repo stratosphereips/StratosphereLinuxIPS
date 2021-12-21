@@ -22,6 +22,7 @@ import sys
 import configparser
 from modules.UpdateManager.timer_manager import InfiniteTimer
 from modules.UpdateManager.update_file_manager import UpdateFileManager
+from signal import SIGSTOP
 
 
 class UpdateManager(Module, multiprocessing.Process):
@@ -83,7 +84,10 @@ class UpdateManager(Module, multiprocessing.Process):
         '''
         Update malicious files
         '''
-        self.update_manager.update()
+        try:
+            self.update_manager.update()
+        except KeyboardInterrupt:
+            os.kill(os.getpid(), SIGSTOP)
 
     def run(self):
         try:
