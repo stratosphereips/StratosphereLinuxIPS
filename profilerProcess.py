@@ -1079,6 +1079,7 @@ class ProfilerProcess(multiprocessing.Process):
         """
         line = new_line['data']
         file_type = new_line['type']
+        file_type = file_type.split('/')[-1]
         # Generic fields in Zeek
         self.column_values = {}
         # We need to set it to empty at the beggining so any new flow has the key 'type'
