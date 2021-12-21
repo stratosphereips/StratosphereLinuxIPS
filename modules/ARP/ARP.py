@@ -256,13 +256,6 @@ class Module(Module, multiprocessing.Process):
                     #  Gratuitous ARP shouldn't be marked as an arp scan
                     is_gratuitous = saddr==daddr and (dst_mac=="ff:ff:ff:ff:ff:ff" or dst_mac=="00:00:00:00:00:00" or dst_mac==src_mac)
                     if is_gratuitous:
-                        # keep track of the mac address of each IP
-                        MAC_info = __database__.get_mac_addr_from_profile(profileid)
-                        # store the mac of this profile if we don't already have it in the db
-                        if not MAC_info:
-                            MAC_info = {'MAC':src_mac }
-                            __database__.add_mac_addr_to_profile(profileid, MAC_info)
-
                         # for MITM arp attack, the arp has to be gratuitous
                         # and it has to be a reply operation, not a request
                         if 'reply' in operation:
