@@ -323,17 +323,19 @@ class Module(Module, multiprocessing.Process):
 
     def port_belongs_to_an_org(self, daddr, portproto, profileid):
         """
-        checks weather a port is known to be used by a specific organization or not
+        Checks weather a port is known to be used by a specific organization or not
         """
         organization_info = __database__.get_organization_of_port(portproto)
         if organization_info:
-          # there's an organization that's known to use this port, check if the daddr belongs to the range of this org
+            # there's an organization that's known to use this port,
+            # check if the daddr belongs to the range of this org
             organization_info = json.loads(organization_info)
             # can be an ip or a range
             org_ip = organization_info['ip']
             # org_name = organization_info['org_name']
             # it's an ip and it belongs to this org, consider the port as known
-            if daddr in org_ip: return False
+            if daddr in org_ip:
+                return False
             # is it a range?
             try:
                 # we have the org range in our database, check if the daddr belongs to this range
@@ -341,10 +343,16 @@ class Module(Module, multiprocessing.Process):
                     # it does, consider the port as known
                     return False
             except ValueError:
-                # not a range either??
-                # consider this port as unknown
-                pass
+                # not a range either since nothing is specified,
+                # check the source and dst mac address vendors
+                src_mac_vendor = str(__database__.get_mac_vendor_from_profile(profileid))
+                dst_mac_vendor = str(__database__.get_mac_vendor_from_profile(f'profile_{daddr}'))
+                org_name = organization_info['org_name'].lower()
+                if (org_name in src_mac_vendor.lower()
+                        and org_name in dst_mac_vendor.lower()):
+                    return True
 
+        # consider this port as unknown
         return False
 
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
