@@ -2197,8 +2197,19 @@ class ProfilerProcess(multiprocessing.Process):
                         'profileid' : profileid,
                         'twid' : twid,
                     }
+                    # send to arp module
                     to_send = json.dumps(to_send)
                     __database__.publish('new_arp', to_send)
+
+                    # send the src and dst MAC to IP_Info module to get vendor info about this MAC
+                    to_send = {'MAC': self.column_values['dst_mac'],
+                               'profileid': f'profile_{self.daddr}'}
+                    __database__.publish('new_MAC', json.dumps(to_send))
+
+                    to_send = {'MAC': self.column_values['src_mac'],
+                               'profileid': f'profile_{self.saddr}'}
+                    __database__.publish('new_MAC', json.dumps(to_send))
+
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur='0',
                                           saddr=str(saddr_as_obj), daddr=str(daddr_as_obj),
