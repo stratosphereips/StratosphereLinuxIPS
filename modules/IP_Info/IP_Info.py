@@ -252,7 +252,9 @@ class Module(Module, multiprocessing.Process):
         """
         Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
-        if not hasattr(self, 'mac_db'):
+        if (not hasattr(self, 'mac_db')
+                or 'ff:ff:ff:ff:ff:ff' in mac_addr.lower()
+                or '00:00:00:00:00:00' in mac_addr.lower()):
             return False
 
         # don't look for the vendor again if we already have it for this profileid
