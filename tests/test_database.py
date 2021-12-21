@@ -96,7 +96,6 @@ def test_setEvidence(database):
     added_evidence = json.loads(added_evidence)
     current_evidence_key = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
     #  note that added_evidence may have evidence from other unit tests
-    import pprint
     assert current_evidence_key in added_evidence.keys()
 
 def test_deleteEvidence(database):
