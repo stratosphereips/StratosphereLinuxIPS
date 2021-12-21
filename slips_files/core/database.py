@@ -214,13 +214,22 @@ class Database(object):
             self.r.hmset(profileid, {'dhcp': 'true'})
 
 
-    def get_mac_addr_from_profile(self,profileid) -> str:
+    def get_mac_addr_from_profile(self, profileid) -> str:
         """
-        Retuns MAC info about a certain profile, doesn't return the vendor
-        return the mac address or None
+        Retuns MAC info about a certain profile,
+        returns a mac addr or None
         """
         MAC_info = self.r.hmget(profileid, 'MAC')[0]
         return MAC_info
+
+    def get_mac_vendor_from_profile(self, profileid) -> str:
+        """
+        Retuns MAC vendor about a certain profile,
+        returns the mac vendor or None
+        """
+        MAC_vendor = self.r.hmget(profileid, 'Vendor')[0]
+        return MAC_vendor
+
 
     def get_IP_of_MAC(self, MAC):
         """
