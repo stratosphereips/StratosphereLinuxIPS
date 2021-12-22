@@ -19,6 +19,18 @@ jobs:
     - name: Install slips dependencies
       run: sudo apt-get -y install curl git redis python3-redis python3-watchdog lsof file iptables wget tar
 
+    - name: Install YARA
+      run: |
+        wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz
+        tar -zxf v4.1.3.tar.gz
+        cd yara-4.1.3
+        sudo ./bootstrap.sh
+        sudo ./configure
+        sudo make
+        sudo make install
+        git clone https://github.com/VirusTotal/yara-python yara-python && cd yara-python
+        python3 setup.py build && python3 setup.py install
+
     - name: Set up Python 3.8
       uses: actions/setup-python@v2
       with:
@@ -38,22 +50,10 @@ jobs:
     - name: Install Node dependencies
       run: npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 
-    - name: Install YARA
-      run: |
-        wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz
-        tar -zxf v4.1.3.tar.gz
-        cd yara-4.1.3
-        ./bootstrap.sh
-        ./configure
-        make
-        make install
-        git clone https://github.com/VirusTotal/yara-python yara-python && cd yara-python
-        python3 setup.py build && python3 setup.py install
-
-    - name: Start Redis
+    - name: Install Redis
       uses: supercharge/redis-github-action@1.2.0
 
-    - name: start redis server
+    - name: Start redis server
       run: redis-server --daemonize yes
 
 
