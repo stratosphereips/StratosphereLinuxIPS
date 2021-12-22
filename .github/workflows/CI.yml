@@ -74,6 +74,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    # make sure this job doesn't run until we're done installing dependencies
+    - needs: install_dependencies
 
     - name: Clear the database
       run: ./slips.py -cc
