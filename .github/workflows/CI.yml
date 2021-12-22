@@ -36,8 +36,7 @@ jobs:
         node-version: 14.x
 
     - name: Install Node dependencies
-      run: npm install blessed blessed-contrib redis async chalk \
-          strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
+      run: npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 
 
     - name: Install Zeek
