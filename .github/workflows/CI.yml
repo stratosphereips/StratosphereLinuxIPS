@@ -25,9 +25,9 @@ jobs:
         python-version: "3.8"
 
     - name: Install Python dependencies
-      uses: py-actions/py-dependency-install@v3
-      with:
-        path: "requirements.txt"
+      run:
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
 
     - name: Use Node.js 14.x
