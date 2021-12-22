@@ -38,18 +38,6 @@ jobs:
     - name: Install Node dependencies
       run: npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 
-
-    - name: Install Zeek
-      run: |
-        sudo apt-get -y install cmake make gcc g++ flex bison libpcap-dev libssl-dev python-dev swig zlib1g-dev
-        git clone --recursive https://github.com/zeek/zeek
-        cd zeek/
-        ./configure
-        sudo make
-        sudo make install
-        sudo ln --symbolic /usr/local/zeek/bin/zeek /usr/bin/zeek
-        export PATH=$PATH:/usr/local/zeek/bin
-
     - name: Install YARA
       run: |
         wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz
@@ -67,6 +55,18 @@ jobs:
 
     - name: start redis server
       run: redis-server --daemonize yes
+
+
+    - name: Install Zeek
+      run: |
+        sudo apt-get -y install cmake make gcc g++ flex bison libpcap-dev libssl-dev python-dev swig zlib1g-dev
+        git clone --recursive https://github.com/zeek/zeek
+        cd zeek/
+        ./configure
+        sudo make
+        sudo make install
+        sudo ln --symbolic /usr/local/zeek/bin/zeek /usr/bin/zeek
+        export PATH=$PATH:/usr/local/zeek/bin
 
   run_tests:
 
