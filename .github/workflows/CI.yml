@@ -68,15 +68,6 @@ jobs:
         sudo ln --symbolic /usr/local/zeek/bin/zeek /usr/bin/zeek
         export PATH=$PATH:/usr/local/zeek/bin
 
-  run_tests:
-
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-    # make sure this job doesn't run until we're done installing dependencies
-    - needs: install_dependencies
-
     - name: Clear the database
       run: ./slips.py -cc
 
