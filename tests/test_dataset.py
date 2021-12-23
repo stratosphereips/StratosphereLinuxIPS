@@ -48,6 +48,7 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
     assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
+@pytest.mark.skipif( shutil.which('nfdump'), reason="nfdump is not installed")
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [
      ('dataset/test2.binetflow',1,'C&C channels detection','test2/'),
     ('dataset/test3.binetflow',20,'horizontal port scan to port 3389','test3/'),
