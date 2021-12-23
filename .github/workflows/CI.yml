@@ -19,6 +19,13 @@ jobs:
     - name: Install slips dependencies
       run: sudo apt-get -y install curl git redis python3-redis python3-watchdog lsof file iptables wget tar nfdump
 
+    - name: Install Zeek
+      run: |
+        sudo echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
+        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+        sudo apt install -y --no-install-recommends zeek
+        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+
     - name: Install YARA
       run: |
         wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz
@@ -41,7 +48,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-
     - name: Use Node.js 14.x
       uses: actions/setup-node@v1
       with:
@@ -52,14 +58,6 @@ jobs:
 
     - name: Start redis server
       run: redis-server --daemonize yes
-
-
-    - name: Install Zeek
-      run: |
-        echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list
-        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
-        sudo apt install -y --no-install-recommends zeek
-        ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
     - name: Run unit tests
       run: python3 -m pytest tests/ --ignore="tests/test_dataset.py" -p no:warnings -vv
