@@ -37,7 +37,7 @@ RUN apt update && apt install -y --no-install-recommends \
     net-tools \
     iproute2 \
     iptables \
-    psutils \
+    psutil \
     python3-tzlocal \
     nfdump \
     tshark \
