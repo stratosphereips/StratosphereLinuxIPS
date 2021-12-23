@@ -65,3 +65,31 @@ jobs:
 
     - name: Test all files in our dataset
       run: python3 -m pytest tests/test_dataset.py -p no:warnings -vv -s
+
+    #todo build docker and run unit tests inside the container
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v1
+      with:
+        username: stratosphereips
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    # push the image with latest tag
+    - name: Build and push
+      id: docker_build
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./docker/ubuntu-image/Dockerfile
+        push: true
+        tags: stratosphereips/slips:latest
+
+    # push the image with the version tag
+    - name: Build and push
+      id: docker_build
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./docker/ubuntu-image/Dockerfile
+        push: true
+        tags: stratosphereips/slips:v0.8.2
