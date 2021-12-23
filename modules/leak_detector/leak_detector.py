@@ -177,13 +177,18 @@ class Module(Module, multiprocessing.Process):
         Compile and save all yara rules in the compiled_yara_rules_path
         """
 
-        if os.path.exists(self.compiled_yara_rules_path):
-            # we already have compiled rules
-            return True
+        try:
+            os.mkdir(self.compiled_yara_rules_path)
+        except FileExistsError:
+            pass
 
-        os.mkdir(self.compiled_yara_rules_path)
         for yara_rule in os.listdir(self.yara_rules_path):
-            # get the complete path of the rule
+            compiled_rule_path = os.path.join(self.compiled_yara_rules_path, f'{yara_rule}_compiled')
+            # if we already have the rule compiled, don't compiler again
+            if os.path.exists(compiled_rule_path):
+                # we already have the rule compiled
+                continue
+            # get the complete path of the .yara rule
             rule_path = os.path.join(self.yara_rules_path, yara_rule)
             # ignore yara_rules/compiled/
             if not os.path.isfile(rule_path):
@@ -191,7 +196,7 @@ class Module(Module, multiprocessing.Process):
             # compile the rule
             compiled_rule = yara.compile(filepath=rule_path)
             # save the compiled rule
-            compiled_rule.save(os.path.join(self.compiled_yara_rules_path, f'{yara_rule}_compiled'))
+            compiled_rule.save(compiled_rule_path)
 
     def find_matches(self):
         """ Run yara rules on the given pcap and find matches"""
