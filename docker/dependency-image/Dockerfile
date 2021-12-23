@@ -37,7 +37,6 @@ RUN apt update && apt install -y --no-install-recommends \
     net-tools \
     iproute2 \
     iptables \
-    psutil \
     python3-tzlocal \
     nfdump \
     tshark \
@@ -55,7 +54,7 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
   && make \
   && make install
 
-RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas sklearn urllib3 scipy watchdog slackclient stix2 cabby ipwhois pytest pytest-xdist yara-python
+RUN pip3 install wheel redis setuptools validators psutil colorama maxminddb pandas sklearn urllib3 scipy watchdog slackclient stix2 cabby ipwhois pytest pytest-xdist yara-python
 RUN pip3 install --ignore-installed six
 RUN pip3 install --upgrade tensorflow==2.4.1
 
