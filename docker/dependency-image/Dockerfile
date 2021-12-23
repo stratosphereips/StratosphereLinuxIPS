@@ -1,5 +1,9 @@
 # this image contains the dependencies of slips
 # to save time in CI
+# This image doesn't have slips installed, we'll be doing this from .github/workflows/CI.yml
+# this image doesn't have node.js requirements and doesn't support kalipso
+# because it's only used for unit testing,
+# and we don't have unit tests for kalipso yet
 
 FROM ubuntu
 
