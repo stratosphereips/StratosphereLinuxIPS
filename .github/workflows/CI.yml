@@ -56,14 +56,10 @@ jobs:
 
     - name: Install Zeek
       run: |
-        sudo apt-get -y install cmake make gcc g++ flex bison libpcap-dev libssl-dev python-dev swig zlib1g-dev
-        git clone --recursive https://github.com/zeek/zeek
-        cd zeek/
-        ./configure
-        sudo make
-        sudo make install
-        sudo ln --symbolic /usr/local/zeek/bin/zeek /usr/bin/zeek
-        export PATH=$PATH:/usr/local/zeek/bin
+        echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list
+        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+        sudo apt install -y --no-install-recommends zeek
+        ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
     - name: Run unit tests
       run: python3 -m pytest tests/ --ignore="tests/test_dataset.py" -p no:warnings -vv
