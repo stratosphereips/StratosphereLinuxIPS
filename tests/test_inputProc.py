@@ -45,7 +45,7 @@ def test_handle_nfdump(outputQueue, profilerQueue, input_type, input_information
     assert inputProcess.handle_nfdump() == True
 
 
-@pytest.mark.skipif( shutil.which('nfdump'), reason="nfdump is not installed")
+@pytest.mark.skipif('nfdump' not in shutil.which('nfdump') , reason="nfdump is not installed")
 @pytest.mark.parametrize("input_type,input_information", [('binetflow','dataset/test2.binetflow'),
                                                           ('binetflow','dataset/test3.binetflow'),
                                                           ('binetflow','dataset/test4.binetflow'),
