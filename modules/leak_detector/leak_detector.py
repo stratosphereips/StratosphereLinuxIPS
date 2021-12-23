@@ -1,16 +1,3 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
-
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
@@ -189,6 +176,12 @@ class Module(Module, multiprocessing.Process):
         """
         Compile and save all yara rules in the compiled_yara_rules_path
         """
+
+        if os.path.exists(self.compiled_yara_rules_path):
+            # we already have compiled rules
+            return True
+
+        os.mkdir(self.compiled_yara_rules_path)
         for yara_rule in os.listdir(self.yara_rules_path):
             # get the complete path of the rule
             rule_path = os.path.join(self.yara_rules_path, yara_rule)
@@ -215,9 +208,7 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # if we we don't have compiled rules, compile them
-            if not os.path.exists(self.compiled_yara_rules_path):
-                os.mkdir(self.compiled_yara_rules_path)
-                self.compile_and_save_rules()
+            self.compile_and_save_rules()
             # run the yara rules on the given pcap
             self.find_matches()
         except KeyboardInterrupt:
