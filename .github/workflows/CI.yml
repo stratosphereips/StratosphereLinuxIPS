@@ -17,7 +17,7 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Install slips dependencies
-      run: sudo apt-get -y install curl git redis python3-redis python3-watchdog lsof file iptables wget tar
+      run: sudo apt-get -y install curl git redis python3-redis python3-watchdog lsof file iptables wget tar nfdump
 
     - name: Install YARA
       run: |
