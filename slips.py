@@ -242,7 +242,13 @@ def shutdown_gracefully(input_information):
         # loop until all loaded modules are finished
         while len(finished_modules) < len(loaded_modules) and max_loops != 0:
             # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
-            message = c1.get_message(timeout=0.01)
+            try:
+                message = c1.get_message(timeout=0.01)
+            except NameError:
+                # Sometimes the c1 variable does not exist yet. So just force the shutdown
+                message = {}
+                message['data'] = 'dummy_value_not_stopprocess'
+                message['channel'] = 'finished_modules'
             if message and message['data'] == 'stop_process':
                 continue
             if message and message['channel'] == 'finished_modules' and type(message['data']) == str:
