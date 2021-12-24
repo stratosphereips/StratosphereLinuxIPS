@@ -80,7 +80,12 @@ class Module(Module, multiprocessing.Process):
 
         description = f'connection {direction} blacklisted IP {ip}{dns_resolution}. Source: {ip_info["source"]}. Description: {ip_info["description"]}'
 
-        tags = ip_info.get('tags',False).replace("[",'').replace(']','').replace("'",'')
+        tags_temp = ip_info.get('tags',False)
+        if tags_temp:
+            # We need tags_temp so we avoid doing a replace on a bool.
+            tags = tags_temp.replace("[",'').replace(']','').replace("'",'')
+        else:
+            tags = ''
         if tags:
             description += f' tags={tags}'
             source_target_tag = tags.capitalize()
