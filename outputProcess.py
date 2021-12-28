@@ -121,7 +121,7 @@ class OutputProcess(multiprocessing.Process):
         (level, sender, msg) = self.process_line(line)
         verbose_level, debug_level = int(level[0]), int(level[1])
         # if verbosity level is 3 make it red
-        if debug_level == 3 : msg = f'\033[1;31;40m{msg}\033[00m'
+        if debug_level == 3 : msg = f'\033[0;35;40m{msg}\033[00m'
         # There should be a level 0 that we never print. So its >, and not >=
         if verbose_level > 0 and verbose_level <= 3 and verbose_level <= self.verbose:
             if 'Start' in msg:
