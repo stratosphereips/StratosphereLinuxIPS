@@ -1,6 +1,6 @@
 <h1 align="center"> 
 
-Slips v0.8.1
+Slips v0.8.2
 </h1>
 
 Slips is a behavioral-based Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels to provide good visualisation for the analyst.
@@ -30,8 +30,9 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | VirusTotal | module to lookup IP address on VirusTotal |✅|
 | flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
 | IP_Info | module to find Geolocation, ASN, RDNS info about IPs and MAC vendors  |✅|
+| CESNET | Send and receive alerts from warden servers |✅|
 | RiskIQ | Module to get different information from RiskIQ  |✅|
-| ARPScanDetector | module to check for ARP scans in ARP traffic  |✅|
+| ARP | module to check for ARP attacks in ARP traffic  |✅|
 | ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|
 | http_analyzer | module to analyze HTTP traffic |✅|
 | blocking | module to block malicious IPs connecting to the device |✅|
@@ -73,9 +74,8 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
 ## How to build Slips docker from Dockerfile:
 
-        cd docker/ubuntu-image
-        docker build --no-cache -t slips -f Dockerfile .
-        docker run -it --rm --net=host -v $(pwd)/../../dataset:/StratosphereLinuxIPS/dataset slips
+        docker build --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
+        docker run -it --rm --net=host slips
         ./slips.py -c slips.conf -f dataset/test3.binetflow
 
 ## If you want to allow Slips inside the docker to analyze and block the traffic in your Linux host, run docker with --cap-add=NET_ADMIN. And run with -p

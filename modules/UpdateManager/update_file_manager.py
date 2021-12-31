@@ -54,6 +54,12 @@ class UpdateFileManager:
             for tuple_ in self.ti_feed_tuples:
                 if not url:
                     url = tuple_.replace('\n','')
+                elif url.startswith(';'):
+                    # remove commented lines from the cache db
+                    feed = url.split('/')[-1]
+                    __database__.delete_feed(feed)
+                    # to avoid calling delete_feed again with the same feed
+                    url = ''
                 elif not threat_level:
                     threat_level = tuple_.replace('threat_level=','')
                 elif not tags:
@@ -102,26 +108,16 @@ class UpdateFileManager:
             self.ja3_feeds = {}
 
         try:
-            # Read the riskiq username
-            self.riskiq_email = self.config.get('threatintelligence', 'RiskIQ_email')
-            if '@' not in self.riskiq_email or 'example@gmail.com' in self.riskiq_email:
-                raise NameError
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # Read the riskiq api key
+            RiskIQ_credentials_path = self.config.get('threatintelligence', 'RiskIQ_credentials_path')
+            with open(RiskIQ_credentials_path,'r') as f:
+                self.riskiq_email = f.readline().replace('\n','')
+                self.riskiq_key = f.readline().replace('\n','')
+                if len(self.riskiq_key) != 64:
+                    raise NameError
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError, FileNotFoundError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.riskiq_email = None
-
-        try:
-            # Read the riskiq api key
-            riskiq_key_path = self.config.get('threatintelligence', 'RiskIQ_key_path')
-            try:
-                with open(riskiq_key_path,'r') as f:
-                    self.riskiq_key = f.read().replace('\n','')
-                    if len(self.riskiq_key) != 64:
-                        raise NameError
-            except FileNotFoundError:
-                raise NameError
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
             self.riskiq_key = None
 
         try:
@@ -158,11 +154,11 @@ class UpdateFileManager:
         """
         file_name_to_download = file_to_download.split('/')[-1]
         # Get last timeupdate of the file
-        data = __database__.get_malicious_file_info(file_name_to_download)
+        data = __database__.get_TI_file_info(file_name_to_download)
         try:
             last_update = data['time']
             last_update = float(last_update)
-        except TypeError:
+        except (TypeError,KeyError):
             last_update = float('-inf')
 
         now = time.time()
@@ -241,7 +237,7 @@ class UpdateFileManager:
 
             file_name_to_download = link_to_download.split('/')[-1]
             # Get what files are stored in cache db and their E-TAG to compare with current files
-            data = __database__.get_malicious_file_info(file_name_to_download)
+            data = __database__.get_TI_file_info(file_name_to_download)
             try:
                 old_e_tag = data['e-tag']
             except TypeError:
@@ -277,7 +273,7 @@ class UpdateFileManager:
                 malicious_file_info = {}
                 malicious_file_info['e-tag'] = new_e_tag
                 malicious_file_info['time'] = self.new_update_time
-                __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
+                __database__.set_TI_file_info(file_name_to_download, malicious_file_info)
                 return True
             elif new_e_tag and old_e_tag == new_e_tag:
                 self.print(f'File {link_to_download} is still the same. Not downloading the file', 3, 0)
@@ -287,7 +283,7 @@ class UpdateFileManager:
                 malicious_file_info = {}
                 malicious_file_info['e-tag'] = new_e_tag
                 malicious_file_info['time'] = self.new_update_time
-                __database__.set_malicious_file_info(file_name_to_download, malicious_file_info)
+                __database__.set_TI_file_info(file_name_to_download, malicious_file_info)
                 return True
             elif not new_e_tag:
                 # Something failed. Do not download
@@ -332,7 +328,7 @@ class UpdateFileManager:
 
             # update the timestamp in the db
             malicious_file_info = {'time': time.time()}
-            __database__.set_malicious_file_info('riskiq_domains', malicious_file_info)
+            __database__.set_TI_file_info('riskiq_domains', malicious_file_info)
             return True
         except Exception as e:
             self.print(f'An error occurred while updating RiskIQ feed.', 0, 1)
@@ -370,7 +366,7 @@ class UpdateFileManager:
                     self.print(f'Successfully updated remote file {file_to_download}.', 1, 0)
                     self.loaded_ti_files +=1
                 else:
-                    self.print(f'An error occured during downloading file {file_to_download}. Updating was aborted.', 0, 1)
+                    self.print(f'An error occurred during downloading file {file_to_download}. Updating was aborted.', 0, 1)
                     continue
             else:
                 self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
@@ -384,7 +380,9 @@ class UpdateFileManager:
             if self.update_riskiq_feed():
                 self.print('Successfully updated RiskIQ domains.', 1, 0)
             else:
-                self.print(f'An error occured while updating RiskIQ domains. Updating was aborted.', 0, 1)
+                self.print(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
+        time.sleep(0.5)
+        print('-'*30)
 
     def __delete_old_source_IPs(self, file):
         """
@@ -577,9 +575,9 @@ class UpdateFileManager:
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
+                # to support nsec/full-results-2019-05-15.json
                 if 'json' in malicious_data_path:
                     filename= malicious_data_path.split('/')[-1]
-                    # to support nsec/full-results-2019-05-15.json
                     try:
                         file = json.loads(malicious_file.read())
                         for description,iocs in file.items():
@@ -619,7 +617,9 @@ class UpdateFileManager:
                 # if any keyword of the following is present in a line
                 # then this line should be ignored by slips
                 # either a not supported ioc type or a header line etc.
-                header_keywords = ('type', 'first_seen_utc', 'ip_v4','"domain"','#"type"','#fields')
+                # make sure the header keywords are lowercase because
+                # we convert lines to lowercase when comparing
+                header_keywords = ('type', 'first_seen_utc', 'ip_v4','"domain"','#"type"','#fields', "number")
                 ignored_IoCs = ('email', 'url', 'file_hash')
 
                 while True:

@@ -2,7 +2,7 @@ import os
 import redis
 import time
 import json
-from typing import Tuple, Dict, Set, Callable
+from typing import Tuple
 import configparser
 import traceback
 import subprocess
@@ -12,6 +12,7 @@ import sys
 import validators
 import platform
 import re
+import ast
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -37,10 +38,10 @@ class Database(object):
         else:
             self.sudo = 'sudo '
 
-    def start(self, config):
-        """ Start the DB. Allow it to read the conf """
-        self.config = config
-        # Read values from the configuration file
+    def read_configuration(self):
+        """
+        Read values from the configuration file
+        """
         try:
             deletePrevdbText = self.config.get('parameters', 'deletePrevdb')
             if deletePrevdbText == 'True':
@@ -65,13 +66,46 @@ class Database(object):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.width = 3600
+
+        # Read disabled detections from slips.conf
+        # get the configuration for this alert
+        try:
+            self.disabled_detections = self.config.get('DisabledAlerts', 'disabled_detections')
+            self.disabled_detections = self.disabled_detections.replace('[','').replace(']','').split()
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError, KeyError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            # if we failed to read a value, it will be enabled by default.
+            self.disabled_detections  = []
+
+    def start(self, config):
+        """ Start the DB. Allow it to read the conf """
+        self.config = config
+        self.read_configuration()
         # Create the connection to redis
         if not hasattr(self, 'r'):
             try:
                 # db 0 changes everytime we run slips
-                self.r = redis.StrictRedis(host='localhost', port=6379, db=0, charset="utf-8", decode_responses=True) #password='password')
+                # set health_check_interval to avoid redis ConnectionReset errors:
+                # if the connection is idle for more than 30 seconds,
+                # a round trip PING/PONG will be attempted before next redis cmd.
+                # If the PING/PONG fails, the connection will reestablished
+                self.r = redis.StrictRedis(host='localhost',
+                                           port=6379,
+                                           db=0,
+                                           charset="utf-8",
+                                           socket_keepalive=True,
+                                           retry_on_timeout=True,
+                                           decode_responses=True,
+                                           health_check_interval=30)#password='password')
                 # db 1 is cache, delete it using -cc flag
-                self.rcache = redis.StrictRedis(host='localhost', port=6379, db=1, charset="utf-8", decode_responses=True) #password='password')
+                self.rcache = redis.StrictRedis(host='localhost',
+                                                port=6379,
+                                                db=1,
+                                                charset="utf-8",
+                                                socket_keepalive=True,
+                                                retry_on_timeout=True,
+                                                decode_responses=True,
+                                                health_check_interval=30)#password='password')
                 if self.deletePrevdb:
                     self.r.flushdb()
             except redis.exceptions.ConnectionError:
@@ -150,14 +184,35 @@ class Database(object):
             self.outputqueue.put('00|database|{}'.format(type(inst)))
             self.outputqueue.put('00|database|{}'.format(inst))
 
+    def is_msg_intended_for(self, message, channel):
+        """
+        Function to check
+            1. If the given message is intended for this channel
+            2. The msg has valid data
+        """
+
+        return (message
+                and type(message['data']) == str
+                and message['data'] != 'stop_process'
+                and message['channel'] == channel)
+
     def add_mac_addr_to_profile(self,profileid, MAC_info):
         """
-        Used when mac adddr
+        Used to associate this profile with it's MAC addr
         :param MAC_info: dict containing mac address and vendor info
         """
-        # MAC_info = json.dumps(MAC_info)
         # Add the MAC addr and vendor to this profile
         self.r.hmset(profileid, MAC_info)
+
+    def mark_profile_as_dhcp(self, profileid):
+        """
+        Used to mark this profile as dhcp server
+        """
+        # check if it's already marked as dhcp
+        is_dhcp_set = self.r.hmget(profileid , 'dhcp')[0]
+        if not is_dhcp_set:
+            self.r.hmset(profileid, {'dhcp': 'true'})
+
 
     def get_mac_addr_from_profile(self,profileid) -> str:
         """
@@ -963,30 +1018,48 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
-    def setEvidence(self, type_detection, detection_info, type_evidence,
-                    threat_level, confidence, description, timestamp, profileid='', twid='', uid=''):
+    def is_detection_disabled(self, evidence):
+        """
+        Function to check if detection is disabled in slips.conf
+        """
+        for disabled_detection in self.disabled_detections:
+            # when we disable a detection , we add 'SSHSuccessful' in slips.conf,
+            # however our evidence can depend on an addr, for example 'SSHSuccessful-by-addr'.
+            # check if any disabled detection is a part of our evidence.
+            # for example 'SSHSuccessful' is a part of 'SSHSuccessful-by-addr' so if  'SSHSuccessful'
+            # is disabled,  'SSHSuccessful-by-addr' should also be disabled
+            if disabled_detection in evidence:
+                return True
+        return False
+
+
+    def setEvidence(self, type_evidence, type_detection, detection_info,
+                    threat_level, confidence, description, timestamp, category,
+                    source_target_tag=False,
+                    conn_count=False, profileid='', twid='', uid=''):
         """
         Set the evidence for this Profile and Timewindow.
-        Parameters:
-            key: This is how your evidences are grouped. E.g. if you are detecting horizontal port scans,
-                 then this would be the port used. The idea is that you can later update
-                 this specific detection when it evolves. Examples of keys are:
-                 'dport:1234' for all the evidences regarding this dport,
-                 'dip:1.1.1.1' for all the evidences regarding that dst ip
-        type_detection: the value that is important: dport, dip, flow
-        type_evidence: determine the type of evidenc. E.g. PortScan, ThreatIntelligence
-        threat_level: determine the importance of the evidence.
-        confidence: determine the confidence of the detection. (How sure you are that this is what you say it is.)
+
+        type_evidence: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
+        type_detection: the type of value causing the detection e.g. dport, dip, flow
+        detection_info: the actual dstip or dstport. e.g. 1.1.1.1 or 443
+        threat_level: determine the importance of the evidence on a scale from 0 to 1.
+        confidence: determine the confidence of the detection on a scale from 0 to 1. (How sure you are that this is what you say it is.)
         uid: needed to get the flow from the database
-        alert: do we want to generate an alert for this evidence or not
-        Example:
-        The evidence is stored as a dict.
-        {
-            'dport:32432:PortScanType1': [confidence, threat_level, 'Super complicated portscan on port 32432'],
-            'dip:10.0.0.1:PortScanType2': [confidence, threat_level, 'Horizontal port scan on ip 10.0.0.1']
-            'dport:454:Attack3': [confidence, threat_level, 'Buffer Overflow']
-        }
+        category: what is this evidence category according to IDEA categories
+        conn_count: the number of packets/flows/nxdomains that formed this scan/sweep/DGA.
+
+        source_target_tag:
+            this is the IDEA category of the source and dst ip used in the evidence
+            if the type_detection is srcip this describes the source ip,
+            if the type_detection is dstip this describes the dst ip.
+            supported source and dst types are in the SourceTargetTag section https://idea.cesnet.cz/en/classifications
+            this is a keyword/optional argument because it shouldn't be used with dports and sports type_detection
         """
+
+        # Ignore evidence if it's disabled in the configuration file
+        if self.is_detection_disabled(type_evidence):
+            return False
 
         # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
@@ -994,43 +1067,38 @@ class Database(object):
             current_evidence = json.loads(current_evidence)
         else:
             current_evidence = {}
-        # Prepare key for a new evidence
-        key = dict()
-        key['type_detection'] = type_detection
-        key['detection_info'] = detection_info
-        key['type_evidence'] = type_evidence
-        #Prepare data for a new evidence
-        data = dict()
-        data['confidence']= confidence
-        try:
-            data['threat_level'] = float(threat_level)
-        except ValueError:
-            # no threat level is specified, probably ''
-            threat_level = 0
 
-        data['description'] = description
-        # key uses dictionary format, so it needs to be converted to json to work as a dict key.
-        key_json = json.dumps(key)
-        # It is done to ignore repetition of the same evidence sent.
-        if key_json not in current_evidence.keys():
-            evidence_to_send = {
+        evidence_to_send = {
                 'profileid': str(profileid),
                 'twid': str(twid),
-                'key': key,
-                'data': data,
+                'type_detection' : type_detection,
+                'detection_info' : detection_info ,
+                'type_evidence' : type_evidence,
                 'description': description,
                 'stime': timestamp,
                 'uid' : uid,
-                'confidence' : confidence
+                'confidence' : confidence,
+                'threat_level': threat_level,
+                'category': category
             }
-            evidence_to_send = json.dumps(evidence_to_send)
+        # not all evidence requires a conn_coun, scans only
+        if conn_count: evidence_to_send.update({'conn_count': conn_count })
+
+        # source_target_tag is defined only if type_detection is srcip or dstip
+        if source_target_tag: evidence_to_send.update({'source_target_tag': source_target_tag })
+
+        evidence_to_send = json.dumps(evidence_to_send)
+        # This is done to ignore repetition of the same evidence sent.
+        if description not in current_evidence.keys():
             self.publish('evidence_added', evidence_to_send)
 
-        current_evidence[key_json] = data
-        current_evidence_json = json.dumps(current_evidence)
+        # update the our current evidence for this profileid and twid. now the description is used as the key
+        current_evidence.update({description : evidence_to_send})
         # Set evidence in the database.
-        self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
-        self.r.hset('evidence'+profileid, twid, current_evidence_json)
+        current_evidence = json.dumps(current_evidence)
+        self.r.hset(profileid + self.separator + twid, 'Evidence', current_evidence)
+        self.r.hset('evidence'+profileid, twid, current_evidence)
+
         return True
 
     def get_evidence_count(self, evidence_type, profileid, twid):
@@ -1517,6 +1585,9 @@ class Database(object):
         return flows
 
     def get_all_contacted_ips_in_profileid_twid(self, profileid, twid) ->dict:
+        """
+        Get all the contacted IPs in a given profile and TW
+        """
         all_flows = self.get_all_flows_in_profileid_twid(profileid,twid)
         if not all_flows:
             return {}
@@ -1798,6 +1869,10 @@ class Database(object):
         data['answers'] = answers
         data['ttls'] = ttls
         data['stime'] = stime
+
+        # Add DNS resolution to the db if there are answers for the query
+        if answers:
+            self.set_dns_resolution(query, answers, stime, uid, qtype_name, profileid, twid)
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
@@ -1809,6 +1884,7 @@ class Database(object):
         to_send['flow'] = data
         to_send['stime'] = stime
         to_send['uid'] = uid
+        to_send['rcode_name'] = rcode_name
         to_send = json.dumps(to_send)
         #publish a dns with its flow
         self.publish('new_dns_flow', to_send)
@@ -2012,19 +2088,41 @@ class Database(object):
         """
         self.rcache.hset('IoC_domains', domain, description)
 
-    def set_malicious_ip(self, ip, profileid_twid):
+    def set_malicious_ip(self, ip, profileid, twid):
         """
         Save in DB malicious IP found in the traffic
         with its profileid and twid
         """
-        self.r.hset('MaliciousIPs', ip, profileid_twid)
+        # Retrieve all profiles and twis, where this malicios IP was met.
+        ip_profileid_twid = self.get_malicious_ip(ip)
+        try:
+            profile_tws = ip_profileid_twid[profileid]             # a dictionary {profile:set(tw1, tw2)}
+            profile_tws = ast.literal_eval(profile_tws)            # set(tw1, tw2)
+            profile_tws.add(twid)
+            ip_profileid_twid[profileid] = str(profile_tws)
+        except KeyError:
+            ip_profileid_twid[profileid] = str({twid})                   # add key-pair to the dict if does not exist
+        data = json.dumps(ip_profileid_twid)
 
-    def set_malicious_domain(self, domain, profileid_twid):
+        self.r.hset('MaliciousIPs', ip, data)
+
+    def set_malicious_domain(self, domain, profileid, twid):
         """
         Save in DB a malicious domain found in the traffic
         with its profileid and twid
         """
-        self.r.hset('MaliciousDomains', domain, profileid_twid)
+        # get all profiles and twis where this IP was met
+        domain_profiled_twid = __database__.get_malicious_domain(domain)
+        try:
+            profile_tws = domain_profiled_twid[profileid]               # a dictionary {profile:set(tw1, tw2)}
+            profile_tws = ast.literal_eval(profile_tws)                 # set(tw1, tw2)
+            profile_tws.add(twid)
+            domain_profiled_twid[profileid] = str(profile_tws)
+        except KeyError:
+            domain_profiled_twid[profileid] = str({twid})               # add key-pair to the dict if does not exist
+        data = json.dumps(domain_profiled_twid)
+
+        self.r.hset('MaliciousDomains', domain, data)
 
     def get_malicious_ip(self, ip):
         """
@@ -2292,21 +2390,21 @@ class Database(object):
         data = self.r.hget(profileid, 'labeled_as_malicious')
         return data
 
-    def set_malicious_file_info(self, file, data):
+    def set_TI_file_info(self, file, data):
         '''
-        Set/update time and/or e-tag for malicious file
+        Set/update time and/or e-tag for TI file
         '''
         # data = self.get_malicious_file_info(file)
         # for key in file_data:
         # data[key] = file_data[key]
         data = json.dumps(data)
-        self.rcache.hset('malicious_files_info', file, data)
+        self.rcache.hset('TI_files_info', file, data)
 
-    def get_malicious_file_info(self, file):
+    def get_TI_file_info(self, file):
         '''
-        Get malicious file info
+        Get TI file info
         '''
-        data = self.rcache.hget('malicious_files_info', file)
+        data = self.rcache.hget('TI_files_info', file)
         if data:
             data = json.loads(data)
         else:
@@ -2364,6 +2462,22 @@ class Database(object):
             return json.loads(whitelist)
         else:
             return False
+
+    def store_dhcp_server(self, server_addr):
+        """
+        Store all seen DHCP servers in the database.
+        """
+        # make sure it's a valid ip
+        try:
+            ipaddress.ip_address(server_addr)
+        except ValueError:
+            # not a valid ip skip
+            return False
+        # make sure the server isn't there before adding
+        DHCP_servers = self.r.lrange('DHCP_servers', 0, -1)
+        if server_addr not in DHCP_servers:
+            self.r.lpush('DHCP_servers', server_addr)
+
 
     def save(self,backup_file):
         """
@@ -2424,5 +2538,60 @@ class Database(object):
             self.print("{} doesn't exist.".format(backup_file))
             return False
 
+    def delete_feed(self, url: str):
+        """
+        Delete all entries in IoC_domains and IoC_ips that contain the given feed as source
+        """
+        # get the feed name from the given url
+        feed_to_delete = url.split('/')[-1]
+        # get all domains that are read from TI files in our db
+        IoC_domains = self.rcache.hgetall('IoC_domains')
+        for domain, domain_description in IoC_domains.items():
+            domain_description = json.loads(domain_description)
+            if feed_to_delete in domain_description['source']:
+                # this entry has the given feed as source, delete it
+                self.rcache.hdel('IoC_domains', domain)
+
+        # get all IPs that are read from TI files in our db
+        IoC_ips = self.rcache.hgetall('IoC_ips')
+        for ip, ip_description in IoC_ips.items():
+            ip_description = json.loads(ip_description)
+            if feed_to_delete in ip_description['source']:
+                # this entry has the given feed as source, delete it
+                self.rcache.hdel('IoC_ips', ip)
+
+    def set_last_warden_push_time(self, time):
+        """
+        :param time: epoch
+        """
+        self.r.hset('Warden','push',time)
+
+    def set_last_warden_poll_time(self, time):
+        """
+        :param time: epoch
+        """
+        self.r.hset('Warden','poll',time)
+
+    def get_last_warden_push_time(self):
+        """
+        returns epoch time of last push
+        """
+        time =  self.r.hget('Warden','push')
+        if time:
+            time = float(time)
+        else:
+            time = float('-inf')
+        return time
+
+    def get_last_warden_poll_time(self):
+        """
+        returns epoch time of last poll
+        """
+        time = self.r.hget('Warden','poll')
+        if time:
+            time = float(time)
+        else:
+            time = float('-inf')
+        return time
 
 __database__ = Database()

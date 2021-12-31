@@ -52,7 +52,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('tw_closed')
         # get separator
         self.separator = __database__.separator
-        self.timeout = None
+        self.timeout = 0.0000001
 
     def print(self, text, verbose=1, debug=0):
         """

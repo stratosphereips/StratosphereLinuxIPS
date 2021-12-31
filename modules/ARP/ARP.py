@@ -16,8 +16,8 @@ import ipaddress
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'ARPScanDetector'
-    description = 'Detect ARP scans'
+    name = 'ARP'
+    description = 'Detect ARP attacks'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config):
@@ -30,10 +30,9 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        self.pubsub = __database__.r.pubsub()
-        self.pubsub.subscribe('new_arp')
-        self.pubsub.subscribe('tw_closed')
-        self.timeout = None
+        self.c1 = __database__.subscribe('new_arp')
+        self.c2 = __database__.subscribe('tw_closed')
+        self.timeout = 0.0000001
         self.read_configuration()
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
@@ -100,14 +99,13 @@ class Module(Module, multiprocessing.Process):
             cached_requests.update({daddr: {'uid' : uid,
                                     'ts' : ts}})
         except KeyError:
-            # create the key if it doesn't exist
+            # create the key for this profileid_twid if it doesn't exist
             self.cache_arp_requests[f'{profileid}_{twid}'] = {daddr: {'uid' : uid,
-                                                                'ts' : ts}}
+                                                                      'ts' : ts}}
             return True
 
-        # get the keys of cache_arp_requests in a list
         profileids_twids = list(cached_requests.keys())
-        # The minimum amount of ARP packets to send to be considered as scan is 3
+        # The minimum amount of ARP packets to send to be considered as scan is 5
         if len(profileids_twids) >= self.arp_scan_threshold:
             # check if these requests happened within 30 secs
             # get the first and the last request of the 10
@@ -127,10 +125,15 @@ class Module(Module, multiprocessing.Process):
                 threat_level = 0.7
                 description = f'{saddr} performing an ARP scan. Threat level {threat_level}. Confidence {confidence}.'
                 type_evidence = 'ARPScan'
-                type_detection = 'ip' #srcip
+                # category of this evidence according to idea categories
+                category = 'Recon.Scanning'
+                type_detection = 'srcip'
+                source_target_tag = 'Recon' # srcip description
                 detection_info = profileid.split("_")[1]
-                __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                     threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+                conn_count = len(profileids_twids)
+                __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                         description, ts, category, source_target_tag=source_target_tag, conn_count=conn_count, profileid=profileid,
+                                         twid=twid, uid=uid)
                 # after we set evidence, clear the dict so we can detect if it does another scan
                 self.cache_arp_requests.pop(f'{profileid}_{twid}')
                 return True
@@ -145,13 +148,14 @@ class Module(Module, multiprocessing.Process):
 
         daddr_as_obj = ipaddress.IPv4Address(daddr)
         if daddr_as_obj.is_multicast or daddr_as_obj.is_link_local:
-            # The ARP to ‘outside’ the network should not dettect multicast or link-local addresses.
+            # The ARP to ‘outside’ the network should not detect multicast or link-local addresses.
             return False
 
         for network in self.home_network:
             if daddr_as_obj in network:
                 # IP is in this local network, don't alert
                 return False
+
         # to prevent ARP alerts from one IP to itself
         local_net = saddr.split('.')[0]
         if not daddr.startswith(local_net):
@@ -160,11 +164,14 @@ class Module(Module, multiprocessing.Process):
             threat_level =  0.7
             ip_identification = __database__.getIPIdentification(daddr)
             description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
-            type_evidence = 'ARPScan'
-            type_detection = 'ip' #srcip
+            type_evidence = 'ARP-ouside-localnet'
+            category = 'Anomaly.Behaviour'
+            type_detection = 'srcip'
             detection_info = profileid.split("_")[1]
-            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
+            return True
+
 
     def detect_unsolicited_arp(self, profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw):
         """ Unsolicited ARP is used to update the neighbours' ARP caches but can also be used in ARP spoofing """
@@ -174,10 +181,13 @@ class Module(Module, multiprocessing.Process):
             threat_level = 50
             description = f'detected sending unsolicited ARP'
             type_evidence = 'UnsolicitedARP'
-            type_detection = 'ip' #srcip
+            # This may be ARP spoofing
+            category = 'Information'
+            type_detection = 'srcip'
+            source_target_tag = 'Recon' # srcip description
             detection_info = profileid.split("_")[1]
-            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, ts, category,source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
             return True
 
 
@@ -185,15 +195,16 @@ class Module(Module, multiprocessing.Process):
         """Detects when a MAC with IP A, is trying to tell others that now that MAC is also for IP B (ARP cache attack)"""
 
         # to test this add these 2 flows to arp.log
-        # {"ts":1636305825.755132,"operation":"request","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
-        # {"ts":1636305825.755132,"operation":"request","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
 
         #todo will we get FPs when an ip changes?
         # todo what if the ip of the attacker came to us first and we stored it in the db? the original IP of this src mac is now the IP of the attacker?
 
         # get the original IP of the src mac from the database
         original_IP = __database__.get_IP_of_MAC(src_mac)
-        # is this IP trying to tell everyone that it's own mac is now used with another IP?
+        # is this saddr trying to tell everyone that this it owns this src_mac
+        # even though we know this src_mac is associated with another IP (original_IP)?
         if saddr != original_IP:
             # From our db we know that:
             # original_IP has src_MAC
@@ -202,27 +213,31 @@ class Module(Module, multiprocessing.Process):
             # todo how to find out which one is it??
             confidence = 0.2 # low confidence for now
             threat_level = 90
-            description = f'{saddr} performing MITM attack.'
+            description = f'{saddr} performing a MITM ARP attack. The MAC {src_mac}, now belonging to IP {saddr}, was seen before for IP {original_IP}.'
             # self.print(f'{saddr} is claiming to have {src_mac}')
             type_evidence = 'MITM-ARP-attack'
-            type_detection = 'ip' #srcip
+            # This may be ARP spoofing
+            category = 'Recon'
+            type_detection = 'srcip'
+            source_target_tag = 'MITM'
             detection_info = profileid.split("_")[1]
-            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, ts, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, ts, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
             return True
+
 
 
     def run(self):
         # Main loop function
         while True:
             try:
-                message = self.pubsub.get_message(timeout=None)
+                message = self.c1.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if message and message['channel'] == 'new_arp' and type(message['data'])==str:
+                if __database__.is_msg_intended_for(message, 'new_arp'):
                     flow = json.loads(message['data'])
                     ts = flow['ts']
                     profileid = flow['profileid']
@@ -249,18 +264,22 @@ class Module(Module, multiprocessing.Process):
                             __database__.add_mac_addr_to_profile(profileid, MAC_info)
 
                         # for MITM arp attack, the arp has to be gratuitous
-                        self.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac)
-
-                    if not is_gratuitous:
+                        # and it has to be a reply operation, not a request
+                        if 'reply' in operation:
+                            self.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac)
+                    else:
                         # not gratuitous, may be an ARP scan
                         self.check_arp_scan(profileid, twid, daddr, uid, ts, dst_mac, src_mac)
 
                     if 'request' in operation:
                         self.check_dstip_outside_localnet(profileid, twid, daddr, uid, saddr, ts)
+                    elif 'reply' in operation:
+                        # Unsolicited ARPs should be of type reply only, not request
                         self.detect_unsolicited_arp(profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw)
 
                 # if the tw is closed, remove all its entries from the cache dict
-                if message and message['channel'] == 'tw_closed' and type(message['data'])==str:
+                message = self.c2.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data']
                     # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore
                     # this copy is made to avoid dictionary changed size during iteration err
@@ -269,6 +288,7 @@ class Module(Module, multiprocessing.Process):
                         if profileid_tw in key:
                             self.cache_arp_requests.pop(key)
                             # don't break, keep looking for more keys that belong to the same tw
+
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue

@@ -30,16 +30,11 @@ class Module(Module, multiprocessing.Process):
         # This line might not be needed when running SLIPS, but when VT module is run standalone, it still uses the
         # database and this line is necessary. Do not delete it, instead move it to line 21.
         __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
-        # To which channels do you want to subscribe? When a message arrives on the channel the module will wake up
-        # The options change, so the last list is on the slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
-        self.pubsub = __database__.r.pubsub()
-        self.pubsub.subscribe('new_flow')
-        self.pubsub.subscribe('new_dns_flow')
-        self.pubsub.subscribe('new_url')
-        self.pubsub.subscribe('new_downloaded_file')
+        self.c1 = __database__.subscribe('new_flow')
+        self.c2 = __database__.subscribe('new_dns_flow')
+        self.c3 = __database__.subscribe('new_url')
+        self.c4 = __database__.subscribe('new_downloaded_file')
+
         # Read the conf file
         self.__read_configuration()
         self.key = None
@@ -56,10 +51,12 @@ class Module(Module, multiprocessing.Process):
         # Pool manager to make HTTP requests with urllib3
         # The certificate provides a bundle of trusted CAs, the certificates are located in certifi.where()
         self.http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
-        self.timeout = None
+        self.timeout = 0.0000001
         self.counter = 0
         # create the queue thread
         self.api_calls_thread = threading.Thread(target=self.API_calls_thread, daemon=True)
+        # this will be true when there's a problem with the API key, then the module will exit
+        self.incorrect_API_key = False
 
     def __read_configuration(self) -> str:
         """ Read the configuration file for what we need """
@@ -220,10 +217,11 @@ class Module(Module, multiprocessing.Process):
             type_evidence = "MaliciousDownloadedFile"
             threat_level = 80
             description =  f'Malicious downloaded file {md5} size: {size} from IP: {saddr} Score: {score}'
+            category = 'Malware'
             if not twid:
                 twid = ''
-            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                     threat_level, confidence, description, ts , profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
             return 'malicious'
         return 'benign'
 
@@ -235,6 +233,9 @@ class Module(Module, multiprocessing.Process):
         """
 
         while True:
+            # do not attempt to make more api calls if we already know that the api key is incorrect
+            if self.incorrect_API_key == True:
+                return False
             # wait until the queue is populated
             if not self.api_call_queue: time.sleep(30)
             # wait the api limit
@@ -250,7 +251,6 @@ class Module(Module, multiprocessing.Process):
                 ioc_type = self.get_ioc_type(ioc)
                 if ioc_type is 'ip':
                     cached_data = __database__.getIPData(ioc)
-                    self.set_vt_data_in_IPInfo(ioc,cached_data)
                     # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
                     ip_addr = ipaddress.ip_address(ioc)
                     # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
@@ -262,6 +262,7 @@ class Module(Module, multiprocessing.Process):
                     cached_data = __database__.getDomainData(ioc)
                     if not cached_data or 'VirusTotal' not in cached_data:
                         self.set_domain_data_in_DomainInfo(ioc, cached_data)
+
 
                 elif ioc_type is 'url':
                     cached_data = __database__.getURLData(ioc)
@@ -303,7 +304,8 @@ class Module(Module, multiprocessing.Process):
         """
         response_key = 'resolutions'
         if response_key in response:
-            return response[response_key]
+            # return the first 10 entries only
+            return response[response_key][:10]
         else:
             return ''
 
@@ -391,6 +393,9 @@ class Module(Module, multiprocessing.Process):
         :param save_data: False by default. Set to True to save each request json in a file named ip.txt
         :return: Response object
         """
+        if self.incorrect_API_key == True:
+            return {}
+
         params = {'apikey': self.key}
         ioc_type = self.get_ioc_type(ioc)
         if ioc_type is 'ip':
@@ -432,7 +437,8 @@ class Module(Module, multiprocessing.Process):
             elif response.status == 403:
                 # don't add to the api call queue because the user will have to restart slips anyway
                 # to add a correct API key and the queue wil be erased
-                self.print("Please check that your API key is correct.")
+                self.print("Please check that your API key is correct.", 0, 1)
+                self.incorrect_API_key = True
             else:
                 # if the query was unsuccessful but it is not caused by API limit, abort (this is some unknown error)
                 # X-Api-Message is a comprehensive error description, but it is not always present
@@ -550,6 +556,7 @@ class Module(Module, multiprocessing.Process):
 
         return url_ratio, down_file_ratio, ref_file_ratio, com_file_ratio
 
+
     def run(self):
         try:
             if self.key is None:
@@ -567,18 +574,16 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.pubsub.get_message(timeout=None)
-                if not message or message["type"] != "message" or type(message['data']) == int:
-                    # didn't receive a msg on any channel, or received the subscribe msg. keep trying
-                    continue
-                
+                message = self.c1.get_message(timeout=self.timeout)
+
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
-                if message['data'] == 'stop_process':
+                # exit module if there's a problem with the API key
+                if (message and message['data'] == 'stop_process') or self.incorrect_API_key == True:
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                elif message['channel'] == 'new_flow' :
+                if __database__.is_msg_intended_for(message, 'new_flow'):
                     data = message["data"]
                     data = json.loads(data)
                     profileid = data['profileid']
@@ -587,7 +592,6 @@ class Module(Module, multiprocessing.Process):
                     flow = json.loads(data['flow']) # this is a dict {'uid':json flow data}
                     # there is only one pair key-value in the dictionary
                     for key, value in flow.items():
-                        uid = key
                         flow_data = json.loads(value)
                     ip = flow_data['daddr']
                     cached_data = __database__.getIPData(ip)
@@ -603,8 +607,9 @@ class Module(Module, multiprocessing.Process):
                         # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                         if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                             self.set_vt_data_in_IPInfo(ip, cached_data)
-                # if timewindows are not updated for a long time, Slips is stopped automatically.
-                elif message['channel'] == 'new_dns_flow':
+
+                message = self.c2.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message["data"]
 
                     data = json.loads(data)
@@ -625,9 +630,10 @@ class Module(Module, multiprocessing.Process):
                         if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                             self.set_domain_data_in_DomainInfo(domain, cached_data)
 
-                elif message['channel'] == 'new_url':
-                    data = message["data"]
 
+                message = self.c3.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_url'):
+                    data = message["data"]
                     data = json.loads(data)
                     profileid = data['profileid']
                     twid = data['twid']
@@ -644,7 +650,8 @@ class Module(Module, multiprocessing.Process):
                         if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                             self.set_url_data_in_URLInfo(url, cached_data)
 
-                elif message['channel'] == 'new_downloaded_file' :
+                message = self.c4.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_downloaded_file'):
                     self.file_info = json.loads(message['data'])
                     file_info = self.file_info.copy()
                     self.scan_file(file_info)

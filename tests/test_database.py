@@ -1,6 +1,8 @@
 import ipaddress
 import redis
 import os
+import json
+
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
@@ -77,28 +79,37 @@ def test_add_port(database):
 def test_setEvidence(database):
     type_detection = 'ip'
     detection_info = test_ip
-    by = detection_info
-    type_evidence = 'SSHSuccessful-by-' + by
+    type_evidence = f'SSHSuccessful-by-{detection_info}'
     threat_level = 0.01
     confidence = 0.6
     description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip
     timestamp = ''
-    database.setEvidence(type_detection, detection_info, type_evidence,
-                             threat_level, confidence, description, timestamp, profileid=profileid, twid=twid)
+    category = 'Infomation'
+    uid = '123'
+    database.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     added_evidence = database.r.hget('evidence'+profileid, twid)
     added_evidence2 = database.r.hget(profileid + '_' + twid, 'Evidence')
     assert added_evidence2 == added_evidence
-    assert added_evidence ==  '{"{\\"type_detection\\": \\"ip\\", \\"detection_info\\": \\"192.168.1.1\\", \\"type_evidence\\": \\"SSHSuccessful-by-192.168.1.1\\"}": {"confidence": 0.6, "threat_level": 0.01, "description": "SSH Successful to IP :8.8.8.8. From IP 192.168.1.1"}}'
+
+    added_evidence = json.loads(added_evidence)
+    current_evidence_key = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
+    #  note that added_evidence may have evidence from other unit tests
+    import pprint
+    print(f'@@@@@@@@@@@@@@@@@@  current_evidence_key: {current_evidence_key} \n')
+    print(f'@@@@@@@@@@@@@@@@@@   added_evidence: \n{pprint.pprint(added_evidence)}\n')
+    assert current_evidence_key in added_evidence.keys()
 
 def test_deleteEvidence(database):
     key = {'type_detection': 'ip',
            'detection_info': test_ip,
-           'type_evidence': 'SSHSuccessful-by-192.168.1.1'
+           'type_evidence': 'SSHSuccessful-by-192.168.1.1',
+           'description': "SSH Successful to IP :8.8.8.8. From IP 192.168.1.1"
            }
     database.deleteEvidence(profileid, twid, key)
-    added_evidence = database.r.hget('evidence'+profileid, twid)
-    added_evidence2 = database.r.hget(profileid + '_' + twid, 'Evidence')
+    added_evidence = json.loads(database.r.hget('evidence'+profileid, twid))
+    added_evidence2 = json.loads(database.r.hget(profileid + '_' + twid, 'Evidence'))
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
 
@@ -119,9 +130,13 @@ def test_add_flow(database):
     uid = '1234'
     flow_type =  ""
     assert database.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
-                                          saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj),
-                                          dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
-                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, flow_type=flow_type) == True
+                                          saddr=str(saddr_as_obj), sport=sport,
+                                          daddr=str(daddr_as_obj),
+                                          dport=dport, proto=proto,
+                                          state=state, pkts=pkts, allbytes=allbytes,
+                                          spkts=spkts, sbytes=sbytes,
+                                          appproto=appproto, uid=uid,
+                                          flow_type=flow_type) == True
     assert database.r.hget(profileid + '_' + twid + '_' + 'flows', uid) == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20, "sbytes": 20, "appproto": "dhcp", "label": "", "flow_type": "", "module_labels": {}}'
 
 

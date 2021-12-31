@@ -32,7 +32,7 @@ class Module(Module, multiprocessing.Process):
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
-        self.timeout = None
+        self.timeout = 0.0000001
         self.__read_configuration()
 
     def __read_configuration(self):
@@ -60,10 +60,16 @@ class Module(Module, multiprocessing.Process):
         type_detection = ip_state
         detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
-        threat_level = ip_info['threat_level']
-        if not threat_level:
-            threat_level = 80
+
+        try:
+            threat_level = float(ip_info.get('threat_level', False))
+            if not threat_level:
+                raise ValueError
+        except ValueError:
+            threat_level =  80
+
         confidence = 1
+        category = 'Anomaly.Traffic'
         dns_resolution = __database__.get_dns_resolution(ip)
         dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
 
@@ -74,12 +80,17 @@ class Module(Module, multiprocessing.Process):
 
         description = f'connection {direction} blacklisted IP {ip}{dns_resolution}. Source: {ip_info["source"]}. Description: {ip_info["description"]}'
 
-        tags = ip_info.get('tags',False)
+        tags = ip_info.get('tags',False).replace("[",'').replace(']','').replace("'",'')
         if tags:
             description += f' tags={tags}'
+            source_target_tag = tags.capitalize()
+        else:
+            source_target_tag = "BlacklistedIP"
 
-        __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, is_subdomain, profileid='', twid=''):
         '''
@@ -90,23 +101,35 @@ class Module(Module, multiprocessing.Process):
 
         type_detection = 'dstdomain'
         detection_info = domain
+        category = 'Anomaly.Traffic'
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
         # in case of finding a subdomain in our blacklists
         # print that in the description of the alert and change the confidence accordingly
         if is_subdomain:
             confidence = 0.7
-            type = 'sub-domain in this domain'
+            # type = 'sub-domain in this domain'
         else:
             confidence = 1
-            type = 'domain'
+            # type = 'domain'
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
-        threat_level = domain_info.get('threat_level', False)
-        tags = domain_info.get('tags', False)
-        if not threat_level:
+        try:
+            threat_level = float(domain_info.get('threat_level', False))
+            if not threat_level:
+                raise ValueError
+        except ValueError:
             threat_level =  50
+        tags = domain_info.get('tags', False).replace("[",'').replace(']','').replace("'",'')
+        if tags:
+            source_target_tag = tags.capitalize()
+        else:
+            source_target_tag = "BlacklistedDomain"
+
+
         description = f'connection to a blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
-        __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description, timestamp,
+                                 category, source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid, uid=uid)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -336,7 +359,7 @@ class Module(Module, multiprocessing.Process):
             for localfile in local_ti_files:
                 self.print(f'Loading local TI file {localfile}', 2, 0)
                 # Get what files are stored in cache db and their E-TAG to comapre with current files
-                data = __database__.get_malicious_file_info(localfile)
+                data = __database__.get_TI_file_info(localfile)
                 try:
                     old_hash = data['e-tag']
                 except TypeError:
@@ -362,7 +385,7 @@ class Module(Module, multiprocessing.Process):
                     malicious_file_info = {}
                     malicious_file_info['e-tag'] = new_hash
                     malicious_file_info['time'] = ''
-                    __database__.set_malicious_file_info(localfile, malicious_file_info)
+                    __database__.set_TI_file_info(localfile, malicious_file_info)
                     return True
                 elif not new_hash:
                     # Something failed. Do not download
@@ -376,47 +399,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
 
-    def set_maliciousDomain_to_MaliciousDomains(self, domain, profileid, twid):
-        '''
-        Set malicious domain to DB 'MaliciousDomains' with a profileid and twid where domain was met
-        '''
-        # get all profiles and twis where this IP was met
-        domain_profiled_twid = __database__.get_malicious_domain(domain)
-        try:
-            profile_tws = domain_profiled_twid[profileid]               # a dictionary {profile:set(tw1, tw2)}
-            profile_tws = ast.literal_eval(profile_tws)                 # set(tw1, tw2)
-            profile_tws.add(twid)
-            domain_profiled_twid[profileid] = str(profile_tws)
-        except KeyError:
-            domain_profiled_twid[profileid] = str({twid})               # add key-pair to the dict if does not exist
-        data = json.dumps(domain_profiled_twid)
-        __database__.set_malicious_domain(domain, data)
 
-    def set_maliciousDomain_to_DomainInfo(self, domain, domain_description):
-        '''
-        Set malicious domain in DomainsInfo.
-        '''
-        domain_data = {}
-        # Maybe we should change the key to 'status' or something like that.
-        domain_data['threatintelligence'] = domain_description
-        __database__.setInfoForDomains(domain, domain_data)
-
-    def set_maliciousIP_to_MaliousIPs(self, ip, profileid, twid):
-        '''
-        Set malicious IP in 'MaliciousIPs' key with a profileid and twid.
-        '''
-
-        # Retrieve all profiles and twis, where this malicios IP was met.
-        ip_profileid_twid= __database__.get_malicious_ip(ip)
-        try:
-            profile_tws = ip_profileid_twid[profileid]             # a dictionary {profile:set(tw1, tw2)}
-            profile_tws = ast.literal_eval(profile_tws)            # set(tw1, tw2)
-            profile_tws.add(twid)
-            ip_profileid_twid[profileid] = str(profile_tws)
-        except KeyError:
-            ip_profileid_twid[profileid] = str({twid})                   # add key-pair to the dict if does not exist
-        data = json.dumps(ip_profileid_twid)
-        __database__.set_malicious_ip(ip, data)
 
     def set_maliciousIP_to_IPInfo(self, ip, ip_description):
         '''
@@ -461,13 +444,13 @@ class Module(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time
                 # (see at logsProcess.py), we will stop slips automatically.
                 # The 'stop_process' line is sent from logsProcess.py.
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
-                elif message['channel'] == 'give_threat_intelligence' and type(message['data']) is not int:
+                if __database__.is_msg_intended_for(message, 'give_threat_intelligence' ):
                     # Data is sent in the channel as a json dict so we need to deserialize it first
                     data = json.loads(message['data'])
                     # Extract data from dict
@@ -493,11 +476,13 @@ class Module(Module, multiprocessing.Process):
                             ip_info = json.loads(ip_info)
                             # Set the evidence on this detection
                             self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
-                            # set malicious IP in IPInfo
-                            self.set_maliciousIP_to_IPInfo(ip, ip_info)
-                            # set malicious IP in MaliciousIPs
-                            self.set_maliciousIP_to_MaliousIPs(ip, profileid, twid)
 
+                            # mark this ip as malicious in our database
+                            ip_info = {'threatintelligence': ip_info}
+                            __database__.setInfoForIPs(ip, ip_info)
+
+                            # add this ip to our MaliciousIPs hash in the database
+                            __database__.set_malicious_ip(ip, profileid, twid)
                     else:
                         # We were not given an IP. Check if we were given a domain
 
@@ -510,10 +495,13 @@ class Module(Module, multiprocessing.Process):
                                 # If the domain is in the blacklist of IoC. Set an evidence
                                 domain_info = json.loads(domain_info)
                                 self.set_evidence_domain(domain, uid, timestamp, domain_info, is_subdomain, profileid, twid)
-                                # set malicious domain in DomainInfo
-                                self.set_maliciousDomain_to_DomainInfo(domain, domain_info)
-                                # set malicious domain in MaliciousDomains
-                                self.set_maliciousDomain_to_MaliciousDomains(domain, profileid, twid)
+
+                                # mark this domain as malicious in our database
+                                domain_info =  {'threatintelligence': domain_info }
+                                __database__.setInfoForDomains(domain, domain_info)
+
+                                # add this domain to our MaliciousDomains hash in the database
+                                __database__.set_malicious_domain(domain, profileid, twid)
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue

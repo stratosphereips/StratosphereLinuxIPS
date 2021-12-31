@@ -46,7 +46,7 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
-        self.timeout = None
+        self.timeout = 0.0000001
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -74,11 +74,11 @@ class Module(Module, multiprocessing.Process):
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                if message['channel'] == 'new_ip':
+                if message and message['channel'] == 'new_ip':
                     # Example of printing the number of profiles in the
                     # Database every second
                     data = len(__database__.getProfiles())

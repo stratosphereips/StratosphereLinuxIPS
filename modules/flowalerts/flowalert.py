@@ -36,14 +36,13 @@ class Module(Module, multiprocessing.Process):
         # Retrieve the labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        self.pubsub = __database__.r.pubsub()
-        self.pubsub.subscribe('new_flow')
-        self.pubsub.subscribe('new_ssh')
-        self.pubsub.subscribe('new_notice')
-        self.pubsub.subscribe('new_ssl')
-        self.pubsub.subscribe('new_service')
-        self.pubsub.subscribe('new_dns_flow')
-        self.timeout = None
+        self.c1 = __database__.subscribe('new_flow')
+        self.c2 = __database__.subscribe('new_ssh')
+        self.c3 = __database__.subscribe('new_notice')
+        self.c4 = __database__.subscribe('new_ssl')
+        self.c5 = __database__.subscribe('new_service')
+        self.c6 = __database__.subscribe('new_dns_flow')
+        self.timeout = 0.0000001
         # read our list of ports that are associated to a specific organizations
         ports_info_filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
         self.read_ports_info(ports_info_filepath)
@@ -60,6 +59,10 @@ class Module(Module, multiprocessing.Process):
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In seconds
         self.conn_without_dns_interface_wait_time = 180
+        # this dict will contain the number of nxdomains found in every profile
+        self.nxdomains = {}
+        # if nxdomains are >= this threshold, it's probably DGA
+        self.nxdomains_threshold = 10
 
     def read_ports_info(self, ports_info_filepath):
         """
@@ -92,40 +95,6 @@ class Module(Module, multiprocessing.Process):
                         continue
         except OSError:
             self.print(f"An error occured while reading {ports_info_filepath}.",0,1)
-
-
-    def read_ports_info(self, ports_info_filepath):
-        """
-        Reads port info from slips_files/ports_info/ports_used_by_specific_orgs.csv
-        and store it in the db
-        """
-
-        # there are ports that are by default considered unknown to slips,
-        # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
-        # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
-
-        try:
-            with open(ports_info_filepath,'r') as f:
-                while True:
-                    line = f.readline()
-                    # reached the end of file
-                    if not line: break
-                    # skip the header and the comments at the begining
-                    if line.startswith('#') or line.startswith('"Organization"'):
-                        continue
-
-                    line = line.split(',')
-
-                    try:
-                        organization, ip = line[0], line[1]
-                        portproto = f'{line[2]}/{line[3].lower()}'
-                        __database__.set_organization_of_port(organization, ip, portproto)
-                    except IndexError:
-                        self.print(f"Invalid line: {line} in {ports_info_filepath}. Skipping.",0,1)
-                        continue
-        except OSError:
-            self.print(f"An error occured while reading {ports_info_filepath}.",0,1)
-
 
     def is_ignored_ip(self, ip) -> bool:
         """
@@ -154,6 +123,7 @@ class Module(Module, multiprocessing.Process):
             self.long_connection_threshold = int(self.config.get('flowalerts', 'long_connection_threshold'))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
+            # this value is in seconds, =25 mins
             self.long_connection_threshold = 1500
         try:
             self.ssh_succesful_detection_threshold = int(self.config.get('flowalerts', 'ssh_succesful_detection_threshold'))
@@ -194,17 +164,18 @@ class Module(Module, multiprocessing.Process):
         The threat_level is 0.01 to show that this is not a detection
         """
 
-        type_detection = 'ip'
+        type_detection = 'srcip'
         detection_info = saddr
-        type_evidence = 'SSHSuccessful-by-' + by
+        type_evidence = f'SSHSuccessful-by-{saddr}'
         threat_level = 0
         confidence = 0.5
+        category = 'Infomation'
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'SSH successful to IP {daddr}. {ip_identification}. From IP {saddr}. Size: {str(size)}. Detection model {by}. Threat level {threat_level}. Confidence {confidence}'
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_long_connection(self, ip, duration, profileid, twid, uid, timestamp, ip_state='ip'):
         '''
@@ -214,15 +185,19 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         type_evidence = 'LongConnection'
         threat_level = 0.5
+        category = 'Anomaly.Connection'
         # confidence depends on how long the connection
         # scale the confidence from 0 to 1, 1 means 24 hours long
         confidence = 1/(3600*24)*(duration-3600*24)+1
+        confidence = round(confidence, 2)
         ip_identification = __database__.getIPIdentification(ip)
-        description = 'Long Connection ' + str(duration) + f'. {ip_identification}'
+        # get the duration in minutes
+        duration = int(duration/60)
+        description = f'Long Connection. Connection to: {ip} {ip_identification} took {duration} mins'
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_self_signed_certificates(self, profileid, twid, ip, description, uid, timestamp, ip_state='ip'):
         '''
@@ -230,13 +205,14 @@ class Module(Module, multiprocessing.Process):
         '''
         confidence = 0.5
         threat_level = 0.3
+        category = 'Anomaly.Behaviour'
         type_detection = 'dstip'
         type_evidence = 'SelfSignedCertificate'
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                 description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_for_multiple_reconnection_attempts(self,profileid, twid, ip, description, uid, timestamp):
         '''
@@ -244,13 +220,14 @@ class Module(Module, multiprocessing.Process):
         '''
         confidence = 0.5
         threat_level = 20
+        category = 'Anomaly.Traffic'
         type_detection  = 'dstip'
         type_evidence = 'MultipleReconnectionAttempts'
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_for_connection_to_multiple_ports(self,profileid, twid, ip, description, uid, timestamp):
         '''
@@ -258,13 +235,14 @@ class Module(Module, multiprocessing.Process):
         '''
         confidence = 0.5
         threat_level = 20
+        category = 'Anomaly.Connection'
         type_detection  = 'dstip'
         type_evidence = 'ConnectionToMultiplePorts'
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_for_invalid_certificates(self, profileid, twid, ip, description, uid, timestamp):
         '''
@@ -272,18 +250,20 @@ class Module(Module, multiprocessing.Process):
         '''
         confidence = 0.5
         threat_level =  0.2
+        category = "Anomaly.Behaviour"
         type_detection  = 'dstip'
         type_evidence = 'InvalidCertificate'
         detection_info = ip
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid, timestamp):
         """
         Check if a duration of the connection is
         above the threshold (more than 25 minutess by default).
+        :param dur: duration of the flow in seconds
         """
         if type(dur) == str:
             dur = float(dur)
@@ -399,6 +379,7 @@ class Module(Module, multiprocessing.Process):
             # we don't have info about this port
             confidence = 1
             threat_level = 0.6
+            category = 'Anomaly.Connection'
             type_detection  = 'dport'
             type_evidence = 'UnknownPort'
             detection_info = str(dport)
@@ -410,27 +391,28 @@ class Module(Module, multiprocessing.Process):
                 description += f' ({ip_info})'
             if not twid:
                 twid = ''
-            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                     confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_for_port_0_scanning(self, saddr, daddr, direction, profileid, twid, uid, timestamp):
+    def set_evidence_for_port_0_connection(self, saddr, daddr, direction, profileid, twid, uid, timestamp):
         """ :param direction: 'source' or 'destination' """
         confidence = 0.8
         threat_level =  0.5
+        category = 'Anomaly.Connection'
         type_detection  = 'srcip' if direction == 'source' else 'dstip'
-        type_evidence = 'Port0Scanning'
+        source_target_tag = "Recon"
+        type_evidence = 'Port0Connection'
         detection_info = saddr if direction == 'source' else daddr
         if direction == 'source':
             ip_identification = __database__.getIPIdentification(daddr)
-            description = f'Port 0 scanning: {saddr} is scanning {daddr}. {ip_identification}.'
+            description = f'Connection on port 0 from {saddr} to {daddr}. {ip_identification}.'
         else:
             ip_identification = __database__.getIPIdentification(saddr)
-            description = f'Port 0 scanning: {daddr} is scanning {saddr}. {ip_identification}'
-
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+            description = f'Connection on port 0 from {daddr} to {saddr}. {ip_identification}'
+        conn_count = 1
+        if not twid: twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
@@ -477,7 +459,9 @@ class Module(Module, multiprocessing.Process):
                 # but still no dns resolution for it. So now alert
                 #self.print(f'Alerting after timer conn without dns on {daddr}, uid {uid}. time {datetime.datetime.now()}')
                 threat_level = 0.9
+                category = 'Anomaly.Connection'
                 type_detection  = 'dstip'
+                source_target_tag = 'Malware'
                 type_evidence = 'ConnectionWithoutDNS'
                 detection_info = daddr
                 confidence = 0.8
@@ -485,8 +469,8 @@ class Module(Module, multiprocessing.Process):
                 description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
                 if not twid:
                     twid = ''
-                __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                         description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                         description, timestamp, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
                 # This UID will never appear again, so we can remove it and
                 # free some memory
                 try:
@@ -499,13 +483,14 @@ class Module(Module, multiprocessing.Process):
         Makes sure all cached DNS answers are used in contacted_ips
         :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
-        # Ignore some domains
+        # Ignore some domains because its is ok if they do DNS without a connection
         ## - All reverse dns resolutions
         ## - All .local domains
         ## - The wildcard domain *
-        ## - Subdomains of cymru.com, since it is used by the ipwhois library to get the ASN of an IP and its range.
+        ## - Subdomains of cymru.com, since it is used by the ipwhois library in Slips to get the ASN of an IP and its range. This DNS is meant not to have a connection later
         ## - Domains check from Chrome, like xrvwsrklpqrw
         ## - The WPAD domain of windows
+
         if 'arpa' in domain or '.local' in domain or '*' in domain or '.cymru.com' in domain[-10:] or len(domain.split('.')) == 1 or domain == 'WPAD':
             return False
 
@@ -564,12 +549,13 @@ class Module(Module, multiprocessing.Process):
             # but still no connection for it. So now alert
             confidence = 0.8
             threat_level = 0.3
+            category = 'Anomaly.Traffic'
             type_detection  = 'dstdomain'
             type_evidence = 'DNSWithoutConnection'
             detection_info = domain
             description = f'domain {domain} resolved with no connection'
-            __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level, confidence,
-                                 description, timestamp, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
             # This UID will never appear again, so we can remove it and
             # free some memory
             try:
@@ -658,57 +644,108 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-
-    def set_evidence_malicious_JA3(self,daddr, profileid, twid, description, uid, timestamp, alert: bool, confidence):
+    def set_evidence_malicious_JA3(self, malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='', ioc=''):
+        # todo description should be constructed in this function not outside D:
         """
         :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
         """
-        threat_level = 80
-        type_detection  = 'dstip'
-        if 'JA3s ' in description:
-            type_evidence = 'MaliciousJA3s'
-        else:
+        malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
+        tags = malicious_ja3_dict['tags']
+        ja3_description = malicious_ja3_dict['description']
+        threat_level = malicious_ja3_dict['threat_level']
+
+        if type_ == 'ja3':
+            description = f'Malicious JA3: {ioc} to daddr {daddr}'
             type_evidence = 'MaliciousJA3'
+            category =  'Intrusion.Botnet'
+            source_target_tag =  "Botnet"
+        elif type_ == 'ja3s':
+            description = f'Malicious JA3s: (possible C&C server): {ioc} to server {daddr} '
+            type_evidence = 'MaliciousJA3s'
+            category =  'Intrusion.Botnet'
+            source_target_tag = "CC"
+
+        # append daddr identification to the description
+        ip_identification = __database__.getIPIdentification(daddr)
+        description+= f'{ip_identification} description: {ja3_description} {tags}'
+
+        type_detection  = 'dstip'
         detection_info = daddr
         confidence = 1
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_data_exfiltration(self, most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
         confidence = 0.6
         threat_level = 60
         type_detection  = 'dstip'
-        type_evidence = 'DataExfiltration'
+        source_target_tag = 'OriginMalware'
+        type_evidence = 'DataUpload'
+        category = 'Malware'
         detection_info = most_contacted_daddr
         bytes_sent_in_MB = int(total_bytes / (10**6))
         ip_identification = __database__.getIPIdentification(most_contacted_daddr)
-        description = f'possible data exfiltration. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}. {ip_identification}. IP contacted {times_contacted} times in the past 1h'
+        description = f'possible data upload. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}.'
+        description+= f'{ip_identification}. IP contacted {times_contacted} times in the past 1h'
         timestamp = datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
+                                 confidence, description, timestamp, category,
+                                 source_target_tag=source_target_tag, profileid=profileid, twid=twid)
 
 
+    def detect_DGA(self, rcode_name, query, stime, profileid, twid, uid):
+        """
+        Detect DGA based on the amount of NXDOMAINs seen in dns.log
+        """
+
+        if not 'NXDOMAIN' in rcode_name or 'in-addr.arpa' in query or query.endswith('.local'):
+            return False
+
+        profileid_twid = f'{profileid}_{twid}'
+
+        # found NXDOMAIN by this profile
+        try:
+            self.nxdomains[profileid_twid] +=1
+        except KeyError:
+            # first time seeing nxdomain in this profile and tw
+            self.nxdomains.update({profileid_twid: 1})
+            return False
+
+        # every 10,15,20 .. etc. nxdomains, generate an alert.
+        if self.nxdomains[profileid_twid] % 5 == 0 and self.nxdomains[profileid_twid] >= self.nxdomains_threshold:
+            confidence = (1/100)*(self.nxdomains[profileid_twid]-100)+1
+            confidence = round(confidence, 2) # for readability
+            threat_level = 80
+            category = 'Intrusion.Botnet'
+            # the srcip performing all the dns queries
+            type_detection  = 'srcip'
+            source_target_tag = 'OriginMalware'
+            type_evidence = f'DGA-{self.nxdomains[profileid_twid]}-NXDOMAINs'
+            detection_info = profileid.split('_')[1]
+            description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains[profileid_twid]} domains'
+            conn_count = self.nxdomains[profileid_twid]
+            if not twid: twid = ''
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, stime, category, source_target_tag=source_target_tag,
+                                     conn_count=conn_count, profileid=profileid, twid=twid)
+            return True
 
     def run(self):
         # Main loop function
         while True:
             try:
-                message = self.pubsub.get_message(timeout=None)
-                if not message or message["type"] != "message" or type(message['data']) == int:
-                    # didn't receive a msg on any channel, or received the subscribe msg. keep trying
-                    continue
                 # ---------------------------- new_flow channel
+                message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-
-                elif message['channel'] == 'new_flow':
+                if __database__.is_msg_intended_for(message, 'new_flow'):
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -731,6 +768,7 @@ class Module(Module, multiprocessing.Process):
                     origstate = flow_dict['origstate']
                     state = flow_dict['state']
                     timestamp = data['stime']
+                    # ports are of type int
                     sport = flow_dict['sport']
                     dport = flow_dict.get('dport', None)
                     proto = flow_dict.get('proto')
@@ -741,7 +779,6 @@ class Module(Module, multiprocessing.Process):
                     # timestamp = data['stime']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-
 
                     # --- Detect long Connections ---
                     # Do not check the duration of the flow if the daddr or
@@ -764,10 +801,10 @@ class Module(Module, multiprocessing.Process):
                                 description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
                                 self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
 
-                    # --- Detect Port 0 Scanning ---
-                    if proto != 'igmp' and proto != 'icmp' and  proto != 'ipv6-icmp' and (sport == '0' or dport == '0'):
+                    # --- Detect Connection to port 0 ---
+                    if proto not in ('igmp', 'icmp', 'ipv6-icmp') and (sport == 0 or dport == 0):
                         direction = 'source' if sport==0 else 'destination'
-                        self.set_evidence_for_port_0_scanning(saddr, daddr, direction, profileid, twid, uid, timestamp)
+                        self.set_evidence_for_port_0_connection(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
                     # --- Detect if this is a connection without a DNS resolution ---
                     # The exceptions are:
@@ -896,11 +933,13 @@ class Module(Module, multiprocessing.Process):
                                     self.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # --- Detect successful SSH connections ---
-                elif message['channel'] == 'new_ssh' :
+                message = self.c2.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_ssh'):
                     self.check_ssh(message)
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
-                elif message['channel'] == 'new_notice':
+                message = self.c3.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_notice'):
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
@@ -915,6 +954,8 @@ class Module(Module, multiprocessing.Process):
                         uid = data['uid']
                         msg = flow['msg']
                         note = flow['note']
+
+                        # --- Self signed CERTS ---
                         # We're looking for self signed certs in notice.log in the 'msg' field
                         if 'self signed' in msg or 'self-signed' in msg:
                             profileid = data['profileid']
@@ -924,11 +965,13 @@ class Module(Module, multiprocessing.Process):
                             description = f'self-signed certificate. Destination IP {ip}. {ip_identification}'
                             confidence = 0.5
                             threat_level = 30
+                            category = "Anomaly.Behaviour"
                             type_detection = 'dstip'
                             type_evidence = 'SelfSignedCertificate'
                             detection_info = ip
-                            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                     threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
+                                                     confidence, description, timestamp, category, profileid=profileid,
+                                                     twid=twid, uid=uid)
                             #self.print(description, 3, 0)
 
                         # --- Detect port scans from Zeek logs---
@@ -941,10 +984,15 @@ class Module(Module, multiprocessing.Process):
                             # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
                             description = 'vertical port scan by Zeek engine. ' + msg
                             type_evidence = 'PortScanType1'
+                            category = 'Recon.Scanning'
                             type_detection = 'dstip'
+                            source_target_tag = "Recon"
+                            conn_count = int(msg.split("scanned")[1].split("ports")[0])
                             detection_info = flow.get('scanning_ip','')
-                            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
+                                                     confidence, description, timestamp, category,
+                                                     source_target_tag=source_target_tag, conn_count=conn_count,
+                                                     profileid=profileid, twid=twid, uid=uid)
                             #self.print(description, 3, 0)
 
                         if 'SSL certificate validation failed' in msg:
@@ -957,31 +1005,45 @@ class Module(Module, multiprocessing.Process):
 
                         if 'Address_Scan' in note:
                             # Horizontal port scan
+                            # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
                             confidence = 1
                             threat_level = 60
                             description = 'horizontal port scan by Zeek engine. ' + msg
                             type_evidence = 'PortScanType2'
                             type_detection = 'dport'
+                            source_target_tag = 'Recon'
                             detection_info = flow.get('scanned_port','')
-                            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                            category = 'Recon.Scanning'
+                            # get the number of unique hosts scanned on a specific port
+                            conn_count = int(msg.split("least")[1].split("unique")[0])
+                            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
+                                                     confidence, description, timestamp, category,
+                                                     source_target_tag=source_target_tag, conn_count=conn_count,
+                                                     profileid=profileid, twid=twid, uid=uid)
+
                             #self.print(description, 3, 0)
                         if 'Password_Guessing' in note:
                             # Vertical port scan
                             # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
                             confidence = 1
                             threat_level = 0.6
+                            category = 'Attempt.Login'
                             # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
                             description = 'password guessing by Zeek enegine. ' + msg
                             type_evidence = 'Password_Guessing'
-                            type_detection = 'dstip'
+                            type_detection = 'srcip'
+                            source_target_tag = 'Malware'
                             detection_info = flow.get('scanning_ip','')
-                            __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+                            conn_count = int(msg.split("in ")[1].split("connections")[0])
+                            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
+                                                     confidence, description, timestamp, category,
+                                                     conn_count=conn_count, source_target_tag=source_target_tag,
+                                                     profileid=profileid, twid=twid, uid=uid)
                             #self.print(description, 3, 0)
 
                 # --- Detect maliciuos JA3 TLS servers ---
-                elif message['channel'] == 'new_ssl':
+                message = self.c4.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_ssl'):
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
                     if type(data) == str:
@@ -997,13 +1059,14 @@ class Module(Module, multiprocessing.Process):
                         ja3s = flow.get('ja3s',False)
                         profileid = data['profileid']
                         twid = data['twid']
+                        daddr = flow['daddr']
 
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
+                            ip_identification = __database__.getIPIdentification(ip)
                             server_name = flow.get('server_name') # returns None if not found
                             # if server_name is not None or not empty
                             if not server_name:
-                                ip_identification = __database__.getIPIdentification(ip)
                                 description = f'Self-signed certificate. Destination IP: {ip}. {ip_identification}'
                             else:
                                 description = f'Self-signed certificate. Destination IP: {ip}, SNI: {server_name}. {ip_identification}'
@@ -1013,26 +1076,15 @@ class Module(Module, multiprocessing.Process):
                         if ja3 or ja3s:
                             # get the dict of malicious ja3 stored in our db
                             malicious_ja3_dict = __database__.get_ja3_in_IoC()
-                            daddr = flow['daddr']
-
                             if ja3 in malicious_ja3_dict:
-                                malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3])
-                                description = malicious_ja3_dict['description']
-                                tags = malicious_ja3_dict['tags']
-                                description = f'Malicious JA3: {ja3} to daddr {daddr} description: {description} [{tags}]'
-                                threat_level = malicious_ja3_dict['threat_level']
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
+                                self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp,  type_='ja3', ioc=ja3)
 
                             if ja3s in malicious_ja3_dict:
-                                malicious_ja3_dict = json.loads(malicious_ja3_dict[ja3s])
-                                description = malicious_ja3_dict['description']
-                                tags = malicious_ja3_dict['tags']
-                                description = f'Malicious JA3s: (possible C&C server): {ja3s} to server {daddr} description: {description} [{tags}]'
-                                threat_level = malicious_ja3_dict['threat_level']
-                                self.set_evidence_malicious_JA3(daddr, profileid, twid, description, uid, timestamp, threat_level)
+                                self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='ja3s', ioc=ja3s)
 
                 # --- Learn ports that Zeek knows but Slips doesn't ---
-                elif message['channel'] == 'new_service':
+                message = self.c5.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_service'):
                     data = json.loads(message['data'])
                     # uid = data['uid']
                     # profileid = data['profileid']
@@ -1048,29 +1100,32 @@ class Module(Module, multiprocessing.Process):
                         __database__.set_port_info(f'{port}/{proto}', service[0])
 
                 # --- Detect DNS resolutions without connection ---
-                elif message['channel'] == 'new_dns_flow':
+                message = self.c6.get_message(timeout=self.timeout)
+                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
                     data = json.loads(message["data"])
-
                     profileid = data['profileid']
                     twid = data['twid']
                     uid = data['uid']
                     flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-                    domain = flow_data.get('query',False)
-                    answers = flow_data.get('answers',False)
+                    domain = flow_data.get('query', False)
+                    answers = flow_data.get('answers', False)
+                    rcode_name = flow_data.get('rcode_name', False)
                     stime = data.get('stime',False)
+
                     # only check dns without connection if we have answers(we're sure the query is resolved)
                     if answers:
                         self.check_dns_resolution_without_connection(domain, answers, stime, profileid, twid, uid)
-
+                    if rcode_name:
+                        self.detect_DGA(rcode_name, domain, stime, profileid, twid, uid)
             except KeyboardInterrupt:
                 continue
-            # except Exception as inst:
-                # exception_line = sys.exc_info()[2].tb_lineno
-                # self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                # self.print(str(type(inst)), 0, 1)
-                # self.print(str(inst.args), 0, 1)
-                # self.print(str(inst), 0, 1)
-                # return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
 
 class TimerThread(threading.Thread):
     """Thread that executes 1 task after N seconds. Only to run the process_global_data."""
