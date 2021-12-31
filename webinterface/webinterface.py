@@ -75,7 +75,6 @@ def alerts():
     # pagination
     start = request.args.get('start', type=int)
     length = request.args.get('length', type=int)
-    alerts_page = ""
     # alerts_page = []
     # if start and length:
     alerts_page = alerts[start:(start + length)]
