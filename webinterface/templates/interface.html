@@ -1,29 +1,61 @@
+
+
+
 <!doctype html>
 <html>
 
   <head>
     <title>{{ title }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+<!--  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">-->
+<!--<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">-->
+
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.25/css/dataTables.bootstrap5.css">
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.3/css/jquery.dataTables.min.css">
-<!--    <link href=" {{url_for('static', filename='dataTable.css')}}" rel="stylesheet"/>-->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/bs5/dt-1.11.3/sl-1.3.3/datatables.min.css"/>
+
   </head>
 
   <body>
     <div class="container-fluid px-0">
+
       <div class = "row">
-        <div class = "col-md-4">
-          <table id="profiles" class="table table-striped">
+        <!-- Modal -->
+          <div class="modal fade" id="exampleModalCenter" tabindex="-1" role="dialog" aria-labelledby="exampleModalCenterTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title" id="exampleModalLongTitle">Modal title</h5>
+                  <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                  </button>
+                </div>
+                <div class="modal-body">
+                  ...
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                  <button type="button" class="btn btn-primary">Save changes</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        <div class = "col mx-3 ">
+          <style type="text/css">
+          .table_block{ border-radius: 15px; border-style: solid;}
+          </style>
+          <table id="profiles" class="table table_block">
             <thead>
             <tr>
               <th></th>
-              <th>profiles</th>
+              <th  >profiles</th>
+              <th></th>
             </tr>
             </thead>
           </table>
+          </div>
 
-        </div>
-        <div class = "col-md-8">
+        <div class = "col col-md-8">
             <table id="alerts" class="table table-striped">
               <thead>
                 <tr>
@@ -49,15 +81,20 @@
               </tfoot>
           </table>
         </div>
+
+
       </div>
     </div>
-    <script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
-<!--    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap5.js"></script>-->
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.js"></script>
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap5.js"></script>
+<!--    <script type="text/javascript" src="https://cdn.datatables.net/v/bs5/dt-1.11.3/sl-1.3.3/datatables.min.js"></script>-->
+
     <script type="text/javascript" charset="utf8" src=" {{url_for('static', filename='js/profiles_dataTable.js')}}" rel="stylesheet"></script>
     <script type="text/javascript" charset="utf8" src=" {{url_for('static', filename='js/alerts_dataTable.js')}}" rel="stylesheet"></script>
-    <script>
-
-  </script>
   </body>
 </html>
