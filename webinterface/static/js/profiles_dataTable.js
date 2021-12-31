@@ -1,16 +1,20 @@
 function format ( d ) {
-    const open_string = '<table cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
+
+    const open_string = '<table class="table table-striped">' //cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
     const close_string = '</table>'
     let data = ""
-    d.tws.forEach(item=> data = data + '<tr>'+ '<td>'+ item + '</td>'+ '</tr>')
+    d.tws.forEach(item=> data = data + '<tr onclick="myFunction(this)" data-profile='+d.id+'>'+ '<td>'+ item + '</td>'+ '</tr>')
     return open_string + data + close_string;
     }
+
+function myFunction(x) {
+  alert("Row index is: " + x.getAttribute("data-profile"));
+}
 
 $(document).ready(function () {
     $('#profiles').on('click', 'tbody td.dt-control', function () {
             var tr = $(this).closest('tr');
             var row = table.row( tr );
-
             if ( row.child.isShown() ) {
                 // This row is already open - close it
                 row.child.hide();
