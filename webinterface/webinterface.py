@@ -8,7 +8,22 @@ app = Flask(__name__)
 # Connection to Slips redis database
 config = ""
 # __database__.start(config)
-__database__ = redis.StrictRedis("localhost",6379,charset="utf-8", decode_responses=True)
+__database__ =redis.StrictRedis(host='localhost',
+                                           port=6379,
+                                           db=0,
+                                           charset="utf-8",
+                                           socket_keepalive=True,
+                                           retry_on_timeout=True,
+                                           decode_responses=True,
+                                           health_check_interval=30)
+__cache__ = redis.StrictRedis(host='localhost',
+                                                port=6379,
+                                                db=1,
+                                                charset="utf-8",
+                                                socket_keepalive=True,
+                                                retry_on_timeout=True,
+                                                decode_responses=True,
+                                                health_check_interval=30)
 
 
 # alerts_channel = __database__.subscribe('evidence_added')
