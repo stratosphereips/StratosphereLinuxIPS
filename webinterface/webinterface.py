@@ -29,6 +29,11 @@ __database__ = redis.StrictRedis("localhost",6379,charset="utf-8", decode_respon
 def index():
     return render_template('interface.html', title='Slips')
 
+@app.route('/info/<ip>')
+def ip_info(ip):
+    ip_info = __cache__.hget('IPsInfo', ip)
+    print(ip_info)
+    return ip_info
 
 @app.route('/profiles_tws')
 def profile_tws():
@@ -38,8 +43,12 @@ def profile_tws():
     for profileid, tws in profile_tws.items():
         data.append({"id": str(id), "profile": profileid, "tws": json.loads(tws)})
         id = id + 1
+    # start = request.args.get('start', type=int)
+    # length = request.args.get('length', type=int)
     data_length = id
     total_filtered = id
+    # profiles_page = data[start:(start + length)]
+
     return {
         'data': data,
         'recordsFiltered': total_filtered,
@@ -67,6 +76,7 @@ def alerts():
     start = request.args.get('start', type=int)
     length = request.args.get('length', type=int)
     alerts_page = ""
+    # alerts_page = []
     # if start and length:
     alerts_page = alerts[start:(start + length)]
 
