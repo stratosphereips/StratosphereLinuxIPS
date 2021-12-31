@@ -17,6 +17,7 @@ The detection techniques are:
 - Detect invalid certificates using Zeek
 - Detect multiple reconnection attempts to the same destination port with not established flows
 - Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing 
+- Detect DGA
 
 The details of each detection follows.
 
@@ -50,5 +51,15 @@ The domains that are excepted are:
 - Subdomains of cymru.com, since it is used by the ipwhois library to get the ASN of an IP and its range.
 - Ignore WPAD domain from Windows
 - Ignore domains without a TLD such as the Chrome test domains.
+
+## Detect DGA
+
+When the dns server fails to resolve a domain, it responds back with NXDOMAIN code.
+
+To detect DGA, Slips will count the amount of NXDOMAINs met in the DNS traffic of each source IP.
+
+Then we alert when there is 10 or more NXDOMAINs.
+
+Every 10,15,20 ..etc slips generates an alert.
 
 ## Still under construction...

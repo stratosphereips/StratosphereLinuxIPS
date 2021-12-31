@@ -96,7 +96,7 @@ class Module(Module, multiprocessing.Process):
         self.is_thread_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
-        self.timeout = None
+        self.timeout = 0.0000001
         # flag to open json file only once
         self.is_json_file_opened = False
         self.json_file_handle = False
@@ -372,9 +372,10 @@ class Module(Module, multiprocessing.Process):
                             if not sent_to_slack:
                                 self.print("Problem in send_to_slack()", 0, 3)
                         if 'stix' in self.export_to:
-                            key = evidence['key']
-                            msg_to_send = (key['type_evidence'],key['type_detection'],
-                                                key['detection_info'], description)
+                            msg_to_send = (evidence['type_evidence'],
+                                           evidence['type_detection'],
+                                           evidence['detection_info'],
+                                           description)
                             # This thread is responsible for waiting n seconds before each push to the stix server
                             # it starts the timer when the first alert happens
                             # push_delay should be an int when slips is running using -i

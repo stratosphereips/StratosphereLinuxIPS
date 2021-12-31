@@ -1,4 +1,16 @@
 # Architecture
+
+The architecture of Slips is basically:
+    - To receive some data as input
+    - To process it to a common format
+    - To enrich it
+    - To apply detection modules 
+    - To output results
+
+Slips is heavily based on the Zeek monitoring tool as input tool for packets from the interface and pcap file, due to its excelent recognition of protocols and easiness to identify the content of the traffic.
+
+Figure 1 shows how the data is analyzed by Slips. As we can see, Slips internally uses <a href="https://zeek.org/">Zeek</a>, an open source network security monitoring tool. Slips divides flows into profiles and each proifle into a timewindows. Slips runs detection modules on each flow and stores all evidence, alerts and features in an appropriate profile structure. All data, i.e. zeek flows, performed detections, profiles and timewindows' data, is stored inside a <a href="https://redis.io/">Redis</a> database. The output of Slips is a folder with logs, alert.json or alerts.log, and Kalipso, a terminal graphical user interface.
+
 <style>
 .zoom {
   transition: transform .2s; /* Animation */
@@ -17,7 +29,7 @@
 <figcaption><b>Figure 1.</b> The analysis of the network traffic by Slips. Its input, internal structure and output.</figcaption>
 </div>
 <br>
-Figure 1 shows how the data is analyzed by Slips. As we can see, Slips internally uses <a href="https://zeek.org/">Zeek</a>, an open source network security monitoring tool. Slips divides flows generatedby Zeek into profiles and timewindows. Slips runs detection modules on each flow and stores all evidence, detection and feature in an appropriate profile and timewindow. All data, i.e. zeek flows, performed detections, profiles and timewindows' data, is stored inside a <a href="https://redis.io/">Redis</a> database. The output of Slips is a folder with logs, alert.json or alerts.log, and Kalipso, a terminal graphical user interface.
+
 
 Below is more explanation on internal representation of data, usage of Zeek and usage of Redis inside Slips.
 

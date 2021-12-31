@@ -45,15 +45,8 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        # To which channels do you wnat to subscribe? When a message arrives
-        # on the channel the module will wakeup
-        # The options change, so the last list is on the slips/core/database.py
-        # file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
         self.c1 = __database__.subscribe('new_letters')
-        self.timeout = None
+        self.timeout = 0.0000001
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -81,13 +74,17 @@ class Module(Module, multiprocessing.Process):
         '''
         type_detection = 'outTuple'
         detection_info = tupleid
-        type_evidence = 'C&C channels detection'
+        source_target_tag= 'CC'
+        type_evidence = 'Command-and-Control-channels-detection'
         threat_level = 0.3
+        categroy =  'Intrusion.Botnet'
         tupleid = tupleid.split(':')
         dstip , port, proto =  tupleid[0], tupleid[1], tupleid[2]
         description = f'C&C channels detection, destination IP: {dstip} port: {port}/{proto} score: {format(score, ".4f")}'
-        __database__.setEvidence(type_detection, detection_info, type_evidence,
-                                 threat_level, confidence, description, timestamp, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description, timestamp,
+                                 categroy, source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid, uid=uid)
 
     def convert_input_for_module(self, pre_behavioral_model):
         """
@@ -148,11 +145,12 @@ class Module(Module, multiprocessing.Process):
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                if message['data'] == 'stop_process':
+                if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                if message['channel'] == 'new_letters' and type(message['data']) is not int:
+
+                if __database__.is_msg_intended_for(message, 'new_letters'):
                     data = message['data']
                     data = json.loads(data)
                     pre_behavioral_model = data['new_symbol']

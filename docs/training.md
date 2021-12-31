@@ -26,11 +26,11 @@ To re-train this machine learning algorithm, you need to do the following:
 
 After this edits, just run Slips as usual with any type of input, for example with a Zeek folder.
 
-    ./slips.py -c slips.conf -l -f ~/my-computer-normal/
+    ./slips.py -c slips.conf -f ~/my-computer-normal/
 
 Or with a pcap file.
 
-    ./slips.py -c slips.conf -l -f ~/my-computer-normal2.pcap
+    ./slips.py -c slips.conf -f ~/my-computer-normal2.pcap
 
 3- If you have also malicious traffic, first change the label to malicious in slips.conf
 
@@ -39,15 +39,15 @@ Or with a pcap file.
     label = malicious
     #label = unknown
 
-    ./slips.py -c slips.conf -l -f ~/my-computer-normal2.pcap
+    ./slips.py -c slips.conf -f ~/my-computer-normal2.pcap
 
 After this edits, just run Slips as usual with any type of input, for example another pcap
 
-    ./slips.py -c slips.conf -l -f ~/malware1.pcap
+    ./slips.py -c slips.conf -f ~/malware1.pcap
 
 You can also run slips in an interface and train it directly with your data 
 
-    ./slips.py -c slips.conf -l -i eth0
+    ./slips.py -c slips.conf -i eth0
 
 4- Finally to use the model, put back the __test__ mode in the configuration slips.conf
     
@@ -62,4 +62,4 @@ You can also run slips in an interface and train it directly with your data
 
 5- Use slips normally in files or interfaces
 
-    ./slips.py -c slips.conf -l -i eth0
+    ./slips.py -c slips.conf -i eth0

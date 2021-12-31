@@ -46,7 +46,7 @@ class Module(Module, multiprocessing.Process):
         # Read the configuration
         self.read_configuration()
         # Channel timeout
-        self.timeout = None
+        self.timeout = 0.0000001
         # Minum amount of new lables needed to trigger the train
         self.minimum_lables_to_retrain = 50
         # To plot the scores of training
@@ -349,14 +349,15 @@ class Module(Module, multiprocessing.Process):
         confidence =  0.1
         threat_level = 0.2
         type_detection  = 'flow'
+        category = 'Anomaly.Traffic'
         detection_info = str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
         type_evidence = 'MaliciousFlow'
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport}'
         timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
         if not twid:
             twid = ''
-        __database__.setEvidence(type_detection, detection_info, type_evidence, threat_level,
-                                 confidence, description, timestamp, profileid=profileid, twid=twid)
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid)
 
     def run(self):
         # Load the model first
@@ -368,12 +369,12 @@ class Module(Module, multiprocessing.Process):
                 try:
                     message = self.c1.get_message(timeout=self.timeout)
 
-                    if message['data'] == 'stop_process':
+                    if message and message['data'] == 'stop_process':
                         # Confirm that the module is done processing
                         self.store_model()
                         __database__.publish('finished_modules', self.name)
                         return True
-                    elif message['channel'] == 'new_flow' and message['data'] != 1:
+                    if __database__.is_msg_intended_for(message, 'new_flow'):
                         data = message['data']
                         # Convert from json to dict
                         data = json.loads(data)

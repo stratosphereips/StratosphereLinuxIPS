@@ -1,0 +1,45 @@
+# slips generated alerts
+output/alerts.log
+output/alerts.json
+2021-*/
+2022-*/
+
+
+# zeek log files
+zeek_files/*.log
+
+yara-python/*
+
+Datasett/
+
+# virtual env files
+ENV/*
+
+# compiled yara rules
+modules/leak_detector/yara_rules/compiled/
+
+# api keys
+modules/RiskIQ/api_key_secret
+modules/virustotal/api_key_secret
+
+.git/
+.cache/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# CESNET module logs
+*.log
+modules/CESNET/*.log
+
+# redis backups
+redis_backups/*.rdb
+
+# for IntelliJ IDE
+.idea/
+
+# for vscode
+.vscode/
+
+
+
