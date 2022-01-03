@@ -20,6 +20,10 @@ ENV IS_IN_A_DOCKER_CONTAINER True
 # running in github actions) we disable the blocking module unit tests
 ENV IS_DEPENDENCY_IMAGE True
 
+# destionation dir for slips inside the container
+ENV SLIPS_DIR /Slips
+
+
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
@@ -49,6 +53,19 @@ RUN apt update && apt install -y --no-install-recommends \
     tshark \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
+
+# Install python dependencies
+
+# you should build the image using
+# docker build --no-cache -t slips_dependencies -f docker/dependency-image/Dockerfile .
+# or this step won't be able to find requirements.txt
+COPY requirements.txt ${SLIPS_DIR}/
+
+# Upgrade pip3 and install slips requirements
+RUN pip3 install --upgrade pip
+RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
+
+
 # Requirements for compiling yara
 RUN apt install -y automake libtool make gcc pkg-config
 
@@ -60,9 +77,5 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
   && ./configure \
   && make \
   && make install
-
-RUN pip3 install wheel redis setuptools validators psutil colorama maxminddb pandas sklearn urllib3 scipy watchdog slackclient stix2 cabby ipwhois pytest pytest-xdist yara-python
-RUN pip3 install --ignore-installed six
-RUN pip3 install --upgrade tensorflow==2.4.1
 
 CMD redis-server --daemonize yes && /bin/bash
