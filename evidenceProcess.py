@@ -137,7 +137,6 @@ class EvidenceProcess(multiprocessing.Process):
         finally:
             s.close()
         # get public ip
-        #IPs.append(requests.get('http://ipinfo.io/json').json()['ip'])
         command = f'curl -m 5 -s http://ipinfo.io/json'
         result = subprocess.run(command.split(), capture_output=True)
         text_output = result.stdout.decode("utf-8").replace('\n','')
@@ -211,7 +210,7 @@ class EvidenceProcess(multiprocessing.Process):
 
     def format_evidence_string(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
         '''
-        Function to format the evidence to be displayed according to the detection module.
+        Function to format each evidence and enrich it with more data, to be displayed according to each detection module.
         :return : string with a correct evidence displacement
         '''
         evidence_string = ''
@@ -243,7 +242,7 @@ class EvidenceProcess(multiprocessing.Process):
         # evidence_string = f'IP: {ip} (DNS:{dns_resolution_ip}). ' + evidence_string
         # evidence_string = f'Src IP {ip:15}. ' + evidence_string
 
-        return f'• {evidence_string}'
+        return f'{evidence_string}'
 
     def clean_evidence_log_file(self, output_folder):
         '''
@@ -661,6 +660,7 @@ class EvidenceProcess(multiprocessing.Process):
     def format_evidence_causing_this_alert(self, all_evidence, profileid, twid, flow_datetime) -> str:
         """
         Function to format the string with all evidence causing an alert
+        flow_datetime: time of the last evidence received
         """
         # alerts in slips consists of several evidence, each evidence has a threat_level
         # once we reach a certain threshold of accumulated threat_levels, we produce an alert
@@ -742,8 +742,8 @@ class EvidenceProcess(multiprocessing.Process):
                     conn_count = data.get('conn_count',False)
                     source_target_tag = data.get('source_target_tag',False)
 
-                    # Ignore alert if ip is whitelisted
-                    flow = __database__.get_flow(profileid,twid,uid)
+                    # Ignore alert if IP is whitelisted
+                    flow = __database__.get_flow(profileid, twid, uid)
                     if flow and self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
@@ -754,6 +754,7 @@ class EvidenceProcess(multiprocessing.Process):
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
 
+                    # Format the time to a common style given multiple type of time variables
                     flow_datetime = self.format_timestamp(timestamp)
 
                     # prepare evidence for text log file
@@ -777,7 +778,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     source_target_tag)
 
                     # Add the evidence to the log files
-                    self.addDataToLogFile(flow_datetime +  f': Src IP {srcip:15}. ' + evidence[2:])
+                    self.addDataToLogFile(flow_datetime +  f': Src IP {srcip:15}. ' + evidence)
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
 
