@@ -1,6 +1,6 @@
 # This workflow will install Slips dependencies, run unit tests and push to dockerhub
 
-name: CI-production
+name: test-CI-production
 
 on:
   push:
