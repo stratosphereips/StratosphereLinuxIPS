@@ -10,13 +10,16 @@ on:
 
 jobs:
 
-  install_dependencies:
+  run_unit_tests:
     runs-on: ubuntu-latest
     container:
       image: alyagomaa/slips_dependencies:dependencies
 
     steps:
     - uses: actions/checkout@v2
+
+    - name: Start redis server
+      run: redis-server --daemonize yes
 
     - name: Run unit tests
       run: python3 -m pytest tests/ --ignore="tests/test_dataset.py" -p no:warnings -vv
