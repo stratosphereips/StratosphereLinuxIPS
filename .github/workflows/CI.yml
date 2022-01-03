@@ -12,53 +12,11 @@ jobs:
 
   install_dependencies:
     runs-on: ubuntu-latest
+    container:
+      image: alyagomaa/slips_dependencies:dependencies
 
     steps:
     - uses: actions/checkout@v2
-
-    - name: Install slips dependencies
-      run: sudo apt-get -y install curl git redis python3-redis python3-watchdog lsof file iptables wget tar nfdump
-
-    - name: Install Zeek
-      run: |
-        sudo echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
-        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
-        sudo apt update
-        sudo apt install -y --no-install-recommends zeek
-        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
-
-    - name: Install YARA
-      run: |
-        wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz
-        tar -zxf v4.1.3.tar.gz
-        cd yara-4.1.3
-        sudo ./bootstrap.sh
-        sudo ./configure
-        sudo make
-        sudo make install
-        git clone https://github.com/VirusTotal/yara-python yara-python && cd yara-python
-        sudo python3 setup.py build && sudo python3 setup.py install
-
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v2
-      with:
-        python-version: "3.8"
-
-    - name: Install Python dependencies
-      run:
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Use Node.js 14.x
-      uses: actions/setup-node@v1
-      with:
-        node-version: 14.x
-
-    - name: Install Node dependencies
-      run: npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
-
-    - name: Start redis server
-      run: redis-server --daemonize yes
 
     - name: Run unit tests
       run: python3 -m pytest tests/ --ignore="tests/test_dataset.py" -p no:warnings -vv
