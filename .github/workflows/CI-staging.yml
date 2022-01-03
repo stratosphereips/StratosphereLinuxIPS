@@ -1,6 +1,6 @@
 # This workflow will install Slips dependencies and run unit tests
 
-name: CI
+name: CI-staging
 
 on:
   push:
