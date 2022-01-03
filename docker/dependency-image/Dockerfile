@@ -13,6 +13,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Blocking module requirement to avoid using sudo
 ENV IS_IN_A_DOCKER_CONTAINER True
 
+# When using github actions, we build and run this image but we have no control over
+# the running options, for example we can't use --cap-add NET_ADMIN
+# so all blocking module unit tests will fail because we don't have admin privs
+# we use this environment variable to check if we're running this image (this means slips is
+# running in github actions) we disable the blocking module unit tests
+ENV IS_DEPENDENCY_IMAGE True
+
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
