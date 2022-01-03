@@ -4,7 +4,7 @@
 #* this file will be deleted after testing
 #* the purpose of this file is to try pushing to dockerhub for the first time using GH actions in a tmp repo instead of stratosphereips main repo
 
-name: CI-production
+name: test-CI-production
 
 on:
   push:
