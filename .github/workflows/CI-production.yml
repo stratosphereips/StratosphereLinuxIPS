@@ -75,7 +75,7 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
     # push the image with latest tag
-    - name: Build and push
+    - name: Push stratosphereips/slips:latest
       id: docker_build_latest_tag
       uses: docker/build-push-action@v2
       with:
@@ -85,7 +85,7 @@ jobs:
         tags: stratosphereips/slips:latest
 
     # push the image with the version tag
-    - name: Build and push
+    - name:  Push stratosphereips/slips:v<version_number>
       id: docker_build_version_tag
       uses: docker/build-push-action@v2
       with:
