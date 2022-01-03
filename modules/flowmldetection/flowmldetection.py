@@ -422,7 +422,7 @@ class Module(Module, multiprocessing.Process):
                             if label and label != 'unknown' and label != pred[0]:
                                 # If the user specified a label in test mode, and the label
                                 # is diff from the prediction, print in debug mode
-                                self.print(f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
+                                self.print(f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 3)
                             if pred[0] == 'Malware':
                                 # Generate an alert
                                 self.set_evidence_malicious_flow(self.flow_dict['saddr'], self.flow_dict['sport'], self.flow_dict['daddr'], self.flow_dict['dport'], profileid, twid, uid)
