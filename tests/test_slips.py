@@ -2,9 +2,7 @@
 import os
 
 from ..slips  import *
-import time
 import os
-import pytest
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
