@@ -4,9 +4,9 @@ name: CI-production
 
 on:
   push:
-    branches: [ master, alya-CI ]
+    branches: [ master ]
   pull_request:
-    branches: [ master, alya-CI  ]
+    branches: [ master ]
 
 jobs:
 
