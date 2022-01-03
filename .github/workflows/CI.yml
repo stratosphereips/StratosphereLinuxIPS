@@ -11,7 +11,9 @@ on:
 jobs:
 
   run_unit_tests:
+    # specify the host OS
     runs-on: ubuntu-latest
+    # start a container using slips dependencies image
     container:
       image: alyagomaa/slips_dependencies:dependencies
 
