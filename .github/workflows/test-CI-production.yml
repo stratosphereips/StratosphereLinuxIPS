@@ -2,7 +2,7 @@
 # so instead of pushing images to stratosphereips repo in dockerhub we'll be pushing to a tmp repo
 
 #* this file will be deleted after testing
-#* the purpose of this file is to try pushing to dockerhub for the first time using GH actions in a tmp repo instead of stratosphereips main repo
+#* the purpose of this file is to try pushing to dockerhub for the first time using GH actions in a tmp repo instead of alyagomaa main repo
 
 name: test-CI-production
 
@@ -80,13 +80,13 @@ jobs:
       with:
         context: ./
         file: ./docker/ubuntu-image/Dockerfile
-        tags: stratosphereips/slips:latest
+        tags: alyagomaa/slips:latest
         push: false
 
     # use the built image to run unit tests inside docker
     - uses: addnab/docker-run-action@v3
       with:
-        image: stratosphereips/slips:latest
+        image: alyagomaa/slips:latest
         run: |
           redis-server --daemonize yes
           python3 -m pytest tests/ --ignore="tests/test_dataset.py" -p no:warnings -vv
@@ -99,12 +99,14 @@ jobs:
         username: alyagomaa
         password: ${{ secrets.TMP_DOCKER_HUB_ACCESS_TOKEN }}
 
+#todo remove the tmp acccess token and delete this file
+    -
     - name: Push slips images to dockerhub
       run: |
-        echo "\n[+] Running: docker push stratosphereips/slips:v$SLIPS_VERSION"
-        docker push stratosphereips/slips:v$SLIPS_VERSION
-        echo "\n[+] Running: docker push stratosphereips/slips:latest"
-        docker push stratosphereips/slips:latest
+        echo "[+] Running: docker push alyagomaa/slips:v$SLIPS_VERSION"
+        docker push alyagomaa/slips:v$SLIPS_VERSION
+        echo "[+] Running: docker push alyagomaa/slips:latest"
+        docker push alyagomaa/slips:latest
 
 
 #    # push the image with latest tag
