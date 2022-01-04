@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 # Connection to Slips redis database
 config = ""
-# __database__.start(config)
+
 __database__ =redis.StrictRedis(host='localhost',
                                            port=6379,
                                            db=0,
@@ -31,12 +31,18 @@ def index():
     return render_template('interface.html', title='Slips')
 
 @app.route('/info/<ip>')
-def ip_info(ip):
+def set_ip_info(ip):
+    '''
+    Set info about the ip in route /info/<ip> (geocountry, asn, TI)
+    '''
     ip_info = __cache__.hget('IPsInfo', ip)
     return ip_info
 
 @app.route('/profiles_tws')
 def profile_tws():
+    '''
+    Set profiles and their timewindows data.
+    '''
     profile_tws = __database__.hgetall('Profiles_TWs')
     data = []
     id = 0
@@ -89,8 +95,7 @@ def profile_tws():
 @app.route('/timeline/profile_<ip>/<timewindow>')
 def timeline(ip, timewindow):
     """
-    Create a datatable with Slips alerts in flask web.
-    Data is stored in a route "/timeline".
+    Set timeline data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
     """
     timeline = __database__.hgetall('profile_'+ip+"_"+timewindow+"_flows")
     flows = [json.loads(value) for key,value in timeline.items()]
