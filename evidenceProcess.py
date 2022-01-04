@@ -570,7 +570,6 @@ class EvidenceProcess(multiprocessing.Process):
             # The timestamp is a float
             timestamp = datetime.fromtimestamp(timestamp).astimezone().isoformat()
         elif ' ' in timestamp:
-            self.print(f'DATETIME: {timestamp}')
             # The timestamp is a string with spaces
             timestamp = timestamp.replace('/','-')
             #dt_string = "2020-12-18 3:11:09"
