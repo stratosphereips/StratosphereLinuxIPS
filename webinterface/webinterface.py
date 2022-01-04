@@ -74,28 +74,32 @@ def profile_tws():
 
 @app.route('/alerts')
 def alerts():
+@app.route('/timeline/profile_<ip>/<timewindow>')
+def timeline(ip, timewindow):
     """
     Create a datatable with Slips alerts in flask web.
-    Data is stored in a route "/alerts".
-
+    Data is stored in a route "/timeline".
     """
-    alerts = __database__.smembers('Evidence')
-    alerts = [json.loads(element) for element in alerts]
-    data_length = len(alerts)
-    total_filtered = len(alerts)
+    timeline = __database__.hgetall('profile_'+ip+"_"+timewindow+"_flows")
+    flows = [json.loads(value) for key,value in timeline.items()]
+    data_length = len(flows)
+    total_filtered = len(flows)
     search = request.args.get('search[value]')
+
+    # search
     if search:
-        alerts = [element for element in alerts if element['dport_name'].lower() == search.lower()]
-        total_filtered = len(alerts)
+        flows = [element for element in flows if element['proto'].lower() == search.lower()]
+        total_filtered = len(flows)
+
     # pagination
     start = request.args.get('start', type=int)
     length = request.args.get('length', type=int)
-    # alerts_page = []
-    # if start and length:
-    alerts_page = alerts[start:(start + length)]
+    timeline_page = []
+    if start and length:
+        timeline_page = flows[start:(start + length)]
 
     return {
-        'data': alerts_page,
+        'data': timeline_page if timeline_page else flows,
         'recordsFiltered': total_filtered,
         'recordsTotal': data_length,
         'draw': request.args.get('draw', type=int)
