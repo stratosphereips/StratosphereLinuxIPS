@@ -16,6 +16,7 @@ __database__ =redis.StrictRedis(host='localhost',
                                            retry_on_timeout=True,
                                            decode_responses=True,
                                            health_check_interval=30)
+
 __cache__ = redis.StrictRedis(host='localhost',
                                                 port=6379,
                                                 db=1,
@@ -25,21 +26,6 @@ __cache__ = redis.StrictRedis(host='localhost',
                                                 decode_responses=True,
                                                 health_check_interval=30)
 
-
-# alerts_channel = __database__.subscribe('evidence_added')
-
-#
-# def run():
-#     """
-#     Waits for the database updates from channels.
-#     """
-#     while True:
-#         message = alerts_channel.get_message(timeout=None)
-#         if message['channel'] == 'evidence_added' and type(message['data']) is not int:
-#             data = json.loads(message['data'])
-#             alerts(data)
-
-
 @app.route('/')
 def index():
     return render_template('interface.html', title='Slips')
@@ -47,7 +33,6 @@ def index():
 @app.route('/info/<ip>')
 def ip_info(ip):
     ip_info = __cache__.hget('IPsInfo', ip)
-    print(ip_info)
     return ip_info
 
 @app.route('/profiles_tws')
@@ -71,9 +56,36 @@ def profile_tws():
         'draw': request.args.get('draw', type=int)
     }
 
+#
+# @app.route('/alerts')
+# def alerts():
+#     """
+#     Create a datatable with Slips alerts.
+#     Data is stored in a route "/alerts".
+#
+#     """
+#     alerts = __database__.smembers('Evidence')
+#     alerts = [json.loads(element) for element in alerts]
+#     data_length = len(alerts)
+#     total_filtered = len(alerts)
+#     search = request.args.get('search[value]')
+#     if search:
+#         alerts = [element for element in alerts if element['dport_name'].lower() == search.lower()]
+#         total_filtered = len(alerts)
+#     # pagination
+#     start = request.args.get('start', type=int)
+#     length = request.args.get('length', type=int)
+#     # alerts_page = []
+#     # if start and length:
+#     alerts_page = alerts[start:(start + length)]
+#
+#     return {
+#         'data': alerts_page,
+#         'recordsFiltered': total_filtered,
+#         'recordsTotal': data_length,
+#         'draw': request.args.get('draw', type=int)
+#     }
 
-@app.route('/alerts')
-def alerts():
 @app.route('/timeline/profile_<ip>/<timewindow>')
 def timeline(ip, timewindow):
     """
