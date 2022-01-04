@@ -574,7 +574,11 @@ class EvidenceProcess(multiprocessing.Process):
             # The timestamp is a string with spaces
             timestamp = timestamp.replace('/','-')
             # format of incoming ts
-            newformat = "%Y-%m-%d %H:%M:%S.%f"
+            if '+' in timestamp:
+                # timestamp contains UTC offset, set the new format accordingly
+                newformat = "%Y-%m-%d %H:%M:%S.%f%z"
+            else:
+                newformat = "%Y-%m-%d %H:%M:%S.%f"
             # convert to datetime obj
             timestamp = datetime.strptime(timestamp, newformat)
             # convert to iso format
