@@ -563,15 +563,21 @@ class EvidenceProcess(multiprocessing.Process):
         :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
         returns the date and time in RFC3339 format (IDEA standard)
         """
-        if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
+        if timestamp and (isinstance(timestamp, datetime)):
+            # The timestamp is a datetime
+            timestamp = timestamp.strftime("%Y-%m-%d %H:%M:%S.%f%z")
+        elif timestamp and type(timestamp) == float:
+            # The timestamp is a float
             timestamp = datetime.fromtimestamp(timestamp).astimezone().isoformat()
         elif ' ' in timestamp:
+            self.print(f'DATETIME: {timestamp}')
+            # The timestamp is a string with spaces
             timestamp = timestamp.replace('/','-')
-            dt_string = "2020-12-18 3:11:09"
+            #dt_string = "2020-12-18 3:11:09"
             # format of incoming ts
-            format = "%Y-%m-%d %H:%M:%S"
+            newformat = "%Y-%m-%d %H:%M:%S.%f%z"
             # convert to datetime obj
-            timestamp = datetime.strptime(dt_string, format)
+            timestamp = datetime.strptime(timestamp, newformat)
             # convert to iso format
             timestamp = timestamp.astimezone().isoformat()
         return timestamp
