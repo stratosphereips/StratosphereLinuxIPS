@@ -18,7 +18,7 @@
 import multiprocessing
 from slips_files.core.database import __database__
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import configparser
 from os import path
 from colorama import Fore, Style
@@ -137,7 +137,6 @@ class EvidenceProcess(multiprocessing.Process):
         finally:
             s.close()
         # get public ip
-        #IPs.append(requests.get('http://ipinfo.io/json').json()['ip'])
         command = f'curl -m 5 -s http://ipinfo.io/json'
         result = subprocess.run(command.split(), capture_output=True)
         text_output = result.stdout.decode("utf-8").replace('\n','')
@@ -211,7 +210,7 @@ class EvidenceProcess(multiprocessing.Process):
 
     def format_evidence_string(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
         '''
-        Function to format the evidence to be displayed according to the detection module.
+        Function to format each evidence and enrich it with more data, to be displayed according to each detection module.
         :return : string with a correct evidence displacement
         '''
         evidence_string = ''
@@ -243,7 +242,7 @@ class EvidenceProcess(multiprocessing.Process):
         # evidence_string = f'IP: {ip} (DNS:{dns_resolution_ip}). ' + evidence_string
         # evidence_string = f'Src IP {ip:15}. ' + evidence_string
 
-        return f'• {evidence_string}'
+        return f'{evidence_string}'
 
     def clean_evidence_log_file(self, output_folder):
         '''
@@ -564,15 +563,21 @@ class EvidenceProcess(multiprocessing.Process):
         :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
         returns the date and time in RFC3339 format (IDEA standard)
         """
-        if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
+        if timestamp and (isinstance(timestamp, datetime)):
+            # The timestamp is a datetime
+            timestamp = timestamp.strftime("%Y-%m-%d %H:%M:%S.%f%z")
+        elif timestamp and type(timestamp) == float:
+            # The timestamp is a float
             timestamp = datetime.fromtimestamp(timestamp).astimezone().isoformat()
         elif ' ' in timestamp:
+            self.print(f'DATETIME: {timestamp}')
+            # The timestamp is a string with spaces
             timestamp = timestamp.replace('/','-')
-            dt_string = "2020-12-18 3:11:09"
+            #dt_string = "2020-12-18 3:11:09"
             # format of incoming ts
-            format = "%Y-%m-%d %H:%M:%S"
+            newformat = "%Y-%m-%d %H:%M:%S.%f%z"
             # convert to datetime obj
-            timestamp = datetime.strptime(dt_string, format)
+            timestamp = datetime.strptime(timestamp, newformat)
             # convert to iso format
             timestamp = timestamp.astimezone().isoformat()
         return timestamp
@@ -661,15 +666,29 @@ class EvidenceProcess(multiprocessing.Process):
     def format_evidence_causing_this_alert(self, all_evidence, profileid, twid, flow_datetime) -> str:
         """
         Function to format the string with all evidence causing an alert
+        flow_datetime: time of the last evidence received
         """
         # alerts in slips consists of several evidence, each evidence has a threat_level
         # once we reach a certain threshold of accumulated threat_levels, we produce an alert
         # Now instead of printing the last evidence only, we print all of them
+        try:
 
+            twid_num = twid.split('timewindow')[1]
+            srcip = profileid.split(self.separator)[1]
+            # Get the start time of this TW
+            tw_start_time_str = self.format_timestamp(float(__database__.getTimeTW(profileid, twid)))
+            tw_start_time_datetime = datetime.strptime(tw_start_time_str, "%Y-%m-%dT%H:%M:%S.%f%z")
+            # Convert the tw width to deltatime
+            tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
+            # Get the stop time of the TW
+            tw_stop_time_datetime = tw_start_time_datetime + tw_width_in_seconds_delta
+            tw_stop_time_str = tw_stop_time_datetime.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
 
-        srcip = profileid.split(self.separator)[1]
-        alert_to_print = f'IP {srcip} is infected in {twid} given the following evidence:\n'
-
+            alert_to_print = f'{Fore.RED}IP {srcip} detected as infected in timewindow {twid_num} (start {tw_start_time_str}, stop {tw_stop_time_str}) given the following evidence:{Style.RESET_ALL}\n'
+        except Exception as e:
+            print(type(e))
+            print(e)
+ 
         for evidence in all_evidence.values():
             # Deserialize evidence
             evidence = json.loads(evidence)
@@ -680,22 +699,16 @@ class EvidenceProcess(multiprocessing.Process):
 
             # format the string of this evidence only: for example Detected C&C channels detection, destination IP:xyz
             evidence_string = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
+            alert_to_print += f'\t{Fore.CYAN}• {evidence_string}{Style.RESET_ALL}\n'
 
-            # if the evidence takes more than 1 line in the terminal, split it into 2 lines
-            if len(evidence_string)>107:
-                evidence_string = evidence_string[:107]+'\n\t\t   '+ evidence_string[107:]
-                evidence_string.replace('\n\t\t   .','\n\t\t   ')
-
-            alert_to_print += f'\t\t {evidence_string}\n'
-
-        # the datetime printed will be of the last evidence only
+        # Add the timestamp to the alert. The datetime printed will be of the last evidence only
         if '.' in flow_datetime:
             format = '%Y-%m-%dT%H:%M:%S.%f%z'
         else:
             # e.g  2020-12-18T03:11:09+02:00
             format = '%Y-%m-%dT%H:%M:%S%z'
         human_readable_datetime = datetime.strptime(flow_datetime, format).strftime("%Y/%m/%d %H:%M:%S")
-        alert_to_print = f'{human_readable_datetime} {alert_to_print}'
+        alert_to_print = f'{Fore.RED}{human_readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
 
 
@@ -735,8 +748,8 @@ class EvidenceProcess(multiprocessing.Process):
                     conn_count = data.get('conn_count',False)
                     source_target_tag = data.get('source_target_tag',False)
 
-                    # Ignore alert if ip is whitelisted
-                    flow = __database__.get_flow(profileid,twid,uid)
+                    # Ignore alert if IP is whitelisted
+                    flow = __database__.get_flow(profileid, twid, uid)
                     if flow and self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
@@ -747,6 +760,7 @@ class EvidenceProcess(multiprocessing.Process):
                         __database__.deleteEvidence(profileid, twid, key)
                         continue
 
+                    # Format the time to a common style given multiple type of time variables
                     flow_datetime = self.format_timestamp(timestamp)
 
                     # prepare evidence for text log file
@@ -770,7 +784,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     source_target_tag)
 
                     # Add the evidence to the log files
-                    self.addDataToLogFile(flow_datetime +  f': Src IP {srcip:15}. ' + evidence[2:])
+                    self.addDataToLogFile(flow_datetime +  f': Src IP {srcip:15}. ' + evidence)
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
 
@@ -817,11 +831,8 @@ class EvidenceProcess(multiprocessing.Process):
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
-                                # now that this evidence is being printed, it's no longer evidence, it's an alert
-                                # alert_to_print = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
-
                                 alert_to_print = self.format_evidence_causing_this_alert(tw_evidence, profileid, twid, flow_datetime)
-                                self.print(f'{Fore.RED} {alert_to_print}{Style.RESET_ALL}', 1, 0)
+                                self.print(f'{alert_to_print}', 1, 0)
 
                                 # Add to log files that this srcip is being blocked
                                 blocked_srcip_to_log = self.format_blocked_srcip_evidence(profileid, twid, flow_datetime)

@@ -136,6 +136,9 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             return True
+        except AttributeError as e:
+            self.print('Error loading the model.')
+            self.print(e)
         except KeyboardInterrupt:
             # enter the while loop to recieve stop_process msg
             pass
