@@ -86,7 +86,7 @@ jobs:
     # use the built image to run unit tests inside docker
     - uses: addnab/docker-run-action@v3
       with:
-        image: alyagomaa/slips:latest
+        image: alyagomaa/slips:v$SLIPS_VERSION
         run: |
           redis-server --daemonize yes
           python3 -m pytest tests/ --ignore="tests/test_dataset.py" --ignore="tests/test_blocking.py" -p no:warnings -vv
@@ -99,15 +99,14 @@ jobs:
         username: alyagomaa
         password: ${{ secrets.TMP_DOCKER_HUB_ACCESS_TOKEN }}
 
-#todo remove the tmp acccess token and delete this file
-    -
+    #todo remove the tmp acccess token and delete this file
+
     - name: Push slips images to dockerhub
       run: |
         echo "[+] Running: docker push alyagomaa/slips:v$SLIPS_VERSION"
         docker push alyagomaa/slips:v$SLIPS_VERSION
-        echo "[+] Running: docker push alyagomaa/slips:latest"
-        docker push alyagomaa/slips:latest
 
+    # todo find a way to tag the same image with 'latest'
 
 #    # push the image with latest tag
 #    - name: Push stratosphereips/slips:latest
