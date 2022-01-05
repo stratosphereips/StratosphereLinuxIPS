@@ -4,9 +4,9 @@ name: CI-staging
 
 on:
   push:
-    branches: [ develop, alya-CI ]
+    branches: [ develop ]
   pull_request:
-    branches: [ develop, alya-CI  ]
+    branches: [ develop  ]
 
 jobs:
 

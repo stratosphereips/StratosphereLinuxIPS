@@ -578,6 +578,7 @@ class EvidenceProcess(multiprocessing.Process):
                 # timestamp contains UTC offset, set the new format accordingly
                 newformat = "%Y-%m-%d %H:%M:%S.%f%z"
             else:
+                # timestamp doesn't contain UTC offset, set the new format accordingly
                 newformat = "%Y-%m-%d %H:%M:%S.%f"
             # convert to datetime obj
             timestamp = datetime.strptime(timestamp, newformat)
