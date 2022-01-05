@@ -874,9 +874,9 @@ class EvidenceProcess(multiprocessing.Process):
                 self.jsonfile.close()
                 # self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
                 continue
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.outputqueue.put(f'01|[Evidence] Error in the Evidence Process line {exception_line}')
-                self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
-                self.outputqueue.put('01|[Evidence] {}'.format(inst))
-                return True
+            # except Exception as inst:
+            #     exception_line = sys.exc_info()[2].tb_lineno
+            #     self.outputqueue.put(f'01|[Evidence] Error in the Evidence Process line {exception_line}')
+            #     self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
+            #     self.outputqueue.put('01|[Evidence] {}'.format(inst))
+            #     return True
