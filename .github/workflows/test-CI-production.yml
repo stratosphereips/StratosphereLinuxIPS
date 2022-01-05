@@ -87,7 +87,7 @@ jobs:
       with:
         context: ./
         file: ./docker/ubuntu-image/Dockerfile
-        tags: alyagomaa/slips:latest, alyagomaa/slips:${SLIPS_VERSION}
+        tags: alyagomaa/slips:latest, alyagomaa/slips:${{ env.SLIPS_VERSION }}
         push: true
 
 #    # use the built image to run unit tests inside docker
