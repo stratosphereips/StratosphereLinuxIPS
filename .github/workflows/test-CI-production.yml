@@ -108,7 +108,7 @@ jobs:
     - name: Add version tag to the built slips image
       run: |
         slips_image=$(docker images | awk '{ print $3 }' |  awk 'NR==2')
-        docker tag $slips_image stratosphereips/slips:v$SLIPS_VERSION
+        docker tag $slips_image alyagomaa/slips:v$SLIPS_VERSION
 
     - name: Push slips images to dockerhub
       run: |
