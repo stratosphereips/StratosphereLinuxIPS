@@ -73,7 +73,7 @@ jobs:
 #      run: python3 -m pytest tests/test_dataset.py -p no:warnings -vv -s
 #
 
-    # build slips ubuntu dockerfile
+    # build slips from ubuntu dockerfile
     - name: Build our ubuntu-dockerfile
       id: docker_build
       uses: docker/build-push-action@v2
@@ -105,11 +105,16 @@ jobs:
 
     #todo remove the tmp acccess token and delete this file
 
-    - name: Push slips image to dockerhub
+    - name: Add version tag to the built slips image
       run: |
+        slips_image=$(docker images | awk '{ print $3 }' |  awk 'NR==2')
+        docker tag $slips_image stratosphereips/slips:v$SLIPS_VERSION
+
+    - name: Push slips images to dockerhub
+      run: |
+        docker push alyagomaa/slips:v$VERSION_NUMBER
         docker push alyagomaa/slips:latest
 
-    # todo find a way to tag the same image with 'version tag'
 
 #    # push the image with latest tag
 #    - name: Push stratosphereips/slips:latest
