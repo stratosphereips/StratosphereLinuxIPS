@@ -655,10 +655,10 @@ class Module(Module, multiprocessing.Process):
         threat_level = malicious_ja3_dict['threat_level']
 
         if type_ == 'ja3':
-            description = f'Malicious JA3: {ioc} to daddr {daddr}'
+            description = f'Malicious JA3: {ioc} to daddr {daddr} '
             type_evidence = 'MaliciousJA3'
-            category =  'Intrusion.Botnet'
-            source_target_tag =  "Botnet"
+            category = 'Intrusion.Botnet'
+            source_target_tag = "Botnet"
         elif type_ == 'ja3s':
             description = f'Malicious JA3s: (possible C&C server): {ioc} to server {daddr} '
             type_evidence = 'MaliciousJA3s'
