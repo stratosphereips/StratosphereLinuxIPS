@@ -75,7 +75,7 @@ jobs:
 
     # build slips from ubuntu dockerfile
     - name: Build our ubuntu-dockerfile
-      id: docker_build
+      id: docker_build_slips
       uses: docker/build-push-action@v2
       with:
         context: ./
@@ -103,7 +103,7 @@ jobs:
         username: alyagomaa
         password: ${{ secrets.TMP_DOCKER_HUB_ACCESS_TOKEN }}
 
-    #todo remove the tmp acccess token and delete this file
+    #todo remove the tmp access token and delete this file
 
     - name: Add version tag to the built slips image
       run: |
@@ -115,23 +115,13 @@ jobs:
         docker push alyagomaa/slips:v$VERSION_NUMBER
         docker push alyagomaa/slips:latest
 
+    # build slips_dependencies image
+    - name: Build and push latest dependency image
+      id: docker_build_dependency_image
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./docker/dependency-image/Dockerfile
+        tags: alyagomaa/slips_dependencies:latest
+        push: true
 
-#    # push the image with latest tag
-#    - name: Push stratosphereips/slips:latest
-#      id: docker_build_latest_tag
-#      uses: docker/build-push-action@v2
-#      with:
-#        context: ./
-#        file: ./docker/ubuntu-image/Dockerfile
-#        push: true
-#        tags: stratosphereips/slips:latest
-#
-#    # push the image with the version tag
-#    - name:  Push stratosphereips/slips:v<version_number>
-#      id: build_docker_with_version_tag
-#      uses: docker/build-push-action@v2
-#      with:
-#        context: ./
-#        file: ./docker/ubuntu-image/Dockerfile
-#        push: true
-#        tags: stratosphereips/slips:v0.8.2
