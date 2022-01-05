@@ -109,12 +109,15 @@ jobs:
 
     - name: Add version tag to the built slips image
       run: |
-        slips_image=$(docker images | awk '{ print $3 }' |  awk 'NR==2')
-        docker tag $slips_image alyagomaa/slips:v$SLIPS_VERSION
+        slips_image_hash=$(docker images | awk '{ print $3 }' |  awk 'NR==2')
+        latest_slips_version=alyagomaa/slips:v$SLIPS_VERSION
+        docker tag $slips_image_hash $latest_slips_version
 
+    # push one with the latest version as the tag, and another one with 'latest' as the tag
     - name: Push slips images to dockerhub
       run: |
-        docker push alyagomaa/slips:v$VERSION_NUMBER
+        latest_slips_version=alyagomaa/slips:v$SLIPS_VERSION
+        docker push latest_slips_version
         docker push alyagomaa/slips:latest
 
     # build slips_dependencies image
