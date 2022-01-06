@@ -35,8 +35,22 @@ def set_ip_info(ip):
     '''
     Set info about the ip in route /info/<ip> (geocountry, asn, TI)
     '''
-    ip_info = __cache__.hget('IPsInfo', ip)
-    return ip_info
+    ip_info = json.loads(__cache__.hget('IPsInfo', ip))
+
+    #TODO put all data of the ipInfo
+    # hardcode the fields of the ip
+    data = []
+    data.append({'field': 'geocountry', 'value': ip_info.get('geocountry', '-')})
+    #TODO retrieve asnorg
+    data.append({'field': 'asn', 'value': ip_info.get('asn', '-')})
+    data.append({'field': 'reverse_dns', 'value': ip_info.get('reverse_dns', '-')})
+
+    return {
+        'data': data,
+        'recordsFiltered': len(data),
+        'recordsTotal': len(data),
+        'draw': request.args.get('draw', type=int)
+    }
 
 @app.route('/profiles_tws')
 def profile_tws():
@@ -97,6 +111,7 @@ def timeline(ip, timewindow):
     """
     Set timeline data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
     """
+
     timeline = __database__.hgetall('profile_'+ip+"_"+timewindow+"_flows")
     flows = [json.loads(value) for key,value in timeline.items()]
     data_length = len(flows)
