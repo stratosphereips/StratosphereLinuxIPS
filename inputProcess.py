@@ -301,7 +301,7 @@ class InputProcess(multiprocessing.Process):
             # We want to stop bro if no new line is coming.
             self.bro_timeout = 1
             lines = self.read_zeek_files()
-            self.print(f"We read everything from the folder. No more input. Stopping input process. Sent {lines} lines\n", 2, 0)
+            self.print(f"\nWe read everything from the folder. No more input. Stopping input process. Sent {lines} lines", 2, 0)
             self.stop_queues()
             return True
         except KeyboardInterrupt:
@@ -397,7 +397,7 @@ class InputProcess(multiprocessing.Process):
             # Get command output
             self.nfdump_output = result.stdout.decode('utf-8')
             self.lines = self.read_nfdump_output()
-            self.print("We read everything. No more input. Stopping input process. Sent {} lines\n".format(self.lines))
+            self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(self.lines))
             return True
         except KeyboardInterrupt:
             return True
@@ -455,7 +455,7 @@ class InputProcess(multiprocessing.Process):
             time.sleep(3)
 
             lines = self.read_zeek_files()
-            self.print("We read everything. No more input. Stopping input process. Sent {} lines\n".format(lines))
+            self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
 
             # Stop the observer
             try:
@@ -502,7 +502,7 @@ class InputProcess(multiprocessing.Process):
                 return False
 
         except KeyboardInterrupt:
-            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines\n".format(self.lines))
+            self.outputqueue.put("04|input|[In] \nNo more input. Stopping input process. Sent {} lines".format(self.lines))
             try:
                 self.event_observer.stop()
                 self.event_observer.join()
