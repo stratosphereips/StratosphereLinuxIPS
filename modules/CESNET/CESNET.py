@@ -9,6 +9,7 @@ from ..CESNET.warden_client import Client, read_cfg, Error, format_timestamp
 import os
 import json
 import time
+import threading
 
 class Module(Module, multiprocessing.Process):
     name = 'CESNET'
@@ -116,8 +117,13 @@ class Module(Module, multiprocessing.Process):
 
         # [2] Upload to warden server
         self.print(f"Uploading {len(alerts_list)} events to warden server.")
-        ret = wclient.sendEvents(alerts_list)
-        self.print(ret)
+        # create a thread for sending alerts to warden server
+        # and don't stop this module until the thread is done
+        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_list])
+        self.sender_thread.start()
+        self.sender_thread.join()
+        self.print(f' Done uploading events to warden server.\n')
+        # self.print(ret)
 
     def import_alerts(self, wclient):
         # cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
@@ -133,10 +139,13 @@ class Module(Module, multiprocessing.Process):
         #group = ['cz.tul.ward.kippo','cz.vsb.buldog.kippo', 'cz.zcu.civ.afrodita','cz.vutbr.net.bee.hpscan']
         group = []
         nogroup = []
+
         #todo how many events to poll?
-        self.print(f"Getting 10 events to warden server.")
-        ret = wclient.getEvents(count=10, cat=cat, nocat=nocat, tag=tag, notag=notag, group=group, nogroup=nogroup)
-        self.print(f"Got {len(ret)} events")
+        self.print(f"Getting 10 events from warden server.")
+        ret = wclient.getEvents(count=10, cat=cat, nocat=nocat,
+                                tag=tag, notag=notag, group=group,
+                                nogroup=nogroup)
+        # self.print(f"Got {len(ret)} events")
 
 
     def run(self):
@@ -172,6 +181,10 @@ class Module(Module, multiprocessing.Process):
                     # slips will push as soon as it finishes the analysis.
                     if 'yes' in self.send_to_warden:
                         self.export_alerts(wclient)
+                        # don't publish this module's name in finished_modules channel
+                        # until the sender thread is done
+                        while self.sender_thread.isAlive():
+                            time.sleep(3)
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
