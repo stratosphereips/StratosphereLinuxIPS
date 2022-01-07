@@ -11,7 +11,6 @@ import json
 import time
 
 class Module(Module, multiprocessing.Process):
-    # Name: short name of the module. Do not use spaces
     name = 'CESNET'
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
@@ -51,7 +50,6 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-
     def read_configuration(self):
         """ Read importing/exporting preferences from slips.conf """
 
@@ -85,6 +83,9 @@ class Module(Module, multiprocessing.Process):
 
 
     def export_alerts(self, wclient):
+        """
+        Function to read all alerts from alerts.json as a list, and sends them to the warden server
+        """
 
         # [1] read all alerts from alerts.json
         alerts_path = os.path.join(self.output_dir, 'alerts.json')
@@ -121,7 +122,7 @@ class Module(Module, multiprocessing.Process):
     def import_alerts(self, wclient):
         # cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
         # 'Fraud.Scam', 'Malware.Virus', 'Information', 'Fraud.Scam']
-        #todo we're only allowed to poll test category for now
+        #todo we're only allowed to poll Test category for now
         cat = ['Test']
         nocat = []
 
@@ -145,18 +146,16 @@ class Module(Module, multiprocessing.Process):
         # create the warden client
         wclient = Client(**read_cfg(self.configuration_file))
 
-        info = wclient.getDebug()
         # All methods return something.
         # If you want to catch possible errors (for example implement some
         # form of persistent retry, or save failed events for later, you may
         # check for Error instance and act based on contained info.
         # If you want just to be informed, this is not necessary, just
         # configure logging correctly and check logs.
-        if isinstance(info, Error):
-            self.print(info, 0, 1)
 
-        info = wclient.getInfo()
-        self.print(info, 0, 1)
+        # for getting send and recceive limits
+        # info = wclient.getInfo()
+        # self.print(info, 0, 1)
 
         self.node_info = [{
             "Name": wclient.name,
@@ -172,7 +171,6 @@ class Module(Module, multiprocessing.Process):
                     # If running on a file not an interface,
                     # slips will push as soon as it finishes the analysis.
                     if 'yes' in self.send_to_warden:
-                        #todo the module is being killed and doesnt have enough time to export !!
                         self.export_alerts(wclient)
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
