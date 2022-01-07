@@ -12,7 +12,7 @@ from sys import stderr, exc_info
 from traceback import format_tb
 from os import path
 from operator import itemgetter
-
+import queue
 
 VERSION = "3.0-beta2"
 
@@ -493,9 +493,12 @@ class Client(object):
         return err if err.errors else {}
 
 
-    def sendEvents(self, events=[], retry=None, pause=None):
-        """ Send out "events" list to server, retrying on server errors.
+    def sendEvents(self, events=[], q=None, retry=None, pause=None):
         """
+        Send out "events" list to server, retrying on server errors.
+        :param q: in case this function was called as a thread, this queue will hold the return value of it
+        """
+
         ev = events
         idx_xlat = range(len(ev))
         err = Error()
@@ -529,7 +532,9 @@ class Client(object):
                             next_idx_xlat.append(idx_xlat[evlist_i])
             ev = next_ev
             idx_xlat = next_idx_xlat
-
+        # add the return value to the queue
+        if q:
+            q.put(self.log_err(err) if err.errors else {"saved": len(events)})
         return self.log_err(err) if err.errors else {"saved": len(events)}
 
 
