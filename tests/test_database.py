@@ -97,8 +97,6 @@ def test_setEvidence(database):
     current_evidence_key = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
     #  note that added_evidence may have evidence from other unit tests
     import pprint
-    print(f'@@@@@@@@@@@@@@@@@@  current_evidence_key: {current_evidence_key} \n')
-    print(f'@@@@@@@@@@@@@@@@@@   added_evidence: \n{pprint.pprint(added_evidence)}\n')
     assert current_evidence_key in added_evidence.keys()
 
 def test_deleteEvidence(database):

@@ -601,6 +601,7 @@ class EvidenceProcess(multiprocessing.Process):
                     confidence, category, conn_count, source_target_tag):
         """
         Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
+        Detailed explanation of IDEA categories: https://idea.cesnet.cz/en/classifications
         """
         IDEA_dict = {'Format': 'IDEA0',
                      'ID': str(uuid4()),

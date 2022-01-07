@@ -97,7 +97,7 @@ class InputProcess(multiprocessing.Process):
         """ Stops the profiler and output queues """
 
         self.profilerqueue.put("stop")
-        self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+        self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).\n".format(self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
         self.outputqueue.close()
         self.profilerqueue.close()
 
@@ -455,7 +455,7 @@ class InputProcess(multiprocessing.Process):
             time.sleep(3)
 
             lines = self.read_zeek_files()
-            self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
+            self.print("We read everything. No more input. Stopping input process. Sent {} lines\n".format(lines))
 
             # Stop the observer
             try:
@@ -502,7 +502,7 @@ class InputProcess(multiprocessing.Process):
                 return False
 
         except KeyboardInterrupt:
-            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(self.lines))
+            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines\n".format(self.lines))
             try:
                 self.event_observer.stop()
                 self.event_observer.join()
