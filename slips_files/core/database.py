@@ -1043,7 +1043,7 @@ class Database(object):
         type_evidence: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
         type_detection: the type of value causing the detection e.g. dport, dip, flow
         detection_info: the actual dstip or dstport. e.g. 1.1.1.1 or 443
-        threat_level: determine the importance of the evidence on a scale from 0 to 1.
+        threat_level: determine the importance of the evidence, available options are : info, low, medium, high, critical
         confidence: determine the confidence of the detection on a scale from 0 to 1. (How sure you are that this is what you say it is.)
         uid: needed to get the flow from the database
         category: what is this evidence category according to IDEA categories
@@ -2408,7 +2408,7 @@ class Database(object):
         if data:
             data = json.loads(data)
         else:
-            data = ''
+            data = {}
         return data
 
 

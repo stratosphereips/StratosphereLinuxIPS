@@ -122,8 +122,8 @@ class Module(Module, multiprocessing.Process):
             if self.diff <= 30.00:
                 # we are sure this is an arp scan
                 confidence = 0.8
-                threat_level = 0.7
-                description = f'{saddr} performing an ARP scan. Threat level {threat_level}. Confidence {confidence}.'
+                threat_level = 'low'
+                description = f'{saddr} performing an ARP scan. Confidence {confidence}.'
                 type_evidence = 'ARPScan'
                 # category of this evidence according to idea categories
                 category = 'Recon.Scanning'
@@ -161,7 +161,7 @@ class Module(Module, multiprocessing.Process):
         if not daddr.startswith(local_net):
             # comes here if the IP isn't in any of the local networks
             confidence = 0.6
-            threat_level =  0.7
+            threat_level = 'low'
             ip_identification = __database__.getIPIdentification(daddr)
             description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
             type_evidence = 'ARP-ouside-localnet'
@@ -178,7 +178,7 @@ class Module(Module, multiprocessing.Process):
         if dst_mac=="ff:ff:ff:ff:ff:ff" and dst_hw=="ff:ff:ff:ff:ff:ff" and src_mac != '00:00:00:00:00:00' and src_hw != '00:00:00:00:00:00':
             # We're sure this is unsolicited arp
             confidence = 0.8
-            threat_level = 50
+            threat_level = 'info'
             description = f'detected sending unsolicited ARP'
             type_evidence = 'UnsolicitedARP'
             # This may be ARP spoofing
@@ -212,7 +212,7 @@ class Module(Module, multiprocessing.Process):
             # so this is either a MITM ARP attack or the IP address of this src_mac simply changed
             # todo how to find out which one is it??
             confidence = 0.2 # low confidence for now
-            threat_level = 90
+            threat_level = 'ciritical'
             description = f'{saddr} performing a MITM ARP attack. The MAC {src_mac}, now belonging to IP {saddr}, was seen before for IP {original_IP}.'
             # self.print(f'{saddr} is claiming to have {src_mac}')
             type_evidence = 'MITM-ARP-attack'
