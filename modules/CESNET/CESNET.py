@@ -151,8 +151,8 @@ class Module(Module, multiprocessing.Process):
         nogroup = []
 
         #todo how many events to poll?
-        self.print(f"Getting 10 events from warden server.")
-        events = wclient.getEvents(count=10, cat=cat, nocat=nocat,
+        self.print(f"Getting 50 events from warden server.")
+        events = wclient.getEvents(count=50, cat=cat, nocat=nocat,
                                 tag=tag, notag=notag, group=group,
                                 nogroup=nogroup)
 
