@@ -137,6 +137,7 @@ class Module(Module, multiprocessing.Process):
         # cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
         # 'Fraud.Scam', 'Malware.Virus', 'Information', 'Fraud.Scam']
         #todo we're only allowed to poll Test category for now
+        #todo check if we're out of probation
         cat = ['Test']
         nocat = []
 
@@ -150,10 +151,46 @@ class Module(Module, multiprocessing.Process):
 
         #todo how many events to poll?
         self.print(f"Getting 10 events from warden server.")
-        ret = wclient.getEvents(count=10, cat=cat, nocat=nocat,
+        events = wclient.getEvents(count=10, cat=cat, nocat=nocat,
                                 tag=tag, notag=notag, group=group,
                                 nogroup=nogroup)
-        # self.print(f"Got {len(ret)} events")
+        # now that we received from warden server,
+        # store the received IPs, description, category and node in the db
+        src_ips = {} #todo is the srcip always the offender? can it be the victim?
+        for event in events:
+            # extract event details
+            srcips = event.get('Source',[])
+            description = event.get('Description','')
+            category = event.get('Category',[])
+
+            # get the source of this IoC
+            node = event.get('Node',[{}])
+            if node != []:
+                node = node[0].get('Name','')
+
+            # sometimes one alert can have multiple srcips
+            for srcip in srcips:
+                # store the event info in a form recognizable by slips
+                event_info = {
+                    'description': description,
+                    'source': f'Warden Server {node}',
+                    'threat_level': 'medium', #todo merge alya-change-threat-levels-to-strings first
+                    'tags': category[0]
+                }
+                # srcip is a dict, for example
+
+                # IoC can be ipv6 ar v4
+                if 'IP4' in srcip:
+                    srcip = srcip['IP4'][0]
+                elif 'IP6' in srcip:
+                    srcip = srcip['IP6'][0]
+
+                src_ips.update({
+                    srcip: json.dumps(event_info)
+                })
+
+        __database__.add_ips_to_IoC(src_ips) #todo check if we're overwriting current dict or not?
+
 
 
     def run(self):
