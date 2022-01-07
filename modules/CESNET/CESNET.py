@@ -10,6 +10,7 @@ import os
 import json
 import time
 import threading
+import queue
 
 class Module(Module, multiprocessing.Process):
     name = 'CESNET'
@@ -119,11 +120,18 @@ class Module(Module, multiprocessing.Process):
         self.print(f"Uploading {len(alerts_list)} events to warden server.")
         # create a thread for sending alerts to warden server
         # and don't stop this module until the thread is done
-        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_list])
+        q = queue.Queue()
+        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_list, q])
         self.sender_thread.start()
         self.sender_thread.join()
-        self.print(f' Done uploading events to warden server.\n')
-        # self.print(ret)
+        result = q.get()
+        if 'saved' in result:
+            # no errors
+            self.print(f'Done uploading {result["saved"]} events to warden server.\n')
+        else:
+            # print the error
+            self.print(result, 0, 1)
+
 
     def import_alerts(self, wclient):
         # cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
@@ -183,7 +191,7 @@ class Module(Module, multiprocessing.Process):
                         self.export_alerts(wclient)
                         # don't publish this module's name in finished_modules channel
                         # until the sender thread is done
-                        while self.sender_thread.isAlive():
+                        while self.sender_thread.is_alive():
                             time.sleep(3)
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
