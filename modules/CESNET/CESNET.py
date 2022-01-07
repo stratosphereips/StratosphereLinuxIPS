@@ -134,11 +134,12 @@ class Module(Module, multiprocessing.Process):
 
 
     def import_alerts(self, wclient):
-        # cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
-        # 'Fraud.Scam', 'Malware.Virus', 'Information', 'Fraud.Scam']
+        #todo do we want all categories?
+        cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
+         'Fraud.Scam', 'Malware.Virus', 'Information', 'Fraud.Scam']
         #todo we're only allowed to poll Test category for now
-        #todo check if we're out of probation
-        cat = ['Test']
+        # todo assign a threat level to every cat??
+        # cat = ['Abusive.Spam']
         nocat = []
 
         #tag = ['Log', 'Data','Flow', 'Datagram']
@@ -154,6 +155,11 @@ class Module(Module, multiprocessing.Process):
         events = wclient.getEvents(count=10, cat=cat, nocat=nocat,
                                 tag=tag, notag=notag, group=group,
                                 nogroup=nogroup)
+
+        if len(events) == 0:
+            self.print(f'Error getting event from warden server.')
+            return False
+
         # now that we received from warden server,
         # store the received IPs, description, category and node in the db
         src_ips = {} #todo is the srcip always the offender? can it be the victim?
@@ -162,6 +168,7 @@ class Module(Module, multiprocessing.Process):
             srcips = event.get('Source',[])
             description = event.get('Description','')
             category = event.get('Category',[])
+            #todo get the SW
 
             # get the source of this IoC
             node = event.get('Node',[{}])
@@ -184,12 +191,14 @@ class Module(Module, multiprocessing.Process):
                     srcip = srcip['IP4'][0]
                 elif 'IP6' in srcip:
                     srcip = srcip['IP6'][0]
+                else:
+                    srcip = srcip['IP'][0]
 
                 src_ips.update({
                     srcip: json.dumps(event_info)
                 })
 
-        __database__.add_ips_to_IoC(src_ips) #todo check if we're overwriting current dict or not?
+        __database__.add_ips_to_IoC(src_ips)
 
 
 
