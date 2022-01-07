@@ -269,14 +269,15 @@ def shutdown_gracefully(input_information):
                     print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
             max_loops -=1
 
-        # before killing the modules that aren't finished
-        # make sure we're not in the middle of exporting alerts
-        # if the PID of CESNET module is there in PIDs dict,
-        # it means the module hasn't stopped yet
-        if 'yes' in send_to_warden and 'CESNET' in PIDs:
-            # we're in the middle of sending alerts to warden server
-            # delay killing unstopped modules
-            max_loops+=10
+            # before killing the modules that aren't finished
+            # make sure we're not in the middle of exporting alerts
+            # if the PID of CESNET module is there in PIDs dict,
+            # it means the module hasn't stopped yet
+            if 'yes' in send_to_warden and 'CESNET' in PIDs:
+                # we're in the middle of sending alerts to warden server
+                # delay killing unstopped modules
+                max_loops+=1
+
 
         # modules that aren't subscribed to any channel will always be killed and not stopped
         # some modules continue on sigint, but recieve other msgs (other than stop_message) in the queue before stop_process
@@ -353,7 +354,7 @@ def shutdown_gracefully(input_information):
         # display a warning if the user's trying to stop
         # slips while we're still exporting
         if 'yes' in send_to_warden and 'CESNET' in PIDs:
-            print("Exporting alerts to warden server was cancelled.")
+            print("[Main] Exporting alerts to warden server was cancelled.")
         return False
 
 
