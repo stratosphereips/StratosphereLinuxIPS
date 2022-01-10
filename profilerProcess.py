@@ -1079,6 +1079,10 @@ class ProfilerProcess(multiprocessing.Process):
         """
         line = new_line['data']
         file_type = new_line['type']
+        # if the zeek dir given to slips has 'conn' in it's name,
+        # slips thinks it's reading a conn file
+        # because we use the file path as the file 'type'
+        # to fix this, only use the file name as file 'type'
         file_type = file_type.split('/')[-1]
         # Generic fields in Zeek
         self.column_values = {}
