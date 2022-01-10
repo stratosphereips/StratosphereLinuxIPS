@@ -167,7 +167,6 @@ class Module(Module, multiprocessing.Process):
             srcips = event.get('Source',[])
             description = event.get('Description','')
             category = event.get('Category',[])
-            #todo get the SW
 
             # get the source of this IoC
             node = event.get('Node',[{}])
@@ -194,7 +193,7 @@ class Module(Module, multiprocessing.Process):
                 event_info = {
                     'description': description,
                     'source': f'{node_name}, software: {software}',
-                    'threat_level': 'medium', #todo merge alya-change-threat-levels-to-strings first
+                    'threat_level': 'medium',
                     'tags': category[0]
                 }
                 # srcip is a dict, for example
@@ -229,7 +228,7 @@ class Module(Module, multiprocessing.Process):
         # If you want just to be informed, this is not necessary, just
         # configure logging correctly and check logs.
 
-        # for getting send and recceive limits
+        # for getting send and receive limits
         # info = wclient.getInfo()
         # self.print(info, 0, 1)
 
