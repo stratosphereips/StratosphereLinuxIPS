@@ -222,7 +222,7 @@ def shutdown_gracefully(input_information):
     """
 
     try:
-        print('\n'+'-'*32)
+        print('\n'+'-'*27)
         print('Stopping Slips')
         # is slips currently exporting alerts?
         send_to_warden = config.get('CESNET', 'send_alerts').lower()
