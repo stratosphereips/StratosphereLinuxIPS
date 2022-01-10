@@ -1,8 +1,15 @@
 -0.8.3
-		- More accurate threat levels, now they're strings instead of values
+* Slips
+  - More accurate threat levels, now they're strings instead of values
+  - Add CESNET sharing moddule, which supports exporting and importing event to and from warden servers
+  - Improve Unknown ports alerts, now we don't have false positive alerts when apple devices are talking to each other using unknown ports
+  - Added support for continuous integrations using Github Actions
+  - Improvements in printing alerts, we now print each alert with it's timestamp and the evidence caused it
+  - Local TI files now support threat levels. each entry now has it'sown threat level.
+  - Improve empty HTTP connections. now supports (Yandix, bing and yahoo)
 
 -0.8.2
-	-Slips
+*	Slips
 		- Detect gratoitous ARP
 		- Detect unsolicited ARP
 		- Detect MITM ARP attack
@@ -23,7 +30,7 @@
 		- Optimize our docker image
 
 -0.8.1
-	-Slips
+*	Slips
 		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
 		- Add module to detect leaks of data in the traffic using YARA rules (works on PCAPs only)
 		- Move RiskIQ api key to a separate file in modules/UpdateManager/api_key_secret
