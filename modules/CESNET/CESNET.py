@@ -134,11 +134,11 @@ class Module(Module, multiprocessing.Process):
 
 
     def import_alerts(self, wclient):
-        #todo do we want all categories?
+        events_to_get = 10
+
         cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
-         'Fraud.Scam', 'Malware.Virus', 'Information', 'Fraud.Scam']
-        #todo we're only allowed to poll Test category for now
-        # todo assign a threat level to every cat??
+         'Fraud.Scam', 'Information', 'Fraud.Scam']
+
         # cat = ['Abusive.Spam']
         nocat = []
 
@@ -150,9 +150,8 @@ class Module(Module, multiprocessing.Process):
         group = []
         nogroup = []
 
-        #todo how many events to poll?
-        self.print(f"Getting 50 events from warden server.")
-        events = wclient.getEvents(count=50, cat=cat, nocat=nocat,
+        self.print(f"Getting {events_to_get} events from warden server.")
+        events = wclient.getEvents(count=events_to_get, cat=cat, nocat=nocat,
                                 tag=tag, notag=notag, group=group,
                                 nogroup=nogroup)
 
@@ -172,15 +171,29 @@ class Module(Module, multiprocessing.Process):
 
             # get the source of this IoC
             node = event.get('Node',[{}])
-            if node != []:
-                node = node[0].get('Name','')
+            # node is an array of dicts
+            if node == []:
+                # we don't know the source of this info, skip it
+                continue
+            # use the node that has a software name defined
+            node_name = node[0].get('Name','')
+            software = node[0].get('SW',[False])[0]
+            if not software:
+                # first node doesn't have a software
+                # use the second one
+                try:
+                    node_name = node[1].get('Name','')
+                    software = node[1].get('SW',[None])[0]
+                except IndexError:
+                    # there's no second node
+                    pass
 
             # sometimes one alert can have multiple srcips
             for srcip in srcips:
                 # store the event info in a form recognizable by slips
                 event_info = {
                     'description': description,
-                    'source': f'Warden Server {node}',
+                    'source': f'{node_name}, software: {software}',
                     'threat_level': 'medium', #todo merge alya-change-threat-levels-to-strings first
                     'tags': category[0]
                 }
