@@ -567,15 +567,32 @@ class EvidenceProcess(multiprocessing.Process):
         elif platform.system() == 'Darwin':
             os.system(f"osascript -e 'display notification \"{alert_to_log}\" with title \"Slips\"' ")
 
+    def get_ts_format(self, timestamp):
+        """
+        returns the appropriate format of the given ts
+        """
+        if '+' in timestamp:
+            # timestamp contains UTC offset, set the new format accordingly
+            newformat = "%Y-%m-%d %H:%M:%S%z"
+        else:
+            # timestamp doesn't contain UTC offset, set the new format accordingly
+            newformat = "%Y-%m-%d %H:%M:%S.%f"
+
+        # is the seconds field a float?
+        if '.' in timestamp:
+            # append .f to the seconds field
+            newformat = newformat.replace('S','S.%f')
+        return newformat
+
     def format_timestamp(self, timestamp):
         """
         Function to unify timestamps printed to log files, notification and cli.
         :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
-        returns the date and time in RFC3339 format (IDEA standard)
+        returns the date and time in RFC3339 format (IDEA standard) as str by default
         """
         if timestamp and (isinstance(timestamp, datetime)):
             # The timestamp is a datetime
-            timestamp = timestamp.strftime("%Y-%m-%d %H:%M:%S.%f%z")
+            timestamp = timestamp.strftime(self.get_ts_format(timestamp))
         elif timestamp and type(timestamp) == float:
             # The timestamp is a float
             timestamp = datetime.fromtimestamp(timestamp).astimezone().isoformat()
@@ -583,17 +600,12 @@ class EvidenceProcess(multiprocessing.Process):
             # self.print(f'DATETIME: {timestamp}')
             # The timestamp is a string with spaces
             timestamp = timestamp.replace('/','-')
-            # format of incoming ts
-            if '+' in timestamp:
-                # timestamp contains UTC offset, set the new format accordingly
-                newformat = "%Y-%m-%d %H:%M:%S.%f%z"
-            else:
-                # timestamp doesn't contain UTC offset, set the new format accordingly
-                newformat = "%Y-%m-%d %H:%M:%S.%f"
-            # convert to datetime obj
-            timestamp = datetime.strptime(timestamp, newformat)
+            # convert to datetime obj using the format of incoming ts
+            timestamp = datetime.strptime(timestamp, self.get_ts_format(timestamp))
             # convert to iso format
             timestamp = timestamp.astimezone().isoformat()
+
+
         return timestamp
 
     def add_to_log_folder(self, data):
@@ -692,17 +704,18 @@ class EvidenceProcess(multiprocessing.Process):
             srcip = profileid.split(self.separator)[1]
             # Get the start time of this TW
             tw_start_time_str = self.format_timestamp(float(__database__.getTimeTW(profileid, twid)))
-            tw_start_time_datetime = datetime.strptime(tw_start_time_str, "%Y-%m-%dT%H:%M:%S.%f%z")
+            tw_start_time_datetime = datetime.strptime(tw_start_time_str, self.get_ts_format(tw_start_time_str).replace(' ','T'))
             # Convert the tw width to deltatime
             tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
             # Get the stop time of the TW
             tw_stop_time_datetime = tw_start_time_datetime + tw_width_in_seconds_delta
             tw_stop_time_str = tw_stop_time_datetime.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
 
-            alert_to_print = f'{Fore.RED}IP {srcip} detected as infected in timewindow {twid_num} (start {tw_start_time_str}, stop {tw_stop_time_str}) given the following evidence:{Style.RESET_ALL}\n'
+            alert_to_print = f'{Fore.RED}IP {srcip} detected as infected in timewindow {twid_num} ' \
+                             f'(start {tw_start_time_str}, stop {tw_stop_time_str}) given the following evidence:{Style.RESET_ALL}\n'
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            self.print(f'Problem on format_evidence_causing_this_alert() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -898,9 +911,9 @@ class EvidenceProcess(multiprocessing.Process):
                 self.jsonfile.close()
                 # self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
                 continue
-            # except Exception as inst:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.outputqueue.put(f'01|[Evidence] Error in the Evidence Process line {exception_line}')
-            #     self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
-            #     self.outputqueue.put('01|[Evidence] {}'.format(inst))
-            #     return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.outputqueue.put(f'01|[Evidence] Error in the Evidence Process line {exception_line}')
+                self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
+                self.outputqueue.put('01|[Evidence] {}'.format(inst))
+                return True
