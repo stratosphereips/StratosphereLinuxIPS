@@ -41,9 +41,6 @@ class Module(Module, multiprocessing.Process):
         self.c5 = __database__.subscribe('new_service')
         self.c6 = __database__.subscribe('new_dns_flow')
         self.timeout = 0.0000001
-        # read our list of ports that are associated to a specific organizations
-        ports_info_filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
-        self.read_ports_info(ports_info_filepath)
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = __database__.get_default_gateway()
@@ -61,38 +58,6 @@ class Module(Module, multiprocessing.Process):
         self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
         self.nxdomains_threshold = 10
-
-    def read_ports_info(self, ports_info_filepath):
-        """
-        Reads port info from slips_files/ports_info/ports_used_by_specific_orgs.csv
-        and store it in the db
-        """
-
-        # there are ports that are by default considered unknown to slips,
-        # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
-        # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
-
-        try:
-            with open(ports_info_filepath,'r') as f:
-                while True:
-                    line = f.readline()
-                    # reached the end of file
-                    if not line: break
-                    # skip the header and the comments at the begining
-                    if line.startswith('#') or line.startswith('"Organization"'):
-                        continue
-
-                    line = line.split(',')
-
-                    try:
-                        organization, ip = line[0], line[1]
-                        portproto = f'{line[2]}/{line[3].lower()}'
-                        __database__.set_organization_of_port(organization, ip, portproto)
-                    except IndexError:
-                        self.print(f"Invalid line: {line} in {ports_info_filepath}. Skipping.",0,1)
-                        continue
-        except OSError:
-            self.print(f"An error occured while reading {ports_info_filepath}.",0,1)
 
     def is_ignored_ip(self, ip) -> bool:
         """
@@ -356,32 +321,49 @@ class Module(Module, multiprocessing.Process):
 
         return False
 
+    def port_belongs_to_an_org(self, daddr, portproto, profileid):
+        """
+        Checks weather a port is known to be used by a specific organization or not
+        """
+        organization_info = __database__.get_organization_of_port(portproto)
+        if organization_info:
+            # there's an organization that's known to use this port,
+            # check if the daddr belongs to the range of this org
+            organization_info = json.loads(organization_info)
+            # can be an ip or a range
+            org_ip = organization_info['ip']
+            # org_name = organization_info['org_name']
+            # it's an ip and it belongs to this org, consider the port as known
+            if daddr in org_ip:
+                return False
+            # is it a range?
+            try:
+                # we have the org range in our database, check if the daddr belongs to this range
+                if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
+                    # it does, consider the port as known
+                    return False
+            except ValueError:
+                # not a range either since nothing is specified,
+                # check the source and dst mac address vendors
+                src_mac_vendor = str(__database__.get_mac_vendor_from_profile(profileid))
+                dst_mac_vendor = str(__database__.get_mac_vendor_from_profile(f'profile_{daddr}'))
+                org_name = organization_info['org_name'].lower()
+                if (org_name in src_mac_vendor.lower()
+                        and org_name in dst_mac_vendor.lower()):
+                    return True
+
+        # consider this port as unknown
+        return False
+
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
-        """ Checks dports that are not in any of our slips_files/ports_info/ files"""
+        """ Checks dports that are not in our slips_files/ports_info/ files"""
         portproto = f'{dport}/{proto}'
         port_info = __database__.get_port_info(portproto)
         if not port_info:
             # we don't have port info in our database
             # is it a port that is known to be used by a specific organization
-            organization_info = __database__.get_organization_of_port(portproto)
-            if organization_info:
-              # there's an organization that's known to use this port, check if the daddr belongs to the range of this org
-                organization_info = json.loads(organization_info)
-                # can be an ip or a range
-                org_ip = organization_info['ip']
-                org_name = organization_info['org_name']
-                # it's an ip and it belongs to this org, consider the port as known
-                if daddr in org_ip: return False
-                # is it a range?
-                try:
-                    # we have the org range in our database, check if the daddr belongs to this range
-                    if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
-                        # it does, consider the port as known
-                        return False
-                except ValueError:
-                    # not a range either??
-                    # consider this port as unknown
-                    pass
+            if self.port_belongs_to_an_org(daddr, portproto, profileid):
+                return False
 
 
         if (not port_info
