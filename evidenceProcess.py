@@ -700,9 +700,14 @@ class EvidenceProcess(multiprocessing.Process):
             tw_stop_time_str = tw_stop_time_datetime.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
 
             alert_to_print = f'{Fore.RED}IP {srcip} detected as infected in timewindow {twid_num} (start {tw_start_time_str}, stop {tw_stop_time_str}) given the following evidence:{Style.RESET_ALL}\n'
-        except Exception as e:
-            print(type(e))
-            print(e)
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
+
  
         for evidence in all_evidence.values():
             # Deserialize evidence
@@ -830,14 +835,15 @@ class EvidenceProcess(multiprocessing.Process):
                             type_evidence = evidence.get('type_evidence')
                             confidence = float(evidence.get('confidence'))
                             threat_level = evidence.get('threat_level')
+                            description = evidence.get('description')
                             # each threat level is a string, get the numerical value of it
                             try:
                                 threat_level = self.threat_levels[threat_level.lower()]
                             except KeyError:
                                 self.print(f"Error: Evidence of type {type_evidence} has an invalid threat level {threat_level}", 0 , 1)
+                                self.print(f"Description: {description}")
                                 threat_level = 0
 
-                            description = evidence.get('description')
 
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
