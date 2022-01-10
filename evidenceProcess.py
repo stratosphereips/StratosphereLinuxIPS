@@ -830,11 +830,11 @@ class EvidenceProcess(multiprocessing.Process):
                             type_evidence = evidence.get('type_evidence')
                             confidence = float(evidence.get('confidence'))
                             threat_level = evidence.get('threat_level')
-                            # each threat level is a string, get the numericial value of it
+                            # each threat level is a string, get the numerical value of it
                             try:
                                 threat_level = self.threat_levels[threat_level.lower()]
                             except KeyError:
-                                self.print(f"Evidence of type {type_evidence} has an invalid threat level {threat_level}", 0 , 1)
+                                self.print(f"Error: Evidence of type {type_evidence} has an invalid threat level {threat_level}", 0 , 1)
                                 threat_level = 0
 
                             description = evidence.get('description')
