@@ -34,7 +34,7 @@ import pkgutil
 import inspect
 import modules
 import importlib
-from slips_files.common.abstracts import Module
+from signal import SIGSTOP
 from slips_files.common.argparse import ArgumentParser
 import errno
 import subprocess
@@ -90,7 +90,10 @@ def update_malicious_file(outputqueue, config):
     Update malicious files and store them in database before slips start
     '''
     update_manager = UpdateFileManager(outputqueue, config)
-    update_manager.update()
+    try:
+        update_manager.update()
+    except KeyboardInterrupt:
+        os.kill(os.getpid(), SIGSTOP)
 
 def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
     """
@@ -687,9 +690,6 @@ if __name__ == '__main__':
             except TypeError:
                 # There are not modules in the configuration to ignore?
                 print('No modules are ignored')
-
-
-
 
         # Get the type of output from the parameters
         # Several combinations of outputs should be able to be used
