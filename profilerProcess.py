@@ -374,7 +374,7 @@ class ProfilerProcess(multiprocessing.Process):
         returns a list containing the org's domains
         """
         try:
-            # Each file is named after the organization's name followed by _asn
+            # Each file is named after the organization's name followed by _domains
             domains =[]
             file = f'slips_files/organizations_info/{org}_domains'
             with open(file,'r') as f:
@@ -419,7 +419,8 @@ class ProfilerProcess(multiprocessing.Process):
             org_subnets = []
             # see if we can get asn about this org
             try:
-                response = requests.get('http://asnlookup.com/api/lookup?org=' + org.replace('_', ' '), headers ={  'User-Agent': 'ASNLookup PY/Client'}, timeout = 10)
+                response = requests.get('http://asnlookup.com/api/lookup?org=' + org.replace('_', ' '),
+                                        headers ={  'User-Agent': 'ASNLookup PY/Client'}, timeout = 10)
             except requests.exceptions.ConnectionError:
                 # Connection reset by peer
                 return False
@@ -1797,7 +1798,8 @@ class ProfilerProcess(multiprocessing.Process):
                         if domain in main_domain:
                             # We can ignore flows or alerts, what is it?
                             if 'flows' in what_to_ignore or 'both' in what_to_ignore:
-                                # self.print(f"Whitelisting the domain {domain_to_check} because is related to domain {domain} of dst IP {self.column_values['daddr']}")
+                                # self.print(f"Whitelisting the domain {domain_to_check} because is related"
+                                #            f" to domain {domain} of dst IP {self.column_values['daddr']}")
                                 return True
 
         saddr = self.column_values['saddr']
@@ -1816,7 +1818,7 @@ class ProfilerProcess(multiprocessing.Process):
                 from_ = whitelisted_IPs[saddr]['from']
                 what_to_ignore = whitelisted_IPs[saddr]['what_to_ignore']
                 if ('src' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
-                    #self.print(f"Whitelisting the src IP {self.column_values['saddr']}")
+                    # self.print(f"Whitelisting the src IP {self.column_values['saddr']}")
                     return True
 
             if daddr in ips_to_whitelist: # should be if and not elif
@@ -1824,7 +1826,7 @@ class ProfilerProcess(multiprocessing.Process):
                 from_ = whitelisted_IPs[daddr]['from']
                 what_to_ignore = whitelisted_IPs[daddr]['what_to_ignore']
                 if ('dst' in from_  or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
-                    #self.print(f"Whitelisting the dst IP {self.column_values['daddr']}")
+                    # self.print(f"Whitelisting the dst IP {self.column_values['daddr']}")
                     return True
 
         # check if we have orgs whitelisted
@@ -1859,7 +1861,7 @@ class ProfilerProcess(multiprocessing.Process):
                             try:
                                 ip = ipaddress.ip_address(saddr)
                                 if ip in ipaddress.ip_network(network):
-                                    #self.print(f"The src IP {saddr} is in the range {network} or org {org}. Whitelisted.")
+                                    # self.print(f"The src IP {saddr} is in the range {network} or org {org}. Whitelisted.")
                                     return True
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
@@ -1872,7 +1874,7 @@ class ProfilerProcess(multiprocessing.Process):
                             ip_asn = ip_data['asn']['asnorg']
                             if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in whitelisted_orgs[org]['asn']):
                                 # this ip belongs to a whitelisted org, ignore flow
-                                #self.print(f"The ASN {ip_asn} of IP {saddr} is in the values of org {org}. Whitelisted.")
+                                # self.print(f"The ASN {ip_asn} of IP {saddr} is in the values of org {org}. Whitelisted.")
                                 return True
                         except (KeyError, TypeError):
                             # No asn data for src ip
@@ -1883,10 +1885,13 @@ class ProfilerProcess(multiprocessing.Process):
                         # domains to check are usually 1 or 2 domains
                         for flow_domain in domains_to_check:
                             if org in flow_domain:
+                                # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
                                 return True
                             for domain in org_domains:
                                 # match subdomains too
                                 if domain in flow_domain:
+                                    # self.print(f"The src domain of this flow ({flow_domain}) is "
+                                    #            f"a subdomain of {org} domain: {domain}")
                                     return True
 
                     if 'dst' in from_ or 'both' in from_:
@@ -1895,7 +1900,8 @@ class ProfilerProcess(multiprocessing.Process):
                             try:
                                 ip = ipaddress.ip_address(self.column_values['daddr'])
                                 if ip in ipaddress.ip_network(network):
-                                    #self.print(f"The dst IP {self.column_values['daddr']} is in the range {network} or org {org}. Whitelisted.")
+                                    # self.print(f"The dst IP {self.column_values['daddr']} "
+                                    #            f"is in the range {network} or org {org}. Whitelisted.")
                                     return True
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
@@ -1906,7 +1912,8 @@ class ProfilerProcess(multiprocessing.Process):
                             ip_asn = ip_data['asn']['asnorg']
                             if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in whitelisted_orgs[org]['asn']):
                                 # this ip belongs to a whitelisted org, ignore flow
-                                #self.print(f"The ASN {ip_asn} of IP {self.column_values['daddr']} is in the values of org {org}. Whitelisted.")
+                                # self.print(f"The ASN {ip_asn} of IP {self.column_values['daddr']} "
+                                #            f"is in the values of org {org}. Whitelisted.")
                                 return True
                         except (KeyError, TypeError):
                             # No asn data for src ip
@@ -1918,33 +1925,35 @@ class ProfilerProcess(multiprocessing.Process):
                             for flow_domain in domains_to_check:
                                 # match subdomains too
                                 if domain in flow_domain:
+                                    # self.print(f"The dst domain of this flow ({flow_domain}) is "
+                                    #            f"a subdomain of {org} domain: {domain}")
                                     return True
 
-        # check if we have mac addresses whitelisted
-        whitelisted_mac = __database__.get_whitelist('mac')
+                    # check if we have mac addresses whitelisted
+                    whitelisted_mac = __database__.get_whitelist('mac')
 
-        if whitelisted_mac:
+                    if whitelisted_mac:
 
-            # try to get the mac address of the current flow
-            src_mac =  self.column_values.get('src_mac',False)
-            if not src_mac: src_mac = self.column_values.get('mac',False)
-            if not src_mac:
-                src_mac = __database__.get_mac_addr_from_profile(f'profile_{saddr}')[0]
+                        # try to get the mac address of the current flow
+                        src_mac =  self.column_values.get('src_mac',False)
+                        if not src_mac: src_mac = self.column_values.get('mac',False)
+                        if not src_mac:
+                            src_mac = __database__.get_mac_addr_from_profile(f'profile_{saddr}')[0]
 
-            if src_mac and src_mac in list(whitelisted_mac.keys()):
-                # the src mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_mac[src_mac]['from']
-                what_to_ignore = whitelisted_mac[src_mac]['what_to_ignore']
-                if ('src' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
-                    return True
+                        if src_mac and src_mac in list(whitelisted_mac.keys()):
+                            # the src mac of this flow is whitelisted, but which direction?
+                            from_ = whitelisted_mac[src_mac]['from']
+                            if 'src' in from_ or 'both' in from_:
+                                # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
+                                return True
 
-            dst_mac = self.column_values.get('dst_mac',False)
-            if dst_mac and dst_mac in list(whitelisted_mac.keys()):
-                # the dst mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_mac[dst_mac]['from']
-                what_to_ignore = whitelisted_mac[dst_mac]['what_to_ignore']
-                if ('dst' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
-                    return True
+                        dst_mac = self.column_values.get('dst_mac',False)
+                        if dst_mac and dst_mac in list(whitelisted_mac.keys()):
+                            # the dst mac of this flow is whitelisted, but which direction?
+                            from_ = whitelisted_mac[dst_mac]['from']
+                            if 'dst' in from_ or 'both' in from_:
+                                # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
+                                return True
 
         return False
 
@@ -2008,6 +2017,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Check if the flow is whitelisted and we should not process
             if self.is_whitelisted():
+                # print(f'@@@@@@@@@@@@@@@@@@  whitelisted : {self.daddr} {__database__.getIPIdentification(self.daddr)} \n')
                 return True
 
             def get_rev_profile(starttime, daddr_as_obj):

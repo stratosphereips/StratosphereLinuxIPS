@@ -387,7 +387,7 @@ class EvidenceProcess(multiprocessing.Process):
         except (IndexError, KeyError):
             whitelisted_orgs = {}
         try:
-            whitelisted_mac = json.loads(whitelist['organizations'])
+            whitelisted_mac = json.loads(whitelist['mac'])
         except (IndexError, KeyError):
             whitelisted_mac = {}
 
@@ -432,7 +432,7 @@ class EvidenceProcess(multiprocessing.Process):
             data_type = 'ip'
 
         # Check IPs
-        if data_type is 'ip':
+        if data_type == 'ip':
             # Check that the IP in the content of the alert is whitelisted
             # Was the evidence coming as a src or dst?
             ip = data
@@ -463,14 +463,14 @@ class EvidenceProcess(multiprocessing.Process):
                         from_ = whitelisted_mac[mac]['from']
                         what_to_ignore = whitelisted_mac[mac]['what_to_ignore']
                         # do we want to whitelist alerts?
-                        if ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                        if ('alerts' in what_to_ignore or 'both' in what_to_ignore):
                             if is_srcip and ('src' in from_ or 'both' in from_) :
                                 return True
                             if is_dstip and ('dst' in from_ or 'both' in from_):
                                 return True
 
         # Check domains
-        if data_type is 'domain':
+        if data_type == 'domain':
             is_srcdomain = type_detection in ('srcdomain')
             is_dstdomain = type_detection in ('dstdomain')
             domain = data
@@ -489,72 +489,67 @@ class EvidenceProcess(multiprocessing.Process):
                     if ignore_alerts_from_domain or ignore_alerts_to_domain:
                         #self.print(f'Whitelisting evidence about {domain_in_whitelist}, due to a connection related to {data} in {description}')
                         return True
-
         # Check orgs
         if whitelisted_orgs:
-            # Check if the IP in the alert belongs to a whitelisted organization
-            if data_type is 'ip':
-                is_srcorg = type_detection in ('sip', 'srcip', 'sport', 'inTuple', 'srcdomain')
-                is_dstorg = type_detection in ('dip', 'dstip', 'dport', 'outTuple', 'dstdomain')
-                ip = data
-                for org in whitelisted_orgs:
-                    from_ =  whitelisted_orgs[org]['from']
-                    what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
-                    ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
-                    ignore_alerts_from_org = ignore_alerts and is_srcorg and ('src' in from_ or 'both' in from_)
-                    ignore_alerts_to_org = ignore_alerts and is_dstorg and ('dst' in from_ or 'both' in from_)
+            is_src = type_detection in ('sip', 'srcip', 'sport', 'inTuple', 'srcdomain')
+            is_dst = type_detection in ('dip', 'dstip', 'dport', 'outTuple', 'dstdomain')
+            for org in whitelisted_orgs:
+                from_ =  whitelisted_orgs[org]['from']
+                what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
+                ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                ignore_alerts_from_org = ignore_alerts and is_src and ('src' in from_ or 'both' in from_)
+                ignore_alerts_to_org = ignore_alerts and is_dst and ('dst' in from_ or 'both' in from_)
 
+                # Check if the IP in the alert belongs to a whitelisted organization
+                if data_type == 'ip':
+                    ip = data
                     if ignore_alerts_from_org or ignore_alerts_to_org:
                         # Method 1: using asn
                         # Check if the IP in the content of the alert has ASN info in the db
                         ip_data = __database__.getIPData(ip)
                         if ip_data:
-                            ip_asn = ip_data.get('asn',{'asnorg':''})
-
+                            ip_asn = ip_data.get('asn',{'asnorg':''})['asnorg']
                             # make sure the asn field contains a value
-                            if (ip_asn['asnorg'] not in ('','Unknown')
-                                and (org.lower() in ip_asn['asnorg'].lower()
-                                        or ip_asn['asnorg'] in whitelisted_orgs[org].get('asn',''))):
+                            if (ip_asn not in ('','Unknown')
+                                and (org.lower() in ip_asn.lower()
+                                        or ip_asn in whitelisted_orgs[org].get('asn',''))):
                                 # this ip belongs to a whitelisted org, ignore alert
                                 #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
                                 return True
 
-                        # Method 2 using the organization's list of ips
-                        # ip doesn't have asn info, search in the list of organization IPs
-                        try:
-                            org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
-                            ip = ipaddress.ip_address(ip)
-                            for network in org_subnets:
-                                # check if ip belongs to this network
-                                if ip in ipaddress.ip_network(network):
-                                    #self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
-                                    return True
-                        except (KeyError,TypeError):
-                            # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
-                            # and ip doesn't have asn info.
-                            pass
-
-                        # Method 3 Check if the domains of this flow belong to this org domains
-                        domains_to_check_dst, domains_to_check_src = self.get_domains_of_flow(flow)
-                        # which list of the above should be used? src or dst or both?
-                        if ignore_alerts_to_org and ignore_alerts_from_org: domains_to_check = domains_to_check_src + domains_to_check_dst
-                        elif ignore_alerts_from_org : domains_to_check = domains_to_check_src
-                        elif ignore_alerts_to_org : domains_to_check = domains_to_check_dst
-                        try:
-                            org_domains = json.loads(whitelisted_orgs[org].get('domains','{}'))
-                            # domains to check are usually 1 or 2 domains
-                            for flow_domain in domains_to_check:
-                                if org in flow_domain:
-                                    return True
-                                for domain in org_domains:
-                                    # match subdomains too
-                                    if domain in flow_domain:
-                                        return True
-                        except (KeyError,TypeError):
-                            # comes here if the whitelisted org doesn't have domains in slips/organizations_info (not a famous org)
-                            # and ip doesn't have asn info.
-                            # so we don't know how to link this ip to the whitelisted org!
-                            pass
+                    # Method 2 using the organization's list of ips
+                    # ip doesn't have asn info, search in the list of organization IPs
+                    try:
+                        org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
+                        ip = ipaddress.ip_address(ip)
+                        for network in org_subnets:
+                            # check if ip belongs to this network
+                            if ip in ipaddress.ip_network(network):
+                                #self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
+                                return True
+                    except (KeyError, TypeError):
+                        # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
+                        # and ip doesn't have asn info.
+                        pass
+                if data_type == 'domain':
+                    flow_domain = data
+                    # Method 3 Check if the domains of this flow belong to this org domains
+                    try:
+                        org_domains = json.loads(whitelisted_orgs[org].get('domains','{}'))
+                        if org in flow_domain:
+                            # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
+                            return True
+                        for domain in org_domains:
+                            # match subdomains too
+                            if domain in flow_domain:
+                                # self.print(f"The src domain of this flow ({flow_domain}) is "
+                                #             f"a subdomain of {org} domain: {domain}")
+                                return True
+                    except (KeyError,TypeError):
+                        # comes here if the whitelisted org doesn't have domains in slips/organizations_info (not a famous org)
+                        # and ip doesn't have asn info.
+                        # so we don't know how to link this ip to the whitelisted org!
+                        pass
         return False
 
     def show_popup(self, alert_to_log: str):
@@ -786,11 +781,7 @@ class EvidenceProcess(multiprocessing.Process):
                     if flow and self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
-                        key = {'type_detection' : type_detection,
-                                'detection_info' : detection_info ,
-                                'type_evidence' : type_evidence,
-                                'description': description}
-                        __database__.deleteEvidence(profileid, twid, key)
+                        __database__.deleteEvidence(profileid, twid, description)
                         continue
 
                     # Format the time to a common style given multiple type of time variables
