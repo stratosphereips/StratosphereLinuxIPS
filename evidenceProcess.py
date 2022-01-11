@@ -576,7 +576,7 @@ class EvidenceProcess(multiprocessing.Process):
             newformat = "%Y-%m-%d %H:%M:%S%z"
         else:
             # timestamp doesn't contain UTC offset, set the new format accordingly
-            newformat = "%Y-%m-%d %H:%M:%S.%f"
+            newformat = "%Y-%m-%d %H:%M:%S"
 
         # is the seconds field a float?
         if '.' in timestamp:
