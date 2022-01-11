@@ -691,9 +691,6 @@ if __name__ == '__main__':
                 # There are not modules in the configuration to ignore?
                 print('No modules are ignored')
 
-
-
-
         # Get the type of output from the parameters
         # Several combinations of outputs should be able to be used
         if args.gui:
