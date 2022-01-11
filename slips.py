@@ -480,6 +480,11 @@ if __name__ == '__main__':
             input_type = 'interface'
         elif args.filepath:
             input_information = args.filepath
+            # check invalid file path
+            if not os.path.exists(input_information):
+                print(f'[Main] Invalid file path {input_information}. Stopping.')
+                sys.exit(-1)
+
             # default value
             input_type = 'file'
             # Get the type of file
@@ -526,7 +531,7 @@ if __name__ == '__main__':
             input_type = 'database'
             input_information = 'database'
         else:
-            print('You need to define an input source.')
+            print('[Main] You need to define an input source.')
             sys.exit(-1)
 
         # If we need zeek (bro), test if we can run it.
