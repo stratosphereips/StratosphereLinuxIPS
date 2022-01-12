@@ -8,6 +8,8 @@
   - Local TI files now support threat levels. each entry now has it'sown threat level.
   - Improve empty HTTP connections. now supports (Yandix, bing and yahoo)
   - Detect JNDI string as suspicious user agent. used in Log4shell CVE-2021-44228.
+  - Improve whitelists.
+  - Improve code security.
 
 -0.8.2
 *	Slips
