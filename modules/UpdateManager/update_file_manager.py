@@ -72,14 +72,14 @@ class UpdateFileManager:
                         # Is a combined tags+url.
                         # This is an issue with the library
                         tags = tuple_.split('\n')[0].replace('tags=','')
-                        self.url_feeds[url] =  {'threat_level': threat_level, 'tags':tags}
+                        self.url_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
                         url = tuple_.split('\n')[1]
                         threat_level = ''
                         tags = ''
                     else:
                         # The first line is not combined tag+url
                         tags = tuple_.replace('tags=','')
-                        self.url_feeds[url] =  {'threat_level': threat_level, 'tags':tags}
+                        self.url_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
             #self.print(f'Final: {self.url_feeds}')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
