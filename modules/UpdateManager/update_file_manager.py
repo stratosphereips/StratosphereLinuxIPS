@@ -62,19 +62,24 @@ class UpdateFileManager:
                     url = ''
                 elif not threat_level:
                     threat_level = tuple_.replace('threat_level=','')
+                    # make sure threat level is a valid value
+                    if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
+                        # not a valid threat_level
+                        self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
+                        threat_level = 'low'
                 elif not tags:
                     if '\n' in tuple_:
                         # Is a combined tags+url.
                         # This is an issue with the library
                         tags = tuple_.split('\n')[0].replace('tags=','')
-                        self.url_feeds[url] =  {'threat_level': threat_level, 'tags':tags}
+                        self.url_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
                         url = tuple_.split('\n')[1]
                         threat_level = ''
                         tags = ''
                     else:
                         # The first line is not combined tag+url
                         tags = tuple_.replace('tags=','')
-                        self.url_feeds[url] =  {'threat_level': threat_level, 'tags':tags}
+                        self.url_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
             #self.print(f'Final: {self.url_feeds}')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -90,19 +95,22 @@ class UpdateFileManager:
                     url = tuple_.replace('\n','')
                 elif not threat_level:
                     threat_level = tuple_.replace('threat_level=','')
+                    # not a valid threat_level
+                    self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
+                    threat_level = 'low'
                 elif not tags:
                     if '\n' in tuple_:
                         # Is a combined tags+url.
                         # This is an issue with the library
                         tags = tuple_.split('\n')[0].replace('tags=','')
-                        self.ja3_feeds[url] =  {'threat_level': threat_level, 'tags':tags}
+                        self.ja3_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
                         url = tuple_.split('\n')[0]
                         threat_level = ''
                         tags = ''
                     else:
                         # The first line is not combined tag+url
                         tags = tuple_.replace('tags=','')
-                        self.ja3_feeds[url] =  {'threat_level': threat_level, 'tags':tags}
+                        self.ja3_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ja3_feeds = {}
@@ -238,10 +246,7 @@ class UpdateFileManager:
             file_name_to_download = link_to_download.split('/')[-1]
             # Get what files are stored in cache db and their E-TAG to compare with current files
             data = __database__.get_TI_file_info(file_name_to_download)
-            try:
-                old_e_tag = data['e-tag']
-            except TypeError:
-                old_e_tag = ''
+            old_e_tag = data.get('e-tag', '')
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
             new_e_tag = self.get_e_tag_from_web(link_to_download)
@@ -382,7 +387,7 @@ class UpdateFileManager:
             else:
                 self.print(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
         time.sleep(0.5)
-        print('-'*30)
+        print('-'*27)
 
     def __delete_old_source_IPs(self, file):
         """

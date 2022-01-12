@@ -9,9 +9,10 @@ from ..CESNET.warden_client import Client, read_cfg, Error, format_timestamp
 import os
 import json
 import time
+import threading
+import queue
 
 class Module(Module, multiprocessing.Process):
-    # Name: short name of the module. Do not use spaces
     name = 'CESNET'
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
@@ -51,7 +52,6 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-
     def read_configuration(self):
         """ Read importing/exporting preferences from slips.conf """
 
@@ -85,6 +85,9 @@ class Module(Module, multiprocessing.Process):
 
 
     def export_alerts(self, wclient):
+        """
+        Function to read all alerts from alerts.json as a list, and sends them to the warden server
+        """
 
         # [1] read all alerts from alerts.json
         alerts_path = os.path.join(self.output_dir, 'alerts.json')
@@ -115,14 +118,28 @@ class Module(Module, multiprocessing.Process):
 
         # [2] Upload to warden server
         self.print(f"Uploading {len(alerts_list)} events to warden server.")
-        ret = wclient.sendEvents(alerts_list)
-        self.print(ret)
+        # create a thread for sending alerts to warden server
+        # and don't stop this module until the thread is done
+        q = queue.Queue()
+        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_list, q])
+        self.sender_thread.start()
+        self.sender_thread.join()
+        result = q.get()
+        if 'saved' in result:
+            # no errors
+            self.print(f'Done uploading {result["saved"]} events to warden server.\n')
+        else:
+            # print the error
+            self.print(result, 0, 1)
+
 
     def import_alerts(self, wclient):
-        # cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
-        # 'Fraud.Scam', 'Malware.Virus', 'Information', 'Fraud.Scam']
-        #todo we're only allowed to poll test category for now
-        cat = ['Test']
+        events_to_get = 10
+
+        cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
+         'Fraud.Scam', 'Information', 'Fraud.Scam']
+
+        # cat = ['Abusive.Spam']
         nocat = []
 
         #tag = ['Log', 'Data','Flow', 'Datagram']
@@ -132,10 +149,69 @@ class Module(Module, multiprocessing.Process):
         #group = ['cz.tul.ward.kippo','cz.vsb.buldog.kippo', 'cz.zcu.civ.afrodita','cz.vutbr.net.bee.hpscan']
         group = []
         nogroup = []
-        #todo how many events to poll?
-        self.print(f"Getting 10 events to warden server.")
-        ret = wclient.getEvents(count=10, cat=cat, nocat=nocat, tag=tag, notag=notag, group=group, nogroup=nogroup)
-        self.print(f"Got {len(ret)} events")
+
+        self.print(f"Getting {events_to_get} events from warden server.")
+        events = wclient.getEvents(count=events_to_get, cat=cat, nocat=nocat,
+                                tag=tag, notag=notag, group=group,
+                                nogroup=nogroup)
+
+        if len(events) == 0:
+            self.print(f'Error getting event from warden server.')
+            return False
+
+        # now that we received from warden server,
+        # store the received IPs, description, category and node in the db
+        src_ips = {} #todo is the srcip always the offender? can it be the victim?
+        for event in events:
+            # extract event details
+            srcips = event.get('Source',[])
+            description = event.get('Description','')
+            category = event.get('Category',[])
+
+            # get the source of this IoC
+            node = event.get('Node',[{}])
+            # node is an array of dicts
+            if node == []:
+                # we don't know the source of this info, skip it
+                continue
+            # use the node that has a software name defined
+            node_name = node[0].get('Name','')
+            software = node[0].get('SW',[False])[0]
+            if not software:
+                # first node doesn't have a software
+                # use the second one
+                try:
+                    node_name = node[1].get('Name','')
+                    software = node[1].get('SW',[None])[0]
+                except IndexError:
+                    # there's no second node
+                    pass
+
+            # sometimes one alert can have multiple srcips
+            for srcip in srcips:
+                # store the event info in a form recognizable by slips
+                event_info = {
+                    'description': description,
+                    'source': f'{node_name}, software: {software}',
+                    'threat_level': 'medium',
+                    'tags': category[0]
+                }
+                # srcip is a dict, for example
+
+                # IoC can be ipv6 ar v4
+                if 'IP4' in srcip:
+                    srcip = srcip['IP4'][0]
+                elif 'IP6' in srcip:
+                    srcip = srcip['IP6'][0]
+                else:
+                    srcip = srcip['IP'][0]
+
+                src_ips.update({
+                    srcip: json.dumps(event_info)
+                })
+
+        __database__.add_ips_to_IoC(src_ips)
+
 
 
     def run(self):
@@ -145,18 +221,16 @@ class Module(Module, multiprocessing.Process):
         # create the warden client
         wclient = Client(**read_cfg(self.configuration_file))
 
-        info = wclient.getDebug()
         # All methods return something.
         # If you want to catch possible errors (for example implement some
         # form of persistent retry, or save failed events for later, you may
         # check for Error instance and act based on contained info.
         # If you want just to be informed, this is not necessary, just
         # configure logging correctly and check logs.
-        if isinstance(info, Error):
-            self.print(info, 0, 1)
 
-        info = wclient.getInfo()
-        self.print(info, 0, 1)
+        # for getting send and receive limits
+        # info = wclient.getInfo()
+        # self.print(info, 0, 1)
 
         self.node_info = [{
             "Name": wclient.name,
@@ -172,8 +246,11 @@ class Module(Module, multiprocessing.Process):
                     # If running on a file not an interface,
                     # slips will push as soon as it finishes the analysis.
                     if 'yes' in self.send_to_warden:
-                        #todo the module is being killed and doesnt have enough time to export !!
                         self.export_alerts(wclient)
+                        # don't publish this module's name in finished_modules channel
+                        # until the sender thread is done
+                        while self.sender_thread.is_alive():
+                            time.sleep(3)
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True

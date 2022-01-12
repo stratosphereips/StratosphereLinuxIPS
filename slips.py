@@ -34,6 +34,7 @@ import pkgutil
 import inspect
 import modules
 import importlib
+from signal import SIGSTOP
 from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
 import errno
@@ -90,7 +91,10 @@ def update_malicious_file(outputqueue, config):
     Update malicious files and store them in database before slips start
     '''
     update_manager = UpdateFileManager(outputqueue, config)
-    update_manager.update()
+    try:
+        update_manager.update()
+    except KeyboardInterrupt:
+        os.kill(os.getpid(), SIGSTOP)
 
 def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
     """
@@ -219,8 +223,10 @@ def shutdown_gracefully(input_information):
     """
 
     try:
-        print('\n'+'-'*32)
+        print('\n'+'-'*27)
         print('Stopping Slips')
+        # is slips currently exporting alerts?
+        send_to_warden = config.get('CESNET', 'send_alerts').lower()
         # Stop the modules that are subscribed to channels
         __database__.publish_stop()
         # Here we should Wait for any channel if it has still
@@ -266,6 +272,17 @@ def shutdown_gracefully(input_information):
                     module_name = module_name+' '*(20-len(module_name))
                     print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
             max_loops -=1
+
+            # before killing the modules that aren't finished
+            # make sure we're not in the middle of exporting alerts
+            # if the PID of CESNET module is there in PIDs dict,
+            # it means the module hasn't stopped yet
+            if 'yes' in send_to_warden and 'CESNET' in PIDs:
+                # we're in the middle of sending alerts to warden server
+                # delay killing unstopped modules
+                max_loops+=1
+
+
         # modules that aren't subscribed to any channel will always be killed and not stopped
         # some modules continue on sigint, but recieve other msgs (other than stop_message) in the queue before stop_process
         # they will always be killed
@@ -296,6 +313,8 @@ def shutdown_gracefully(input_information):
             inputProcess.terminate()
         except NameError:
             pass
+
+        # save redis database if '-s' is specified
         if args.save:
             # Create a new dir to store backups
             backups_dir = get_cwd() +'redis_backups' + '/'
@@ -336,6 +355,10 @@ def shutdown_gracefully(input_information):
         os._exit(-1)
         return True
     except KeyboardInterrupt:
+        # display a warning if the user's trying to stop
+        # slips while we're still exporting
+        if 'yes' in send_to_warden and 'CESNET' in PIDs:
+            print("[Main] Exporting alerts to warden server was cancelled.")
         return False
 
 
@@ -458,6 +481,11 @@ if __name__ == '__main__':
             input_type = 'interface'
         elif args.filepath:
             input_information = args.filepath
+            # check invalid file path
+            if not os.path.exists(input_information):
+                print(f'[Main] Invalid file path {input_information}. Stopping.')
+                sys.exit(-1)
+
             # default value
             input_type = 'file'
             # Get the type of file
@@ -504,7 +532,7 @@ if __name__ == '__main__':
             input_type = 'database'
             input_information = 'database'
         else:
-            print('You need to define an input source.')
+            print('[Main] You need to define an input source.')
             sys.exit(-1)
 
         # If we need zeek (bro), test if we can run it.
@@ -663,9 +691,6 @@ if __name__ == '__main__':
             except TypeError:
                 # There are not modules in the configuration to ignore?
                 print('No modules are ignored')
-
-
-
 
         # Get the type of output from the parameters
         # Several combinations of outputs should be able to be used
