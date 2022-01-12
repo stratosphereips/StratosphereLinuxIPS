@@ -2100,9 +2100,8 @@ class ProfilerProcess(multiprocessing.Process):
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
                                           spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label, flow_type=flow_type)
                 elif 'dns' in flow_type:
-                    __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
-
-
+                    __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name,
+                                             qtype_name, rcode_name, answers, ttls)
                 elif flow_type == 'http':
 
                     __database__.add_out_http(profileid, twid, starttime, flow_type, uid, self.column_values['method'],
