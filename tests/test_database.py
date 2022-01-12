@@ -99,12 +99,8 @@ def test_setEvidence(database):
     assert current_evidence_key in added_evidence.keys()
 
 def test_deleteEvidence(database):
-    key = {'type_detection': 'ip',
-           'detection_info': test_ip,
-           'type_evidence': 'SSHSuccessful-by-192.168.1.1',
-           'description': "SSH Successful to IP :8.8.8.8. From IP 192.168.1.1"
-           }
-    database.deleteEvidence(profileid, twid, key)
+    description =  "SSH Successful to IP :8.8.8.8. From IP 192.168.1.1"
+    database.deleteEvidence(profileid, twid, description)
     added_evidence = json.loads(database.r.hget('evidence'+profileid, twid))
     added_evidence2 = json.loads(database.r.hget(profileid + '_' + twid, 'Evidence'))
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
