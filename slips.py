@@ -35,6 +35,7 @@ import inspect
 import modules
 import importlib
 from signal import SIGSTOP
+from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
 import errno
 import subprocess
