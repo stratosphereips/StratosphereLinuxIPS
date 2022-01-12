@@ -4,9 +4,9 @@ name: CI-staging
 
 on:
   push:
-    branches: [ develop, alya-fix-connection-without-dns-confidence  ]
+    branches: [ develop  ]
   pull_request:
-    branches: [ develop, alya-fix-connection-without-dns-confidence ]
+    branches: [ develop ]
 
 jobs:
 
