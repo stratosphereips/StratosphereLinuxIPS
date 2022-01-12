@@ -881,6 +881,8 @@ class EvidenceProcess(multiprocessing.Process):
                                 self.add_to_log_folder(blocked_srcip_dict)
 
                                 if self.popup_alerts:
+                                    # remove the colors from the aletss before printing
+                                    alert_to_print = alert_to_print.replace(Fore.RED, '').replace(Fore.CYAN, '').replace(Style.RESET_ALL,'')
                                     self.show_popup(alert_to_print)
 
                                 # Send to the blocking module.
