@@ -957,12 +957,15 @@ class Module(Module, multiprocessing.Process):
 
                         # --- Self signed CERTS ---
                         # We're looking for self signed certs in notice.log in the 'msg' field
+                        # The self-signed certs apear in both ssl and notice log. But if we check both
+                        # we are going to have repeated evidences. So we only check the ssl log for those
+                        """
                         if 'self signed' in msg or 'self-signed' in msg:
                             profileid = data['profileid']
                             twid = data['twid']
                             ip = flow['daddr']
                             ip_identification = __database__.getIPIdentification(ip)
-                            description = f'self-signed certificate. Destination IP {ip}. {ip_identification}'
+                            description = f'Self-signed certificate. Destination IP {ip}. {ip_identification}'
                             confidence = 0.5
                             threat_level = 30
                             category = "Anomaly.Behaviour"
@@ -972,7 +975,7 @@ class Module(Module, multiprocessing.Process):
                             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
                                                      confidence, description, timestamp, category, profileid=profileid,
                                                      twid=twid, uid=uid)
-                            #self.print(description, 3, 0)
+                        """
 
                         # --- Detect port scans from Zeek logs---
                         # We're looking for port scans in notice.log in the note field
@@ -993,7 +996,6 @@ class Module(Module, multiprocessing.Process):
                                                      confidence, description, timestamp, category,
                                                      source_target_tag=source_target_tag, conn_count=conn_count,
                                                      profileid=profileid, twid=twid, uid=uid)
-                            #self.print(description, 3, 0)
 
                         if 'SSL certificate validation failed' in msg:
                             ip = flow['daddr']
@@ -1001,7 +1003,6 @@ class Module(Module, multiprocessing.Process):
                             ip_identification = __database__.getIPIdentification(ip)
                             description = msg + f' Destination IP: {ip}. {ip_identification}'
                             self.set_evidence_for_invalid_certificates(profileid, twid, ip, description, uid, timestamp)
-                            #self.print(description, 3, 0)
 
                         if 'Address_Scan' in note:
                             # Horizontal port scan
@@ -1021,7 +1022,6 @@ class Module(Module, multiprocessing.Process):
                                                      source_target_tag=source_target_tag, conn_count=conn_count,
                                                      profileid=profileid, twid=twid, uid=uid)
 
-                            #self.print(description, 3, 0)
                         if 'Password_Guessing' in note:
                             # Vertical port scan
                             # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
@@ -1039,7 +1039,6 @@ class Module(Module, multiprocessing.Process):
                                                      confidence, description, timestamp, category,
                                                      conn_count=conn_count, source_target_tag=source_target_tag,
                                                      profileid=profileid, twid=twid, uid=uid)
-                            #self.print(description, 3, 0)
 
                 # --- Detect maliciuos JA3 TLS servers ---
                 message = self.c4.get_message(timeout=self.timeout)
