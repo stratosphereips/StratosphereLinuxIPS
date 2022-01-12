@@ -4,9 +4,9 @@ name: CI-staging
 
 on:
   push:
-    branches: [ develop  ]
+    branches: [ develop, alya-sanitize-user-input  ]
   pull_request:
-    branches: [ develop ]
+    branches: [ develop, alya-sanitize-user-input ]
 
 jobs:
 
