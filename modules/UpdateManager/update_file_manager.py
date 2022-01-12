@@ -95,19 +95,22 @@ class UpdateFileManager:
                     url = tuple_.replace('\n','')
                 elif not threat_level:
                     threat_level = tuple_.replace('threat_level=','')
+                    # not a valid threat_level
+                    self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
+                    threat_level = 'low'
                 elif not tags:
                     if '\n' in tuple_:
                         # Is a combined tags+url.
                         # This is an issue with the library
                         tags = tuple_.split('\n')[0].replace('tags=','')
-                        self.ja3_feeds[url] =  {'threat_level': threat_level, 'tags':tags}
+                        self.ja3_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
                         url = tuple_.split('\n')[0]
                         threat_level = ''
                         tags = ''
                     else:
                         # The first line is not combined tag+url
                         tags = tuple_.replace('tags=','')
-                        self.ja3_feeds[url] =  {'threat_level': threat_level, 'tags':tags}
+                        self.ja3_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ja3_feeds = {}
