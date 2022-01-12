@@ -574,9 +574,15 @@ class EvidenceProcess(multiprocessing.Process):
             timestamp = timestamp.replace('/','-')
             #dt_string = "2020-12-18 3:11:09"
             # format of incoming ts
-            newformat = "%Y-%m-%d %H:%M:%S.%f%z"
-            # convert to datetime obj
-            timestamp = datetime.strptime(timestamp, newformat)
+            try:
+                newformat = "%Y-%m-%d %H:%M:%S.%f%z"
+                # convert to datetime obj
+                timestamp = datetime.strptime(timestamp, newformat)
+            except ValueError:
+                # The string did not have a time zone
+                newformat = "%Y-%m-%d %H:%M:%S.%f"
+                # convert to datetime obj
+                timestamp = datetime.strptime(timestamp, newformat)
             # convert to iso format
             timestamp = timestamp.astimezone().isoformat()
         return timestamp
