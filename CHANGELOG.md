@@ -7,6 +7,7 @@
   - Improvements in printing alerts, we now print each alert with it's timestamp and the evidence caused it
   - Local TI files now support threat levels. each entry now has it'sown threat level.
   - Improve empty HTTP connections. now supports (Yandix, bing and yahoo)
+  - Detect JNDI string as suspicious user agent. used in Log4shell CVE-2021-44228.
 
 -0.8.2
 *	Slips
