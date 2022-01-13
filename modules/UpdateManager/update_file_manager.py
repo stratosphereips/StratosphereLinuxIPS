@@ -188,6 +188,36 @@ class UpdateFileManager:
                     self.print(f"Invalid line: {line} line number: {line_number} in {ports_info_filepath}. Skipping.",0,1)
                     continue
 
+
+
+    def update_local_file(self, file_path) -> bool:
+        """
+        Return True if update was successfull
+        """
+        try:
+            # each file is updated differently
+
+            if 'ports_used_by_specific_orgs.csv' in file_path:
+                self.read_ports_info(file_path)
+
+            elif 'services.csv' in file_path:
+                with open(file_path, 'r') as f:
+                    for line in f:
+                        name = line.split(',')[0]
+                        port = line.split(',')[1]
+                        proto = line.split(',')[2]
+                        # descr = line.split(',')[3]
+                        __database__.set_port_info(str(port)+'/'+proto, name)
+
+            # Store the new hash of file in the database
+            file_info = { 'hash': self.new_hash }
+            __database__.set_TI_file_info(file_path, file_info)
+            return True
+
+        except OSError:
+            return False
+
+
     def __check_if_update_local_file(self, file_path: str) -> bool:
         """
         Decides whether to update or not based on the file hash.
@@ -448,6 +478,13 @@ class UpdateFileManager:
                 self.print('Successfully updated RiskIQ domains.', 1, 0)
             else:
                 self.print(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
+
+        for file in os.listdir('slips_files/ports_info'):
+            file = os.path.join('slips_files/ports_info', file)
+            if self.__check_if_update_local_file(file):
+                if not self.update_local_file(file):
+                    # update failed
+                    self.print(f'An error occurred while updating {file}. Updating was aborted.', 0, 1)
         time.sleep(0.5)
         print('-'*27)
 
