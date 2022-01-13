@@ -1,5 +1,6 @@
 # Must imports
 from slips_files.common.abstracts import Module
+from slips_files.common.slips_utils import Utils
 import multiprocessing
 from slips_files.core.database import __database__
 import platform
@@ -34,6 +35,8 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('give_threat_intelligence')
         self.timeout = 0.0000001
         self.__read_configuration()
+        # create Utils instance
+        self.utils = Utils()
 
     def __read_configuration(self):
         """ Read the configuration file for what we need """
@@ -149,35 +152,6 @@ class Module(Module, multiprocessing.Process):
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
-
-    def get_hash_from_file(self, filename):
-        """
-        Compute the sha256 hash of a local file
-        """
-        try:
-            # The size of each read from the file
-            BLOCK_SIZE = 65536
-            # Create the hash object, can use something other
-            # than `.sha256()` if you wish
-            file_hash = hashlib.sha256()
-            # Open the file to read it's bytes
-            with open(filename, 'rb') as f:
-                # Read from the file. Take in the amount declared above
-                fb = f.read(BLOCK_SIZE)
-                # While there is still data being read from the file
-                while len(fb) > 0:
-                    # Update the hash
-                    file_hash.update(fb)
-                    # Read the next block from the file
-                    fb = f.read(BLOCK_SIZE)
-            return file_hash.hexdigest()
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on get_hash_from_file() line {exception_line}', 0, 0)
-            self.print(str(type(inst)), 0, 0)
-            self.print(str(inst.args), 0, 0)
-            self.print(str(inst), 0, 0)
-            return False
 
     def parse_ti_file(self, ti_file_path: str) -> bool:
         """
@@ -315,7 +289,7 @@ class Module(Module, multiprocessing.Process):
 
                 # In the case of the local file, we dont store the e-tag
                 # we calculate the hash
-                new_hash = self.get_hash_from_file(path_to_files + '/' + localfile)
+                new_hash = self.utils.get_hash_from_file(path_to_files + '/' + localfile)
 
                 if not new_hash:
                     # Something failed. Do not download
