@@ -1,8 +1,8 @@
 import configparser
-import re
 import time
 import os
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import Utils
 import json
 import ipaddress
 import validators
@@ -27,6 +27,9 @@ class UpdateFileManager:
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
+        # create Utils instance to be able to use get_hash_from_file
+        self.utils = Utils()
+
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -156,9 +159,39 @@ class UpdateFileManager:
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
+    def __check_if_update_local_file(self, file_path: str) -> bool:
+        """
+        Decides whether to update or not based on the file hash.
+        Used for local files that are updated if the contents of the file hash changed
+        """
+
+        # compute file sha256 hash
+        new_hash = self.utils.get_hash_from_file(file_path)
+
+        # Get last hash of the file stored in the database
+        file_info = __database__.get_TI_file_info(file_path)
+        old_hash = file_info.get('hash', False)
+
+        if not old_hash:
+            # the file is not in our db, first time seeing it, we should update
+            self.new_hash = new_hash
+            return True
+
+        elif old_hash == new_hash:
+            # The 2 hashes are identical. File is up to date.
+            return False
+
+        elif old_hash != new_hash:
+            # File was changed. Load the new one
+            # this will be used for storing the new hash
+            # in the db once the update is done
+            self.new_hash =  new_hash
+            return True
+
     def __check_if_update(self, file_to_download: str) -> bool:
         """
-        Check if user wants to update.
+        Decides whethe to update or not based on the update period.
+        Used for remote files that are updated periodically
         """
         file_name_to_download = file_to_download.split('/')[-1]
         # Get last timeupdate of the file
@@ -236,7 +269,7 @@ class UpdateFileManager:
     def download_malicious_file(self, link_to_download: str) -> bool:
         """
         Compare the e-tag of link_to_download in our database with the e-tag of this file and download if they're different
-        Doesn't matter if it's a ti_feed or JA3 feed
+        Doesn't matter if it's a ti_feed, JA3 feed or organzation info file
         """
         try:
             # Check that the folder exist
@@ -366,12 +399,12 @@ class UpdateFileManager:
         for file_to_download in files_to_download_dics.keys():
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
-                self.print(f'We should update the remote file {file_to_download}', 1, 0)
+                self.print(f'Updating the remote file {file_to_download}', 1, 0)
                 if self.download_malicious_file(file_to_download):
                     self.print(f'Successfully updated remote file {file_to_download}.', 1, 0)
                     self.loaded_ti_files +=1
                 else:
-                    self.print(f'An error occurred during downloading file {file_to_download}. Updating was aborted.', 0, 1)
+                    self.print(f'An error occurred while downloading {file_to_download}. Updating was aborted.', 0, 1)
                     continue
             else:
                 self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
@@ -381,7 +414,7 @@ class UpdateFileManager:
         # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
         # check if we have a username and api key and a week has passed since we last updated
         if self.riskiq_email and self.riskiq_key and self.__check_if_update('riskiq_domains'):
-            self.print(f'We should update RiskIQ domains', 1, 0)
+            self.print(f'Updating RiskIQ domains', 1, 0)
             if self.update_riskiq_feed():
                 self.print('Successfully updated RiskIQ domains.', 1, 0)
             else:
