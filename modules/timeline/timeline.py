@@ -53,7 +53,7 @@ class Module(Module, multiprocessing.Process):
 
     def load_ports(self):
         """
-        Funciton to read our special file called 'services.csv' and load the known ports from it into the database
+        Function to read our special file called 'services.csv' and load the known ports from it into the database
         """
         try:
             f = open('slips_files/ports_info/services.csv')
