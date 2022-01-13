@@ -31,8 +31,6 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_flow')
         # To store the timelines of each profileid_twid
         self.profiles_tw = {}
-        # Load the list of common known ports
-        self.load_ports()
         # Store malicious IPs. We do not make alert everytime we receive flow with thi IP but only once.
         self.alerted_malicous_ips_dict = {}
         # Read information how we should print timestamp.
@@ -50,27 +48,6 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             conf_variable = None
         return conf_variable
-
-    def load_ports(self):
-        """
-        Function to read our special file called 'services.csv' and load the known ports from it into the database
-        """
-        try:
-            f = open('slips_files/ports_info/services.csv')
-            for line in f:
-                name = line.split(',')[0]
-                port = line.split(',')[1]
-                proto = line.split(',')[2]
-                # descr = line.split(',')[3]
-                __database__.set_port_info(str(port)+'/'+proto, name)
-            return True
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on load_ports() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return False
 
     def print(self, text, verbose=1, debug=0):
         """

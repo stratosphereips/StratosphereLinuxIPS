@@ -12,7 +12,6 @@ import os
 import configparser
 import json
 import traceback
-import hashlib
 import validators
 import ast
 
@@ -35,7 +34,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('give_threat_intelligence')
         self.timeout = 0.0000001
         self.__read_configuration()
-        # create Utils instance
+        # create Utils instance to be able to use get_hash_from_file
         self.utils = Utils()
 
     def __read_configuration(self):
