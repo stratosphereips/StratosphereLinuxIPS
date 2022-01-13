@@ -1,4 +1,4 @@
-""" Unit test for modules/UpdateManager/UpdateManager.py """
+""" Unit test for modules/UpdateManager/update_file_manager.py """
 import os
 
 from ..modules.UpdateManager.update_file_manager import UpdateFileManager
@@ -33,20 +33,24 @@ def test_download_file(outputQueue, url):
     os.remove(filename)
 
 @pytest.mark.parametrize('url', [('https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv')])
-def test_download_malicious_file(outputQueue, database,url):
-    """we're tetsing this condition old_e_tag == new_e_tag"""
+def test_download_malicious_file(outputQueue, database, url):
+    """we're tetsing this condition old_e_tag != new_e_tag"""
     update_manager = create_update_manager_instance(outputQueue)
+    # modify old e-tag of this file and store it in the database
     old_etag = update_manager.get_e_tag_from_web(url)
+    old_etag = '*' + old_etag[1:]
     database.set_TI_file_info(url.split('/')[-1], {'e-tag':old_etag})
-    assert update_manager.update_TI_file(url) == True
+    # we call this function to set the new self.new_e_tag
+    # to something different than the old modified one
+    assert update_manager._UpdateFileManager__check_if_update(url) == True
 
 @pytest.mark.parametrize('url', [('https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv')])
-def test_download_malicious_file2(outputQueue, database,url):
-    """we're tetsing old_e_tag != new_e_tag"""
+def test_download_malicious_file2(outputQueue, database, url):
+    """we're tetsing old_e_tag == new_e_tag, it shouldn't update"""
     update_manager = create_update_manager_instance(outputQueue)
-    # setup old e-tag
+
+    # setup old e-tag to be the current e-tag
     old_etag = update_manager.get_e_tag_from_web(url)
-    # edit old e-tag to be different from the new e-tag
-    old_etag = old_etag.replace('0','*')
     database.set_TI_file_info(url.split('/')[-1], {'e-tag':old_etag})
-    assert update_manager.update_TI_file(url) == True
+
+    assert update_manager._UpdateFileManager__check_if_update(url) == False
