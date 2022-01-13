@@ -474,7 +474,7 @@ class Module(Module, multiprocessing.Process):
                 start_time = __database__.get_slips_start_time()
                 now = time.time()
                 confidence = 0.8
-                if type(start_time) == datetime:
+                if type(start_time) == datetime.datetime:
                     if '-i' in sys.argv and (now - start_time.timestamp() < 18000):
                         confidence = 0.1
                 else:
