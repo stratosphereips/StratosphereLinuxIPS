@@ -15,11 +15,6 @@ def create_threatintel_instance(outputQueue):
     threatintel.print = do_nothing
     return threatintel
 
-def test_get_hash_from_file(outputQueue):
-    threatintel = create_threatintel_instance(outputQueue)
-    # a file that we know doesn't change
-    assert threatintel.get_hash_from_file('modules/template/__init__.py') == '2d12747a3369505a4d3b722a0422f8ffc8af5514355cdb0eb18178ea7071b8d0'
-
 def test_load_malicious_datafile(outputQueue):
     threatintel = create_threatintel_instance(outputQueue)
     # get local data dir
