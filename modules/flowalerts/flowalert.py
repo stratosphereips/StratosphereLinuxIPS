@@ -474,8 +474,13 @@ class Module(Module, multiprocessing.Process):
                 start_time = __database__.get_slips_start_time()
                 now = time.time()
                 confidence = 0.8
-                if '-i' in sys.argv and (now - start_time < 18000):
-                    confidence = 0.1
+                if type(start_time) == datetime:
+                    if '-i' in sys.argv and (now - start_time.timestamp() < 18000):
+                        confidence = 0.1
+                else:
+                    # start_time is float
+                    if '-i' in sys.argv and (now - start_time < 18000):
+                        confidence = 0.1
 
                 ip_identification = __database__.getIPIdentification(daddr)
                 description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
