@@ -372,7 +372,7 @@ def is_debugger_active() -> bool:
 ####################
 if __name__ == '__main__':
     try:
-        # Before the argparse, we need to set up the default path fr alerts.log and alerts.json. In our case, it is output folder.
+        # Before the argparse, We need to set up the default path fr alerts.log and alerts.json. In our case, it is output folder.
         alerts_default_path = 'output/'
 
         print('Slips. Version {}'.format(version))
