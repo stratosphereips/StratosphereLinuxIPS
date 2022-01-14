@@ -102,6 +102,11 @@ conda activate slips
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
 
+## Slips in Blackhat 
+
+Check out Slips presentation in Blackhat Arsenal 2021 [here](https://mega.nz/file/EAIjWA5D#DoYhJknH1hpbqfS2ayVLwA7ewNT50jFQb7S3dVAKPko). 
+
+
 ## People Involved
 
 **Founder:** Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 

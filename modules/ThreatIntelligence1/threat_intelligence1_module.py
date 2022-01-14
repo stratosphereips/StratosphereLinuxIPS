@@ -40,7 +40,8 @@ class Module(Module, multiprocessing.Process):
         # Get the time of log report
         try:
             # Read the path to where to store and read the malicious files
-            self.path_to_local_threat_intelligence_data = self.config.get('threatintelligence', 'download_path_for_local_threat_intelligence')
+            self.path_to_local_threat_intelligence_data = self.config.get('threatintelligence',
+                                                                          'download_path_for_local_threat_intelligence')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_local_threat_intelligence_data = 'modules/ThreatIntelligence1/local_data_files/'
@@ -61,12 +62,7 @@ class Module(Module, multiprocessing.Process):
         detection_info = ip
         type_evidence = 'ThreatIntelligenceBlacklistIP'
 
-        try:
-            threat_level = float(ip_info.get('threat_level', False))
-            if not threat_level:
-                raise ValueError
-        except ValueError:
-            threat_level =  80
+        threat_level = ip_info.get('threat_level', 'medium')
 
         confidence = 1
         category = 'Anomaly.Traffic'
@@ -78,9 +74,15 @@ class Module(Module, multiprocessing.Process):
         elif 'dst' in ip_state:
             direction = 'to'
 
-        description = f'connection {direction} blacklisted IP {ip}{dns_resolution}. Source: {ip_info["source"]}. Description: {ip_info["description"]}'
+        description = f'connection {direction} blacklisted IP {ip}{dns_resolution}.' \
+                      f' Source: {ip_info["source"]}. Description: {ip_info["description"]}'
 
-        tags = ip_info.get('tags',False).replace("[",'').replace(']','').replace("'",'')
+        tags_temp = ip_info.get('tags',False)
+        if tags_temp:
+            # We need tags_temp so we avoid doing a replace on a bool.
+            tags = tags_temp.replace("[",'').replace(']','').replace("'",'')
+        else:
+            tags = ''
         if tags:
             description += f' tags={tags}'
             source_target_tag = tags.capitalize()
@@ -105,19 +107,14 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'ThreatIntelligenceBlacklistDomain'
         # in case of finding a subdomain in our blacklists
         # print that in the description of the alert and change the confidence accordingly
+        # in case of a domain, confidence=1
+        confidence = 1
         if is_subdomain:
             confidence = 0.7
-            # type = 'sub-domain in this domain'
-        else:
-            confidence = 1
-            # type = 'domain'
+
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
-        try:
-            threat_level = float(domain_info.get('threat_level', False))
-            if not threat_level:
-                raise ValueError
-        except ValueError:
-            threat_level =  50
+        threat_level = domain_info.get('threat_level', 'high')
+
         tags = domain_info.get('tags', False).replace("[",'').replace(']','').replace("'",'')
         if tags:
             source_target_tag = tags.capitalize()
@@ -125,7 +122,9 @@ class Module(Module, multiprocessing.Process):
             source_target_tag = "BlacklistedDomain"
 
 
-        description = f'connection to a blacklisted domain {domain}. Found in feed {domain_info["source"]}, with tags {tags}. Threat level {threat_level}. Confidence {confidence}.'
+        description = f'connection to a blacklisted domain {domain}. ' \
+                      f'Found in feed {domain_info["source"]}, with tags {tags}. ' \
+                      f'Confidence {confidence}.'
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description, timestamp,
                                  category, source_target_tag=source_target_tag,
@@ -180,125 +179,74 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst), 0, 0)
             return False
 
-    def load_malicious_datafile(self, malicious_data_path: str) -> bool:
+    def parse_ti_file(self, ti_file_path: str) -> bool:
         """
-        Read all the files holding IP addresses and a description and put the
-        info in a large dict.
-        This also helps in having unique ioc accross files
+        Read all the files holding IP addresses and a description and store in the db.
+        This also helps in having unique ioc across files
         Returns nothing, but the dictionary should be filled
-        :param malicious_data_path: path_to local threat intel files/localfile
+        :param ti_file_path: path_to local threat intel file
         """
         try:
-            data_file_name = malicious_data_path.split('/')[-1]
+            data_file_name = ti_file_path.split('/')[-1]
             malicious_ips_dict = {}
             malicious_domains_dict = {}
-            with open(malicious_data_path) as malicious_file:
+            # used for debugging
+            line_number = 0
+            with open(ti_file_path) as local_ti_file:
 
-                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 2, 0)
+                self.print('Reading local file {}'.format(ti_file_path), 2, 0)
 
-                # Remove comments and find the description column if possible
-                description_column = None
+                # skip comments
                 while True:
-                    line = malicious_file.readline()
-                    # break while statement if it is not a comment line
-                    # i.e. does not startwith #
-                    if line.startswith('#"type"'):
-                        # looks like the colums names, search where is the
-                        # description column
-                        for name_column in line.split(','):
-                            if name_column.lower().startswith('desc'):
-                                description_column = line.split(',').index(name_column)
-                    if not line.startswith('#') and not line.startswith('"type"'):
+                    line_number+=1
+                    line = local_ti_file.readline()
+                    if not line.startswith('#'):
                         break
 
-                #
-                # Find in which column is the imporant info in this
-                # TI file (domain or ip)
-                #
-
-                # Store the current position of the TI file
-                current_file_position = malicious_file.tell()
-
-                # temp_line = malicious_file.readline()
-                data = line.replace("\n","").replace("\"","").split(",")
-                amount_of_columns = len(line.split(","))
-                if description_column is None:
-                    description_column = amount_of_columns - 1
-                # Search the first column that is an IPv4, IPv6 or domain
-                for column in range(amount_of_columns):
-                    # Check if ip is valid.
-                    try:
-                        ip_address = ipaddress.IPv4Address(data[column].strip())
-                        # Is IPv4! let go
-                        data_column = column
-                        self.print(f'The data is on column {column} and is ipv4: {ip_address}', 2, 0)
-                        break
-                    except ipaddress.AddressValueError:
-                        # Is it ipv6?
-                        try:
-                            ip_address = ipaddress.IPv6Address(data[column].strip())
-                            # Is IPv6! let go
-                            data_column = column
-                            self.print(f'The data is on column {column} and is ipv6: {ip_address}', 2,0)
-                            break
-                        except ipaddress.AddressValueError:
-                            # It does not look as IP address.
-                            # So it should be a domain
-                            if validators.domain(data[column].strip()):
-                                data_column = column
-                                self.print(f'The data is on column {column} and is domain: {data[column]}', 2,0)
-                                break
-                            else:
-                                # Some string that is not a domain
-                                data_column = None
-                                pass
-                if data_column is None:
-                    self.print(f'Error while reading the TI file {malicious_file}. Could not find a column with an IP or domain', 0, 2)
-                    return False
-
-                # Now that we read the first line, go back so we
-                # can process it
-                malicious_file.seek(current_file_position)
-
-                for line in malicious_file:
+                for line in local_ti_file:
+                    line_number+=1
                     # The format of the file should be
-                    # "0", "103.15.53.231","90", "Karel from our village. He is bad guy."
-                    # So the second column will be used as important data with
-                    # an IP or domain
-                    # In the case of domains can be
-                    # domain,www.netspy.net,NetSpy
+                    # "103.15.53.231","critical", "Karel from our village. He is bad guy."
+                    data = line.replace("\n","").replace("\"","").split(",")
 
-                    # Separate the lines like CSV
-                    # In the new format the ip is in the second position.
-                    # And surronded by "
-                    data = line.replace("\n","").replace("\"","").split(",")[data_column].strip()
+                    # the column order is hardcoded because it's owr own ti file and we know the format,
+                    # we shouldn't be trying to find it
+                    ioc, threat_level, description,  = data[0], data [1].lower(), data[2]
 
-                    description = line.replace("\n","").replace("\"","").split(",")[description_column].strip()
-                    self.print('\tRead Data {}: {}'.format(data, description), 2, 0)
+                    # validate the threat level taken from the user
+                    if threat_level not in ('info', 'low', 'medium', 'high', 'critical'):
+                        # default value
+                        threat_level = 'medium'
 
-                    # Check if ip is valid.
+                    # is the IoC an IPv4, IPv6 or domain?
                     try:
-                        ip_address = ipaddress.IPv4Address(data)
-                        # Is IPv4!
+                        ip_address = ipaddress.IPv4Address(ioc.strip())
+                        self.print(f'The data in line {line_number} is valid and is ipv4: {ip_address}', 2,0)
                         # Store the ip in our local dict
-                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name, 'threat_level':1})
+                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
+                                                                          'source': data_file_name,
+                                                                          'threat_level': threat_level})
                     except ipaddress.AddressValueError:
                         # Is it ipv6?
                         try:
-                            ip_address = ipaddress.IPv6Address(data)
-                            # Is IPv6!
-                            # Store the ip in our local dict
-                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description, 'source':data_file_name, 'threat_level':1})
+                            ip_address = ipaddress.IPv6Address(ioc.strip())
+                            self.print(f'The data in line {line_number} is valid and is ipv6: {ioc}', 2,0)
+                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
+                                                                              'source': data_file_name,
+                                                                              'threat_level': threat_level})
                         except ipaddress.AddressValueError:
                             # It does not look as IP address.
                             # So it should be a domain
-                            if validators.domain(data):
-                                domain = data
-                                # Store the ip in our local dict
-                                malicious_domains_dict[str(domain)] = json.dumps({'description': description, 'source':data_file_name, 'threat_level':1})
+                            if validators.domain(ioc.strip()):
+                                self.print(f'The data in line {line_number} is valid and is a domain: {ioc}', 2,0)
+                                malicious_domains_dict[ioc] = json.dumps({'description': description,
+                                                                          'source': data_file_name,
+                                                                          'threat_level': threat_level})
                             else:
-                                self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 0, 2)
-                                continue
+                                # invalid ioc, skip it
+                                self.print(f'Error while reading the TI file {local_ti_file}.'
+                                           f' Line {line_number} has invalid data: {ioc}', 0, 1)
+
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
@@ -308,7 +256,7 @@ class Module(Module, multiprocessing.Process):
             return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on load_malicious_datafile() line {exception_line}', 0, 1)
+            self.print(f'Problem on parse_ti_file() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -352,26 +300,34 @@ class Module(Module, multiprocessing.Process):
         self.__delete_old_source_IPs(data_file)
         self.__delete_old_source_Domains(data_file)
 
-    def load_malicious_local_files(self, path_to_files: str) -> bool:
-        """ Checks if a local malicious file was changed based on it's hash, if so, update its content and delete old data"""
+    def check_local_ti_files(self, path_to_files: str) -> bool:
+        """
+        Checks if a local TI file was changed based
+        on it's hash, if so, update its content and delete old data
+        """
         try:
             local_ti_files = os.listdir(path_to_files)
             for localfile in local_ti_files:
                 self.print(f'Loading local TI file {localfile}', 2, 0)
                 # Get what files are stored in cache db and their E-TAG to comapre with current files
                 data = __database__.get_TI_file_info(localfile)
-                try:
-                    old_hash = data['e-tag']
-                except TypeError:
-                    old_hash = ''
-                # In the case of the local file, we dont store the e-tag but
-                # the hash
+                old_hash = data.get('e-tag', False)
+
+                # In the case of the local file, we dont store the e-tag
+                # we calculate the hash
                 new_hash = self.get_hash_from_file(path_to_files + '/' + localfile)
+
+                if not new_hash:
+                    # Something failed. Do not download
+                    self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 3)
+                    return False
+
                 if old_hash == new_hash:
                     # The 2 hashes are identical. File is up to date.
                     self.print(f'File {localfile} is up to date.', 2, 0)
+
                     return True
-                elif new_hash and old_hash != new_hash:
+                elif old_hash != new_hash:
                     # Our malicious file was changed. Load the new one
                     self.print(f'Updating the local TI file {localfile}', 2, 0)
                     if old_hash:
@@ -379,25 +335,21 @@ class Module(Module, multiprocessing.Process):
                         # Delete previous data of this file.
                         self.__delete_old_source_data_from_database(localfile)
                     # Load updated data to the database
-                    self.load_malicious_datafile(path_to_files + '/' + localfile)
+                    self.parse_ti_file(path_to_files + '/' + localfile)
 
                     # Store the new etag and time of file in the database
                     malicious_file_info = {}
                     malicious_file_info['e-tag'] = new_hash
-                    malicious_file_info['time'] = ''
+                    malicious_file_info['time'] =  ''
                     __database__.set_TI_file_info(localfile, malicious_file_info)
                     return True
-                elif not new_hash:
-                    # Something failed. Do not download
-                    self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 3)
-                    return False
 
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on __load_malicious_local_files() line {exception_line}', 0, 0)
-            self.print(str(type(inst)), 0, 0)
-            self.print(str(inst.args), 0, 0)
-            self.print(str(inst), 0, 0)
+            self.print(f'Problem on __load_malicious_local_files() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
 
 
 
@@ -426,8 +378,9 @@ class Module(Module, multiprocessing.Process):
         try:
             # Load the local Threat Intelligence files that are stored in the local folder
             # The remote files are being loaded by the UpdateManager
-            if not self.load_malicious_local_files(self.path_to_local_threat_intelligence_data):
-                self.print(f'Could not load the local file of TI data {self.path_to_local_threat_intelligence_data}')
+            # check if we should update the files
+            if not self.check_local_ti_files(self.path_to_local_threat_intelligence_data):
+                self.print(f'Could not load the local TI files {self.path_to_local_threat_intelligence_data}')
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)

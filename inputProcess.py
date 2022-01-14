@@ -69,9 +69,14 @@ class InputProcess(multiprocessing.Process):
         # Get tcp inactivity timeout
         try:
             self.tcp_inactivity_timeout = self.config.get('parameters', 'tcp_inactivity_timeout')
+            try:
+                # make sure the value is a valid int
+                self.tcp_inactivity_timeout = int(self.tcp_inactivity_timeout)
+            except ValueError:
+                raise NameError
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.tcp_inactivity_timeout = ''
+            self.tcp_inactivity_timeout = '5'
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -97,7 +102,7 @@ class InputProcess(multiprocessing.Process):
         """ Stops the profiler and output queues """
 
         self.profilerqueue.put("stop")
-        self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).".format(self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+        self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).\n".format(self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
         self.outputqueue.close()
         self.profilerqueue.close()
 
@@ -301,7 +306,7 @@ class InputProcess(multiprocessing.Process):
             # We want to stop bro if no new line is coming.
             self.bro_timeout = 1
             lines = self.read_zeek_files()
-            self.print(f"We read everything from the folder. No more input. Stopping input process. Sent {lines} lines\n", 2, 0)
+            self.print(f"\nWe read everything from the folder. No more input. Stopping input process. Sent {lines} lines", 2, 0)
             self.stop_queues()
             return True
         except KeyboardInterrupt:
@@ -397,7 +402,7 @@ class InputProcess(multiprocessing.Process):
             # Get command output
             self.nfdump_output = result.stdout.decode('utf-8')
             self.lines = self.read_nfdump_output()
-            self.print("We read everything. No more input. Stopping input process. Sent {} lines\n".format(self.lines))
+            self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(self.lines))
             return True
         except KeyboardInterrupt:
             return True
@@ -446,7 +451,7 @@ class InputProcess(multiprocessing.Process):
 
             # Run zeek on the pcap or interface. The redef is to have json files
             zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
-            command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} {self.tcp_inactivity_timeout} local -f {self.packet_filter} {zeek_scripts_dir} > /dev/null 2>&1  &'
+            command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins local -f {self.packet_filter} {zeek_scripts_dir} > /dev/null 2>&1  &'
             self.print(f'Zeek command: {command}', 3, 0)
             # Run zeek.
             os.system(command)
@@ -502,7 +507,7 @@ class InputProcess(multiprocessing.Process):
                 return False
 
         except KeyboardInterrupt:
-            self.outputqueue.put("04|input|[In] No more input. Stopping input process. Sent {} lines".format(self.lines))
+            self.outputqueue.put("04|input|[In] \nNo more input. Stopping input process. Sent {} lines".format(self.lines))
             try:
                 self.event_observer.stop()
                 self.event_observer.join()

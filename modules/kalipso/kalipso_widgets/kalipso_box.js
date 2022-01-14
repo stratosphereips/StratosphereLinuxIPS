@@ -72,22 +72,27 @@ class Box{
                 var evidence_keys = Object.keys(evidence_json);
 
                 async.each(evidence_keys, (key,callback)=>{
-                    var key_dict = JSON.parse(key)
-                    var key_values = Object.values(key_dict).join(':')
-                    if ((key_dict['type_evidence'] == 'ThreatIntelligenceBlacklistIP') || (key_dict['type_evidence'] == 'ThreatIntelligenceBlacklistDomain')){
+                    var evidence_details =  JSON.parse(evidence_json[key])
+                    // var key_dict = JSON.parse(key)
+                    // var key_values = Object.values(key_dict).join(':')
+                    if ((evidence_details['type_evidence'] == 'ThreatIntelligenceBlacklistIP')
+                        || (evidence_details['type_evidence'] == 'ThreatIntelligenceBlacklistDomain'))
+                    {
                         evidence_data =
                         evidence_data +
-                        '{bold}' + color.green('Detected '+key_dict['type_detection'] +
-                        ' ' + key_dict['detection_info']) + '{/bold}' +
-                        ". Blacklisted in " + evidence_json[key]["description"] + '\n'
+                            '{bold}' +
+                            color.green('Detected '+evidence_details['type_detection'] + ' ' + evidence_details['detection_info']) +
+                            '{/bold}' +
+                            ". Blacklisted in " + evidence_details["description"] + '\n'
+                        // evidence_data = evidence_data + '{bold}' + key + '\n'
                     }
 
                   else{
-                    evidence_data =
-                    evidence_data +
-                    '{bold}'+color.green('Detected '+key_dict['type_detection'] +
-                    ' ' +key_dict['detection_info']) + '{/bold}' +
-                    ". " + evidence_json[key]["description"] + '\n'
+                    evidence_data = evidence_data +
+                        '{bold}'+
+                        color.green('Detected '+evidence_details['type_detection'] + ' ' +evidence_details['detection_info']) +
+                        '{/bold}' +
+                        ". " + evidence_details["description"] + '\n'
                   }
 
                   callback();

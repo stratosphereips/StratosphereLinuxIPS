@@ -32,7 +32,8 @@ def create_leak_detector_instance(outputQueue):
 def test_compile_and_save_rules(outputQueue):
     leak_detector = create_leak_detector_instance(outputQueue)
     leak_detector.compile_and_save_rules()
-    assert 'test_rule.yara_compiled' in os.listdir(compiled_yara_rules_path)
+    compiled_rules = os.listdir(compiled_yara_rules_path)
+    assert 'test_rule.yara_compiled' in compiled_rules
     # delete teh compiled file so it doesn't affect further unit tests
     os.remove(compiled_test_rule)
 
