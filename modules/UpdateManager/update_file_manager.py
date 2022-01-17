@@ -100,9 +100,10 @@ class UpdateFileManager:
                     url = tuple_.replace('\n','')
                 elif not threat_level:
                     threat_level = tuple_.replace('threat_level=','')
-                    # not a valid threat_level
-                    self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
-                    threat_level = 'low'
+                    if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
+                        # not a valid threat_level
+                        self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
+                        threat_level = 'low'
                 elif not tags:
                     if '\n' in tuple_:
                         # Is a combined tags+url.
