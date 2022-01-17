@@ -2,16 +2,21 @@ name: CI-production
 
 on:
   push:
-    branches: [ master ]
+    branches:
+    - 'master'
+    - '!develop'
+
   pull_request:
-    branches: [ master ]
+    branches:
+    - 'master'
+    - '!develop'
 
 jobs:
 
   test_slips_locally:
     runs-on: ubuntu-latest
     env:
-      SLIPS_VERSION: v0.8.2
+      SLIPS_VERSION: v0.8.3
 
     steps:
     - uses: actions/checkout@v2
@@ -72,7 +77,7 @@ jobs:
 
     runs-on: ubuntu-latest
     env:
-      SLIPS_VERSION: v0.8.2
+      SLIPS_VERSION: v0.8.3
 
     steps:
 

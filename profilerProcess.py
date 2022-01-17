@@ -65,9 +65,6 @@ class ProfilerProcess(multiprocessing.Process):
         # Read the whitelist
         # anything in this list will be ignored
         self.read_whitelist()
-        # read our list of ports that are associated to a specific organizations
-        ports_info_filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
-        self.read_ports_info(ports_info_filepath)
         # Start the DB
         __database__.start(self.config)
         # Set the database output queue
@@ -161,40 +158,6 @@ class ProfilerProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default
             self.label = 'unknown'
-
-    def read_ports_info(self, ports_info_filepath):
-        """
-        Reads port info from slips_files/ports_info/ports_used_by_specific_orgs.csv
-        and store it in the db
-        """
-
-        # there are ports that are by default considered unknown to slips,
-        # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
-        # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
-
-        try:
-            with open(ports_info_filepath,'r') as f:
-                line_number = 0
-                while True:
-                    line = f.readline()
-                    line_number +=1
-                    # reached the end of file
-                    if not line: break
-                    # skip the header and the comments at the begining
-                    if line.startswith('#') or line.startswith('"Organization"'):
-                        continue
-
-                    line = line.split(',')
-
-                    try:
-                        organization, ip = line[0], line[1]
-                        portproto = f'{line[2]}/{line[3].lower().strip()}'
-                        __database__.set_organization_of_port(organization, ip, portproto)
-                    except IndexError:
-                        self.print(f"Invalid line: {line} line number: {line_number} in {ports_info_filepath}. Skipping.",0,1)
-                        continue
-        except OSError:
-            self.print(f"An error occured while reading {ports_info_filepath}.",0,1)
 
     def read_whitelist(self):
         """ Reads the content of whitelist.conf and stores information about each ip/org/domain in the database """
@@ -1030,7 +993,7 @@ class ProfilerProcess(multiprocessing.Process):
             # proto	note	msg	sub	src	dst	p	n	peer_descr	actions	suppress_for
             self.column_values['type'] = 'notice'
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
-            if self.column_values['saddr'] is '-' :
+            if self.column_values['saddr'] == '-' :
                 try:
                     self.column_values['saddr'] = line[13] #  src field
                 except IndexError:
@@ -1038,13 +1001,13 @@ class ProfilerProcess(multiprocessing.Process):
                     # keep it - as it is
                     pass
 
-            if self.column_values['daddr'] is '-':
+            if self.column_values['daddr'] == '-':
                 self.column_values['daddr'] = line[14]  #  dst field
-                if self.column_values['daddr'] is '-':
+                if self.column_values['daddr'] == '-':
                     self.column_values['daddr'] = self.column_values['saddr']
 
             self.column_values['dport'] = line[5] # id.orig_p
-            if self.column_values['dport'] is '-':
+            if self.column_values['dport'] == '-':
                 try:
                     self.column_values['dport'] = line[15] # p field
                 except IndexError:
@@ -1254,9 +1217,9 @@ class ProfilerProcess(multiprocessing.Process):
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
             self.column_values['type'] = 'notice'
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
-            if self.column_values['saddr'] is '' :
+            if self.column_values['saddr'] == '' :
                 self.column_values['saddr'] = line.get('src','' )
-            if self.column_values['daddr'] is '':
+            if self.column_values['daddr'] == '':
                 # set daddr to src for now because the notice that contains portscan doesn't have a dst field and slips needs it to work
                 self.column_values['daddr'] = line.get('dst', self.column_values['saddr'] )
             self.column_values['sport'] = line.get('id.orig_p', '')
