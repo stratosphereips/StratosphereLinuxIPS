@@ -1,6 +1,3 @@
-
-# Must Import
-import sys
 # Your imports
 import hashlib
 
@@ -35,3 +32,17 @@ class Utils(object):
                 fb = f.read(BLOCK_SIZE)
         return file_hash.hexdigest()
 
+    def is_msg_intended_for(self, message, channel):
+        """
+        Function to check
+            1. If the given message is intended for this channel
+            2. The msg has valid data
+        """
+
+        return (message
+                and type(message['data']) == str
+                and message['data'] != 'stop_process'
+                and message['channel'] == channel)
+
+
+utils = Utils()
