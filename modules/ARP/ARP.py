@@ -1,10 +1,9 @@
 
 # Must imports
-import ipaddress
-
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import configparser
 
 # Your imports
@@ -237,7 +236,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_arp'):
+                if utils.is_msg_intended_for(message, 'new_arp'):
                     flow = json.loads(message['data'])
                     ts = flow['ts']
                     profileid = flow['profileid']
@@ -272,7 +271,7 @@ class Module(Module, multiprocessing.Process):
 
                 # if the tw is closed, remove all its entries from the cache dict
                 message = self.c2.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'tw_closed'):
+                if utils.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data']
                     # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore
                     # this copy is made to avoid dictionary changed size during iteration err

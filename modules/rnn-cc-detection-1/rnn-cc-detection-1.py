@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 import warnings
 import json
@@ -140,7 +141,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_letters'):
+                if utils.is_msg_intended_for(message, 'new_letters'):
                     data = message['data']
                     data = json.loads(data)
                     pre_behavioral_model = data['new_symbol']

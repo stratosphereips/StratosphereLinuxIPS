@@ -27,8 +27,6 @@ class UpdateFileManager:
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
-        # create Utils instance to be able to use get_hash_from_file
-        self.utils = Utils()
 
 
     def read_configuration(self):
@@ -283,6 +281,7 @@ class UpdateFileManager:
                 # Check now if E-TAG of file in github is same as downloaded
                 # file here.
                 new_e_tag = self.get_e_tag_from_web(file_to_download)
+                print(f'@@@@@@@@@@@@@@@@@@  {new_e_tag} \n')
                 if not new_e_tag:
                     # Something failed. Do not download
                     self.print(f'Some error ocurred. Not downloading the file {file_to_download}', 0, 1)
@@ -319,17 +318,22 @@ class UpdateFileManager:
             # We use a command in os because if we use urllib or requests the process complains!:w
             # If the webpage does not answer in 10 seconds, continue
             command = "curl -m 10 --insecure -s -I " + file_to_download + " | grep -i etag"
-            temp = os.popen(command).read()
+            print(f'@@@@@@@@@@@@@@@@@@   cmd : {command}\n')
+            new_e_tag = os.popen(command).read()
+            print(f'@@@@@@@@@@@@@@@@@@  cmd output : {new_e_tag} \n')
             try:
-                new_e_tag = temp.split()[1].split('\n')[0].replace("\"",'')
+                new_e_tag = new_e_tag.split()[1].split('\n')[0].replace("\"",'')
                 return new_e_tag
             except IndexError:
                 self.print(f"File {file_to_download} doesn't have an e-tag")
+                print(f'@@@@@@@@@@@@@@@@@@  returning false \n')
                 return False
+
         except Exception as inst:
             self.print('Error with get_e_tag_from_web()', 0, 1)
             self.print('{}'.format(type(inst)), 0, 1)
             self.print('{}'.format(inst), 0, 1)
+            print(f'@@@@@@@@@@@@@@@@@@  returning false 2 \n')
             return False
 
     def download_file(self, url: str, filepath: str) -> bool:
@@ -669,6 +673,7 @@ class UpdateFileManager:
                         __database__.add_ips_to_IoC(malicious_ips_dict)
                         # Add all loaded malicious domains to the database
                         __database__.add_domains_to_IoC(malicious_domains_dict)
+
                         return True
                     except json.decoder.JSONDecodeError:
                         # not a json file??

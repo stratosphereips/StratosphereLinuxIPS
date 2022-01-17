@@ -1,6 +1,6 @@
 # Must imports
 from slips_files.common.abstracts import Module
-from slips_files.common.slips_utils import Utils
+from slips_files.common.slips_utils import utils
 import multiprocessing
 from slips_files.core.database import __database__
 import platform
@@ -34,8 +34,6 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('give_threat_intelligence')
         self.timeout = 0.0000001
         self.__read_configuration()
-        # create Utils instance to be able to use get_hash_from_file
-        self.utils = Utils()
 
     def __read_configuration(self):
         """ Read the configuration file for what we need """
@@ -288,7 +286,7 @@ class Module(Module, multiprocessing.Process):
 
                 # In the case of the local file, we dont store the e-tag
                 # we calculate the hash
-                new_hash = self.utils.get_hash_from_file(path_to_files + '/' + localfile)
+                new_hash = utils.get_hash_from_file(path_to_files + '/' + localfile)
 
                 if not new_hash:
                     # Something failed. Do not download
@@ -376,7 +374,7 @@ class Module(Module, multiprocessing.Process):
                     return True
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
-                if __database__.is_msg_intended_for(message, 'give_threat_intelligence' ):
+                if utils.is_msg_intended_for(message, 'give_threat_intelligence' ):
                     # Data is sent in the channel as a json dict so we need to deserialize it first
                     data = json.loads(message['data'])
                     # Extract data from dict

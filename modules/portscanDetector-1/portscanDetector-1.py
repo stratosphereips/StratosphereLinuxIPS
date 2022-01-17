@@ -3,6 +3,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
@@ -310,7 +311,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'tw_modified'):
+                if utils.is_msg_intended_for(message, 'tw_modified'):
                     # Get the profileid and twid
                         profileid = message['data'].split(':')[0]
                         twid = message['data'].split(':')[1]
