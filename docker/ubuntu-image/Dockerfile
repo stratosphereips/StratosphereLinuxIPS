@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV IS_IN_A_DOCKER_CONTAINER True
 
 # destionation dir for slips inside the container
-ENV SLIPS_DIR /Slips
+ENV SLIPS_DIR /StratosphereLinuxIPS
 
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
