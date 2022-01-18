@@ -44,8 +44,9 @@ class UpdateFileManager:
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_threat_intelligence_data = 'modules/ThreatIntelligence1/remote_data_files/'
-            if not os.path.isdir(self.path_to_threat_intelligence_data):
-                os.mkdir(self.path_to_threat_intelligence_data)
+        if not os.path.exists(self.path_to_threat_intelligence_data):
+            os.mkdir(self.path_to_threat_intelligence_data)
+
         try:
             # Read the list of URLs to download. Convert to list
             self.ti_feed_tuples = self.config.get('threatintelligence', 'ti_files').split(', ')
