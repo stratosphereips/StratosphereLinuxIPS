@@ -2,7 +2,7 @@ import configparser
 import time
 import os
 from slips_files.core.database import __database__
-from slips_files.common.slips_utils import Utils
+from slips_files.common.slips_utils import utils
 import json
 import ipaddress
 import validators
@@ -226,7 +226,7 @@ class UpdateFileManager:
         """
 
         # compute file sha256 hash
-        new_hash = self.utils.get_hash_from_file(file_path)
+        new_hash = utils.get_hash_from_file(file_path)
 
         # Get last hash of the file stored in the database
         file_info = __database__.get_TI_file_info(file_path)
