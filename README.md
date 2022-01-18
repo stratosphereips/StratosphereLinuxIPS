@@ -69,7 +69,7 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
         mkdir ~/dataset
         cp <some-place>/myfile.pcap ~/dataset
-        docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+        docker run -it --rm --net=host -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
         ./slips.py -c slips.conf -f dataset/myfile.pcap
 
 ## How to build Slips docker from Dockerfile:
