@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 import sys
 
@@ -306,7 +307,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_ip'):
+                if utils.is_msg_intended_for(message, 'new_ip'):
                     # Get the IP from the message
                     ip = message['data']
                     try:
@@ -339,7 +340,7 @@ class Module(Module, multiprocessing.Process):
                     self.get_rdns(ip)
 
                 message = self.c2.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_MAC'):
+                if utils.is_msg_intended_for(message, 'new_MAC'):
                     data = json.loads(message['data'])
                     mac_addr = data['MAC']
                     host_name = data.get('host_name', False)

@@ -184,18 +184,6 @@ class Database(object):
             self.outputqueue.put('00|database|{}'.format(type(inst)))
             self.outputqueue.put('00|database|{}'.format(inst))
 
-    def is_msg_intended_for(self, message, channel):
-        """
-        Function to check
-            1. If the given message is intended for this channel
-            2. The msg has valid data
-        """
-
-        return (message
-                and type(message['data']) == str
-                and message['data'] != 'stop_process'
-                and message['channel'] == channel)
-
     def add_mac_addr_to_profile(self,profileid, MAC_info):
         """
         Used to associate this profile with it's MAC addr

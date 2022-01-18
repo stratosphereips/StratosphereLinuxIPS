@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 
 # Your imports
@@ -767,7 +768,7 @@ class Module(Module, multiprocessing.Process):
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                if __database__.is_msg_intended_for(message, 'new_flow'):
+                if utils.is_msg_intended_for(message, 'new_flow'):
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -956,12 +957,12 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Detect successful SSH connections ---
                 message = self.c2.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_ssh'):
+                if utils.is_msg_intended_for(message, 'new_ssh'):
                     self.check_ssh(message)
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
                 message = self.c3.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_notice'):
+                if utils.is_msg_intended_for(message, 'new_notice'):
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
@@ -1067,7 +1068,7 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Detect maliciuos JA3 TLS servers ---
                 message = self.c4.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_ssl'):
+                if utils.is_msg_intended_for(message, 'new_ssl'):
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
                     if type(data) == str:
@@ -1108,7 +1109,7 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Learn ports that Zeek knows but Slips doesn't ---
                 message = self.c5.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_service'):
+                if utils.is_msg_intended_for(message, 'new_service'):
                     data = json.loads(message['data'])
                     # uid = data['uid']
                     # profileid = data['profileid']
@@ -1125,7 +1126,7 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Detect DNS resolutions without connection ---
                 message = self.c6.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
+                if utils.is_msg_intended_for(message, 'new_dns_flow'):
                     data = json.loads(message["data"])
                     profileid = data['profileid']
                     twid = data['twid']

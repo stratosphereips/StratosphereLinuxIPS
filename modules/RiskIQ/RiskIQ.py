@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
@@ -105,7 +106,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_ip'):
+                if utils.is_msg_intended_for(message, 'new_ip'):
                     ip = message['data']
                     # Only get passive total dns data if we don't have it in the db
                     if __database__.get_passive_dns(ip) == '':

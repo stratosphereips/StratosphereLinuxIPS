@@ -2,7 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
-
+from slips_files.common.slips_utils import utils
 import sys
 import configparser
 import time
@@ -374,7 +374,7 @@ class Module(Module, multiprocessing.Process):
                         self.store_model()
                         __database__.publish('finished_modules', self.name)
                         return True
-                    if __database__.is_msg_intended_for(message, 'new_flow'):
+                    if utils.is_msg_intended_for(message, 'new_flow'):
                         data = message['data']
                         # Convert from json to dict
                         data = json.loads(data)

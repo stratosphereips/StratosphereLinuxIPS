@@ -17,6 +17,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import json
 from datetime import datetime, timezone, timedelta
 import configparser
@@ -764,7 +765,7 @@ class EvidenceProcess(multiprocessing.Process):
                     __database__.publish('finished_modules','EvidenceProcess')
                     return True
 
-                if __database__.is_msg_intended_for(message, 'evidence_added'):
+                if utils.is_msg_intended_for(message, 'evidence_added'):
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
                     profileid = data.get('profileid')
