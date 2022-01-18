@@ -46,8 +46,9 @@ class UpdateFileManager:
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_threat_intelligence_data = 'modules/ThreatIntelligence1/remote_data_files/'
-            if not os.path.isdir(self.path_to_threat_intelligence_data):
-                os.mkdir(self.path_to_threat_intelligence_data)
+        if not os.path.exists(self.path_to_threat_intelligence_data):
+            os.mkdir(self.path_to_threat_intelligence_data)
+
         try:
             # Read the list of URLs to download. Convert to list
             self.ti_feed_tuples = self.config.get('threatintelligence', 'ti_files').split(', ')
@@ -100,9 +101,10 @@ class UpdateFileManager:
                     url = tuple_.replace('\n','')
                 elif not threat_level:
                     threat_level = tuple_.replace('threat_level=','')
-                    # not a valid threat_level
-                    self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
-                    threat_level = 'low'
+                    if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
+                        # not a valid threat_level
+                        self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
+                        threat_level = 'low'
                 elif not tags:
                     if '\n' in tuple_:
                         # Is a combined tags+url.
