@@ -1850,11 +1850,17 @@ class ProfilerProcess(multiprocessing.Process):
                             if org in flow_domain:
                                 # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
                                 return True
-                            for domain in org_domains:
+                            for org_domain in org_domains:
                                 # match subdomains too
-                                if domain in flow_domain:
-                                    # self.print(f"The src domain of this flow ({flow_domain}) is "
-                                    #            f"a subdomain of {org} domain: {domain}")
+                                # if org has org.com, and the flow_domain is xyz.org.com whitelist it
+                                if org_domain in flow_domain:
+                                    # print(f"The src domain of this flow ({flow_domain}) is "
+                                    #            f"a subdomain of {org} domain: {org_domain}")
+                                    return True
+                                # if org has xyz.org.com, and the flow_domain is org.com whitelist it
+                                if flow_domain in org_domain :
+                                    # print(f"The domain of {org} ({org_domain}) is a subdomain of "
+                                    #       f"this flow domain ({flow_domain})")
                                     return True
 
                     if 'dst' in from_ or 'both' in from_:
