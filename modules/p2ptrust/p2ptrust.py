@@ -42,7 +42,6 @@ def validate_slips_data(message_data: str) -> (str, int):
 
 
 class Trust(Module, multiprocessing.Process):
-    # Name: short name of the module. Do not use spaces
     name = 'p2ptrust'
     description = 'Enables sharing detection data with other Slips instances'
     authors = ['Dita']
@@ -72,12 +71,6 @@ class Trust(Module, multiprocessing.Process):
         self.output_queue = output_queue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
-        # To which channels do you want to subscribe? When a message arrives on the channel the module will wakeup
-        # The options change, so the last list is on the slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
-
         self.port = pigeon_port
         self.rename_with_port = rename_with_port
         self.gopy_channel_raw = gopy_channel
@@ -107,17 +100,7 @@ class Trust(Module, multiprocessing.Process):
         if rename_redis_ip_info:
             self.storage_name += str(self.port)
 
-        # Set the timeout based on the platform. This is because the pyredis lib does not have officially recognized the
-        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = -1
-        else:
-            # ??
-            self.timeout = None
+        self.timeout = None
 
         # Start the db
         __database__.start(self.config)
@@ -125,6 +108,18 @@ class Trust(Module, multiprocessing.Process):
         self.sql_db_name = self.data_dir + "trustdb.db"
         if rename_sql_db_file:
             self.sql_db_name += str(pigeon_port)
+
+        # todo don't duplicate this dict, move it to slips_utils
+        # all evidence slips detects has threat levels of strings
+        # each string should have a corresponding int value to be able to calculate
+        # the accumulated threat level and alert
+        self.threat_levels = {
+            'info': 0,
+            'low' : 0.2,
+            'medium': 0.5,
+            'high': 0.8,
+            'critical': 1
+        }
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(text, verbose, debug)
@@ -165,53 +160,54 @@ class Trust(Module, multiprocessing.Process):
             outfile = open(self.pigeon_logfile, "+w")
             self.pigeon = subprocess.Popen(executable, cwd=self.data_dir, stdout=outfile)
 
-    def run(self):
-        # configure process
-        self._configure()
+    def new_evidence_callback(self, msg: Dict):
+        """
+        This function is called whenever a msg arrives to the evidence_added channel,
+        It compares the score and confidence of the given IP and decides whether or not to
+        share it accordingly
+        """
+        data = msg['data']
 
-        # check if it was possible to start up pigeon
-        if self.start_pigeon and self.pigeon is None:
-            self.print("Module was supposed to start up pigeon but it was not possible to start pigeon! Exiting...")
+        type_detection = data.get('type_detection') # example: dstip srcip dport sport dstdomain
+        if not 'ip' in type_detection: #and not 'domain' in type_detection:
+            # todo do we share domains too?
+            # the detection is a srcport, dstport, etc. don't share
             return
 
-        pubsub = __database__.r.pubsub()
+        # todo what exactly do we need to send to the netwrok? srcip/srdomain, threat_level and confidence?
+        detection_info = data.get('detection_info')
+        confidence = data.get('confidence', False)
+        threat_level = data.get('threat_level', False)
+        if not threat_level:
+            self.print(f"IP/domain {detection_info} doesn't have a threat_level")
+            return
+        if not confidence:
+            self.print(f"IP/domain {detection_info} doesn't have a confidence")
+            return
 
-        # callbacks for subscribed channels
-        callbacks = {
-            self.p2p_data_request_channel: self.data_request_callback,
-            self.slips_update_channel: self.update_callback,
-            self.gopy_channel: self.gopy_callback,
-        }
+        # get the  int representing this threat_level
+        score = self.threat_levels[threat_level]
 
-        pubsub.subscribe(**callbacks, ignore_subscribe_messages=True)
+        # todo when we genarate a new evidence, we give it a score and a tl, but we don't update th IP_Info and give it a score in th db!
+
+        # TODO: discuss - only share score if confidence is high enough?
+        # compare slips data with data in go
+        data_already_reported = True
         try:
-            while True:
-                ret_code = self.pigeon.poll()
-                if ret_code is not None:
-                    self.print(f"Pigeon process suddenly terminated with return code {ret_code}. Stopping module.")
-                    return
+            cached_opinion = self.trust_db.get_cached_network_opinion("ip", detection_info)
+            cached_score, cached_confidence, network_score, timestamp = cached_opinion
+            if cached_score is None or abs(score - cached_score) < 0.1:
+                data_already_reported = False
+        except KeyError:
+            data_already_reported = False
+        except IndexError:
+            # data saved in local db have wrong structure, this is an invalid state
+            return
 
-                # get_message() also let redis library to take execution time and call subscribed callbacks if needed
-                message = pubsub.get_message()
+        # TODO: in the future, be smarter and share only when needed. For now, we will always share
+        if not data_already_reported:
+            utils.send_evaluation_to_go(detection_info, score, confidence, "*", self.pygo_channel)
 
-                # listen to slips kill signal and quit
-                if message and message['data'] == 'stop_process':
-                    self.print("Received stop signal from slips, stopping")
-                    if self.start_pigeon:
-                        self.pigeon.send_signal(signal.SIGINT)
-
-                    self.trust_db.__del__()
-                    break
-
-                time.sleep(0.1)
-
-        except KeyboardInterrupt:
-            pass
-
-        except Exception as e:
-            self.print(f"Exception {e}")
-
-        return True
 
     def gopy_callback(self, msg: Dict):
         try:
@@ -237,8 +233,9 @@ class Trust(Module, multiprocessing.Process):
         """
         Handle IP scores changing in Slips received from the ip_info_change channel
 
-        This method checks if new score differs from opinion known to the network, and if so, it means that it is worth
-        sharing and it will be shared. Additionally, if the score is serious, the node will be blamed
+        This method checks if Slips has new score that are different
+        from the scores known to the network, and if so, it means that it is worth
+        sharing and it will be shared. Additionally, if the score is serious, the node will be blamed(blocked)
         :param ip_address: The IP address sent through the ip_info_change channel (if it is not valid IP, it returns)
         """
 
@@ -256,6 +253,7 @@ class Trust(Module, multiprocessing.Process):
         self.trust_db.insert_slips_score(ip_address, score, confidence)
 
         # TODO: discuss - only share score if confidence is high enough?
+
         # compare slips data with data in go
         data_already_reported = True
         try:
@@ -341,7 +339,58 @@ class Trust(Module, multiprocessing.Process):
                                        self.storage_name)
 
     def respond_to_message_request(self, key, reporter):
+        # todo do you mean another peer is asking me about an ip?
         pass
 
     def process_message_report(self, reporter: str, report_time: int, data: dict):
+        # todo wym
         pass
+
+    def run(self):
+        # configure process
+        self._configure()
+
+        # check if it was possible to start up pigeon
+        if self.start_pigeon and self.pigeon is None:
+            self.print("Module was supposed to start up pigeon but it was not possible to start pigeon! Exiting...")
+            return
+
+        pubsub = __database__.r.pubsub()
+
+        # callbacks for subscribed channels
+        callbacks = {
+            self.p2p_data_request_channel: self.data_request_callback,
+            self.slips_update_channel: self.update_callback,
+            self.gopy_channel: self.gopy_callback,
+            'evidence_added': self.new_evidence_callback
+        }
+
+        pubsub.subscribe(**callbacks, ignore_subscribe_messages=True)
+        try:
+            while True:
+                ret_code = self.pigeon.poll()
+                if ret_code is not None:
+                    self.print(f"Pigeon process suddenly terminated with return code {ret_code}. Stopping module.")
+                    return
+
+                # get_message() also let redis library to take execution time and call subscribed callbacks if needed
+                message = pubsub.get_message()
+
+                # listen to slips kill signal and quit
+                if message and message['data'] == 'stop_process':
+                    self.print("Received stop signal from slips, stopping")
+                    if self.start_pigeon:
+                        self.pigeon.send_signal(signal.SIGINT)
+
+                    self.trust_db.__del__()
+                    break
+
+                time.sleep(0.1)
+
+        except KeyboardInterrupt:
+            pass
+
+        except Exception as e:
+            self.print(f"Exception {e}")
+
+        return True
