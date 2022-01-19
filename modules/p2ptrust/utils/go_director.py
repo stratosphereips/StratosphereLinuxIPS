@@ -29,6 +29,7 @@ class GoDirector:
                  gopy_channel: str = "p2p_gopy",
                  pygo_channel: str = "p2p_pygo"):
 
+        # todo what is override_p2p
         if override_p2p and not (report_func and request_func):
             raise Exception("Override_p2p set but not provided appropriate functions")
 
@@ -58,9 +59,11 @@ class GoDirector:
             message_contents = data_dict["message_contents"]
 
             if message_type == "peer_update":
+                # update in peers reliability or IP address.
                 self.process_go_update(message_contents)
 
             elif message_type == "go_data":
+                # a peer request or update
                 self.process_go_data(message_contents)
 
             else:
@@ -73,7 +76,7 @@ class GoDirector:
             self.print("Json from the pigeon doesn't contain expected values")
 
     def process_go_data(self, report: dict) -> None:
-        """Process data sent by the go layer
+        """Process peer updates, requests and reports sent by the go layer
 
         The data is expected to be a list of messages received from go peers. They are parsed and inserted into the
          database. If a message does not comply with the format, the reporter's reputation is lowered.
@@ -107,9 +110,11 @@ class GoDirector:
         message_type, data = self.validate_message(message)
 
         if message_type == "report":
+            # a peer reporting an IP
             self.process_message_report(reporter, report_time, data)
 
         elif message_type == "request":
+            # a peer requesting info about an ip
             self.process_message_request(reporter, report_time, data)
 
         elif message_type == "blame":
