@@ -654,7 +654,7 @@ class Database(object):
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
-        Function to add information about the an IP address
+        Function to add information about an IP address
         The flow can go out of the IP (we are acting as Client) or into the IP
         (we are acting as Server)
         ip_as_obj: IP to add. It can be a dstIP or srcIP depending on the role
@@ -731,6 +731,10 @@ class Database(object):
                 }
                 data_to_send = json.dumps(data_to_send)
                 self.publish('give_threat_intelligence', data_to_send)
+                # ask other peers their opinion about this IP
+                cache_age = 1000 # todo what does this mean?
+                self.publish("p2p_data_request", f'{daddr} {cache_age}')
+
 
             if role == 'Client':
                 # The profile corresponds to the src ip that received this flow
