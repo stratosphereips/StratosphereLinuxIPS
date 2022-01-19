@@ -88,7 +88,6 @@ class Trust(Module, multiprocessing.Process):
         self.printer = Printer(output_queue, self.name + str_port)
 
         self.slips_update_channel = slips_update_channel
-        # channel to send msgs to whenever slips needs info from other peers about an ip
         self.p2p_data_request_channel = p2p_data_request_channel
 
         self.gopy_channel = self.gopy_channel_raw + str_port
@@ -360,9 +359,14 @@ class Trust(Module, multiprocessing.Process):
 
         # callbacks for subscribed channels
         callbacks = {
+            # channel to send msgs to whenever slips needs info from other peers about an ip
             self.p2p_data_request_channel: self.data_request_callback,
+
             self.slips_update_channel: self.update_callback,
+
+            # this channel receives peers requests/updates
             self.gopy_channel: self.gopy_callback,
+
             'evidence_added': self.new_evidence_callback
         }
 
