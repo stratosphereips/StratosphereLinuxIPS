@@ -88,6 +88,7 @@ class Trust(Module, multiprocessing.Process):
         self.printer = Printer(output_queue, self.name + str_port)
 
         self.slips_update_channel = slips_update_channel
+        # channel to send msgs to whenever slips needs info from other peers about an ip
         self.p2p_data_request_channel = p2p_data_request_channel
 
         self.gopy_channel = self.gopy_channel_raw + str_port
@@ -280,7 +281,7 @@ class Trust(Module, multiprocessing.Process):
 
     def handle_data_request(self, message_data: str) -> None:
         """
-        Read data request from Slips and collect the data.
+        Process the request from Slips and ask the network.
 
         Three `arguments` are expected in the redis channel:
             ip_address: str,
@@ -300,7 +301,7 @@ class Trust(Module, multiprocessing.Process):
         :param message_data: The data received from the redis channel `p2p_data_response`
         :return: None, the result is saved into the redis database under key `p2p4slips`
         """
-
+        # todo what is cache age?
         # make sure that IP address is valid and cache age is a valid timestamp from the past
         ip_address, cache_age = validate_slips_data(message_data)
         if ip_address is None:

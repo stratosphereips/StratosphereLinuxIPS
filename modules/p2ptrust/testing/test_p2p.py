@@ -227,7 +227,7 @@ def slips_listener_test():
 
 def test_handle_slips_update():
     print("Slips asks about data for 1.2.3.5")
-    # slips asks for data about 1.2.3.5
+    # slips asks for data about 1.2.3.5 and cache age 1000
     __database__.publish("p2p_data_request", "1.2.3.5 1000")
 
     time.sleep(1)
