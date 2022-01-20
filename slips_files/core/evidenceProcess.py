@@ -841,21 +841,22 @@ class EvidenceProcess(multiprocessing.Process):
                         continue
                     # The available values for the following variables are defined in go_director
 
-                    # available key types: "ip"
-                    key_type = data["key_type"]
-
-                    # if the key type is ip, the ip is validated
-                    key = data["key"]
-
-                    # available evaluation types: 'score_confidence'
-                    evaluation_type = data["evaluation_type"]
-
-                    # this is the score_confidence received from the peer
-                    evaluation = data["evaluation"]
-                    # todo in this case how to get the profileid and twid that this ip wil be blocked in??
-                    # todo will the ip be blocked forever?
-                    # self.decide_blocking(key, profileid, twid)
-
+                                # Send to the blocking module.
+                                # Check that the dst ip isn't our own IP
+                                if type_detection=='dstip' and detection_info not in self.our_ips:
+                                    #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
+                                    # blocking_data = {
+                                    #     'ip':str(detection_info),
+                                    #     'block' : True,
+                                    # }
+                                    # blocking_data = json.dumps(blocking_data)
+                                    # # If the blocking module is loaded after this module this line won't work!!!
+                                    # __database__.publish('new_blocking', blocking_data)
+                                    pass
+                                __database__.markProfileTWAsBlocked(profileid, twid)
+                message = self.c2.get_message(timeout=self.timeout)
+                if utils.is_msg_intended_for(message, 'new_blame'):
+                    pass
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

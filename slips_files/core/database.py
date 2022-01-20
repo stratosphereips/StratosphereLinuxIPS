@@ -32,7 +32,7 @@ class Database(object):
                           'dns_info_change', 'tw_closed', 'core_messages',
                           'new_blocking', 'new_ssh', 'new_notice', 'new_url',
                           'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                          'new_service', 'new_arp', 'new_MAC'}
+                          'new_service', 'new_arp', 'new_MAC', 'new_blame'}
 
     """ Database object management """
     def __init__(self):
