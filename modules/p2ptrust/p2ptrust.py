@@ -7,6 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Dict
+import json
 
 import modules.p2ptrust.trust.base_model as reputation_model
 import modules.p2ptrust.trust.trustdb as trustdb
@@ -166,7 +167,11 @@ class Trust(Module, multiprocessing.Process):
         It compares the score and confidence of the given IP and decides whether or not to
         share it accordingly
         """
-        data = msg['data']
+        try:
+            data = json.loads(msg['data'])
+        except json.decoder.JSONDecodeError:
+            # not a valid json dict
+            return
 
         type_detection = data.get('type_detection') # example: dstip srcip dport sport dstdomain
         if not 'ip' in type_detection: #and not 'domain' in type_detection:
