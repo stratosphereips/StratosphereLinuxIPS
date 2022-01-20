@@ -238,7 +238,7 @@ class Trust(Module, multiprocessing.Process):
         """
         Handle IP scores changing in Slips received from the ip_info_change channel
 
-        This method checks if Slips has new score that are different
+        This method checks if Slips has a new score that are different
         from the scores known to the network, and if so, it means that it is worth
         sharing and it will be shared. Additionally, if the score is serious, the node will be blamed(blocked)
         :param ip_address: The IP address sent through the ip_info_change channel (if it is not valid IP, it returns)
@@ -281,6 +281,8 @@ class Trust(Module, multiprocessing.Process):
 
         # TODO: discuss - based on what criteria should we start blaming?
         if score > 0.8 and confidence > 0.6:
+            # tell other peers that we're blocking this IP
+            #todo finish the blocking logic and edit the above ip statement
             utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
 
     def handle_data_request(self, message_data: str) -> None:
@@ -348,8 +350,17 @@ class Trust(Module, multiprocessing.Process):
         pass
 
     def process_message_report(self, reporter: str, report_time: int, data: dict):
-        # todo wym
-        pass
+        """
+        Handle a report received from a peer
+        :param reporter: The peer that sent the report
+        :param report_time: Time of receiving the report, provided by the go part
+        :param data: Report data
+        """
+        # All keys and data sent to this function is validated in go_director.py
+        data = json.dumps(data)
+        # give the report to evidenceProcess to decide whether to block or not
+        __database__.publish('new_blame', data)
+
 
     def run(self):
         # configure process
