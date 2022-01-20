@@ -695,12 +695,14 @@ class EvidenceProcess(multiprocessing.Process):
         alert_to_print = f'{Fore.RED}{human_readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
 
-    def decide_blocking(self, detection_info, profileid, twid):
+    def decide_blocking(self, ip, profileid, twid):
         """
         Decide whether to block or not and send to the blocking module
+        :param ip: IP to block
+        profileid and twid are used to log the blocking to alerts.log and other log files.
         """
         # Make sure we don't block our own IP
-        if detection_info in self.our_ips:
+        if ip in self.our_ips:
             return
 
         #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
@@ -713,7 +715,7 @@ class EvidenceProcess(multiprocessing.Process):
         # __database__.publish('new_blocking', blocking_data)
         __database__.markProfileTWAsBlocked(profileid, twid)
         return True
-    
+
     def shutdown_gracefully(self):
         self.logfile.close()
         self.jsonfile.close()
@@ -905,7 +907,29 @@ class EvidenceProcess(multiprocessing.Process):
 
                 message = self.c2.get_message(timeout=self.timeout)
                 if utils.is_msg_intended_for(message, 'new_blame'):
-                    pass
+                    data = message['data']
+                    try:
+                        data = json.loads(data)
+                    except json.decoder.JSONDecodeError:
+                        self.print("Error in the report received from p2ptrust module")
+                        continue
+                    # The available values for the following variables are defined in go_director
+
+                    # available key types: "ip"
+                    key_type = data["key_type"]
+
+                    # if the key type is ip, the ip is validated
+                    key = data["key"]
+
+                    # available evaluation types: 'score_confidence'
+                    evaluation_type = data["evaluation_type"]
+
+                    # this is the score_confidence received from the peer
+                    evaluation = data["evaluation"]
+                    # todo in this case how to get the profileid and twid that this ip wil be blocked in??
+                    # todo will the ip be blocked forever?
+                    # self.decide_blocking(key, profileid, twid)
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
