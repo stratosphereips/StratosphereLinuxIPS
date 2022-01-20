@@ -60,6 +60,7 @@ class EvidenceProcess(multiprocessing.Process):
             self.setup_notifications()
         # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
+        self.c2 = __database__.subscribe('new_blame')
         self.logfile = self.clean_evidence_log_file(output_folder)
         self.jsonfile = self.clean_evidence_json_file(output_folder)
         # If logs enabled, write alerts to the log folder as well
@@ -915,6 +916,9 @@ class EvidenceProcess(multiprocessing.Process):
                                     # __database__.publish('new_blocking', blocking_data)
                                     pass
                                 __database__.markProfileTWAsBlocked(profileid, twid)
+                message = self.c2.get_message(timeout=self.timeout)
+                if utils.is_msg_intended_for(message, 'new_blame'):
+                    pass
 
             except KeyboardInterrupt:
                 self.logfile.close()
