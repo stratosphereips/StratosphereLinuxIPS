@@ -728,7 +728,12 @@ class EvidenceProcess(multiprocessing.Process):
             tw_stop_time_datetime = tw_start_time_datetime + tw_width_in_seconds_delta
             tw_stop_time_str = tw_stop_time_datetime.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
 
-            alert_to_print = f'{Fore.RED}IP {srcip} detected as infected in timewindow {twid_num} ' \
+
+            hostname = __database__.get_hostname_from_profile(profileid)
+            # if there's no hostname, set it as ' '
+            hostname = hostname or ' '
+
+            alert_to_print = f'{Fore.RED}IP {srcip} ({hostname}) detected as infected in timewindow {twid_num} ' \
                              f'(start {tw_start_time_str}, stop {tw_stop_time_str}) given the following evidence:{Style.RESET_ALL}\n'
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
