@@ -757,7 +757,24 @@ class EvidenceProcess(multiprocessing.Process):
         alert_to_print = f'{Fore.RED}{human_readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
 
+    def decide_blocking(self, detection_info, profileid, twid):
+        """
+        Decide whether to block or not and send to the blocking module
+        """
+        # Make sure we don't block our own IP
+        if detection_info in self.our_ips:
+            return
 
+        #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
+        # blocking_data = {
+        #     'ip':str(detection_info),
+        #     'block' : True,
+        # }
+        # blocking_data = json.dumps(blocking_data)
+        # # If the blocking module is loaded after this module this line won't work!!!
+        # __database__.publish('new_blocking', blocking_data)
+        __database__.markProfileTWAsBlocked(profileid, twid)
+        return True
 
     def run(self):
         while True:
@@ -902,22 +919,12 @@ class EvidenceProcess(multiprocessing.Process):
                                     # remove the colors from the aletss before printing
                                     alert_to_print = alert_to_print.replace(Fore.RED, '').replace(Fore.CYAN, '').replace(Style.RESET_ALL,'')
                                     self.show_popup(alert_to_print)
+                                if type_detection=='dstip':
+                                    self.decide_blocking(detection_info, profileid, twid)
 
-                                # Send to the blocking module.
-                                # Check that the dst ip isn't our own IP
-                                if type_detection=='dstip' and detection_info not in self.our_ips:
-                                    #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
-                                    # blocking_data = {
-                                    #     'ip':str(detection_info),
-                                    #     'block' : True,
-                                    # }
-                                    # blocking_data = json.dumps(blocking_data)
-                                    # # If the blocking module is loaded after this module this line won't work!!!
-                                    # __database__.publish('new_blocking', blocking_data)
-                                    pass
-                                __database__.markProfileTWAsBlocked(profileid, twid)
                 message = self.c2.get_message(timeout=self.timeout)
                 if utils.is_msg_intended_for(message, 'new_blame'):
+
                     pass
 
             except KeyboardInterrupt:
