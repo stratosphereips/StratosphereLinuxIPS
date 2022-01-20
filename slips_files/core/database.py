@@ -32,7 +32,7 @@ class Database(object):
                           'dns_info_change', 'tw_closed', 'core_messages',
                           'new_blocking', 'new_ssh', 'new_notice', 'new_url',
                           'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                          'new_service', 'new_arp', 'new_MAC'}
+                          'new_service', 'new_arp', 'new_MAC',  'new_blame'}
 
     """ Database object management """
     def __init__(self):
@@ -41,11 +41,11 @@ class Database(object):
         self.separator = '_'
         self.normal_label = 'normal'
         self.malicious_label = 'malicious'
+        self.sudo = 'sudo '
         self.running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
         if self.running_in_docker:
             self.sudo =''
-        else:
-            self.sudo = 'sudo '
+
 
 
     def read_configuration(self):
@@ -119,7 +119,7 @@ class Database(object):
                                                 socket_keepalive=True,
                                                 retry_on_timeout=True,
                                                 decode_responses=True,
-                                                health_check_interval=20)#password='password')
+                                                health_check_interval=30)#password='password')
                 if self.deletePrevdb:
                     self.r.flushdb()
 
