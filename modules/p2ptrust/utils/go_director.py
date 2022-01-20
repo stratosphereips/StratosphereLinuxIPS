@@ -221,10 +221,6 @@ class GoDirector:
         :return: None. Result is saved to the database
         """
 
-        if self.override_p2p:
-            self.report_func(reporter, report_time, data)
-            return
-
         # validate keys in message
         try:
             key = data["key"]
@@ -249,6 +245,13 @@ class GoDirector:
         # validate evaluation type
         if evaluation_type not in self.evaluation_processors:
             self.print("Module can't process given evaluation type")
+            return
+
+        # after making sure that the data received from peers is valid,
+        # pass the report to p2ptrust module
+        # to decide what to do with it
+        if self.override_p2p:
+            self.report_func(reporter, report_time, data)
             return
 
         self.evaluation_processors[evaluation_type](reporter, report_time, key_type, key, evaluation)
