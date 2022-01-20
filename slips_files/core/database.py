@@ -187,9 +187,9 @@ class Database(object):
     def add_mac_addr_to_profile(self,profileid, MAC_info):
         """
         Used to associate this profile with it's MAC addr
-        :param MAC_info: dict containing mac address and vendor info
+        :param MAC_info: dict containing mac address, hostname and vendor info
         """
-        # Add the MAC addr and vendor to this profile
+        # Add the MAC addr, hostname and vendor to this profile
         self.r.hmset(profileid, MAC_info)
 
     def mark_profile_as_dhcp(self, profileid):
@@ -204,20 +204,24 @@ class Database(object):
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
-        Retuns MAC info about a certain profile,
-        returns a mac addr or None
+        Returns MAC info about a certain profile or None
         """
         MAC_info = self.r.hmget(profileid, 'MAC')[0]
         return MAC_info
 
     def get_mac_vendor_from_profile(self, profileid) -> str:
         """
-        Retuns MAC vendor about a certain profile,
-        returns the mac vendor or None
+        Returns MAC vendor about a certain profile or None
         """
         MAC_vendor = self.r.hmget(profileid, 'Vendor')[0]
         return MAC_vendor
 
+    def get_hostname_from_profile(self, profileid) -> str:
+        """
+        Returns hostname about a certain profile or None
+        """
+        hostname = self.r.hmget(profileid, 'host_name')[0]
+        return hostname
 
     def get_IP_of_MAC(self, MAC):
         """
