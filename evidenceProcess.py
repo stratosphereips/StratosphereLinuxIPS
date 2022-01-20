@@ -63,12 +63,14 @@ class EvidenceProcess(multiprocessing.Process):
         self.logfile = self.clean_evidence_log_file(output_folder)
         self.jsonfile = self.clean_evidence_json_file(output_folder)
         # If logs enabled, write alerts to the log folder as well
+        self.logs_logfile = False
+        self.logs_jsonfile = False
         if logs_folder:
+            # alerts.log
             self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
+            # alerts.json
             self.logs_jsonfile =  self.clean_evidence_json_file(logs_folder+'/')
-        else:
-            self.logs_logfile = False
-            self.logs_jsonfile = False
+
         self.timeout = 0.0000001
         # this list will have our local and public ips
         self.our_ips = self.get_IP()
@@ -212,7 +214,7 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
             ip = profileid.split("_")[-1].strip()
-            alert_to_print = f'{flow_datetime}: Src IP {ip:15}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
+            alert_to_print = f'{flow_datetime}: Src IP {ip:29}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
             return alert_to_print
         except Exception as inst:
             self.print('Error in print_alert()')
@@ -286,7 +288,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # int and float values should be printed as they are
                     json_alert += f'"{key_}": {val},\n'
             # remove the last comma and close the dict
-            json_alert = json_alert[:-2] +  '\n}\n'
+            json_alert = json_alert[:-2] + '\n}\n'
             self.jsonfile.write(json_alert)
             # empty lines or line containing '\n' mark the end of the file for the cesnet sharing module. don't add any
             self.jsonfile.flush()
@@ -299,17 +301,20 @@ class EvidenceProcess(multiprocessing.Process):
 
     def addDataToLogFile(self, data):
         """
-        Add a new evidence line to the file.
+        Add a new evidence line to the alerts.log and other log files if logging is enabled.
         """
         try:
+            # write to alerts.log
             self.logfile.write(data)
             self.logfile.write('\n')
             self.logfile.flush()
+
             # If logs are enabled, write alerts in the folder as well
             if self.logs_logfile:
                 self.logs_logfile.write(data)
                 self.logs_logfile.write('\n')
                 self.logs_logfile.flush()
+
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -824,8 +829,20 @@ class EvidenceProcess(multiprocessing.Process):
                                     conn_count,
                                     source_target_tag)
 
+
+                    # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
+                    alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence}'
+                    # sometimes slips tries to get the hostname of a profile before ip_info stores it in the db
+                    # there's nothing we can do about it
+                    hostname = __database__.get_hostname_from_profile(profileid)
+                    if hostname:
+                        srcip = f'{srcip} ({hostname})'
+                        # fill the rest of the 26 characters with spaces to keep the alignment
+                        srcip =  f'{srcip}{" "*(26-len(srcip))}'
+                        alert_to_log = f'{flow_datetime}: Src IP {srcip}. {evidence}'
                     # Add the evidence to the log files
-                    self.addDataToLogFile(flow_datetime +  f': Src IP {srcip:15}. ' + evidence)
+                    self.addDataToLogFile(alert_to_log)
+                    # add to alerts.json
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
 

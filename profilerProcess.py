@@ -1986,7 +1986,6 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Check if the flow is whitelisted and we should not process
             if self.is_whitelisted():
-                # print(f'@@@@@@@@@@@@@@@@@@  whitelisted : {self.daddr} {__database__.getIPIdentification(self.daddr)} \n')
                 return True
 
             def get_rev_profile(starttime, daddr_as_obj):
