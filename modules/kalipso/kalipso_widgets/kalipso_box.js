@@ -1,5 +1,5 @@
 var async = require('async')
-var color = import('chalk')
+var color = require('chalk')
 
 class Box{
     constructor(grid, blessed, contrib, redis_database,screen, characteristics){
