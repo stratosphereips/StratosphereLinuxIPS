@@ -2162,31 +2162,46 @@ class Database(object):
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
 
             # Also store these IPs inside the domain
-            domain = query
             ips_to_add = []
 
-            for ip in answers:
+            for answer in answers:
                 # Make sure it's an ip not a CNAME
-                if not validators.ipv6(ip) and not validators.ipv4(ip):
-                    # it is a CNAME
+                if not validators.ipv6(answer) and not validators.ipv4(answer):
+                    # now this is not an ip, it's a CNAME or a TXT
+                    if 'TXT' in answer: continue
+                    # it's a CNAME
+                    CNAME = answer
                     continue
 
                 # get stored DNS resolution from our db
-                domains = self.get_dns_resolution(ip)
+                domains = self.get_dns_resolution(answer)
                 # if the domain(query) we have isn't already in DNSresolution in the db, add it
                 if query not in domains:
                     domains.append(query)
+
                 # domains should be a list, not a string!, so don't use json.dumps here
                 ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
                 ip_info = json.dumps(ip_info)
                 # we store ALL dns resolutions seen since starting slips in DNSresolution
-                self.r.hset('DNSresolution', ip, ip_info)
-                ips_to_add.append(ip)
+                self.r.hset('DNSresolution', answer, ip_info)
+                # these ips will be associated with the query in our db
+                ips_to_add.append(answer)
 
             if ips_to_add:
                 domaindata = {}
                 domaindata['IPs'] = ips_to_add
-                self.setInfoForDomains(domain, domaindata, mode='add')
+
+                # if an ip came in the DNS answer along with the last seen CNAME
+                try:
+                    # store this CNAME in the db
+                    domaindata['CNAME'] = CNAME
+                except NameError:
+                    # no CNAME came with this query
+                    pass
+
+                self.setInfoForDomains(query, domaindata, mode='add')
+
+
 
     def get_dns_resolution(self, ip, all_info=False):
         """
