@@ -1871,7 +1871,7 @@ class Database(object):
 
         # Add DNS resolution to the db if there are answers for the query
         if answers:
-            self.set_dns_resolution(query, answers, stime, uid, qtype_name, profileid, twid)
+            self.set_dns_resolution(query, answers, stime, uid, qtype_name)
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
@@ -2149,7 +2149,7 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str, profileid: str, twid: str):
+    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str):
         """
         Cache DNS answers
         1- For each ip in the answer, store the domain
@@ -2163,7 +2163,8 @@ class Database(object):
             for ip in answers:
                 # Make sure it's an ip not a CNAME
                 if not validators.ipv6(ip) and not validators.ipv4(ip):
-                    # it is a CNAME, maybe we can use it later
+                    # it is a CNAME
+
                     continue
                 # get stored DNS resolution from our db
                 domains = self.get_dns_resolution(ip)
