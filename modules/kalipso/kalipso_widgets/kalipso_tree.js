@@ -1,6 +1,6 @@
-var async = import('async')
+var async = require('async')
 var stripAnsi = require('strip-ansi')
-var color = import('chalk')
+var color = require('chalk')
 
 class Tree{
     constructor(grid, blessed, contrib, redis_database, timeline_widget, screen, evidence_widget,ipinfo_widget){
