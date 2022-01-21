@@ -1,5 +1,5 @@
 var async = import('async')
-var stripAnsi = import('strip-ansi')
+var stripAnsi = require('strip-ansi')
 var color = import('chalk')
 
 class Tree{
