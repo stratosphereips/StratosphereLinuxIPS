@@ -1850,7 +1850,13 @@ class ProfilerProcess(multiprocessing.Process):
                             if org in flow_domain:
                                 # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
                                 return True
+
+                            flow_TLD = flow_domain.split(".")[-1]
                             for org_domain in org_domains:
+                                org_domain_TLD = org_domain.split(".")[-1]
+                                # make sure the 2 domains have the same same top level domain
+                                if flow_TLD != org_domain_TLD: continue
+
                                 # match subdomains too
                                 # if org has org.com, and the flow_domain is xyz.org.com whitelist it
                                 if org_domain in flow_domain:
