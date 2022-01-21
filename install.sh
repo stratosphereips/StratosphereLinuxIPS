@@ -12,7 +12,7 @@ pip3 install maxminddb colorama validators urllib3 numpy sklearn requests pandas
 echo "[+] Executing pip3 install --ignore-installed six"
 pip3 install --ignore-installed six
 echo "[+] Executing 'sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs pytest'"
-sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
+sudo npm install blessed blessed-contrib redis@3.1.2 async chalk@4.1.2 strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 
 # Compile and install YARA
 echo "[+] Installing YARA ..."
