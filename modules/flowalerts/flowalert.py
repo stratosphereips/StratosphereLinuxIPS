@@ -749,7 +749,7 @@ class Module(Module, multiprocessing.Process):
             source_target_tag = 'OriginMalware'
             type_evidence = f'DGA-{self.nxdomains[profileid_twid]}-NXDOMAINs'
             detection_info = profileid.split('_')[1]
-            description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains[profileid_twid]} domains'
+            description = f'possible DGA or domain scanning. {detection_info} failed to resolve {self.nxdomains[profileid_twid]} domains'
             conn_count = self.nxdomains[profileid_twid]
             if not twid: twid = ''
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
