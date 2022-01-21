@@ -2160,12 +2160,17 @@ class Database(object):
         # don't store queries ending with arpa as dns resolutions, they're reverse dns
         if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
+
+            # Also store these IPs inside the domain
+            domain = query
+            ips_to_add = []
+
             for ip in answers:
                 # Make sure it's an ip not a CNAME
                 if not validators.ipv6(ip) and not validators.ipv4(ip):
                     # it is a CNAME
-
                     continue
+
                 # get stored DNS resolution from our db
                 domains = self.get_dns_resolution(ip)
                 # if the domain(query) we have isn't already in DNSresolution in the db, add it
@@ -2176,16 +2181,8 @@ class Database(object):
                 ip_info = json.dumps(ip_info)
                 # we store ALL dns resolutions seen since starting slips in DNSresolution
                 self.r.hset('DNSresolution', ip, ip_info)
-
-            # Also store these IPs inside the domain
-            domain = query
-            ips_to_add = []
-            for ip in answers:
-                # Make sure it's an ip not a CNAME
-                if not validators.ipv6(ip) and not validators.ipv4(ip):
-                    # it is a CNAME, maybe we can use it later
-                    continue
                 ips_to_add.append(ip)
+
             if ips_to_add:
                 domaindata = {}
                 domaindata['IPs'] = ips_to_add
