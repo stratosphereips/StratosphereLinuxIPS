@@ -69,7 +69,7 @@ RUN cd StratosphereLinuxIPS && chmod 774 slips.py
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
-RUN npm install async fs blessed blessed-contrib clipboardy chalk strip-ansi redis sorted-array-async yargs
+RUN npm install async fs blessed blessed-contrib clipboardy chalk@4.1.2 strip-ansi redis@3.1.2 sorted-array-async yargs
 
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
