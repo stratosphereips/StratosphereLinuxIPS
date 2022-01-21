@@ -1,6 +1,6 @@
-var async = import('async')
+var async = require('async')
 var color = import('chalk')
-var stripAnsi = import('strip-ansi')
+var stripAnsi = require('strip-ansi')
 
 class Table{
 

@@ -1,4 +1,4 @@
-var async = import('async')
+var async = require('async')
 var color = import('chalk')
 
 class Box{
