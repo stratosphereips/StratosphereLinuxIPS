@@ -534,14 +534,20 @@ class EvidenceProcess(multiprocessing.Process):
                         pass
                 if data_type == 'domain':
                     flow_domain = data
+                    flow_TLD = flow_domain.split(".")[-1]
                     # Method 3 Check if the domains of this flow belong to this org domains
                     try:
                         org_domains = json.loads(whitelisted_orgs[org].get('domains','{}'))
                         if org in flow_domain:
                             # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
                             return True
+
                         for org_domain in org_domains:
-                            # match subdomains too
+                            org_domain_TLD = org_domain.split(".")[-1]
+                            # make sure the 2 domains have the same same top level domain
+                            if flow_TLD != org_domain_TLD: continue
+
+                            # match subdomains
                             # if org has org.com, and the flow_domain is xyz.org.com whitelist it
                             if org_domain in flow_domain:
                                 print(f"The src domain of this flow ({flow_domain}) is "
