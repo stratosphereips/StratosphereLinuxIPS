@@ -95,6 +95,7 @@ async def update_TI_files(outputqueue, config):
     try:
         # create_task is used to run update() function concurrently instead of serially
         update_finished = asyncio.create_task(update_manager.update())
+        # wait for UpdateFileManager to finish before starting all the modules
         await update_finished
     except KeyboardInterrupt:
         os.kill(os.getpid(), SIGSTOP)
