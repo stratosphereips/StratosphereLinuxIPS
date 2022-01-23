@@ -939,7 +939,8 @@ class UpdateFileManager:
                 task = asyncio.create_task(self.update_TI_file(file_to_download))
             else:
                 self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
-                self.loaded_ti_files +=1
+                self.loaded_ti_files += 1
+
         # wait for all TI files to update
         await task
         self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
