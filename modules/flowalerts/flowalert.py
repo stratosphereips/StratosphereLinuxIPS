@@ -664,8 +664,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-    def set_evidence_malicious_JA3(self, malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='', ioc=''):
-        # todo description should be constructed in this function not outside D:
+    def set_evidence_malicious_JA3(self, malicious_ja3_dict, ip, profileid, twid, uid, timestamp, type_='', ioc=''):
         """
         :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
         """
@@ -675,22 +674,24 @@ class Module(Module, multiprocessing.Process):
         threat_level = malicious_ja3_dict['threat_level']
 
         if type_ == 'ja3':
-            description = f'Malicious JA3: {ioc} to daddr {daddr} '
+            description = f'Malicious JA3: {ioc} from source address {ip} '
             type_evidence = 'MaliciousJA3'
             category = 'Intrusion.Botnet'
             source_target_tag = "Botnet"
+            type_detection  = 'srcip'
         elif type_ == 'ja3s':
-            description = f'Malicious JA3s: (possible C&C server): {ioc} to server {daddr} '
+            description = f'Malicious JA3s: (possible C&C server): {ioc} to server {ip} '
             type_evidence = 'MaliciousJA3s'
             category =  'Intrusion.Botnet'
             source_target_tag = "CC"
+            type_detection  = 'dstip'
 
         # append daddr identification to the description
-        ip_identification = __database__.getIPIdentification(daddr)
-        description+= f'{ip_identification} description: {ja3_description} {tags}'
+        ip_identification = __database__.getIPIdentification(ip)
+        description += f'{ip_identification} description: {ja3_description} {tags}'
 
-        type_detection  = 'dstip'
-        detection_info = daddr
+
+        detection_info = ip
         confidence = 1
         if not twid:
             twid = ''
@@ -1085,6 +1086,7 @@ class Module(Module, multiprocessing.Process):
                         profileid = data['profileid']
                         twid = data['twid']
                         daddr = flow['daddr']
+                        saddr = profileid.split('_')[1]
 
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
@@ -1099,10 +1101,12 @@ class Module(Module, multiprocessing.Process):
                             self.print(description, 3, 0)
 
                         if ja3 or ja3s:
+
                             # get the dict of malicious ja3 stored in our db
                             malicious_ja3_dict = __database__.get_ja3_in_IoC()
+
                             if ja3 in malicious_ja3_dict:
-                                self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp,  type_='ja3', ioc=ja3)
+                                self.set_evidence_malicious_JA3(malicious_ja3_dict, saddr, profileid, twid, uid, timestamp,  type_='ja3', ioc=ja3)
 
                             if ja3s in malicious_ja3_dict:
                                 self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='ja3s', ioc=ja3s)

@@ -52,7 +52,7 @@ class Module(Module, multiprocessing.Process):
     def check_suspicious_user_agents(self, uid, host, uri, timestamp, user_agent, profileid, twid):
         ''' Check unusual user agents and set evidence '''
 
-        suspicious_user_agents = ('httpsend', 'chm_msdn', 'pb', 'jndi')
+        suspicious_user_agents = ('httpsend', 'chm_msdn', 'pb', 'jndi', 'tesseract')
         if user_agent.lower() in suspicious_user_agents:
             type_detection = 'srcip'
             source_target_tag = 'UsingSuspiciousUserAgent'

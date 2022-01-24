@@ -1380,61 +1380,78 @@ class Database(object):
         else:
             return False
 
-    def setInfoForDomains(self, domain: str, domaindata: dict, mode='leave'):
+    def setInfoForDomains(self, domain: str, info_to_set: dict, mode='leave'):
         """
         Store information for this domain
-        We receive a dictionary, such as {'geocountry': 'rumania'} that we are
+        :param info_to_set: a dictionary, such as {'geocountry': 'rumania'} that we are
         going to store for this domain
-        The mode parameter defines how to deal with the new data
+        :param mode: defines how to deal with the new data
         - to 'overwrite' the data with the new data
         - to 'add' the data to the new data
         - to 'leave' the past data untouched
         """
+
         # Get the previous info already stored
-        data = self.getDomainData(domain)
-        if not data:
+        domain_data = self.getDomainData(domain)
+        if not domain_data:
             # This domain is not in the dictionary, add it first:
             self.setNewDomain(domain)
             # Now get the data, which should be empty, but just in case
-            data = self.getDomainData(domain)
+            domain_data = self.getDomainData(domain)
 
         # Let's check each key stored for this domain
-        for key in iter(domaindata):
-            # domaindata can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
-            # domaindata can be {'VirusTotal': [1,2,3,4]}
+        for key in iter(info_to_set):
+            # info_to_set can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
+            # info_to_set can be {'VirusTotal': [1,2,3,4]}
 
             # I think we dont need this anymore of the conversion
-            if type(data) == str:
+            if type(domain_data) == str:
                 # Convert the str to a dict
-                data = json.loads(data)
+                domain_data = json.loads(domain_data)
 
-            data_to_store = domaindata[key]
+            # this can be a str or a list
+            data_to_store = info_to_set[key]
             # If there is data previously stored, check if we have
             # this key already
             try:
-                # Do we have they key alredy?
-                _ = data[key]
+                # Do we have the key alredy?
+                _ = domain_data[key]
+
+                # convert incoming data to list
+                if type(data_to_store) != list:
+                    # data_to_store and prev_info Should both be lists, so we can extend
+                    data_to_store = [data_to_store]
+
                 if mode == 'overwrite':
-                    data[key] = data_to_store
+                    domain_data[key] = data_to_store
                 elif mode == 'add':
-                    temp = data[key]
-                    # Should both be lists, so we can extend
-                    temp.extend(data_to_store)
-                    if type(temp) == list:
-                        data[key] = list(set(temp))
-                    else:
-                        data[key] = temp
+                    prev_info = domain_data[key]
+
+                    if type(prev_info) == list:
+                        # for example, list of IPs
+                        prev_info.extend(data_to_store)
+                        domain_data[key] = list(set(prev_info))
+                    elif type(prev_info) == str:
+                        # previous info about this domain is a str, we should make it a list and extend
+                        prev_info = [prev_info]
+                        # add the new data_to_store to our prev_info
+                        domain_data[key] = prev_info.extend(data_to_store)
+                    elif prev_info == None:
+                        # no previous info about this domain
+                        domain_data[key] = data_to_store
+
                 elif mode == 'leave':
                     return
+
             except KeyError:
-                # There is no data for they key so far. Add it
+                # There is no data for the key so far. Add it
                 if type(data_to_store) == list:
-                    data[key] = list(set(data_to_store))
+                    domain_data[key] = list(set(data_to_store))
                 else:
-                    data[key] = data_to_store
+                    domain_data[key] = data_to_store
             # Store
-            newdata_str = json.dumps(data)
-            self.rcache.hset('DomainsInfo', domain, newdata_str)
+            domain_data = json.dumps(domain_data)
+            self.rcache.hset('DomainsInfo', domain, domain_data)
             # Publish the changes
             self.r.publish('dns_info_change', domain)
 
@@ -2167,14 +2184,14 @@ class Database(object):
 
             # Also store these IPs inside the domain
             ips_to_add = []
-
+            CNAMEs = []
             for answer in answers:
                 # Make sure it's an ip not a CNAME
                 if not validators.ipv6(answer) and not validators.ipv4(answer):
                     # now this is not an ip, it's a CNAME or a TXT
                     if 'TXT' in answer: continue
                     # it's a CNAME
-                    CNAME = answer
+                    CNAMEs.append(answer)
                     continue
 
                 # get stored DNS resolution from our db
@@ -2198,7 +2215,7 @@ class Database(object):
                 # if an ip came in the DNS answer along with the last seen CNAME
                 try:
                     # store this CNAME in the db
-                    domaindata['CNAME'] = CNAME
+                    domaindata['CNAME'] = CNAMEs
                 except NameError:
                     # no CNAME came with this query
                     pass
