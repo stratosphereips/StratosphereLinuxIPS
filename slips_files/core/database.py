@@ -228,9 +228,14 @@ class Database(object):
         """
         Used to associate this profile with it's used user_agent
         """
-        # Add the MAC addr, hostname and vendor to this profile
         self.r.hmset(profileid, {'User-agent': user_agent})
 
+    def get_user_agent_from_profile(self, profileid) -> str:
+        """
+        Returns user agent used by a certain profile or None
+        """
+        user_agent = self.r.hmget(profileid, 'User-agent')[0]
+        return user_agent
 
     def add_mac_addr_to_profile(self,profileid, MAC_info):
         """
