@@ -7,6 +7,8 @@ import sys
 
 # Your imports
 import json
+import requests
+
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -111,6 +113,40 @@ class Module(Module, multiprocessing.Process):
             return True
         return False
 
+
+    def get_user_agent_info(self, user_agent, profileid) -> bool:
+        """
+        Get OS and browser info about a use agent from an online database http://useragentstring.com
+        """
+        # some zeek http flows don't have a user agent field
+        if not user_agent: return False
+
+        # don't make a request again if we already have a user agent associated with this profile
+        if __database__.get_user_agent_from_profile(profileid) != None:
+            # this profile already has a user agent
+            return True
+
+        url = f'http://useragentstring.com/?uas={user_agent}&getJSON=all'
+        response = requests.get(url)
+        if response.status_code != 200:
+            return False
+
+        # returns the following
+        # {"agent_type":"Browser","agent_name":"Internet Explorer","agent_version":"8.0",
+        # "os_type":"Windows","os_name":"Windows 7","os_versionName":"","os_versionNumber":"",
+        # "os_producer":"","os_producerURL":"","linux_distibution":"Null","agent_language":"","agent_languageTag":""}
+
+        json_response = json.loads(response.text)
+        os_type = json_response.get('os_type', '')
+        os_name = json_response.get('os_name', '')
+        browser = json_response.get('agent_name', '')
+        # store the ua and the info we got in one string
+        # the above website returns unknown if it has no info about this UA,
+        # remove the 'unknown' from the string before storing in the db
+        UA_info = f'{user_agent} {os_name} {os_type} {browser}'.replace('unknown','').replace('  ','')
+        # store it in the database
+        __database__.add_user_agent_to_profile(profileid, UA_info)
+
     def run(self):
         # Main loop function
         while True:
@@ -129,10 +165,11 @@ class Module(Module, multiprocessing.Process):
                     host = flow['host']
                     uri = flow['uri']
                     timestamp = flow.get('stime','')
-                    user_agent = flow.get('user_agent')
+                    user_agent = flow.get('user_agent', False)
                     request_body_len = flow.get('request_body_len')
                     self.check_suspicious_user_agents(uid, host, uri, timestamp, user_agent, profileid, twid)
                     self.check_multiple_empty_connections(uid, host, timestamp, request_body_len, profileid, twid)
+                    self.get_user_agent_info(user_agent, profileid)
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
