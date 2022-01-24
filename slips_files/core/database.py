@@ -1433,7 +1433,7 @@ class Database(object):
                         domain_data[key] = list(set(prev_info))
                     elif type(prev_info) == str:
                         # previous info about this domain is a str, we should make it a list and extend
-                        prev_info =  [prev_info]
+                        prev_info = [prev_info]
                         # add the new data_to_store to our prev_info
                         domain_data[key] = prev_info.extend(data_to_store)
                     elif prev_info == None:
@@ -2184,14 +2184,14 @@ class Database(object):
 
             # Also store these IPs inside the domain
             ips_to_add = []
-
+            CNAMEs = []
             for answer in answers:
                 # Make sure it's an ip not a CNAME
                 if not validators.ipv6(answer) and not validators.ipv4(answer):
                     # now this is not an ip, it's a CNAME or a TXT
                     if 'TXT' in answer: continue
                     # it's a CNAME
-                    CNAME = answer
+                    CNAMEs.append(answer)
                     continue
 
                 # get stored DNS resolution from our db
@@ -2215,7 +2215,7 @@ class Database(object):
                 # if an ip came in the DNS answer along with the last seen CNAME
                 try:
                     # store this CNAME in the db
-                    domaindata['CNAME'] = CNAME
+                    domaindata['CNAME'] = CNAMEs
                 except NameError:
                     # no CNAME came with this query
                     pass
