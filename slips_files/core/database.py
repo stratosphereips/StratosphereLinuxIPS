@@ -224,6 +224,14 @@ class Database(object):
                     # will be detected later by the ARP module
                     pass
 
+    def add_user_agent_to_profile(self, profileid, user_agent: str):
+        """
+        Used to associate this profile with it's used user_agent
+        """
+        # Add the MAC addr, hostname and vendor to this profile
+        self.r.hmset(profileid, {'User-agent': user_agent})
+
+
     def add_mac_addr_to_profile(self,profileid, MAC_info):
         """
         Used to associate this profile with it's MAC addr
