@@ -284,6 +284,10 @@ class Module(Module, multiprocessing.Process):
                 MAC_info.update({'Vendor': vendor})
                 break
 
+        # some cases we have ipv4 and ipv6 on the same computer, they should be associated with the same mac
+        # and both profiles should be aware of both IPs
+        __database__.search_for_profile_with_the_same_MAC(profileid, mac_addr)
+
         # either we found the vendor or not, store the mac of this ip to the db
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
         return MAC_info
