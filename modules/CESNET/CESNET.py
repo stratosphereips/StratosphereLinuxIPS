@@ -56,18 +56,6 @@ class Module(Module, multiprocessing.Process):
         """ Read importing/exporting preferences from slips.conf """
 
         self.send_to_warden = self.config.get('CESNET', 'send_alerts').lower()
-        if 'yes' in self.send_to_warden:
-            # how often should we push to the server?
-            try:
-                self.push_delay = int(self.config.get('CESNET', 'push_delay'))
-            except ValueError:
-                # By default push every 1 day
-                self.push_delay = 86400
-            # get the output dir, this is where the alerts we want to push are stored
-            self.output_dir = 'output/'
-            if '-o' in sys.argv:
-                self.output_dir = sys.argv[sys.argv.index('-o')+1]
-
 
         self.receive_from_warden = self.config.get('CESNET', 'receive_alerts').lower()
         if 'yes' in self.receive_from_warden:
@@ -88,49 +76,50 @@ class Module(Module, multiprocessing.Process):
         """
         Function to read all alerts from alerts.json as a list, and sends them to the warden server
         """
-
-        # [1] read all alerts from alerts.json
-        alerts_path = os.path.join(self.output_dir, 'alerts.json')
-        # this will contain a list of dicts, each dict is an alert in the IDEA format
-        # and each dict will contain node information
-        alerts_list = []
-
-        alert= ''
-        # Get the data that we want to send
-        with open(alerts_path, 'r') as f:
-            for line in f:
-                alert += line
-                if line.endswith('}\n'):
-                    # reached the end of 1 alert
-                    # convert all single quotes to double quotes to be able to convert to json
-                    alert = alert.replace("'",'"')
-
-                    # convert to dict to be able to add node name
-                    json_alert = json.loads(alert)
-                    # add Node info to the alert
-                    json_alert.update({"Node": self.node_info})
-
-                    #todo for now we can only send test category
-                    json_alert.update({"Category": ['Test']})
-
-                    alerts_list.append(json_alert)
-                    alert = ''
-
-        # [2] Upload to warden server
-        self.print(f"Uploading {len(alerts_list)} events to warden server.")
-        # create a thread for sending alerts to warden server
-        # and don't stop this module until the thread is done
-        q = queue.Queue()
-        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_list, q])
-        self.sender_thread.start()
-        self.sender_thread.join()
-        result = q.get()
-        if 'saved' in result:
-            # no errors
-            self.print(f'Done uploading {result["saved"]} events to warden server.\n')
-        else:
-            # print the error
-            self.print(result, 0, 1)
+        pass
+        #
+        # # [1] read all alerts from alerts.json
+        # alerts_path = os.path.join(self.output_dir, 'alerts.json')
+        # # this will contain a list of dicts, each dict is an alert in the IDEA format
+        # # and each dict will contain node information
+        # alerts_list = []
+        #
+        # alert= ''
+        # # Get the data that we want to send
+        # with open(alerts_path, 'r') as f:
+        #     for line in f:
+        #         alert += line
+        #         if line.endswith('}\n'):
+        #             # reached the end of 1 alert
+        #             # convert all single quotes to double quotes to be able to convert to json
+        #             alert = alert.replace("'",'"')
+        #
+        #             # convert to dict to be able to add node name
+        #             json_alert = json.loads(alert)
+        #             # add Node info to the alert
+        #             json_alert.update({"Node": self.node_info})
+        #
+        #             #todo for now we can only send test category
+        #             json_alert.update({"Category": ['Test']})
+        #
+        #             alerts_list.append(json_alert)
+        #             alert = ''
+        #
+        # # [2] Upload to warden server
+        # self.print(f"Uploading {len(alerts_list)} events to warden server.")
+        # # create a thread for sending alerts to warden server
+        # # and don't stop this module until the thread is done
+        # q = queue.Queue()
+        # self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_list, q])
+        # self.sender_thread.start()
+        # self.sender_thread.join()
+        # result = q.get()
+        # if 'saved' in result:
+        #     # no errors
+        #     self.print(f'Done uploading {result["saved"]} events to warden server.\n')
+        # else:
+        #     # print the error
+        #     self.print(result, 0, 1)
 
 
     def import_alerts(self, wclient):
@@ -241,16 +230,7 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
-                    # If running on a file not an interface,
-                    # slips will push as soon as it finishes the analysis.
-                    if 'yes' in self.send_to_warden and '-i' not in sys.argv:
-                        self.export_alerts(wclient)
-                        # don't publish this module's name in finished_modules channel
-                        # until the sender thread is done
-                        while self.sender_thread.is_alive():
-                            time.sleep(3)
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
@@ -264,26 +244,9 @@ class Module(Module, multiprocessing.Process):
                         # set last poll time to now
                         __database__.set_last_warden_poll_time(now)
 
-                # in case of an interface, push every push_delay time
-                if 'yes' in self.send_to_warden and '-i' in sys.argv :
-                    last_update = __database__.get_last_warden_push_time()
-
-                    # first push should be push_delay after slips starts (for example 1h after starting)
-                    # so that slips has enough time to generate alerts
-                    start_time  = float(__database__.get_slips_start_time().strftime('%s'))
-                    now = time.time()
-                    first_push = now >= start_time + self.push_delay
-
-                    # did we wait the push_delay period since last update?
-                    push_period_passed = last_update + self.push_delay < now
-
-                    if first_push and push_period_passed:
-                        self.export_alerts(wclient)
-                        # set last push time to now
-                        __database__.set_last_warden_push_time(now)
-
-                    # start the module again when the min of the delays has passed
-                    time.sleep(min(self.push_delay, self.poll_delay))
+                # in case of an interface or a file, push every time we get an alert
+                if 'yes' in self.send_to_warden:
+                    pass
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
