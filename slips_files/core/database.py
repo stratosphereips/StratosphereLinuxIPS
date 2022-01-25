@@ -1047,7 +1047,6 @@ class Database(object):
 
         evidence:dict = json.loads(evidence)
         # loop through each evidence in this tw
-        # for ev in evidence: #todo change and use get_evidence_count_too
         for description, evidence_details in evidence.items():
             evidence_details = json.loads(evidence_details)
             if evidence_details.get('ID') == ID:
@@ -1149,20 +1148,18 @@ class Database(object):
         Returns the number of evidence of this type in this profiled and twid
         :param evidence_type: PortScan, ThreatIntelligence, C&C channels detection etc..
         """
-        evidence = self.getEvidenceForTW(profileid, twid)
         count = 0
-        if evidence:
-            evidence = json.loads(evidence)
-            # evidence is a dict of evidence
-            for ev in evidence:
-                # evidence_description is a dicct with type_detection, detection_info and type_evidence as keys
-                evidence_description = json.loads(ev)
-                # count how many evidence of this specific type (evidence_type)
-                evidence_description = evidence_description['type_evidence']
-                if evidence_type in evidence_description:
-                    count +=1
-        return count
+        evidence = self.getEvidenceForTW(profileid, twid)
+        if not evidence:
+            return False
 
+        evidence:dict = json.loads(evidence)
+        # loop through each evidence in this tw
+        for description, evidence_details in evidence.items():
+            evidence_details = json.loads(evidence_details)
+            if evidence_type in evidence_details['type_evidence']:
+                count +=1
+        return count
 
 
     def deleteEvidence(self,profileid, twid, description: str):
