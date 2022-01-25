@@ -1020,6 +1020,26 @@ class Database(object):
         """ Return the field separator """
         return self.separator
 
+    def set_evidence_causing_alert(self, alert_ID, evidence_IDs: list):
+        """
+        When we have a bunch of evidence causing an alert, we assiciate all evidence IDs with the alert ID in our database
+        :param alert ID: the profileid_twid_ID of the last evidence causing this alert
+        :param evidence_IDs: all IDs of the evidence causing this alert
+        """
+        evidence_IDs = json.dumps(evidence_IDs)
+        self.r.hset('alerts', alert_ID, evidence_IDs)
+
+    def get_evidence_causing_alert(self, alert_ID) -> list:
+        """
+        Returns all the IDs of evidence causing this alert
+        """
+        evidence_IDs = self.r.hget('alerts', alert_ID)
+        if evidence_IDs:
+            return json.loads(evidence_IDs)
+        else:
+            return False
+
+
     def is_detection_disabled(self, evidence):
         """
         Function to check if detection is disabled in slips.conf
