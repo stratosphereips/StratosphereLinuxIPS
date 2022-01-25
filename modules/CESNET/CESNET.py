@@ -73,11 +73,39 @@ class Module(Module, multiprocessing.Process):
             self.stop_module = True
 
 
-    def export_alerts(self, wclient):
+    def export_evidence(self, wclient, alert_ID):
         """
-        Function to read all alerts from alerts.json as a list, and sends them to the warden server
+        Exports all evidence causing the given alert to warden server
+        :param alert_ID: alert to export to warden server
         """
-        pass
+        # get all the evidence causing this alert
+        evidence_IDs:list = __database__.get_evidence_causing_alert(alert_ID)
+        if not evidence_IDs:
+            # something went wrong while getting the list of evidence
+            return False
+
+        profile, ip, twid, ID = alert_ID.split('_')
+        profileid = f'{profile}_{ip}'
+
+        # this will contain alerts in IDEA format ready to be exported
+        alerts_to_export = []
+        for ID in evidence_IDs:
+            evidence = __database__.get_evidence_by_ID(profileid, twid, ID)
+            srcip = profileid.split('_')[1]
+            type_evidence = evidence.get('type_evidence')
+            type_detection = evidence.get('type_detection')
+            detection_info = evidence.get('detection_info')
+            description = evidence.get('description')
+            confidence = evidence.get('confidence')
+            category = evidence.get('category')
+            conn_count = evidence.get('conn_count')
+            source_target_tag = evidence.get('source_target_tag')
+            stime = evidence.get('stime')
+            flow_datetime = utils.format_timestamp(stime)
+            evidence_in_IDEA = utils.IDEA_format(srcip, type_evidence, type_detection,
+                    detection_info, description, flow_datetime,
+                    confidence, category, conn_count, source_target_tag)
+            return
         #
         # # [1] read all alerts from alerts.json
         # alerts_path = os.path.join(self.output_dir, 'alerts.json')
@@ -202,8 +230,6 @@ class Module(Module, multiprocessing.Process):
 
         __database__.add_ips_to_IoC(src_ips)
 
-
-
     def run(self):
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
@@ -248,15 +274,8 @@ class Module(Module, multiprocessing.Process):
                 # in case of an interface or a file, push every time we get an alert
                 if (utils.is_msg_intended_for(message, 'new_alert')
                         and 'yes' in self.send_to_warden):
-                    data = message['data']
-                    profile, ip, twid, ID = data.split('_')
-                    profileid = f'{profile}_{ip}'
-                    # try to get all the evidence causing this alert
-                    evidence_IDs = __database__.get_evidence_causing_alert(data)
-                    if not evidence_IDs:
-                        # something went wrong while getting the list of evidence
-                        continue
-                    # print(__database__.get_evidence_by_ID(profileid, twid, ID))
+                    alert_ID = message['data']
+                    self.export_evidence(wclient, alert_ID)
 
 
 
