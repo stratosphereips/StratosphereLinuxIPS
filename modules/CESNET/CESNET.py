@@ -245,7 +245,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     # If running on a file not an interface,
                     # slips will push as soon as it finishes the analysis.
-                    if 'yes' in self.send_to_warden:
+                    if 'yes' in self.send_to_warden and '-i' not in sys.argv:
                         self.export_alerts(wclient)
                         # don't publish this module's name in finished_modules channel
                         # until the sender thread is done
