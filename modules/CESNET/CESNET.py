@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
@@ -28,7 +29,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.read_configuration()
-        self.c1 = __database__.subscribe('new_ip')
+        self.c1 = __database__.subscribe('new_alert')
         self.timeout = 0.0000001
         self.stop_module = False
 
@@ -245,8 +246,19 @@ class Module(Module, multiprocessing.Process):
                         __database__.set_last_warden_poll_time(now)
 
                 # in case of an interface or a file, push every time we get an alert
-                if 'yes' in self.send_to_warden:
-                    pass
+                if (utils.is_msg_intended_for(message, 'new_alert')
+                        and 'yes' in self.send_to_warden):
+                    data = message['data']
+                    profile, ip, twid, ID = data.split('_')
+                    profileid = f'{profile}_{ip}'
+                    # try to get all the evidence causing this alert
+                    evidence_IDs = __database__.get_evidence_causing_alert(data)
+                    if not evidence_IDs:
+                        # something went wrong while getting the list of evidence
+                        continue
+                    # print(__database__.get_evidence_by_ID(profileid, twid, ID))
+
+
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it

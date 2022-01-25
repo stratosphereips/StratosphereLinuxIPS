@@ -916,7 +916,9 @@ class EvidenceProcess(multiprocessing.Process):
                                 # store the alert in our database
                                 # the alert ID is profileid_twid + the ID of the last evidence causing this alert
                                 alert_ID = f'{profileid}_{twid}_{ID}'
+                                # todo we can just publish in new_alert, do we need to save it in the db??
                                 __database__.set_evidence_causing_alert(alert_ID, IDs_causing_an_alert)
+                                __database__.publish('new_alert', alert_ID)
 
                                 # print the alert
                                 alert_to_print = self.format_evidence_causing_this_alert(tw_evidence, profileid, twid, flow_datetime)
