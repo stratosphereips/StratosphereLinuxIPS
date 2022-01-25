@@ -13,6 +13,7 @@ import validators
 import platform
 import re
 import ast
+from uuid import uuid4
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -1069,6 +1070,9 @@ class Database(object):
         else:
             current_evidence = {}
 
+        # every evidence should have an ID according to the IDEA format
+        evidence_ID = str(uuid4())
+
         evidence_to_send = {
                 'profileid': str(profileid),
                 'twid': str(twid),
@@ -1080,7 +1084,8 @@ class Database(object):
                 'uid' : uid,
                 'confidence' : confidence,
                 'threat_level': threat_level,
-                'category': category
+                'category': category,
+                'ID': evidence_ID
             }
         # not all evidence requires a conn_coun, scans only
         if conn_count: evidence_to_send.update({'conn_count': conn_count })
@@ -1093,10 +1098,12 @@ class Database(object):
         if description not in current_evidence.keys():
             self.publish('evidence_added', evidence_to_send)
 
-        # update the our current evidence for this profileid and twid. now the description is used as the key
+        # update our current evidence for this profileid and twid. now the description is used as the key
         current_evidence.update({description : evidence_to_send})
+
         # Set evidence in the database.
         current_evidence = json.dumps(current_evidence)
+
         self.r.hset(profileid + self.separator + twid, 'Evidence', current_evidence)
         self.r.hset('evidence'+profileid, twid, current_evidence)
 
