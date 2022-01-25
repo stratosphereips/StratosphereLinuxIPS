@@ -875,6 +875,8 @@ class EvidenceProcess(multiprocessing.Process):
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
                         srcip = profileid.split(self.separator)[1]
+                        # to store all the ids causing this alerts in the database
+                        IDs_causing_an_alert = []
                         for evidence in tw_evidence.values():
                             # Deserialize evidence
                             evidence = json.loads(evidence)
@@ -885,6 +887,9 @@ class EvidenceProcess(multiprocessing.Process):
                             confidence = float(evidence.get('confidence'))
                             threat_level = evidence.get('threat_level')
                             description = evidence.get('description')
+                            ID = evidence.get('ID')
+                            IDs_causing_an_alert.append(ID)
+
                             # each threat level is a string, get the numerical value of it
                             try:
                                 threat_level = self.threat_levels[threat_level.lower()]
@@ -908,6 +913,12 @@ class EvidenceProcess(multiprocessing.Process):
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
+                                # store the alert in our database
+                                # the alert ID is profileid_twid + the ID of the last evidence causing this alert
+                                alert_ID = f'{profileid}_{twid}_{ID}'
+                                __database__.set_evidence_causing_alert(alert_ID, IDs_causing_an_alert)
+
+                                # print the alert
                                 alert_to_print = self.format_evidence_causing_this_alert(tw_evidence, profileid, twid, flow_datetime)
                                 self.print(f'{alert_to_print}', 1, 0)
 
