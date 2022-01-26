@@ -1072,7 +1072,7 @@ class Database(object):
     def setEvidence(self, type_evidence, type_detection, detection_info,
                     threat_level, confidence, description, timestamp, category,
                     source_target_tag=False,
-                    conn_count=False, profileid='', twid='', uid=''):
+                    conn_count=False, port=False, proto=False, profileid='', twid='', uid=''):
         """
         Set the evidence for this Profile and Timewindow.
 
@@ -1126,6 +1126,9 @@ class Database(object):
 
         # source_target_tag is defined only if type_detection is srcip or dstip
         if source_target_tag: evidence_to_send.update({'source_target_tag': source_target_tag })
+
+        if port: evidence_to_send.update({'port': port })
+        if proto: evidence_to_send.update({'proto': proto })
 
         evidence_to_send = json.dumps(evidence_to_send)
         # This is done to ignore repetition of the same evidence sent.

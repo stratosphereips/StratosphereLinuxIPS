@@ -72,6 +72,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description, timestamp,
                                  categroy, source_target_tag=source_target_tag,
+                                 port=port, proto=proto,
                                  profileid=profileid, twid=twid, uid=uid)
 
     def convert_input_for_module(self, pre_behavioral_model):

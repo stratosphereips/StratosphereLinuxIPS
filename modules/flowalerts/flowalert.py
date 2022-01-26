@@ -390,7 +390,7 @@ class Module(Module, multiprocessing.Process):
                 twid = ''
             __database__.setEvidence(type_evidence, type_detection, detection_info,
                                      threat_level, confidence, description,
-                                     timestamp, category, profileid=profileid,
+                                     timestamp, category, port=dport, proto=proto,profileid=profileid,
                                      twid=twid, uid=uid)
 
     def set_evidence_for_port_0_connection(self, saddr, daddr, direction, profileid, twid, uid, timestamp):
