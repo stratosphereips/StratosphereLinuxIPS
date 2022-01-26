@@ -12,6 +12,8 @@ import json
 import time
 import threading
 import queue
+import ipaddress
+import validators
 
 class Module(Module, multiprocessing.Process):
     name = 'CESNET'
@@ -93,8 +95,14 @@ class Module(Module, multiprocessing.Process):
             evidence = __database__.get_evidence_by_ID(profileid, twid, ID)
             srcip = profileid.split('_')[1]
             type_evidence = evidence.get('type_evidence')
-            type_detection = evidence.get('type_detection')
             detection_info = evidence.get('detection_info')
+            # don't send private IPv4 or IPv6 addresses
+            if (validators.ipv4(detection_info)
+                    and ipaddress.IPv4Address(detection_info).is_private)\
+                or (validators.ipv6(detection_info)
+                        and ipaddress.IPv6Address(detection_info).is_private):
+                continue
+            type_detection = evidence.get('type_detection')
             description = evidence.get('description')
             confidence = evidence.get('confidence')
             category = evidence.get('category')
@@ -102,13 +110,15 @@ class Module(Module, multiprocessing.Process):
             source_target_tag = evidence.get('source_target_tag')
             stime = evidence.get('stime')
             flow_datetime = utils.format_timestamp(stime)
+
             evidence_in_IDEA = utils.IDEA_format(srcip, type_evidence, type_detection,
                     detection_info, description, flow_datetime,
                     confidence, category, conn_count, source_target_tag)
-             # add Node info to the alert
-            evidence_in_IDEA.update({"Node": self.node_info})
-            alerts_to_export.append(evidence_in_IDEA)
 
+            # add Node info to the alert
+            evidence_in_IDEA.update({"Node": self.node_info})
+
+            alerts_to_export.append(evidence_in_IDEA)
 
         # [2] Upload to warden server
         self.print(f"Uploading {len(alerts_to_export)} events to warden server.")
@@ -119,10 +129,12 @@ class Module(Module, multiprocessing.Process):
         self.sender_thread.start()
         self.sender_thread.join()
         result = q.get()
-        if 'saved' in result:
-            # no errors
-            self.print(f'Done uploading {result["saved"]} events to warden server.\n')
-        else:
+
+        try:
+            if 'saved' in result:
+                # no errors
+                self.print(f'Done uploading {result["saved"]} events to warden server.\n')
+        except TypeError:
             # print the error
             self.print(result, 0, 1)
 
@@ -258,13 +270,13 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
-
-
+            # except Exception as inst:
+            #     exception_line = sys.exc_info()[2].tb_lineno
+            #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            #     self.print(str(type(inst)), 0, 1)
+            #     self.print(str(inst.args), 0, 1)
+            #     self.print(str(inst), 0, 1)
+            #     return True
+            # 
+            # 
 
