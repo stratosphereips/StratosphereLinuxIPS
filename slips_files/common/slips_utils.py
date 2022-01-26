@@ -181,8 +181,7 @@ class Utils(object):
         attachment = {
             'Attach': [{
                 'Content': description,
-                "ContentType": "text",
-                'Type': "OrigData"
+                "ContentType": "text/plain",
             }]
         }
         IDEA_dict.update(attachment)
