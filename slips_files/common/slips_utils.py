@@ -107,6 +107,20 @@ class Utils(object):
         if source_target_tag:
             IDEA_dict['Source'][0].update({'Type': [source_target_tag] })
 
+        # extract the port/proto from the description
+        for proto in ('tcp', 'udp'):
+            port = description.lower().split(proto)[0].split(' ')[-1][:-1]
+
+            # python doesn't raise an exception when splitting using a proto
+            # that's not there, so manually check
+            if len(port) == len(description):
+                # this proto isn't in the description
+                continue
+
+            IDEA_dict['Source'][0].update({'Proto': [proto] })
+            IDEA_dict['Source'][0].update({'Port': [port] })
+            break
+
         # some evidence have a dst ip
         if 'dstip' in type_detection or 'dip' in type_detection:
             # is the dstip ipv4/ipv6 or mac?
