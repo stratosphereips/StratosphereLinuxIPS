@@ -74,6 +74,14 @@ class Module(Module, multiprocessing.Process):
             self.print(f"Can't find warden.conf at {self.configuration_file}. Stopping module.")
             self.stop_module = True
 
+    def is_private_ip(self, type_evidence, detection_info, description):
+        # C&C alerts have dstips in description
+        if type_evidence == 'Command-and-Control-channels-detection':
+            # get the destination IP
+            detection_info = description.split('destination IP: ')[1].split(' ')[0]
+
+        return ((validators.ipv4(detection_info) and ipaddress.IPv4Address(detection_info).is_private)
+                or (validators.ipv6(detection_info) and ipaddress.IPv6Address(detection_info).is_private))
 
     def export_evidence(self, wclient, alert_ID):
         """
@@ -96,14 +104,13 @@ class Module(Module, multiprocessing.Process):
             srcip = profileid.split('_')[1]
             type_evidence = evidence.get('type_evidence')
             detection_info = evidence.get('detection_info')
-            # don't send private IPv4 or IPv6 addresses
-            if (validators.ipv4(detection_info)
-                    and ipaddress.IPv4Address(detection_info).is_private)\
-                or (validators.ipv6(detection_info)
-                        and ipaddress.IPv6Address(detection_info).is_private):
-                continue
             type_detection = evidence.get('type_detection')
             description = evidence.get('description')
+
+            # don't send alerts of private IPv4 or IPv6 addresses
+            if self.is_private_ip(type_evidence, detection_info, description):
+                continue
+
             confidence = evidence.get('confidence')
             category = evidence.get('category')
             conn_count = evidence.get('conn_count')
@@ -111,16 +118,26 @@ class Module(Module, multiprocessing.Process):
             port = evidence.get('port')
             proto = evidence.get('proto')
 
-            evidence_in_IDEA = utils.IDEA_format(srcip, type_evidence, type_detection,
-                    detection_info, description,
-                    confidence, category, conn_count,
-                    source_target_tag, port, proto)
+            evidence_in_IDEA = utils.IDEA_format(
+                srcip,
+                type_evidence,
+                type_detection,
+                detection_info,
+                description,
+                confidence,
+                category,
+                conn_count,
+                source_target_tag,
+                port,
+                proto)
 
             # add Node info to the alert
             evidence_in_IDEA.update({"Node": self.node_info})
+
             # Add test to the categories because we're still in probation mode
             evidence_in_IDEA['Category'].append('Test')
             evidence_in_IDEA.update({"Category": evidence_in_IDEA["Category"]})
+
             alerts_to_export.append(evidence_in_IDEA)
 
         # [2] Upload to warden server
