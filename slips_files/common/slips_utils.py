@@ -91,9 +91,9 @@ class Utils(object):
                      'EventTime': datetime.now(timezone.utc).isoformat(),
                      'Category': [category],
                      'Confidence': confidence,
-                     'Note' : description.replace('"','\"').replace("'",'\''),
                      'Source': [{}]
                      }
+
 
         # is the srcip ipv4/ipv6 or mac?
         if validators.ipv4(srcip):
@@ -146,6 +146,18 @@ class Utils(object):
             # update the dstip description if specified in the evidence
             if source_target_tag:
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
+
+
+        # add the description
+
+        attachment = {
+            'Attach': [{
+                'Content': description,
+                "ContentType": "text",
+                'Type': "OrigData"
+            }]
+        }
+        IDEA_dict.update(attachment)
 
         # only evidence of type scanning have conn_count
         if conn_count: IDEA_dict.update({'ConnCount': conn_count})
