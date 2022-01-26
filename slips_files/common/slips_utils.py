@@ -109,19 +109,26 @@ class Utils(object):
             # because it describes the source ip
             IDEA_dict['Source'][0].update({'Type': [source_target_tag] })
 
-        # extract the port/proto from the description
-        for proto in ('tcp', 'udp'):
-            port = description.lower().split(proto)[0].split(' ')[-1][:-1]
 
-            # python doesn't raise an exception when splitting using a proto
-            # that's not there, so manually check
-            if len(port) == len(description):
-                # this proto isn't in the description
-                continue
+        # When someone communicates with C&C, both sides of communication are
+        # sources, differentiated by the Type attribute, 'C&C' or 'Botnet'
+        if type_evidence == 'Command-and-Control-channels-detection':
+            # for C&C alerts IDEA_dict['Source'][0] is the Botnet aka srcip,
+            # IDEA_dict['Source'][1] is the C&C aka dstip
 
-            IDEA_dict['Source'][0].update({'Proto': [proto] })
-            IDEA_dict['Source'][0].update({'Port': [port] })
-            break
+            # get the destination IP
+            dstip = description.split('destination IP: ')[1].split(' ')[0]
+
+            if validators.ipv4(dstip):
+                ip_version = 'IP4'
+            elif validators.ipv6(dstip):
+                ip_version = 'IP6'
+
+            IDEA_dict['Source'].append({
+                ip_version: dstip,
+                'Type': 'CC'
+            })
+
 
         # some evidence have a dst ip
         if 'dstip' in type_detection or 'dip' in type_detection:
