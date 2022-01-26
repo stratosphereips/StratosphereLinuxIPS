@@ -105,50 +105,26 @@ class Module(Module, multiprocessing.Process):
             evidence_in_IDEA = utils.IDEA_format(srcip, type_evidence, type_detection,
                     detection_info, description, flow_datetime,
                     confidence, category, conn_count, source_target_tag)
-            return
-        #
-        # # [1] read all alerts from alerts.json
-        # alerts_path = os.path.join(self.output_dir, 'alerts.json')
-        # # this will contain a list of dicts, each dict is an alert in the IDEA format
-        # # and each dict will contain node information
-        # alerts_list = []
-        #
-        # alert= ''
-        # # Get the data that we want to send
-        # with open(alerts_path, 'r') as f:
-        #     for line in f:
-        #         alert += line
-        #         if line.endswith('}\n'):
-        #             # reached the end of 1 alert
-        #             # convert all single quotes to double quotes to be able to convert to json
-        #             alert = alert.replace("'",'"')
-        #
-        #             # convert to dict to be able to add node name
-        #             json_alert = json.loads(alert)
-        #             # add Node info to the alert
-        #             json_alert.update({"Node": self.node_info})
-        #
-        #             #todo for now we can only send test category
-        #             json_alert.update({"Category": ['Test']})
-        #
-        #             alerts_list.append(json_alert)
-        #             alert = ''
-        #
-        # # [2] Upload to warden server
-        # self.print(f"Uploading {len(alerts_list)} events to warden server.")
-        # # create a thread for sending alerts to warden server
-        # # and don't stop this module until the thread is done
-        # q = queue.Queue()
-        # self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_list, q])
-        # self.sender_thread.start()
-        # self.sender_thread.join()
-        # result = q.get()
-        # if 'saved' in result:
-        #     # no errors
-        #     self.print(f'Done uploading {result["saved"]} events to warden server.\n')
-        # else:
-        #     # print the error
-        #     self.print(result, 0, 1)
+             # add Node info to the alert
+            evidence_in_IDEA.update({"Node": self.node_info})
+            alerts_to_export.append(evidence_in_IDEA)
+
+
+        # [2] Upload to warden server
+        self.print(f"Uploading {len(alerts_to_export)} events to warden server.")
+        # create a thread for sending alerts to warden server
+        # and don't stop this module until the thread is done
+        q = queue.Queue()
+        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_to_export, q])
+        self.sender_thread.start()
+        self.sender_thread.join()
+        result = q.get()
+        if 'saved' in result:
+            # no errors
+            self.print(f'Done uploading {result["saved"]} events to warden server.\n')
+        else:
+            # print the error
+            self.print(result, 0, 1)
 
 
     def import_alerts(self, wclient):
