@@ -108,12 +108,13 @@ class Module(Module, multiprocessing.Process):
             category = evidence.get('category')
             conn_count = evidence.get('conn_count')
             source_target_tag = evidence.get('source_target_tag')
-            stime = evidence.get('stime')
-            flow_datetime = utils.format_timestamp(stime)
+            port = evidence.get('port')
+            proto = evidence.get('proto')
 
             evidence_in_IDEA = utils.IDEA_format(srcip, type_evidence, type_detection,
-                    detection_info, description, flow_datetime,
-                    confidence, category, conn_count, source_target_tag)
+                    detection_info, description,
+                    confidence, category, conn_count,
+                    source_target_tag, port, proto)
 
             # add Node info to the alert
             evidence_in_IDEA.update({"Node": self.node_info})

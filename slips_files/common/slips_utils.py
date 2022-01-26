@@ -78,8 +78,9 @@ class Utils(object):
         return timestamp
 
     def IDEA_format(self, srcip, type_evidence, type_detection,
-                    detection_info, description, flow_datetime,
-                    confidence, category, conn_count, source_target_tag):
+                    detection_info, description,
+                    confidence, category, conn_count, source_target_tag,
+                    port, proto):
         """
         Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
         Detailed explanation of IDEA categories: https://idea.cesnet.cz/en/classifications
@@ -128,6 +129,7 @@ class Utils(object):
 
         # extract the port/proto from the description
         for proto in ('tcp', 'udp'):
+            #todo this is done wrong for DNSWithoutConnection !!
             port = description.lower().split(proto)[0].split(' ')[-1][:-1]
 
             # python doesn't raise an exception when splitting using a proto
@@ -141,12 +143,16 @@ class Utils(object):
             # IDEA_dict['Source'][1] is the C&C aka dstip
             # for all other alerts they have the srcip in IDEA_dict['Source'][0]
             # and the dstip in IDEA_dict['Target'][0]
+            key = 'Source'
+            if 'Target' in IDEA_dict:
+                key = 'Target'
+
             idx = 0
             if type_evidence == 'Command-and-Control-channels-detection':
                 idx = 1
 
-            IDEA_dict['Source'][idx].update({'Proto': [proto] })
-            IDEA_dict['Source'][idx].update({'Port': [port] })
+            IDEA_dict[key][idx].update({'Proto': [proto] })
+            IDEA_dict[key][idx].update({'Port': [port] })
             break
 
 

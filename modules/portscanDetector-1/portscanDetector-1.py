@@ -205,7 +205,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     timestamp = data[dstip]['stime']
                     __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                              description, timestamp, category, conn_count=pkts_sent,
-                                             source_target_tag=source_target_tag,
+                                             source_target_tag=source_target_tag, proto=protocol,
                                              profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
