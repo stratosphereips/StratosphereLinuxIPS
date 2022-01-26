@@ -118,7 +118,6 @@ class Module(Module, multiprocessing.Process):
             # add Node info to the alert
             evidence_in_IDEA.update({"Node": self.node_info})
             # Add test to the categories because we're still in probation mode
-            # remove subcategories because they're causing errors? #todo
             evidence_in_IDEA['Category'].append('Test')
             evidence_in_IDEA.update({"Category": evidence_in_IDEA["Category"]})
             alerts_to_export.append(evidence_in_IDEA)

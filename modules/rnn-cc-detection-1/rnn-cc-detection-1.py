@@ -62,7 +62,7 @@ class Module(Module, multiprocessing.Process):
         '''
         type_detection = 'outTuple'
         detection_info = tupleid
-        source_target_tag= 'CC'
+        source_target_tag = 'Botnet'
         type_evidence = 'Command-and-Control-channels-detection'
         threat_level = 'high'
         categroy =  'Intrusion.Botnet'

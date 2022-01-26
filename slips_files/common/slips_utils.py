@@ -105,6 +105,8 @@ class Utils(object):
 
         # update the srcip description if specified in the evidence
         if source_target_tag:
+            # for example: this will be 'Botnet' in case of C&C alerts not C&C,
+            # because it describes the source ip
             IDEA_dict['Source'][0].update({'Type': [source_target_tag] })
 
         # extract the port/proto from the description
@@ -147,9 +149,7 @@ class Utils(object):
             if source_target_tag:
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
 
-
         # add the description
-
         attachment = {
             'Attach': [{
                 'Content': description,
