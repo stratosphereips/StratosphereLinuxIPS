@@ -86,7 +86,8 @@ class Utils(object):
         """
         IDEA_dict = {'Format': 'IDEA0',
                      'ID': str(uuid4()),
-                     'DetectTime': flow_datetime,
+                     # both times represet the time of the detection, we probably don't need flow_datetime
+                     'DetectTime': datetime.now(timezone.utc).isoformat(),
                      'EventTime': datetime.now(timezone.utc).isoformat(),
                      'Category': [category],
                      'Confidence': confidence,
