@@ -74,14 +74,40 @@ class Module(Module, multiprocessing.Process):
             self.print(f"Can't find warden.conf at {self.configuration_file}. Stopping module.")
             self.stop_module = True
 
-    def is_private_ip(self, type_evidence, detection_info, description):
-        # C&C alerts have dstips in description
-        if type_evidence == 'Command-and-Control-channels-detection':
-            # get the destination IP
-            detection_info = description.split('destination IP: ')[1].split(' ')[0]
+    def remove_private_ips(self, evidence_in_IDEA: dict):
+        """
+        returns evidence_in_IDEA but without the private IPs
+        """
 
-        return ((validators.ipv4(detection_info) and ipaddress.IPv4Address(detection_info).is_private)
-                or (validators.ipv6(detection_info) and ipaddress.IPv6Address(detection_info).is_private))
+        for type_ in ('Source', 'Target'):
+            try:
+                alert_field = evidence_in_IDEA[type_]
+            except KeyError:
+                # alert doesn't have this field
+                continue
+
+            # evidence_in_IDEA['Source'] may contain multiple dicts
+            for dict_ in alert_field :
+                for ip_version in ('IP4','IP6'):
+                    try:
+                        # get the ip
+                        ip = dict_[ip_version][0]
+                        if ip_version == 'IP4' and (validators.ipv4(ip) and ipaddress.IPv4Address(ip).is_private):
+                            # private ipv4
+                            evidence_in_IDEA['Source'].remove(dict_)
+
+                        elif validators.ipv6(ip) and ipaddress.IPv6Address(ip).is_private:
+                            # private ipv6
+                            evidence_in_IDEA['Source'].remove(dict_)
+
+                    except KeyError:
+                        # incorrect version
+                        continue
+
+        return evidence_in_IDEA
+
+    def is_valid_alert(self):
+        return True
 
     def export_evidence(self, wclient, alert_ID):
         """
@@ -106,11 +132,6 @@ class Module(Module, multiprocessing.Process):
             detection_info = evidence.get('detection_info')
             type_detection = evidence.get('type_detection')
             description = evidence.get('description')
-
-            # don't send alerts of private IPv4 or IPv6 addresses
-            if self.is_private_ip(type_evidence, detection_info, description):
-                continue
-
             confidence = evidence.get('confidence')
             category = evidence.get('category')
             conn_count = evidence.get('conn_count')
@@ -131,6 +152,12 @@ class Module(Module, multiprocessing.Process):
                 port,
                 proto)
 
+            if self.remove_private_ips(evidence_in_IDEA):
+                continue
+
+            if not self.is_valid_alert():
+                continue
+
             # add Node info to the alert
             evidence_in_IDEA.update({"Node": self.node_info})
 
@@ -142,21 +169,23 @@ class Module(Module, multiprocessing.Process):
 
         # [2] Upload to warden server
         self.print(f"Uploading {len(alerts_to_export)} events to warden server.")
-        # create a thread for sending alerts to warden server
-        # and don't stop this module until the thread is done
-        q = queue.Queue()
-        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_to_export, q])
-        self.sender_thread.start()
-        self.sender_thread.join()
-        result = q.get()
-
-        try:
-            if 'saved' in result:
-                # no errors
-                self.print(f'Done uploading {result["saved"]} events to warden server.\n')
-        except TypeError:
-            # print the error
-            self.print(result, 0, 1)
+        import pprint
+        pprint.pprint(alerts_to_export)
+        # # create a thread for sending alerts to warden server
+        # # and don't stop this module until the thread is done
+        # q = queue.Queue()
+        # self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_to_export, q])
+        # self.sender_thread.start()
+        # self.sender_thread.join()
+        # result = q.get()
+        #
+        # try:
+        #     if 'saved' in result:
+        #         # no errors
+        #         self.print(f'Done uploading {result["saved"]} events to warden server.\n')
+        # except TypeError:
+        #     # print the error
+        #     self.print(result, 0, 1)
 
 
     def import_alerts(self, wclient):
