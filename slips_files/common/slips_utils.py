@@ -127,33 +127,6 @@ class Utils(object):
                 'Type': 'CC'
             })
 
-        # extract the port/proto from the description
-        for proto in ('tcp', 'udp'):
-            #todo this is done wrong for DNSWithoutConnection !!
-            port = description.lower().split(proto)[0].split(' ')[-1][:-1]
-
-            # python doesn't raise an exception when splitting using a proto
-            # that's not there, so manually check
-            if len(port) == len(description):
-                # this proto isn't in the description
-                continue
-
-            # got the port and proto, check whether to add them to source[0] or source[1]
-            # for C&C alerts IDEA_dict['Source'][0] is the Botnet aka srcip,
-            # IDEA_dict['Source'][1] is the C&C aka dstip
-            # for all other alerts they have the srcip in IDEA_dict['Source'][0]
-            # and the dstip in IDEA_dict['Target'][0]
-            key = 'Source'
-            if 'Target' in IDEA_dict:
-                key = 'Target'
-
-            idx = 0
-            if type_evidence == 'Command-and-Control-channels-detection':
-                idx = 1
-
-            IDEA_dict[key][idx].update({'Proto': [proto] })
-            IDEA_dict[key][idx].update({'Port': [port] })
-            break
 
 
         # some evidence have a dst ip
@@ -181,6 +154,28 @@ class Utils(object):
             # update the dstip description if specified in the evidence
             if source_target_tag:
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
+
+        # add the port/proto
+        # for all alerts, the srcip is in IDEA_dict['Source'][0] and the dstip is in IDEA_dict['Target'][0]
+        # for alert that only have a source, this is the port/proto of the source ip
+        key = 'Source'
+        idx = 0 # this idx is used for selecting the right dict to add port/proto
+
+        if 'Target' in IDEA_dict:
+            # if the alert has a target, add the port/proto to the target(dstip)
+            key = 'Target'
+            idx = 0
+
+        # for C&C alerts IDEA_dict['Source'][0] is the Botnet aka srcip and IDEA_dict['Source'][1] is the C&C aka dstip
+        if type_evidence == 'Command-and-Control-channels-detection':
+            # idx of the dict containing the dstip, we'll use this to add the port and proto to this dict
+            key = 'Source'
+            idx = 1
+
+        if port:
+            IDEA_dict[key][idx].update({'Port': [int(port)] })
+        if proto:
+            IDEA_dict[key][idx].update({'Proto': [proto.lower()] })
 
         # add the description
         attachment = {
