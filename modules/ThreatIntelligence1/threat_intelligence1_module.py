@@ -155,7 +155,7 @@ class Module(Module, multiprocessing.Process):
         Read all the files holding IP addresses and a description and store in the db.
         This also helps in having unique ioc across files
         Returns nothing, but the dictionary should be filled
-        :param ti_file_path: path_to local threat intel file
+        :param ti_file_path: full path_to local threat intel file
         """
         try:
             data_file_name = ti_file_path.split('/')[-1]
@@ -271,6 +271,64 @@ class Module(Module, multiprocessing.Process):
         self.__delete_old_source_IPs(data_file)
         self.__delete_old_source_Domains(data_file)
 
+    def parse_ja3_file(self, path):
+        """
+        Reads the file holding JA3 hashes and store in the db.
+        Returns nothing, but the dictionary should be filled
+        :param path: full path_to local threat intel file
+        """
+        try:
+            data_file_name = path.split('/')[-1]
+            ja3_dict = {}
+            # used for debugging
+            line_number = 0
+
+            with open(path) as local_ja3_file:
+                self.print('Reading local file {}'.format(path), 2, 0)
+
+                # skip comments
+                while True:
+                    line_number+=1
+                    line = local_ja3_file.readline()
+                    if not line.startswith('#'):
+                        break
+
+                for line in local_ja3_file:
+                    line_number+=1
+                    # The format of the file should be
+                    # "JA3 hash", "Threat level", "Description"
+                    data = line.replace("\n","").replace("\"","").split(",")
+
+                    # the column order is hardcoded because it's owr own ti file and we know the format,
+                    # we shouldn't be trying to find it
+                    ja3, threat_level, description = data[0], data [1].lower(), data[2]
+
+                    # validate the threat level taken from the user
+                    if threat_level not in ('info', 'low', 'medium', 'high', 'critical'):
+                        # default value
+                        threat_level = 'medium'
+
+                    # validate the ja3 hash taken from the user
+                    if not validators.md5(ja3):
+                        continue
+
+                    ja3_dict[ja3] = json.dumps({'description': description,
+                                                'source': data_file_name,
+                                                'threat_level': threat_level})
+            # Add all loaded JA3 to the database
+            __database__.add_ja3_to_IoC(ja3_dict)
+            return True
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on parse_ti_file() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            print(traceback.format_exc())
+            return True
+
     def check_local_ti_files(self, path_to_files: str) -> bool:
         """
         Checks if a local TI file was changed based
@@ -305,8 +363,14 @@ class Module(Module, multiprocessing.Process):
                         # File is updated and was in database.
                         # Delete previous data of this file.
                         self.__delete_old_source_data_from_database(localfile)
-                    # Load updated data to the database
-                    self.parse_ti_file(path_to_files + '/' + localfile)
+
+                    full_path_to_file = f'{path_to_files}/{localfile}'
+                    # we have 2 types of local files, TI and JA3 files
+                    if 'ja3' in localfile.lower():
+                        self.parse_ja3_file(full_path_to_file)
+                    else:
+                        # Load updated data to the database
+                        self.parse_ti_file(full_path_to_file)
 
                     # Store the new etag and time of file in the database
                     malicious_file_info = {}
