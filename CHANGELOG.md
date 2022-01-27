@@ -1,3 +1,14 @@
+-0.8.4
+* Slips
+  - Add support for local JA3 feeds
+  - Improved CESNET Module
+  - Update and improve whitelists
+  - Improve alerts by adding hostname to alerts printed in the CLI and in alerts.log
+  - Faster startup of Slips
+
+* Kalipso
+  - Fix Kalipso in docker issue
+
 -0.8.3
 * Slips
   - More accurate threat levels, now they're strings instead of values
