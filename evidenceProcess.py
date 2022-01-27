@@ -704,6 +704,8 @@ class EvidenceProcess(multiprocessing.Process):
                     threat_level = data.get('threat_level', False)
                     category = data.get('category',False)
                     conn_count = data.get('conn_count',False)
+                    port = data.get('port',False)
+                    proto = data.get('proto',False)
                     source_target_tag = data.get('source_target_tag', False)
 
                     # Ignore alert if IP is whitelisted
@@ -731,11 +733,12 @@ class EvidenceProcess(multiprocessing.Process):
                                     type_detection,
                                     detection_info,
                                     description,
-                                    flow_datetime,
                                     confidence,
                                     category,
                                     conn_count,
-                                    source_target_tag)
+                                    source_target_tag,
+                                    port,
+                                    proto)
 
 
                     # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
