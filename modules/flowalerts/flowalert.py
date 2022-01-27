@@ -376,9 +376,9 @@ class Module(Module, multiprocessing.Process):
             confidence = 1
             threat_level = 'high'
             category = 'Anomaly.Connection'
-            type_detection  = 'dport'
+            type_detection  = 'dstip'
             type_evidence = 'UnknownPort'
-            detection_info = str(dport)
+            detection_info = daddr
             ip_identification = __database__.getIPIdentification(daddr)
             description = f'Connection to unknown destination port {dport}/{proto.upper()} ' \
                           f'destination IP {daddr}. {ip_identification}'
@@ -386,11 +386,12 @@ class Module(Module, multiprocessing.Process):
             ip_info = self.get_ip_info(daddr)
             if ip_info:
                 description += f' ({ip_info})'
+
             if not twid:
                 twid = ''
             __database__.setEvidence(type_evidence, type_detection, detection_info,
                                      threat_level, confidence, description,
-                                     timestamp, category, profileid=profileid,
+                                     timestamp, category, port=dport, proto=proto,profileid=profileid,
                                      twid=twid, uid=uid)
 
     def set_evidence_for_port_0_connection(self, saddr, daddr, direction, profileid, twid, uid, timestamp):

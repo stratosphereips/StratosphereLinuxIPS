@@ -403,16 +403,7 @@ class EvidenceProcess(multiprocessing.Process):
             data_type = 'domain'
         elif 'outTuple' in type_detection:
             # for example: ip:port:proto
-            # check if ipv6 or v4
-            data = data.split(':')
-            if len(data) > 3:
-                # outtuples can contain ipv6 like this 2a00:1450:400c:c05::be:443:tcp
-                # we're sure this is an ipv6, extract it
-                data = data[:-2]  # remove port and proto
-                data = "".join(i+':' for i in data)[:-1]
-            else:
-                # is ipv4
-                data = data[0]
+            data = data.split('-')[0]
             data_type = 'ip'
 
         elif 'dport' in type_detection:
@@ -598,38 +589,7 @@ class EvidenceProcess(multiprocessing.Process):
             newformat = newformat.replace('S','S.%f')
         return newformat
 
-    def format_timestamp(self, timestamp):
-        """
-        Function to unify timestamps printed to log files, notification and cli.
-        :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
-        returns the date and time in RFC3339 format (IDEA standard) as str by default
-        """
-        if timestamp and (isinstance(timestamp, datetime)):
-            # The timestamp is a datetime
-            timestamp = timestamp.strftime(self.get_ts_format(timestamp))
-        elif timestamp and type(timestamp) == float:
-            # The timestamp is a float
-            timestamp = datetime.fromtimestamp(timestamp).astimezone().isoformat()
-        elif ' ' in timestamp:
-            # self.print(f'DATETIME: {timestamp}')
-            # The timestamp is a string with spaces
-            timestamp = timestamp.replace('/','-')
-            #dt_string = "2020-12-18 3:11:09"
-            # format of incoming ts
-            try:
-                newformat = "%Y-%m-%d %H:%M:%S.%f%z"
-                # convert to datetime obj
-                timestamp = datetime.strptime(timestamp, newformat)
-            except ValueError:
-                # The string did not have a time zone
-                newformat = "%Y-%m-%d %H:%M:%S.%f"
-                # convert to datetime obj
-                timestamp = datetime.strptime(timestamp, newformat)
-            # convert to iso format
-            timestamp = timestamp.astimezone().isoformat()
 
-
-        return timestamp
 
     def add_to_log_folder(self, data):
         # If logs folder is enabled (using -l), write alerts in the folder as well
@@ -640,78 +600,6 @@ class EvidenceProcess(multiprocessing.Process):
         self.logs_jsonfile.write('\n')
         self.logs_jsonfile.flush()
 
-
-    def IDEA_format(self, srcip, type_evidence, type_detection,
-                    detection_info, description, flow_datetime,
-                    confidence, category, conn_count, source_target_tag):
-        """
-        Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
-        Detailed explanation of IDEA categories: https://idea.cesnet.cz/en/classifications
-        """
-        IDEA_dict = {'Format': 'IDEA0',
-                     'ID': str(uuid4()),
-                     'DetectTime': flow_datetime,
-                     'EventTime': datetime.now(timezone.utc).isoformat(),
-                     'Category': [category],
-                     'Confidence': confidence,
-                     'Note' : description.replace('"','\"').replace("'",'\''),
-                     'Source': [{}]
-                     }
-
-        # is the srcip ipv4/ipv6 or mac?
-        if validators.ipv4(srcip):
-            IDEA_dict['Source'][0].update({'IP4': [srcip]})
-        elif validators.ipv6(srcip):
-            IDEA_dict['Source'][0].update({'IP6': [srcip]})
-        elif validators.mac_address(srcip):
-            IDEA_dict['Source'][0].update({'MAC': [srcip]})
-
-        # update the srcip description if specified in the evidence
-        if source_target_tag:
-            IDEA_dict['Source'][0].update({'Type': [source_target_tag] })
-
-        # some evidence have a dst ip
-        if 'dstip' in type_detection or 'dip' in type_detection:
-            # is the dstip ipv4/ipv6 or mac?
-            if validators.ipv4(detection_info):
-                IDEA_dict['Target'] = [{'IP4': [detection_info]}]
-            elif validators.ipv6(detection_info):
-                IDEA_dict['Target'] = [{'IP6': [detection_info]}]
-            elif validators.mac_address(detection_info):
-                IDEA_dict['Target'] = [{'MAC': [detection_info]}]
-
-            # try to extract the hostname/SNI/rDNS of the dstip form the description if available
-            hostname = False
-            try:
-                hostname = description.split('rDNS: ')[1]
-            except IndexError:
-                pass
-            try:
-                hostname = description.split('SNI: ')[1]
-            except IndexError:
-                pass
-            if hostname:
-                IDEA_dict['Target'][0].update({'Hostname': [hostname]})
-            # update the dstip description if specified in the evidence
-            if source_target_tag:
-                IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
-
-        # only evidence of type scanning have conn_count
-        if conn_count: IDEA_dict.update({'ConnCount': conn_count})
-
-        if 'MaliciousDownloadedFile' in type_evidence:
-            IDEA_dict.update({
-                'Attach': [
-                    {
-                        'Type': ["Malware"],
-                        "Hash": [f'md5:{detection_info}'],
-                        "Size": int(description.split("size:")[1].split("from")[0])
-
-                    }
-                ]
-            })
-
-        return IDEA_dict
 
     def format_evidence_causing_this_alert(self, all_evidence, profileid, twid, flow_datetime) -> str:
         """
@@ -726,7 +614,7 @@ class EvidenceProcess(multiprocessing.Process):
             twid_num = twid.split('timewindow')[1]
             srcip = profileid.split(self.separator)[1]
             # Get the start time of this TW
-            tw_start_time_str = self.format_timestamp(float(__database__.getTimeTW(profileid, twid)))
+            tw_start_time_str = utils.format_timestamp(float(__database__.getTimeTW(profileid, twid)))
             tw_start_time_datetime = datetime.strptime(tw_start_time_str, self.get_ts_format(tw_start_time_str).replace(' ','T'))
             # Convert the tw width to deltatime
             tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
@@ -807,6 +695,8 @@ class EvidenceProcess(multiprocessing.Process):
                     threat_level = data.get('threat_level', False)
                     category = data.get('category',False)
                     conn_count = data.get('conn_count',False)
+                    port = data.get('port',False)
+                    proto = data.get('proto',False)
                     source_target_tag = data.get('source_target_tag', False)
 
                     # Ignore alert if IP is whitelisted
@@ -818,7 +708,7 @@ class EvidenceProcess(multiprocessing.Process):
                         continue
 
                     # Format the time to a common style given multiple type of time variables
-                    flow_datetime = self.format_timestamp(timestamp)
+                    flow_datetime = utils.format_timestamp(timestamp)
 
                     # prepare evidence for text log file
                     evidence = self.format_evidence_string(profileid,
@@ -829,16 +719,17 @@ class EvidenceProcess(multiprocessing.Process):
                                                            detection_info,
                                                            description)
                     # prepare evidence for json log file
-                    IDEA_dict = self.IDEA_format(srcip,
+                    IDEA_dict = utils.IDEA_format(srcip,
                                     type_evidence,
                                     type_detection,
                                     detection_info,
                                     description,
-                                    flow_datetime,
                                     confidence,
                                     category,
                                     conn_count,
-                                    source_target_tag)
+                                    source_target_tag,
+                                    port,
+                                    proto)
 
 
                     # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
@@ -875,6 +766,8 @@ class EvidenceProcess(multiprocessing.Process):
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
                         srcip = profileid.split(self.separator)[1]
+                        # to store all the ids causing this alerts in the database
+                        IDs_causing_an_alert = []
                         for evidence in tw_evidence.values():
                             # Deserialize evidence
                             evidence = json.loads(evidence)
@@ -885,6 +778,9 @@ class EvidenceProcess(multiprocessing.Process):
                             confidence = float(evidence.get('confidence'))
                             threat_level = evidence.get('threat_level')
                             description = evidence.get('description')
+                            ID = evidence.get('ID')
+                            IDs_causing_an_alert.append(ID)
+
                             # each threat level is a string, get the numerical value of it
                             try:
                                 threat_level = self.threat_levels[threat_level.lower()]
@@ -908,6 +804,14 @@ class EvidenceProcess(multiprocessing.Process):
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
+                                # store the alert in our database
+                                # the alert ID is profileid_twid + the ID of the last evidence causing this alert
+                                alert_ID = f'{profileid}_{twid}_{ID}'
+                                # todo we can just publish in new_alert, do we need to save it in the db??
+                                __database__.set_evidence_causing_alert(alert_ID, IDs_causing_an_alert)
+                                __database__.publish('new_alert', alert_ID)
+
+                                # print the alert
                                 alert_to_print = self.format_evidence_causing_this_alert(tw_evidence, profileid, twid, flow_datetime)
                                 self.print(f'{alert_to_print}', 1, 0)
 
