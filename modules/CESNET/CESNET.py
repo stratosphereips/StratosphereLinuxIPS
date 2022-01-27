@@ -140,6 +140,11 @@ class Module(Module, multiprocessing.Process):
                 # we received an evidence ID before it's added to the database
                 # there's a time.sleep(3) above to solve this issue
                 continue
+            threat_level = evidence.get('threat_level')
+            if threat_level == 0:
+                # don't export alerts of type 'info'
+                continue
+
             type_evidence = evidence.get('type_evidence')
             detection_info = evidence.get('detection_info')
             type_detection = evidence.get('type_detection')
