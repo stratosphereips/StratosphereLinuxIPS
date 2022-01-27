@@ -123,8 +123,8 @@ class Utils(object):
                 ip_version = 'IP6'
 
             IDEA_dict['Source'].append({
-                ip_version: dstip,
-                'Type': 'CC'
+                ip_version: [dstip],
+                'Type': ['CC']
             })
 
 

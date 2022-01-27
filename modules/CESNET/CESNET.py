@@ -10,6 +10,8 @@ from ..CESNET.warden_client import Client, read_cfg, Error, format_timestamp
 import os
 import json
 import time
+import threading
+import queue
 import ipaddress
 import validators
 
@@ -181,21 +183,19 @@ class Module(Module, multiprocessing.Process):
 
         # [2] Upload to warden server
         self.print(f"Uploading {len(alerts_to_export)} events to warden server.")
-        # # create a thread for sending alerts to warden server
-        # # and don't stop this module until the thread is done
-        # q = queue.Queue()
-        # self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_to_export, q])
-        # self.sender_thread.start()
-        # self.sender_thread.join()
-        # result = q.get()
-        #
-        # try:
-        #     if 'saved' in result:
-        #         # no errors
-        #         self.print(f'Done uploading {result["saved"]} events to warden server.\n')
-        # except TypeError:
-        #     # print the error
-        #     self.print(result, 0, 1)
+        # create a thread for sending alerts to warden server
+        # and don't stop this module until the thread is done
+        q = queue.Queue()
+        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_to_export, q])
+        self.sender_thread.start()
+        self.sender_thread.join()
+        result = q.get()
+
+        try:
+            # no errors
+            self.print(f'Done uploading {result["saved"]} events to warden server.\n')
+        except KeyError:
+            self.print(result, 0, 1)
 
 
     def import_alerts(self, wclient):
