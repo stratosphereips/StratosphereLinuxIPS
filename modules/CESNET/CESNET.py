@@ -10,8 +10,6 @@ from ..CESNET.warden_client import Client, read_cfg, Error, format_timestamp
 import os
 import json
 import time
-import threading
-import queue
 import ipaddress
 import validators
 
@@ -87,22 +85,26 @@ class Module(Module, multiprocessing.Process):
                 continue
 
             # evidence_in_IDEA['Source'] may contain multiple dicts
-            for dict_ in alert_field :
+            for dict_ in alert_field:
                 for ip_version in ('IP4','IP6'):
                     try:
                         # get the ip
                         ip = dict_[ip_version][0]
-                        if ip_version == 'IP4' and (validators.ipv4(ip) and ipaddress.IPv4Address(ip).is_private):
-                            # private ipv4
-                            evidence_in_IDEA['Source'].remove(dict_)
-
-                        elif validators.ipv6(ip) and ipaddress.IPv6Address(ip).is_private:
-                            # private ipv6
-                            evidence_in_IDEA['Source'].remove(dict_)
-
                     except KeyError:
                         # incorrect version
                         continue
+
+                    if ip_version == 'IP4' and (validators.ipv4(ip) and ipaddress.IPv4Address(ip).is_private):
+                        # private ipv4
+                        evidence_in_IDEA[type_].remove(dict_)
+                    elif validators.ipv6(ip) and ipaddress.IPv6Address(ip).is_private:
+                        # private ipv6
+                        evidence_in_IDEA[type_].remove(dict_)
+
+                    # After removing private IPs, some alerts may not have any IoCs left so we shouldn't export them
+                    # if we have no source or target dicts left, remove the source/target field from the alert
+                    if evidence_in_IDEA[type_] == []:
+                        evidence_in_IDEA.pop(type_)
 
         return evidence_in_IDEA
 
@@ -120,8 +122,8 @@ class Module(Module, multiprocessing.Process):
             # something went wrong while getting the list of evidence
             return False
 
-        profile, ip, twid, ID = alert_ID.split('_')
-        profileid = f'{profile}_{ip}'
+        profile, srcip, twid, ID = alert_ID.split('_')
+        profileid = f'{profile}_{srcip}'
 
         # this will contain alerts in IDEA format ready to be exported
         alerts_to_export = []
@@ -152,11 +154,13 @@ class Module(Module, multiprocessing.Process):
                 port,
                 proto)
 
-            if self.remove_private_ips(evidence_in_IDEA):
+            # remove private ips from the alert
+            evidence_in_IDEA =  self.remove_private_ips(evidence_in_IDEA)
+
+            # make sure we still have an IoC in th alert, a valid domain/mac/public ip
+            if not self.is_valid_alert(evidence_in_IDEA):
                 continue
 
-            if not self.is_valid_alert():
-                continue
 
             # add Node info to the alert
             evidence_in_IDEA.update({"Node": self.node_info})
@@ -169,8 +173,6 @@ class Module(Module, multiprocessing.Process):
 
         # [2] Upload to warden server
         self.print(f"Uploading {len(alerts_to_export)} events to warden server.")
-        import pprint
-        pprint.pprint(alerts_to_export)
         # # create a thread for sending alerts to warden server
         # # and don't stop this module until the thread is done
         # q = queue.Queue()
