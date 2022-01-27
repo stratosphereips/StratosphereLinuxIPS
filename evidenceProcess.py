@@ -403,16 +403,7 @@ class EvidenceProcess(multiprocessing.Process):
             data_type = 'domain'
         elif 'outTuple' in type_detection:
             # for example: ip:port:proto
-            # check if ipv6 or v4
-            data = data.split(':')
-            if len(data) > 3:
-                # outtuples can contain ipv6 like this 2a00:1450:400c:c05::be:443:tcp
-                # we're sure this is an ipv6, extract it
-                data = data[:-2]  # remove port and proto
-                data = "".join(i+':' for i in data)[:-1]
-            else:
-                # is ipv4
-                data = data[0]
+            data = data.split('-')[0]
             data_type = 'ip'
 
         elif 'dport' in type_detection:

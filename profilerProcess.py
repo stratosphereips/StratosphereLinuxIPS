@@ -2080,7 +2080,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                     # Tuple
-                    tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
+                    tupleid = str(daddr_as_obj) + '-' + str(dport) + '-' + proto
                     # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
                     # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
@@ -2212,7 +2212,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                     # Tuple. We use the src ip, but the dst port still!
-                    tupleid = str(saddr_as_obj) + ':' + str(dport) + ':' + proto
+                    tupleid = str(saddr_as_obj) + '-' + str(dport) + '-' + proto
                     # Compute symbols.
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
                     # Add the src tuple
