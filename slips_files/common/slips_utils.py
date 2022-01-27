@@ -128,7 +128,6 @@ class Utils(object):
             })
 
 
-
         # some evidence have a dst ip
         if 'dstip' in type_detection or 'dip' in type_detection:
             # is the dstip ipv4/ipv6 or mac?
@@ -152,6 +151,15 @@ class Utils(object):
             if hostname:
                 IDEA_dict['Target'][0].update({'Hostname': [hostname]})
             # update the dstip description if specified in the evidence
+            if source_target_tag:
+                IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
+
+        elif 'domain' in type_detection:
+            # the ioc is a domain
+            target_info = {'Hostname': [detection_info]}
+            IDEA_dict['Target'] = [target_info]
+
+            # update the dstdomain description if specified in the evidence
             if source_target_tag:
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
 
