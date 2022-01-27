@@ -376,7 +376,7 @@ class Module(Module, multiprocessing.Process):
             confidence = 1
             threat_level = 'high'
             category = 'Anomaly.Connection'
-            type_detection  = 'daddr'
+            type_detection  = 'dstip'
             type_evidence = 'UnknownPort'
             detection_info = daddr
             ip_identification = __database__.getIPIdentification(daddr)
