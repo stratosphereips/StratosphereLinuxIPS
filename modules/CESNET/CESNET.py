@@ -108,14 +108,19 @@ class Module(Module, multiprocessing.Process):
 
         return evidence_in_IDEA
 
-    def is_valid_alert(self):
-        return True
+    def is_valid_alert(self, evidence_in_IDEA) -> bool:
+        """
+        Make sure we still have a field that contains valid IoCs to export
+        """
+        return 'Source' in evidence_in_IDEA or 'Target' in evidence_in_IDEA
 
     def export_evidence(self, wclient, alert_ID):
         """
         Exports all evidence causing the given alert to warden server
         :param alert_ID: alert to export to warden server
         """
+        # give evidenceProcess enough time to store all evidence IDs in the database
+        time.sleep(3)
         # get all the evidence causing this alert
         evidence_IDs:list = __database__.get_evidence_causing_alert(alert_ID)
         if not evidence_IDs:
@@ -129,7 +134,10 @@ class Module(Module, multiprocessing.Process):
         alerts_to_export = []
         for ID in evidence_IDs:
             evidence = __database__.get_evidence_by_ID(profileid, twid, ID)
-            srcip = profileid.split('_')[1]
+            if not evidence:
+                # we received an evidence ID before it's added to the database
+                # there's a time.sleep(3) above to solve this issue
+                continue
             type_evidence = evidence.get('type_evidence')
             detection_info = evidence.get('detection_info')
             type_detection = evidence.get('type_detection')
