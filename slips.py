@@ -215,6 +215,12 @@ def prepare_zeek_scripts():
                 # found a file in the dir that isn't in __load__.zeek, add it
                 f.write(f'\n@load ./{file_name}')
 
+def add_metadata():
+    """
+    Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist file, current commit and date
+    """
+    pass
+
 def shutdown_gracefully(input_information):
     """ Wait for all modules to confirm that they're done processing and then shutdown
     :param input_information: the interface/pcap/nfdump/binetflow used. we need it to save the db
@@ -735,8 +741,6 @@ if __name__ == '__main__':
 
         c1 = __database__.subscribe('finished_modules')
 
-
-
         # Input process
         # Create the input process and start it
         inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
@@ -747,6 +751,9 @@ if __name__ == '__main__':
         __database__.store_process_PID('inputProcess', int(inputProcess.pid))
 
 
+        enable_metadata = read_configuration(config, 'parameters', 'metadata_dir')
+        if 'yes' in enable_metadata.lower():
+            add_metadata()
 
         # Store the host IP address if input type is interface
         if input_type == 'interface':
