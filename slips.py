@@ -42,6 +42,7 @@ import subprocess
 import re
 from collections import OrderedDict
 from distutils.dir_util import copy_tree
+import asyncio
 
 version = '0.8.3'
 
@@ -86,13 +87,16 @@ def create_folder_for_logs():
             return False
     return logs_folder
 
-def update_malicious_file(outputqueue, config):
+async def update_TI_files(outputqueue, config):
     '''
     Update malicious files and store them in database before slips start
     '''
     update_manager = UpdateFileManager(outputqueue, config)
     try:
-        update_manager.update()
+        # create_task is used to run update() function concurrently instead of serially
+        update_finished = asyncio.create_task(update_manager.update())
+        # wait for UpdateFileManager to finish before starting all the modules
+        await update_finished
     except KeyboardInterrupt:
         os.kill(os.getpid(), SIGSTOP)
 
@@ -643,7 +647,9 @@ if __name__ == '__main__':
         outputProcessThread.start()
 
         # Before starting update malicious file
-        update_malicious_file(outputProcessQueue,config)
+        # create an event loop and allow it to run the update_file_manager asynchronously
+        asyncio.run(update_TI_files(outputProcessQueue, config))
+
         # Print the PID of the main slips process. We do it here because we needed the queue to the output process
         outputProcessQueue.put('10|main|Started main program [PID {}]'.format(os.getpid()))
         # Output pid

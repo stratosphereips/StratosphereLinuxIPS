@@ -524,7 +524,7 @@ class Database(object):
         Function to add information about the an IP address
         The flow can go out of the IP (we are acting as Client) or into the IP
         (we are acting as Server)
-        ip_as_obj: IP to add. It can be a dstIP or srcIP depending on the rol
+        ip_as_obj: IP to add. It can be a dstIP or srcIP depending on the role
         role: 'Client' or 'Server'
         This function does two things:
             1- Add the ip to this tw in this profile, counting how many times
@@ -704,31 +704,32 @@ class Database(object):
     def add_tuple(self, profileid, twid, tupleid, data_tuple, role, starttime, uid):
         """
         Add the tuple going in or out for this profile
+        :param tupleid: daddr:dport:proto
         role: 'Client' or 'Server'
         """
         # If the traffic is going out it is part of our outtuples, if not, part of our intuples
         if role == 'Client':
-            tuple_key = 'OutTuples'
+            direction = 'OutTuples'
         elif role == 'Server':
-            tuple_key = 'InTuples'
+            direction = 'InTuples'
         try:
             self.print('Add_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple), 3,0)
             # Get all the InTuples or OutTuples for this profileid in this TW
-            hash_id = profileid + self.separator + twid
-            data = self.r.hget(hash_id, tuple_key)
+            profileid_twid = profileid + self.separator + twid
+            tuples = self.r.hget(profileid_twid, direction)
             # Separate the symbold to add and the previous data
             (symbol_to_add, previous_two_timestamps) = data_tuple
-            if not data:
+            if not tuples:
                 # Must be str so we can convert later
-                data = '{}'
+                tuples = '{}'
             # Convert the json str to a dictionary
-            data = json.loads(data)
+            tuples = json.loads(tuples)
             try:
-                stored_tuple = data[tupleid]
+                stored_tuple = tuples[tupleid]
                 # Disasemble the input
-                self.print('Not the first time for tuple {} as an {} for {} in TW {}. Add the symbol: {}. Store previous_times: {}. Prev Data: {}'.format(tupleid, tuple_key, profileid, twid, symbol_to_add, previous_two_timestamps, data), 3,0)
+                self.print('Not the first time for tuple {} as an {} for {} in TW {}. Add the symbol: {}. Store previous_times: {}. Prev Data: {}'.format(tupleid, direction, profileid, twid, symbol_to_add, previous_two_timestamps, tuples), 3,0)
                 # Get the last symbols of letters in the DB
-                prev_symbols = data[tupleid][0]
+                prev_symbols = tuples[tupleid][0]
                 # Add it to form the string of letters
                 new_symbol = prev_symbols + symbol_to_add
                 # Bundle the data together
@@ -745,20 +746,20 @@ class Database(object):
                     }
                     to_send = json.dumps(to_send)
                     self.publish('new_letters', to_send)
-                data[tupleid] = new_data
+                tuples[tupleid] = new_data
                 self.print('\tLetters so far for tuple {}: {}'.format(tupleid, new_symbol),3,0)
-                data = json.dumps(data)
-            except (TypeError, KeyError) as e:
+                tuples = json.dumps(tuples)
+            except (TypeError, KeyError):
                 # TODO check that this condition is triggered correctly only for the first case and not the rest after...
                 # There was no previous data stored in the DB
-                self.print('First time for tuple {} as an {} for {} in TW {}'.format(tupleid, tuple_key, profileid, twid), 3,0)
+                self.print('First time for tuple {} as an {} for {} in TW {}'.format(tupleid, direction, profileid, twid), 3,0)
                 # Here get the info from the ipinfo key
                 new_data = (symbol_to_add, previous_two_timestamps)
-                data[tupleid] = new_data
+                tuples[tupleid] = new_data
                 # Convet the dictionary to json
-                data = json.dumps(data)
+                tuples = json.dumps(tuples)
             # Store the new data on the db
-            self.r.hset(hash_id, tuple_key, str(data))
+            self.r.hset(profileid_twid, direction, str(tuples))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, starttime)
         except Exception as inst:
@@ -2654,5 +2655,23 @@ class Database(object):
         else:
             time = float('-inf')
         return time
+
+
+    def start_profiling(self):
+        print("-"*30+ " Started profiling")
+        import cProfile
+        profile = cProfile.Profile()
+        profile.enable()
+        return profile
+
+    def end_profiling(self, profile):
+        import pstats, io
+        profile.disable()
+        s = io.StringIO()
+        sortby = pstats.SortKey.CUMULATIVE
+        ps = pstats.Stats(profile, stream=s).sort_stats(sortby)
+        ps.print_stats()
+        print(s.getvalue())
+        print("-"*30+ " Done profiling")
 
 __database__ = Database()

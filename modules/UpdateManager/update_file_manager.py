@@ -10,6 +10,7 @@ import traceback
 import requests
 import datetime
 import sys
+import asyncio
 
 class UpdateFileManager:
 
@@ -190,8 +191,6 @@ class UpdateFileManager:
                     self.print(f"Invalid line: {line} line number: {line_number} in {ports_info_filepath}. Skipping.",0,1)
                     continue
 
-
-
     def update_local_file(self, file_path) -> bool:
         """
         Return True if update was successfull
@@ -218,7 +217,6 @@ class UpdateFileManager:
 
         except OSError:
             return False
-
 
     def __check_if_update_local_file(self, file_path: str) -> bool:
         """
@@ -365,7 +363,7 @@ class UpdateFileManager:
             self.print(f'Error: {e}', 0, 1)
             return False
 
-    def update_TI_file(self, link_to_download: str) -> bool:
+    async def update_TI_file(self, link_to_download: str) -> bool:
         """
         Update remote TI files and JA3 feeds by downloading and parsing them
         """
@@ -375,6 +373,7 @@ class UpdateFileManager:
             # first download the file and save it locally
             if not self.download_file(link_to_download, self.path_to_threat_intelligence_data + '/' + file_name_to_download):
                 # failed to download file
+                self.print(f"Error downloading feed {link_to_download}. Updating was aborted.", 0, 1)
                 return False
 
             # File is updated in the server and was in our database.
@@ -386,12 +385,14 @@ class UpdateFileManager:
             path = f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'
             # is it ja3 feed?
             if link_to_download in self.ja3_feeds and not self.parse_ja3_feed(link_to_download, path):
+                self.print(f"Error parsing JA3 feed {link_to_download}. Updating was aborted.", 0, 1)
                 return False
 
             # is it a ti_file? load updated IPs to the database
             elif link_to_download in self.url_feeds \
                     and not self.parse_ti_feed(link_to_download, path):
                 # an error occured
+                self.print(f"Error parsing feed {link_to_download}. Updating was aborted.", 0, 1)
                 return False
 
             # Store the new etag and time of file in the database
@@ -399,6 +400,9 @@ class UpdateFileManager:
             file_info['e-tag'] = self.new_e_tag
             file_info['time'] = self.new_update_time
             __database__.set_TI_file_info(file_name_to_download, file_info)
+
+            self.print(f'Successfully updated remote file {file_name_to_download}.', 1, 0)
+            self.loaded_ti_files +=1
             return True
 
         except Exception as inst:
@@ -899,7 +903,7 @@ class UpdateFileManager:
             print(traceback.format_exc())
             return False
 
-    def update(self) -> bool:
+    async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
         """
@@ -912,7 +916,7 @@ class UpdateFileManager:
 
         if self.update_period <= 0:
             # User does not want to update the malicious IP list.
-            self.print('Not Updating the remote file of maliciuos IPs and domains because the update period is <= 0.', 0, 1)
+            self.print('Not Updating the remote file of malicious IPs and domains because the update period is <= 0.', 0, 1)
             return False
 
         self.print('Checking if we need to download TI files.')
@@ -928,17 +932,21 @@ class UpdateFileManager:
         for file_to_download in files_to_download_dics.keys():
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
-                self.print(f'Updating the remote file {file_to_download}', 1, 0)
-                if self.update_TI_file(file_to_download):
-                    self.print(f'Successfully updated remote file {file_to_download}.', 1, 0)
-                    self.loaded_ti_files +=1
-                else:
-                    self.print(f'An error occurred while downloading {file_to_download}. Updating was aborted.', 0, 1)
-                    continue
+                print(f'Updating the remote file {file_to_download}', 1, 0)
+                # every function call to update_TI_file is now running concurrently instead of serially
+                # so when a server's taking a while to give us the TI feed, we proceed
+                # to download to next file instead of being idle
+                task = asyncio.create_task(self.update_TI_file(file_to_download))
             else:
                 self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
-                self.loaded_ti_files +=1
-                continue
+                self.loaded_ti_files += 1
+
+        # wait for all TI files to update
+        try:
+            await task
+        except UnboundLocalError:
+            # in case all our files are updated, we don't have task defined, skip
+            pass
         self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
 
 
