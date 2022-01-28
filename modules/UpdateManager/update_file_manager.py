@@ -348,16 +348,23 @@ class UpdateFileManager:
             url = url.replace('|', '')
             url = url.replace('$(', '')
             url = url.replace('\n', '')
-            command = 'curl -m 10 --insecure -s ' + url + ' -o ' + filepath
-            self.print(f'Downloading with curl command: {command}', 0, 3)
-            # If the command is successful
-            if os.system(command) == 0:
-                # Get the time of update
-                self.new_update_time = time.time()
-                return True
-            else:
+
+            response = requests.get(url,  timeout=10)
+
+            if response.status_code != 200:
                 self.print(f'An error occurred while downloading the file {url}.', 0, 1)
                 return False
+
+            with open(filepath, "w") as f:
+                f.write(response.text)
+
+            # command = 'curl -m 10 --insecure -s ' + url + ' -o ' + filepath
+
+            # If the command is successful
+            # Get the time of update
+            self.new_update_time = time.time()
+            return True
+
         except Exception as e:
             self.print(f'An error occurred while downloading the file {url}.', 0, 1)
             self.print(f'Error: {e}', 0, 1)
@@ -401,7 +408,7 @@ class UpdateFileManager:
             file_info['time'] = self.new_update_time
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
-            self.print(f'Successfully updated remote file {file_name_to_download}.', 1, 0)
+            self.print(f'Successfully updated remote file {file_name_to_download}', 1, 0)
             self.loaded_ti_files +=1
             return True
 
@@ -587,8 +594,6 @@ class UpdateFileManager:
             __database__.add_ja3_to_IoC(malicious_ja3_dict)
             return True
 
-        except KeyboardInterrupt:
-            return False
         except Exception as inst:
             self.print('Problem in parse_ja3_feed()', 0, 1)
             self.print(str(type(inst)), 0, 1)
@@ -892,15 +897,14 @@ class UpdateFileManager:
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
             return True
-        except KeyboardInterrupt:
-            return False
+
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the __load_malicious_datafile() line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
-            print(traceback.format_exc())
+            self.print(traceback.format_exc())
             return False
 
     async def update(self) -> bool:
@@ -932,7 +936,7 @@ class UpdateFileManager:
         for file_to_download in files_to_download_dics.keys():
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
-                print(f'Updating the remote file {file_to_download}', 1, 0)
+                self.print(f'Updating the remote file {file_to_download}', 1, 0)
                 # every function call to update_TI_file is now running concurrently instead of serially
                 # so when a server's taking a while to give us the TI feed, we proceed
                 # to download to next file instead of being idle

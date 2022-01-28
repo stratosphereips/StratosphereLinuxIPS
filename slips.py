@@ -92,13 +92,11 @@ async def update_TI_files(outputqueue, config):
     Update malicious files and store them in database before slips start
     '''
     update_manager = UpdateFileManager(outputqueue, config)
-    try:
-        # create_task is used to run update() function concurrently instead of serially
-        update_finished = asyncio.create_task(update_manager.update())
-        # wait for UpdateFileManager to finish before starting all the modules
-        await update_finished
-    except KeyboardInterrupt:
-        os.kill(os.getpid(), SIGSTOP)
+    # create_task is used to run update() function concurrently instead of serially
+    update_finished = asyncio.create_task(update_manager.update())
+    # wait for UpdateFileManager to finish before starting all the modules
+    await update_finished
+
 
 def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
     """
@@ -221,6 +219,40 @@ def prepare_zeek_scripts():
                 # found a file in the dir that isn't in __load__.zeek, add it
                 f.write(f'\n@load ./{file_name}')
 
+def add_metadata():
+    """
+    Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
+    """
+    metadata_dir = os.path.join(args.output, 'metadata')
+    try:
+        os.mkdir(metadata_dir)
+    except FileExistsError:
+        # if the file exists it will be overwritten
+        pass
+
+    # Add a copy of slips.conf
+    config_file = args.config or 'slips.conf'
+    shutil.copy(config_file, metadata_dir)
+    # Add a copy of whitelist.conf
+    whitelist = config.get('parameters', 'whitelist_path')
+    shutil.copy(whitelist, metadata_dir)
+
+    from git import Repo
+    repo = Repo('.')
+    branch = repo.active_branch.name
+    commit = repo.active_branch.commit.hexsha
+    now = datetime.now()
+
+    info_path = os.path.join(metadata_dir,'info.txt')
+    with open(info_path, 'w') as f:
+        f.write(f'Slips version: {version}\n')
+        f.write(f'Branch: {branch}\n')
+        f.write(f'Commit: {commit}\n')
+        f.write(f'Date: {now}\n')
+
+    print(f'[Main] Metadata added to {metadata_dir}')
+
+
 def shutdown_gracefully(input_information):
     """ Wait for all modules to confirm that they're done processing and then shutdown
     :param input_information: the interface/pcap/nfdump/binetflow used. we need it to save the db
@@ -256,6 +288,7 @@ def shutdown_gracefully(input_information):
                 message = {}
                 message['data'] = 'dummy_value_not_stopprocess'
                 message['channel'] = 'finished_modules'
+
             if message and message['data'] == 'stop_process':
                 continue
             if message and message['channel'] == 'finished_modules' and type(message['data']) == str:
@@ -742,8 +775,6 @@ if __name__ == '__main__':
 
         c1 = __database__.subscribe('finished_modules')
 
-
-
         # Input process
         # Create the input process and start it
         inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
@@ -754,6 +785,9 @@ if __name__ == '__main__':
         __database__.store_process_PID('inputProcess', int(inputProcess.pid))
 
 
+        enable_metadata = read_configuration(config, 'parameters', 'metadata_dir')
+        if 'yes' in enable_metadata.lower():
+            add_metadata()
 
         # Store the host IP address if input type is interface
         if input_type == 'interface':
