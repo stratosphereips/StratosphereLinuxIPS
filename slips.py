@@ -217,9 +217,37 @@ def prepare_zeek_scripts():
 
 def add_metadata():
     """
-    Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist file, current commit and date
+    Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
     """
-    pass
+    metadata_dir = os.path.join(args.output, 'metadata')
+    try:
+        os.mkdir(metadata_dir)
+    except FileExistsError:
+        # if the file exists it will be overwritten
+        pass
+
+    # Add a copy of slips.conf
+    config_file = args.config or 'slips.conf'
+    shutil.copy(config_file, metadata_dir)
+    # Add a copy of whitelist.conf
+    whitelist = config.get('parameters', 'whitelist_path')
+    shutil.copy(whitelist, metadata_dir)
+
+    from git import Repo
+    repo = Repo('.')
+    branch = repo.active_branch.name
+    commit = repo.active_branch.commit.hexsha
+    now = datetime.now()
+
+    info_path = os.path.join(metadata_dir,'info.txt')
+    with open(info_path, 'w') as f:
+        f.write(f'Slips version: {version}\n')
+        f.write(f'Branch: {branch}\n')
+        f.write(f'Commit: {commit}\n')
+        f.write(f'Date: {now}\n')
+
+    print(f'[Main] Metadata added to {metadata_dir}')
+
 
 def shutdown_gracefully(input_information):
     """ Wait for all modules to confirm that they're done processing and then shutdown
