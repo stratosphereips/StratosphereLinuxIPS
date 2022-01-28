@@ -191,7 +191,7 @@ class Module(Module, multiprocessing.Process):
           delete : to delete an existing rule
         """
 
-        command = f'{self.sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} -m comment --comment "Blocked by Slips" >/dev/null 2>&1'
+        command = f'{self.sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} -m comment --comment "Slips rule" >/dev/null 2>&1'
         # Add the options constructed in block_ip or unblock_ip to the iptables command
         for key in options.keys():
             command += options[key]
