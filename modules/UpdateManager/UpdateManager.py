@@ -84,10 +84,7 @@ class UpdateManager(Module, multiprocessing.Process):
         '''
         Update malicious files
         '''
-        try:
-            self.update_manager.update()
-        except KeyboardInterrupt:
-            os.kill(os.getpid(), SIGSTOP)
+        self.update_manager.update()
 
     def run(self):
         try:
