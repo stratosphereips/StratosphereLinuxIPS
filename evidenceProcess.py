@@ -33,8 +33,8 @@ import platform
 import os
 import psutil
 import pwd
-from uuid import uuid4
-import validators
+from git import Repo
+
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -61,6 +61,8 @@ class EvidenceProcess(multiprocessing.Process):
         self.c1 = __database__.subscribe('evidence_added')
         self.logfile = self.clean_evidence_log_file(output_folder)
         self.jsonfile = self.clean_evidence_json_file(output_folder)
+        log_files = [self.logfile, self.jsonfile]
+        self.add_branch_info(log_files)
         # If logs enabled, write alerts to the log folder as well
         self.logs_logfile = False
         self.logs_jsonfile = False
@@ -81,6 +83,16 @@ class EvidenceProcess(multiprocessing.Process):
             'high': 0.8,
             'critical': 1
         }
+
+    def add_branch_info(self, log_files: list):
+        repo = Repo('.')
+        # add branch name and commit
+        branch = repo.active_branch.name
+        commit = repo.active_branch.commit.hexsha
+        now = datetime.now()
+
+        for file in log_files:
+            file.write(f'Using {branch} - {commit} - {now}\n')
 
     def setup_notifications(self):
         """
