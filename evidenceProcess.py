@@ -19,14 +19,13 @@ import multiprocessing
 from slips_files.core.database import __database__
 from slips_files.common.slips_utils import utils
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 import configparser
 from os import path
 from colorama import Fore, Style
 import ipaddress
 import sys
 
-#import requests
 import subprocess
 import socket
 import re
@@ -66,9 +65,7 @@ class EvidenceProcess(multiprocessing.Process):
         self.logs_logfile = False
         self.logs_jsonfile = False
         if logs_folder:
-            # alerts.log
             self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
-            # alerts.json
             self.logs_jsonfile =  self.clean_evidence_json_file(logs_folder+'/')
 
         self.timeout = 0.0000001
@@ -610,11 +607,15 @@ class EvidenceProcess(multiprocessing.Process):
         # once we reach a certain threshold of accumulated threat_levels, we produce an alert
         # Now instead of printing the last evidence only, we print all of them
         try:
-
             twid_num = twid.split('timewindow')[1]
             srcip = profileid.split(self.separator)[1]
             # Get the start time of this TW
-            tw_start_time_str = utils.format_timestamp(float(__database__.getTimeTW(profileid, twid)))
+            twid_start_time = None
+            while twid_start_time==None:
+                # give the database time to retreive the time
+                twid_start_time = __database__.getTimeTW(profileid, twid)
+
+            tw_start_time_str = utils.format_timestamp(float(twid_start_time))
             tw_start_time_datetime = datetime.strptime(tw_start_time_str, self.get_ts_format(tw_start_time_str).replace(' ','T'))
             # Convert the tw width to deltatime
             tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
