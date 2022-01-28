@@ -408,7 +408,7 @@ class UpdateFileManager:
             file_info['time'] = self.new_update_time
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
-            self.print(f'Successfully updated remote file {file_name_to_download}.', 1, 0)
+            self.print(f'Successfully updated remote file {file_name_to_download}', 1, 0)
             self.loaded_ti_files +=1
             return True
 
@@ -904,7 +904,7 @@ class UpdateFileManager:
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
-            print(traceback.format_exc())
+            self.print(traceback.format_exc())
             return False
 
     async def update(self) -> bool:
@@ -936,7 +936,7 @@ class UpdateFileManager:
         for file_to_download in files_to_download_dics.keys():
             file_to_download = file_to_download.strip()
             if self.__check_if_update(file_to_download):
-                print(f'Updating the remote file {file_to_download}', 1, 0)
+                self.print(f'Updating the remote file {file_to_download}', 1, 0)
                 # every function call to update_TI_file is now running concurrently instead of serially
                 # so when a server's taking a while to give us the TI feed, we proceed
                 # to download to next file instead of being idle
