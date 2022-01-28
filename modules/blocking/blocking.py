@@ -139,8 +139,6 @@ class Module(Module, multiprocessing.Process):
             return True
         return False
 
-
-
     def get_cmd_output(self,command):
         """ Executes a command and returns the output """
 
@@ -180,7 +178,6 @@ class Module(Module, multiprocessing.Process):
             os.system(self.sudo + "nft add table inet slipsBlocking")
             # TODO: HANDLE NFT TABLE
 
-
     def exec_iptables_command(self,
                               action, ip_to_block,
                               flag, options):
@@ -194,7 +191,7 @@ class Module(Module, multiprocessing.Process):
           delete : to delete an existing rule
         """
 
-        command = f'{self.sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} >/dev/null 2>&1'
+        command = f'{self.sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} -m comment --comment "Blocked by Slips" >/dev/null 2>&1'
         # Add the options constructed in block_ip or unblock_ip to the iptables command
         for key in options.keys():
             command += options[key]
