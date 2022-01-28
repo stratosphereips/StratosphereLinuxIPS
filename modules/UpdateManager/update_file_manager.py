@@ -942,7 +942,11 @@ class UpdateFileManager:
                 self.loaded_ti_files += 1
 
         # wait for all TI files to update
-        await task
+        try:
+            await task
+        except UnboundLocalError:
+            # in case all our files are updated, we don't have task defined, skip
+            pass
         self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
 
 
