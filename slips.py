@@ -288,6 +288,7 @@ def shutdown_gracefully(input_information):
                 message = {}
                 message['data'] = 'dummy_value_not_stopprocess'
                 message['channel'] = 'finished_modules'
+
             if message and message['data'] == 'stop_process':
                 continue
             if message and message['channel'] == 'finished_modules' and type(message['data']) == str:
