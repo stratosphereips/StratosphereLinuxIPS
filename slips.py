@@ -785,8 +785,14 @@ if __name__ == '__main__':
         __database__.store_process_PID('inputProcess', int(inputProcess.pid))
 
 
-        enable_metadata = read_configuration(config, 'parameters', 'metadata_dir')
-        if 'yes' in enable_metadata.lower():
+        try:
+            enable_metadata = read_configuration(config, 'parameters', 'metadata_dir')
+            enable_metadata = False if 'no' in enable_metadata.lower() else True
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            enable_metadata = False 
+
+        if 'yes' in enable_metadata:
             add_metadata()
 
         # Store the host IP address if input type is interface
