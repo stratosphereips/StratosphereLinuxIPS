@@ -16,12 +16,6 @@ let profiles = function(){
                     "data":           null,
                     "defaultContent": ''
                 },
-              {data: 'profile'},
-              {
-                "targets": -1,
-                "data": null,
-                "defaultContent":'<button type="button" class="btn btn-primary" data-toggle="modal">Info</button>' // data-target="#exampleModalCenter"
-                }
             ],
             "order": [[1, 'asc']]
             });
