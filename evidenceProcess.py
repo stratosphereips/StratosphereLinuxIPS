@@ -232,7 +232,7 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
             ip = profileid.split("_")[-1].strip()
-            alert_to_print = f'{flow_datetime}: Src IP {ip:29}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
+            alert_to_print = f'{flow_datetime}: Src IP {ip:26}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
             return alert_to_print
         except Exception as inst:
             self.print('Error in print_alert()')
