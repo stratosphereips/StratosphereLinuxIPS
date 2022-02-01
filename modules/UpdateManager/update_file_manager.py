@@ -613,23 +613,35 @@ class UpdateFileManager:
         try:
             ip_address = ipaddress.IPv4Address(data)
             # Is IPv4!
-            return ip_address
+            return 'ip'
         except ipaddress.AddressValueError:
-            # Is it ipv6?
-            try:
-                ip_address = ipaddress.IPv6Address(data)
-                # Is IPv6!
-                return ip_address
-            except ipaddress.AddressValueError:
-                # It does not look as IP address.
-                # So it should be a domain
-                if validators.domain(data):
-                    domain = data
-                    return 'domain'
-                else:
-                    # unknown
-                    return None
-                    # self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
+            pass
+        # Is it ipv6?
+        try:
+            ip_address = ipaddress.IPv6Address(data)
+            # Is IPv6!
+            return 'ip'
+        except ipaddress.AddressValueError:
+            # It does not look as IP address.
+            pass
+
+        try:
+            ipaddress.ip_network(data)
+            return 'ip_range'
+        except ValueError:
+            pass
+
+        if not validators.domain(data):
+            # some ti files have / at the end of domains, remove it
+            if data.endswith('/'):
+                data = data[:-1]
+            domain =  data
+            if domain.startswith('http://'): data= data[7:]
+            if domain.startswith('https://'): data= data[8:]
+            if validators.domain(data):
+                return 'domain'
+
+
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
         # to support nsec/full-results-2019-05-15.json
