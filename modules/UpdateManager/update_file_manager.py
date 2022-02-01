@@ -631,6 +631,59 @@ class UpdateFileManager:
                     return None
                     # self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 3, 3)
 
+    def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
+        # to support nsec/full-results-2019-05-15.json
+        tags = self.url_feeds[link_to_download]["tags"]
+        # the new threat_level is the max of the 2
+        threat_level = self.url_feeds[link_to_download]['threat_level']
+
+        filename= ti_file_path.split('/')[-1]
+        malicious_ips_dict = {}
+        malicious_domains_dict = {}
+        with open(ti_file_path) as feed:
+            self.print('Reading next lines in the file {} for IoC'.format(ti_file_path), 3, 0)
+            try:
+                file = json.loads(feed.read())
+            except json.decoder.JSONDecodeError:
+                # not a json file??
+                return False
+
+            for description,iocs in file.items():
+                # iocs is a list of dicts
+                for ioc in iocs:
+                    # ioc is a dict with keys 'IP', 'ports', 'domains'
+                    # process IPs
+                    ip = ioc.get('IP','')
+                    # verify its a valid ip
+                    try:
+                        ip_address = ipaddress.IPv4Address(ip.strip())
+                    except ipaddress.AddressValueError:
+                        # Is it ipv6?
+                        try:
+                            ip_address = ipaddress.IPv6Address(ip.strip())
+                        except ipaddress.AddressValueError:
+                            # not a valid IP
+                            continue
+                    malicious_ips_dict[ip] = json.dumps({{'description': description,
+                                                        'source': filename,
+                                                        'threat_level':threat_level,
+                                                        'tags':tags }})
+                    # process domains
+                    domains = ioc.get('domains',[])
+                    for domain in domains:
+                        if validators.domain(domain.strip()):
+                            # this is a valid domain
+                            malicious_domains_dict[domain] = json.dumps({{'description': description,
+                                                        'source': filename,
+                                                        'threat_level':threat_level,
+                                                        'tags':tags }})
+            # Add all loaded malicious ips to the database
+            __database__.add_ips_to_IoC(malicious_ips_dict)
+            # Add all loaded malicious domains to the database
+            __database__.add_domains_to_IoC(malicious_domains_dict)
+            return True
+
+
     def parse_ti_feed(self, link_to_download, malicious_data_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
@@ -649,45 +702,12 @@ class UpdateFileManager:
 
             malicious_ips_dict = {}
             malicious_domains_dict = {}
-            with open(malicious_data_path) as malicious_file:
+            with open(malicious_data_path) as feed:
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
                 # to support nsec/full-results-2019-05-15.json
                 if 'json' in malicious_data_path:
-                    filename= malicious_data_path.split('/')[-1]
-                    try:
-                        file = json.loads(malicious_file.read())
-                        for description,iocs in file.items():
-                            # iocs is a list of dicts
-                            for ioc in iocs:
-                                # ioc is a dict with keys 'IP', 'ports', 'domains'
-                                # process IPs
-                                ip = ioc.get('IP','')
-                                # verify its a valid ip
-                                try:
-                                    ip_address = ipaddress.IPv4Address(ip.strip())
-                                except ipaddress.AddressValueError:
-                                    # Is it ipv6?
-                                    try:
-                                        ip_address = ipaddress.IPv6Address(ip.strip())
-                                    except ipaddress.AddressValueError:
-                                        # not a valid IP
-                                        continue
-                                malicious_ips_dict[ip] = json.dumps({'description': description, 'source':filename})
-                                # process domains
-                                domains = ioc.get('domains',[])
-                                for domain in domains:
-                                    if validators.domain(domain.strip()):
-                                        # this is a valid domain
-                                        malicious_domains_dict[domain] = json.dumps({'description': description, 'source':filename})
-                        # Add all loaded malicious ips to the database
-                        __database__.add_ips_to_IoC(malicious_ips_dict)
-                        # Add all loaded malicious domains to the database
-                        __database__.add_domains_to_IoC(malicious_domains_dict)
-
-                        return True
-                    except json.decoder.JSONDecodeError:
-                        # not a json file??
-                        return False
+                    self.parse_json_ti_feed(link_to_download, malicious_data_path)
+                    return True
 
                 # Remove comments and find the description column if possible
                 description_column = None
@@ -700,7 +720,7 @@ class UpdateFileManager:
                 ignored_IoCs = ('email', 'url', 'file_hash')
 
                 while True:
-                    line = malicious_file.readline()
+                    line = feed.readline()
                     if not line:
                         break
                     # Try to find the line that has column names
@@ -729,7 +749,7 @@ class UpdateFileManager:
 
                 # Find in which column is the important info in this TI file (domain or ip)
                 # Store the current position of the TI file
-                current_file_position = malicious_file.tell()
+                current_file_position = feed.tell()
                 # temp_line = malicious_file.readline()
                 if '#' in line:
                     # some files like alienvault.com/reputation.generic have comments next to ioc
@@ -795,9 +815,9 @@ class UpdateFileManager:
                     return False
 
                 # Now that we read the first line, go back so we can process it
-                malicious_file.seek(current_file_position)
+                feed.seek(current_file_position)
 
-                for line in malicious_file:
+                for line in feed:
                     # The format of the file should be
                     # "0", "103.15.53.231","90", "Karel from our village. He is bad guy."
                     # So the second column will be used as important data with
