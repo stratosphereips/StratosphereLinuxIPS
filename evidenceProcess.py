@@ -54,22 +54,23 @@ class EvidenceProcess(multiprocessing.Process):
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
+        # If logs enabled, write alerts to the log folder as well
+        self.clear_logs_dir(logs_folder)
+
         if self.popup_alerts:
             # The way we send notifications differ depending on the user and the OS
             self.setup_notifications()
+
         # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
+
+        # clear alerts.log
         self.logfile = self.clean_evidence_log_file(output_folder)
+        # clear alerts.json
         self.jsonfile = self.clean_evidence_json_file(output_folder)
+
         log_files = [self.logfile, self.jsonfile]
         self.add_branch_info(log_files)
-        # If logs enabled, write alerts to the log folder as well
-        self.logs_logfile = False
-        self.logs_jsonfile = False
-        if logs_folder:
-            self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
-            self.logs_jsonfile =  self.clean_evidence_json_file(logs_folder+'/')
-
         self.timeout = 0.0000001
         # this list will have our local and public ips
         self.our_ips = self.get_IP()
@@ -83,6 +84,14 @@ class EvidenceProcess(multiprocessing.Process):
             'high': 0.8,
             'critical': 1
         }
+
+    def clear_logs_dir(self, logs_folder):
+        self.logs_logfile = False
+        self.logs_jsonfile = False
+        if logs_folder:
+            # these json files are inside the logs dir, not the output/ dir
+            self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
+            self.logs_jsonfile = self.clean_evidence_json_file(logs_folder+'/')
 
     def add_branch_info(self, log_files: list):
         repo = Repo('.')
