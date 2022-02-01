@@ -749,7 +749,7 @@ class UpdateFileManager:
 
                     # make sure the next line is not a header, a comment or an unsupported IoC type
                     process_line = True
-                    if line.startswith('#') or line.isspace() or len(line) < 3: continue
+                    if line.startswith('#') or line.startswith(';') or line.isspace() or len(line) < 3: continue
                     for keyword in header_keywords + ignored_IoCs:
                         if keyword in line.lower():
                             # we should ignore this line
@@ -762,70 +762,44 @@ class UpdateFileManager:
                 # Find in which column is the important info in this TI file (domain or ip)
                 # Store the current position of the TI file
                 current_file_position = feed.tell()
-                # temp_line = malicious_file.readline()
-                if '#' in line:
-                    # some files like alienvault.com/reputation.generic have comments next to ioc
-                    data = line.replace("\n","").replace("\"","").split("#")
-                    amount_of_columns =  len(line.split("#"))
-                elif ',' in line:
-                    data = line.replace("\n","").replace("\"","").split(",")
-                    amount_of_columns = len(line.split(","))
-                elif '0.0.0.0 ' in line:
-                    # anudeepND/blacklist file
-                    data = [line[line.index(' ')+1:].replace("\n","")]
-                    amount_of_columns = 1
+                line = line.replace("\n","").replace("\"","")
+
+                # Separate the lines like CSV, either by commas or tabs
+                separators = ('#', ',', ';','\t')
+                for separator in separators:
+                    if separator in line:
+                        # get a list of every field in the line e.g [ioc, description, date]
+                        line_fields = line.split(separator)
+                        amount_of_columns =  len(line.split(separator))
+                        break
                 else:
-                    data = line.replace("\n","").replace("\"","").split("\t")
-                    # lines are not comma separated like ipsum files, try tabs
-                    amount_of_columns = len(line.split('\t'))
+                    # no separator of the above was found
+                    if '0.0.0.0 ' in line:
+                        # anudeepND/blacklist file
+                        line_fields = [line[line.index(' ')+1:].replace("\n","")]
+                        amount_of_columns = 1
+
 
                 if description_column is None:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
 
+                data_column = None
                 # Search the first column that is an IPv4, IPv6 or domain
-                for column in range(amount_of_columns):
-                    # Check if ip is valid.
-                    try:
-                        ip_address = ipaddress.IPv4Address(data[column].strip())
-                        # Is IPv4! let go
-                        data_column = column
-                        self.print(f'The data is on column {column} and is ipv4: {ip_address}', 2, 0)
+                for column_idx in range(amount_of_columns):
+                    # Check if we support this type.
+                    data_type = self.detect_data_type(line_fields[column_idx])
+                    # found a supported type
+                    if data_type:
+                        data_column = column_idx
                         break
-                    except ipaddress.AddressValueError:
-                        # Is it ipv6?
-                        try:
-                            ip_address = ipaddress.IPv6Address(data[column].strip())
-                            # Is IPv6! let go
-                            data_column = column
-                            self.print(f'The data is on column {column} and is ipv6: {ip_address}', 0, 2)
-                            break
-                        except ipaddress.AddressValueError:
-                            # It does not look like an IP address.
-                            # So it should be a domain
-                            # some ti files have / at the end of domains, remove it
-                            if data[column].endswith('/'):
-                                data[column] = data[column][:-1]
-                            domain =  data[column]
-                            if domain.startswith('http://'): data[column]= data[column][7:]
-                            if domain.startswith('https://'): data[column]= data[column][8:]
-
-                            if validators.domain(data[column].strip()):
-                                data_column = column
-                                self.print(f'The data is on column {column} and is domain: {data[column]}', 0, 6)
-                                break
-                            elif "/" in data[column]:
-                                # this file contains one column that has network ranges and ips
-                                data_column = column
-                            else:
-                                # Some string that is not a domain
-                                data_column = None
-
-                if data_column is None:
+                # don't use if not data_column, it may be 0
+                if data_column==None:
+                    # Some unknown string and we cant detect the type of it
                     # can't find a column that contains an ioc
-                    self.print(f'Error while reading the TI file {malicious_data_path}. Could not find a column with an IP or domain', 0, 1)
+                    self.print(f'Error while reading the TI file {malicious_data_path}.'
+                               f' Could not find a column with an IP or domain', 0, 1)
                     return False
-
                 # Now that we read the first line, go back so we can process it
                 feed.seek(current_file_position)
 
@@ -838,44 +812,36 @@ class UpdateFileManager:
                     # domain,www.netspy.net,NetSpy
 
                     # skip comment lines
-                    if line.startswith('#')\
+                    if line.startswith('#') or line.startswith(';')\
                             or 'FILE_HASH' in line\
                             or 'EMAIL' in line or 'URL' in line:
                         continue
 
-                    # Separate the lines like CSV, either by commas or tabs
-                    # In the new format the ip is in the second position.
-                    # And surronded by "
-                    if '#' in line:
-                        data = line.replace("\n", "").replace("\"", "").split("#")[data_column].strip()
-                    elif ',' in line:
-                        data = line.replace("\n", "").replace("\"", "").split(",")[data_column].strip()
-                    elif '0.0.0.0 ' in line:
-                        # anudeepND/blacklist file
-                        data = line[line.index(' ')+1:].replace("\n","")
-                    else:
-                        data = line.replace("\n", "").replace("\"", "").split("\t")[data_column].strip()
+                    line = line.replace("\n", "").replace("\"", "")
 
-                    if '/' in data or data in ('','\n'):
-                        # this is probably a range of ips (subnet) or a new line, we don't support that. read the next line
-                        continue
+                    try:
+                        line_fields = line.split(separator)
+                        # get the ioc
+                        data = line_fields[data_column].strip()
+                        break
+                    except UnboundLocalError:
+                        # no separator =was foun
+                        if '0.0.0.0 ' in line:
+                            # anudeepND/blacklist file
+                            data = line[line.index(' ')+1:].replace("\n","")
 
                     # get the description of this line
                     try:
-                        if '#' in line:
-                            description = line.replace("\n", "").replace("\"", "").split("#")[description_column].strip()
-                        elif ',' in line:
-                            description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
-                        else:
-                            description = line.replace("\n", "").replace("\"", "").split("\t")[description_column].strip()
-                    except IndexError:
+                        description = line_fields[description_column].strip()
+                    except (IndexError, UnboundLocalError):
+                        description = ''
                         self.print(f'IndexError Description column: {description_column}. Line: {line}',0,1)
 
                     self.print('\tRead Data {}: {}'.format(data, description), 3, 0)
 
                     data_file_name = malicious_data_path.split('/')[-1]
 
-                    # if we have info about data, append to it, if we don't add a new entry in the correct dict
+                    # if we have info about the ioc, append to it, if we don't add a new entry in the correct dict
                     data_type = self.detect_data_type(data)
                     if data_type == None:
                         self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 0, 1)
@@ -904,7 +870,7 @@ class UpdateFileManager:
                                                                                   'source':data_file_name,
                                                                                   'threat_level':self.url_feeds[link_to_download]['threat_level'],
                                                                                 'tags': self.url_feeds[link_to_download]['tags']})
-                    else:
+                    elif data_type == 'ip':
                         try:
                             # we already have info about this ip?
                             old_ip_info = json.loads(malicious_ips_dict[str(data)])
@@ -929,6 +895,10 @@ class UpdateFileManager:
                                                                           'source':data_file_name,
                                                                           'threat_level':self.url_feeds[link_to_download]['threat_level'],
                                                                         'tags': self.url_feeds[link_to_download]['tags']})
+                    elif data_type == 'ip_range':
+                        #todo
+                        pass
+
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
