@@ -16,6 +16,9 @@ let profiles = function(){
                     "data":           null,
                     "defaultContent": ''
                 },
+              {data: 'profile',
+              "className": 'r'}
+
             ],
             "order": [[1, 'asc']]
             });
@@ -42,8 +45,8 @@ let profiles = function(){
             });
         },
 
-        onclick_buttons: function(){
-            $('#profiles ').on( 'click', 'tbody button', function () {
+        onclick_ips: function(){
+            $('#profiles ').on( 'click', 'tbody td.r', function () {
                 let data = table.row( $(this).parents('tr')).data();
                 let profile_IP = data.profile.split("_")[1]
                 let url = '/info/' + profile_IP
@@ -54,7 +57,7 @@ let profiles = function(){
 }
 let profile = profiles();
 profile.onclick_tws();
-profile.onclick_buttons();
+profile.onclick_ips();
 
 let datatable = $('#timeline').DataTable({
             "bDestroy": true,
