@@ -305,8 +305,6 @@ class UpdateFileManager:
                 # file here.
                 new_e_tag = self.get_e_tag_from_web(response)
                 if not new_e_tag:
-                    # Something failed. Do not download
-                    self.print(f'Error getting the e-tag. Not downloading the file {file_to_download}', 0, 1)
                     return False
 
                 if old_e_tag != new_e_tag:
