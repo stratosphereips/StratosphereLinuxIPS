@@ -263,6 +263,16 @@ class UpdateFileManager:
             return False
         return response
 
+    def get_last_modified(self, response) -> str:
+        """
+        returns Last-Modified field of TI file.
+        Called when the file doesn't have an e-tag
+        :param response: the output of a request done with requests library
+        """
+        last_modified = response.headers.get('Last-Modified', False)
+        return last_modified
+
+
     def __check_if_update(self, file_to_download: str) :
         """
         Decides whether to update or not based on the update period and e-tag.
@@ -305,7 +315,13 @@ class UpdateFileManager:
                 # file here.
                 new_e_tag = self.get_e_tag_from_web(response)
                 if not new_e_tag:
-                    return False
+                    # use last modified instead
+                    last_modified = self.get_last_modified(response)
+                    if not last_modified:
+                        self.print(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
+                        return False
+                    # use last modified date instead of e-tag
+                    new_e_tag = last_modified
 
                 if old_e_tag != new_e_tag:
                     # Our TI file is old. Download the new one.
@@ -340,9 +356,6 @@ class UpdateFileManager:
         :param response: the output of a request done with requests library
         """
         e_tag = response.headers.get('ETag', False)
-        if not e_tag:
-            self.print(f"File {response.headers['Server']} doesn't have an e-tag")
-            return False
         return e_tag
 
 
