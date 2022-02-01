@@ -69,7 +69,7 @@ class EvidenceProcess(multiprocessing.Process):
         # clear alerts.json
         self.jsonfile = self.clean_evidence_json_file(output_folder)
 
-        log_files = [self.logfile, self.jsonfile]
+        log_files = [self.logfile]
         self.add_branch_info(log_files)
         self.timeout = 0.0000001
         # this list will have our local and public ips
