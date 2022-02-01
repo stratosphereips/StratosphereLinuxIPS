@@ -317,7 +317,6 @@ class UpdateFileManager:
 
                 elif old_e_tag == new_e_tag:
                     self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
-                    self.loaded_ti_files += 1
                     # Store the update time like we downloaded it anyway
                     self.new_update_time = time.time()
                     # Store the new etag and time of file in the database
@@ -333,7 +332,9 @@ class UpdateFileManager:
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
-
+        else:
+            # Update period hasn't passed yet, but the file is in our db
+            self.loaded_ti_files += 1
         return False
 
     def get_e_tag_from_web(self, response) :
@@ -930,8 +931,6 @@ class UpdateFileManager:
             file_to_download = file_to_download.strip()
             file_to_download = self.sanitize(file_to_download)
 
-            self.print(f'Updating the remote file {file_to_download}', 1, 0)
-
             response = self.__check_if_update(file_to_download)
             if not response:
                 # failed to get the response, either a server problem
@@ -939,6 +938,7 @@ class UpdateFileManager:
                 # either way __check_if_update handles the error printing
                 continue
 
+            self.print(f'Updating the remote file {file_to_download}', 1, 0)
             # every function call to update_TI_file is now running concurrently instead of serially
             # so when a server's taking a while to give us the TI feed, we proceed
             # to download to next file instead of being idle
