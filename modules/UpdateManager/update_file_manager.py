@@ -356,19 +356,10 @@ class UpdateFileManager:
         string = string.replace('\n', '')
         return string
 
-    def download_file(self, url: str, filepath: str) -> bool:
-        """
-        Download file from the url and save to filepath
-        """
-        try:
-            response = requests.get(url,  timeout=10)
+    def write_file_to_disk(self, response, full_path):
 
-            if response.status_code != 200:
-                self.print(f'An error occurred while downloading the file {url}.', 0, 1)
-                return False
-
-            with open(filepath, "w") as f:
-                f.write(response.text)
+        with open(full_path, 'w') as f:
+            f.write(response.text)
 
     async def update_TI_file(self, link_to_download: str, response) -> bool:
         """
