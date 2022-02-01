@@ -42,6 +42,7 @@ class UpdateFileManager:
         try:
             # Read the path to where to store and read the malicious files
             self.path_to_threat_intelligence_data = self.config.get('threatintelligence', 'download_path_for_remote_threat_intelligence')
+            self.path_to_threat_intelligence_data = self.sanitize(self.path_to_threat_intelligence_data)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_threat_intelligence_data = 'modules/ThreatIntelligence1/remote_data_files/'
@@ -263,14 +264,15 @@ class UpdateFileManager:
 
         now = time.time()
 
+        update_period = self.riskiq_update_period if 'risk' in file_to_download else self.update_period
 
         # we have 2 types of remote files, JA3 feeds and TI feeds
-        ###################Checkign JA3 feeds######################
+        ################### Checking JA3 feeds ######################
         # did update_period pass since last time we updated?
-        if 'risk' in file_to_download and last_update + self.riskiq_update_period < now:
+        if 'risk' in file_to_download and last_update + update_period < now:
             return True
-        ###################Checkign TI feeds######################
-        if last_update + self.update_period < now:
+        ################### Checkign TI feeds ######################
+        if last_update + update_period < now:
             # Update only if the e-tag is different
             try:
                 file_name_to_download = file_to_download.split('/')[-1]
@@ -282,7 +284,7 @@ class UpdateFileManager:
                 new_e_tag = self.get_e_tag_from_web(file_to_download)
                 if not new_e_tag:
                     # Something failed. Do not download
-                    self.print(f'Some error ocurred. Not downloading the file {file_to_download}', 0, 1)
+                    self.print(f'Error getting the e-tag. Not downloading the file {file_to_download}', 0, 1)
                     return False
 
                 if old_e_tag != new_e_tag:
@@ -292,7 +294,8 @@ class UpdateFileManager:
                     return True
 
                 elif old_e_tag == new_e_tag:
-                    self.print(f'File {file_to_download} is still the same. Not downloading the file', 3, 0)
+                    self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
+                    self.loaded_ti_files += 1
                     # Store the update time like we downloaded it anyway
                     self.new_update_time = time.time()
                     # Store the new etag and time of file in the database
