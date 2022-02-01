@@ -315,6 +315,8 @@ class UpdateFileManager:
         try:
             # We use a command in os because if we use urllib or requests the process complains!:w
             # If the webpage does not answer in 10 seconds, continue
+
+
             command = "curl -m 10 --insecure -s -I " + file_to_download + " | grep -i etag"
             new_e_tag = os.popen(command).read()
             try:
@@ -330,25 +332,23 @@ class UpdateFileManager:
             self.print('{}'.format(inst), 0, 1)
             return False
 
+    def sanitize(self, string):
+        """
+        Sanitize strings taken from the user
+        """
+        string = string.replace(';', '')
+        string = string.replace('\`', '')
+        string = string.replace('&', '')
+        string = string.replace('|', '')
+        string = string.replace('$(', '')
+        string = string.replace('\n', '')
+        return string
+
     def download_file(self, url: str, filepath: str) -> bool:
         """
         Download file from the url and save to filepath
         """
         try:
-            # This replaces are to be sure that a user can not inject commands in curl
-            filepath = filepath.replace(';', '')
-            filepath = filepath.replace('\`', '')
-            filepath = filepath.replace('&', '')
-            filepath = filepath.replace('|', '')
-            filepath = filepath.replace('$(', '')
-            filepath = filepath.replace('\n', '')
-            url = url.replace(';', '')
-            url = url.replace('\`', '')
-            url = url.replace('&', '')
-            url = url.replace('|', '')
-            url = url.replace('$(', '')
-            url = url.replace('\n', '')
-
             response = requests.get(url,  timeout=10)
 
             if response.status_code != 200:
@@ -378,7 +378,11 @@ class UpdateFileManager:
             file_name_to_download = link_to_download.split('/')[-1]
             self.print(f'Trying to download the file {file_name_to_download}', 3, 0)
             # first download the file and save it locally
-            if not self.download_file(link_to_download, self.path_to_threat_intelligence_data + '/' + file_name_to_download):
+            full_path = f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'
+            full_path = self.sanitize(full_path)
+            link_to_download = self.sanitize(link_to_download)
+
+            if not self.download_file(link_to_download, full_path):
                 # failed to download file
                 self.print(f"Error downloading feed {link_to_download}. Updating was aborted.", 0, 1)
                 return False
@@ -389,15 +393,14 @@ class UpdateFileManager:
 
 
             # ja3 files and ti_files are parsed differently, check which file is this
-            path = f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'
             # is it ja3 feed?
-            if link_to_download in self.ja3_feeds and not self.parse_ja3_feed(link_to_download, path):
+            if link_to_download in self.ja3_feeds and not self.parse_ja3_feed(link_to_download, full_path):
                 self.print(f"Error parsing JA3 feed {link_to_download}. Updating was aborted.", 0, 1)
                 return False
 
             # is it a ti_file? load updated IPs to the database
             elif link_to_download in self.url_feeds \
-                    and not self.parse_ti_feed(link_to_download, path):
+                    and not self.parse_ti_feed(link_to_download, full_path):
                 # an error occured
                 self.print(f"Error parsing feed {link_to_download}. Updating was aborted.", 0, 1)
                 return False
