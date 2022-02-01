@@ -36,14 +36,13 @@ def set_ip_info(ip):
     Set info about the ip in route /info/<ip> (geocountry, asn, TI)
     '''
     ip_info = json.loads(__cache__.hget('IPsInfo', ip))
-
-    #TODO put all data of the ipInfo
-    # hardcode the fields of the ip
     data = []
-    data.append({'field': 'geocountry', 'value': ip_info.get('geocountry', '-')})
-    #TODO retrieve asnorg
-    data.append({'field': 'asn', 'value': ip_info.get('asn', '-')})
-    data.append({'field': 'reverse_dns', 'value': ip_info.get('reverse_dns', '-')})
+    # Hardcoded fields due to the complexity of data in side. Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
+    geocountry = ip_info.get('geocountry', '-')
+    asn = ip_info.get('asn', '-')
+    asnorg = [asn.get('asnorg','-') if isinstance(asn, dict) else '-']
+    reverse_dns = ip_info.get('reverse_dns', '-')
+    data.append({'geocountry': geocountry, 'asnorg': asnorg, 'reverse_dns': reverse_dns})
 
     return {
         'data': data,
