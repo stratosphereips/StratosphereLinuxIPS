@@ -333,26 +333,16 @@ class UpdateFileManager:
 
         return False
 
-    def get_e_tag_from_web(self, file_to_download):
-        try:
-            # We use a command in os because if we use urllib or requests the process complains!:w
-            # If the webpage does not answer in 10 seconds, continue
-
-
-            command = "curl -m 10 --insecure -s -I " + file_to_download + " | grep -i etag"
-            new_e_tag = os.popen(command).read()
-            try:
-                new_e_tag = new_e_tag.split()[1].split('\n')[0].replace("\"",'')
-                return new_e_tag
-            except IndexError:
-                self.print(f"File {file_to_download} doesn't have an e-tag")
-                return False
-
-        except Exception as inst:
-            self.print('Error with get_e_tag_from_web()', 0, 1)
-            self.print('{}'.format(type(inst)), 0, 1)
-            self.print('{}'.format(inst), 0, 1)
+    def get_e_tag_from_web(self, response) :
+        """
+        :param response: the output of a request done with requests library
+        """
+        e_tag = response.headers.get('ETag', False)
+        if not e_tag:
+            self.print(f"File {response.headers['Server']} doesn't have an e-tag")
             return False
+        return e_tag
+
 
     def sanitize(self, string):
         """
@@ -380,39 +370,22 @@ class UpdateFileManager:
             with open(filepath, "w") as f:
                 f.write(response.text)
 
-            # command = 'curl -m 10 --insecure -s ' + url + ' -o ' + filepath
-
-            # If the command is successful
-            # Get the time of update
-            self.new_update_time = time.time()
-            return True
-
-        except Exception as e:
-            self.print(f'An error occurred while downloading the file {url}.', 0, 1)
-            self.print(f'Error: {e}', 0, 1)
-            return False
-
-    async def update_TI_file(self, link_to_download: str) -> bool:
+    async def update_TI_file(self, link_to_download: str, response) -> bool:
         """
         Update remote TI files and JA3 feeds by downloading and parsing them
+
+        :param response: the output of a request done with requests library
         """
         try:
             file_name_to_download = link_to_download.split('/')[-1]
-            self.print(f'Trying to download the file {file_name_to_download}', 3, 0)
+
             # first download the file and save it locally
             full_path = f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'
-            full_path = self.sanitize(full_path)
-            link_to_download = self.sanitize(link_to_download)
-
-            if not self.download_file(link_to_download, full_path):
-                # failed to download file
-                self.print(f"Error downloading feed {link_to_download}. Updating was aborted.", 0, 1)
-                return False
+            self.write_file_to_disk(response, full_path)
 
             # File is updated in the server and was in our database.
             # Delete previous IPs of this file.
             self.__delete_old_source_data_from_database(file_name_to_download)
-
 
             # ja3 files and ti_files are parsed differently, check which file is this
             # is it ja3 feed?
@@ -420,7 +393,7 @@ class UpdateFileManager:
                 self.print(f"Error parsing JA3 feed {link_to_download}. Updating was aborted.", 0, 1)
                 return False
 
-            # is it a ti_file? load updated IPs to the database
+            # is it a ti_file? load updated IPs/domains to the database
             elif link_to_download in self.url_feeds \
                     and not self.parse_ti_feed(link_to_download, full_path):
                 # an error occured
@@ -428,13 +401,14 @@ class UpdateFileManager:
                 return False
 
             # Store the new etag and time of file in the database
+            self.new_update_time = time.time()
             file_info = {}
             file_info['e-tag'] = self.new_e_tag
             file_info['time'] = self.new_update_time
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
-            self.print(f'Successfully updated remote file {file_name_to_download}', 1, 0)
-            self.loaded_ti_files +=1
+            self.print(f'Successfully updated remote file {link_to_download}', 1, 0)
+            self.loaded_ti_files += 1
             return True
 
         except Exception as inst:
@@ -960,15 +934,21 @@ class UpdateFileManager:
         files_to_download_dics.update(self.ja3_feeds)
         for file_to_download in files_to_download_dics.keys():
             file_to_download = file_to_download.strip()
-            if self.__check_if_update(file_to_download):
-                self.print(f'Updating the remote file {file_to_download}', 1, 0)
-                # every function call to update_TI_file is now running concurrently instead of serially
-                # so when a server's taking a while to give us the TI feed, we proceed
-                # to download to next file instead of being idle
-                task = asyncio.create_task(self.update_TI_file(file_to_download))
-            else:
-                self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
-                self.loaded_ti_files += 1
+            file_to_download = self.sanitize(file_to_download)
+
+            self.print(f'Updating the remote file {file_to_download}', 1, 0)
+
+            response = self.__check_if_update(file_to_download)
+            if not response:
+                # failed to get the response, either a server problem
+                # or the the file is up to date so the response isn't needed
+                # either way __check_if_update handles the error printing
+                continue
+
+            # every function call to update_TI_file is now running concurrently instead of serially
+            # so when a server's taking a while to give us the TI feed, we proceed
+            # to download to next file instead of being idle
+            task = asyncio.create_task(self.update_TI_file(file_to_download, response))
 
         # wait for all TI files to update
         try:
