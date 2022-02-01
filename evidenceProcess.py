@@ -299,17 +299,15 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             json_alert = '{\n'
             for key_,val in IDEA_dict.items():
-                if type(val) ==str:
+                if type(val)==str:
                     # strings in json should be in double quotes instead of single quotes
                    json_alert += f'"{key_}": "{val}",\n'
                 else:
                     # int and float values should be printed as they are
                     json_alert += f'"{key_}": {val},\n'
-            # remove the last comma and close the dict
-            json_alert = json_alert[:-2] + '\n}\n'
+            # remove the last comma, make sure ther'es no double quotes, and close the dict
+            json_alert = json_alert[:-2].replace("'",'"') + '\n}\n'
             self.jsonfile.write(json_alert)
-            # empty lines or line containing '\n' mark the end of the file for the cesnet sharing module. don't add any
-            self.jsonfile.flush()
         except KeyboardInterrupt:
             return True
         except Exception as inst:
