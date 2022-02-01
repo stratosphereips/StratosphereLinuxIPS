@@ -254,9 +254,12 @@ class UpdateFileManager:
         except requests.exceptions.ReadTimeout:
             self.print(f'Timeout reached while downloading the file {file_to_download}. Aborting.', 0, 1)
             return False
+        except requests.exceptions.ConnectionError:
+            self.print(f'Connection error while downloading the file {file_to_download}. Aborting.', 0, 1)
+            return False
 
         if response.status_code != 200:
-            self.print(f'An error occurred while downloading the file {file_to_download}.', 0, 1)
+            self.print(f'An error occurred while downloading the file {file_to_download}. Aborting', 0, 1)
             return False
         return response
 
