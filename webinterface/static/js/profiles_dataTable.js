@@ -92,8 +92,10 @@ let ipinfo = $('#ipinfo').DataTable({
             "paging":   false,
             "bInfo" :   false,
             columns: [
-              {data: 'field'},
-              {data: 'value'}
+              {data: 'geocountry'},
+              {data: 'reverse_dns'},
+              {data: 'asnorg'}
+
 
             ]
 });
