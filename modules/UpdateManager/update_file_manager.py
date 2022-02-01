@@ -248,10 +248,24 @@ class UpdateFileManager:
             self.new_hash =  new_hash
             return True
 
-    def __check_if_update(self, file_to_download: str) -> bool:
+    def download_file(self, file_to_download):
+        try:
+            response = requests.get(file_to_download,  timeout=10)
+        except requests.exceptions.ReadTimeout:
+            self.print(f'Timeout reached while downloading the file {file_to_download}. Aborting.', 0, 1)
+            return False
+
+        if response.status_code != 200:
+            self.print(f'An error occurred while downloading the file {file_to_download}.', 0, 1)
+            return False
+        return response
+
+    def __check_if_update(self, file_to_download: str) :
         """
         Decides whether to update or not based on the update period and e-tag.
         Used for remote files that are updated periodically
+
+        Returns the response if the file is old and needs to be updated
         """
         file_name_to_download = file_to_download.split('/')[-1]
         # Get last timeupdate of the file
@@ -276,12 +290,17 @@ class UpdateFileManager:
             # Update only if the e-tag is different
             try:
                 file_name_to_download = file_to_download.split('/')[-1]
+
+                # response will be used to get e-tag, and if the file was updated
+                # the same response will be used to update the content in our db
+                response = self.download_file(file_to_download)
+
                 # Get what files are stored in cache db and their E-TAG to compare with current files
                 data = __database__.get_TI_file_info(file_name_to_download)
                 old_e_tag = data.get('e-tag', '')
                 # Check now if E-TAG of file in github is same as downloaded
                 # file here.
-                new_e_tag = self.get_e_tag_from_web(file_to_download)
+                new_e_tag = self.get_e_tag_from_web(response)
                 if not new_e_tag:
                     # Something failed. Do not download
                     self.print(f'Error getting the e-tag. Not downloading the file {file_to_download}', 0, 1)
@@ -291,7 +310,7 @@ class UpdateFileManager:
                     # Our TI file is old. Download the new one.
                     # we'll be storing this e-tag in our database
                     self.new_e_tag = new_e_tag
-                    return True
+                    return response
 
                 elif old_e_tag == new_e_tag:
                     self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
