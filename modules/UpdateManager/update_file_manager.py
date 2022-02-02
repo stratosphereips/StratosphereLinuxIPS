@@ -29,7 +29,6 @@ class UpdateFileManager:
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
 
-
     def read_configuration(self):
         """ Read the configuration file for what we need """
         try:
@@ -272,7 +271,6 @@ class UpdateFileManager:
         last_modified = response.headers.get('Last-Modified', False)
         return last_modified
 
-
     def __check_if_update(self, file_to_download: str) :
         """
         Decides whether to update or not based on the update period and e-tag.
@@ -357,7 +355,6 @@ class UpdateFileManager:
         """
         e_tag = response.headers.get('ETag', False)
         return e_tag
-
 
     def sanitize(self, string):
         """
@@ -610,15 +607,16 @@ class UpdateFileManager:
     def detect_data_type(self, data):
         """ Detects if incoming data is ipv4, ipv6 or domain """
         # Check if the data is a valid IPv4, IPv6 or domain
+        data = data.strip()
         try:
-            ip_address = ipaddress.IPv4Address(data)
+            ipaddress.IPv4Address(data)
             # Is IPv4!
             return 'ip'
         except ipaddress.AddressValueError:
             pass
         # Is it ipv6?
         try:
-            ip_address = ipaddress.IPv6Address(data)
+            ipaddress.IPv6Address(data)
             # Is IPv6!
             return 'ip'
         except ipaddress.AddressValueError:
@@ -640,8 +638,6 @@ class UpdateFileManager:
             if domain.startswith('https://'): data= data[8:]
             if validators.domain(data):
                 return 'domain'
-
-
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
         # to support nsec/full-results-2019-05-15.json
@@ -695,7 +691,6 @@ class UpdateFileManager:
             __database__.add_domains_to_IoC(malicious_domains_dict)
             return True
 
-
     def parse_ti_feed(self, link_to_download, malicious_data_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
@@ -714,6 +709,7 @@ class UpdateFileManager:
 
             malicious_ips_dict = {}
             malicious_domains_dict = {}
+            malicious_ip_ranges = {}
             with open(malicious_data_path) as feed:
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
                 # to support nsec/full-results-2019-05-15.json
@@ -823,9 +819,8 @@ class UpdateFileManager:
                         line_fields = line.split(separator)
                         # get the ioc
                         data = line_fields[data_column].strip()
-                        break
                     except UnboundLocalError:
-                        # no separator =was foun
+                        # no separator was found
                         if '0.0.0.0 ' in line:
                             # anudeepND/blacklist file
                             data = line[line.index(' ')+1:].replace("\n","")
@@ -852,18 +847,18 @@ class UpdateFileManager:
                             old_domain_info = json.loads(malicious_domains_dict[str(data)] )
                             # if the domain appeared twice in the same blacklist, don't add the blacklist name twice
                             # or calculate the max threat_level
-                            if data_file_name not in old_domain_info['source']:
-                                # append the new blacklist name to the current one
-                                source = f'{old_domain_info["source"]}, {data_file_name}'
-                                # append the new tag to the current tag
-                                tags = f'{old_domain_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
-                                # the new threat_level is the maximum threat_level
-                                threat_level = str(max(float(old_domain_info['threat_level']), float(self.url_feeds[link_to_download]['threat_level'])))
-                                # Store the ip in our local dict
-                                malicious_domains_dict[str(data)] = json.dumps({'description': old_domain_info['description'],
-                                                                                'source':source,
-                                                                                'threat_level':threat_level,
-                                                                                'tags':tags })
+                            if data_file_name in old_domain_info['source']: continue
+                            # append the new blacklist name to the current one
+                            source = f'{old_domain_info["source"]}, {data_file_name}'
+                            # append the new tag to the current tag
+                            tags = f'{old_domain_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
+                            # the new threat_level is the maximum threat_level
+                            threat_level = str(max(float(old_domain_info['threat_level']), float(self.url_feeds[link_to_download]['threat_level'])))
+                            # Store the ip in our local dict
+                            malicious_domains_dict[str(data)] = json.dumps({'description': old_domain_info['description'],
+                                                                            'source':source,
+                                                                            'threat_level':threat_level,
+                                                                            'tags':tags })
                         except KeyError:
                             # We don't have info about this domain, Store the ip in our local dict
                             malicious_domains_dict[str(data)] = json.dumps({'description': description,
@@ -876,33 +871,57 @@ class UpdateFileManager:
                             old_ip_info = json.loads(malicious_ips_dict[str(data)])
                             # if the IP appeared twice in the same blacklist, don't add the blacklist name twice
                             # or calculate the max threat_level
-                            if data_file_name not in old_ip_info['source']:
-                                # append the new blacklist name to the current one
-                                source = f'{old_ip_info["source"]}, {data_file_name}'
-                                # append the new tag to the old tag
-                                tags = f'{old_ip_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
-                                # the new threat_level is the max of the 2
-                                threat_level = str(max(int(old_ip_info['threat_level']), int(self.url_feeds[link_to_download]['threat_level'])))
-                                malicious_ips_dict[str(data)] = json.dumps({'description': old_ip_info['description'],
-                                                                                'source':source,
-                                                                                'threat_level':threat_level,
-                                                                                'tags': tags})
-                                # print(f'Dulicate ip {data} found in sources: {source} old threat_level: {ip_info["threat_level"]}
+                            if data_file_name in old_ip_info['source']: continue
+                            # append the new blacklist name to the current one
+                            source = f'{old_ip_info["source"]}, {data_file_name}'
+                            # append the new tag to the old tag
+                            tags = f'{old_ip_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
+                            # the new threat_level is the max of the 2
+                            threat_level = str(max(int(old_ip_info['threat_level']),
+                                                   int(self.url_feeds[link_to_download]['threat_level'])))
+                            malicious_ips_dict[str(data)] = json.dumps({'description': old_ip_info['description'],
+                                                                        'source':source,
+                                                                        'threat_level':threat_level,
+                                                                        'tags': tags})
+                            # print(f'Dulicate ip {data} found in sources: {source} old threat_level: {ip_info["threat_level"]}
 
                         except KeyError:
                             # We don't have info about this IP, Store the ip in our local dict
                             malicious_ips_dict[str(data)] = json.dumps({'description': description,
-                                                                          'source':data_file_name,
-                                                                          'threat_level':self.url_feeds[link_to_download]['threat_level'],
+                                                                        'source':data_file_name,
+                                                                        'threat_level':self.url_feeds[link_to_download]['threat_level'],
                                                                         'tags': self.url_feeds[link_to_download]['tags']})
                     elif data_type == 'ip_range':
-                        #todo
-                        pass
+                        try:
+                            # we already have info about this range?
+                            old_range_info = json.loads(malicious_ip_ranges[data])
+                            # if the Range appeared twice in the same blacklist, don't add the blacklist name twice
+                            # or calculate the max threat_level
+                            if data_file_name in old_range_info['source']: continue
+                            # append the new blacklist name to the current one
+                            source = f'{old_range_info["source"]}, {data_file_name}'
+                            # append the new tag to the old tag
+                            tags = f'{old_range_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
+                            # the new threat_level is the max of the 2
+                            threat_level = str(max(int(old_range_info['threat_level']),
+                                                   int(self.url_feeds[link_to_download]['threat_level'])))
+                            malicious_ips_dict[str(data)] = json.dumps({'description': old_range_info['description'],
+                                                                        'source':source,
+                                                                        'threat_level':threat_level,
+                                                                        'tags': tags})
+                            # print(f'Dulicate up range {data} found in sources: {source} old threat_level: {ip_info["threat_level"]}
 
+                        except KeyError:
+                            # We don't have info about this range, Store the ip in our local dict
+                            malicious_ip_ranges[data] = json.dumps({'description': description,
+                                                                    'source':data_file_name,
+                                                                    'threat_level':self.url_feeds[link_to_download]['threat_level'],
+                                                                    'tags': self.url_feeds[link_to_download]['tags']})
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
+            __database__.add_ip_range_to_IoC(malicious_ip_ranges)
             return True
 
         except Exception as inst:
