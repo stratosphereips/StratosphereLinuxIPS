@@ -2118,6 +2118,7 @@ class Database(object):
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
         """
         Store a group of IPs in the db as they were obtained from an IoC source
+        :param ips_and_description: is {ip: json.dumps{'source':..,'tags':..,'threat_level':... ,'description'}}
         """
         if ips_and_description:
             self.rcache.hmset('IoC_ips', ips_and_description)
@@ -2126,11 +2127,20 @@ class Database(object):
         """
         Store a group of domains in the db as they were obtained from
         an IoC source
-        What is the format of domains_and_description?
+        :param domains_and_description: is {domain: json.dumps{'source':..,'tags':..,'threat_level':... ,'description'}}
         """
         if domains_and_description:
             self.rcache.hmset('IoC_domains', domains_and_description)
 
+    def add_ip_range_to_IoC(self, malicious_ip_ranges: dict) -> None:
+        """
+        Store a group of IP ranges in the db as they were obtained from an IoC source
+        :param malicious_ip_ranges: is {range: json.dumps{'source':..,'tags':..,'threat_level':... ,'description'}}
+        """
+        if malicious_ip_ranges:
+            self.rcache.hmset('IoC_ip_ranges', malicious_ip_ranges)
+            import pprint
+            pprint.pp(malicious_ip_ranges)
 
     def add_ja3_to_IoC(self, ja3_dict) -> None:
         """
