@@ -80,7 +80,7 @@ class Tree{
             var ips_tws = this.tree_data
             var result = {};
             var ips_with_profiles = Object.keys(ips_tws)
-            for(var i=0; i<ips_with_profiles.length; i++){
+            async.forEachOf(ips_with_profiles, (ip, ind, callback)=>{
                 // get the twids of each ip
                 var tw = ips_tws[ip];
                 var sorted_tws = this.sortTWs(blockedIPsTWs, tw[0], ip)
