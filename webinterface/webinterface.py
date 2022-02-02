@@ -60,7 +60,7 @@ def profile_tws():
     data = []
     id = 0
     for profileid, tws in profile_tws.items():
-        data.append({"id": str(id), "profile": profileid, "tws": json.loads(tws)})
+        data.append({"id": str(id), "profile": profileid.split("_")[1], "tws": json.loads(tws)})
         id = id + 1
     # start = request.args.get('start', type=int)
     # length = request.args.get('length', type=int)
@@ -110,7 +110,6 @@ def timeline(ip, timewindow):
     """
     Set timeline data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
     """
-
     timeline = __database__.hgetall('profile_'+ip+"_"+timewindow+"_flows")
     flows = [json.loads(value) for key,value in timeline.items()]
     data_length = len(flows)
