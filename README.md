@@ -1,13 +1,16 @@
 <h1 align="center"> 
 
-Slips v0.8.2
+Slips v0.8.3
 </h1>
 
 Slips is a behavioral-based Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels to provide good visualisation for the analyst.
 Slips is a modular software.
 
 <h3 align="center"> 
-Behavioral based Intrusion Prevention System<br><br>
+Slips is a behavioral based Intrusion Prevention System<br><br>
+
+<a href="https://asciinema.org/a/ygkJGTXU3jyVBmow7XlgXBHtm" target="_blank"><img src="https://asciinema.org/a/ygkJGTXU3jyVBmow7XlgXBHtm.svg" /></a>
+
 
 Slips documentation is [here](https://stratospherelinuxips.readthedocs.io/en/develop/) <br>
 
@@ -69,7 +72,7 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
         mkdir ~/dataset
         cp <some-place>/myfile.pcap ~/dataset
-        docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+        docker run -it --rm --net=host -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
         ./slips.py -c slips.conf -f dataset/myfile.pcap
 
 ## How to build Slips docker from Dockerfile:
@@ -101,6 +104,11 @@ conda activate slips
 ```
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
+
+## Slips in Blackhat 
+
+Check out Slips presentation in Blackhat Arsenal 2021 [here](https://mega.nz/file/EAIjWA5D#DoYhJknH1hpbqfS2ayVLwA7ewNT50jFQb7S3dVAKPko). 
+
 
 ## People Involved
 

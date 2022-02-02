@@ -3,6 +3,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
@@ -31,7 +32,8 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.fieldseparator = __database__.getFieldSeparator()
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('tw_modified')
-        # We need to know that after a detection, if we receive another flow that does not modify the count for the detection, we are not
+        # We need to know that after a detection, if we receive another flow
+        # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
         self.cache_det_thresholds = {}
         # Retrieve malicious/benigh labels
@@ -111,7 +113,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 source_target_tag = 'Recon'
                 detection_info = srcip
                 # Threat level
-                threat_level = 0.7
+                threat_level = 'medium'
                 category = 'Recon.Scanning'
                 # Compute the confidence
                 pkts_sent = 0
@@ -134,14 +136,14 @@ class PortScanProcess(Module, multiprocessing.Process):
                         # Between threshold and 10 pkts compute a kind of linear grow
                         confidence = pkts_sent / 10.0
                     # Description
-                    description = (f'new horizontal port scan to port {dport}/{protocol}. '
+                    description = (f'horizontal port scan to port {dport}/{protocol}. '
                                    f'From {saddr} to {amount_of_dips} unique dst IPs. '
                                    f'Tot pkts: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}')
                     uid = next(iter(dstips.values()))['uid'] # first uid in the dictionary
                     timestamp = next(iter(dstips.values()))['stime']
                     __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                              description, timestamp, category, conn_count=pkts_sent,
-                                             source_target_tag=source_target_tag,
+                                             source_target_tag=source_target_tag, port=dport, proto=protocol,
                                              profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
@@ -173,7 +175,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 key = 'dstip' + ':' + dstip + ':' + type_evidence
                 source_target_tag = 'Recon'
                 # Threat level
-                threat_level = 0.7
+                threat_level = 'medium'
                 category = 'Recon.Scanning'
                 # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dports per dip.
                 # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
@@ -195,12 +197,15 @@ class PortScanProcess(Module, multiprocessing.Process):
                         # Between threshold and 10 pkts compute a kind of linear grow
                         confidence = pkts_sent / 10.0
                     # Description
-                    description = f'new vertical port scan to IP {dstip} from {srcip}. Total {amount_of_dports} dst ports of protocol {protocol}. Not Established. Tot pkts sent all ports: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
+                    description = f'new vertical port scan to IP {dstip} from {srcip}. ' \
+                                  f'Total {amount_of_dports} dst ports of protocol {protocol}. ' \
+                                  f'Not Established. Tot pkts sent all ports: {pkts_sent}. ' \
+                                  f'Confidence: {confidence}'
                     uid = data[dstip]['uid']
                     timestamp = data[dstip]['stime']
                     __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                              description, timestamp, category, conn_count=pkts_sent,
-                                             source_target_tag=source_target_tag,
+                                             source_target_tag=source_target_tag, proto=protocol,
                                              profileid=profileid, twid=twid, uid=uid)
                     # Set 'malicious' label in the detected profile
                     __database__.set_profile_module_label(profileid, type_evidence, self.malicious_label)
@@ -248,7 +253,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 confidence = 1
             else:
                 confidence = pkts_sent / 10.0
-            threat_level = 25
+            threat_level = 'medium'
             category = 'Recon.Scanning'
             # type_detection is set to dstip even though the srcip is the one performing the scan
             # because setEvidence doesn't alert on the same key twice, so we have to send different keys to be able
@@ -306,7 +311,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'tw_modified'):
+                if utils.is_msg_intended_for(message, 'tw_modified'):
                     # Get the profileid and twid
                         profileid = message['data'].split(':')[0]
                         twid = message['data'].split(':')[1]

@@ -84,8 +84,6 @@ class Box{
                             color.green('Detected '+evidence_details['type_detection'] + ' ' + evidence_details['detection_info']) +
                             '{/bold}' +
                             ". Blacklisted in " + evidence_details["description"] + '\n'
-                        console.log(evidence_data)
-
                         // evidence_data = evidence_data + '{bold}' + key + '\n'
                     }
 

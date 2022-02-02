@@ -1,20 +1,8 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
-
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
@@ -157,7 +145,9 @@ class Module(Module, multiprocessing.Process):
             # we now know there's a match at offset x, we need to know offset x belongs to which packet
             packet_info = self.get_packet_info(offset)
             if packet_info:
-                srcip, dstip, proto, sport, dport, ts = packet_info[0],packet_info[1],packet_info[2],packet_info[3],packet_info[4],packet_info[5]
+                srcip, dstip, proto, sport, dport, ts = packet_info[0], packet_info[1], \
+                                                        packet_info[2],packet_info[3], \
+                                                        packet_info[4],packet_info[5]
                 type_detection = 'dstip'
                 detection_info = dstip
                 source_target_tag = 'CC'
@@ -165,7 +155,7 @@ class Module(Module, multiprocessing.Process):
                 type_evidence = 'NETWORK_gps_location_leaked'
                 category = 'Malware'
                 confidence = 0.9
-                threat_level = 0.9
+                threat_level = 'high'
                 description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
                 # generate a random uid
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
@@ -183,14 +173,26 @@ class Module(Module, multiprocessing.Process):
                         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                                  threat_level, confidence, description, ts,
                                                  category, source_target_tag=source_target_tag,
+                                                 port=dport, proto=proto,
                                                  profileid=profileid, twid=twid, uid=uid)
 
     def compile_and_save_rules(self):
         """
         Compile and save all yara rules in the compiled_yara_rules_path
         """
+
+        try:
+            os.mkdir(self.compiled_yara_rules_path)
+        except FileExistsError:
+            pass
+
         for yara_rule in os.listdir(self.yara_rules_path):
-            # get the complete path of the rule
+            compiled_rule_path = os.path.join(self.compiled_yara_rules_path, f'{yara_rule}_compiled')
+            # if we already have the rule compiled, don't compiler again
+            if os.path.exists(compiled_rule_path):
+                # we already have the rule compiled
+                continue
+            # get the complete path of the .yara rule
             rule_path = os.path.join(self.yara_rules_path, yara_rule)
             # ignore yara_rules/compiled/
             if not os.path.isfile(rule_path):
@@ -198,7 +200,7 @@ class Module(Module, multiprocessing.Process):
             # compile the rule
             compiled_rule = yara.compile(filepath=rule_path)
             # save the compiled rule
-            compiled_rule.save(os.path.join(self.compiled_yara_rules_path, f'{yara_rule}_compiled'))
+            compiled_rule.save(compiled_rule_path)
 
     def find_matches(self):
         """ Run yara rules on the given pcap and find matches"""
@@ -215,9 +217,7 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # if we we don't have compiled rules, compile them
-            if not os.path.exists(self.compiled_yara_rules_path):
-                os.mkdir(self.compiled_yara_rules_path)
-                self.compile_and_save_rules()
+            self.compile_and_save_rules()
             # run the yara rules on the given pcap
             self.find_matches()
         except KeyboardInterrupt:

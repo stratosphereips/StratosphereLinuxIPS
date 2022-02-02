@@ -144,3 +144,6 @@ modules/leak_detector/yara_rules/compiled
 
 # ignore warden configuration file
 modules/CESNET/warden.conf
+
+# For RisqIQ credentinals
+credentials

@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 import sys
 
@@ -252,13 +253,14 @@ class Module(Module, multiprocessing.Process):
         """
         Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
-        if not hasattr(self, 'mac_db'):
+        if (not hasattr(self, 'mac_db')
+                or 'ff:ff:ff:ff:ff:ff' in mac_addr.lower()
+                or '00:00:00:00:00:00' in mac_addr.lower()):
             return False
 
-
-        # don't look for the vendor again if we already have MAC info about this profileid
-        MAC_info = __database__.get_mac_addr_from_profile(profileid)
-        if MAC_info:
+        # don't look for the vendor again if we already have it for this profileid
+        MAC_vendor = __database__.get_mac_vendor_from_profile(profileid)
+        if MAC_vendor:
             return True
 
         MAC_info = {'MAC': mac_addr}
@@ -267,14 +269,20 @@ class Module(Module, multiprocessing.Process):
 
         oui = mac_addr[:8].upper()
         # parse the mac db and search for this oui
-        line = self.mac_db.readline()
-        while line:
+        self.mac_db.seek(0)
+        while True:
+            line = self.mac_db.readline()
+            if line =='':
+                # reached the end of file without finding the vendor
+                # set the vendor to unknown to avoid searching for it again
+                MAC_info.update({'Vendor': 'Unknown'})
+                break
+
             if oui in line:
                 line = json.loads(line)
                 vendor = line['companyName']
                 MAC_info.update({'Vendor': vendor})
                 break
-            line = self.mac_db.readline()
 
         # either we found the vendor or not, store the mac of this ip to the db
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
@@ -299,7 +307,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_ip'):
+                if utils.is_msg_intended_for(message, 'new_ip'):
                     # Get the IP from the message
                     ip = message['data']
                     try:
@@ -332,11 +340,11 @@ class Module(Module, multiprocessing.Process):
                     self.get_rdns(ip)
 
                 message = self.c2.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_MAC'):
+                if utils.is_msg_intended_for(message, 'new_MAC'):
                     data = json.loads(message['data'])
                     mac_addr = data['MAC']
-                    profileid = data['profileid']
                     host_name = data.get('host_name', False)
+                    profileid = data['profileid']
                     self.get_vendor(mac_addr, host_name, profileid)
 
             except KeyboardInterrupt:

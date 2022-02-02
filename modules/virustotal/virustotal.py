@@ -3,6 +3,7 @@ import configparser
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 import sys
 
@@ -214,14 +215,15 @@ class Module(Module, multiprocessing.Process):
             # consider it malicious and alert
             type_detection = 'file'
             detection_info = md5
-            type_evidence = "MaliciousDownloadedFile"
-            threat_level = 80
+            type_evidence = 'MaliciousDownloadedFile'
+            threat_level = 'critical'
             description =  f'Malicious downloaded file {md5} size: {size} from IP: {saddr} Score: {score}'
             category = 'Malware'
             if not twid:
                 twid = ''
-            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
+            __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                     threat_level, confidence, description,
+                                     ts, category, profileid=profileid, twid=twid, uid=uid)
             return 'malicious'
         return 'benign'
 
@@ -451,7 +453,7 @@ class Module(Module, multiprocessing.Process):
 
             # report that API limit is reached, wait one minute and try again
             self.print("Status code is " + str(response.status) + " at " + str(time.asctime()) + ", query id: " + str(
-                self.counter), 0,2)
+                self.counter), 0, 2)
             # return empty dict because api call isn't successful
             data = {}
         else:
@@ -583,7 +585,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_flow'):
+                if utils.is_msg_intended_for(message, 'new_flow'):
                     data = message["data"]
                     data = json.loads(data)
                     profileid = data['profileid']
@@ -609,7 +611,7 @@ class Module(Module, multiprocessing.Process):
                             self.set_vt_data_in_IPInfo(ip, cached_data)
 
                 message = self.c2.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
+                if utils.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message["data"]
 
                     data = json.loads(data)
@@ -632,7 +634,7 @@ class Module(Module, multiprocessing.Process):
 
 
                 message = self.c3.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_url'):
+                if utils.is_msg_intended_for(message, 'new_url'):
                     data = message["data"]
                     data = json.loads(data)
                     profileid = data['profileid']
@@ -651,7 +653,7 @@ class Module(Module, multiprocessing.Process):
                             self.set_url_data_in_URLInfo(url, cached_data)
 
                 message = self.c4.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_downloaded_file'):
+                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
                     self.file_info = json.loads(message['data'])
                     file_info = self.file_info.copy()
                     self.scan_file(file_info)

@@ -1,0 +1,147 @@
+name: CI-production
+
+on:
+  push:
+    branches:
+    - 'master'
+    - '!develop'
+
+  pull_request:
+    branches:
+    - 'master'
+    - '!develop'
+
+jobs:
+
+  test_slips_locally:
+    runs-on: ubuntu-latest
+    env:
+      SLIPS_VERSION: v0.8.3
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install slips dependencies
+      run: sudo apt-get -y install curl git redis python3-redis python3-watchdog lsof file iptables wget tar nfdump
+
+    - name: Install Zeek
+      run: |
+        sudo echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
+        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+        sudo apt update
+        sudo apt install -y --no-install-recommends zeek
+        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+
+    - name: Install YARA
+      run: |
+        wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz
+        tar -zxf v4.1.3.tar.gz
+        cd yara-4.1.3
+        sudo ./bootstrap.sh
+        sudo ./configure
+        sudo make
+        sudo make install
+        git clone https://github.com/VirusTotal/yara-python yara-python && cd yara-python
+        sudo python3 setup.py build && sudo python3 setup.py install
+
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: "3.8"
+
+    - name: Install Python dependencies
+      run:
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Use Node.js 14.x
+      uses: actions/setup-node@v1
+      with:
+        node-version: 14.x
+
+    - name: Install Node dependencies
+      run: npm install blessed blessed-contrib redis@3.1.2 async chalk@4.1.2 strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
+
+    - name: Start redis server
+      run: redis-server --daemonize yes
+
+    - name: Run unit tests
+      run: python3 -m pytest tests/ --ignore="tests/test_dataset.py" -p no:warnings -vv
+
+    - name: Test all files in our dataset
+      run: python3 -m pytest tests/test_dataset.py -p no:warnings -vv -s
+
+     #Reaching this step means all unit tests passed outtside of docker
+
+  test_slips_in_docker:
+
+    runs-on: ubuntu-latest
+    env:
+      SLIPS_VERSION: v0.8.3
+
+    steps:
+
+    # clone slips and checkout branch
+    - uses: actions/checkout@v2
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v1
+      with:
+        username: stratosphereips
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+
+    # build slips from ubuntu dockerfile, but don't push
+    - name: Build our ubuntu-dockerfile
+      id: docker_build_slips
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./docker/ubuntu-image/Dockerfile
+        tags: stratosphereips/slips:latest, stratosphereips/slips:${{ env.SLIPS_VERSION }}
+        push: false
+
+    # use the built image to run unit tests inside docker
+    # we ignore the blocking module unit tests because we cannot run
+    # docker with -cap-add=NET_ADMIN and use iptables in GH actions
+    - name: Run unit tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        run: |
+          redis-server --daemonize yes
+          python3 -m pytest tests/ --ignore="tests/test_dataset.py" --ignore="tests/test_blocking.py" -p no:warnings -vv
+          python3 -m pytest tests/test_dataset.py -p no:warnings -vv -s
+
+    # push one with the latest version as the tag, and another one with 'latest' as the tag
+    - name: Push slips images to dockerhub
+      env:
+        slips_image: stratosphereips/slips:${{ env.SLIPS_VERSION }}
+      run: |
+        docker push $slips_image
+        docker push stratosphereips/slips:latest
+
+  build_and_push_dependency_image:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    # clone slips and checkout branch
+    - uses: actions/checkout@v2
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v1
+      with:
+        username: stratosphereips
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    - name: Build and push latest dependency image
+      id: docker_build_dependency_image
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./docker/dependency-image/Dockerfile
+        tags: stratosphereips/slips_dependencies:latest
+        push: true
+

@@ -1,20 +1,8 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
-
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 import warnings
 import json
@@ -74,16 +62,17 @@ class Module(Module, multiprocessing.Process):
         '''
         type_detection = 'outTuple'
         detection_info = tupleid
-        source_target_tag= 'CC'
+        source_target_tag = 'Botnet'
         type_evidence = 'Command-and-Control-channels-detection'
-        threat_level = 0.3
+        threat_level = 'high'
         categroy =  'Intrusion.Botnet'
-        tupleid = tupleid.split(':')
+        tupleid = tupleid.split('-')
         dstip , port, proto =  tupleid[0], tupleid[1], tupleid[2]
-        description = f'C&C channels detection, destination IP: {dstip} port: {port}/{proto} score: {format(score, ".4f")}'
+        description = f'C&C channel, destination IP: {dstip} port: {port}/{proto} score: {format(score, ".4f")}'
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description, timestamp,
                                  categroy, source_target_tag=source_target_tag,
+                                 port=port, proto=proto,
                                  profileid=profileid, twid=twid, uid=uid)
 
     def convert_input_for_module(self, pre_behavioral_model):
@@ -136,6 +125,9 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             return True
+        except AttributeError as e:
+            self.print('Error loading the model.')
+            self.print(e)
         except KeyboardInterrupt:
             # enter the while loop to recieve stop_process msg
             pass
@@ -150,7 +142,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_letters'):
+                if utils.is_msg_intended_for(message, 'new_letters'):
                     data = message['data']
                     data = json.loads(data)
                     pre_behavioral_model = data['new_symbol']

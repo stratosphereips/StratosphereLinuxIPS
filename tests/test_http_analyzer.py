@@ -42,7 +42,7 @@ def test_check_multiple_google_connections(outputQueue, database):
     timestamp = 1635765895.037696
     request_body_len = 0
     for i in range(4):
-        found_detection = http_analyzer.check_multiple_google_connections(uid, host, timestamp, request_body_len, profileid, twid)
+        found_detection = http_analyzer.check_multiple_empty_connections(uid, host, timestamp, request_body_len, profileid, twid)
 
     assert found_detection == True
 

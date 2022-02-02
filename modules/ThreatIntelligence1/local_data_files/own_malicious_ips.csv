@@ -1,14 +1,15 @@
-# This file is for you to add your own IPs to the list to detect
+# This file is for you to add your own IPs or domains to the list to detect
 # Format of this file: 
-# "Number","IP address","Rating", "Description"
-# Rating goes from 1 to 100
-"1", "23.253.126.58","80","Simda CC"
-"2", "bncv00.no-ip.info", "100", "Variant.Zusy"
-"3", "54.192.46.116", "80", "FusionCore"
-"4", "wheridomaintv.com", "80", "Rana Malware IRAN"
-"5", "whoisdomainpc.com", "80", "Rana Malware IRAN"
-"6", "fullplayersoftware.com", "80", "Rana Malware IRAN"
-"7", "softwareplayertop.com", "80", "Rana Malware IRAN"
-"8", "saveingone.com", "80", "Rana Malware IRAN"
-"9", "facedomainpc.com", "80", "Rana Malware IRAN"
-"10", "facedomaintv.com", "80", "Rana Malware IRAN"
+# "IP address","Threat level", "Description"
+# Threat level available options: info, low, medium, high, critical
+
+"23.253.126.58","high","Simda CC"
+"bncv00.no-ip.info", "critical", "Variant.Zusy"
+"54.192.46.116", "high", "FusionCore"
+"wheridomaintv.com", "high", "Rana Malware IRAN"
+"whoisdomainpc.com", "high", "Rana Malware IRAN"
+"fullplayersoftware.com", "high", "Rana Malware IRAN"
+"softwareplayertop.com", "high", "Rana Malware IRAN"
+"saveingone.com", "high", "Rana Malware IRAN"
+"facedomainpc.com", "high", "Rana Malware IRAN"
+"facedomaintv.com", "high", "Rana Malware IRAN"

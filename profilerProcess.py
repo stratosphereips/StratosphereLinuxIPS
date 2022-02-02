@@ -337,7 +337,7 @@ class ProfilerProcess(multiprocessing.Process):
         returns a list containing the org's domains
         """
         try:
-            # Each file is named after the organization's name followed by _asn
+            # Each file is named after the organization's name followed by _domains
             domains =[]
             file = f'slips_files/organizations_info/{org}_domains'
             with open(file,'r') as f:
@@ -382,7 +382,8 @@ class ProfilerProcess(multiprocessing.Process):
             org_subnets = []
             # see if we can get asn about this org
             try:
-                response = requests.get('http://asnlookup.com/api/lookup?org=' + org.replace('_', ' '), headers ={  'User-Agent': 'ASNLookup PY/Client'}, timeout = 10)
+                response = requests.get('http://asnlookup.com/api/lookup?org=' + org.replace('_', ' '),
+                                        headers ={  'User-Agent': 'ASNLookup PY/Client'}, timeout = 10)
             except requests.exceptions.ConnectionError:
                 # Connection reset by peer
                 return False
@@ -992,7 +993,7 @@ class ProfilerProcess(multiprocessing.Process):
             # proto	note	msg	sub	src	dst	p	n	peer_descr	actions	suppress_for
             self.column_values['type'] = 'notice'
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
-            if self.column_values['saddr'] is '-' :
+            if self.column_values['saddr'] == '-' :
                 try:
                     self.column_values['saddr'] = line[13] #  src field
                 except IndexError:
@@ -1000,13 +1001,13 @@ class ProfilerProcess(multiprocessing.Process):
                     # keep it - as it is
                     pass
 
-            if self.column_values['daddr'] is '-':
+            if self.column_values['daddr'] == '-':
                 self.column_values['daddr'] = line[14]  #  dst field
-                if self.column_values['daddr'] is '-':
+                if self.column_values['daddr'] == '-':
                     self.column_values['daddr'] = self.column_values['saddr']
 
             self.column_values['dport'] = line[5] # id.orig_p
-            if self.column_values['dport'] is '-':
+            if self.column_values['dport'] == '-':
                 try:
                     self.column_values['dport'] = line[15] # p field
                 except IndexError:
@@ -1042,6 +1043,11 @@ class ProfilerProcess(multiprocessing.Process):
         """
         line = new_line['data']
         file_type = new_line['type']
+        # if the zeek dir given to slips has 'conn' in it's name,
+        # slips thinks it's reading a conn file
+        # because we use the file path as the file 'type'
+        # to fix this, only use the file name as file 'type'
+        file_type = file_type.split('/')[-1]
         # Generic fields in Zeek
         self.column_values = {}
         # We need to set it to empty at the beggining so any new flow has the key 'type'
@@ -1211,9 +1217,9 @@ class ProfilerProcess(multiprocessing.Process):
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
             self.column_values['type'] = 'notice'
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
-            if self.column_values['saddr'] is '' :
+            if self.column_values['saddr'] == '' :
                 self.column_values['saddr'] = line.get('src','' )
-            if self.column_values['daddr'] is '':
+            if self.column_values['daddr'] == '':
                 # set daddr to src for now because the notice that contains portscan doesn't have a dst field and slips needs it to work
                 self.column_values['daddr'] = line.get('dst', self.column_values['saddr'] )
             self.column_values['sport'] = line.get('id.orig_p', '')
@@ -1223,7 +1229,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
             self.column_values['scanned_port'] = line.get('p', '')
             self.column_values['scanning_ip'] = line.get('src', '')
-        elif '/files' in file_type:
+        elif 'files' in file_type:
             """ Parse the fields we're interested in in the files.log file """
             # the slash before files to distinguish between 'files' in the dir name and file.log
             self.column_values['type'] = 'files'
@@ -1755,7 +1761,8 @@ class ProfilerProcess(multiprocessing.Process):
                         if domain in main_domain:
                             # We can ignore flows or alerts, what is it?
                             if 'flows' in what_to_ignore or 'both' in what_to_ignore:
-                                # self.print(f"Whitelisting the domain {domain_to_check} because is related to domain {domain} of dst IP {self.column_values['daddr']}")
+                                # self.print(f"Whitelisting the domain {domain_to_check} because is related"
+                                #            f" to domain {domain} of dst IP {self.column_values['daddr']}")
                                 return True
 
         saddr = self.column_values['saddr']
@@ -1774,7 +1781,7 @@ class ProfilerProcess(multiprocessing.Process):
                 from_ = whitelisted_IPs[saddr]['from']
                 what_to_ignore = whitelisted_IPs[saddr]['what_to_ignore']
                 if ('src' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
-                    #self.print(f"Whitelisting the src IP {self.column_values['saddr']}")
+                    # self.print(f"Whitelisting the src IP {self.column_values['saddr']}")
                     return True
 
             if daddr in ips_to_whitelist: # should be if and not elif
@@ -1782,7 +1789,7 @@ class ProfilerProcess(multiprocessing.Process):
                 from_ = whitelisted_IPs[daddr]['from']
                 what_to_ignore = whitelisted_IPs[daddr]['what_to_ignore']
                 if ('dst' in from_  or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
-                    #self.print(f"Whitelisting the dst IP {self.column_values['daddr']}")
+                    # self.print(f"Whitelisting the dst IP {self.column_values['daddr']}")
                     return True
 
         # check if we have orgs whitelisted
@@ -1817,7 +1824,7 @@ class ProfilerProcess(multiprocessing.Process):
                             try:
                                 ip = ipaddress.ip_address(saddr)
                                 if ip in ipaddress.ip_network(network):
-                                    #self.print(f"The src IP {saddr} is in the range {network} or org {org}. Whitelisted.")
+                                    # self.print(f"The src IP {saddr} is in the range {network} or org {org}. Whitelisted.")
                                     return True
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
@@ -1830,7 +1837,7 @@ class ProfilerProcess(multiprocessing.Process):
                             ip_asn = ip_data['asn']['asnorg']
                             if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in whitelisted_orgs[org]['asn']):
                                 # this ip belongs to a whitelisted org, ignore flow
-                                #self.print(f"The ASN {ip_asn} of IP {saddr} is in the values of org {org}. Whitelisted.")
+                                # self.print(f"The ASN {ip_asn} of IP {saddr} is in the values of org {org}. Whitelisted.")
                                 return True
                         except (KeyError, TypeError):
                             # No asn data for src ip
@@ -1841,10 +1848,25 @@ class ProfilerProcess(multiprocessing.Process):
                         # domains to check are usually 1 or 2 domains
                         for flow_domain in domains_to_check:
                             if org in flow_domain:
+                                # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
                                 return True
-                            for domain in org_domains:
+
+                            flow_TLD = flow_domain.split(".")[-1]
+                            for org_domain in org_domains:
+                                org_domain_TLD = org_domain.split(".")[-1]
+                                # make sure the 2 domains have the same same top level domain
+                                if flow_TLD != org_domain_TLD: continue
+
                                 # match subdomains too
-                                if domain in flow_domain:
+                                # if org has org.com, and the flow_domain is xyz.org.com whitelist it
+                                if org_domain in flow_domain:
+                                    # print(f"The src domain of this flow ({flow_domain}) is "
+                                    #            f"a subdomain of {org} domain: {org_domain}")
+                                    return True
+                                # if org has xyz.org.com, and the flow_domain is org.com whitelist it
+                                if flow_domain in org_domain :
+                                    # print(f"The domain of {org} ({org_domain}) is a subdomain of "
+                                    #       f"this flow domain ({flow_domain})")
                                     return True
 
                     if 'dst' in from_ or 'both' in from_:
@@ -1853,7 +1875,8 @@ class ProfilerProcess(multiprocessing.Process):
                             try:
                                 ip = ipaddress.ip_address(self.column_values['daddr'])
                                 if ip in ipaddress.ip_network(network):
-                                    #self.print(f"The dst IP {self.column_values['daddr']} is in the range {network} or org {org}. Whitelisted.")
+                                    # self.print(f"The dst IP {self.column_values['daddr']} "
+                                    #            f"is in the range {network} or org {org}. Whitelisted.")
                                     return True
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
@@ -1864,7 +1887,8 @@ class ProfilerProcess(multiprocessing.Process):
                             ip_asn = ip_data['asn']['asnorg']
                             if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in whitelisted_orgs[org]['asn']):
                                 # this ip belongs to a whitelisted org, ignore flow
-                                #self.print(f"The ASN {ip_asn} of IP {self.column_values['daddr']} is in the values of org {org}. Whitelisted.")
+                                # self.print(f"The ASN {ip_asn} of IP {self.column_values['daddr']} "
+                                #            f"is in the values of org {org}. Whitelisted.")
                                 return True
                         except (KeyError, TypeError):
                             # No asn data for src ip
@@ -1876,33 +1900,35 @@ class ProfilerProcess(multiprocessing.Process):
                             for flow_domain in domains_to_check:
                                 # match subdomains too
                                 if domain in flow_domain:
+                                    # self.print(f"The dst domain of this flow ({flow_domain}) is "
+                                    #            f"a subdomain of {org} domain: {domain}")
                                     return True
 
-        # check if we have mac addresses whitelisted
-        whitelisted_mac = __database__.get_whitelist('mac')
+                    # check if we have mac addresses whitelisted
+                    whitelisted_mac = __database__.get_whitelist('mac')
 
-        if whitelisted_mac:
+                    if whitelisted_mac:
 
-            # try to get the mac address of the current flow
-            src_mac =  self.column_values.get('src_mac',False)
-            if not src_mac: src_mac = self.column_values.get('mac',False)
-            if not src_mac:
-                src_mac = __database__.get_mac_addr_from_profile(f'profile_{saddr}')[0]
+                        # try to get the mac address of the current flow
+                        src_mac =  self.column_values.get('src_mac',False)
+                        if not src_mac: src_mac = self.column_values.get('mac',False)
+                        if not src_mac:
+                            src_mac = __database__.get_mac_addr_from_profile(f'profile_{saddr}')[0]
 
-            if src_mac and src_mac in list(whitelisted_mac.keys()):
-                # the src mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_mac[src_mac]['from']
-                what_to_ignore = whitelisted_mac[src_mac]['what_to_ignore']
-                if ('src' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
-                    return True
+                        if src_mac and src_mac in list(whitelisted_mac.keys()):
+                            # the src mac of this flow is whitelisted, but which direction?
+                            from_ = whitelisted_mac[src_mac]['from']
+                            if 'src' in from_ or 'both' in from_:
+                                # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
+                                return True
 
-            dst_mac = self.column_values.get('dst_mac',False)
-            if dst_mac and dst_mac in list(whitelisted_mac.keys()):
-                # the dst mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_mac[dst_mac]['from']
-                what_to_ignore = whitelisted_mac[dst_mac]['what_to_ignore']
-                if ('dst' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
-                    return True
+                        dst_mac = self.column_values.get('dst_mac',False)
+                        if dst_mac and dst_mac in list(whitelisted_mac.keys()):
+                            # the dst mac of this flow is whitelisted, but which direction?
+                            from_ = whitelisted_mac[dst_mac]['from']
+                            if 'dst' in from_ or 'both' in from_:
+                                # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
+                                return True
 
         return False
 
@@ -2054,7 +2080,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                     # Tuple
-                    tupleid = str(daddr_as_obj) + ':' + str(dport) + ':' + proto
+                    tupleid = str(daddr_as_obj) + '-' + str(dport) + '-' + proto
                     # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
                     # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
@@ -2074,9 +2100,8 @@ class ProfilerProcess(multiprocessing.Process):
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
                                           spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label, flow_type=flow_type)
                 elif 'dns' in flow_type:
-                    __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name, qtype_name, rcode_name, answers, ttls)
-
-
+                    __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name,
+                                             qtype_name, rcode_name, answers, ttls)
                 elif flow_type == 'http':
 
                     __database__.add_out_http(profileid, twid, starttime, flow_type, uid, self.column_values['method'],
@@ -2160,8 +2185,19 @@ class ProfilerProcess(multiprocessing.Process):
                         'profileid' : profileid,
                         'twid' : twid,
                     }
+                    # send to arp module
                     to_send = json.dumps(to_send)
                     __database__.publish('new_arp', to_send)
+
+                    # send the src and dst MAC to IP_Info module to get vendor info about this MAC
+                    to_send = {'MAC': self.column_values['dst_mac'],
+                               'profileid': f'profile_{self.daddr}'}
+                    __database__.publish('new_MAC', json.dumps(to_send))
+
+                    to_send = {'MAC': self.column_values['src_mac'],
+                               'profileid': f'profile_{self.saddr}'}
+                    __database__.publish('new_MAC', json.dumps(to_send))
+
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur='0',
                                           saddr=str(saddr_as_obj), daddr=str(daddr_as_obj),
@@ -2175,7 +2211,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                     # Tuple. We use the src ip, but the dst port still!
-                    tupleid = str(saddr_as_obj) + ':' + str(dport) + ':' + proto
+                    tupleid = str(saddr_as_obj) + '-' + str(dport) + '-' + proto
                     # Compute symbols.
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
                     # Add the src tuple
@@ -2434,116 +2470,39 @@ class ProfilerProcess(multiprocessing.Process):
 
             def compute_letter():
                 """ Function to compute letter """
-                if periodicity == -1:
-                    if size == 1:
-                        if duration == 1:
-                            return '1'
-                        elif duration == 2:
-                            return '2'
-                        elif duration == 3:
-                            return '3'
-                    elif size == 2:
-                        if duration == 1:
-                            return '4'
-                        elif duration == 2:
-                            return '5'
-                        elif duration == 3:
-                            return '6'
-                    elif size == 3:
-                        if duration == 1:
-                            return '7'
-                        elif duration == 2:
-                            return '8'
-                        elif duration == 3:
-                            return '9'
-                elif periodicity == 1:
-                    if size == 1:
-                        if duration == 1:
-                            return 'a'
-                        elif duration == 2:
-                            return 'b'
-                        elif duration == 3:
-                            return 'c'
-                    elif size == 2:
-                        if duration == 1:
-                            return 'd'
-                        elif duration == 2:
-                            return 'e'
-                        elif duration == 3:
-                            return 'f'
-                    elif size == 3:
-                        if duration == 1:
-                            return 'g'
-                        elif duration == 2:
-                            return 'h'
-                        elif duration == 3:
-                            return 'i'
-                elif periodicity == 2:
-                    if size == 1:
-                        if duration == 1:
-                            return 'A'
-                        elif duration == 2:
-                            return 'B'
-                        elif duration == 3:
-                            return 'C'
-                    elif size == 2:
-                        if duration == 1:
-                            return 'D'
-                        elif duration == 2:
-                            return 'E'
-                        elif duration == 3:
-                            return 'F'
-                    elif size == 3:
-                        if duration == 1:
-                            return 'G'
-                        elif duration == 2:
-                            return 'H'
-                        elif duration == 3:
-                            return 'I'
-                elif periodicity == 3:
-                    if size == 1:
-                        if duration == 1:
-                            return 'r'
-                        elif duration == 2:
-                            return 's'
-                        elif duration == 3:
-                            return 't'
-                    elif size == 2:
-                        if duration == 1:
-                            return 'u'
-                        elif duration == 2:
-                            return 'v'
-                        elif duration == 3:
-                            return 'w'
-                    elif size == 3:
-                        if duration == 1:
-                            return 'x'
-                        elif duration == 2:
-                            return 'y'
-                        elif duration == 3:
-                            return 'z'
-                elif periodicity == 4:
-                    if size == 1:
-                        if duration == 1:
-                            return 'R'
-                        elif duration == 2:
-                            return 'S'
-                        elif duration == 3:
-                            return 'T'
-                    elif size == 2:
-                        if duration == 1:
-                            return 'U'
-                        elif duration == 2:
-                            return 'V'
-                        elif duration == 3:
-                            return 'W'
-                    elif size == 3:
-                        if duration == 1:
-                            return 'X'
-                        elif duration == 2:
-                            return 'Y'
-                        elif duration == 3:
-                            return 'Z'
+                # format of this map is as follows
+                # {periodicity: {'size' : {duration: letter, duration: letter, etc.}}
+                periodicity_map = {
+                    # every key in this dict represents a periodicity
+                    '-1': {
+                        # every key in this dict is a size 1,2,3
+                        # 'size' : {duration: letter, diration: letter, etc.}
+                        '1': {'1': '1', '2': '2', '3': '3'},
+                        '2': {'1': '4', '2': '5', '3': '6'},
+                        '3' : {'1': '7', '2': '8', '3': '9'},
+                    },
+                    '1': {
+                        '1': {'1': 'a', '2': 'b', '3': 'c'},
+                        '2': {'1': 'd', '2': 'e', '3': 'f'},
+                        '3' : {'1': 'g', '2': 'h', '3':'i'},
+                    },
+                    '2': {
+                        '1': {'1': 'A', '2': 'B', '3': 'C'},
+                        '2': {'1': 'D', '2': 'E', '3': 'F'},
+                        '3' : {'1': 'G', '2': 'H', '3':'I'},
+                    },
+                    '3': {
+                        '1': {'1': 'r', '2': 's', '3': 't'},
+                        '2': {'1': 'u', '2': 'v', '3': 'w'},
+                        '3' : {'1': 'x', '2': 'y', '3':'z'},
+                    },
+                    '4': {
+                        '1': {'1': 'R', '2': 'S', '3': 'T'},
+                        '2': {'1': 'U', '2': 'V', '3': 'W'},
+                        '3' : {'1': 'X', '2': 'Y', '3':'Z'},
+                    }
+                }
+                return periodicity_map[str(periodicity)][str(size)][str(duration)]
 
             def compute_timechar():
                 """ Function to compute the timechar """
@@ -2580,7 +2539,7 @@ class ProfilerProcess(multiprocessing.Process):
             except TypeError:
                 T2 = False
             # self.print("T2:{}".format(T2), 0, 1)
-
+            # p = __database__.start_profiling()
             # Compute the rest
             periodicity, zeros = compute_periodicity(now_ts, last_ts, last_last_ts)
             duration = compute_duration()
@@ -2592,7 +2551,7 @@ class ProfilerProcess(multiprocessing.Process):
             timechar = compute_timechar()
             # self.print("TimeChar: {}".format(timechar), 0, 1)
             self.print("Profileid: {}, Tuple: {}, Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(profileid, tupleid, periodicity, duration, size, letter, timechar),  3, 0)
-
+            # p = __database__.end_profiling(p)
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
             return symbol, (last_ts, now_ts)
@@ -2714,7 +2673,9 @@ class ProfilerProcess(multiprocessing.Process):
                         # self.print('Zeek line')
                         self.process_zeek_input(line)
                         # Add the flow to the profile
+                        # p = __database__.start_profiling()
                         self.add_flow_to_profile()
+                        # p = __database__.end_profiling(p)
                     elif self.input_type == 'argus' or self.input_type == 'argus-tabs':
                         # self.print('Argus line')
                         # Argus puts the definition of the columns on the first line only

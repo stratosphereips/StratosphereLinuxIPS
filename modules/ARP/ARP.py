@@ -1,10 +1,9 @@
 
 # Must imports
-import ipaddress
-
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import configparser
 
 # Your imports
@@ -122,8 +121,8 @@ class Module(Module, multiprocessing.Process):
             if self.diff <= 30.00:
                 # we are sure this is an arp scan
                 confidence = 0.8
-                threat_level = 0.7
-                description = f'{saddr} performing an ARP scan. Threat level {threat_level}. Confidence {confidence}.'
+                threat_level = 'low'
+                description = f'{saddr} performing an ARP scan. Confidence {confidence}.'
                 type_evidence = 'ARPScan'
                 # category of this evidence according to idea categories
                 category = 'Recon.Scanning'
@@ -161,7 +160,7 @@ class Module(Module, multiprocessing.Process):
         if not daddr.startswith(local_net):
             # comes here if the IP isn't in any of the local networks
             confidence = 0.6
-            threat_level =  0.7
+            threat_level = 'low'
             ip_identification = __database__.getIPIdentification(daddr)
             description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
             type_evidence = 'ARP-ouside-localnet'
@@ -178,7 +177,7 @@ class Module(Module, multiprocessing.Process):
         if dst_mac=="ff:ff:ff:ff:ff:ff" and dst_hw=="ff:ff:ff:ff:ff:ff" and src_mac != '00:00:00:00:00:00' and src_hw != '00:00:00:00:00:00':
             # We're sure this is unsolicited arp
             confidence = 0.8
-            threat_level = 50
+            threat_level = 'info'
             description = f'detected sending unsolicited ARP'
             type_evidence = 'UnsolicitedARP'
             # This may be ARP spoofing
@@ -212,7 +211,7 @@ class Module(Module, multiprocessing.Process):
             # so this is either a MITM ARP attack or the IP address of this src_mac simply changed
             # todo how to find out which one is it??
             confidence = 0.2 # low confidence for now
-            threat_level = 90
+            threat_level = 'ciritical'
             description = f'{saddr} performing a MITM ARP attack. The MAC {src_mac}, now belonging to IP {saddr}, was seen before for IP {original_IP}.'
             # self.print(f'{saddr} is claiming to have {src_mac}')
             type_evidence = 'MITM-ARP-attack'
@@ -237,7 +236,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_arp'):
+                if utils.is_msg_intended_for(message, 'new_arp'):
                     flow = json.loads(message['data'])
                     ts = flow['ts']
                     profileid = flow['profileid']
@@ -256,13 +255,6 @@ class Module(Module, multiprocessing.Process):
                     #  Gratuitous ARP shouldn't be marked as an arp scan
                     is_gratuitous = saddr==daddr and (dst_mac=="ff:ff:ff:ff:ff:ff" or dst_mac=="00:00:00:00:00:00" or dst_mac==src_mac)
                     if is_gratuitous:
-                        # keep track of the mac address of each IP
-                        MAC_info = __database__.get_mac_addr_from_profile(profileid)
-                        # store the mac of this profile if we don't already have it in the db
-                        if not MAC_info:
-                            MAC_info = {'MAC':src_mac }
-                            __database__.add_mac_addr_to_profile(profileid, MAC_info)
-
                         # for MITM arp attack, the arp has to be gratuitous
                         # and it has to be a reply operation, not a request
                         if 'reply' in operation:
@@ -279,7 +271,7 @@ class Module(Module, multiprocessing.Process):
 
                 # if the tw is closed, remove all its entries from the cache dict
                 message = self.c2.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'tw_closed'):
+                if utils.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data']
                     # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore
                     # this copy is made to avoid dictionary changed size during iteration err

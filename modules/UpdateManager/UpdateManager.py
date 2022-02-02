@@ -22,6 +22,7 @@ import sys
 import configparser
 from modules.UpdateManager.timer_manager import InfiniteTimer
 from modules.UpdateManager.update_file_manager import UpdateFileManager
+from signal import SIGSTOP
 
 
 class UpdateManager(Module, multiprocessing.Process):
@@ -46,7 +47,7 @@ class UpdateManager(Module, multiprocessing.Process):
         # Update file manager
         self.update_manager = UpdateFileManager(self.outputqueue, config)
         # Timer to update the ThreatIntelligence files
-        self.timer_manager = InfiniteTimer(self.update_period, self.update_malicious_files)
+        self.timer_manager = InfiniteTimer(self.update_period, self.update_TI_files)
         self.timeout = 0.0000001
 
     def read_configuration(self):
@@ -79,7 +80,7 @@ class UpdateManager(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-    def update_malicious_files(self):
+    def update_TI_files(self):
         '''
         Update malicious files
         '''
