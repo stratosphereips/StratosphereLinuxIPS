@@ -87,26 +87,40 @@ class Tree{
                 var decorated_ip = ip
                 // get the length of the hostIP list
                 var length_hostIP = hostIP.length
-                // check if the current ip aka child aka new_child is the same as any of the Host IPs
-                async.forEachOf(hostIP,(host_ip,ind, callback)=>{
-                    // the last ip in hostIP list is the current host ip, this is the one we'll be adding (me) to
-                    if(child.includes(host_ip) && ind == length_hostIP - 1 )
-                    {
-                        // found a child that is also a host ip, add (me) next to the ip
-                        new_child = child + ' (me)'
-                    }
-                    else if(child.includes(host_ip)){
 
-                        new_child = child+ ' (old me)'
-                    }
-                    callback();
-                }, (err)=>{
-                    if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
+                this.redis_database.getHostnameOfIP("profile_" + ip).then(res => {
+                    if(res){decorated_ip += " " +res;}
 
+                    // check if the current ip aka child aka new_child is the same as any of the Host IPs
+                    async.forEachOf(hostIP,(host_ip, ind, callback)=>{
+                        // the last ip in hostIP list is the current host ip, this is the one we'll be adding (me) to
+                        if(ip.includes(host_ip) && ind == length_hostIP - 1 )
+                        {
+                            // found a child that is also a host ip, add (me) next to the ip
+                            decorated_ip += ' (me)'
                         }
-                    }
-                    resolve (result)})
-            }
+                        else if(ip.includes(host_ip)){
+                            decorated_ip += ' (old me)'
+                        }
+                        callback();
+                    }, (err)=>{
+                        if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
+                        // no errors, color the malicious ips in red
+                        if(Object.keys(blockedIPsTWs).includes(ip))
+                        {
+                            result[ip] = { name:color.red(decorated_ip), extended:false, children: sorted_tws}
+                        }
+                        else
+                        {
+                            result[ip] = { name:decorated_ip, extended:false, children: sorted_tws}
+                        }
+                        resolve (result)})
+                })
+                callback();
+            },
+                 (err)=>{
+                    if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
+            })
         })
     }
 
