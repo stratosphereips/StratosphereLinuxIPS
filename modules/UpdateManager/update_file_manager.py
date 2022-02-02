@@ -768,7 +768,7 @@ class UpdateFileManager:
                     if separator in line:
                         # get a list of every field in the line e.g [ioc, description, date]
                         line_fields = line.split(separator)
-                        amount_of_columns =  len(line.split(separator))
+                        amount_of_columns =  len(line_fields)
                         break
                 else:
                     # no separator of the above was found
@@ -776,11 +776,16 @@ class UpdateFileManager:
                         # anudeepND/blacklist file
                         line_fields = [line[line.index(' ')+1:].replace("\n","")]
                         amount_of_columns = 1
+                    else:
+                        separator = '\t'
+                        line_fields = line.split(separator)
+                        amount_of_columns =  len(line_fields)
+
 
 
                 if description_column is None:
-                    # assume it's the last column
-                    description_column = amount_of_columns - 1
+                        # assume it's the last column
+                        description_column = amount_of_columns - 1
 
                 data_column = None
                 # Search the first column that is an IPv4, IPv6 or domain
@@ -809,7 +814,7 @@ class UpdateFileManager:
                     # In the case of domains can be
                     # domain,www.netspy.net,NetSpy
 
-                    # skip comment lines
+                    # skip comments and headers
                     if line.startswith('#') or line.startswith(';')\
                             or 'FILE_HASH' in line\
                             or 'EMAIL' in line or 'URL' in line:
@@ -817,15 +822,17 @@ class UpdateFileManager:
 
                     line = line.replace("\n", "").replace("\"", "")
 
-                    try:
+                    if '0.0.0.0 ' in line:
+                        # anudeepND/blacklist file
+                        data = line[line.index(' ')+1:].replace("\n","")
+                    else:
                         line_fields = line.split(separator)
                         # get the ioc
                         data = line_fields[data_column].strip()
-                    except UnboundLocalError:
-                        # no separator was found
-                        if '0.0.0.0 ' in line:
-                            # anudeepND/blacklist file
-                            data = line[line.index(' ')+1:].replace("\n","")
+
+
+                    # some ti files have new lines in the middle of the file, ignore them
+                    if len(data) < 3: continue
 
                     # get the description of this line
                     try:
@@ -928,11 +935,11 @@ class UpdateFileManager:
 
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on the __load_malicious_datafile() line {exception_line}', 0, 1)
+            self.print(f'Problem while updating {link_to_download} line {exception_line}', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
-            self.print(traceback.format_exc())
+            self.print(traceback.format_exc(), 0, 1)
             return False
 
     async def update(self) -> bool:
