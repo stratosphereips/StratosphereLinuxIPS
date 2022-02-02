@@ -45,8 +45,8 @@ class Tree{
 	      	else{
 	      		// comes here when you press enter on a tw in the leftmost widget(the one that has iPs and tws)
 		      	var ip  = stripAnsi(node.parent.name);
-		      	ip = ip.replace(' (me)','')
-		        ip = ip.replace(' (old me)','')
+                // remove '(me)', '(old me)' and host name from the profile
+                ip = ip.split(' ')[0]
 		    	var timewindow = stripAnsi(node.name);
 		    	this.current_ip = ip
 		    	this.current_tw = timewindow
