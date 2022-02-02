@@ -605,8 +605,8 @@ class UpdateFileManager:
             return False
 
     def detect_data_type(self, data):
-        """ Detects if incoming data is ipv4, ipv6 or domain """
-        # Check if the data is a valid IPv4, IPv6 or domain
+        """ Detects if incoming data is ipv4, ipv6, domain or ip range """
+
         data = data.strip()
         try:
             ipaddress.IPv4Address(data)
@@ -629,7 +629,9 @@ class UpdateFileManager:
         except ValueError:
             pass
 
-        if not validators.domain(data):
+        if validators.domain(data):
+            return 'domain'
+        else:
             # some ti files have / at the end of domains, remove it
             if data.endswith('/'):
                 data = data[:-1]
