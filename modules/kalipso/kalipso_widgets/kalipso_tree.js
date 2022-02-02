@@ -82,11 +82,9 @@ class Tree{
             var ips_with_profiles = Object.keys(ips_tws)
             for(var i=0; i<ips_with_profiles.length; i++){
                 // get the twids of each ip
-                var current_ip = ips_with_profiles[i]
-                var tw = ips_tws[current_ip];
-                var child = current_ip;
-                var sorted_tws = this.sortTWs(blockedIPsTWs,tw[0], child)
-                var new_child = child
+                var tw = ips_tws[ip];
+                var sorted_tws = this.sortTWs(blockedIPsTWs, tw[0], ip)
+                var decorated_ip = ip
                 // get the length of the hostIP list
                 var length_hostIP = hostIP.length
                 // check if the current ip aka child aka new_child is the same as any of the Host IPs
@@ -105,21 +103,6 @@ class Tree{
                 }, (err)=>{
                     if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
 
-                    // no errors, color the malicious ips in red
-
-                    if(Object.keys(blockedIPsTWs).includes(child))
-                    {
-                        if(this.current_ip.includes(child)){
-                            result[child] = { name:color.red(new_child), extended:true, children: sorted_tws};}
-                        else{
-                            result[child] = { name:color.red(new_child), extended:false, children: sorted_tws}}
-                    }
-                    else
-                    {
-                        if(this.current_ip.includes(child)){
-                            result[child] = { name:new_child, extended:true, children: tw[0]};}
-                        else{
-                            result[child] = { name:new_child, extended:false, children: tw[0]};
                         }
                     }
                     resolve (result)})
