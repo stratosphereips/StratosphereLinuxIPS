@@ -29,7 +29,7 @@ let profiles = function(){
                 const close_string = '</table>'
                 let data = ""
                 profile_tws.tws.forEach(item => {
-                data = data + '<tr onclick="timewindows.update_timeline(' + "'" + profile_tws.profile+"'" + ',' + "'" + item + "'" +')">' + '<td>'+ item + '</td>' + '</tr>';})
+                data = data + '<tr onclick="timewindows.update_timeline(' + "'" + "profile_" + profile_tws.profile+"'" + ',' + "'" + item + "'" +')">' + '<td>'+ item + '</td>' + '</tr>';})
                 return open_string + data + close_string;
             }
 
@@ -48,8 +48,7 @@ let profiles = function(){
         onclick_ips: function(){
             $('#profiles ').on( 'click', 'tbody td.r', function () {
                 let data = table.row( $(this).parents('tr')).data();
-                let profile_IP = data.profile.split("_")[1]
-                let url = '/info/' + profile_IP
+                let url = '/info/' + data.profile
                 ipinfo.ajax.url(url).load();
             });
         }
