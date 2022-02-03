@@ -39,7 +39,7 @@ class UpdateFileManager:
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.update_period = 86400 # 1 day
         try:
-            # Read the path to where to store and read the malicious files
+            # Read the path to where to store and read the malicious files,
             self.path_to_threat_intelligence_data = self.config.get('threatintelligence', 'download_path_for_remote_threat_intelligence')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
