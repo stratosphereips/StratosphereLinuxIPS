@@ -45,8 +45,8 @@ class Tree{
 	      	else{
 	      		// comes here when you press enter on a tw in the leftmost widget(the one that has iPs and tws)
 		      	var ip  = stripAnsi(node.parent.name);
-		      	ip = ip.replace(' (me)','')
-		        ip = ip.replace(' (old me)','')
+                // remove '(me)', '(old me)' and host name from the profile
+                ip = ip.split(' ')[0]
 		    	var timewindow = stripAnsi(node.name);
 		    	this.current_ip = ip
 		    	this.current_tw = timewindow
@@ -80,50 +80,47 @@ class Tree{
             var ips_tws = this.tree_data
             var result = {};
             var ips_with_profiles = Object.keys(ips_tws)
-            for(var i=0; i<ips_with_profiles.length; i++){
+            async.forEachOf(ips_with_profiles, (ip, ind, callback)=>{
                 // get the twids of each ip
-                var current_ip = ips_with_profiles[i]
-                var tw = ips_tws[current_ip];
-                var child = current_ip;
-                var sorted_tws = this.sortTWs(blockedIPsTWs,tw[0], child)
-                var new_child = child
+                var tw = ips_tws[ip];
+                var sorted_tws = this.sortTWs(blockedIPsTWs, tw[0], ip)
+                var decorated_ip = ip
                 // get the length of the hostIP list
                 var length_hostIP = hostIP.length
-                // check if the current ip aka child aka new_child is the same as any of the Host IPs
-                async.forEachOf(hostIP,(host_ip,ind, callback)=>{
-                    // the last ip in hostIP list is the current host ip, this is the one we'll be adding (me) to
-                    if(child.includes(host_ip) && ind == length_hostIP - 1 )
-                    {
-                        // found a child that is also a host ip, add (me) next to the ip
-                        new_child = child + ' (me)'
-                    }
-                    else if(child.includes(host_ip)){
 
-                        new_child = child+ ' (old me)'
-                    }
-                    callback();
-                }, (err)=>{
-                    if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
+                this.redis_database.getHostnameOfIP("profile_" + ip).then(res => {
+                    if(res){decorated_ip += " " +res;}
 
-                    // no errors, color the malicious ips in red
-
-                    if(Object.keys(blockedIPsTWs).includes(child))
-                    {
-                        if(this.current_ip.includes(child)){
-                            result[child] = { name:color.red(new_child), extended:true, children: sorted_tws};}
-                        else{
-                            result[child] = { name:color.red(new_child), extended:false, children: sorted_tws}}
-                    }
-                    else
-                    {
-                        if(this.current_ip.includes(child)){
-                            result[child] = { name:new_child, extended:true, children: tw[0]};}
-                        else{
-                            result[child] = { name:new_child, extended:false, children: tw[0]};
+                    // check if the current ip aka child aka new_child is the same as any of the Host IPs
+                    async.forEachOf(hostIP,(host_ip, ind, callback)=>{
+                        // the last ip in hostIP list is the current host ip, this is the one we'll be adding (me) to
+                        if(ip.includes(host_ip) && ind == length_hostIP - 1 )
+                        {
+                            // found a child that is also a host ip, add (me) next to the ip
+                            decorated_ip += ' (me)'
                         }
-                    }
-                    resolve (result)})
-            }
+                        else if(ip.includes(host_ip)){
+                            decorated_ip += ' (old me)'
+                        }
+                        callback();
+                    }, (err)=>{
+                        if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
+                        // no errors, color the malicious ips in red
+                        if(Object.keys(blockedIPsTWs).includes(ip))
+                        {
+                            result[ip] = { name:color.red(decorated_ip), extended:false, children: sorted_tws}
+                        }
+                        else
+                        {
+                            result[ip] = { name:decorated_ip, extended:false, children: sorted_tws}
+                        }
+                        resolve (result)})
+                })
+                callback();
+            },
+                 (err)=>{
+                    if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
+            })
         })
     }
 
