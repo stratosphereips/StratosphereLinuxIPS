@@ -9,6 +9,56 @@
 
 module SSL;
 
+export {
+	redef enum Notice::Type += {
+		## This notice indicates that the result of validating the
+		## certificate along with its full certificate chain was
+		## invalid.
+		Invalid_Server_Cert
+	};
+
+	redef record Info += {
+		## Result of certificate validation for this connection.
+		validation_status: string &log &optional;
+		## Result of certificate validation for this connection, given
+		## as OpenSSL validation code.
+		validation_code: int &optional;
+		## Ordered chain of validated certificate, if validation succeeded.
+		valid_chain: vector of opaque of x509 &optional;
+	};
+
+	## Result values for recently validated chains along with the
+	## validation status are kept in this table to avoid constant
+	## validation every time the same certificate chain is seen.
+	global recently_validated_certs: table[string] of X509::Result = table()
+		&read_expire=5mins &redef;
+
+	## Use intermediate CA certificate caching when trying to validate
+	## certificates. When this is enabled, Zeek keeps track of all valid
+	## intermediate CA certificates that it has seen in the past. When
+	## encountering a host certificate that cannot be validated because
+	## of missing intermediate CA certificate, the cached list is used
+	## to try to validate the cert. This is similar to how Firefox is
+	## doing certificate validation.
+	##
+	## Disabling this will usually greatly increase the number of validation warnings
+	## that you encounter. Only disable if you want to find misconfigured servers.
+	global ssl_cache_intermediate_ca: bool = T &redef;
+
+	## Store the valid chain in c$ssl$valid_chain if validation succeeds.
+	## This has a potentially high memory impact, depending on the local environment
+	## and is thus disabled by default.
+	global ssl_store_valid_chain: bool = F &redef;
+
+	## Event from a manager to workers when encountering a new, valid
+	## intermediate.
+	global intermediate_add: event(key: string, value: vector of opaque of x509);
+
+	## Event from workers to the manager when a new intermediate chain
+	## is to be added.
+	global new_intermediate: event(key: string, value: vector of opaque of x509);
+}
+
 global intermediate_cache: table[string] of vector of opaque of x509;
 
 @if ( Cluster::is_enabled() )
@@ -19,7 +69,13 @@ event zeek_init()
 	}
 @endif
 
-
+function add_to_cache(key: string, value: vector of opaque of x509)
+	{
+	intermediate_cache[key] = value;
+@if ( Cluster::is_enabled() )
+	event SSL::new_intermediate(key, value);
+@endif
+	}
 
 @if ( Cluster::is_enabled() && Cluster::local_node_type() != Cluster::MANAGER )
 event SSL::intermediate_add(key: string, value: vector of opaque of x509)
@@ -39,8 +95,6 @@ event SSL::new_intermediate(key: string, value: vector of opaque of x509)
 	}
 @endif
 
-
-
 function cache_validate(chain: vector of opaque of x509): X509::Result
 	{
 	local chain_hash: vector of string = vector();
@@ -53,8 +107,8 @@ function cache_validate(chain: vector of opaque of x509): X509::Result
 	# If we tried this certificate recently, just return the cached result.
 	if ( chain_id in recently_validated_certs )
 		return recently_validated_certs[chain_id];
-    local ts = current_time();
-	local result = x509_verify(chain, root_certs, ts );
+
+	local result = x509_verify(chain, root_certs, current_time());
 	if ( ! ssl_store_valid_chain && result?$chain_certs )
 		recently_validated_certs[chain_id] = X509::Result($result=result$result, $result_string=result$result_string);
 	else
