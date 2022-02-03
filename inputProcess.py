@@ -451,7 +451,9 @@ class InputProcess(multiprocessing.Process):
 
             # Run zeek on the pcap or interface. The redef is to have json files
             zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
-            command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins local -f {self.packet_filter} {zeek_scripts_dir} > /dev/null 2>&1  &'
+            # 'local' is removed from the command because it loads policy/protocols/ssl/expiring-certs and
+            # and policy/protocols/ssl/validate-certs and they have conflicts with our own zeek-scripts/expiring-certs and validate-certs
+            command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins -f {self.packet_filter} {zeek_scripts_dir} '
             self.print(f'Zeek command: {command}', 3, 0)
             # Run zeek.
             os.system(command)
