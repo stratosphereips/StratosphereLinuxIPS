@@ -24,16 +24,8 @@ def has_errors(output_file):
     with open(output_file ,'r') as f:
         lines_printed = False
         for line in f:
-            if lines_printed:
-                lines_printed+=1
-                print(line)
-                if lines_printed ==4:
-                    return True
-            elif '<class' in line or 'error' in line:
-                # print the line that has errors and the following 4 lines
-                lines_printed = 1
-                print(line)
-                # return True
+            if '<class' in line or 'error' in line:
+                return True
 
     return False
 
@@ -51,7 +43,6 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
-    # profiles = get_profiles(output_dir)
     profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
