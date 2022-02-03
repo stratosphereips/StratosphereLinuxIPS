@@ -30,5 +30,7 @@ jobs:
       run: redis-server --daemonize yes
 
     - name: Run unit tests
-      run: python3 -m pytest tests/ -p no:warnings -vv -s
+      run: python3 -m pytest tests/ --ignore="tests/test_dataset.py" -p no:warnings -vv
 
+    - name: Test all files in our dataset
+      run: python3 -m pytest tests/test_dataset.py -p no:warnings -vv -s
