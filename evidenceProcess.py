@@ -69,8 +69,6 @@ class EvidenceProcess(multiprocessing.Process):
         # clear alerts.json
         self.jsonfile = self.clean_evidence_json_file(output_folder)
 
-        log_files = [self.logfile]
-        self.add_branch_info(log_files)
         self.timeout = 0.0000001
         # this list will have our local and public ips
         self.our_ips = self.get_IP()
@@ -93,15 +91,16 @@ class EvidenceProcess(multiprocessing.Process):
             self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
             self.logs_jsonfile = self.clean_evidence_json_file(logs_folder+'/')
 
-    def add_branch_info(self, log_files: list):
+    def get_branch_info(self):
+        """
+        Returns a tuple containing (commit,branch)
+        """
         repo = Repo('.')
         # add branch name and commit
         branch = repo.active_branch.name
         commit = repo.active_branch.commit.hexsha
-        now = datetime.now()
+        return (commit, branch)
 
-        for file in log_files:
-            file.write(f'Using {branch} - {commit} - {now}\n')
 
     def setup_notifications(self):
         """
@@ -684,6 +683,11 @@ class EvidenceProcess(multiprocessing.Process):
 
 
     def run(self):
+        # add metadata to alerts.log
+        commit, branch = self.get_branch_info()
+        now = datetime.now()
+        self.logfile.write(f'Using {branch} - {commit} - {now}\n')
+
         while True:
             try:
             # Adapt this process to process evidence from only IPs and not profileid or twid
