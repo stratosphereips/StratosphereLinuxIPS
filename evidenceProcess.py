@@ -82,6 +82,8 @@ class EvidenceProcess(multiprocessing.Process):
             'high': 0.8,
             'critical': 1
         }
+        # flag to only add commit and hash to the firs alert in alerts.json
+        self.is_first_alert = True
 
     def clear_logs_dir(self, logs_folder):
         self.logs_logfile = False
@@ -686,7 +688,7 @@ class EvidenceProcess(multiprocessing.Process):
         # add metadata to alerts.log
         commit, branch = self.get_branch_info()
         now = datetime.now()
-        self.logfile.write(f'Using {branch} - {commit} - {now}\n')
+        self.logfile.write(f'Using {branch} - {commit} - {now}\n\n')
 
         while True:
             try:
@@ -770,6 +772,10 @@ class EvidenceProcess(multiprocessing.Process):
                     # Add the evidence to the log files
                     self.addDataToLogFile(alert_to_log)
                     # add to alerts.json
+                    if self.is_first_alert:
+                        # only add commit and hash to the firs alert in alerts.json
+                        self.is_first_alert = False
+                        IDEA_dict.update({'commit': commit, 'branch': branch })
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
 
