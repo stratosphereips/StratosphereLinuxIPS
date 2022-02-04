@@ -875,6 +875,10 @@ class UpdateFileManager:
                                                                                   'threat_level':self.url_feeds[link_to_download]['threat_level'],
                                                                                 'tags': self.url_feeds[link_to_download]['tags']})
                     elif data_type == 'ip':
+                        # make sure we're not blacklisting a private ip
+                        if ipaddress.ip_address(data).is_private:
+                            continue
+
                         try:
                             # we already have info about this ip?
                             old_ip_info = json.loads(malicious_ips_dict[str(data)])
