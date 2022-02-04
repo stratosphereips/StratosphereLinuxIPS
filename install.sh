@@ -1,5 +1,6 @@
 #!/bin/sh
 # Installing slips dependencies
+echo 'test'
 
 echo "[+] Executing 'sudo apt-get update'"
 sudo apt-get update
