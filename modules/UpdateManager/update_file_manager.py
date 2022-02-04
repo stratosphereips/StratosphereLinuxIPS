@@ -901,6 +901,12 @@ class UpdateFileManager:
                                                                         'threat_level':self.url_feeds[link_to_download]['threat_level'],
                                                                         'tags': self.url_feeds[link_to_download]['tags']})
                     elif data_type == 'ip_range':
+                        # make sure we're not blacklisting a private ip range
+                        # get network address from range
+                        net_addr = data[:data.index('/')]
+                        if net_addr in utils.home_networks:
+                            continue
+
                         try:
                             # we already have info about this range?
                             old_range_info = json.loads(malicious_ip_ranges[data])
