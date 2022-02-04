@@ -42,6 +42,7 @@ class Module(Module, multiprocessing.Process):
         self.c4 = __database__.subscribe('new_ssl')
         self.c5 = __database__.subscribe('new_service')
         self.c6 = __database__.subscribe('new_dns_flow')
+        self.c7 = __database__.subscribe('new_downloaded_file')
         self.timeout = 0.0000001
         self.p2p_daddrs = {}
         # get the default gateway
@@ -1147,6 +1148,13 @@ class Module(Module, multiprocessing.Process):
                         self.check_dns_resolution_without_connection(domain, answers, stime, profileid, twid, uid)
                     if rcode_name:
                         self.detect_DGA(rcode_name, domain, stime, profileid, twid, uid)
+
+                message = self.c7.get_message(timeout=self.timeout)
+                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
+                   data = json.loads(message['data'])
+                    # detect malicious ssl certs
+                    #todo
+
             except KeyboardInterrupt:
                 continue
             except Exception as inst:
