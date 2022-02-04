@@ -10,7 +10,8 @@ class Utils(object):
     authors = ['Alya Gomaa']
 
     def __init__(self):
-        pass
+        self.home_network_ranges = ('192.168.0.0/16', '172.16.0.0/12', '10.0.0.0/8')
+        self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
 
     def get_hash_from_file(self, filename):
         """

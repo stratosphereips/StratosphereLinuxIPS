@@ -15,8 +15,11 @@ jobs:
 
   test_slips_locally:
     runs-on: ubuntu-latest
+    # 2 hours timeout
+    timeout-minutes: 7200
     env:
       SLIPS_VERSION: v0.8.3
+
 
     steps:
     - uses: actions/checkout@v2
@@ -76,6 +79,8 @@ jobs:
   test_slips_in_docker:
 
     runs-on: ubuntu-latest
+    # 2 hours timeout
+    timeout-minutes: 7200
     env:
       SLIPS_VERSION: v0.8.3
 

@@ -194,7 +194,8 @@ def prepare_zeek_scripts():
         home_network = config.get('parameters', 'home_network')
     except (configparser.NoOptionError, configparser.NoSectionError, NameError):
         # There is a conf, but there is no option, or no section or no configuration file specified
-        home_network = '192.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8'
+        from slips_files.common.slips_utils import utils
+        home_network = utils.home_network_ranges
 
     zeek_scripts_dir  = os.getcwd() + '/zeek-scripts'
     # add local sites if not there

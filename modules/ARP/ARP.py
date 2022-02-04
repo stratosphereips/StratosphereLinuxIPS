@@ -66,7 +66,7 @@ class Module(Module, multiprocessing.Process):
             self.home_network.append(self.config.get('parameters', 'home_network'))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.home_network = ['192.168.0.0/16', '172.16.0.0/12', '10.0.0.0/8']
+            self.home_network = utils.home_network_ranges
         # convert the ranges into network obj
         self.home_network = list(map(ipaddress.ip_network,self.home_network))
 

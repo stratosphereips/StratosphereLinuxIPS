@@ -94,6 +94,13 @@ class Module(Module, multiprocessing.Process):
                                  timestamp, category, source_target_tag=source_target_tag,
                                  profileid=profileid, twid=twid, uid=uid)
 
+        # mark this ip as malicious in our database
+        ip_info = {'threatintelligence': ip_info}
+        __database__.setInfoForIPs(ip, ip_info)
+
+        # add this ip to our MaliciousIPs hash in the database
+        __database__.set_malicious_ip(ip, profileid, twid)
+
     def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, is_subdomain, profileid='', twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
@@ -332,7 +339,7 @@ class Module(Module, multiprocessing.Process):
     def check_local_ti_files(self, path_to_files: str) -> bool:
         """
         Checks if a local TI file was changed based
-        on it's hash, if so, update its content and delete old data
+        on it's hash. if so, update its content and delete old data
         """
         try:
             local_ti_files = os.listdir(path_to_files)
@@ -455,22 +462,29 @@ class Module(Module, multiprocessing.Process):
 
                     # If given an IP, ask for it
                     if ip:
+                        # Block only if the traffic isn't outgoing ICMP port unreachable packet
+                        if self.is_outgoing_icmp_packet(protocol,ip_state): continue
+
                         # Search for this IP in our database of IoC
                         ip_info = __database__.search_IP_in_IoC(ip)
-                        # Block only if the traffic isn't outgoing ICMP port unreachable packet
-                        if (ip_info != False
-                                and not self.is_outgoing_icmp_packet(protocol,ip_state)): # Dont change this condition. This is the only way it works
+                        # check if it's a blacklisted ip
+                        if ip_info != False: # Dont change this condition. This is the only way it works
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_info = json.loads(ip_info)
                             # Set the evidence on this detection
                             self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
 
-                            # mark this ip as malicious in our database
-                            ip_info = {'threatintelligence': ip_info}
-                            __database__.setInfoForIPs(ip, ip_info)
+                        # check if this ip belongs to any of our blacklisted ranges
+                        ip_ranges = __database__.get_malicious_ip_ranges()
+                        if not ip_ranges: continue
 
-                            # add this ip to our MaliciousIPs hash in the database
-                            __database__.set_malicious_ip(ip, profileid, twid)
+                        for range,info in ip_ranges.items():
+                            if ipaddress.ip_address(ip) in ipaddress.ip_network(range):
+                                # ip was found in one of the blacklisted ranges
+                                ip_info = json.loads(info)
+                                # Set the evidence on this detection
+                                self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
+                                break
                     else:
                         # We were not given an IP. Check if we were given a domain
 
@@ -490,6 +504,7 @@ class Module(Module, multiprocessing.Process):
 
                                 # add this domain to our MaliciousDomains hash in the database
                                 __database__.set_malicious_domain(domain, profileid, twid)
+
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
