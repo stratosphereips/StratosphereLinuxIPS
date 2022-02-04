@@ -29,7 +29,7 @@ class Tree{
 
     /*Function to manipulate tree, timeline, evidence*/
     on(){
-    	// node is the widgest name
+        // node is the widget name
 
         this.widget.on('select',node=>{
         	// comes here when you press enter on an IP in the leftmost widget(the one that has iPs and tws)
@@ -45,8 +45,8 @@ class Tree{
 	      	else{
 	      		// comes here when you press enter on a tw in the leftmost widget(the one that has iPs and tws)
 		      	var ip  = stripAnsi(node.parent.name);
-		      	ip = ip.replace(' (me)','')
-		        ip = ip.replace(' (old me)','')
+                // remove '(me)', '(old me)' and host name from the profile
+                ip = ip.split(' ')[0]
 		    	var timewindow = stripAnsi(node.name);
 		    	this.current_ip = ip
 		    	this.current_tw = timewindow
@@ -76,56 +76,62 @@ class Tree{
 
     /*Fill tree with Profile IPs and their timewindows, highlight blocked timewindows and the host*/
     setTree(values, blockedIPsTWs,hostIP){
-      	return new Promise(resolve=>{
-      		var ips_tws = this.tree_data
-      	    var result = {};
-      		var ips_with_profiles = Object.keys(ips_tws)
-      		for(var i=0; i<ips_with_profiles.length; i++){
-          		var tw = ips_tws[ips_with_profiles[i]];
-          		var child = ips_with_profiles[i];
-                var sorted_tws = this.sortTWs(blockedIPsTWs,tw[0], child)
-                var new_child = child
+        return new Promise(resolve=>{
+            var ips_tws = this.tree_data
+            var result = {};
+            var ips_with_profiles = Object.keys(ips_tws)
+            async.forEachOf(ips_with_profiles, (ip, ind, callback)=>{
+                // get the twids of each ip
+                var tw = ips_tws[ip];
+                var sorted_tws = this.sortTWs(blockedIPsTWs, tw[0], ip)
+                var decorated_ip = ip
+                // get the length of the hostIP list
                 var length_hostIP = hostIP.length
-                async.forEachOf(hostIP,(ip,ind, callback)=>{
-	            if(child.includes(ip) && ind == length_hostIP - 1 )
-	            	{
-	            	new_child = child + ' (me)'
-	             	}
-	             else if(child.includes(ip)){
-                    new_child = child+ ' (old me)'
-	                }
 
-	            callback();
-	            }, (err)=>{
-	            if(err)console.log('Check setTree in kalipso_tree.js. Error: ',err)
-		        if(Object.keys(blockedIPsTWs).includes(child))
-		        	{
-		        	if(this.current_ip.includes(child)){
-		          	    result[child] = { name:color.red(new_child), extended:true, children: sorted_tws};}
-		          	else{
-		          	result[child] = { name:color.red(new_child), extended:false, children: sorted_tws}}
-		        	}	
-		        else
-		        	{
-		        	if(this.current_ip.includes(child)){
-		          	    result[child] = { name:new_child, extended:true, children: tw[0]};}
-		          	else{
-		          	    result[child] = { name:new_child, extended:false, children: tw[0]};
-		          	}
-		        	}
-		        resolve (result)})
-		    }
-     	})
-	}
+                this.redis_database.getHostnameOfIP("profile_" + ip).then(res => {
+                    if(res){decorated_ip += " " +res;}
+
+                    // check if the current ip aka child aka new_child is the same as any of the Host IPs
+                    async.forEachOf(hostIP,(host_ip, ind, callback)=>{
+                        // the last ip in hostIP list is the current host ip, this is the one we'll be adding (me) to
+                        if(ip.includes(host_ip) && ind == length_hostIP - 1 )
+                        {
+                            // found a child that is also a host ip, add (me) next to the ip
+                            decorated_ip += ' (me)'
+                        }
+                        else if(ip.includes(host_ip)){
+                            decorated_ip += ' (old me)'
+                        }
+                        callback();
+                    }, (err)=>{
+                        if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
+                        // no errors, color the malicious ips in red
+                        if(Object.keys(blockedIPsTWs).includes(ip))
+                        {
+                            result[ip] = { name:color.red(decorated_ip), extended:false, children: sorted_tws}
+                        }
+                        else
+                        {
+                            result[ip] = { name:decorated_ip, extended:false, children: sorted_tws}
+                        }
+                        resolve (result)})
+                })
+                callback();
+            },
+                 (err)=>{
+                    if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
+            })
+        })
+    }
 
     /*Function to sort timewindows in ascending order*/
 	sortTWs(blocked,tws_dict, ip){
 
 		var blocked_tws = blocked[ip];
 	    var keys = Object.keys(tws_dict);
-	    keys.sort(function(a,b){return(Number(a.match(/(\d+)/g)[0]) - Number((b.match(/(\d+)/g)[0])))}); 
+	    keys.sort(function(a,b){return(Number(a.match(/(\d+)/g)[0]) - Number((b.match(/(\d+)/g)[0])))});
 	    var temp_tws_dict = {};
-	    for (var i=0; i<keys.length; i++){ 
+	    for (var i=0; i<keys.length; i++){
 		    var key = keys[i];
 		    if(blocked_tws != undefined && blocked_tws.includes(key)){
 		    temp_tws_dict[color.red(key)] = {}
@@ -133,13 +139,13 @@ class Tree{
 		    else{
 		    temp_tws_dict[key] = {}
 			}
-	    } 
+	    }
 	    return temp_tws_dict;
 	}
 
     /*Reprocess the necessary data for the tree*/
 	fillTreeData(redis_keys){
-		return Promise.all([redis_keys[0].map(key_redis =>this.getTreeData(key_redis)),this.getBlockedIPsTWs(redis_keys[1]), redis_keys[2]]).then(values=>{this.setTree(values[0],values[1],values[2]).then(values=>{this.setData(values); this.screen.render()})}) 
+		return Promise.all([redis_keys[0].map(key_redis =>this.getTreeData(key_redis)),this.getBlockedIPsTWs(redis_keys[1]), redis_keys[2]]).then(values=>{this.setTree(values[0],values[1],values[2]).then(values=>{this.setData(values); this.screen.render()})})
     }
 
     /*Prepare needed data from Redis to fill the tree and call the next function to format data*/
@@ -181,7 +187,7 @@ class Tree{
 	        {
 	          this.tree_data[redis_key_list[1]][0][redis_key_list[2]]={};
 	    	}
-  		  	
+
 		}
 	}
 }

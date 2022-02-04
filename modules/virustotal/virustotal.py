@@ -3,6 +3,7 @@ import configparser
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 import sys
 
@@ -584,7 +585,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_flow'):
+                if utils.is_msg_intended_for(message, 'new_flow'):
                     data = message["data"]
                     data = json.loads(data)
                     profileid = data['profileid']
@@ -610,7 +611,7 @@ class Module(Module, multiprocessing.Process):
                             self.set_vt_data_in_IPInfo(ip, cached_data)
 
                 message = self.c2.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
+                if utils.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message["data"]
 
                     data = json.loads(data)
@@ -633,7 +634,7 @@ class Module(Module, multiprocessing.Process):
 
 
                 message = self.c3.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_url'):
+                if utils.is_msg_intended_for(message, 'new_url'):
                     data = message["data"]
                     data = json.loads(data)
                     profileid = data['profileid']
@@ -652,7 +653,7 @@ class Module(Module, multiprocessing.Process):
                             self.set_url_data_in_URLInfo(url, cached_data)
 
                 message = self.c4.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_downloaded_file'):
+                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
                     self.file_info = json.loads(message['data'])
                     file_info = self.file_info.copy()
                     self.scan_file(file_info)

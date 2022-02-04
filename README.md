@@ -7,7 +7,10 @@ Slips is a behavioral-based Python intrusion prevention system that uses machine
 Slips is a modular software.
 
 <h3 align="center"> 
-Behavioral based Intrusion Prevention System<br><br>
+Slips is a behavioral based Intrusion Prevention System<br><br>
+
+<a href="https://asciinema.org/a/ygkJGTXU3jyVBmow7XlgXBHtm" target="_blank"><img src="https://asciinema.org/a/ygkJGTXU3jyVBmow7XlgXBHtm.svg" /></a>
+
 
 Slips documentation is [here](https://stratospherelinuxips.readthedocs.io/en/develop/) <br>
 
@@ -69,7 +72,7 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
         mkdir ~/dataset
         cp <some-place>/myfile.pcap ~/dataset
-        docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+        docker run -it --rm --net=host -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
         ./slips.py -c slips.conf -f dataset/myfile.pcap
 
 ## How to build Slips docker from Dockerfile:

@@ -1,18 +1,6 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
-
 # Must imports
 from slips_files.common.abstracts import Module
+from slips_files.common.slips_utils import utils
 import multiprocessing
 from slips_files.core.database import __database__
 import platform
@@ -60,6 +48,7 @@ class Module(Module, multiprocessing.Process):
         self.set_sudo_according_to_env()
         self.initialize_chains_in_firewall()
         # self.test()
+
 
     def test(self):
         """ For debugging purposes, once we're done with the module we'll delete it """
@@ -150,8 +139,6 @@ class Module(Module, multiprocessing.Process):
             return True
         return False
 
-
-
     def get_cmd_output(self,command):
         """ Executes a command and returns the output """
 
@@ -191,7 +178,6 @@ class Module(Module, multiprocessing.Process):
             os.system(self.sudo + "nft add table inet slipsBlocking")
             # TODO: HANDLE NFT TABLE
 
-
     def exec_iptables_command(self,
                               action, ip_to_block,
                               flag, options):
@@ -205,7 +191,7 @@ class Module(Module, multiprocessing.Process):
           delete : to delete an existing rule
         """
 
-        command = f'{self.sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} >/dev/null 2>&1'
+        command = f'{self.sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} -m comment --comment "Slips rule" >/dev/null 2>&1'
         # Add the options constructed in block_ip or unblock_ip to the iptables command
         for key in options.keys():
             command += options[key]

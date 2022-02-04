@@ -27,3 +27,4 @@ scipy==1.7.3
 sklearn==0.0
 setuptools
 wheel
+gitpython

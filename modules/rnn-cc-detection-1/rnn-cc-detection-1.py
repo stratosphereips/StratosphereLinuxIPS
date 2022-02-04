@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 import warnings
 import json
@@ -61,16 +62,17 @@ class Module(Module, multiprocessing.Process):
         '''
         type_detection = 'outTuple'
         detection_info = tupleid
-        source_target_tag= 'CC'
+        source_target_tag = 'Botnet'
         type_evidence = 'Command-and-Control-channels-detection'
         threat_level = 'high'
         categroy =  'Intrusion.Botnet'
-        tupleid = tupleid.split(':')
+        tupleid = tupleid.split('-')
         dstip , port, proto =  tupleid[0], tupleid[1], tupleid[2]
         description = f'C&C channel, destination IP: {dstip} port: {port}/{proto} score: {format(score, ".4f")}'
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description, timestamp,
                                  categroy, source_target_tag=source_target_tag,
+                                 port=port, proto=proto,
                                  profileid=profileid, twid=twid, uid=uid)
 
     def convert_input_for_module(self, pre_behavioral_model):
@@ -140,7 +142,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_letters'):
+                if utils.is_msg_intended_for(message, 'new_letters'):
                     data = message['data']
                     data = json.loads(data)
                     pre_behavioral_model = data['new_symbol']

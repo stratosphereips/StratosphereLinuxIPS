@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 
 # Your imports
@@ -375,9 +376,9 @@ class Module(Module, multiprocessing.Process):
             confidence = 1
             threat_level = 'high'
             category = 'Anomaly.Connection'
-            type_detection  = 'dport'
+            type_detection  = 'dstip'
             type_evidence = 'UnknownPort'
-            detection_info = str(dport)
+            detection_info = daddr
             ip_identification = __database__.getIPIdentification(daddr)
             description = f'Connection to unknown destination port {dport}/{proto.upper()} ' \
                           f'destination IP {daddr}. {ip_identification}'
@@ -385,11 +386,12 @@ class Module(Module, multiprocessing.Process):
             ip_info = self.get_ip_info(daddr)
             if ip_info:
                 description += f' ({ip_info})'
+
             if not twid:
                 twid = ''
             __database__.setEvidence(type_evidence, type_detection, detection_info,
                                      threat_level, confidence, description,
-                                     timestamp, category, profileid=profileid,
+                                     timestamp, category, port=dport, proto=proto,profileid=profileid,
                                      twid=twid, uid=uid)
 
     def set_evidence_for_port_0_connection(self, saddr, daddr, direction, profileid, twid, uid, timestamp):
@@ -663,8 +665,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-    def set_evidence_malicious_JA3(self, malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='', ioc=''):
-        # todo description should be constructed in this function not outside D:
+    def set_evidence_malicious_JA3(self, malicious_ja3_dict, ip, profileid, twid, uid, timestamp, type_='', ioc=''):
         """
         :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
         """
@@ -674,22 +675,24 @@ class Module(Module, multiprocessing.Process):
         threat_level = malicious_ja3_dict['threat_level']
 
         if type_ == 'ja3':
-            description = f'Malicious JA3: {ioc} to daddr {daddr} '
+            description = f'Malicious JA3: {ioc} from source address {ip} '
             type_evidence = 'MaliciousJA3'
             category = 'Intrusion.Botnet'
             source_target_tag = "Botnet"
+            type_detection  = 'srcip'
         elif type_ == 'ja3s':
-            description = f'Malicious JA3s: (possible C&C server): {ioc} to server {daddr} '
+            description = f'Malicious JA3s: (possible C&C server): {ioc} to server {ip} '
             type_evidence = 'MaliciousJA3s'
             category =  'Intrusion.Botnet'
             source_target_tag = "CC"
+            type_detection  = 'dstip'
 
         # append daddr identification to the description
-        ip_identification = __database__.getIPIdentification(daddr)
-        description+= f'{ip_identification} description: {ja3_description} {tags}'
+        ip_identification = __database__.getIPIdentification(ip)
+        description += f'{ip_identification} description: {ja3_description} {tags}'
 
-        type_detection  = 'dstip'
-        detection_info = daddr
+
+        detection_info = ip
         confidence = 1
         if not twid:
             twid = ''
@@ -748,7 +751,7 @@ class Module(Module, multiprocessing.Process):
             source_target_tag = 'OriginMalware'
             type_evidence = f'DGA-{self.nxdomains[profileid_twid]}-NXDOMAINs'
             detection_info = profileid.split('_')[1]
-            description = f'possible DGA. {detection_info} failed to resolve {self.nxdomains[profileid_twid]} domains'
+            description = f'possible DGA or domain scanning. {detection_info} failed to resolve {self.nxdomains[profileid_twid]} domains'
             conn_count = self.nxdomains[profileid_twid]
             if not twid: twid = ''
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
@@ -767,7 +770,7 @@ class Module(Module, multiprocessing.Process):
                     # confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
-                if __database__.is_msg_intended_for(message, 'new_flow'):
+                if utils.is_msg_intended_for(message, 'new_flow'):
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -956,12 +959,12 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Detect successful SSH connections ---
                 message = self.c2.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_ssh'):
+                if utils.is_msg_intended_for(message, 'new_ssh'):
                     self.check_ssh(message)
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
                 message = self.c3.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_notice'):
+                if utils.is_msg_intended_for(message, 'new_notice'):
                     data = message['data']
                     if type(data) == str:
                         # Convert from json to dict
@@ -1067,7 +1070,7 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Detect maliciuos JA3 TLS servers ---
                 message = self.c4.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_ssl'):
+                if utils.is_msg_intended_for(message, 'new_ssl'):
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
                     if type(data) == str:
@@ -1084,6 +1087,7 @@ class Module(Module, multiprocessing.Process):
                         profileid = data['profileid']
                         twid = data['twid']
                         daddr = flow['daddr']
+                        saddr = profileid.split('_')[1]
 
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
@@ -1098,17 +1102,19 @@ class Module(Module, multiprocessing.Process):
                             self.print(description, 3, 0)
 
                         if ja3 or ja3s:
+
                             # get the dict of malicious ja3 stored in our db
                             malicious_ja3_dict = __database__.get_ja3_in_IoC()
+
                             if ja3 in malicious_ja3_dict:
-                                self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp,  type_='ja3', ioc=ja3)
+                                self.set_evidence_malicious_JA3(malicious_ja3_dict, saddr, profileid, twid, uid, timestamp,  type_='ja3', ioc=ja3)
 
                             if ja3s in malicious_ja3_dict:
                                 self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='ja3s', ioc=ja3s)
 
                 # --- Learn ports that Zeek knows but Slips doesn't ---
                 message = self.c5.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_service'):
+                if utils.is_msg_intended_for(message, 'new_service'):
                     data = json.loads(message['data'])
                     # uid = data['uid']
                     # profileid = data['profileid']
@@ -1125,7 +1131,7 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Detect DNS resolutions without connection ---
                 message = self.c6.get_message(timeout=self.timeout)
-                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
+                if utils.is_msg_intended_for(message, 'new_dns_flow'):
                     data = json.loads(message["data"])
                     profileid = data['profileid']
                     twid = data['twid']

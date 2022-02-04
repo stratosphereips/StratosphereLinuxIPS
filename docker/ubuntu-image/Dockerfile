@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV IS_IN_A_DOCKER_CONTAINER True
 
 # destionation dir for slips inside the container
-ENV SLIPS_DIR /Slips
+ENV SLIPS_DIR /StratosphereLinuxIPS
 
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
@@ -33,6 +33,7 @@ RUN apt update && apt install -y --no-install-recommends \
     net-tools \
     iproute2 \
     iptables \
+    psutil \
     python3-tzlocal \
     nfdump \
     tshark \
@@ -64,7 +65,7 @@ RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
-RUN npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
+RUN npm install blessed blessed-contrib redis@3.1.2 async chalk@4.1.2 strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
 
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}

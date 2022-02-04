@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
@@ -11,6 +12,8 @@ import json
 import time
 import threading
 import queue
+import ipaddress
+import validators
 
 class Module(Module, multiprocessing.Process):
     name = 'CESNET'
@@ -28,7 +31,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.read_configuration()
-        self.c1 = __database__.subscribe('new_ip')
+        self.c1 = __database__.subscribe('new_alert')
         self.timeout = 0.0000001
         self.stop_module = False
 
@@ -56,18 +59,6 @@ class Module(Module, multiprocessing.Process):
         """ Read importing/exporting preferences from slips.conf """
 
         self.send_to_warden = self.config.get('CESNET', 'send_alerts').lower()
-        if 'yes' in self.send_to_warden:
-            # how often should we push to the server?
-            try:
-                self.push_delay = int(self.config.get('CESNET', 'push_delay'))
-            except ValueError:
-                # By default push every 1 day
-                self.push_delay = 86400
-            # get the output dir, this is where the alerts we want to push are stored
-            self.output_dir = 'output/'
-            if '-o' in sys.argv:
-                self.output_dir = sys.argv[sys.argv.index('-o')+1]
-
 
         self.receive_from_warden = self.config.get('CESNET', 'receive_alerts').lower()
         if 'yes' in self.receive_from_warden:
@@ -83,53 +74,132 @@ class Module(Module, multiprocessing.Process):
             self.print(f"Can't find warden.conf at {self.configuration_file}. Stopping module.")
             self.stop_module = True
 
-
-    def export_alerts(self, wclient):
+    def remove_private_ips(self, evidence_in_IDEA: dict):
         """
-        Function to read all alerts from alerts.json as a list, and sends them to the warden server
+        returns evidence_in_IDEA but without the private IPs
         """
 
-        # [1] read all alerts from alerts.json
-        alerts_path = os.path.join(self.output_dir, 'alerts.json')
-        # this will contain a list of dicts, each dict is an alert in the IDEA format
-        # and each dict will contain node information
-        alerts_list = []
+        for type_ in ('Source', 'Target'):
+            try:
+                alert_field = evidence_in_IDEA[type_]
+            except KeyError:
+                # alert doesn't have this field
+                continue
 
-        alert= ''
-        # Get the data that we want to send
-        with open(alerts_path, 'r') as f:
-            for line in f:
-                alert += line
-                if line.endswith('}\n'):
-                    # reached the end of 1 alert
-                    # convert all single quotes to double quotes to be able to convert to json
-                    alert = alert.replace("'",'"')
+            # evidence_in_IDEA['Source'] may contain multiple dicts
+            for dict_ in alert_field:
+                for ip_version in ('IP4','IP6'):
+                    try:
+                        # get the ip
+                        ip = dict_[ip_version][0]
+                    except KeyError:
+                        # incorrect version
+                        continue
 
-                    # convert to dict to be able to add node name
-                    json_alert = json.loads(alert)
-                    # add Node info to the alert
-                    json_alert.update({"Node": self.node_info})
+                    if ip_version == 'IP4' and (validators.ipv4(ip) and ipaddress.IPv4Address(ip).is_private):
+                        # private ipv4
+                        evidence_in_IDEA[type_].remove(dict_)
+                    elif validators.ipv6(ip) and ipaddress.IPv6Address(ip).is_private:
+                        # private ipv6
+                        evidence_in_IDEA[type_].remove(dict_)
 
-                    #todo for now we can only send test category
-                    json_alert.update({"Category": ['Test']})
+                    # After removing private IPs, some alerts may not have any IoCs left so we shouldn't export them
+                    # if we have no source or target dicts left, remove the source/target field from the alert
+                    if evidence_in_IDEA[type_] == []:
+                        evidence_in_IDEA.pop(type_)
 
-                    alerts_list.append(json_alert)
-                    alert = ''
+        return evidence_in_IDEA
+
+    def is_valid_alert(self, evidence_in_IDEA) -> bool:
+        """
+        Make sure we still have a field that contains valid IoCs to export
+        """
+        return 'Source' in evidence_in_IDEA or 'Target' in evidence_in_IDEA
+
+    def export_evidence(self, wclient, alert_ID):
+        """
+        Exports all evidence causing the given alert to warden server
+        :param alert_ID: alert to export to warden server
+        """
+        # give evidenceProcess enough time to store all evidence IDs in the database
+        time.sleep(3)
+        # get all the evidence causing this alert
+        evidence_IDs:list = __database__.get_evidence_causing_alert(alert_ID)
+        if not evidence_IDs:
+            # something went wrong while getting the list of evidence
+            return False
+
+        profile, srcip, twid, ID = alert_ID.split('_')
+        profileid = f'{profile}_{srcip}'
+
+        # this will contain alerts in IDEA format ready to be exported
+        alerts_to_export = []
+        for ID in evidence_IDs:
+            evidence = __database__.get_evidence_by_ID(profileid, twid, ID)
+            if not evidence:
+                # we received an evidence ID before it's added to the database
+                # there's a time.sleep(3) above to solve this issue
+                continue
+            threat_level = evidence.get('threat_level')
+            if threat_level == 0:
+                # don't export alerts of type 'info'
+                continue
+
+            type_evidence = evidence.get('type_evidence')
+            detection_info = evidence.get('detection_info')
+            type_detection = evidence.get('type_detection')
+            description = evidence.get('description')
+            confidence = evidence.get('confidence')
+            category = evidence.get('category')
+            conn_count = evidence.get('conn_count')
+            source_target_tag = evidence.get('source_target_tag')
+            port = evidence.get('port')
+            proto = evidence.get('proto')
+
+            evidence_in_IDEA = utils.IDEA_format(
+                srcip,
+                type_evidence,
+                type_detection,
+                detection_info,
+                description,
+                confidence,
+                category,
+                conn_count,
+                source_target_tag,
+                port,
+                proto)
+
+            # remove private ips from the alert
+            evidence_in_IDEA =  self.remove_private_ips(evidence_in_IDEA)
+
+            # make sure we still have an IoC in th alert, a valid domain/mac/public ip
+            if not self.is_valid_alert(evidence_in_IDEA):
+                continue
+
+
+            # add Node info to the alert
+            evidence_in_IDEA.update({"Node": self.node_info})
+
+            # Add test to the categories because we're still in probation mode
+            evidence_in_IDEA['Category'].append('Test')
+            evidence_in_IDEA.update({"Category": evidence_in_IDEA["Category"]})
+
+            alerts_to_export.append(evidence_in_IDEA)
 
         # [2] Upload to warden server
-        self.print(f"Uploading {len(alerts_list)} events to warden server.")
+        self.print(f"Uploading {len(alerts_to_export)} events to warden server.")
         # create a thread for sending alerts to warden server
         # and don't stop this module until the thread is done
         q = queue.Queue()
-        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_list, q])
+        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_to_export, q])
         self.sender_thread.start()
         self.sender_thread.join()
         result = q.get()
-        if 'saved' in result:
+
+        try:
             # no errors
             self.print(f'Done uploading {result["saved"]} events to warden server.\n')
-        else:
-            # print the error
+        except KeyError:
             self.print(result, 0, 1)
 
 
@@ -212,8 +282,6 @@ class Module(Module, multiprocessing.Process):
 
         __database__.add_ips_to_IoC(src_ips)
 
-
-
     def run(self):
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
@@ -241,16 +309,7 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
-                    # If running on a file not an interface,
-                    # slips will push as soon as it finishes the analysis.
-                    if 'yes' in self.send_to_warden:
-                        self.export_alerts(wclient)
-                        # don't publish this module's name in finished_modules channel
-                        # until the sender thread is done
-                        while self.sender_thread.is_alive():
-                            time.sleep(3)
                     # Confirm that the module is done processing
                     __database__.publish('finished_modules', self.name)
                     return True
@@ -264,26 +323,13 @@ class Module(Module, multiprocessing.Process):
                         # set last poll time to now
                         __database__.set_last_warden_poll_time(now)
 
-                # in case of an interface, push every push_delay time
-                if 'yes' in self.send_to_warden and '-i' in sys.argv :
-                    last_update = __database__.get_last_warden_push_time()
+                # in case of an interface or a file, push every time we get an alert
+                if (utils.is_msg_intended_for(message, 'new_alert')
+                        and 'yes' in self.send_to_warden):
+                    alert_ID = message['data']
+                    self.export_evidence(wclient, alert_ID)
 
-                    # first push should be push_delay after slips starts (for example 1h after starting)
-                    # so that slips has enough time to generate alerts
-                    start_time  = float(__database__.get_slips_start_time().strftime('%s'))
-                    now = time.time()
-                    first_push = now >= start_time + self.push_delay
 
-                    # did we wait the push_delay period since last update?
-                    push_period_passed = last_update + self.push_delay < now
-
-                    if first_push and push_period_passed:
-                        self.export_alerts(wclient)
-                        # set last push time to now
-                        __database__.set_last_warden_push_time(now)
-
-                    # start the module again when the min of the delays has passed
-                    time.sleep(min(self.push_delay, self.poll_delay))
 
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it

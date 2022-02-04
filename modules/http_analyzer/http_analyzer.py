@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
@@ -51,7 +52,7 @@ class Module(Module, multiprocessing.Process):
     def check_suspicious_user_agents(self, uid, host, uri, timestamp, user_agent, profileid, twid):
         ''' Check unusual user agents and set evidence '''
 
-        suspicious_user_agents = ('httpsend', 'chm_msdn', 'pb', 'jndi')
+        suspicious_user_agents = ('httpsend', 'chm_msdn', 'pb', 'jndi', 'tesseract')
         if user_agent.lower() in suspicious_user_agents:
             type_detection = 'srcip'
             source_target_tag = 'UsingSuspiciousUserAgent'
@@ -119,7 +120,7 @@ class Module(Module, multiprocessing.Process):
                     __database__.publish('finished_modules', self.name)
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_http'):
+                if utils.is_msg_intended_for(message, 'new_http'):
                     message = json.loads(message['data'])
                     profileid = message['profileid']
                     twid = message['twid']

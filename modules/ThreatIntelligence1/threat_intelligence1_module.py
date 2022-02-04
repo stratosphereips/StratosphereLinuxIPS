@@ -1,6 +1,6 @@
 # Must imports
 from slips_files.common.abstracts import Module
-from slips_files.common.slips_utils import Utils
+from slips_files.common.slips_utils import utils
 import multiprocessing
 from slips_files.core.database import __database__
 import platform
@@ -34,8 +34,6 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('give_threat_intelligence')
         self.timeout = 0.0000001
         self.__read_configuration()
-        # create Utils instance to be able to use get_hash_from_file
-        self.utils = Utils()
 
     def __read_configuration(self):
         """ Read the configuration file for what we need """
@@ -95,6 +93,13 @@ class Module(Module, multiprocessing.Process):
                                  threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag,
                                  profileid=profileid, twid=twid, uid=uid)
+
+        # mark this ip as malicious in our database
+        ip_info = {'threatintelligence': ip_info}
+        __database__.setInfoForIPs(ip, ip_info)
+
+        # add this ip to our MaliciousIPs hash in the database
+        __database__.set_malicious_ip(ip, profileid, twid)
 
     def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, is_subdomain, profileid='', twid=''):
         '''
@@ -157,7 +162,7 @@ class Module(Module, multiprocessing.Process):
         Read all the files holding IP addresses and a description and store in the db.
         This also helps in having unique ioc across files
         Returns nothing, but the dictionary should be filled
-        :param ti_file_path: path_to local threat intel file
+        :param ti_file_path: full path_to local threat intel file
         """
         try:
             data_file_name = ti_file_path.split('/')[-1]
@@ -273,10 +278,68 @@ class Module(Module, multiprocessing.Process):
         self.__delete_old_source_IPs(data_file)
         self.__delete_old_source_Domains(data_file)
 
+    def parse_ja3_file(self, path):
+        """
+        Reads the file holding JA3 hashes and store in the db.
+        Returns nothing, but the dictionary should be filled
+        :param path: full path_to local threat intel file
+        """
+        try:
+            data_file_name = path.split('/')[-1]
+            ja3_dict = {}
+            # used for debugging
+            line_number = 0
+
+            with open(path) as local_ja3_file:
+                self.print('Reading local file {}'.format(path), 2, 0)
+
+                # skip comments
+                while True:
+                    line_number+=1
+                    line = local_ja3_file.readline()
+                    if not line.startswith('#'):
+                        break
+
+                for line in local_ja3_file:
+                    line_number+=1
+                    # The format of the file should be
+                    # "JA3 hash", "Threat level", "Description"
+                    data = line.replace("\n","").replace("\"","").split(",")
+
+                    # the column order is hardcoded because it's owr own ti file and we know the format,
+                    # we shouldn't be trying to find it
+                    ja3, threat_level, description = data[0], data [1].lower(), data[2]
+
+                    # validate the threat level taken from the user
+                    if threat_level not in ('info', 'low', 'medium', 'high', 'critical'):
+                        # default value
+                        threat_level = 'medium'
+
+                    # validate the ja3 hash taken from the user
+                    if not validators.md5(ja3):
+                        continue
+
+                    ja3_dict[ja3] = json.dumps({'description': description,
+                                                'source': data_file_name,
+                                                'threat_level': threat_level})
+            # Add all loaded JA3 to the database
+            __database__.add_ja3_to_IoC(ja3_dict)
+            return True
+        except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on parse_ti_file() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            print(traceback.format_exc())
+            return True
+
     def check_local_ti_files(self, path_to_files: str) -> bool:
         """
         Checks if a local TI file was changed based
-        on it's hash, if so, update its content and delete old data
+        on it's hash. if so, update its content and delete old data
         """
         try:
             local_ti_files = os.listdir(path_to_files)
@@ -288,7 +351,7 @@ class Module(Module, multiprocessing.Process):
 
                 # In the case of the local file, we dont store the e-tag
                 # we calculate the hash
-                new_hash = self.utils.get_hash_from_file(path_to_files + '/' + localfile)
+                new_hash = utils.get_hash_from_file(path_to_files + '/' + localfile)
 
                 if not new_hash:
                     # Something failed. Do not download
@@ -307,8 +370,14 @@ class Module(Module, multiprocessing.Process):
                         # File is updated and was in database.
                         # Delete previous data of this file.
                         self.__delete_old_source_data_from_database(localfile)
-                    # Load updated data to the database
-                    self.parse_ti_file(path_to_files + '/' + localfile)
+
+                    full_path_to_file = f'{path_to_files}/{localfile}'
+                    # we have 2 types of local files, TI and JA3 files
+                    if 'ja3' in localfile.lower():
+                        self.parse_ja3_file(full_path_to_file)
+                    else:
+                        # Load updated data to the database
+                        self.parse_ti_file(full_path_to_file)
 
                     # Store the new etag and time of file in the database
                     malicious_file_info = {}
@@ -376,7 +445,7 @@ class Module(Module, multiprocessing.Process):
                     return True
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
-                if __database__.is_msg_intended_for(message, 'give_threat_intelligence' ):
+                if utils.is_msg_intended_for(message, 'give_threat_intelligence' ):
                     # Data is sent in the channel as a json dict so we need to deserialize it first
                     data = json.loads(message['data'])
                     # Extract data from dict
@@ -393,22 +462,29 @@ class Module(Module, multiprocessing.Process):
 
                     # If given an IP, ask for it
                     if ip:
+                        # Block only if the traffic isn't outgoing ICMP port unreachable packet
+                        if self.is_outgoing_icmp_packet(protocol,ip_state): continue
+
                         # Search for this IP in our database of IoC
                         ip_info = __database__.search_IP_in_IoC(ip)
-                        # Block only if the traffic isn't outgoing ICMP port unreachable packet
-                        if (ip_info != False
-                                and not self.is_outgoing_icmp_packet(protocol,ip_state)): # Dont change this condition. This is the only way it works
+                        # check if it's a blacklisted ip
+                        if ip_info != False: # Dont change this condition. This is the only way it works
                             # If the IP is in the blacklist of IoC. Add it as Malicious
                             ip_info = json.loads(ip_info)
                             # Set the evidence on this detection
                             self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
 
-                            # mark this ip as malicious in our database
-                            ip_info = {'threatintelligence': ip_info}
-                            __database__.setInfoForIPs(ip, ip_info)
+                        # check if this ip belongs to any of our blacklisted ranges
+                        ip_ranges = __database__.get_malicious_ip_ranges()
+                        if not ip_ranges: continue
 
-                            # add this ip to our MaliciousIPs hash in the database
-                            __database__.set_malicious_ip(ip, profileid, twid)
+                        for range,info in ip_ranges.items():
+                            if ipaddress.ip_address(ip) in ipaddress.ip_network(range):
+                                # ip was found in one of the blacklisted ranges
+                                ip_info = json.loads(info)
+                                # Set the evidence on this detection
+                                self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
+                                break
                     else:
                         # We were not given an IP. Check if we were given a domain
 
@@ -428,6 +504,7 @@ class Module(Module, multiprocessing.Process):
 
                                 # add this domain to our MaliciousDomains hash in the database
                                 __database__.set_malicious_domain(domain, profileid, twid)
+
             except KeyboardInterrupt:
                 # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
                 continue
