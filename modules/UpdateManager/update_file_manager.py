@@ -64,6 +64,13 @@ class UpdateFileManager:
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ja3_feeds = {}
 
+        try:
+            # Read the list of ja3 feeds to download. Convert to list
+            self.ssl_feed_tuples = self.config.get('threatintelligence', 'ssl_feeds').split(', ')
+            self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.ssl_feeds = {}
 
         try:
             # Read the riskiq api key
@@ -930,6 +937,7 @@ class UpdateFileManager:
         """
         Main function. It tries to update the TI files from a remote server
         """
+        return
         try:
             self.update_period = float(self.update_period)
         except (TypeError, ValueError):
