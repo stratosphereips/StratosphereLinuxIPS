@@ -2154,6 +2154,9 @@ class ProfilerProcess(multiprocessing.Process):
                         'saddr': self.column_values['saddr'],
                         'size' : self.column_values['size'],
                         'md5':  self.column_values['md5'],
+                        'sha1':  self.column_values['sha1'],
+                        'analyzers':  self.column_values['analyzers'],
+                        'source':  self.column_values['source'],
                         'profileid' : profileid,
                         'twid' : twid,
                         'ts' : starttime
