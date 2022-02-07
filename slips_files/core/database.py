@@ -1323,8 +1323,8 @@ class Database(object):
         if current_data:
             if 'asn' in current_data.keys():
                 asn = current_data['asn']['asnorg']
-                if 'Unknown' not in asn:
-                    identification += 'AS: ' + current_data['asn']['asnorg'] + ', '
+                if 'Unknown' not in asn and asn != '':
+                    identification += 'AS: ' + asn + ', '
             if 'SNI' in current_data.keys():
                 SNI = current_data['SNI']
                 if type(SNI) == list:
@@ -2113,8 +2113,10 @@ class Database(object):
         return gateway
 
     def get_ssl_info(self, sha1):
-        info = self.rcache.hmget('IoC_SSL', sha1)
-        return info or False
+        info = self.rcache.hmget('IoC_SSL', sha1)[0]
+        if info == None:
+            return False
+        return info
 
     def set_profile_module_label(self, profileid, module, label):
         """
