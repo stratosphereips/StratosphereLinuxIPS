@@ -2182,11 +2182,20 @@ class Database(object):
     def add_ja3_to_IoC(self, ja3_dict) -> None:
         """
         Store a group of ja3 in the db
-        :param ja3_dict: a json serialized dict {ja3: {'source':..,'tags':..,
-                                                        'threat_level':... ,'description'}}
+        :param ja3_dict:  {ja3: {'source':..,'tags':..,
+                            'threat_level':... ,'description'}}
 
         """
         self.rcache.hmset('IoC_JA3', ja3_dict)
+
+    def add_ssl_sha1_to_IoC(self, malicious_ssl_certs):
+        """
+        Store a group of ssl fingerprints in the db
+        :param malicious_ssl_certs:  {sha1: {'source':..,'tags':..,
+                                    'threat_level':... ,'description'}}
+
+        """
+        self.rcache.hmset('IoC_SSL', malicious_ssl_certs)
 
     def add_ip_to_IoC(self, ip: str, description: str) -> None:
         """
