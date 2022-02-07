@@ -2112,6 +2112,10 @@ class Database(object):
 
         return gateway
 
+    def get_ssl_info(self, sha1):
+        info = self.rcache.hmget('IoC_SSL', sha1)
+        return info or False
+
     def set_profile_module_label(self, profileid, module, label):
         """
         Set a module label for a profile.
