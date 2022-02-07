@@ -171,7 +171,9 @@ class EvidenceProcess(multiprocessing.Process):
         command = f'curl -m 5 -s http://ipinfo.io/json'
         result = subprocess.run(command.split(), capture_output=True)
         text_output = result.stdout.decode("utf-8").replace('\n','')
-        if text_output:
+        if not text_output or 'Connection timed out' in text_output:
+            self.print('Error getting local and public IPs', 0, 1)
+        else:
             public_ip = json.loads(text_output)['ip']
             IPs.append(public_ip)
         return IPs
