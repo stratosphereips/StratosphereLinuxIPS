@@ -1023,14 +1023,15 @@ class Module(Module, multiprocessing.Process):
                                                      source_target_tag=source_target_tag, conn_count=conn_count,
                                                      profileid=profileid, twid=twid, uid=uid)
 
-                        if 'SSL certificate validation failed' in msg:
-                            ip = flow['daddr']
-                            # get the description inside parenthesis
-                            ip_identification = __database__.getIPIdentification(ip)
-                            description = msg + f' Destination IP: {ip}. {ip_identification}'
-                            self.set_evidence_for_invalid_certificates(profileid, twid, ip,
-                                                                       description, uid, timestamp)
-                            #self.print(description, 3, 0)
+                        if 'SSL certificate validation failed' in msg \
+                                and 'unable to get local issuer certificate' not in msg:
+                                ip = flow['daddr']
+                                # get the description inside parenthesis
+                                ip_identification = __database__.getIPIdentification(ip)
+                                description = msg + f' Destination IP: {ip}. {ip_identification}'
+                                self.set_evidence_for_invalid_certificates(profileid, twid, ip,
+                                                                           description, uid, timestamp)
+                                #self.print(description, 3, 0)
 
                         if 'Address_Scan' in note:
                             # Horizontal port scan
