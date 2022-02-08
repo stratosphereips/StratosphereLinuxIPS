@@ -83,6 +83,11 @@ let operate_hotkeys = function(){
               {data: 'sbytes'}
             ]
 });
+    function hide_hotkey(){
+        x = document.getElementById(last_active_hotkey);
+        x.style.display = "none"
+        last_active_hotkey = active_hotkey;
+    }
         set_profile_timewindow: function(pr, tw){
             profile = pr;
             timewindow = tw;
