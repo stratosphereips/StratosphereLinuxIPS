@@ -88,6 +88,12 @@ let timewindows = {
     'update_timeline': function (profile, timewindow) {
         let s = '/timeline/' + profile + '/' + timewindow
         datatable.ajax.url(s).load();
+        update_timeline: function(){
+            let s = '/timeline/' + profile + '/' + timewindow;
+            timeline.ajax.url(s).load();
+            x = document.getElementById("timeline");
+            x.style.display = "block"
+            },
     }
 }
 
