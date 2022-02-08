@@ -135,6 +135,37 @@ def set_timeline_flows(ip, timewindow):
         'draw': request.args.get('draw', type=int)
     }
 
+@app.route('/timeline/profile_<ip>/<timewindow>')
+def set_timeline(ip, timewindow):
+    """
+    Set timeline data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
+    """
+    timeline = __database__.zrange('profile_'+ip+"_"+timewindow+"_timeline", 0, -1)
+    print(timeline)
+    flows = [json.loads(line) for line in timeline]
+    data_length = len(flows)
+    total_filtered = len(flows)
+    search = request.args.get('search[value]')
+
+    # search
+    if search:
+        flows = [element for element in flows if element['proto'].lower() == search.lower()]
+        total_filtered = len(flows)
+
+    # pagination
+    start = request.args.get('start', type=int)
+    length = request.args.get('length', type=int)
+    timeline_page = []
+    if start and length:
+        timeline_page = flows[start:(start + length)]
+
+    return {
+        'data': timeline_page if timeline_page else flows,
+        'recordsFiltered': total_filtered,
+        'recordsTotal': data_length,
+        'draw': request.args.get('draw', type=int)
+    }
+
 
 if __name__ == '__main__':
     app.run()
