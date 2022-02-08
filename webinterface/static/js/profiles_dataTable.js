@@ -83,6 +83,21 @@ let operate_hotkeys = function(){
               {data: 'sbytes'}
             ]
 });
+    });
+
+    let timeline = $('#table_timeline').DataTable({
+            "bDestroy": true,
+            columns: [
+              {data: 'timestamp'},
+              {data: 'dport_name'},
+              {data: 'preposition'},
+//              {data: 'dns_resolution'},
+//              {data: 'dport/proto'},
+              {data: 'daddr'}
+//              {data: 'info'}
+            ]
+    });
+
     function hide_hotkey(){
         x = document.getElementById(last_active_hotkey);
         x.style.display = "none"
