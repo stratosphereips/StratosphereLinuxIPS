@@ -92,6 +92,11 @@ let operate_hotkeys = function(){
             profile = pr;
             timewindow = tw;
             },
+
+        get_active_hotkey: function(){
+            return active_hotkey;
+        },
+
         update_timeline_flows: function(){
             let link = '/timeline_flows/' + profile + '/' + timewindow;
             timeline_flows.ajax.url(link).load();
