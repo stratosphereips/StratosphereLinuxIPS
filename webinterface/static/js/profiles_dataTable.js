@@ -58,7 +58,14 @@ let profile = profiles();
 profile.onclick_tws();
 profile.onclick_ips();
 
-let datatable = $('#timeline').DataTable({
+
+let operate_hotkeys = function(){
+
+    let profile = '';
+    let timewindow = '';
+    let active_hotkey = 'timeline';
+    let last_active_hotkey = 'timeline';
+
             "bDestroy": true,
             columns: [
               {data: 'ts'},
