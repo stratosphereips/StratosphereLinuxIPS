@@ -114,6 +114,17 @@ let timewindows = {
             x = document.getElementById("timeline");
             x.style.display = "block"
             },
+
+        onclick_buttons: function(){
+            $("#buttons .btn").click(function(){
+                $("#buttons .btn").removeClass('active');
+                $(this).toggleClass('active');
+                let [first, ...rest] = (this.id).split('_');
+                active_hotkey = rest.join('_');
+                if(active_hotkey != last_active_hotkey){
+                    hide_hotkey();}
+                });
+            }
     }
 }
 
