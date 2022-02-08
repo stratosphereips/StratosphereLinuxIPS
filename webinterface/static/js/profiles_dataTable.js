@@ -54,6 +54,7 @@ let profiles = function(){
         }
     }
 }
+
 let profile = profiles();
 profile.onclick_tws();
 profile.onclick_ips();
@@ -66,6 +67,7 @@ let operate_hotkeys = function(){
     let active_hotkey = 'timeline';
     let last_active_hotkey = 'timeline';
 
+    let timeline_flows = $('#table_timeline_flows').DataTable({
             "bDestroy": true,
             columns: [
               {data: 'ts'},
@@ -82,7 +84,6 @@ let operate_hotkeys = function(){
               {data: 'spkts'},
               {data: 'sbytes'}
             ]
-});
     });
 
     let timeline = $('#table_timeline').DataTable({
@@ -103,6 +104,8 @@ let operate_hotkeys = function(){
         x.style.display = "none"
         last_active_hotkey = active_hotkey;
     }
+
+    return{
         set_profile_timewindow: function(pr, tw){
             profile = pr;
             timewindow = tw;
@@ -119,10 +122,6 @@ let operate_hotkeys = function(){
             x.style.display = "block"
             },
 
-let timewindows = {
-    'update_timeline': function (profile, timewindow) {
-        let s = '/timeline/' + profile + '/' + timewindow
-        datatable.ajax.url(s).load();
         update_timeline: function(){
             let s = '/timeline/' + profile + '/' + timewindow;
             timeline.ajax.url(s).load();
@@ -142,6 +141,7 @@ let timewindows = {
             }
     }
 }
+2
 
 let ipinfo = $('#ipinfo').DataTable({
             "bDestroy": true,
@@ -156,5 +156,33 @@ let ipinfo = $('#ipinfo').DataTable({
               {data: 'asnorg'}
             ]
 });
+
+let hotkeys = operate_hotkeys();
+hotkeys.onclick_buttons();
+
+let hotkey_hook = {
+    'initialize_profile_timewindow': function(profile, timewindow){
+        hotkeys.set_profile_timewindow(profile, timewindow);
+        hotkey_hook.initialize_hotkey();
+    },
+    'initialize_hotkey':function(){
+        let active_hotkey = hotkeys.get_active_hotkey();
+        if(active_hotkey == 'timeline'){
+            hotkey_hook.set_timeline();
+        }
+        else if(active_hotkey == 'timeline_flows'){
+            hotkey_hook.set_timeline_flows();
+        }
+
+    },
+    'set_timeline_flows': function(){
+        hotkeys.update_timeline_flows();
+    },
+
+    'set_timeline': function(){
+        hotkeys.update_timeline();
+    }
+}
+
 
 
