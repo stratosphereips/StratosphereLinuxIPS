@@ -83,6 +83,10 @@ let operate_hotkeys = function(){
               {data: 'sbytes'}
             ]
 });
+        set_profile_timewindow: function(pr, tw){
+            profile = pr;
+            timewindow = tw;
+            },
         update_timeline_flows: function(){
             let link = '/timeline_flows/' + profile + '/' + timewindow;
             timeline_flows.ajax.url(link).load();
