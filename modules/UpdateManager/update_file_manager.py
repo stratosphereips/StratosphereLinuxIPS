@@ -498,7 +498,7 @@ class UpdateFileManager:
             file_info['time'] = self.new_update_time
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
-            self.print(f'Successfully updated remote file {link_to_download}', 1, 0)
+            self.print(f'Successfully updated remote file {link_to_download}')
             self.loaded_ti_files += 1
             return True
 
