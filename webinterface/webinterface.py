@@ -42,7 +42,7 @@ def set_ip_info(ip):
     asn = ip_info.get('asn', '-')
     asnorg = [asn.get('asnorg','-') if isinstance(asn, dict) else '-']
     reverse_dns = ip_info.get('reverse_dns', '-')
-    data.append({'geocountry': geocountry, 'asnorg': asnorg, 'reverse_dns': reverse_dns})
+    data.append({'ip':ip,'geocountry': geocountry, 'asnorg': asnorg, 'reverse_dns': reverse_dns})
 
     return {
         'data': data,
