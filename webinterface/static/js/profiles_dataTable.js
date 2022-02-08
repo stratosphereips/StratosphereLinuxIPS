@@ -29,7 +29,7 @@ let profiles = function(){
                 const close_string = '</table>'
                 let data = ""
                 profile_tws.tws.forEach(item => {
-                data = data + '<tr onclick="timewindows.update_timeline(' + "'" + "profile_" + profile_tws.profile+"'" + ',' + "'" + item + "'" +')">' + '<td>'+ item + '</td>' + '</tr>';})
+                data = data + '<tr onclick="hotkey_hook.initialize_profile_timewindow(' + "'" + "profile_" + profile_tws.profile+"'" + ',' + "'" + item + "'" +')">' + '<td>'+ item + '</td>' + '</tr>';})
                 return open_string + data + close_string;
             }
 
