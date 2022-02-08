@@ -94,7 +94,12 @@ class EvidenceProcess(multiprocessing.Process):
             self.logs_jsonfile = self.clean_evidence_json_file(logs_folder+'/')
 
     def add_branch_info(self, log_files: list):
-        repo = Repo('.')
+        try:
+            repo = Repo('.')
+        except:
+            # when in docker, we copy the repo instead of clone it so there's no .git files
+            # we can't add repo metadata
+            return False
         # add branch name and commit
         branch = repo.active_branch.name
         commit = repo.active_branch.commit.hexsha
