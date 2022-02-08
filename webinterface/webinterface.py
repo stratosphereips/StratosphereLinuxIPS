@@ -105,10 +105,10 @@ def profile_tws():
 #         'draw': request.args.get('draw', type=int)
 #     }
 
-@app.route('/timeline/profile_<ip>/<timewindow>')
-def timeline(ip, timewindow):
+@app.route('/timeline_flows/profile_<ip>/<timewindow>')
+def set_timeline_flows(ip, timewindow):
     """
-    Set timeline data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
+    Set timeline flows of a chosen profile and timewindow. Supports pagination, sorting and seraching.
     """
     timeline = __database__.hgetall('profile_'+ip+"_"+timewindow+"_flows")
     flows = [json.loads(value) for key,value in timeline.items()]
