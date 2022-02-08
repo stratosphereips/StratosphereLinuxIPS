@@ -83,6 +83,12 @@ let operate_hotkeys = function(){
               {data: 'sbytes'}
             ]
 });
+        update_timeline_flows: function(){
+            let link = '/timeline_flows/' + profile + '/' + timewindow;
+            timeline_flows.ajax.url(link).load();
+            x = document.getElementById("timeline_flows");
+            x.style.display = "block"
+            },
 
 let timewindows = {
     'update_timeline': function (profile, timewindow) {
