@@ -84,6 +84,17 @@
           </table>
 <!--        </div>-->
             <table id="timeline" class="table table-striped">
+
+            <nav class="navbar navbar-light bg-light">
+              <form class="form-inline">
+                  <div id="buttons">
+                <button class="btn btn-outline-success active" type="button" id="button_timeline" onclick="hotkey_hook.set_timeline();">timeline</button>
+                <button class="btn btn-outline-secondary" type="button" id="button_timeline_flows" onclick="hotkey_hook.set_timeline_flows();">flows</button>
+                <button class="btn btn-outline-secondary" type="button" id="button_outtuples" onclick="hotkey_hook.set_timeline_flows();">outtuples</button>
+
+                  </div>
+              </form>
+            </nav>
               <thead>
                 <tr>
                   <th>timestamp</th>
