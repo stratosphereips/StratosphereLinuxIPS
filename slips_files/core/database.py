@@ -185,6 +185,41 @@ class Database(object):
             self.outputqueue.put('00|database|{}'.format(type(inst)))
             self.outputqueue.put('00|database|{}'.format(inst))
 
+
+
+    def search_for_profile_with_the_same_MAC(self, profileid, MAC_address):
+        """
+        If we have different profiles for IPv6 and IPv4 of the same computer(same MAC),
+        store it in the database
+        This function is called whenever slips sees a new MAC address
+        """
+        # some cases we have ipv4 and ipv6 on the same computer, they should be associated with the same mac
+        # and both profiles should be aware of both IPs
+        # get all profiles in the db
+        for stored_profile in self.getProfiles():
+            # get the mac of the profile
+            found_mac = self.get_mac_addr_from_profile(stored_profile)
+            if found_mac == MAC_address:
+                # we found another profile that has the same mac as this one
+                incoming_ip = profileid.split('_')[1]
+                found_ip = stored_profile.split('_')[1]
+
+                # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
+                if (validators.ipv6(incoming_ip)
+                        and validators.ipv4(found_ip)):
+                    # associate the ipv4 we found with the incoming ipv6
+                    self.r.hmset(profileid, {'IPv6': incoming_ip})
+
+                elif (validators.ipv6(found_ip)
+                      and validators.ipv4(incoming_ip)):
+                    # associate the ipv6 we found with the incoming ipv4
+                    self.r.hmset(profileid, {'IPv4': incoming_ip})
+                else:
+                    # both are ipv4 or ipv6 and are claiming to have the same mac address
+                    # OR one of them is 0.0.0.0 and didn't take an ip yet
+                    # will be detected later by the ARP module
+                    pass
+
     def add_mac_addr_to_profile(self,profileid, MAC_info):
         """
         Used to associate this profile with it's MAC addr
@@ -2118,6 +2153,9 @@ class Database(object):
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
         """
         Store a group of IPs in the db as they were obtained from an IoC source
+        :param ips_and_description: is {ip: json.dumps{'source':..,'tags':..,
+                                                        'threat_level':... ,'description'}}
+
         """
         if ips_and_description:
             self.rcache.hmset('IoC_ips', ips_and_description)
@@ -2126,16 +2164,27 @@ class Database(object):
         """
         Store a group of domains in the db as they were obtained from
         an IoC source
-        What is the format of domains_and_description?
+        :param domains_and_description: is {domain: json.dumps{'source':..,'tags':..,
+                                                            'threat_level':... ,'description'}}
         """
         if domains_and_description:
             self.rcache.hmset('IoC_domains', domains_and_description)
 
+    def add_ip_range_to_IoC(self, malicious_ip_ranges: dict) -> None:
+        """
+        Store a group of IP ranges in the db as they were obtained from an IoC source
+        :param malicious_ip_ranges: is {range: json.dumps{'source':..,'tags':..,
+                                                            'threat_level':... ,'description'}}
+        """
+        if malicious_ip_ranges:
+            self.rcache.hmset('IoC_ip_ranges', malicious_ip_ranges)
 
     def add_ja3_to_IoC(self, ja3_dict) -> None:
         """
         Store a group of ja3 in the db
-        :param ja3_dict: a json serialized dict {'ja3': {'description': .. , 'source': ...}}
+        :param ja3_dict: a json serialized dict {ja3: {'source':..,'tags':..,
+                                                        'threat_level':... ,'description'}}
+
         """
         self.rcache.hmset('IoC_JA3', ja3_dict)
 
@@ -2152,6 +2201,15 @@ class Database(object):
         with its description
         """
         self.rcache.hset('IoC_domains', domain, description)
+
+    def get_malicious_ip_ranges(self) -> dict:
+        """
+        Returns all the malicious ip ranges we have from different feeds
+        return format is {range: json.dumps{'source':..,'tags':..,
+                                            'threat_level':... ,'description'}}
+        """
+        return self.rcache.hgetall('IoC_ip_ranges')
+
 
     def set_malicious_ip(self, ip, profileid, twid):
         """

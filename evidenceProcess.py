@@ -54,21 +54,20 @@ class EvidenceProcess(multiprocessing.Process):
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
+        # If logs enabled, write alerts to the log folder as well
+        self.clear_logs_dir(logs_folder)
+
         if self.popup_alerts:
             # The way we send notifications differ depending on the user and the OS
             self.setup_notifications()
+
         # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
+
+        # clear alerts.log
         self.logfile = self.clean_evidence_log_file(output_folder)
+        # clear alerts.json
         self.jsonfile = self.clean_evidence_json_file(output_folder)
-        log_files = [self.logfile, self.jsonfile]
-        self.add_branch_info(log_files)
-        # If logs enabled, write alerts to the log folder as well
-        self.logs_logfile = False
-        self.logs_jsonfile = False
-        if logs_folder:
-            self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
-            self.logs_jsonfile =  self.clean_evidence_json_file(logs_folder+'/')
 
         self.timeout = 0.0000001
         # this list will have our local and public ips
@@ -83,16 +82,27 @@ class EvidenceProcess(multiprocessing.Process):
             'high': 0.8,
             'critical': 1
         }
+        # flag to only add commit and hash to the firs alert in alerts.json
+        self.is_first_alert = True
 
-    def add_branch_info(self, log_files: list):
+    def clear_logs_dir(self, logs_folder):
+        self.logs_logfile = False
+        self.logs_jsonfile = False
+        if logs_folder:
+            # these json files are inside the logs dir, not the output/ dir
+            self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
+            self.logs_jsonfile = self.clean_evidence_json_file(logs_folder+'/')
+
+    def get_branch_info(self):
+        """
+        Returns a tuple containing (commit,branch)
+        """
         repo = Repo('.')
         # add branch name and commit
         branch = repo.active_branch.name
         commit = repo.active_branch.commit.hexsha
-        now = datetime.now()
+        return (commit, branch)
 
-        for file in log_files:
-            file.write(f'Using {branch} - {commit} - {now}\n')
 
     def setup_notifications(self):
         """
@@ -223,7 +233,7 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
             ip = profileid.split("_")[-1].strip()
-            alert_to_print = f'{flow_datetime}: Src IP {ip:29}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
+            alert_to_print = f'{flow_datetime}: Src IP {ip:26}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
             return alert_to_print
         except Exception as inst:
             self.print('Error in print_alert()')
@@ -290,7 +300,7 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             json_alert = '{ '
             for key_,val in IDEA_dict.items():
-                if type(val) ==str:
+                if type(val)==str:
                     # strings in json should be in double quotes instead of single quotes
                    json_alert += f'"{key_}": "{val}", '
                 else:
@@ -636,12 +646,13 @@ class EvidenceProcess(multiprocessing.Process):
             tw_stop_time_datetime = tw_start_time_datetime + tw_width_in_seconds_delta
             tw_stop_time_str = tw_stop_time_datetime.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
 
-
             hostname = __database__.get_hostname_from_profile(profileid)
             # if there's no hostname, set it as ' '
-            hostname = hostname or ' '
+            hostname = hostname or ''
+            if hostname:
+                hostname = f'({hostname})'
 
-            alert_to_print = f'{Fore.RED}IP {srcip} ({hostname}) detected as infected in timewindow {twid_num} ' \
+            alert_to_print = f'{Fore.RED}IP {srcip} {hostname} detected as infected in timewindow {twid_num} ' \
                              f'(start {tw_start_time_str}, stop {tw_stop_time_str}) given the following evidence:{Style.RESET_ALL}\n'
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -677,6 +688,11 @@ class EvidenceProcess(multiprocessing.Process):
 
 
     def run(self):
+        # add metadata to alerts.log
+        commit, branch = self.get_branch_info()
+        now = datetime.now()
+        self.logfile.write(f'Using {branch} - {commit} - {now}\n\n')
+
         while True:
             try:
             # Adapt this process to process evidence from only IPs and not profileid or twid
@@ -759,6 +775,10 @@ class EvidenceProcess(multiprocessing.Process):
                     # Add the evidence to the log files
                     self.addDataToLogFile(alert_to_log)
                     # add to alerts.json
+                    if self.is_first_alert:
+                        # only add commit and hash to the firs alert in alerts.json
+                        self.is_first_alert = False
+                        IDEA_dict.update({'commit': commit, 'branch': branch })
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
 
