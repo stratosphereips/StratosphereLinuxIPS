@@ -5,6 +5,7 @@
   - Update and improve whitelists
   - Improve alerts by adding hostname to alerts printed in the CLI and in alerts.log
   - Faster startup of Slips
+  - Add a logstash configuration file to allow exporting slips alerts.
 
 * Kalipso
   - Fix Kalipso in docker issue
