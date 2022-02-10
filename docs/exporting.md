@@ -5,6 +5,7 @@ The exporting module allows Slips to export alerts and evidence to other systems
 - Slack
 - STIX Servers
 - Warden servers
+- Logstash
 
 
 ## Slack
@@ -70,3 +71,7 @@ You can change how often we get alerts from warden server
 
 By default Slips receives alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
 
+
+## Logstash
+
+Slips has logstash.conf file that exports our alerts.json to a given output file, you can change the output to your preference (e.g elastic search, stdout, etc..)
