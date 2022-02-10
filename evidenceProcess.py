@@ -288,18 +288,19 @@ class EvidenceProcess(multiprocessing.Process):
         :param IDEA_dict: dict containing 1 alert
         """
         try:
-            json_alert = '{\n'
+            json_alert = '{ '
             for key_,val in IDEA_dict.items():
                 if type(val) ==str:
                     # strings in json should be in double quotes instead of single quotes
-                   json_alert += f'"{key_}": "{val}",\n'
+                   json_alert += f'"{key_}": "{val}", '
                 else:
                     # int and float values should be printed as they are
-                    json_alert += f'"{key_}": {val},\n'
+                    json_alert += f'"{key_}": {val}, '
             # remove the last comma and close the dict
-            json_alert = json_alert[:-2] + '\n}\n'
+            json_alert = json_alert[:-2] + ' }\n'
+            # make sure all alerts are in json format (using double quotes)
+            json_alert = json_alert.replace("'",'"')
             self.jsonfile.write(json_alert)
-            # empty lines or line containing '\n' mark the end of the file for the cesnet sharing module. don't add any
             self.jsonfile.flush()
         except KeyboardInterrupt:
             return True
