@@ -388,7 +388,6 @@ def shutdown_gracefully(input_information):
             zeek_files_path = os.path.join(args.output,'zeek_files')
             copy_tree("zeek_files", zeek_files_path)
             print(f"[Main] Stored a copy of zeek files to {zeek_files_path}.")
-
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -874,6 +873,10 @@ if __name__ == '__main__':
                         minimum_intervals_to_wait -= 1
                     else:
                         minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+
+                # manual health checks to avoid idle connections being killed
+                __database__.r.pubsub.check_health()
+
 
         except KeyboardInterrupt:
             shutdown_gracefully(input_information)
