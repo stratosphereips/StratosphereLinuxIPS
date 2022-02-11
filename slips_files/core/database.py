@@ -90,6 +90,10 @@ class Database(object):
                 # if the connection is idle for more than 30 seconds,
                 # a round trip PING/PONG will be attempted before next redis cmd.
                 # If the PING/PONG fails, the connection will reestablished
+
+                # retry_on_timeout=True after the command times out, it will be retried once,
+                # if the retry is successful, it will return normally; if it fails, an exception will be thrown
+
                 self.r = redis.StrictRedis(host='localhost',
                                            port=6379,
                                            db=0,
@@ -97,7 +101,7 @@ class Database(object):
                                            socket_keepalive=True,
                                            retry_on_timeout=True,
                                            decode_responses=True,
-                                           health_check_interval=30)#password='password')
+                                           health_check_interval=20)#password='password')
                 # db 1 is cache, delete it using -cc flag
                 self.rcache = redis.StrictRedis(host='localhost',
                                                 port=6379,
@@ -106,7 +110,7 @@ class Database(object):
                                                 socket_keepalive=True,
                                                 retry_on_timeout=True,
                                                 decode_responses=True,
-                                                health_check_interval=30)#password='password')
+                                                health_check_interval=20)#password='password')
                 if self.deletePrevdb:
                     self.r.flushdb()
             except redis.exceptions.ConnectionError:
@@ -1614,10 +1618,11 @@ class Database(object):
             urldata = json.dumps(urldata)
             self.rcache.hset('URLsInfo', url, urldata)
 
+
     def subscribe(self, channel):
         """ Subscribe to channel """
         # For when a TW is modified
-        pubsub = self.r.pubsub()
+        self.pubsub = self.r.pubsub()
         supported_channels = ['tw_modified', 'evidence_added', 'new_ip',  'new_flow',
                               'new_dns', 'new_dns_flow', 'new_http', 'new_ssl', 'new_profile',
                               'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change',
@@ -1627,12 +1632,12 @@ class Database(object):
                               'new_service',  'new_arp', 'new_MAC', 'new_alert']
         for supported_channel in supported_channels:
             if supported_channel in channel:
-                pubsub.subscribe(channel)
+                self.pubsub.subscribe(channel)
                 break
         else:
             # channel isn't in supported_channels
             return False
-        return pubsub
+        return self.pubsub
 
     def publish(self, channel, data):
         """ Publish something """
