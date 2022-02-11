@@ -874,9 +874,7 @@ if __name__ == '__main__':
                     else:
                         minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
-                # manual health checks to avoid idle connections being killed
-                __database__.r.pubsub.check_health()
-
+                __database__.pubsub.check_health()
 
         except KeyboardInterrupt:
             shutdown_gracefully(input_information)
