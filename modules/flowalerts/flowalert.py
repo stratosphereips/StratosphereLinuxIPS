@@ -42,6 +42,7 @@ class Module(Module, multiprocessing.Process):
         self.c4 = __database__.subscribe('new_ssl')
         self.c5 = __database__.subscribe('new_service')
         self.c6 = __database__.subscribe('new_dns_flow')
+        self.c7 = __database__.subscribe('new_downloaded_file')
         self.timeout = 0.0000001
         self.p2p_daddrs = {}
         # get the default gateway
@@ -759,6 +760,40 @@ class Module(Module, multiprocessing.Process):
                                      conn_count=conn_count, profileid=profileid, twid=twid)
             return True
 
+    def set_evidence_malicious_ssl(self, ssl_info: dict, ssl_info_from_db: dict):
+        """
+        :param ssl_info: info about this ssl cert as found in zeek
+        :param ssl_info_from_db: ti feed, tags, description of this malicious cert
+        """
+        profileid = ssl_info.get('profileid', '')
+        twid = ssl_info.get('twid', '')
+        ts = ssl_info.get('ts', '')
+        daddr = ssl_info.get('daddr', '')
+        uid = ssl_info.get('uid', '')
+        ssl_info_from_db = json.loads(ssl_info_from_db)
+        import pprint
+        pprint.pp(ssl_info_from_db)
+        tags = ssl_info_from_db['tags']
+        cert_description = ssl_info_from_db['description']
+        threat_level = ssl_info_from_db['threat_level']
+
+        description = f'Malicious SSL certificate to server {daddr}. '
+        # append daddr identification to the description
+        ip_identification = __database__.getIPIdentification(daddr)
+        description += f'{ip_identification} description: {cert_description} {tags}  '
+
+        type_evidence = 'MaliciousSSLCert'
+        category =  'Intrusion.Botnet'
+        source_target_tag = "CC"
+        type_detection  = 'dstip'
+
+        detection_info = daddr
+        confidence = 1
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 ts, category, source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid, uid=uid)
+
     def run(self):
         # Main loop function
         while True:
@@ -1147,6 +1182,22 @@ class Module(Module, multiprocessing.Process):
                         self.check_dns_resolution_without_connection(domain, answers, stime, profileid, twid, uid)
                     if rcode_name:
                         self.detect_DGA(rcode_name, domain, stime, profileid, twid, uid)
+
+                message = self.c7.get_message(timeout=self.timeout)
+                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
+                    data = json.loads(message['data'])
+                    source = data.get('source', '')
+                    analyzers = data.get('analyzers', '')
+                    sha1 = data.get('sha1', '')
+                    if 'SSL' not in source or 'SHA1' not in analyzers:
+                        # not an ssl cert
+                        continue
+
+                    # check if we have this sha1 marked as malicious from one of our feeds
+                    ssl_info_from_db = __database__.get_ssl_info(sha1)
+                    if not ssl_info_from_db: continue
+                    self.set_evidence_malicious_ssl(data, ssl_info_from_db)
+
             except KeyboardInterrupt:
                 continue
             except Exception as inst:

@@ -51,41 +51,7 @@ class UpdateFileManager:
         try:
             # Read the list of URLs to download. Convert to list
             self.ti_feed_tuples = self.config.get('threatintelligence', 'ti_files').split(', ')
-            # this dict will contain every link and its threat_level
-            self.url_feeds = {}
-            # Empty the variables so we know which ones we read already
-            url, threat_level, tags= '', '', ''
-            # Each tuple_ is in turn a url, threat_level and tags
-            for tuple_ in self.ti_feed_tuples:
-                if not url:
-                    url = tuple_.replace('\n','')
-                elif url.startswith(';'):
-                    # remove commented lines from the cache db
-                    feed = url.split('/')[-1]
-                    __database__.delete_feed(feed)
-                    # to avoid calling delete_feed again with the same feed
-                    url = ''
-                elif not threat_level:
-                    threat_level = tuple_.replace('threat_level=','')
-                    # make sure threat level is a valid value
-                    if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
-                        # not a valid threat_level
-                        self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
-                        threat_level = 'low'
-                elif not tags:
-                    if '\n' in tuple_:
-                        # Is a combined tags+url.
-                        # This is an issue with the library
-                        tags = tuple_.split('\n')[0].replace('tags=','')
-                        self.url_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
-                        url = tuple_.split('\n')[1]
-                        threat_level = ''
-                        tags = ''
-                    else:
-                        # The first line is not combined tag+url
-                        tags = tuple_.replace('tags=','')
-                        self.url_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
-            #self.print(f'Final: {self.url_feeds}')
+            self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.url_feeds = {}
@@ -93,33 +59,18 @@ class UpdateFileManager:
         try:
             # Read the list of ja3 feeds to download. Convert to list
             self.ja3_feed_tuples = self.config.get('threatintelligence', 'ja3_feeds').split(', ')
-            self.ja3_feeds = {}
-            url, threat_level, tags= '', '', ''
-            for tuple_ in self.ja3_feed_tuples:
-                if not url:
-                    url = tuple_.replace('\n','')
-                elif not threat_level:
-                    threat_level = tuple_.replace('threat_level=','')
-                    if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
-                        # not a valid threat_level
-                        self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
-                        threat_level = 'low'
-                elif not tags:
-                    if '\n' in tuple_:
-                        # Is a combined tags+url.
-                        # This is an issue with the library
-                        tags = tuple_.split('\n')[0].replace('tags=','')
-                        self.ja3_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
-                        url = tuple_.split('\n')[0]
-                        threat_level = ''
-                        tags = ''
-                    else:
-                        # The first line is not combined tag+url
-                        tags = tuple_.replace('tags=','')
-                        self.ja3_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
+            self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ja3_feeds = {}
+
+        try:
+            # Read the list of ja3 feeds to download. Convert to list
+            self.ssl_feed_tuples = self.config.get('threatintelligence', 'ssl_feeds').split(', ')
+            self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.ssl_feeds = {}
 
         try:
             # Read the riskiq api key
@@ -141,6 +92,46 @@ class UpdateFileManager:
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.riskiq_update_period = 604800 # 1 week
+
+    def get_feed_properties(self, feeds):
+        """
+        Parse links, threat level and tags from slips.conf
+        """
+        # this dict will contain every link and its threat_level
+        url_feeds = {}
+        # Empty the variables so we know which ones we read already
+        url, threat_level, tags= '', '', ''
+        # Each tuple_ is in turn a url, threat_level and tags
+        for tuple_ in feeds:
+            if not url:
+                url = tuple_.replace('\n','')
+            elif url.startswith(';'):
+                # remove commented lines from the cache db
+                feed = url.split('/')[-1]
+                __database__.delete_feed(feed)
+                # to avoid calling delete_feed again with the same feed
+                url = ''
+            elif not threat_level:
+                threat_level = tuple_.replace('threat_level=','')
+                # make sure threat level is a valid value
+                if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
+                    # not a valid threat_level
+                    self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
+                    threat_level = 'low'
+            elif not tags:
+                if '\n' in tuple_:
+                    # Is a combined tags+url.
+                    # This is an issue with the library
+                    tags = tuple_.split('\n')[0].replace('tags=','')
+                    url_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
+                    url = tuple_.split('\n')[1]
+                    threat_level = ''
+                    tags = ''
+                else:
+                    # The first line is not combined tag+url
+                    tags = tuple_.replace('tags=','')
+                    url_feeds[url] = {'threat_level': threat_level, 'tags':tags[:30]}
+        return url_feeds
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -373,6 +364,101 @@ class UpdateFileManager:
         with open(full_path, 'w') as f:
             f.write(response.text)
 
+    def parse_ssl_feed(self, url, full_path):
+        """
+        Read all ssl fingerprints in full_path and store the info in our db
+        :param url: the src feed
+        :param full_path: the file path where the SSL feed is downloaded
+        """
+
+        malicious_ssl_certs = {}
+
+        with open(full_path) as ssl_feed:
+            # Ignore comments and find the description column if possible
+            description_column = None
+            while True:
+                line = ssl_feed.readline()
+                if line.startswith('# Listingdate') :
+                    # looks like the line that contains column names, search where is the description column
+                    for column in line.split(','):
+                        # Listingreason is the description column in  abuse.ch Suricata SSL Fingerprint Blacklist
+                        if 'Listingreason' in column.lower():
+                            description_column = line.split(',').index(column)
+                if not line.startswith('#'):
+                    # break while statement if it is not a comment (i.e. does not start with #) or a header line
+                    break
+
+            # Find in which column is the ssl fingerprint in this file
+
+            # Store the current position of the TI file
+            current_file_position = ssl_feed.tell()
+            if ',' in line:
+                data = line.replace("\n","").replace("\"","").split(",")
+                amount_of_columns = len(line.split(","))
+
+            if description_column is None:
+                # assume it's the last column
+                description_column = amount_of_columns - 1
+
+            # Search the first column that contains a sha1 hash
+            for column in range(amount_of_columns):
+                # Check if the ssl fingerprint is valid.
+                # assume this column is the sha1 field
+                sha1 = data[column]
+                # verify
+                if len(sha1) != 40:
+                    sha1_column = None
+                else:
+                    # we found the column that has sha1 info
+                    sha1_column = column
+                    break
+
+            if sha1_column is None:
+                # can't find a column that contains an ioc
+                self.print(f'Error while reading the ssl file {full_path}. Could not find a column with sha1 info', 0, 1)
+                return False
+
+            # Now that we read the first line, go back so we can process it
+            ssl_feed.seek(current_file_position)
+
+            for line in ssl_feed:
+                # The format of the file should be
+                # 2022-02-06 07:58:29,6cec09bcb575352785d313c7e978f26bfbd528ab,AsyncRAT C&C
+
+                # skip comment lines
+                if line.startswith('#'): continue
+
+                # Separate the lines like CSV, either by commas or tabs
+                # In the new format the ip is in the second position.
+                # And surrounded by "
+
+                # get the hash to store in our db
+                if ',' in line:
+                    sha1 = line.replace("\n", "").replace("\"", "").split(",")[sha1_column].strip()
+
+                # get the description of this ssl to store in our db
+                try:
+                    separator = ',' if ',' in line else '\t'
+                    description = line.replace("\n", "").replace("\"", "").split(separator)[description_column].strip()
+                except IndexError:
+                    self.print(f'IndexError Description column: {description_column}. Line: {line}')
+
+                # self.print('\tRead Data {}: {}'.format(sha1, description))
+
+                filename = full_path.split('/')[-1]
+
+                if len(sha1) == 40:
+                    # Store the sha1 in our local dict
+                    malicious_ssl_certs[sha1] = json.dumps({'description': description, 'source':filename,
+                                                          'threat_level': self.ssl_feeds[url]['threat_level'],
+                                                          'tags': self.ssl_feeds[url]['tags']})
+                else:
+                    self.print('The data {} is not valid. It was found in {}.'.format(data, filename), 3, 3)
+                    continue
+        # Add all loaded malicious sha1 to the database
+        __database__.add_ssl_sha1_to_IoC(malicious_ssl_certs)
+        return True
+
     async def update_TI_file(self, link_to_download: str, response) -> bool:
         """
         Update remote TI files and JA3 feeds by downloading and parsing them
@@ -399,10 +485,12 @@ class UpdateFileManager:
             # is it a ti_file? load updated IPs/domains to the database
             elif link_to_download in self.url_feeds \
                     and not self.parse_ti_feed(link_to_download, full_path):
-                # an error occured
                 self.print(f"Error parsing feed {link_to_download}. Updating was aborted.", 0, 1)
                 return False
-
+            elif link_to_download in self.ssl_feeds \
+                    and not self.parse_ssl_feed(link_to_download, full_path):
+                self.print(f"Error parsing feed {link_to_download}. Updating was aborted.", 0, 1)
+                return False
             # Store the new etag and time of file in the database
             self.new_update_time = time.time()
             file_info = {}
@@ -410,7 +498,7 @@ class UpdateFileManager:
             file_info['time'] = self.new_update_time
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
-            self.print(f'Successfully updated remote file {link_to_download}', 1, 0)
+            self.print(f'Successfully updated remote file {link_to_download}')
             self.loaded_ti_files += 1
             return True
 
@@ -978,6 +1066,7 @@ class UpdateFileManager:
         files_to_download_dics = {}
         files_to_download_dics.update(self.url_feeds)
         files_to_download_dics.update(self.ja3_feeds)
+        files_to_download_dics.update(self.ssl_feeds)
         for file_to_download in files_to_download_dics.keys():
             file_to_download = file_to_download.strip()
             file_to_download = self.sanitize(file_to_download)

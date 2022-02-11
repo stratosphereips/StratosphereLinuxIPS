@@ -5,6 +5,8 @@
   - Update and improve whitelists
   - Improve alerts by adding hostname to alerts printed in the CLI and in alerts.log
   - Faster startup of Slips
+  - Fix false positive not valid yet SSL alerts
+  - Add support for malicious SSL feeds
 
 * Kalipso
   - Fix Kalipso in docker issue

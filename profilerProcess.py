@@ -1237,9 +1237,12 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['saddr'] = line.get('tx_hosts',[''])[0]
             self.column_values['daddr'] = line.get('rx_hosts',[''])[0]
             self.column_values['size'] = line.get('seen_bytes', '') # downloaded file size
-
             self.column_values['md5'] = line.get('md5', '')
-            # self.column_values['sha1'] = line.get('sha1','')
+            # used for detecting ssl certs
+            self.column_values['source'] = line.get('source', '')
+            self.column_values['analyzers'] = line.get('analyzers', '')
+            self.column_values['sha1'] = line.get('sha1', '')
+
             #todo process zeek tabs files.log
         elif 'arp' in file_type:
             self.column_values['type'] = 'arp'
@@ -2151,6 +2154,9 @@ class ProfilerProcess(multiprocessing.Process):
                         'saddr': self.column_values['saddr'],
                         'size' : self.column_values['size'],
                         'md5':  self.column_values['md5'],
+                        'sha1':  self.column_values['sha1'],
+                        'analyzers':  self.column_values['analyzers'],
+                        'source':  self.column_values['source'],
                         'profileid' : profileid,
                         'twid' : twid,
                         'ts' : starttime
