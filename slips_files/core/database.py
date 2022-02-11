@@ -97,7 +97,7 @@ class Database(object):
                                            socket_keepalive=True,
                                            retry_on_timeout=True,
                                            decode_responses=True,
-                                           health_check_interval=30)#password='password')
+                                           health_check_interval=20)#password='password')
                 # db 1 is cache, delete it using -cc flag
                 self.rcache = redis.StrictRedis(host='localhost',
                                                 port=6379,
@@ -106,7 +106,7 @@ class Database(object):
                                                 socket_keepalive=True,
                                                 retry_on_timeout=True,
                                                 decode_responses=True,
-                                                health_check_interval=30)#password='password')
+                                                health_check_interval=20)#password='password')
                 if self.deletePrevdb:
                     self.r.flushdb()
             except redis.exceptions.ConnectionError:
