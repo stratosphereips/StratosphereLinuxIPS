@@ -69,8 +69,6 @@ class EvidenceProcess(multiprocessing.Process):
         # clear alerts.json
         self.jsonfile = self.clean_evidence_json_file(output_folder)
 
-        log_files = [self.logfile]
-        self.add_branch_info(log_files)
         self.timeout = 0.0000001
         # this list will have our local and public ips
         self.our_ips = self.get_IP()
@@ -84,6 +82,8 @@ class EvidenceProcess(multiprocessing.Process):
             'high': 0.8,
             'critical': 1
         }
+        # flag to only add commit and hash to the firs alert in alerts.json
+        self.is_first_alert = True
 
     def clear_logs_dir(self, logs_folder):
         self.logs_logfile = False
@@ -93,7 +93,10 @@ class EvidenceProcess(multiprocessing.Process):
             self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
             self.logs_jsonfile = self.clean_evidence_json_file(logs_folder+'/')
 
-    def add_branch_info(self, log_files: list):
+    def get_branch_info(self):
+        """
+        Returns a tuple containing (commit,branch)
+        """
         try:
             repo = Repo('.')
         except:
@@ -103,10 +106,8 @@ class EvidenceProcess(multiprocessing.Process):
         # add branch name and commit
         branch = repo.active_branch.name
         commit = repo.active_branch.commit.hexsha
-        now = datetime.now()
+        return (commit, branch)
 
-        for file in log_files:
-            file.write(f'Using {branch} - {commit} - {now}\n')
 
     def setup_notifications(self):
         """
@@ -304,17 +305,20 @@ class EvidenceProcess(multiprocessing.Process):
         :param IDEA_dict: dict containing 1 alert
         """
         try:
-            json_alert = '{\n'
+            json_alert = '{ '
             for key_,val in IDEA_dict.items():
                 if type(val)==str:
                     # strings in json should be in double quotes instead of single quotes
-                   json_alert += f'"{key_}": "{val}",\n'
+                   json_alert += f'"{key_}": "{val}", '
                 else:
                     # int and float values should be printed as they are
-                    json_alert += f'"{key_}": {val},\n'
-            # remove the last comma, make sure ther'es no double quotes, and close the dict
-            json_alert = json_alert[:-2].replace("'",'"') + '\n}\n'
+                    json_alert += f'"{key_}": {val}, '
+            # remove the last comma and close the dict
+            json_alert = json_alert[:-2] + ' }\n'
+            # make sure all alerts are in json format (using double quotes)
+            json_alert = json_alert.replace("'",'"')
             self.jsonfile.write(json_alert)
+            self.jsonfile.flush()
         except KeyboardInterrupt:
             return True
         except Exception as inst:
@@ -691,6 +695,11 @@ class EvidenceProcess(multiprocessing.Process):
 
 
     def run(self):
+        # add metadata to alerts.log
+        commit, branch = self.get_branch_info()
+        now = datetime.now()
+        self.logfile.write(f'Using {branch} - {commit} - {now}\n\n')
+
         while True:
             try:
             # Adapt this process to process evidence from only IPs and not profileid or twid
@@ -773,6 +782,10 @@ class EvidenceProcess(multiprocessing.Process):
                     # Add the evidence to the log files
                     self.addDataToLogFile(alert_to_log)
                     # add to alerts.json
+                    if self.is_first_alert:
+                        # only add commit and hash to the firs alert in alerts.json
+                        self.is_first_alert = False
+                        IDEA_dict.update({'commit': commit, 'branch': branch })
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
 

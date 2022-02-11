@@ -5,11 +5,11 @@
   - Update and improve whitelists
   - Improve alerts by adding hostname to alerts printed in the CLI and in alerts.log
   - Faster startup of Slips
+  - Add a logstash configuration file to allow exporting slips alerts.
   - Fix false positive not valid yet SSL alerts
   - Add support for malicious SSL feeds
   - Support blacklisting IP ranges taken from TI feeds.
 
- 
 * Kalipso
   - Fix Kalipso in docker issue
 
