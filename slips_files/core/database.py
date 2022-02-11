@@ -189,6 +189,19 @@ class Database(object):
             self.outputqueue.put('00|database|{}'.format(type(inst)))
             self.outputqueue.put('00|database|{}'.format(inst))
 
+    def add_user_agent_to_profile(self, profileid, user_agent: str):
+        """
+        Used to associate this profile with it's used user_agent
+        """
+        self.r.hmset(profileid, {'User-agent': user_agent})
+
+    def get_user_agent_from_profile(self, profileid) -> str:
+        """
+        Returns user agent used by a certain profile or None
+        """
+        user_agent = self.r.hmget(profileid, 'User-agent')[0]
+        return user_agent
+
 
 
     def search_for_profile_with_the_same_MAC(self, profileid, MAC_address):
