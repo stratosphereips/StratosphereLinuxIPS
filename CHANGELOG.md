@@ -7,7 +7,9 @@
   - Faster startup of Slips
   - Fix false positive not valid yet SSL alerts
   - Add support for malicious SSL feeds
+  - Support blacklisting IP ranges taken from TI feeds.
 
+ 
 * Kalipso
   - Fix Kalipso in docker issue
 
