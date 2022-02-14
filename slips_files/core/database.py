@@ -1759,7 +1759,8 @@ class Database(object):
         The profileid is the main profile that this flow is related too.
         """
         summaryState = __database__.getFinalStateFromFlags(state, pkts)
-        data = {'ts': stime, 'dur': '0',
+        data = {'ts': stime,
+            'dur': dur,
             'saddr': saddr,
             'sport': sport,
             'daddr': daddr,

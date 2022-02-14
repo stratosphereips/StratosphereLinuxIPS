@@ -669,8 +669,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dur'] = float(line[8])
             except (IndexError, ValueError):
                 self.column_values['dur'] = 0
-            self.column_values['endtime'] = str(self.column_values['starttime']) + str(timedelta(
-                seconds=self.column_values['dur']))
+            self.column_values['endtime'] = str(self.column_values['starttime']) + str(timedelta(seconds=self.column_values['dur']))
             self.column_values['proto'] = line[6]
             try:
                 self.column_values['appproto'] = line[7]
@@ -1057,7 +1056,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values['type'] = ''
 
         # to set the default value to '' if ts isn't found
-        ts = line.get('ts','')
+        ts = line.get('ts',False)
         if ts:
             self.column_values['starttime'] = self.get_time(ts)
         else:
@@ -1075,10 +1074,10 @@ class ProfilerProcess(multiprocessing.Process):
             # 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8',
             # 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
 
-            self.column_values = {
+            self.column_values.update({
                 'type' :  'conn',
                 'dur': float(line.get('duration',0)),
-                'endtime' : str(self.column_values['starttime']) + str(timedelta(seconds=self.column_values['dur'])),
+                'endtime' : str(self.column_values['starttime']) + str(timedelta(seconds=float(line.get('duration',0)))),
                 'proto' : line['proto'],
                 'appproto' : line.get('service',''),
                 'sport' : line.get('id.orig_p',''),
@@ -1089,21 +1088,22 @@ class ProfilerProcess(multiprocessing.Process):
                 'dpkts' : line.get('resp_pkts',0),
                 'sbytes' : line.get('orig_bytes',0),
                 'dbytes' : line.get('resp_bytes',0),
-                'pkts' : self.column_values['spkts'] + self.column_values['dpkts'],
-                'bytes' : self.column_values['sbytes'] + self.column_values['dbytes'],
-                'state_hist' : line.get('history',self.column_values['state']),
+                'pkts' : line.get('orig_bytes',0) + line.get('resp_pkts',0),
+                'bytes' :  line.get('orig_bytes',0) + line.get('resp_bytes',0),
+                'state_hist' : line.get('history', line.get('conn_state','')),
                 'smac' : line.get('orig_l2_addr',''),
-                'dmac' : line.get('resp_l2_addr','')}
+                'dmac' : line.get('resp_l2_addr','')})
 
         elif 'dns' in file_type:
             #{"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
-            self.column_values = {'type' : 'dns',
+            self.column_values.update({'type' : 'dns',
                                 'query' : line.get('query',''),
                                 'qclass_name' : line.get('qclass_name',''),
                                 'qtype_name' : line.get('qtype_name',''),
                                 'rcode_name' : line.get('rcode_name',''),
                                 'answers' : line.get('answers',''),
-                                'TTLs' : line.get('TTLs','')}
+                                'TTLs' : line.get('TTLs','')})
+
             if type(self.column_values['answers']) == str:
                 # If the answer is only 1, Zeek gives a string
                 # so convert to a list
@@ -1111,7 +1111,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         elif 'http' in  file_type:
             # {"ts":158.957403,"uid":"CnNLbE2dyfy5KyqEhh","id.orig_h":"10.0.2.105","id.orig_p":49158,"id.resp_h":"64.182.208.181","id.resp_p":80,"trans_depth":1,"method":"GET","host":"icanhazip.com","uri":"/","version":"1.1","user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.38 (KHTML, like Gecko) Chrome/45.0.2456.99 Safari/537.38","request_body_len":0,"response_body_len":13,"status_code":200,"status_msg":"OK","tags":[],"resp_fuids":["FwraVxIOACcjkaGi3"],"resp_mime_types":["text/plain"]}
-            self.column_values = {'type' : 'http',
+            self.column_values.update({'type' : 'http',
                  'method' : line.get('method',''),
                  'host' : line.get('host',''),
                  'uri' : line.get('uri',''),
@@ -1122,12 +1122,12 @@ class ProfilerProcess(multiprocessing.Process):
                  'status_code' : line.get('status_code',''),
                  'status_msg' : line.get('status_msg',''),
                  'resp_mime_types' : line.get('resp_mime_types',''),
-                 'resp_fuids' : line.get('resp_fuids','')}
+                 'resp_fuids' : line.get('resp_fuids','')})
 
         elif 'ssl' in file_type:
             # {"ts":12087.045499,"uid":"CdoFDp4iW79I5ZmsT7","id.orig_h":"10.0.2.105","id.orig_p":49704,"id.resp_h":"195.211.240.166","id.resp_p":443,"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
             # {"ts":1382354909.915615,"uid":"C7W6ZA4vI8FxJ9J0bh","id.orig_h":"147.32.83.53","id.orig_p":36567,"id.resp_h":"195.113.214.241","id.resp_p":443,"version":"TLSv12","cipher":"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA","curve":"secp256r1","server_name":"id.google.com.ar","resumed":false,"established":true,"cert_chain_fuids":["FnomJz1vghKIOHtytf","FSvQff1KsaDkRtKXo4","Fif2PF48bytqq6xMDb"],"client_cert_chain_fuids":[],"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
-            self.column_values = {'type' :'ssl',
+            self.column_values.update({'type' :'ssl',
                  'sslversion' : line.get('version',''),
                  'sport' : line.get('id.orig_p',','),
                  'dport' : line.get('id.resp_p',','),
@@ -1142,10 +1142,10 @@ class ProfilerProcess(multiprocessing.Process):
                  'curve' : line.get('curve',''),
                  'server_name' : line.get('server_name',''),
                  'ja3' : line.get('ja3',''),
-                 'ja3s' : line.get('ja3s','')}
+                 'ja3s' : line.get('ja3s','')})
 
         elif 'ssh' in file_type:
-            self.column_values = {
+            self.column_values.update({
                 'type': 'ssh',
                 'version': line.get('version',''),
                 'auth_success': line.get('auth_success',''),
@@ -1157,76 +1157,76 @@ class ProfilerProcess(multiprocessing.Process):
                 'compression_alg': line.get('compression_alg',''),
                 'kex_alg': line.get('kex_alg',''),
                 'host_key_alg': line.get('host_key_alg',''),
-                'host_key': line.get('host_key','')}
+                'host_key': line.get('host_key','')})
 
         elif 'irc' in file_type:
-            self.column_values['type'] = 'irc'
+            self.column_values.update({'type': 'irc'})
         elif 'long' in file_type:
-            self.column_values['type'] = 'long'
+            self.column_values.update({'type': 'long'})
         elif 'dhcp' in file_type:
-            self.column_values = {
+            self.column_values.update({
                 'type' :  'dhcp',
                 'client_addr' : line.get('client_addr',''),
                 'server_addr' : line.get('server_addr',''),
                 'host_name' : line.get('host_name',''),
                 'mac' : line.get('mac',''), # this is the client mac
-                'saddr' : self.column_values['client_addr'],
-                'daddr' : self.column_values['server_addr']}
+                'saddr' : line.get('client_addr',''),
+                'daddr' : line.get('server_addr','')})
 
             # self.column_values['domain'] = line.get('domain','')
             # self.column_values['assigned_addr'] = line.get('assigned_addr','')
 
              # Some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log use the mac address instead
             if (self.column_values['saddr'] == '' and self.column_values['daddr'] == ''
-                and self.column_values.get('mac', False) ):
-                self.column_values.update({'saddr' : self.column_values['mac']})
+                and line.get('mac',False) ):
+                self.column_values.update({'saddr' : line.get('mac','')})
 
         elif 'dce_rpc' in file_type:
-            self.column_values['type'] = 'dce_rpc'
+            self.column_values.update({'type': 'dce_rpc'})
         elif 'dnp3' in file_type:
-            self.column_values['type'] = 'dnp3'
+            self.column_values.update({'type': 'dnp3'})
         elif 'ftp' in file_type:
-            self.column_values['type'] = 'ftp'
-            self.column_values['used_port'] = line.get("data_channel.resp_p",False)
-            #todo do the same in zeek tabs function
+            self.column_values.update({
+                'type': 'ftp',
+                'used_port': line.get("data_channel.resp_p",False)})
 
         elif 'kerberos' in file_type:
-            self.column_values['type'] = 'kerberos'
+            self.column_values.update({'type':'kerberos'})
         elif 'mysql' in file_type:
-            self.column_values['type'] = 'mysql'
+            self.column_values.update({'type': 'mysql'})
         elif 'modbus' in file_type:
-            self.column_values['type'] = 'modbus'
+            self.column_values.update({'type': 'modbus'})
         elif 'ntlm' in file_type:
-            self.column_values['type'] = 'ntlm'
+            self.column_values.update({'type': 'ntlm'})
         elif 'rdp' in file_type:
-            self.column_values['type'] = 'rdp'
+            self.column_values.update({'type': 'rdp'})
         elif 'sip' in file_type:
-            self.column_values['type'] = 'sip'
+            self.column_values.update({'type': 'sip'})
         elif 'smb_cmd' in file_type:
-            self.column_values['type'] = 'smb_cmd'
+            self.column_values.update({'type': 'smb_cmd'})
         elif 'smb_files' in file_type:
-            self.column_values['type'] = 'smb_files'
+            self.column_values.update({'type': 'smb_files'})
         elif 'smb_mapping' in file_type:
-            self.column_values['type'] = 'smb_mapping'
+            self.column_values.update({'type': 'smb_mapping'})
         elif 'smtp' in file_type:
-            self.column_values['type'] = 'smtp'
+            self.column_values.update({'type': 'smtp'})
         elif 'socks' in file_type:
-            self.column_values['type'] = 'socks'
+            self.column_values.update({'type': 'socks'})
         elif 'syslog' in file_type:
-            self.column_values['type'] = 'syslog'
+            self.column_values.update({'type': 'syslog'})
         elif 'tunnel' in file_type:
-            self.column_values['type'] = 'tunnel'
+            self.column_values.update({'type': 'tunnel'})
         elif 'notice' in file_type:
             """ Parse the fields we're interested in in the notice.log file """
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
-            self.column_values = {'type' : 'notice',
+            self.column_values.update({'type' : 'notice',
                                 'sport' : line.get('id.orig_p', ''),
                                 'dport' : line.get('id.resp_p', ''),
                                 # self.column_values['scanned_ip'] = line.get('dst', '')
                                 'note' : line.get('note', ''),
                                 'msg' : line.get('msg', ''), # we,'re looking for self signed certs in this field
                                 'scanned_port' : line.get('p', ''),
-                                'scanning_ip' : line.get('src', '')}
+                                'scanning_ip' : line.get('src', '')})
 
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
             if self.column_values['saddr'] == '' :
@@ -1238,7 +1238,7 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'files' in file_type:
             """ Parse the fields we're interested in in the files.log file """
             # the slash before files to distinguish between 'files' in the dir name and file.log
-            self.column_values = {'type' :'files',
+            self.column_values.update({'type' :'files',
                                 'uid' : line.get('conn_uids',[''])[0],
                                 'saddr' : line.get('tx_hosts',[''])[0],
                                 'daddr' : line.get('rx_hosts',[''])[0],
@@ -1247,28 +1247,26 @@ class ProfilerProcess(multiprocessing.Process):
                                 # used for detecting ssl certs
                                 'source' : line.get('source', ''),
                                 'analyzers' : line.get('analyzers', ''),
-                                'sha1' : line.get('sha1', '')}
+                                'sha1' : line.get('sha1', '')})
 
             #todo process zeek tabs files.log
         elif 'arp' in file_type:
-            self.column_values = {'type' : 'arp',
+            self.column_values.update({'type' : 'arp',
                                 'src_mac' : line.get('src_mac', ''),
                                 'dst_mac' : line.get('dst_mac', ''),
                                 'saddr' : line.get('orig_h',''),
                                 'daddr' : line.get('resp_h',''),
                                 'dst_hw' : line.get('resp_hw',''),
                                 'src_hw' : line.get('orig_hw',''),
-                                'operation' : line.get('operation','') }
+                                'operation' : line.get('operation','') })
         elif 'known_services' in file_type:
-            self.column_values = {'type' : 'known_services',
+            self.column_values.update({'type' : 'known_services',
                                 'saddr' : line.get('host', ''),
                                 # this file doesn't have a daddr field, but we need it in add_flow_to_profile
                                 'daddr' : '0.0.0.0',
                                 'port_num' : line.get('port_num', ''),
                                 'port_proto' : line.get('port_proto', ''),
-                                'service' : line.get('service', '')}
-
-
+                                'service' : line.get('service', '')})
         else:
             return False
         return True
@@ -1527,8 +1525,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.column_values['endtime'] = False
 
                     try:
-                        self.column_values['dur'] = (
-                            self.column_values['endtime'] - self.column_values['starttime']).total_seconds()
+                        self.column_values['dur'] = (self.column_values['endtime'] - self.column_values['starttime']).total_seconds()
                     except (KeyError, TypeError):
                         self.column_values['dur'] = 0
                     try:
@@ -1952,13 +1949,14 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Define which type of flows we are going to process
 
-            if not self.column_values or self.column_values['starttime'] is None:
-                # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
-                return True
-
-            if self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
+            if not self.column_values:
+                    return True
+            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
                                                     'dhcp','files', 'known_services', 'arp','ftp'):
                 # Not a supported type
+                return True
+            elif self.column_values['starttime'] is None:
+                # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
 
 
@@ -2287,19 +2285,19 @@ class ProfilerProcess(multiprocessing.Process):
             # Check if the ip received (src_ip) is part of our home network. We only crate profiles for our home network
             if self.home_net and saddr_as_obj in self.home_net:
                 # Its in our Home network
-
+    
                 # The steps for adding a flow in a profile should be
                 # 1. Add the profile to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
                 # The width is unique for all the timewindow in this profile.
                 # Also we only need to pass the width for registration in the DB. Nothing operational
                 __database__.addProfile(profileid, starttime, self.width)
-
+    
                 # 3. For this profile, find the id in the database of the tw where the flow belongs.
                 twid = self.get_timewindow(starttime, profileid)
-
+    
             elif self.home_net and saddr_as_obj not in self.home_net:
                 # The src ip is not in our home net
-
+    
                 # Check that the dst IP is in our home net. Like the flow is 'going' to it.
                 if daddr_as_obj in self.home_net:
                     self.print("Flow with dstip in homenet: srcip {}, dstip {}".format(saddr_as_obj, daddr_as_obj), 0, 7)
@@ -2328,18 +2326,18 @@ class ProfilerProcess(multiprocessing.Process):
                     return False
             elif not self.home_net:
                 # We don't have a home net, so create profiles for everyone. 
-
+    
                 # Add the profile for the srcip to the DB. If it already exists, nothing happens. So now profileid is the id of the profile to work with.
                 __database__.addProfile(profileid, starttime, self.width)
                 # Add the profile for the dstip to the DB. If it already exists, nothing happens. So now rev_profileid is the id of the profile to work with. 
                 rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
                 __database__.addProfile(rev_profileid, starttime, self.width)
-
+    
                 # For the profile from the srcip , find the id in the database of the tw where the flow belongs.
                 twid = self.get_timewindow(starttime, profileid)
                 # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
                 rev_twid = self.get_timewindow(starttime, rev_profileid)
-
+    
             # In which analysis mode are we?
             # Mode 'out'
             if self.analysis_direction == 'out':
@@ -2347,7 +2345,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # If we have a home net and the flow comes from it, or if we don't have a home net and we are in out out.
                 if (self.home_net and saddr_as_obj in self.home_net) or not self.home_net:
                     store_features_going_out(profileid, twid, starttime)
-
+    
             # Mode 'all'
             elif self.analysis_direction == 'all':
                 # Take care of both the stuff going out and in. In case the profile is for the srcip and for the dstip
