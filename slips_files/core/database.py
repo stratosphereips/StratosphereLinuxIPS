@@ -574,7 +574,7 @@ class Database(object):
         # Get internal time
         sit = self.getSlipsInternalTime()
         # for each modified profile
-        modification_time = float(sit) - self.width
+        # modification_time = float(sit) - self.width
         # To test the time
         modification_time = float(sit) - 20
         profiles_tws_to_close = self.r.zrangebyscore('ModifiedTW', 0, modification_time, withscores=True)
@@ -780,7 +780,7 @@ class Database(object):
         try:
             self.print('Add_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(profileid, twid, tupleid, data_tuple), 3,0)
             # Get all the InTuples or OutTuples for this profileid in this TW
-            profileid_twid = profileid + self.separator + twid
+            profileid_twid = f'{profileid}{self.separator}{twid}'
             tuples = self.r.hget(profileid_twid, direction)
             # Separate the symbold to add and the previous data
             (symbol_to_add, previous_two_timestamps) = data_tuple
@@ -792,14 +792,17 @@ class Database(object):
             try:
                 stored_tuple = tuples[tupleid]
                 # Disasemble the input
-                self.print('Not the first time for tuple {} as an {} for {} in TW {}. Add the symbol: {}. Store previous_times: {}. Prev Data: {}'.format(tupleid, direction, profileid, twid, symbol_to_add, previous_two_timestamps, tuples), 3,0)
+                self.print('Not the first time for tuple {} as an {} for {} in TW {}. '
+                           'Add the symbol: {}. Store previous_times: {}. Prev Data: {}'.format(
+                    tupleid, direction, profileid, twid, symbol_to_add, previous_two_timestamps, tuples), 3,0)
                 # Get the last symbols of letters in the DB
                 prev_symbols = tuples[tupleid][0]
                 # Add it to form the string of letters
-                new_symbol = prev_symbols + symbol_to_add
+                new_symbol = f'{prev_symbols}{symbol_to_add}'
                 # Bundle the data together
                 new_data = (new_symbol, previous_two_timestamps)
-                # analyze behavioral model with lstm model if the length is divided by 3 - so we send when there is 3 more characters added
+                # analyze behavioral model with lstm model if the length is divided by 3 -
+                # so we send when there is 3 more characters added
                 if len(new_symbol) % 3 == 0:
                     to_send = {
                                 'new_symbol':new_symbol,
@@ -1754,52 +1757,50 @@ class Database(object):
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
         """
-        data = {}
-        # data['uid'] = uid
-        data['ts'] = stime
-        data['dur'] = dur
-        data['saddr'] = saddr
-        data['sport'] = sport
-        data['daddr'] = daddr
-        data['dport'] = dport
-        data['proto'] = proto
-        # Store the interpreted state, not the raw one
         summaryState = __database__.getFinalStateFromFlags(state, pkts)
-        data['origstate'] = state
-        data['state'] = summaryState
-        data['pkts'] = pkts
-        data['allbytes'] = allbytes
-        data['spkts'] = spkts
-        data['sbytes'] = sbytes
-        data['appproto'] = appproto
-        data['label'] = label
-        data['flow_type'] = flow_type
-        # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
-        data['module_labels'] = {}
+        data = {'ts': stime, 'dur': '0',
+            'saddr': saddr,
+            'sport': sport,
+            'daddr': daddr,
+            'dport': dport,
+            'proto': proto,
+            'origstate': state,
+            'state': summaryState,
+            'pkts': pkts,
+            'allbytes': allbytes,
+            'spkts': spkts, 'sbytes': sbytes,
+            'appproto': appproto,
+            'label': label,
+            'flow_type': flow_type,
+            'module_labels': {}}
+         # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
+
         # Convert to json string
         data = json.dumps(data)
-        # Store in the hash 10.0.0.1_timewindow1, a key uid, with data
-        value = self.r.hset(profileid + self.separator + twid + self.separator + 'flows', uid, data)
-        if value:
-            # The key was not there before. So this flow is not repeated
-            # Store the label in our uniq set, and increment it by 1
-            if label:
-                self.r.zincrby('labels', 1, label)
-            # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
-            flow = self.get_flow(profileid, twid, uid)
-            # Get the dictionary and convert to json string
-            flow = json.dumps(flow)
-            # Prepare the data to publish.
-            to_send = {}
-            to_send['profileid'] = profileid
-            to_send['twid'] = twid
-            to_send['flow'] = flow
-            to_send['stime'] = stime
-            to_send = json.dumps(to_send)
-            self.publish('new_flow', to_send)
-            return True
-        # means repeated flow
-        return False
+        # Store in the hash 10.0.0.1_timewindow1_flows, a key uid, with data
+        value = self.r.hset(f'{profileid}{self.separator}{twid}{self.separator}flows', uid, data)
+        if not value:
+            # duplicate flow
+            return False
+
+        # The key was not there before. So this flow is not repeated
+        # Store the label in our uniq set, and increment it by 1
+        if label:
+            self.r.zincrby('labels', 1, label)
+        # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
+        flow = self.get_flow(profileid, twid, uid)
+        # Get the dictionary and convert to json string
+        flow = json.dumps(flow)
+        # Prepare the data to publish.
+        to_send = {}
+        to_send['profileid'] = profileid
+        to_send['twid'] = twid
+        to_send['flow'] = flow
+        to_send['stime'] = stime
+        to_send = json.dumps(to_send)
+        self.publish('new_flow', to_send)
+        return True
+
 
     def add_out_ssl(self, profileid, twid, stime, daddr_as_obj, dport, flowtype, uid,
                     version, cipher, resumed, established, cert_chain_fuids,
