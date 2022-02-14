@@ -127,7 +127,10 @@ class Module(Module, multiprocessing.Process):
             return True
 
         url = f'http://useragentstring.com/?uas={user_agent}&getJSON=all'
-        response = requests.get(url)
+        try:
+            response = requests.get(url)
+        except requests.exceptions.ConnectionError:
+            return False
         if response.status_code != 200:
             return False
 
