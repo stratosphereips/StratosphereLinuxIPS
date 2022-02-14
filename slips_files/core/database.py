@@ -624,6 +624,7 @@ class Database(object):
                 type_host_key = 'Dst'
             elif role == 'Server':
                 type_host_key = 'Src'
+
             #############
             # Store the Dst as IP address and notify in the channel
             # We send the obj but when accessed as str, it is automatically
@@ -1810,103 +1811,110 @@ class Database(object):
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
-        data = {}
-        data['uid'] = uid
-        data['type'] = flowtype
-        data['version'] = version
-        data['cipher'] = cipher
-        data['resumed'] = resumed
-        data['established'] = established
-        data['cert_chain_fuids'] = cert_chain_fuids
-        data['client_cert_chain_fuids'] = client_cert_chain_fuids
-        data['subject'] = subject
-        data['issuer'] = issuer
-        data['validation_status'] = validation_status
-        data['curve'] = curve
-        data['server_name'] = server_name
-        data['daddr'] = str(daddr_as_obj)
-        data['dport'] = dport
-        data['stime'] = stime
-        data['ja3'] = ja3
-        data['ja3s'] = ja3s
+        data = {
+            'uid' : uid,
+            'type' : flowtype,
+            'version' : version,
+            'cipher' : cipher,
+            'resumed' : resumed,
+            'established' : established,
+            'cert_chain_fuids' : cert_chain_fuids,
+            'client_cert_chain_fuids' : client_cert_chain_fuids,
+            'subject' : subject,
+            'issuer' : issuer,
+            'validation_status' : validation_status,
+            'curve' : curve,
+            'server_name' : server_name,
+            'daddr' : str(daddr_as_obj),
+            'dport' : dport,
+            'stime' : stime,
+            'ja3' : ja3,
+            'ja3s' : ja3s}
         # Convert to json string
         data = json.dumps(data)
-        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
-        to_send = {}
-        to_send['profileid'] = profileid
-        to_send['twid'] = twid
-        to_send['flow'] = data
-        to_send['stime'] = stime
+        self.r.hset(f'{profileid}{self.separator}{twid}{self.separator}altflows', uid, data)
+        to_send = {
+            'profileid' : profileid,
+            'twid' : twid,
+            'flow' : data,
+            'stime' : stime}
         to_send = json.dumps(to_send)
         self.publish('new_ssl', to_send)
         self.print('Adding SSL flow to DB: {}'.format(data), 3, 0)
         # Check if the server_name (SNI) is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         # If server_name is not empty, set in the IPsInfo and send to TI
-        if server_name:
-            # Save new server name in the IPInfo. There might be several server_name per IP.
-            ipdata = self.getIPData(str(daddr_as_obj))
-            if ipdata:
-                sni_ipdata = ipdata.get('SNI', [])
-            else:
-                sni_ipdata = []
-            SNI_port = {'server_name':server_name, 'dport':dport}
-            # We do not want any duplicates.
-            if SNI_port not in sni_ipdata:
-                # Verify that the SNI is equal to any of the domains in the DNS resolution
-                # only add this SNI to our db if it has a DNS resolution
-                dns_resolutions = self.r.hgetall('DNSresolution')
-                if dns_resolutions:
-                    # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
-                    for ip, resolution in dns_resolutions.items():
-                        resolution = json.loads(resolution)
-                        if SNI_port['server_name'] in resolution['domains']:
-                            # add SNI to our db as it has a DNS resolution
-                            sni_ipdata.append(SNI_port)
-                            self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
-                            break
-            # We are giving only new server_name to the threat_intelligence module.
-            data_to_send = {
-                'server_name' : server_name,
-                'profileid' : str(profileid),
-                'twid': str(twid),
-                'stime': stime,
-                'uid':uid
-            }
-            data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence', data_to_send)
+        if not server_name: return False
 
-    def add_out_http(self, profileid, twid, stime, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids):
+        # Save new server name in the IPInfo. There might be several server_name per IP.
+        ipdata = self.getIPData(str(daddr_as_obj))
+        if ipdata:
+            sni_ipdata = ipdata.get('SNI', [])
+        else:
+            sni_ipdata = []
+        SNI_port = {'server_name':server_name, 'dport':dport}
+        # We do not want any duplicates.
+        if SNI_port not in sni_ipdata:
+            # Verify that the SNI is equal to any of the domains in the DNS resolution
+            # only add this SNI to our db if it has a DNS resolution
+            dns_resolutions = self.r.hgetall('DNSresolution')
+            if dns_resolutions:
+                # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
+                for ip, resolution in dns_resolutions.items():
+                    resolution = json.loads(resolution)
+                    if SNI_port['server_name'] in resolution['domains']:
+                        # add SNI to our db as it has a DNS resolution
+                        sni_ipdata.append(SNI_port)
+                        self.setInfoForIPs(str(daddr_as_obj), {'SNI':sni_ipdata})
+                        break
+        # We are giving only new server_name to the threat_intelligence module.
+        data_to_send = {
+            'server_name' : server_name,
+            'profileid' : str(profileid),
+            'twid': str(twid),
+            'stime': stime,
+            'uid':uid
+        }
+        data_to_send = json.dumps(data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
+
+    def add_out_http(self, profileid, twid, stime, flowtype, uid,
+                     method, host, uri, version, user_agent,
+                     request_body_len, response_body_len,
+                     status_code, status_msg, resp_mime_types,
+                     resp_fuids):
         """
         Store in the DB a http request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
-        data = {}
-        data['uid'] = uid
-        data['type'] = flowtype
-        data['method'] = method
-        data['host'] = host
-        data['uri'] = uri
-        data['version'] = version
-        data['user_agent'] = user_agent
-        data['request_body_len'] = request_body_len
-        data['response_body_len'] = response_body_len
-        data['status_code'] = status_code
-        data['status_msg'] = status_msg
-        data['resp_mime_types'] = resp_mime_types
-        data['resp_fuids'] = resp_fuids
-        data['stime'] = stime
+        data = {
+            'uid' : uid,
+            'type' : flowtype,
+            'method' : method,
+            'host' : host,
+            'uri' : uri,
+            'version' : version,
+            'user_agent' : user_agent,
+            'request_body_len' : request_body_len,
+            'response_body_len' : response_body_len,
+            'status_code' : status_code,
+            'status_msg' : status_msg,
+            'resp_mime_types' : resp_mime_types,
+            'resp_fuids' : resp_fuids,
+            'stime' : stime}
         # Convert to json string
         data = json.dumps(data)
-        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
-        to_send = {}
-        to_send['profileid'] = profileid
-        to_send['twid'] = twid
-        to_send['flow'] = data
-        to_send['stime'] = stime
+
+        self.r.hset(f'{profileid}{ self.separator }{twid}{ self.separator }altflows', uid, data)
+        to_send = {
+            'profileid' : profileid,
+            'twid' : twid,
+            'flow' : data,
+            'stime' : stime}
         to_send = json.dumps(to_send)
         self.publish('new_http', to_send)
         self.publish('new_url', to_send)
+
         self.print('Adding HTTP flow to DB: {}'.format(data), 3, 0)
         # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         data_to_send = {
@@ -1919,7 +1927,10 @@ class Database(object):
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence', data_to_send)
 
-    def add_out_ssh(self, profileid, twid, stime, flowtype, uid, ssh_version, auth_attempts, auth_success, client, server, cipher_alg, mac_alg, compression_alg, kex_alg, host_key_alg, host_key):
+    def add_out_ssh(self, profileid, twid, stime, flowtype,
+                    uid, ssh_version, auth_attempts, auth_success,
+                    client, server, cipher_alg, mac_alg, compression_alg,
+                    kex_alg, host_key_alg, host_key):
         """
         Store in the DB a SSH request
         All the type of flows that are not netflows are stored in a
@@ -1928,32 +1939,32 @@ class Database(object):
         other type of info is related to that uid
         """
         #  {"client":"SSH-2.0-OpenSSH_8.1","server":"SSH-2.0-OpenSSH_7.5p1 Debian-5","cipher_alg":"chacha20-pol y1305@openssh.com","mac_alg":"umac-64-etm@openssh.com","compression_alg":"zlib@openssh.com","kex_alg":"curve25519-sha256","host_key_alg":"ecdsa-sha2-nistp256","host_key":"de:04:98:42:1e:2a:06:86:5b:f0:5b:e3:65:9f:9d:aa"}
-        data = {}
-        data['uid'] = uid
-        data['type'] = flowtype
-        data['version'] = ssh_version
-        data['auth_attempts'] = auth_attempts
-        data['auth_success'] = auth_success
-        data['client'] = client
-        data['server'] = server
-        data['cipher_alg'] = cipher_alg
-        data['mac_alg'] = mac_alg
-        data['compression_alg'] = compression_alg
-        data['kex_alg'] = kex_alg
-        data['host_key_alg'] = host_key_alg
-        data['host_key'] = host_key
-        data['stime'] = stime
+        data = {
+            'uid' : uid,
+            'type' : flowtype,
+            'version' : ssh_version,
+            'auth_attempts' : auth_attempts,
+            'auth_success' : auth_success,
+            'client' : client,
+            'server' : server,
+            'cipher_alg' : cipher_alg,
+            'mac_alg' : mac_alg,
+            'compression_alg' : compression_alg,
+            'kex_alg' : kex_alg,
+            'host_key_alg' : host_key_alg,
+            'host_key' : host_key,
+            'stime' : stime}
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
-        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
+        self.r.hset(f'{profileid}{self.separator}{twid}{self.separator}altflows', uid, data)
         # Publish the new dns received
-        to_send = {}
-        to_send['profileid'] = profileid
-        to_send['twid'] = twid
-        to_send['flow'] = data
-        to_send['stime'] = stime
-        to_send['uid'] = uid
+        to_send = {
+            'profileid' : profileid,
+            'twid' : twid,
+            'flow' : data,
+            'stime' : stime,
+            'uid' : uid}
         to_send = json.dumps(to_send)
         # publish a dns with its flow
         self.publish('new_ssh', to_send)
@@ -1973,13 +1984,14 @@ class Database(object):
             'stime' : stime
         }
         data = json.dumps(data) # this is going to be sent insidethe to_send dict
-        to_send = {}
-        to_send['profileid'] = profileid
-        to_send['twid'] = twid
-        to_send['flow'] = data
-        to_send['stime'] = stime
-        to_send['uid'] = uid
+        to_send = {
+             'profileid' : profileid,
+             'twid' : twid,
+             'flow' : data,
+             'stime' : stime,
+             'uid' : uid}
         to_send = json.dumps(to_send)
+        self.r.hset(f'{profileid}{self.separator}{twid}{self.separator}altflows', uid, data)
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 3, 0)
 
@@ -1989,16 +2001,16 @@ class Database(object):
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
-        data = {}
-        data['uid'] = uid
-        data['type'] = flowtype
-        data['query'] = query
-        data['qclass_name'] = qclass_name
-        data['qtype_name'] = qtype_name
-        data['rcode_name'] = rcode_name
-        data['answers'] = answers
-        data['ttls'] = ttls
-        data['stime'] = stime
+        data = {
+            'uid' : uid,
+            'type' : flowtype,
+            'query' : query,
+            'qclass_name' : qclass_name,
+            'qtype_name' : qtype_name,
+            'rcode_name' : rcode_name,
+            'answers' : answers,
+            'ttls' : ttls,
+            'stime' : stime}
 
         # Add DNS resolution to the db if there are answers for the query
         if answers:
@@ -2006,15 +2018,16 @@ class Database(object):
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
-        self.r.hset(profileid + self.separator + twid + self.separator + 'altflows', uid, data)
+        self.r.hset(f'{profileid}{self.separator}{twid}{self.separator}altflows', uid, data)
         # Publish the new dns received
-        to_send = {}
-        to_send['profileid'] = profileid
-        to_send['twid'] = twid
-        to_send['flow'] = data
-        to_send['stime'] = stime
-        to_send['uid'] = uid
-        to_send['rcode_name'] = rcode_name
+        to_send = {
+        'profileid': profileid,
+        'twid': twid,
+        'flow': data,
+        'stime': stime,
+        'uid': uid,
+        'rcode_name': rcode_name}
+
         to_send = json.dumps(to_send)
         #publish a dns with its flow
         self.publish('new_dns_flow', to_send)
