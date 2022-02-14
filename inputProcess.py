@@ -454,7 +454,7 @@ class InputProcess(multiprocessing.Process):
             # 'local' is removed from the command because it loads policy/protocols/ssl/expiring-certs and
             # and policy/protocols/ssl/validate-certs and they have conflicts with our own zeek-scripts/expiring-certs and validate-certs
             # we have our own copy pf local.zeek in __load__.zeek
-            command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins local tcp_attempt_delay=1min -f {self.packet_filter} {zeek_scripts_dir} '
+            command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins tcp_attempt_delay=1min -f {self.packet_filter} {zeek_scripts_dir} '
             self.print(f'Zeek command: {command}', 3, 0)
             # Run zeek.
             os.system(command)
