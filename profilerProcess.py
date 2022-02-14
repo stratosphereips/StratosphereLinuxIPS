@@ -169,19 +169,6 @@ class ProfilerProcess(multiprocessing.Process):
         whitelisted_orgs = __database__.get_whitelist('organizations')
         whitelisted_mac = __database__.get_whitelist('mac')
 
-        # if any of the dicts arent there in the db, insitialize it
-        if not whitelisted_IPs:
-            whitelisted_IPs = {}
-
-        if not whitelisted_domains:
-            whitelisted_domains = {}
-
-        if not whitelisted_orgs:
-            whitelisted_orgs = {}
-
-        if not whitelisted_mac:
-            whitelisted_mac = {}
-
         try:
             with open(self.whitelist_path) as whitelist:
                 # Process lines after comments
@@ -319,6 +306,7 @@ class ProfilerProcess(multiprocessing.Process):
                     org_asn.append(line)
                     line = f.readline()
             return org_asn
+
         except (FileNotFoundError, IOError):
             # theres no slips_files/organizations_info/{org}_asn for this org
             # see if the org has asn cached in our db
@@ -440,6 +428,7 @@ class ProfilerProcess(multiprocessing.Process):
                 except KeyError:
                     self.input_type = 'zeek'
                 return self.input_type
+
             else:
                 # data is a str
                 try:
@@ -484,24 +473,24 @@ class ProfilerProcess(multiprocessing.Process):
         """ Define the columns for Argus and Zeek-tabs from the line received """
         # These are the indexes for later fast processing
         line = new_line['data']
-        self.column_idx = {}
-        self.column_idx['starttime'] = False
-        self.column_idx['endtime'] = False
-        self.column_idx['dur'] = False
-        self.column_idx['proto'] = False
-        self.column_idx['appproto'] = False
-        self.column_idx['saddr'] = False
-        self.column_idx['sport'] = False
-        self.column_idx['dir'] = False
-        self.column_idx['daddr'] = False
-        self.column_idx['dport'] = False
-        self.column_idx['state'] = False
-        self.column_idx['pkts'] = False
-        self.column_idx['spkts'] = False
-        self.column_idx['dpkts'] = False
-        self.column_idx['bytes'] = False
-        self.column_idx['sbytes'] = False
-        self.column_idx['dbytes'] = False
+        self.column_idx = {
+            'starttime' : False,
+            'endtime' : False,
+            'dur' : False,
+            'proto' : False,
+            'appproto' : False,
+            'saddr' : False,
+            'sport' : False,
+            'dir' : False,
+            'daddr' : False,
+            'dport' : False,
+            'state' : False,
+            'pkts' : False,
+            'spkts' : False,
+            'dpkts' : False,
+            'bytes' : False,
+            'sbytes' : False,
+            'dbytes' : False}
 
         try:
             nline = line.strip().split(self.separator)
@@ -554,28 +543,41 @@ class ProfilerProcess(multiprocessing.Process):
             # Try unix timestamp in seconds.
             datetime.fromtimestamp(float(time))
             time_format = 'unixtimestamp'
+            return time_format
         except ValueError:
-            try:
-                # Try the default time format for suricata.
-                datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f%z')
-                time_format = '%Y-%m-%dT%H:%M:%S.%f%z'
-            except ValueError:
-                # Let's try the classic time format "'%Y-%m-%d %H:%M:%S.%f'"
-                try:
-                    datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
-                    time_format = '%Y-%m-%d %H:%M:%S.%f'
-                except ValueError:
-                    try:
-                        datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
-                        time_format = '%Y-%m-%d %H:%M:%S'
-                    except ValueError:
-                        try:
-                            datetime.strptime(time, '%Y/%m/%d %H:%M:%S.%f')
-                            time_format = '%Y/%m/%d %H:%M:%S.%f'
-                        except ValueError:
-                            # We did not find the right time format.
-                            self.outputqueue.put("01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
-        return time_format
+            pass
+
+        try:
+            # Try the default time format for suricata.
+            datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f%z')
+            time_format = '%Y-%m-%dT%H:%M:%S.%f%z'
+            return time_format
+        except ValueError:
+            pass
+
+        # Let's try the classic time format "'%Y-%m-%d %H:%M:%S.%f'"
+        try:
+            datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
+            time_format = '%Y-%m-%d %H:%M:%S.%f'
+            return time_format
+        except ValueError:
+            pass
+
+        try:
+            datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
+            time_format = '%Y-%m-%d %H:%M:%S'
+            return time_format
+        except ValueError:
+            pass
+
+        try:
+            datetime.strptime(time, '%Y/%m/%d %H:%M:%S.%f')
+            time_format = '%Y/%m/%d %H:%M:%S.%f'
+            return time_format
+        except ValueError:
+            # We did not find the right time format.
+            self.outputqueue.put("01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
+
 
     def get_time(self, time: str) -> datetime:
         """
@@ -647,6 +649,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['starttime'] = self.get_time(line[0])
         except IndexError:
             self.column_values['starttime'] = ''
+
         try:
             self.column_values['uid'] = line[1]
         except IndexError:
@@ -1071,111 +1074,112 @@ class ProfilerProcess(multiprocessing.Process):
             # 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1,
             # 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8',
             # 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
-            self.column_values['type'] = 'conn'
-            try:
-                self.column_values['dur'] = float(line['duration'])
-            except KeyError:
-                self.column_values['dur'] = 0
-            self.column_values['endtime'] = str(self.column_values['starttime']) + str(timedelta(seconds=self.column_values['dur']))
-            self.column_values['proto'] = line['proto']
 
-            self.column_values['appproto'] = line.get('service','')
-            self.column_values['sport'] = line.get('id.orig_p','')
-            self.column_values['dport'] = line.get('id.resp_p','')
-            self.column_values['state'] = line.get('conn_state','')
-            self.column_values['dir'] = '->'
-            self.column_values['spkts'] = line.get('orig_pkts',0)
-            self.column_values['dpkts'] = line.get('resp_pkts',0)
-            self.column_values['sbytes'] = line.get('orig_bytes',0)
-            self.column_values['dbytes'] = line.get('resp_bytes',0)
-            self.column_values['pkts'] = self.column_values['spkts'] + self.column_values['dpkts']
-            self.column_values['bytes'] = self.column_values['sbytes'] + self.column_values['dbytes']
-            self.column_values['state_hist'] = line.get('history',self.column_values['state'])
-            self.column_values['smac'] = line.get('orig_l2_addr','')
-            self.column_values['dmac'] = line.get('resp_l2_addr','')
+            self.column_values = {
+                'type' :  'conn',
+                'dur': float(line.get('duration',0)),
+                'endtime' : str(self.column_values['starttime']) + str(timedelta(seconds=self.column_values['dur'])),
+                'proto' : line['proto'],
+                'appproto' : line.get('service',''),
+                'sport' : line.get('id.orig_p',''),
+                'dport' : line.get('id.resp_p',''),
+                'state' : line.get('conn_state',''),
+                'dir' : '->',
+                'spkts' : line.get('orig_pkts',0),
+                'dpkts' : line.get('resp_pkts',0),
+                'sbytes' : line.get('orig_bytes',0),
+                'dbytes' : line.get('resp_bytes',0),
+                'pkts' : self.column_values['spkts'] + self.column_values['dpkts'],
+                'bytes' : self.column_values['sbytes'] + self.column_values['dbytes'],
+                'state_hist' : line.get('history',self.column_values['state']),
+                'smac' : line.get('orig_l2_addr',''),
+                'dmac' : line.get('resp_l2_addr','')}
 
         elif 'dns' in file_type:
             #{"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
-            self.column_values['type'] = 'dns'
-            self.column_values['query'] = line.get('query','')
-            self.column_values['qclass_name'] = line.get('qclass_name','')
-            self.column_values['qtype_name'] = line.get('qtype_name','')
-            self.column_values['rcode_name'] = line.get('rcode_name','')
-            self.column_values['answers'] = line.get('answers','')
+            self.column_values = {'type' : 'dns',
+                                'query' : line.get('query',''),
+                                'qclass_name' : line.get('qclass_name',''),
+                                'qtype_name' : line.get('qtype_name',''),
+                                'rcode_name' : line.get('rcode_name',''),
+                                'answers' : line.get('answers',''),
+                                'TTLs' : line.get('TTLs','')}
             if type(self.column_values['answers']) == str:
                 # If the answer is only 1, Zeek gives a string
                 # so convert to a list
-                self.column_values['answers'] = [ self.column_values['answers'] ]
-            self.column_values['TTLs'] = line.get('TTLs','')
+                self.column_values.update({'answers' : [self.column_values['answers']] })
 
         elif 'http' in  file_type:
             # {"ts":158.957403,"uid":"CnNLbE2dyfy5KyqEhh","id.orig_h":"10.0.2.105","id.orig_p":49158,"id.resp_h":"64.182.208.181","id.resp_p":80,"trans_depth":1,"method":"GET","host":"icanhazip.com","uri":"/","version":"1.1","user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.38 (KHTML, like Gecko) Chrome/45.0.2456.99 Safari/537.38","request_body_len":0,"response_body_len":13,"status_code":200,"status_msg":"OK","tags":[],"resp_fuids":["FwraVxIOACcjkaGi3"],"resp_mime_types":["text/plain"]}
-            self.column_values['type'] = 'http'
-            self.column_values['method'] = line.get('method','')
-            self.column_values['host'] = line.get('host','')
-            self.column_values['uri'] = line.get('uri','')
-            self.column_values['httpversion'] = line.get('version',0)
-            self.column_values['user_agent'] = line.get('user_agent','')
-            self.column_values['request_body_len'] = line.get('request_body_len',0)
-            self.column_values['response_body_len'] = line.get('response_body_len',0)
-            self.column_values['status_code'] = line.get('status_code','')
-            self.column_values['status_msg'] = line.get('status_msg','')
-            self.column_values['resp_mime_types'] = line.get('resp_mime_types','')
-            self.column_values['resp_fuids'] = line.get('resp_fuids','')
+            self.column_values = {'type' : 'http',
+                 'method' : line.get('method',''),
+                 'host' : line.get('host',''),
+                 'uri' : line.get('uri',''),
+                 'httpversion' : line.get('version',0),
+                 'user_agent' : line.get('user_agent',''),
+                 'request_body_len' : line.get('request_body_len',0),
+                 'response_body_len' : line.get('response_body_len',0),
+                 'status_code' : line.get('status_code',''),
+                 'status_msg' : line.get('status_msg',''),
+                 'resp_mime_types' : line.get('resp_mime_types',''),
+                 'resp_fuids' : line.get('resp_fuids','')}
 
         elif 'ssl' in file_type:
             # {"ts":12087.045499,"uid":"CdoFDp4iW79I5ZmsT7","id.orig_h":"10.0.2.105","id.orig_p":49704,"id.resp_h":"195.211.240.166","id.resp_p":443,"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
             # {"ts":1382354909.915615,"uid":"C7W6ZA4vI8FxJ9J0bh","id.orig_h":"147.32.83.53","id.orig_p":36567,"id.resp_h":"195.113.214.241","id.resp_p":443,"version":"TLSv12","cipher":"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA","curve":"secp256r1","server_name":"id.google.com.ar","resumed":false,"established":true,"cert_chain_fuids":["FnomJz1vghKIOHtytf","FSvQff1KsaDkRtKXo4","Fif2PF48bytqq6xMDb"],"client_cert_chain_fuids":[],"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
-            self.column_values['type'] = 'ssl'
-            self.column_values['sslversion'] = line.get('version','')
-            self.column_values['sport'] = line.get('id.orig_p','')
-            self.column_values['dport'] = line.get('id.resp_p','')
-            self.column_values['cipher'] = line.get('cipher','')
-            self.column_values['resumed'] = line.get('resumed','')
-            self.column_values['established'] = line.get('established','')
-            self.column_values['cert_chain_fuids'] = line.get('cert_chain_fuids','')
-            self.column_values['client_cert_chain_fuids'] = line.get('client_cert_chain_fuids','')
-            self.column_values['subject'] = line.get('subject','')
-            self.column_values['issuer'] = line.get('issuer','')
-            self.column_values['validation_status'] = line.get('validation_status','')
-            self.column_values['curve'] = line.get('curve','')
-            self.column_values['server_name'] = line.get('server_name','')
-            self.column_values['ja3'] = line.get('ja3','')
-            self.column_values['ja3s'] = line.get('ja3s','')
+            self.column_values = {'type' :'ssl',
+                 'sslversion' : line.get('version',''),
+                 'sport' : line.get('id.orig_p',','),
+                 'dport' : line.get('id.resp_p',','),
+                 'cipher' : line.get('cipher',''),
+                 'resumed' : line.get('resumed',''),
+                 'established' : line.get('established',''),
+                 'cert_chain_fuids' : line.get('cert_chain_fuids',''),
+                 'client_cert_chain_fuids' : line.get('client_cert_chain_fuids',''),
+                 'subject' : line.get('subject',''),
+                 'issuer' : line.get('issuer',''),
+                 'validation_status' : line.get('validation_status',''),
+                 'curve' : line.get('curve',''),
+                 'server_name' : line.get('server_name',''),
+                 'ja3' : line.get('ja3',''),
+                 'ja3s' : line.get('ja3s','')}
 
         elif 'ssh' in file_type:
-            self.column_values['type'] = 'ssh'
-            self.column_values['version'] = line.get('version','')
-            self.column_values['auth_success'] = line.get('auth_success','')
-            self.column_values['auth_attempts'] = line.get('auth_attempts','')
-            self.column_values['client'] = line.get('client','')
-            self.column_values['server'] = line.get('server','')
-            self.column_values['cipher_alg'] = line.get('cipher_alg','')
-            self.column_values['mac_alg'] = line.get('mac_alg','')
-            self.column_values['compression_alg'] = line.get('compression_alg','')
-            self.column_values['kex_alg'] = line.get('kex_alg','')
-            self.column_values['host_key_alg'] = line.get('host_key_alg','')
-            self.column_values['host_key'] = line.get('host_key','')
+            self.column_values = {
+                'type': 'ssh',
+                'version': line.get('version',''),
+                'auth_success': line.get('auth_success',''),
+                'auth_attempts': line.get('auth_attempts',''),
+                'client': line.get('client',''),
+                'server': line.get('server',''),
+                'cipher_alg': line.get('cipher_alg',''),
+                'mac_alg': line.get('mac_alg',''),
+                'compression_alg': line.get('compression_alg',''),
+                'kex_alg': line.get('kex_alg',''),
+                'host_key_alg': line.get('host_key_alg',''),
+                'host_key': line.get('host_key','')}
 
         elif 'irc' in file_type:
             self.column_values['type'] = 'irc'
         elif 'long' in file_type:
             self.column_values['type'] = 'long'
         elif 'dhcp' in file_type:
-            self.column_values['type'] = 'dhcp'
-            self.column_values['client_addr'] = line.get('client_addr','')
-            self.column_values['server_addr'] = line.get('server_addr','')
-            self.column_values['host_name'] = line.get('host_name','')
-            self.column_values['mac'] = line.get('mac','') # this is the client mac
-            self.column_values['saddr'] = self.column_values['client_addr']
-            self.column_values['daddr'] = self.column_values['server_addr']
+            self.column_values = {
+                'type' :  'dhcp',
+                'client_addr' : line.get('client_addr',''),
+                'server_addr' : line.get('server_addr',''),
+                'host_name' : line.get('host_name',''),
+                'mac' : line.get('mac',''), # this is the client mac
+                'saddr' : self.column_values['client_addr'],
+                'daddr' : self.column_values['server_addr']}
+
             # self.column_values['domain'] = line.get('domain','')
             # self.column_values['assigned_addr'] = line.get('assigned_addr','')
 
              # Some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log use the mac address instead
             if (self.column_values['saddr'] == '' and self.column_values['daddr'] == ''
                 and self.column_values.get('mac', False) ):
-                self.column_values['saddr'] = self.column_values['mac']
+                self.column_values.update({'saddr' : self.column_values['mac']})
 
         elif 'dce_rpc' in file_type:
             self.column_values['type'] = 'dce_rpc'
@@ -1215,52 +1219,54 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'notice' in file_type:
             """ Parse the fields we're interested in in the notice.log file """
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
-            self.column_values['type'] = 'notice'
+            self.column_values = {'type' : 'notice',
+                                'sport' : line.get('id.orig_p', ''),
+                                'dport' : line.get('id.resp_p', ''),
+                                # self.column_values['scanned_ip'] = line.get('dst', '')
+                                'note' : line.get('note', ''),
+                                'msg' : line.get('msg', ''), # we,'re looking for self signed certs in this field
+                                'scanned_port' : line.get('p', ''),
+                                'scanning_ip' : line.get('src', '')}
+
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
             if self.column_values['saddr'] == '' :
-                self.column_values['saddr'] = line.get('src','' )
+                self.column_values.update({'saddr' : line.get('src','' )})
             if self.column_values['daddr'] == '':
                 # set daddr to src for now because the notice that contains portscan doesn't have a dst field and slips needs it to work
-                self.column_values['daddr'] = line.get('dst', self.column_values['saddr'] )
-            self.column_values['sport'] = line.get('id.orig_p', '')
-            self.column_values['dport'] = line.get('id.resp_p', '')
-            # self.column_values['scanned_ip'] = line.get('dst', '')
-            self.column_values['note'] = line.get('note', '')
-            self.column_values['msg'] = line.get('msg', '') # we're looking for self signed certs in this field
-            self.column_values['scanned_port'] = line.get('p', '')
-            self.column_values['scanning_ip'] = line.get('src', '')
+                self.column_values.update({'daddr' : line.get('dst', self.column_values['saddr']) })
+
         elif 'files' in file_type:
             """ Parse the fields we're interested in in the files.log file """
             # the slash before files to distinguish between 'files' in the dir name and file.log
-            self.column_values['type'] = 'files'
-            self.column_values['uid'] = line.get('conn_uids',[''])[0]
-            self.column_values['saddr'] = line.get('tx_hosts',[''])[0]
-            self.column_values['daddr'] = line.get('rx_hosts',[''])[0]
-            self.column_values['size'] = line.get('seen_bytes', '') # downloaded file size
-            self.column_values['md5'] = line.get('md5', '')
-            # used for detecting ssl certs
-            self.column_values['source'] = line.get('source', '')
-            self.column_values['analyzers'] = line.get('analyzers', '')
-            self.column_values['sha1'] = line.get('sha1', '')
+            self.column_values = {'type' :'files',
+                                'uid' : line.get('conn_uids',[''])[0],
+                                'saddr' : line.get('tx_hosts',[''])[0],
+                                'daddr' : line.get('rx_hosts',[''])[0],
+                                'size' : line.get('seen_bytes', ''), # downloaded file size
+                                'md5' : line.get('md5', ''),
+                                # used for detecting ssl certs
+                                'source' : line.get('source', ''),
+                                'analyzers' : line.get('analyzers', ''),
+                                'sha1' : line.get('sha1', '')}
 
             #todo process zeek tabs files.log
         elif 'arp' in file_type:
-            self.column_values['type'] = 'arp'
-            self.column_values['src_mac'] = line.get('src_mac', '')
-            self.column_values['dst_mac'] = line.get('dst_mac', '')
-            self.column_values['saddr'] = line.get('orig_h','')
-            self.column_values['daddr'] = line.get('resp_h','')
-            self.column_values['dst_hw'] = line.get('resp_hw','')
-            self.column_values['src_hw'] = line.get('orig_hw','')
-            self.column_values['operation'] = line.get('operation','')
+            self.column_values = {'type' : 'arp',
+                                'src_mac' : line.get('src_mac', ''),
+                                'dst_mac' : line.get('dst_mac', ''),
+                                'saddr' : line.get('orig_h',''),
+                                'daddr' : line.get('resp_h',''),
+                                'dst_hw' : line.get('resp_hw',''),
+                                'src_hw' : line.get('orig_hw',''),
+                                'operation' : line.get('operation','') }
         elif 'known_services' in file_type:
-            self.column_values['type'] = 'known_services'
-            self.column_values['saddr'] = line.get('host', '')
-            # this file doesn't have a daddr field, but we need it in add_flow_to_profile
-            self.column_values['daddr'] = '0.0.0.0'
-            self.column_values['port_num'] = line.get('port_num', '')
-            self.column_values['port_proto'] = line.get('port_proto', '')
-            self.column_values['service'] = line.get('service', '')
+            self.column_values = {'type' : 'known_services',
+                                'saddr' : line.get('host', ''),
+                                # this file doesn't have a daddr field, but we need it in add_flow_to_profile
+                                'daddr' : '0.0.0.0',
+                                'port_num' : line.get('port_num', ''),
+                                'port_proto' : line.get('port_proto', ''),
+                                'service' : line.get('service', '')}
 
 
         else:
@@ -1272,25 +1278,25 @@ class ProfilerProcess(multiprocessing.Process):
         Process the line and extract columns for argus
         """
         line = new_line['data']
-        self.column_values = {}
-        self.column_values['starttime'] = False
-        self.column_values['endtime'] = False
-        self.column_values['dur'] = False
-        self.column_values['proto'] = False
-        self.column_values['appproto'] = False
-        self.column_values['saddr'] = False
-        self.column_values['sport'] = False
-        self.column_values['dir'] = False
-        self.column_values['daddr'] = False
-        self.column_values['dport'] = False
-        self.column_values['state'] = False
-        self.column_values['pkts'] = False
-        self.column_values['spkts'] = False
-        self.column_values['dpkts'] = False
-        self.column_values['bytes'] = False
-        self.column_values['sbytes'] = False
-        self.column_values['dbytes'] = False
-        self.column_values['type'] = 'argus'
+        self.column_values = {
+            'starttime' : False,
+            'endtime' : False,
+            'dur' : False,
+            'proto' : False,
+            'appproto' : False,
+            'saddr' : False,
+            'sport' : False,
+            'dir' : False,
+            'daddr' : False,
+            'dport' : False,
+            'state' : False,
+            'pkts' : False,
+            'spkts' : False,
+            'dpkts' : False,
+            'bytes' : False,
+            'sbytes' : False,
+            'dbytes' : False,
+            'type' : 'argus'}
 
         # Read the lines fast
         nline = line.strip().split(self.separator)
@@ -1367,25 +1373,25 @@ class ProfilerProcess(multiprocessing.Process):
         """
         Process the line and extract columns for nfdump
         """
-        self.column_values = {}
-        self.column_values['starttime'] = False
-        self.column_values['endtime'] = False
-        self.column_values['dur'] = False
-        self.column_values['proto'] = False
-        self.column_values['appproto'] = False
-        self.column_values['saddr'] = False
-        self.column_values['sport'] = False
-        self.column_values['dir'] = False
-        self.column_values['daddr'] = False
-        self.column_values['dport'] = False
-        self.column_values['state'] = False
-        self.column_values['pkts'] = False
-        self.column_values['spkts'] = False
-        self.column_values['dpkts'] = False
-        self.column_values['bytes'] = False
-        self.column_values['sbytes'] = False
-        self.column_values['dbytes'] = False
-        self.column_values['type'] = 'nfdump'
+        self.column_values = {
+            'starttime' : False,
+            'endtime' : False,
+            'dur' : False,
+            'proto' : False,
+            'appproto' : False,
+            'saddr' : False,
+            'sport' : False,
+            'dir' : False,
+            'daddr' : False,
+            'dport' : False,
+            'state' : False,
+            'pkts' : False,
+            'spkts' : False,
+            'dpkts' : False,
+            'bytes' : False,
+            'sbytes' : False,
+            'dbytes' : False,
+            'type' : 'nfdump'}
         # Read the lines fast
         line = new_line['data']
         nline = line.strip().split(self.separator)
@@ -1946,15 +1952,15 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Define which type of flows we are going to process
 
-            if not self.column_values:
+            if not self.column_values or self.column_values['starttime'] is None:
+                # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
-            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
+
+            if self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
                                                     'dhcp','files', 'known_services', 'arp','ftp'):
                 # Not a supported type
                 return True
-            elif self.column_values['starttime'] is None:
-                # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
-                return True
+
 
             try:
                 # seconds.
@@ -2083,7 +2089,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
                 if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
                     # Tuple
-                    tupleid = str(daddr_as_obj) + '-' + str(dport) + '-' + proto
+                    tupleid = f'{daddr_as_obj}-{dport}-{proto}'
                     # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
                     symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
                     # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
@@ -2101,7 +2107,8 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
                                           saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj),
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
-                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid, label=self.label, flow_type=flow_type)
+                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid,
+                                          label=self.label, flow_type=flow_type)
                 elif 'dns' in flow_type:
                     __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name,
                                              qtype_name, rcode_name, answers, ttls)
@@ -2130,14 +2137,14 @@ class ProfilerProcess(multiprocessing.Process):
                                              self.column_values['compression_alg'], self.column_values['kex_alg'],
                                              self.column_values['host_key_alg'], self.column_values['host_key'])
                 elif flow_type == 'notice':
-                     __database__.add_out_notice(profileid,twid,\
-                                                 starttime,\
-                                                 self.column_values['daddr'],\
-                                                 self.column_values['sport'],\
-                                                 self.column_values['dport'],\
-                                                 self.column_values['note'],\
-                                                 self.column_values['msg'],\
-                                                 self.column_values['scanned_port'],\
+                     __database__.add_out_notice(profileid,twid,
+                                                 starttime,
+                                                 self.column_values['daddr'],
+                                                 self.column_values['sport'],
+                                                 self.column_values['dport'],
+                                                 self.column_values['note'],
+                                                 self.column_values['msg'],
+                                                 self.column_values['scanned_port'],
                                                  self.column_values['scanning_ip'],
                                                  self.column_values['uid']
                                                  )
@@ -2163,6 +2170,7 @@ class ProfilerProcess(multiprocessing.Process):
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish('new_downloaded_file', to_send)
+
                 elif flow_type == 'known_services':
                     # Send known_services.log data to new_service channel in flowalerts module
                     to_send = {
@@ -2177,6 +2185,7 @@ class ProfilerProcess(multiprocessing.Process):
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish("new_service",to_send)
+
                 elif flow_type == 'arp':
                     to_send = {
                         'uid' : self.column_values['uid'],
@@ -2397,9 +2406,7 @@ class ProfilerProcess(multiprocessing.Process):
             td2 = float(10)
             ts1 = float(250)
             ts2 = float(1100)
-            letter = ''
-            symbol = ''
-            timechar = ''
+
 
             # Get the time of the last flow in this tuple, and the last last
             # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
@@ -2679,9 +2686,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # self.print('Zeek line')
                         self.process_zeek_input(line)
                         # Add the flow to the profile
-                        # p = __database__.start_profiling()
                         self.add_flow_to_profile()
-                        # p = __database__.end_profiling(p)
                     elif self.input_type == 'argus' or self.input_type == 'argus-tabs':
                         # self.print('Argus line')
                         # Argus puts the definition of the columns on the first line only

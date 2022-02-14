@@ -2657,7 +2657,7 @@ class Database(object):
         if whitelist:
             return json.loads(whitelist)
         else:
-            return False
+            return {}
 
     def store_dhcp_server(self, server_addr):
         """
