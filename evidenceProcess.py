@@ -696,9 +696,12 @@ class EvidenceProcess(multiprocessing.Process):
 
     def run(self):
         # add metadata to alerts.log
-        commit, branch = self.get_branch_info()
-        now = datetime.now()
-        self.logfile.write(f'Using {branch} - {commit} - {now}\n\n')
+        branch_info = self.get_branch_info()
+        if branch_info != False:
+            # it's false when we're in docker because there's no .git/ there
+            commit, branch = branch_info[0], branch_info[1]
+            now = datetime.now()
+            self.logfile.write(f'Using {branch} - {commit} - {now}\n\n')
 
         while True:
             try:
@@ -782,7 +785,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # Add the evidence to the log files
                     self.addDataToLogFile(alert_to_log)
                     # add to alerts.json
-                    if self.is_first_alert:
+                    if self.is_first_alert and branch_info != False:
                         # only add commit and hash to the firs alert in alerts.json
                         self.is_first_alert = False
                         IDEA_dict.update({'commit': commit, 'branch': branch })
