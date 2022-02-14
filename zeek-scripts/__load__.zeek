@@ -100,7 +100,8 @@ redef digest_salt = "Please change this value.";
 @load frameworks/files/detect-MHR
 
 # Extend email alerting to include hostnames
-@load policy/frameworks/notice/extend-email/hostnames
+# don't load extend-email/hostnames as we're not using it, it's used for notices that are being sent to email.
+#@load policy/frameworks/notice/extend-email/hostnames
 
 # Uncomment the following line to enable detection of the heartbleed attack. Enabling
 # this might impact performance a bit.
