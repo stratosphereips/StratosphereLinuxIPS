@@ -207,18 +207,17 @@ def prepare_zeek_scripts():
             # update home network
             f.write('\nredef Site::local_nets += { '+home_network+' };\n')
 
-
-    # load all scripts in zeek-script dir
-    with open(zeek_scripts_dir + '/__load__.zeek','r') as f:
-        loaded_scripts = f.read()
-    with open(zeek_scripts_dir + '/__load__.zeek','a') as f:
-        for file_name in os.listdir(zeek_scripts_dir):
-            # ignore the load file
-            if file_name == '__load__.zeek':
-                continue
-            if file_name not in loaded_scripts:
-                # found a file in the dir that isn't in __load__.zeek, add it
-                f.write(f'\n@load ./{file_name}')
+    # # load all scripts in zeek-script dir
+    # with open(zeek_scripts_dir + '/__load__.zeek','r') as f:
+    #     loaded_scripts = f.read()
+    # with open(zeek_scripts_dir + '/__load__.zeek','a') as f:
+    #     for file_name in os.listdir(zeek_scripts_dir):
+    #         # ignore the load file
+    #         if file_name == '__load__.zeek':
+    #             continue
+    #         if file_name not in loaded_scripts:
+    #             # found a file in the dir that isn't in __load__.zeek, add it
+    #             f.write(f'\n@load ./{file_name}')
 
 def add_metadata():
     """
