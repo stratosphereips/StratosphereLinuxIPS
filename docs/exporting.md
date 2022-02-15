@@ -1,12 +1,14 @@
 # Exporting
 
-The exporting module allows Slips to export alerts and evidence to other systems. For now the supported systems are:
+Slips supports exporting alerts to other systems using different modules (ExportingAlerts, CESNET sharing etc.) 
+
+For now the supported systems are:
 
 - Slack
-- STIX Servers
+- TAXII Servers (STIX format)
 - Warden servers
+- suricata-like JSON format
 - Logstash
-
 
 ## Slack
 Slips uses the WebHook method to send data to Slack, more info [here](https://api.slack.com/messaging/webhooks).
@@ -32,46 +34,103 @@ You can do this by going to the channel, then clicking on the channel's name. Th
     slack_channel_name = SlipsAlertsChannel
 
 
+## STIX
 
-## CESNET Sharing
+If you want to export alerts to your TAXII server using STIX format, change ```export_to``` variable to export to STIX, and Slips will automatically generate a 
+```STIX_data.json``` containing all alerts it detects.
 
-Slips supports exporting alerts to warden servers, as well as importing alerts.
 
-To enable the module, set ```send_alerts``` and/or ```receive_alerts``` to ```yes``` in slips.conf
+    [ExportingAlerts]
+    export_to = [stix]
 
-The default configuration file path in specified in the ```configuration_file``` variable in ```slips.conf```
 
-The default path is ```modules/CESNET/warden.conf```
+You can add your TAXII server details in the following variables:
 
-The format of ```warden.conf``` should be the following:
+```TAXII_server```: link to your TAXII server
 
-    {
-       "url": "https://example.com/warden3",
-       "certfile": "cert.pem",
-       "keyfile": "key.pem",
-       "cafile": "/etc/ssl/certs/DigiCert_Assured_ID_Root_CA.pem",
-       "timeout": 600,
-       "errlog": {"file": "/var/log/warden.err", "level": "debug"},
-       "filelog": {"file": "/var/log/warden.log", "level": "warning"},
-       "name": "com.example.warden.test"
-    }
+```port```: port to be used
 
-To get the key and the certificate, you need to run ```warden_apply.sh``` with you registered client_name and password.
+```use_https```: use https or not.
 
-The ```name``` key is your registered warden node name. 
+```discovery_path``` and ```inbox_path``` should contain URIs not full urls. For example:
 
-You can change how much time to wait be before pushing alerts to warden server (in seconds). this is used when slips is running non-stop (e.g with -i )
+```python
+discovery_path = /services/discovery-a
+inbox_path = /services/inbox-a
+```
 
-If running on a file (a PCAP, binetflow, suricata ..etc.) not an interface, slips will export alerts to server after the analysis is done slips will push as soon as it finished the analysis.
+```collection_name```: the collection on the server you want to push your STIX data to.
 
-By default slips will push every 1 day, you can change this by changing the ```push_delay``` value in ```slips.conf```
-    
+```push_delay```: the time to wait before pushing STIX data to server (in seconds). It is used when slips is running non-stop (e.g with -i )
 
-You can change how often we get alerts from warden server
+```taxii_username```: TAXII server user credentials
 
-By default Slips receives alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
+```taxii_password```: TAXII server user password
 
+```jwt_auth_url```: auth url if JWT based authentication is used.
+
+If running on a file not an interface, Slips will export to server after analysis is done. 
+
+More details on how to [export to slack or TAXII server here](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)
+
+## JSON format
+
+
+By default Slips logs all alerts to ```output/alerts.json``` in [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) which is also a JSON format.
+
+ 
+If you want to export Slips alerts in a simpler JSON format instead of IDEA0 format,
+change ```export_to``` variable to export to JSON, and Slips will automatically generate a 
+```exported_alerts.json``` containing all alerts it detects.
+
+
+    [ExportingAlerts]
+    export_to = [json]
+
+
+## CESNET Sharing  
+  
+Slips supports exporting alerts to warden servers, as well as importing alerts.  
+  
+To enable the module, set ```send_alerts``` and/or ```receive_alerts``` to ```yes``` in slips.conf  
+  
+The default configuration file path in specified in the ```configuration_file``` variable in ```slips.conf```  
+  
+The default path is ```modules/CESNET/warden.conf```  
+  
+The format of ```warden.conf``` should be the following:  
+
+  ```
+ { "url": "https://example.com/warden3", 
+   "certfile": "cert.pem", 
+   "keyfile": "key.pem", 
+   "cafile": "/etc/ssl/certs/DigiCert_Assured_ID_Root_CA.pem", 
+   "timeout": 600, 
+   "errlog": {"file": "/var/log/warden.err", "level": "debug"}, 
+   "filelog": {"file": "/var/log/warden.log", "level": "warning"}, 
+   "name": "com.example.warden.test" }  
+```
+To get your key and the certificate, you need to run ```warden_apply.sh``` with you registered client_name and password. [Full instructions here](https://warden.cesnet.cz/en/index)
+  
+The ```name``` key is your registered warden node name.   
+  
+All evidence causing an alert are exported to warden server once an alert is generated. See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
+  
+You can change how often you get alerts (import) from warden server  
+  
+By default Slips imports alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
+
+Slips logs all alerts to ```output/alerts.json``` in [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) by default.
 
 ## Logstash
 
-Slips has logstash.conf file that exports our alerts.json to a given output file, you can change the output to your preference (e.g elastic search, stdout, etc..)
+Slips has logstash.conf file that exports our alerts.json to a given output file,
+you can change the output to your preference (for example: elastic search, stdout, etc.)
+
+## Text logs
+
+By default, the output of Slips is stored in the ```output/``` directory in two files: 
+
+
+1. alert.json in IDEA0 format
+2. alerts.log human readable text format
