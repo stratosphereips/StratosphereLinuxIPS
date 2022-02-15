@@ -1,3 +1,4 @@
+
 # Features
 
 Slips is a behavioral-based IPS that uses machine learning to detect malicious behaviors in the network traffic. It is a modular software that can be extended. When Slips is run, it spawns several child processes to manage the I/O, to profile attackers and to run the detection modules.
@@ -132,13 +133,13 @@ tr:nth-child(even) {
     <th>Status</th>
   </tr>
   <tr>
-    <td>https</td>
-    <td>training&test of RandomForest to detect malicious https flows</td>
+    <td>flowmldetection</td>
+    <td>trainin  and test of random forest to detect malicious HTTPs flows</td>
     <td>✅</td>
   </tr>
   <tr>
     <td>port scan detector</td>
-    <td>detects Horizontal and Vertical port scans</td>
+    <td>detects horizontal and vertical port scans</td>
     <td>✅</td>
   </tr>
   <tr>
@@ -158,7 +159,7 @@ tr:nth-child(even) {
   </tr>
   <tr>
     <td>VirusTotal</td>
-    <td>module to lookup IP address on VirusTotal</td>
+    <td>module to lookup IPs/domains/downloaded files on virustotal </td>
     <td>✅</td>
   </tr>
   <tr>
@@ -198,12 +199,12 @@ tr:nth-child(even) {
   </tr>
   <tr>
     <td>http_analyzer</td>
-    <td>module to analyze HTTP traffic.</td>
+    <td>module to analyze HTTP traffic</td>
     <td>✅</td>
   </tr>
   <tr>
     <td>blocking</td>
-    <td>module to block malicious IPs connecting to the device</td>
+    <td>module to block malicious IPs using iptables</td>
     <td>✅️</td>
   </tr>
   
@@ -212,9 +213,28 @@ tr:nth-child(even) {
 
 ## Usage Instructions
 
+Below are the modules that need special configurations to work.
+
+
 ### Virustotal Module
 
 To use this module you need to add your virustotal api key in ```modules/virustotal/api_key_secret```
+
+### RiskIQ Module
+
+  
+To use this module your RiskIQ email and API key should be stored in ```modules/RiskIQ/credentials```  
+  
+the format of this file should be the following:  
+  
+```  
+example@domain.com  
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  
+```  
+  
+The hash should be your 64 character API Key.  
+  
+The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```slips.conf```
 
 ### ExportingAlerts Module
 
@@ -233,3 +253,41 @@ This module on runs on pcaps, it uses YARA rules to detect leaks.
 
 You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` and it will be automatically compiled and stored in ```modules/leak_detector/yara_rules/compiled``` and matched against every pcap.
 
+  
+## CESNET Sharing  
+  
+Slips supports exporting alerts to warden servers, as well as importing alerts.  
+  
+To enable the module, set ```send_alerts``` and/or ```receive_alerts``` to ```yes``` in slips.conf  
+  
+The default configuration file path in specified in the ```configuration_file``` variable in ```slips.conf```  
+  
+The default path is ```modules/CESNET/warden.conf```  
+  
+The format of ```warden.conf``` should be the following:  
+  ```
+ { "url": "https://example.com/warden3", 
+   "certfile": "cert.pem", 
+   "keyfile": "key.pem", 
+   "cafile": "/etc/ssl/certs/DigiCert_Assured_ID_Root_CA.pem", 
+   "timeout": 600, 
+   "errlog": {"file": "/var/log/warden.err", "level": "debug"}, 
+   "filelog": {"file": "/var/log/warden.log", "level": "warning"}, 
+   "name": "com.example.warden.test" }  
+```
+To get your key and the certificate, you need to run ```warden_apply.sh``` with you registered client_name and password. [Full instructions here](https://warden.cesnet.cz/en/index)
+  
+The ```name``` key is your registered warden node name.   
+  
+All evidence causing an alert are exported to warden server once an alert is generated. See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
+  
+You can change how often you get alerts (import) from warden server  
+  
+By default Slips imports alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
+
+
+## Blocking
+
+To enable blocking in slips, start slips with the ```-p``` flag. 
+
+This feature is only supported in linux using iptables.
