@@ -111,7 +111,7 @@ By default, Slips depends on Zeek for detecting different behaviours, for exampl
 Self-signed certs, invalid certs, port-scans and address scans, and password guessing.
 
 Some scans are also detected by Slips independently of Zeek, like ICMP sweeps and vertical/horizontal portscans.
-Check  []() section for more info
+Check  []() section for more info #todo
 
 
 ## Detect DGA
@@ -136,4 +136,19 @@ Slips uses SSL certificates sha1 hashes to detect C&C servers.
 
 Slips supports SSL feeds and is shipped with Abuse.ch feed of malicious SSL hashes by default. 
 And you can add other SSL feeds in ```ssl_feeds``` in ```slips.conf```.
+
+
+---
+
+With every generated evidence, Slips gathers as much info 
+about the malicious IP and prints it with the alert.
+
+So instead of having an alerts saying:
+
+Detected SSL certificate validation failed with (certificate has expired) Destination IP: 216.58.201.70.
+
+Slips gathers AS, hostname, SNI, rDNS and any available data about this IP and you get an alert saying:
+
+Detected SSL certificate validation failed with (certificate has expired) Destination IP: 
+216.58.201.70. AS: GOOGLE, US, SNI: 2542116.fls.doubleclick.net, rDNS: prg03s01-in-f70.1e100.net
 
