@@ -32,6 +32,7 @@ import pkgutil
 import inspect
 import modules
 import importlib
+from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
 import errno
 import subprocess
@@ -541,7 +542,7 @@ if __name__ == '__main__':
             # check invalid file path
             if not os.path.exists(input_information):
                 print(f'[Main] Invalid file path {input_information}. Stopping.')
-                sys.exit(-1)
+                sys._exit(-1)
 
             # default value
             input_type = 'file'

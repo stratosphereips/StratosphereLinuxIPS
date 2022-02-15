@@ -100,6 +100,7 @@ class Module(Module, multiprocessing.Process):
             self.data_exfiltration_threshold = int(self.config.get('flowalerts', 'data_exfiltration_threshold'))
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
+            # threshold in MBs
             self.data_exfiltration_threshold = 700
 
     def print(self, text, verbose=1, debug=0):
