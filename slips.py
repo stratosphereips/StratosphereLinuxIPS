@@ -401,7 +401,7 @@ def shutdown_gracefully(input_information):
             zeek_files_path = os.path.join(args.output, 'zeek_files')
             copy_tree("zeek_files", zeek_files_path)
             print(f"[Main] Stored a copy of zeek files to {zeek_files_path}.")
-        os.exit(-1)
+        os._exit(-1)
         return True
     except KeyboardInterrupt:
         # display a warning if the user's trying to stop
