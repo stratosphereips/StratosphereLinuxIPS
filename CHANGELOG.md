@@ -1,7 +1,7 @@
 -0.8.4
 * Slips
   - Add support for local JA3 feeds
-  - Improved CESNET Module
+  - Improve CESNET Module
   - Update and improve whitelists
   - Improve alerts by adding hostname to alerts printed in the CLI and in alerts.log
   - Faster startup of Slips, now TI files are updated concurrently. 

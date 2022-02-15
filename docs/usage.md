@@ -277,45 +277,6 @@ Slips can export alerts to Slack and STIX.
 
 To specify where to export, you can append the ```export_to``` list. 
 
-**To export to Slack**
-
-You need to add your Slack bot token to the file ```modules/ExportingAlerts/slack_bot_token_secret```. The file should contain the token at the start of the first line, and nothing more.
-
-If you do not have a Slack bot, follow steps 1 to 3 [here](https://api.slack.com/bot-users#creating-bot-user) to get one.
-
-You can specify the channel name to send alerts to in the ```slack_channel_name``` variable, and the sensor name to be sent together with the alert in the ```sensor_name``` variable.
-
-**To export to STIX**
-
-If you want to export alerts using Stix, change ```export_to``` variable to export to STIX, and Slips will automatically generate a 
-```STIX_data.json``` containing all alerts it detects.
-
-You can add your TAXII server details in the following variables:
-
-```TAXII_server```: link to your TAXII server
-
-```port```: port to be used
-
-```use_https```: use https or not.
-
-```discovery_path``` and ```inbox_path``` should contain URIs not full urls. For example:
-
-```python
-discovery_path = /services/discovery-a
-inbox_path = /services/inbox-a
-```
-
-```collection_name```: the collection on the server you want to push your STIX data to.
-
-```push_delay```: the time to wait before pushing STIX data to server (in seconds). It is used when slips is running non-stop (e.g with -i )
-
-```taxii_username```: TAXII server user credentials
-
-```taxii_password```: TAXII server user password
-
-```jwt_auth_url```: auth url if JWT based authentication is used.
-
-If running on a file not an interface, Slips will export to server after analysis is done. 
 
 ## Logging
 

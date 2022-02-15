@@ -36,7 +36,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | CESNET | Send and receive alerts from warden servers |✅|
 | RiskIQ | Module to get different information from RiskIQ  |✅|
 | ARP | module to check for ARP attacks in ARP traffic  |✅|
-| ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|
+| ExportingAlerts | module to export alerts to slack, STIX or suricata-like JSON format |✅|
 | http_analyzer | module to analyze HTTP traffic |✅|
 | blocking | module to block malicious IPs connecting to the device |✅|
 | flowmldetection | module to detect malicious flows using ML pretrained models |✅|

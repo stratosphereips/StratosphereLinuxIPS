@@ -131,12 +131,14 @@ class Module(Module, multiprocessing.Process):
                 detection_info = profileid.split("_")[1]
                 conn_count = len(profileids_twids)
                 __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                         description, ts, category, source_target_tag=source_target_tag, conn_count=conn_count, profileid=profileid,
+                                         description, ts, category, source_target_tag=source_target_tag,
+                                         conn_count=conn_count, profileid=profileid,
                                          twid=twid, uid=uid)
                 # after we set evidence, clear the dict so we can detect if it does another scan
                 self.cache_arp_requests.pop(f'{profileid}_{twid}')
                 return True
         return False
+
 
     def check_dstip_outside_localnet(self, profileid, twid, daddr, uid, saddr, ts):
         """ Function to setEvidence when daddr is outside the local network """
@@ -223,7 +225,6 @@ class Module(Module, multiprocessing.Process):
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                      description, ts, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
             return True
-
 
 
     def run(self):

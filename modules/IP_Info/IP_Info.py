@@ -111,7 +111,7 @@ class Module(Module, multiprocessing.Process):
         :param cached_data: ip cached info from the database, dict
         """
         try:
-            update =  (time.time() - cached_data['asn']['timestamp']) > self.update_period
+            update = (time.time() - cached_data['asn']['timestamp']) > self.update_period
             return update
         except (KeyError, TypeError):
             # no there's no cached asn info,or no timestamp, or cached_data is None
