@@ -18,8 +18,6 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import configparser
-import argparse
-import json
 import sys
 import redis
 import os
@@ -34,8 +32,6 @@ import pkgutil
 import inspect
 import modules
 import importlib
-from signal import SIGSTOP
-from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
 import errno
 import subprocess
@@ -60,6 +56,7 @@ def read_configuration(config, section, name):
         # There is a conf, but there is no option, or no section or no configuration file specified
         return False
 
+
 def recognize_host_ip():
     """
     Recognize the IP address of the machine
@@ -69,15 +66,16 @@ def recognize_host_ip():
         s.connect(("1.1.1.1", 80))
         ipaddr_check = s.getsockname()[0]
         s.close()
-    except Exception as ex:
+    except (socket.error):
         # not connected to the internet
         return None
     return ipaddr_check
 
+
 def create_folder_for_logs():
-    '''
+    """
     Create a folder for logs if logs are enabled
-    '''
+    """
     logs_folder = datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
     try:
         os.makedirs(logs_folder)
@@ -87,10 +85,11 @@ def create_folder_for_logs():
             return False
     return logs_folder
 
-async def update_TI_files(outputqueue, config):
-    '''
+
+async def update_ti_files(outputqueue, config):
+    """
     Update malicious files and store them in database before slips start
-    '''
+    """
     update_manager = UpdateFileManager(outputqueue, config)
     # create_task is used to run update() function concurrently instead of serially
     update_finished = asyncio.create_task(update_manager.update())
@@ -98,7 +97,7 @@ async def update_TI_files(outputqueue, config):
     await update_finished
 
 
-def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
+def check_redis_database(redis_host='localhost', redis_port=6379) -> bool:
     """
     Check if we have redis-server running
     """
@@ -111,7 +110,8 @@ def check_redis_database(redis_host='localhost', redis_port=6379) -> str:
         return False
     return True
 
-def clear_redis_cache_database(redis_host = 'localhost', redis_port = 6379) -> str:
+
+def clear_redis_cache_database(redis_host='localhost', redis_port=6379) -> bool:
     """
     Clear cache database
     """
@@ -131,11 +131,13 @@ def check_zeek_or_bro():
         return 'bro'
     return False
 
+
 def terminate_slips():
     """
     Do all necessary stuff to stop process any clear any files.
     """
     sys.exit(-1)
+
 
 def load_modules(to_ignore):
     """
@@ -177,18 +179,25 @@ def load_modules(to_ignore):
         # last=False to move to the beginning of the dict
         plugins.move_to_end('Blocking', last=False)
 
-    return plugins,failed_to_load_modules
+    return plugins, failed_to_load_modules
+
 
 def get_cwd():
     # Can't use os.getcwd() because slips directory name won't always be Slips plus this way requires less parsing
     for arg in sys.argv:
         if 'slips.py' in arg:
-            # get the path preceeding slips.py (may be ../ or  ../../ or '' if slips.py is in the cwd) , this path is where slips.conf will be
+            # get the path preceeding slips.py
+            # (may be ../ or  ../../ or '' if slips.py is in the cwd),
+            # this path is where slips.conf will be
             cwd = arg[:arg.index('slips.py')]
             return cwd
 
+
 def prepare_zeek_scripts():
-    """ automatically adds zeek scripts in zeek-scripts/ dir in __load__.zeek and adds local network to slips-conf.zeek"""
+    """
+    Adds local network to slips-conf.zeek
+    """
+
     # get home network from slips.conf
     try:
         home_network = config.get('parameters', 'home_network')
@@ -197,15 +206,17 @@ def prepare_zeek_scripts():
         from slips_files.common.slips_utils import utils
         home_network = utils.home_network_ranges
 
-    zeek_scripts_dir  = os.getcwd() + '/zeek-scripts'
+    zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
     # add local sites if not there
     is_local_nets_defined = False
-    with open(zeek_scripts_dir + '/slips-conf.zeek','r') as f :
-        if  'local_nets' in f.read(): is_local_nets_defined = True
+    with open(zeek_scripts_dir + '/slips-conf.zeek', 'r') as slips_conf:
+        if 'local_nets' in slips_conf.read():
+            is_local_nets_defined = True
+        
     if not is_local_nets_defined:
-        with open(zeek_scripts_dir + '/slips-conf.zeek','a') as f :
+        with open(zeek_scripts_dir + '/slips-conf.zeek', 'a') as slips_conf:
             # update home network
-            f.write('\nredef Site::local_nets += { '+home_network+' };\n')
+            slips_conf.write('\nredef Site::local_nets += { '+home_network+' };\n')
 
     # # load all scripts in zeek-script dir
     # with open(zeek_scripts_dir + '/__load__.zeek','r') as f:
@@ -218,6 +229,7 @@ def prepare_zeek_scripts():
     #         if file_name not in loaded_scripts:
     #             # found a file in the dir that isn't in __load__.zeek, add it
     #             f.write(f'\n@load ./{file_name}')
+
 
 def add_metadata():
     """
@@ -243,7 +255,7 @@ def add_metadata():
     commit = repo.active_branch.commit.hexsha
     now = datetime.now()
 
-    info_path = os.path.join(metadata_dir,'info.txt')
+    info_path = os.path.join(metadata_dir, 'info.txt')
     with open(info_path, 'w') as f:
         f.write(f'Slips version: {version}\n')
         f.write(f'Branch: {branch}\n')
@@ -285,9 +297,9 @@ def shutdown_gracefully(input_information):
                 message = c1.get_message(timeout=0.01)
             except NameError:
                 # Sometimes the c1 variable does not exist yet. So just force the shutdown
-                message = {}
-                message['data'] = 'dummy_value_not_stopprocess'
-                message['channel'] = 'finished_modules'
+                message = {
+                    'data': 'dummy_value_not_stopprocess',
+                    'channel': 'finished_modules'}
 
             if message and message['data'] == 'stop_process':
                 continue
@@ -306,9 +318,9 @@ def shutdown_gracefully(input_information):
                         continue
                     modules_left = len(list(PIDs.keys()))
                     # to vertically align them when printing
-                    module_name = module_name+' '*(20-len(module_name))
+                    module_name = module_name + ' '*(20-len(module_name))
                     print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
-            max_loops -=1
+            max_loops -= 1
 
             # before killing the modules that aren't finished
             # make sure we're not in the middle of exporting alerts
@@ -317,14 +329,14 @@ def shutdown_gracefully(input_information):
             if 'yes' in send_to_warden and 'CESNET' in PIDs:
                 # we're in the middle of sending alerts to warden server
                 # delay killing unstopped modules
-                max_loops+=1
-
+                max_loops += 1
 
         # modules that aren't subscribed to any channel will always be killed and not stopped
-        # some modules continue on sigint, but recieve other msgs (other than stop_message) in the queue before stop_process
+        # some modules continue on sigint, but recieve
+        # other msgs (other than stop_message) in the queue before stop_process
         # they will always be killed
         # kill processes that didn't stop after timeout
-        for unstopped_proc,pid in PIDs.items():
+        for unstopped_proc, pid in PIDs.items():
             unstopped_proc = unstopped_proc+' '*(20-len(unstopped_proc))
             try:
                 os.kill(int(pid), 9)
@@ -354,14 +366,15 @@ def shutdown_gracefully(input_information):
         # save redis database if '-s' is specified
         if args.save:
             # Create a new dir to store backups
-            backups_dir = get_cwd() +'redis_backups' + '/'
+            backups_dir = get_cwd() + 'redis_backups' + '/'
             try:
                 os.mkdir(backups_dir)
             except FileExistsError:
                 pass
             # The name of the interface/pcap/nfdump/binetflow used is in input_information
             # if the input is a zeek dir, remove the / at the end
-            if input_information.endswith('/'): input_information = input_information[:-1]
+            if input_information.endswith('/'):
+                input_information = input_information[:-1]
             # We need to seperate it from the path
             input_information = os.path.basename(input_information)
             # Remove the extension from the filename
@@ -372,8 +385,7 @@ def shutdown_gracefully(input_information):
                 pass
             # Give the exact path to save(), this is where the .rdb backup will be
             __database__.save(backups_dir + input_information)
-            print(f"[Main] Database saved to {backups_dir}{input_information}" )
-
+            print(f"[Main] Database saved to {backups_dir}{input_information}")
 
         # if store_a_copy_of_zeek_files is set to yes in slips.conf, copy the whole zeek_files dir to the output dir
         try:
@@ -385,10 +397,10 @@ def shutdown_gracefully(input_information):
 
         if store_a_copy_of_zeek_files:
             # this is where the copy will be stores
-            zeek_files_path = os.path.join(args.output,'zeek_files')
+            zeek_files_path = os.path.join(args.output, 'zeek_files')
             copy_tree("zeek_files", zeek_files_path)
             print(f"[Main] Stored a copy of zeek files to {zeek_files_path}.")
-        os._exit(-1)
+        os.exit(-1)
         return True
     except KeyboardInterrupt:
         # display a warning if the user's trying to stop
@@ -400,15 +412,18 @@ def shutdown_gracefully(input_information):
 
 def is_debugger_active() -> bool:
     """Return if the debugger is currently active"""
-    gettrace = getattr(sys, 'gettrace', lambda : None)
+    gettrace = getattr(sys, 'gettrace', lambda: None)
     return gettrace() is not None
 
 ####################
 # Main
 ####################
+
+
 if __name__ == '__main__':
     try:
-        # Before the argparse, we need to set up the default path fr alerts.log and alerts.json. In our case, it is output folder.
+        # Before the argparse, we need to set up the default path fr alerts.log
+        # and alerts.json. In our case, it is output folder.
         alerts_default_path = 'output/'
 
         print('Slips. Version {}'.format(version))
@@ -417,33 +432,37 @@ if __name__ == '__main__':
 
         # Parse the parameters
         slips_conf_path = get_cwd() + 'slips.conf'
-        parser = ArgumentParser(usage = "./slips.py -c <configfile> [options] [file ...]",
+        parser = ArgumentParser(usage="./slips.py -c <configfile> [options] [file ...]",
                                 add_help=False)
-        parser.add_argument('-c','--config', metavar='<configfile>',action='store',required=False, default=slips_conf_path,
+        parser.add_argument('-c', '--config', metavar='<configfile>',
+                            action='store', required=False, default=slips_conf_path,
                             help='path to the Slips config file.')
-        parser.add_argument('-v', '--verbose',metavar='<verbositylevel>',action='store', required=False, type=int,
+        parser.add_argument('-v', '--verbose', metavar='<verbositylevel>', action='store', required=False, type=int,
                             help='amount of verbosity. This shows more info about the results.')
-        parser.add_argument('-e', '--debug', metavar='<debuglevel>',action='store', required=False, type=int,
+        parser.add_argument('-e', '--debug', metavar='<debuglevel>', action='store', required=False, type=int,
                             help='amount of debugging. This shows inner information about the program.')
-        parser.add_argument('-f', '--filepath',metavar='<file>', action='store',required=False,
+        parser.add_argument('-f', '--filepath', metavar='<file>', action='store', required=False,
                             help='read a Zeek folder, Argus binetflow, pcapfile or nfdump.')
-        parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
+        parser.add_argument('-i', '--interface', metavar='<interface>', action='store', required=False,
                             help='read packets from an interface.')
-        parser.add_argument('-l','--createlogfiles',action='store_true',required=False,
+        parser.add_argument('-l', '--createlogfiles', action='store_true', required=False,
                             help='create log files with all the traffic info and detections.')
-        parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
+        parser.add_argument('-F', '--pcapfilter', action='store', required=False, type=str,
                             help='packet filter for Zeek. BPF style.')
-        parser.add_argument('-G', '--gui', help='Use the nodejs GUI interface.', required=False, default=False, action='store_true')
-        parser.add_argument('-cc','--clearcache',action='store_true', required=False,
-                            help='clear a cache database.')
-        parser.add_argument('-p', '--blocking', help='Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.',
+        parser.add_argument('-G',  '--gui', help='Use the nodejs GUI interface.',
                             required=False, default=False, action='store_true')
-        parser.add_argument('-cb', '--clearblocking', help='Flush and delete slipsBlocking iptables chain',required=False, default=False, action='store_true')
+        parser.add_argument('-cc', '--clearcache', action='store_true',
+                            required=False, help='clear a cache database.')
+        parser.add_argument('-p', '--blocking',
+                            help='Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.',
+                            required=False, default=False, action='store_true')
+        parser.add_argument('-cb', '--clearblocking', help='Flush and delete slipsBlocking iptables chain',
+                            required=False, default=False, action='store_true')
         parser.add_argument('-o', '--output', action='store', required=False, default=alerts_default_path,
                             help='store alerts.json and alerts.txt in the provided folder.')
-        parser.add_argument('-s', '--save',action='store_true',required=False,
+        parser.add_argument('-s', '--save', action='store_true', required=False,
                             help='To Save redis db to disk. Requires root access.')
-        parser.add_argument('-d', '--db',action='store',required=False,
+        parser.add_argument('-d', '--db', action='store', required=False,
                             help='To read a redis (rdb) saved file. Requires root access.')
         parser.add_argument("-h", "--help", action="help", help="command line help")
 
@@ -464,7 +483,7 @@ if __name__ == '__main__':
             # No conf file provided
             pass
 
-        if (args.verbose and int(args.verbose)> 3) or (args.debug and int(args.debug) > 3):
+        if (args.verbose and int(args.verbose) > 3) or (args.debug and int(args.debug) > 3):
             print("Debug and verbose values range from 0 to 3.")
             terminate_slips()
 
@@ -497,12 +516,14 @@ if __name__ == '__main__':
         if args.db:
             from slips_files.core.database import __database__
             __database__.start(config)
-            if not __database__.load(args.db): print(f"[Main] Failed to {args.db}")
-            else: print(f"{args.db.split('/')[-1]} loaded successfully. Run ./kalipso.sh")
+            if not __database__.load(args.db): 
+                print(f"[Main] Failed to {args.db}")
+            else: 
+                print(f"{args.db.split('/')[-1]} loaded successfully. Run ./kalipso.sh")
             terminate_slips()
 
         # Check if user want to save and load a db at the same time
-        if args.save :
+        if args.save:
             # make sure slips is running as root
             if os.geteuid() != 0:
                 print("Slips needs to be run as root to save the database. Stopping.")
@@ -525,7 +546,7 @@ if __name__ == '__main__':
             # default value
             input_type = 'file'
             # Get the type of file
-            cmd_result = subprocess.run(['file',input_information], stdout=subprocess.PIPE)
+            cmd_result = subprocess.run(['file', input_information], stdout=subprocess.PIPE)
             # Get command output
             cmd_result = cmd_result.stdout.decode('utf-8')
 
@@ -535,34 +556,34 @@ if __name__ == '__main__':
                 input_type = 'nfdump'
             elif 'CSV' in cmd_result:
                 input_type = 'binetflow'
-            elif 'directory'in cmd_result:
+            elif 'directory' in cmd_result:
                 input_type = 'zeek_folder'
             else:
                 # is it a zeek log file or suricata, binetflow tabs , or binetflow comma separated file?
                 # use first line to determine
-                with open(input_information,'r') as f:
+                with open(input_information, 'r') as f:
                     while True:
                         # get the first line that isn't a comment
-                        first_line = f.readline().replace('\n','')
+                        first_line = f.readline().replace('\n', '')
                         if not first_line.startswith('#'):
                             break
                 if 'flow_id' in first_line:
                     input_type = 'suricata'
                 else:
-                    #this is a text file , it can be binetflow or zeek_log_file
+                    # this is a text file , it can be binetflow or zeek_log_file
                     try:
-                        #is it a json log file
+                        # is it a json log file
                         json.loads(first_line)
                         input_type = 'zeek_log_file'
                     except json.decoder.JSONDecodeError:
                         # this is a tab separated file
                         # is it zeek log file or binetflow file?
                         # line = re.split(r'\s{2,}', first_line)[0]
-                        x= re.search('\s{1,}-\s{1,}', first_line)
+                        tabs_found = re.search('\s{1,}-\s{1,}', first_line)
                         if '->' in first_line or 'StartTime' in first_line:
                             # tab separated files are usually binetflow tab files
                             input_type = 'binetflow-tabs'
-                        elif re.search('\s{1,}-\s{1,}', first_line):
+                        elif tabs_found:
                             input_type = 'zeek_log_file'
         elif args.db:
             input_type = 'database'
@@ -593,12 +614,13 @@ if __name__ == '__main__':
             try:
                 os.remove(args.output + 'alerts.log')
                 os.remove(args.output + 'alerts.json')
-            except OSError :
+            except OSError:
                 # Directory not empty (may contain hidden non-deletable files), don't delete dir
                 pass
 
         # Create output folder for alerts.txt and alerts.json if they do not exist
-        if not args.output.endswith('/'): args.output = args.output + '/'
+        if not args.output.endswith('/'):
+            args.output = args.output + '/'
         if not os.path.exists(args.output):
             os.makedirs(args.output)
 
@@ -620,7 +642,7 @@ if __name__ == '__main__':
         from evidenceProcess import EvidenceProcess
 
         # Any verbosity passed as parameter overrides the configuration. Only check its value
-        if args.verbose == None:
+        if args.verbose is None:
             # Read the verbosity from the config
             try:
                 args.verbose = int(config.get('parameters', 'verbose'))
@@ -634,7 +656,7 @@ if __name__ == '__main__':
             args.verbose = 1
 
         # Any debuggsity passed as parameter overrides the configuration. Only check its value
-        if args.debug == None:
+        if args.debug is None:
             # Read the debug from the config
             try:
                 args.debug = int(config.get('parameters', 'debug'))
@@ -646,8 +668,6 @@ if __name__ == '__main__':
         # Limit any debuggisity to > 0
         if args.debug < 0:
             args.debug = 0
-
-
 
         ##########################
         # Creation of the threads
@@ -680,12 +700,12 @@ if __name__ == '__main__':
 
         # Before starting update malicious file
         # create an event loop and allow it to run the update_file_manager asynchronously
-        asyncio.run(update_TI_files(outputProcessQueue, config))
+        asyncio.run(update_ti_files(outputProcessQueue, config))
 
         # Print the PID of the main slips process. We do it here because we needed the queue to the output process
         outputProcessQueue.put('10|main|Started main program [PID {}]'.format(os.getpid()))
         # Output pid
-        __database__.store_process_PID('OutputProcess',int(outputProcessThread.pid))
+        __database__.store_process_PID('OutputProcess', int(outputProcessThread.pid))
 
         outputProcessQueue.put('10|main|Started output thread [PID {}]'.format(outputProcessThread.pid))
 
@@ -697,35 +717,38 @@ if __name__ == '__main__':
         # if slips is given a .rdb file, don't load the modules as we don't need them
         if to_ignore and not args.db:
             # Convert string to list
-            to_ignore = to_ignore.replace("[","").replace("]","").replace(" ","").split(",")
+            to_ignore = to_ignore.replace("[", "").replace("]", "").replace(" ", "").split(",")
             # Ignore exporting alerts module if export_to is empty
-            export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ","").lower()
+            export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ", "").lower()
             if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
                 to_ignore.append('ExportingAlerts')
             # ignore CESNET sharing module if send and receive are are disabled in slips.conf
             send_to_warden = config.get('CESNET', 'send_alerts').lower()
             receive_from_warden = config.get('CESNET', 'receive_alerts').lower()
-            if 'no' in send_to_warden  and 'no' in receive_from_warden:
+            if 'no' in send_to_warden and 'no' in receive_from_warden:
                 to_ignore.append('CESNET')
             # don't run blocking module unless specified
             if not args.clearblocking and not args.blocking \
-                    or (args.blocking and not args.interface): # ignore module if not using interface
+                    or (args.blocking and not args.interface):  # ignore module if not using interface
                 to_ignore.append('blocking')
 
             # leak detector only works on pcap files
-            if input_type != 'pcap': to_ignore.append('leak_detector')
+            if input_type != 'pcap': 
+                to_ignore.append('leak_detector')
             try:
                 # This 'imports' all the modules somehow, but then we ignore some
                 modules_to_call = load_modules(to_ignore)[0]
                 for module_name in modules_to_call:
-                    if not module_name in to_ignore:
+                    if module_name not in to_ignore:
                         module_class = modules_to_call[module_name]['obj']
                         ModuleProcess = module_class(outputProcessQueue, config)
                         ModuleProcess.start()
                         __database__.store_process_PID(module_name, int(ModuleProcess.pid))
-                        outputProcessQueue.put('10|main|\t\tStarting the module {} ({}) [PID {}]'.format(module_name,
-                                                                                                         modules_to_call[module_name]['description'],
-                                                                                                         ModuleProcess.pid))
+                        description = modules_to_call[module_name]['description']
+                        outputProcessQueue.put(
+                            f'10|main|\t\tStarting the module {module_name} '
+                            f'({description}) '
+                            f'[PID {ModuleProcess.pid}]')
             except TypeError:
                 # There are not modules in the configuration to ignore?
                 print('No modules are ignored')
@@ -746,10 +769,11 @@ if __name__ == '__main__':
             logs_folder = create_folder_for_logs()
             # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
             logsProcessQueue = Queue()
-            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue, args.verbose, args.debug, config, logs_folder)
+            logsProcessThread = LogsProcess(logsProcessQueue, outputProcessQueue,
+                                            args.verbose, args.debug, config, logs_folder)
             logsProcessThread.start()
             outputProcessQueue.put('10|main|Started logsfiles thread [PID {}]'.format(logsProcessThread.pid))
-            __database__.store_process_PID('logsProcess',int(logsProcessThread.pid))
+            __database__.store_process_PID('logsProcess', int(logsProcessThread.pid))
         else:
             logs_folder = False
 
@@ -757,17 +781,18 @@ if __name__ == '__main__':
         # Create the queue for the evidence thread
         evidenceProcessQueue = Queue()
         # Create the thread and start it
-        evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue, config, args.output, logs_folder)
+        evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue,
+                                                config, args.output, logs_folder)
         evidenceProcessThread.start()
         outputProcessQueue.put('10|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
         __database__.store_process_PID('EvidenceProcess', int(evidenceProcessThread.pid))
-
 
         # Profile thread
         # Create the queue for the profile thread
         profilerProcessQueue = Queue()
         # Create the profile thread and start it
-        profilerProcessThread = ProfilerProcess(profilerProcessQueue, outputProcessQueue, args.verbose, args.debug, config)
+        profilerProcessThread = ProfilerProcess(profilerProcessQueue,
+                                                outputProcessQueue, args.verbose, args.debug, config)
         profilerProcessThread.start()
         outputProcessQueue.put('10|main|Started Profiler thread [PID {}]'.format(profilerProcessThread.pid))
         __database__.store_process_PID('ProfilerProcess', int(profilerProcessThread.pid))
@@ -776,13 +801,13 @@ if __name__ == '__main__':
 
         # Input process
         # Create the input process and start it
-        inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, input_type, input_information, config, args.pcapfilter, zeek_bro)
+        inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, 
+                                    input_type, input_information, config, args.pcapfilter, zeek_bro)
         inputProcess.start()
         outputProcessQueue.put('10|main|Started input thread [PID {}]'.format(inputProcess.pid))
         time.sleep(0.5)
         print()
         __database__.store_process_PID('inputProcess', int(inputProcess.pid))
-
 
         enable_metadata = read_configuration(config, 'parameters', 'metadata_dir')
         if 'yes' in enable_metadata.lower():
@@ -815,17 +840,18 @@ if __name__ == '__main__':
             while True:
                 # Sleep some time to do rutine checks
                 time.sleep(check_time_sleep)
-                slips_internal_time = __database__.getSlipsInternalTime()
+                slips_internal_time = float(__database__.getSlipsInternalTime())+1
                 # Get the amount of modified profiles since we last checked
-                modified_profiles, time_of_last_modified_tw  = __database__.getModifiedProfilesSinceTime(float(slips_internal_time) + 1)
+                modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(slips_internal_time)
                 amount_of_modified = len(modified_profiles)
                 # Get the time of last modified timewindow and set it as a new
-                if time_of_last_modified_tw != 0:
-                    __database__.setSlipsInternalTime(time_of_last_modified_tw)
+                if last_modified_tw_time != 0:
+                    __database__.setSlipsInternalTime(last_modified_tw_time)
                 # How many profiles we have?
                 profilesLen = str(__database__.getProfilesLen())
-                #outputProcessQueue.put(f'10|Main|Total Number of Profiles in DB so far: {profilesLen}. Modified Profiles in the last TW: {amount_of_modified}. ({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})\r')
-                print(f'Total Number of Profiles in DB so far: {profilesLen}. Modified Profiles in the last TW: {amount_of_modified}. ({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})', end='\r')
+                print(f'Total Number of Profiles in DB so far: {profilesLen}. '
+                      f'Modified Profiles in the last TW: {amount_of_modified}. '
+                      f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})', end='\r')
 
                 # Check if we need to close some TW
                 __database__.check_TW_to_close()
@@ -867,7 +893,7 @@ if __name__ == '__main__':
                         # print('Counter to stop Slips. Amount of modified
                         # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                         if minimum_intervals_to_wait == 0:
-                             # If the user specified -s, save the database before stopping
+                            # If the user specified -s, save the database before stopping
                             shutdown_gracefully(input_information)
                             break
                         minimum_intervals_to_wait -= 1
@@ -881,4 +907,3 @@ if __name__ == '__main__':
 
     except KeyboardInterrupt:
         shutdown_gracefully(input_information)
-

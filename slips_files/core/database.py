@@ -491,7 +491,7 @@ class Database(object):
             return []
         return data
 
-    def getModifiedProfilesSinceTime(self,time):
+    def getModifiedProfilesSince(self, time):
         """ Returns a set of modified profiles since a certain time and the time of the last modified profile"""
         modified_tws = self.getModifiedTWSinceTime(time)
         if not modified_tws:
