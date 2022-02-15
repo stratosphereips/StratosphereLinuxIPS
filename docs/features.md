@@ -28,7 +28,14 @@ The output process collects output from the modules and handles the display of i
 - log files in a folder _current-date-time_ - separates the traffic into files according to a profile and timewindow and summarize the traffic according to each profile and timewindow.
 
 ## Whitelisting
-Slips allows you to whitelist some pieces of data in order to avoid its processing. In particular you can whitelist an IP address, a domain, a MAC address or a complete organization. You can choose to whitelist what is going __to__ them and what is coming __from__ them. You can also choose to whitelist the flows, so they are not processed, or the alerts, so you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid processing any communication to or from these pieces of data, not to avoid any packet that contains that piece of data. For example, if you whitelist the domain slack.com, then a DNS request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
+Slips allows you to whitelist some pieces of data in order to avoid its processing. 
+In particular you can whitelist an IP address, a domain, a MAC address or a complete organization. 
+You can choose to whitelist what is going __to__ them and what is coming __from__ them. 
+You can also choose to whitelist the flows, so they are not processed, or the alerts, so
+you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid
+processing any communication to or from these pieces of data, not to avoid any packet that
+contains that piece of data. For example, if you whitelist the domain slack.com, then a DNS 
+request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
 ## Flows Whitelist
 If you whitelist an IP address, Slips will check all flows and see if you are whitelisting to them or from them.
@@ -213,16 +220,17 @@ tr:nth-child(even) {
 
 ## Usage Instructions
 
-Below are the modules that need special configurations to work.
-
 
 ### Virustotal Module
 
-To use this module you need to add your virustotal api key in ```modules/virustotal/api_key_secret```
+
+This module is used to lookup IPs/domains/downloaded files on virustotal
+
+To use it you need to add your virustotal API key in ```modules/virustotal/api_key_secret```
 
 ### RiskIQ Module
 
-  
+This module is used to get different information (passive DNS, IoCs, etc.) from [RiskIQ](https://www.riskiq.com/)
 To use this module your RiskIQ email and API key should be stored in ```modules/RiskIQ/credentials```  
   
 the format of this file should be the following:  
@@ -236,58 +244,76 @@ The hash should be your 64 character API Key.
   
 The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```slips.conf```
 
-### ExportingAlerts Module
-
-To use this module to export to slack you need to add your slack bot token in  ```modules/ExportingAlerts/slack_bot_token_secret```
-
-If you don't have a slack bot follow steps 1 to 3 [here](https://api.slack.com/bot-users#creating-bot-user) to get one.
-
----
-
-If you want to contribute: improve existing Slips detection modules or implement your own detection modules, see section :doc:`Contributing <contributing>`.
-
-
 ## Leak detection module
 
 This module on runs on pcaps, it uses YARA rules to detect leaks.
 
 You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` and it will be automatically compiled and stored in ```modules/leak_detector/yara_rules/compiled``` and matched against every pcap.
 
-  
-## CESNET Sharing  
-  
-Slips supports exporting alerts to warden servers, as well as importing alerts.  
-  
-To enable the module, set ```send_alerts``` and/or ```receive_alerts``` to ```yes``` in slips.conf  
-  
-The default configuration file path in specified in the ```configuration_file``` variable in ```slips.conf```  
-  
-The default path is ```modules/CESNET/warden.conf```  
-  
-The format of ```warden.conf``` should be the following:  
-  ```
- { "url": "https://example.com/warden3", 
-   "certfile": "cert.pem", 
-   "keyfile": "key.pem", 
-   "cafile": "/etc/ssl/certs/DigiCert_Assured_ID_Root_CA.pem", 
-   "timeout": 600, 
-   "errlog": {"file": "/var/log/warden.err", "level": "debug"}, 
-   "filelog": {"file": "/var/log/warden.log", "level": "warning"}, 
-   "name": "com.example.warden.test" }  
-```
-To get your key and the certificate, you need to run ```warden_apply.sh``` with you registered client_name and password. [Full instructions here](https://warden.cesnet.cz/en/index)
-  
-The ```name``` key is your registered warden node name.   
-  
-All evidence causing an alert are exported to warden server once an alert is generated. See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
-  
-You can change how often you get alerts (import) from warden server  
-  
-By default Slips imports alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
-
-
 ## Blocking
 
 To enable blocking in slips, start slips with the ```-p``` flag. 
 
 This feature is only supported in linux using iptables.
+
+## Exporting Alerts and RiskIQ Modules
+
+Slips supports exporting alerts to other systems using different modules (ExportingAlerts, CESNET sharing etc.) 
+
+
+For now the supported systems are:
+
+- Slack
+- TAXII Servers (STIX format)
+- Warden servers
+- suricata-like JSON format
+- Logstash
+
+
+Refer to the [exporting section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html) for detailed instructions on how to export.
+
+
+## Flowalerts Module
+
+
+This module is responsible for detecting malicious behaviours in your traffic.
+    
+Refer to the [Flowalerts section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/flowalerts.html) for detailed explanation of what Slips detects and how it detects.
+
+## Disabled alerts
+
+All Slips detections are turned on by default.
+
+Slips support disabling unwanted alerts, simply add the name of the unwanted alert name in ```disabled_detections``` list in ```slips.conf```.
+
+for example:
+
+    disabled_detections = [MaliciousJA3, DataExfiltration, SelfSignedCertificate]
+
+A list of all availble detections in available in ```slips.conf```.
+
+
+## Threat Intelligence and Update Manager Modules
+
+
+Slips has a complex system to deal with Threat Intelligence feeds. Feeds are loaded, parsed and updated periodically and automatically without user interaction in slips:
+
+Refer to the [Threat Intelligence section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/threatintelligence.html) for detailed explanation of how it works.
+
+## IP Info Module
+
+The IP info module has several ways of getting information about an IP and MAC addresses.
+
+
+Refer to the [IP Info section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/ipinfo.html) for detailed explanation of how it works.
+
+
+## ARP Module
+
+This module is used to check for ARP attacks in your network traffic
+
+Refer to the [ARP section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/ARP.html) for detailed explanation of how it works.
+
+---
+
+If you want to contribute: improve existing Slips detection modules or implement your own detection modules, see section :doc:`Contributing <contributing>`.
