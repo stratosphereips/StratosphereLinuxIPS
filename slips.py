@@ -330,15 +330,20 @@ def shutdown_gracefully(input_information):
                 # make sure we're not in the middle of processing
                 if len(PIDs) > 0 and max_loops == 1:
                     if not warning_printed:
-                        print(f"\n[Main] The following modules are busy working on your data.\n\n{list(PIDs.keys())}\n\n"
+                        print(f"\n[Main] The following modules are busy working on your data."
+                              f"\n\n{list(PIDs.keys())}\n\n"
                               "You can wait for them to finish, or you can press CTRL-C again to force-kill.\n")
                         warning_printed = True
 
                     # delay killing unstopped modules
                     max_loops += 1
+                    continue
         except KeyboardInterrupt:
-            # the user want to kill the remaining modules
+            # either the user wants to kill the remaining modules (pressed ctrl +c again)
+            # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
+            # either way continue to kill the remaining modules
             pass
+
 
         # modules that aren't subscribed to any channel will always be killed and not stopped
         # some modules continue on sigint, but recieve
@@ -352,6 +357,7 @@ def shutdown_gracefully(input_information):
                 print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tKilled.')
             except ProcessLookupError:
                 print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready stopped.')
+
         # Send manual stops to the process not using channels
         try:
             logsProcessQueue.put('stop_process')
