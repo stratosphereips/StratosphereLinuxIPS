@@ -9,7 +9,7 @@ Slips is a modular software.
 <h3 align="center"> 
 Slips is a behavioral based Intrusion Prevention System<br><br>
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.png" title="Slips in action.">
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" title="Slips in action.">
 
 
 Slips documentation is [here](https://stratospherelinuxips.readthedocs.io/en/develop/) <br>
