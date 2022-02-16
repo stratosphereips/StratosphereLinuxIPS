@@ -289,48 +289,56 @@ def shutdown_gracefully(input_information):
 
         # get dict of PIDs spawned by slips
         PIDs = __database__.get_PIDs()
+        # only print that modules are still running once
+        warning_printed = False
         # timeout variable so we don't loop forever
         max_loops = 130
         # loop until all loaded modules are finished
-        while len(finished_modules) < len(loaded_modules) and max_loops != 0:
-            # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
-            try:
-                message = c1.get_message(timeout=0.01)
-            except NameError:
-                # Sometimes the c1 variable does not exist yet. So just force the shutdown
-                message = {
-                    'data': 'dummy_value_not_stopprocess',
-                    'channel': 'finished_modules'}
+        try:
+            while len(finished_modules) < len(loaded_modules) and max_loops != 0:
+                # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
+                try:
+                    message = c1.get_message(timeout=0.01)
+                except NameError:
+                    # Sometimes the c1 variable does not exist yet. So just force the shutdown
+                    message = {
+                        'data': 'dummy_value_not_stopprocess',
+                        'channel': 'finished_modules'}
 
-            if message and message['data'] == 'stop_process':
-                continue
-            if message and message['channel'] == 'finished_modules' and type(message['data']) == str:
-                # all modules must reply with their names in this channel after
-                # receiving the stop_process msg
-                # to confirm that all processing is done and we can safely exit now
-                module_name = message['data']
+                if message and message['data'] == 'stop_process':
+                    continue
+                if message and message['channel'] == 'finished_modules' and type(message['data']) == str:
+                    # all modules must reply with their names in this channel after
+                    # receiving the stop_process msg
+                    # to confirm that all processing is done and we can safely exit now
+                    module_name = message['data']
 
-                if module_name not in finished_modules:
-                    finished_modules.append(module_name)
-                    try:
-                        # remove module from the list of opened pids
-                        PIDs.pop(module_name)
-                    except KeyError:
-                        continue
-                    modules_left = len(list(PIDs.keys()))
-                    # to vertically align them when printing
-                    module_name = module_name + ' '*(20-len(module_name))
-                    print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
-            max_loops -= 1
+                    if module_name not in finished_modules:
+                        finished_modules.append(module_name)
+                        try:
+                            # remove module from the list of opened pids
+                            PIDs.pop(module_name)
+                        except KeyError:
+                            continue
+                        modules_left = len(list(PIDs.keys()))
+                        # to vertically align them when printing
+                        module_name = module_name + ' '*(20-len(module_name))
+                        print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
+                max_loops -= 1
 
-            # before killing the modules that aren't finished
-            # make sure we're not in the middle of exporting alerts
-            # if the PID of CESNET module is there in PIDs dict,
-            # it means the module hasn't stopped yet
-            if 'yes' in send_to_warden and 'CESNET' in PIDs:
-                # we're in the middle of sending alerts to warden server
-                # delay killing unstopped modules
-                max_loops += 1
+                # after reaching the max_loops and before killing the modules that aren't finished,
+                # make sure we're not in the middle of processing
+                if len(PIDs) > 0 and max_loops == 1:
+                    if not warning_printed:
+                        print(f"\n[Main] The following modules are busy working on your data.\n\n{list(PIDs.keys())}\n\n"
+                              "You can wait for them to finish, or you can press CTRL-C again to force-kill.\n")
+                        warning_printed = True
+
+                    # delay killing unstopped modules
+                    max_loops += 1
+        except KeyboardInterrupt:
+            # the user want to kill the remaining modules
+            pass
 
         # modules that aren't subscribed to any channel will always be killed and not stopped
         # some modules continue on sigint, but recieve
