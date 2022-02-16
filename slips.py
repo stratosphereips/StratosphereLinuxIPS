@@ -386,6 +386,8 @@ def shutdown_gracefully(input_information):
                 pass
             # Give the exact path to save(), this is where the .rdb backup will be
             __database__.save(backups_dir + input_information)
+            # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
+            print("[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.")
             print(f"[Main] Database saved to {backups_dir}{input_information}")
 
         # if store_a_copy_of_zeek_files is set to yes in slips.conf, copy the whole zeek_files dir to the output dir
