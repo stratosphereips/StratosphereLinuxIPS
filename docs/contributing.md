@@ -118,6 +118,17 @@ except (configparser.NoOptionError, configparser.NoSectionError, NameError):
 In this example, the path to the virustotal API key was retrieved from the *virustotal* section and *api_key_file* key.
 
 
+## Plug in a zeek script
+
+Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir and adding the file name in ```zeek-scripts/__load__.zeek```.
+
+For example, if you want to add a zeek script called ```arp.zeek``` you should add it to ```__load__.zeek``` like this:
+
+	@load ./arp.zeek
+
+Zeek output is suppressed by default, so if your script has errors, Slips will fail silently.
+
+
 ### Troubleshooting
 Most errors occur when running the module inside SLIPS. These errors are hard to resolve, because warnings and debug messages may be hidden under extensive outputs from other modules.
 
@@ -136,7 +147,13 @@ In case that the module is started, but does not receive any messages from the c
 
 ### Testing
 
-Before pushing, run the unit tests by:
+
+Slips has 2 kinds of tests, unit tests and integration tests.
+
+integration tests are done by testing all files in our ```dataset/``` dir and 
+are done in ```tests/test_dataset.py```
+
+Before pushing, run the unit tests and integration tests by:
 
 
 1- Make sure you're in slips main dir (the one with kalipso.sh)
