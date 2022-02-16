@@ -31,6 +31,7 @@ class Module(Module, multiprocessing.Process):
         # to check your internet connection
         self.hosts = ['bing.com', 'google.com', 'yandex.com','yahoo.com']
 
+
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -50,6 +51,7 @@ class Module(Module, multiprocessing.Process):
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
+
 
     def check_suspicious_user_agents(self, uid, host, uri, timestamp, user_agent, profileid, twid):
         ''' Check unusual user agents and set evidence '''
@@ -71,6 +73,7 @@ class Module(Module, multiprocessing.Process):
                                      profileid=profileid, twid=twid, uid=uid)
             return True
         return False
+
 
     def check_multiple_empty_connections(self, uid, contacted_host, timestamp, request_body_len, profileid, twid):
         """
@@ -149,6 +152,7 @@ class Module(Module, multiprocessing.Process):
         UA_info = f'{user_agent} {os_name} {os_type} {browser}'.replace('unknown','').replace('  ','')
         # store it in the database
         __database__.add_user_agent_to_profile(profileid, UA_info)
+
 
     def run(self):
         # Main loop function

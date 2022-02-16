@@ -177,7 +177,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # Threat level
                 threat_level = 'medium'
                 category = 'Recon.Scanning'
-                # We detect a scan every Threshold. So we detect when there is 3, 6, 9, 12, etc. dports per dip.
+                # We detect a scan every Threshold. So we detect when there is 6, 9, 12, etc. dports per dip.
                 # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
                 cache_key = profileid + ':' + twid + ':' + key
                 try:
@@ -185,7 +185,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                 except KeyError:
                     prev_amount_dports = 0
                 #self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key, prev_amount_dports, amount_of_dports))
-                if amount_of_dports % self.port_scan_minimum_dports_threshold == 0 and prev_amount_dports < amount_of_dports:
+                if amount_of_dports % self.port_scan_minimum_dports_threshold == 0 \
+                        and prev_amount_dports < amount_of_dports:
                     # Compute the confidence
                     pkts_sent = 0
                     for dport in dstports:

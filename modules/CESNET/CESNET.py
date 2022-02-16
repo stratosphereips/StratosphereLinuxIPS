@@ -204,7 +204,7 @@ class Module(Module, multiprocessing.Process):
 
 
     def import_alerts(self, wclient):
-        events_to_get = 10
+        events_to_get = 100
 
         cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
          'Fraud.Scam', 'Information', 'Fraud.Scam']
