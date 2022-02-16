@@ -47,10 +47,51 @@ Below is more explanation on internal representation of data, usage of Zeek and 
 
 Slips has 4 threat levels.
 
-| **Threat Level** 	| **Description** 	| **Example**|
-|------------------	|-----------------	|---	|
-| Info             	|Information, Do nothing|SSH login|
-| Low              	| Interesting activity to consider|DNS without connection|
-| Medium           	|Suspicious activity that shouldn't happen|PING Sweep|
-| High           	|Malicious|Password guessing|
-| Critical          |Critical for your security, results in a direct block|Malicious Downloaded Files|
+<style type="text/css">
+.tg  {border-collapse:collapse;border-spacing:0;}
+.tg td{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+  overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg th{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+  font-weight:normal;overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg .tg-0pky{border-color:inherit;text-align:left;vertical-align:top}
+</style>
+<table class="tg">
+<thead>
+  <tr>
+    <th class="tg-0pky"><span style="font-weight:bold">Threat Level</span></th>
+    <th class="tg-0pky"><span style="font-weight:bold">Description</span></th>
+    <th class="tg-0pky"><span style="font-weight:bold">Example</span></th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td class="tg-0pky">Info</td>
+    <td class="tg-0pky">Information, Do nothing</td>
+    <td class="tg-0pky">SSH login</td>
+  </tr>
+  <tr>
+    <td class="tg-0pky">Low</td>
+    <td class="tg-0pky">Interesting activity to consider</td>
+    <td class="tg-0pky">DNS without connection</td>
+  </tr>
+  <tr>
+    <td class="tg-0pky">Medium</td>
+    <td class="tg-0pky">Suspicious activity that shouldn't happen</td>
+    <td class="tg-0pky">PING Sweep</td>
+  </tr>
+    <tr>
+    <td class="tg-0pky">High</td>
+    <td class="tg-0pky">Malicious activity</td>
+    <td class="tg-0pky">Password guessing</td>
+  </tr>
+    </tr>
+    <tr>
+    <td class="tg-0pky">Critical</td>
+    <td class="tg-0pky">Critical for your security, results in a direct block</td>
+    <td class="tg-0pky">Malicious downloaded Files</td>
+  </tr>
+
+
+
+</tbody>
+</table>
