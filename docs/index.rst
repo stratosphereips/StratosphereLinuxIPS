@@ -42,9 +42,11 @@ This documentation gives an overview how Slips works, how to use it and how to h
    self 
    installation
    usage
-   detection_modules
    architecture
-   contributing
-   training
-   threatintelligence
+   detection_modules
    flowalerts
+   training
+   exporting
+   contributing
+
+
