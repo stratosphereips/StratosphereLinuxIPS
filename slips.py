@@ -41,7 +41,7 @@ from collections import OrderedDict
 from distutils.dir_util import copy_tree
 import asyncio
 
-version = '0.8.3'
+version = '0.8.4'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
