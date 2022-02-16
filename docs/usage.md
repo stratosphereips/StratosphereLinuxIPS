@@ -125,7 +125,20 @@ You can load it again using ```-d```, For example:
 
 And then use ```./kalipso``` to view the loaded database.
 
-This feature isn't supported in docker due to problems with redis on docker.
+This feature isn't supported in docker due to problems with redis in docker.
+
+_DISCLAIMER_: When saving the database you will see the following
+warning 
+
+    stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file
+
+This configuration is set by slips so that redis will continue working even if redis
+can't write to dump.rdb. 
+
+Your information will be lost only if you're out of space and redis can't write to dump.rdb or if you 
+don't have permissions to write to /var/lib/redis/dump.rdb, otherwise you're fine and 
+the saved database will contain all analysed flows.
+
 
 ## Whitelisting
 Slips allows you to whitelist some pieces of data in order to avoid its processing. 
