@@ -80,7 +80,7 @@ Slips generate a 'possible data exfiltration alerts when the number of uploaded 
 
 The number of MBs can be modified by editting the value of ```data_exfiltration_threshold``` in ```slips.conf``` 
 
-# Malicious JA3 and JA3s hashes
+## Malicious JA3 and JA3s hashes
 
 Slips uses JA3 hashes to detect C&C servers (JA3s) and infected clients (JA3)
 
