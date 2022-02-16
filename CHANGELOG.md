@@ -6,16 +6,17 @@
   - Improve alerts by adding hostname to alerts printed in the CLI and in alerts.log
   - Faster startup of Slips, now TI files are updated concurrently. 
   - Add a logstash configuration file to allow exporting slips alerts.
-  - Fix false positive 'not valid yet' SSL alerts
   - Add support for malicious SSL feeds.
   - Support blacklisting IP ranges taken from TI feeds.
   - profilerProcess optimizations.
   - Get device type, browser and OS info from user agents found in HTTP traffic.
-  - Fix invalid JSON alerts in alerts.json 
-  - Fix problem stopping slips. 
   - Add "Blocked by Slips" comment to all iptables rules added by slips
   - Improve whitelisting by updating organizations' domains.
   - Update documentation
+  - Fix invalid JSON alerts in alerts.json 
+  - Fix problem stopping slips. 
+  - Fix problem with redis stopping on error writing to disk.
+  - Fix false positive 'not valid yet' SSL alerts
 
 * Kalipso
   - Fix Kalipso in docker issue
