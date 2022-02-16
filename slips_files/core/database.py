@@ -39,6 +39,7 @@ class Database(object):
         else:
             self.sudo = 'sudo '
 
+
     def read_configuration(self):
         """
         Read values from the configuration file
@@ -113,6 +114,12 @@ class Database(object):
                                                 health_check_interval=20)#password='password')
                 if self.deletePrevdb:
                     self.r.flushdb()
+
+                # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
+                # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
+                self.r.config_set('stop-writes-on-bgsave-error','no')
+                self.rcache.config_set('stop-writes-on-bgsave-error','no')
+
             except redis.exceptions.ConnectionError:
                 print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
         # Even if the DB is not deleted. We need to delete some temp data
