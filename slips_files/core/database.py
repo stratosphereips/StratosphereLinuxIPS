@@ -2693,8 +2693,9 @@ class Database(object):
         backup_file should be the path+name of the file you want to store the db in
         If you -s the same file twice the old backup will be overwritten.
         """
-        # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
-        self.print("[Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.")
+
+        # print statements in this function won't work becaus eby the time this
+        # function is executed, the redis database would have already stopped
 
         # Saves to /var/lib/redis/dump.rdb
         # this path is only accessible by root
