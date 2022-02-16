@@ -15,6 +15,7 @@
   - Fix problem stopping slips. 
   - Add "Blocked by Slips" comment to all iptables rules added by slips
   - Improve whitelisting by updating organizations' domains.
+  - Update documentation
 
 * Kalipso
   - Fix Kalipso in docker issue
