@@ -155,19 +155,19 @@ The hash should be your 64 character API Key.
   
 The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```slips.conf```
 
-## Leak detection module
+## Leak Detection Module
 
 This module on runs on pcaps, it uses YARA rules to detect leaks.
 
 You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` and it will be automatically compiled and stored in ```modules/leak_detector/yara_rules/compiled``` and matched against every pcap.
 
-## Blocking
+## Blocking Module
 
 To enable blocking in slips, start slips with the ```-p``` flag. 
 
 This feature is only supported in linux using iptables.
 
-## Exporting Alerts and RiskIQ Modules
+## Exporting Alerts Module
 
 Slips supports exporting alerts to other systems using different modules (ExportingAlerts, CESNET sharing etc.) 
 
@@ -449,7 +449,7 @@ by chaning the ```receive_delay``` in ```slips.conf```
 These are the categories we import:
 ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information', 'Fraud.Scam', 'Information', 'Fraud.Scam']
 
-## HTTP Analyzer module
+## HTTP Analyzer Module
 
 This module handles the detections of HTTP flows
 
@@ -473,7 +473,7 @@ and evidence.
 Our current list of user agents has:
 ['httpsend', 'chm_msdn', 'pb', 'jndi', 'tesseract']
 
-## Leak Detector module
+## Leak Detector Module
 
 This module work only when slips is given a PCAP
 

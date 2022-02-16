@@ -21,14 +21,14 @@ The detection techniques are:
 The details of each detection follows.
 
 
-## Detect long connections
+## Long Connections
 Detect connections that are long, except the multicast connections.
 
 By defualt, A connection in considered long if it exceeds 1500 seconds (25 Minutes). 
 
 This threshold can be changed ```slips.conf``` by changing the value of  ```long_connection_threshold```  
 
-## Detect connections without DNS resolution
+## Connections without DNS resolution
 This will detect connections done without a previous DNS resolution. The idea is that a connection without a DNS resolution is slightly suspicious.
 
 If Slips runs by capturing packets directly from a network device (as opposed to, for example, a PCAP file), this detection will ignore all connections that happen in the first 3 minute of operation of Slips. This is because most times Slips is started when the computer is already running, and many DNS connections were already done. So waiting 3 minutes decreases the amount of False Positives.
@@ -50,7 +50,7 @@ Slips detects successful SSH connections using 2 ways
 1. Using Zeek. Zeek logs successful SSH connection to ssh.log by default
 2. if all bytes sent in a SSH connection is more than 4290 bytes
 
-## Detect DNS resolutions without a connection
+## DNS resolutions without a connection
 This will detect DNS resolutions for which no further connection was done. A resolution without a usage is slightly suspicious.
 
 The domains that are excepted are:
@@ -114,7 +114,7 @@ Some scans are also detected by Slips independently of Zeek, like ICMP sweeps an
 Check  []() section for more info #todo
 
 
-## Detect DGA
+## DGA
 
 When the DNS server fails to resolve a domain, it responds back with NXDOMAIN code.
 
@@ -145,10 +145,10 @@ about the malicious IP and prints it with the alert.
 
 So instead of having an alerts saying:
 
-Detected SSL certificate validation failed with (certificate has expired) Destination IP: 216.58.201.70.
+    Detected SSL certificate validation failed with (certificate has expired) Destination IP: 216.58.201.70.
 
 Slips gathers AS, hostname, SNI, rDNS and any available data about this IP and you get an alert saying:
 
-Detected SSL certificate validation failed with (certificate has expired) Destination IP: 
-216.58.201.70. AS: GOOGLE, US, SNI: 2542116.fls.doubleclick.net, rDNS: prg03s01-in-f70.1e100.net
+    Detected SSL certificate validation failed with (certificate has expired) Destination IP: 
+    216.58.201.70. AS: GOOGLE, US, SNI: 2542116.fls.doubleclick.net, rDNS: prg03s01-in-f70.1e100.net
 
