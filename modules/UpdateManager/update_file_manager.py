@@ -239,19 +239,24 @@ class UpdateFileManager:
             return True
 
     def download_file(self, file_to_download):
-        try:
-            response = requests.get(file_to_download,  timeout=10)
-        except requests.exceptions.ReadTimeout:
-            self.print(f'Timeout reached while downloading the file {file_to_download}. Aborting.', 0, 1)
-            return False
-        except requests.exceptions.ConnectionError:
-            self.print(f'Connection error while downloading the file {file_to_download}. Aborting.', 0, 1)
-            return False
 
-        if response.status_code != 200:
-            self.print(f'An error occurred while downloading the file {file_to_download}. Aborting', 0, 1)
+        # Retry 3 times to get the TI file if an error occured
+        for _try in range(3):
+            try:
+                response = requests.get(file_to_download,  timeout=10)
+                if response.status_code != 200:
+                    error = f'An error occurred while downloading the file {file_to_download}. Aborting'
+                else:
+                    return response
+            except requests.exceptions.ReadTimeout:
+                error = f'Timeout reached while downloading the file {file_to_download}. Aborting.'
+
+            except requests.exceptions.ConnectionError:
+                error = f'Connection error while downloading the file {file_to_download}. Aborting.'
+
+        if error:
+            self.print(error, 0, 1)
             return False
-        return response
 
     def get_last_modified(self, response) -> str:
         """
@@ -302,6 +307,9 @@ class UpdateFileManager:
                 old_e_tag = data.get('e-tag', '')
                 # Check now if E-TAG of file in github is same as downloaded
                 # file here.
+                if not response:
+                    return False
+
                 new_e_tag = self.get_e_tag_from_web(response)
                 if not new_e_tag:
                     # use last modified instead
