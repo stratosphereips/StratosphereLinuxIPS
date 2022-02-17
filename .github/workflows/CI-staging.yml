@@ -1,36 +1,36 @@
-# This workflow will install Slips dependencies and run unit tests
-
-name: CI-staging
-
-on:
-  push:
-    branches:
-    - 'develop'
-    - '!master'
-  pull_request:
-    branches:
-    - 'develop'
-    - '!master'
-
-jobs:
-
-  run_unit_tests:
-    # specify the host OS
-    runs-on: ubuntu-latest
-    # 2 hours timeout
-    timeout-minutes: 7200
-    # start a container using slips dependencies image
-    container:
-      image: alyagomaa/slips_dependencies:dependencies
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Start redis server
-      run: redis-server --daemonize yes
-
-    - name: Run unit tests
-      run: python3 -m pytest tests/ --ignore="tests/test_dataset.py" -p no:warnings -vv
-
-    - name: Test all files in our dataset
-      run: python3 -m pytest tests/test_dataset.py -p no:warnings -vv -s
+## This workflow will install Slips dependencies and run unit tests
+#
+#name: CI-staging
+#
+#on:
+#  push:
+#    branches:
+#    - 'develop'
+#    - '!master'
+#  pull_request:
+#    branches:
+#    - 'develop'
+#    - '!master'
+#
+#jobs:
+#
+#  run_unit_tests:
+#    # specify the host OS
+#    runs-on: ubuntu-latest
+#    # 2 hours timeout
+#    timeout-minutes: 7200
+#    # start a container using slips dependencies image
+#    container:
+#      image: alyagomaa/slips_dependencies:dependencies
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#
+#    - name: Start redis server
+#      run: redis-server --daemonize yes
+#
+#    - name: Run unit tests
+#      run: python3 -m pytest tests/ --ignore="tests/test_dataset.py" -p no:warnings -vv
+#
+#    - name: Test all files in our dataset
+#      run: python3 -m pytest tests/test_dataset.py -p no:warnings -vv -s
