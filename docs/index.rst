@@ -47,6 +47,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    flowalerts
    training
    exporting
+   slips_in_action
    contributing
 
 

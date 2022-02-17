@@ -1,5 +1,5 @@
 
-# Slips in action
+# Slips In Action
 
 To demonstrate the capabilities of Slips, we will give it real life malware traffic and checking how Slips analyses it.
 
@@ -249,8 +249,6 @@ Slips did not detect periodic connection over 1337/UDP because the LSTM module f
 
 <img src="https://images.squarespace-cdn.com/content/v1/5a01100f692ebe0459a1859f/1611308530585-BKXFXAQXGFIPXPRLSSVF/image5.png" title="Behavioral model created by Slips for the connection between phone and server using 1337/UDP.">
 
-
----
 
 
 
