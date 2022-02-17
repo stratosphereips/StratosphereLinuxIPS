@@ -9,11 +9,13 @@ To demonstrate the capabilities of Slips, we will give it real life malware traf
 
 ## Saefko RAT
 
-We demonstarte Slips capabilities by running Slips on Saefko-RAT [download here](https://mcfp.felk.cvut.cz/publicDatasets/Android-Mischief-Dataset/AndroidMischiefDataset_v2/RAT06_Saefko/) network traffic.
+We provide the analysis of the network traffic of the RAT06-Saefko [download here](https://mcfp.felk.cvut.cz/publicDatasets/Android-Mischief-Dataset/AndroidMischiefDataset_v2/RAT06_Saefko/) using Slips.
 
-The capture contains different actions done by the RAT controller
-(e.g. upload a file, get GPS location, monitor files, etc.).
-For detailed analysis, check Kamila Babayeva's blog [Dissecting a RAT. Analysis of the Saefko RAT](https://www.stratosphereips.org/blog/2021/6/2/dissecting-a-rat-analysis-of-the-saefko-rat).
+The capture contains different actions done by the RAT controller (e.g. upload a file, get GPS location, monitor files, etc.). For detailed analysis, check Kamila Babayeva's blog [Dissecting a RAT. Analysis of the Saefko RAT](https://www.stratosphereips.org/blog/2021/6/2/dissecting-a-rat-analysis-of-the-saefko-rat).
+
+From the analysis we know that:
+-  The controller IP address: 192.168.131.1 and 2001:718:2:903:f410:3340:d02b:b918
+-  The victim's IP address: 192.168.131.2 and 2001:718:2:903:b877:48ae:9531:fbfc
 
 First we run slips using the following command:
 
@@ -66,7 +68,7 @@ We can see the following detections in the evidence:
 
 JA3 fingerprint the client part of the SSL certificate. This indicates that the source IP 2001:718:2:903:b877:48ae:9531:fbfc was infected with one of the Tofsee malware family
 
-Slips also detected
+Slips also detected the connection to the database:
 
     SSL certificate validation failed with (certificate has expired) Destination IP: 2a02:4780:dead:d8f::1. SNI: experimentsas.000webhostapp.com
 
@@ -97,13 +99,100 @@ To view all evidence that slips detected including those that weren't enough to 
 
 Slips also has another log file in JSON format so they can be easily parsed and exported. See [the exporting section](https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html%29) of the documentation.
 
-The generated alerts in this file follow [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index).
+ The generated alerts in this file follow [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index).
 
     cat output/alerts.json
+---
+## Emotet
+We will be analysing several Emotet PCAPs starting from infection, until Trickbot and Qakbot malwares are  dropped.
+
+
+The captures contain different actions done by the Emotet and trickbot controller. For detailed analysis, check Paloalto's blog [Examining Emotet Infection Traffic](https://unit42.paloaltonetworks.com/wireshark-tutorial-emotet-infection/#:~:text=Example%201%3A%20Emotet%20Infection%20Traffic).
+
+### Emotet infection
+We will be analysing this Emotet PCAP [download here](https://github.com/pan-unit42/wireshark-tutorial-Emotet-traffic/blob/main/Example-1-2021-01-06-Emotet-infection.pcap.zip). password: `infected`
+
+When running Slips on the PCAP
+
+	./slips.py -f Example-1-2021-01-06-Emotet-infection.pcap
+
+We get the following alerts
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/emotet_alerts.png" title="Slips generated Emotet alerts">
+
+The reconnection attemps shown in the analysis
+<img src="https://unit42.paloaltonetworks.com/wp-content/uploads/2021/01/word-image-45.jpeg" title="Slips generated Emotet alerts">
+
+are detected by Slips in the following evidence
+
+		Detected a connection without DNS resolution to IP: 46.101.230.194
+		Detected Multiple reconnection attempts to Destination IP: 46.101.230.194 from IP: 10.1.6.206
+
+
+### Trickbot
+
+Analyzing the next PCAP [download here](https://github.com/pan-unit42/wireshark-tutorial-Emotet-traffic/blob/main/Example-4-2021-01-05-Emotet-infection-with-Trickbot.pcap.zip) that contains the Trickbot traffic. password: `infected`
+
+
+Running slips on the pcap
+
+	 ./slips.py -f Example-4-2021-01-05-Emotet-infection-with-Trickbot.pcap
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/trickbot.png" title="Slips generated Trickbot alerts">
+
+Slips detects a self signed SSL certificate to  102.164.208.44 which is the trickbot IP associated with data exfiltration
+
+		Detected SSL certificate validation failed with (self signed certificate) Destination IP: 102.164.208.44
+
+Slips also detected
+
+	Detected a connection without DNS resolution to IP: 102.164.208.44.
+
+and
+
+	Detected Connection to unknown destination port 449/TCP destination IP 102.164.208.44.
+
+
+### Qakbot
+
+
+Analyzing the next PCAP [download here](https://github.com/pan-unit42/wireshark-tutorial-Emotet-traffic/blob/main/Example-5-2020-08-18-Emotet-infection-with-Qakbot.pcap.zip) that contains the Qakbot traffic. password: `infected`
+
+
+Running slips on the pcap
+
+	 ./slips.py -f Example-5-2020-08-18-Emotet-infection-with-Qakbot.pcap
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/qakbot.png" title="Slips generated Trickbot alerts">
+
+Slips detected that the victim 192.168.100.101 is infected with Qakbo using JA3
+
+	Detected Malicious JA3: 7dd50e112cd23734a310b90f6f44a7cd from source address 192.168.100.101 description: Quakbot ['malicious']
+	Detected Malicious JA3: 57f3642b4e37e28f5cbe3020c9331b4c from source address 192.168.100.101 description: Gozi ['malicious']
+
+We can also see a Domain generation algorithm detection by the same victim 192.168.100.101
+
+	Detected possible DGA or domain scanning. 192.168.100.101 failed to resolve 40 domains
+
+And an expired certificate to samaritantec.com. [This domain was reported as hosting an Emotet binary on the same date](https://urlhaus.abuse.ch/url/436011/).
+
+	Detected SSL certificate validation failed with (certificate has expired) Destination IP: 43.255.154.32. SNI: samaritantec.com
+
+Slips then detected
+
+		Detected C&C channel, destination IP: 71.80.66.107 port: 443/tcp score: 0.9601
+		etected a connection without DNS resolution to IP: 71.80.66.107. AS: CHARTER-20115, rDNS: 071-080-066-107.res.spectrum.com
+
+a quick search in virustotal shows that this IP 71.80.66.107 is [associated with qakbot](https://www.vmray.com/cyber-security-blog/qbot-delivery-method-malware-analysis/)
+
+and a port scan
+
+	Detected horizontal port scan to port 443/TCP. From 192.168.100.101 to 6 unique dst IPs. Tot pkts: 21. Threat Level: medium
+
+
 
 
 ---
-
 
 ## DroidJack v4.4 RAT
 
@@ -115,7 +204,11 @@ From the analysis we know that:
 -  The controller IP address: 147.32.83.253
 -  The victim's IP address: 10.8.0.57
 
-When running slips on the PCAP, we get the following alerts
+When running slips on the PCAP
+
+	./slips.py -f RAT02.pcap
+
+We get the following alerts
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/droidjack_alert.png" title="Slips generated DroidJack alerts">
 
@@ -157,6 +250,7 @@ Slips did not detect periodic connection over 1337/UDP because the LSTM module f
 <img src="https://images.squarespace-cdn.com/content/v1/5a01100f692ebe0459a1859f/1611308530585-BKXFXAQXGFIPXPRLSSVF/image5.png" title="Behavioral model created by Slips for the connection between phone and server using 1337/UDP.">
 
 
+---
 
 
 
