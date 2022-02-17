@@ -91,11 +91,9 @@ There are two options how to run Kalipso Locally:
 1. You can run Kalipso as a shell script in another terminal using the command:
 
 	```./kalipso.sh```
-2. Use the argument ```-G```  when execting Slips. Example:
 
-	``` ./slips.py -c slips.conf -i wlp3s0 -G ```
 
-In docker, you can use ```-G``` or open a new terminal inside the slips container and execute ```./kalipso.sh```
+In docker, you can open a new terminal inside the slips container and execute ```./kalipso.sh```
 
 To open a new terminal inside Slips container first [run](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-inside-a-docker-from-the-dockerhub) Slips in one terminal
 
