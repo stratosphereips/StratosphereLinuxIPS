@@ -1004,7 +1004,7 @@ class UpdateFileManager:
                         # make sure we're not blacklisting a private ip range
                         # get network address from range
                         net_addr = data[:data.index('/')]
-                        if net_addr in utils.home_networks:
+                        if net_addr in utils.home_networks or '224.0.0.0' in net_addr:
                             continue
 
                         try:
