@@ -544,7 +544,7 @@ if __name__ == '__main__':
             # check invalid file path
             if not os.path.exists(input_information):
                 print(f'[Main] Invalid file path {input_information}. Stopping.')
-                sys._exit(-1)
+                os._exit(-1)
 
             # default value
             input_type = 'file'
