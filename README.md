@@ -132,6 +132,11 @@ All contributors are welcomed! How you can help?
 - Pull requests with a solved GitHub issue and new feature
 - Pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
 
+### Getting in touch
+
+Feel free to join our [Discord server](https://discord.gg/zu5HwMFy5C) and ask questions, suggest new features or give us feedback.
+
+
 ## Acknowledgments
 Slips was funded by the following organizations.
 

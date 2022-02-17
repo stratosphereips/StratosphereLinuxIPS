@@ -174,6 +174,11 @@ Slips uses ```pytest``` as the main testing framework, You can add your own unit
 
 3- go to the main slips dir and run ```python3 tests/run_all_tests.py``` and every test file in the ```tests/``` dir will run
 
+### Getting in touch
+
+Feel free to join our [Discord server](https://discord.gg/zu5HwMFy5C) and ask questions, suggest new features or give us feedback.
+
+PRs and Issues are welcomed in our repo.
 
 ### Conclusion
 Adding a new feature to SLIPS is an easy task. The template is ready for everyone to use and there is not much to learn about Slips to be able to write a module.
