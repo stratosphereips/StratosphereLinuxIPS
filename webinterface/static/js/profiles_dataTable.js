@@ -201,6 +201,9 @@ let hotkey_hook = {
     },
     'set_timeline': function(){
         hotkeys.update_timeline();
+    },
+    'set_timewindow_outtuples':function(){
+        hotkeys.update_outtuples();
     }
 }
 
