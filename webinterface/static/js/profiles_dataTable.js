@@ -193,12 +193,12 @@ let hotkey_hook = {
         else if(active_hotkey == 'timeline_flows'){
             hotkey_hook.set_timeline_flows();
         }
-
+        else if(active_hotkey == 'outtuples'){
+            hotkey_hook.set_timewindow_outtuples();}
     },
     'set_timeline_flows': function(){
         hotkeys.update_timeline_flows();
     },
-
     'set_timeline': function(){
         hotkeys.update_timeline();
     }
