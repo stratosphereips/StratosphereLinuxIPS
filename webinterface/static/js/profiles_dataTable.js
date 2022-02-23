@@ -136,8 +136,8 @@ let operate_hotkeys = function(){
             },
 
         update_timeline: function(){
-            let s = '/timeline/' + profile + '/' + timewindow;
-            timeline.ajax.url(s).load();
+            let link = '/timeline/' + profile + '/' + timewindow;
+            timeline.ajax.url(link).load();
             x = document.getElementById("timeline");
             x.style.display = "block"
             },
