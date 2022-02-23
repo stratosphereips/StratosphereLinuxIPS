@@ -113,25 +113,25 @@ def set_timeline_flows(ip, timewindow):
     Set timeline flows of a chosen profile and timewindow. Supports pagination, sorting and seraching.
     """
     timeline = __database__.hgetall('profile_'+ip+"_"+timewindow+"_flows")
-    flows = [json.loads(value) for key,value in timeline.items()]
-    data_length = len(flows)
-    total_filtered = len(flows)
-    search = request.args.get('search[value]')
+    data = [json.loads(value) for key,value in timeline.items()]
+    data_length = len(data)
+    total_filtered = len(data)
 
     # search
+    search = request.args.get('search[value]')
     if search:
-        flows = [element for element in flows if element['proto'].lower() == search.lower()]
-        total_filtered = len(flows)
+        data = [element for element in data if element['proto'].lower() == search.lower()]
+        total_filtered = len(data)
 
     # pagination
     start = request.args.get('start', type=int)
     length = request.args.get('length', type=int)
-    timeline_page = []
+    data_page = []
     if start and length:
-        timeline_page = flows[start:(start + length)]
+        data_page = data[start:(start + length)]
 
     return {
-        'data': timeline_page if timeline_page else flows,
+        'data': data_page if data_page else data,
         'recordsFiltered': total_filtered,
         'recordsTotal': data_length,
         'draw': request.args.get('draw', type=int)
@@ -143,26 +143,55 @@ def set_timeline(ip, timewindow):
     Set timeline data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
     """
     timeline = __database__.zrange('profile_'+ip+"_"+timewindow+"_timeline", 0, -1)
-    print(timeline)
-    flows = [json.loads(line) for line in timeline]
-    data_length = len(flows)
-    total_filtered = len(flows)
+    data = [json.loads(line) for line in timeline]
+    data_length = len(data)
+    total_filtered = len(data)
     search = request.args.get('search[value]')
 
     # search
     if search:
-        flows = [element for element in flows if element['proto'].lower() == search.lower()]
-        total_filtered = len(flows)
+        data = [element for element in data if element['proto'].lower() == search.lower()]
+        total_filtered = len(data)
 
     # pagination
     start = request.args.get('start', type=int)
     length = request.args.get('length', type=int)
-    timeline_page = []
+    data_page = []
     if start and length:
-        timeline_page = flows[start:(start + length)]
+        data_page = data[start:(start + length)]
 
     return {
-        'data': timeline_page if timeline_page else flows,
+        'data': data_page if data_page else data,
+        'recordsFiltered': total_filtered,
+        'recordsTotal': data_length,
+        'draw': request.args.get('draw', type=int)
+    }
+
+@app.route('/alerts/profile_<ip>/<timewindow>')
+def set_alerts(ip, timewindow):
+    """
+    Set alerts data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
+    """
+    timeline = __database__.zrange('profile_'+ip+"_"+timewindow+"_timeline", 0, -1)
+    data = [json.loads(line) for line in timeline]
+    data_length = len(data)
+    total_filtered = len(data)
+    search = request.args.get('search[value]')
+
+    # search
+    if search:
+        data = [element for element in data if element['proto'].lower() == search.lower()]
+        total_filtered = len(data)
+
+    # pagination
+    start = request.args.get('start', type=int)
+    length = request.args.get('length', type=int)
+    data_page = []
+    if start and length:
+        data_page = data[start:(start + length)]
+
+    return {
+        'data': data_page if data_page else data,
         'recordsFiltered': total_filtered,
         'recordsTotal': data_length,
         'draw': request.args.get('draw', type=int)
