@@ -142,6 +142,13 @@ let operate_hotkeys = function(){
             x.style.display = "block"
             },
 
+        update_outtuples: function(){
+            let link = '/outtuples/' + profile + '/' + timewindow;
+            outtuples.ajax.url(link).load();
+            x = document.getElementById("outtuples");
+            x.style.display = "block"
+        },
+
         onclick_buttons: function(){
             $("#buttons .btn").click(function(){
                 $("#buttons .btn").removeClass('active');
