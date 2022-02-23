@@ -66,7 +66,7 @@
 <!--          </table>-->
 <!--        </div>-->
 
-        <div class = "col col-md-8">
+                <div class = "col col-md-8">
           <style type="text/css">
           .table_block{ border-radius: 15px; border-style: solid;}
           </style>
@@ -91,7 +91,29 @@
                   </div>
               </form>
             </nav>
-            <div id="timeline_flows">
+
+            <div id="timeline">
+            <table id="table_timeline" class="table table-striped" >
+              <thead>
+                <tr>
+                  <th>timestamp</th>
+                  <th>dport_name</th>
+                  <th>preposition</th>
+                  <th>daddr</th>
+                </tr>
+              </thead>
+              <tfoot>
+              <tr>
+                  <th>timestamp</th>
+                  <th>dport_name</th>
+                  <th>preposition</th>
+                  <th>daddr</th>
+                </tr>
+              </tfoot>
+            </table>
+            </div>
+
+            <div id="timeline_flows" style="display:none;">
             <table id="table_timeline_flows" class="table table-striped">
               <thead>
                 <tr>
