@@ -75,35 +75,37 @@ def profile_tws():
         'draw': request.args.get('draw', type=int)
     }
 
-#
-# @app.route('/alerts')
-# def alerts():
-#     """
-#     Create a datatable with Slips alerts.
-#     Data is stored in a route "/alerts".
-#
-#     """
-#     alerts = __database__.smembers('Evidence')
-#     alerts = [json.loads(element) for element in alerts]
-#     data_length = len(alerts)
-#     total_filtered = len(alerts)
-#     search = request.args.get('search[value]')
-#     if search:
-#         alerts = [element for element in alerts if element['dport_name'].lower() == search.lower()]
-#         total_filtered = len(alerts)
-#     # pagination
-#     start = request.args.get('start', type=int)
-#     length = request.args.get('length', type=int)
-#     # alerts_page = []
-#     # if start and length:
-#     alerts_page = alerts[start:(start + length)]
-#
-#     return {
-#         'data': alerts_page,
-#         'recordsFiltered': total_filtered,
-#         'recordsTotal': data_length,
-#         'draw': request.args.get('draw', type=int)
-#     }
+@app.route('/outtuples/<ip>/<timewindow>')
+def set_outtuples(ip, timewindow):
+    """
+    Create a datatable with Slips alerts.
+    Data is stored in a route "/alerts/<ip>".
+    """
+    outtuples = __database__.hget(ip + '_'+ timewindow,'OutTuples')
+    outtuples = json.loads(outtuples)
+    data = []
+    for key,value in outtuples.items():
+        data.append({'tuple':key,'string':value[0]})
+    data_length = len(outtuples)
+    total_filtered = len(outtuples)
+    search = request.args.get('search[value]')
+    # search
+    if search:
+        data = [element for element in data if element['dport_name'].lower() == search.lower()]
+        total_filtered = len(data)
+    # pagination
+    start = request.args.get('start', type=int)
+    length = request.args.get('length', type=int)
+    data_page = []
+    if start and length:
+        data_page = outtuples[start:(start + length)]
+
+    return {
+        'data': data_page if data_page else data,
+        'recordsFiltered': total_filtered,
+        'recordsTotal': data_length,
+        'draw': request.args.get('draw', type=int)
+    }
 
 @app.route('/timeline_flows/profile_<ip>/<timewindow>')
 def set_timeline_flows(ip, timewindow):
