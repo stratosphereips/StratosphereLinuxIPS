@@ -99,6 +99,19 @@ let operate_hotkeys = function(){
             ]
     });
 
+    let outtuples = $('#table_outtuples').DataTable({
+        "bDestroy": true,
+        columns: [
+          {data: 'tuple'},
+          {data: 'string'},
+//          {data: 'preposition'},
+//              {data: 'dns_resolution'},
+//              {data: 'dport/proto'},
+//          {data: 'daddr'}
+//              {data: 'info'}
+        ]
+    });
+
     function hide_hotkey(){
         x = document.getElementById(last_active_hotkey);
         x.style.display = "none"
