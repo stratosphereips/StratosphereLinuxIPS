@@ -46,6 +46,12 @@ class PortScanProcess(Module, multiprocessing.Process):
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports_threshold = 6
 
+
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
+
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -308,8 +314,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
                 if message and  message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'tw_modified'):
@@ -336,5 +341,5 @@ class PortScanProcess(Module, multiprocessing.Process):
                         self.check_vertical_portscan(profileid, twid)
                         self.check_icmp_sweep(profileid, twid)
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True

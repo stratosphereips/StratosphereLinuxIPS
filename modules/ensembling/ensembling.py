@@ -104,7 +104,7 @@ class Module(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
                 if message and message['channel'] == 'tw_closed':
                     data = message['data']
@@ -122,8 +122,10 @@ class Module(Module, multiprocessing.Process):
                         self.set_label_per_flow_dstip(profileid, twid)
 
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                # Confirm that the module is done processing
+                self.shutdown_gracefully()
+                return True
+
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

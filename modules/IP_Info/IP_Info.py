@@ -298,6 +298,11 @@ class Module(Module, multiprocessing.Process):
         if hasattr(self, 'country_db'): self.country_db.close()
         if hasattr(self, 'mac_db'): self.mac_db.close()
 
+    def shutdown_gracefully(self):
+        self.close_dbs()
+        # confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
     def run(self):
         # Main loop function
         while True:
@@ -306,9 +311,7 @@ class Module(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time (see at logsProcess.py),
                 # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message and message['data'] == 'stop_process':
-                    self.close_dbs()
-                    # confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_ip'):
@@ -352,8 +355,9 @@ class Module(Module, multiprocessing.Process):
                     self.get_vendor(mac_addr, host_name, profileid)
 
             except KeyboardInterrupt:
-                self.close_dbs()
-                continue
+                self.shutdown_gracefully()
+                return True
+
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on run() line {exception_line}', 0, 1)

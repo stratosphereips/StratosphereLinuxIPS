@@ -359,6 +359,11 @@ class Module(Module, multiprocessing.Process):
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid)
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        self.store_model()
+        __database__.publish('finished_modules', self.name)
+
     def run(self):
         # Load the model first
         # Load the model
@@ -369,9 +374,7 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
 
                 if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    self.store_model()
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_flow'):
@@ -429,10 +432,11 @@ class Module(Module, multiprocessing.Process):
                             self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
 
             except KeyboardInterrupt:
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 # Stop the timer
                 self.print('Error in run()')
-                self.print(type(inst))
-                self.print(inst)
+                self.print(type(inst), 0, 1)
+                self.print(inst, 0, 1)
                 return True

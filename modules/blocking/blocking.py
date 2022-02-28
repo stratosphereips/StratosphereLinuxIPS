@@ -335,8 +335,9 @@ class Module(Module, multiprocessing.Process):
                         self.unblock_ip(ip, from_, to, dport, sport, protocol)
 
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
+
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

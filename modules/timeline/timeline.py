@@ -322,6 +322,10 @@ class Module(Module, multiprocessing.Process):
             self.print(traceback.format_exc())
             return True
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
     def run(self):
         # Main loop function
         while True:
@@ -331,8 +335,7 @@ class Module(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time (see at logsProcess.py),
                 # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_flow'):
@@ -349,8 +352,8 @@ class Module(Module, multiprocessing.Process):
                     # Process the flow
                     return_value = self.process_flow(profileid, twid, flow, timestamp)
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

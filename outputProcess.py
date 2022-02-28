@@ -106,14 +106,13 @@ class OutputProcess(multiprocessing.Process):
                 print('The message passed to OutputProcess was wrongly formated.')
                 sys.exit(-1)
             return (level, sender, msg)
-        except KeyboardInterrupt:
-            return True
+
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            print(f'\tProblem with process line in OutputProcess() line {exception_line}')
-            print(type(inst))
-            print(inst.args)
-            print(inst)
+            print(f'\tProblem with process line in OutputProcess() line {exception_line}', 0, 1)
+            print(type(inst), 0, 1)
+            print(inst.args, 0, 1)
+            print(inst, 0, 1)
             sys.exit(1)
 
     def output_line(self, line):
@@ -136,6 +135,9 @@ class OutputProcess(multiprocessing.Process):
             print(f'{sender}{msg}')
         # This is to test if we are reading the flows completely
 
+    def shutdown_gracefully(self):
+        __database__.publish('finished_modules', self.name)
+
     def run(self):
         while True:
             try:
@@ -144,7 +146,7 @@ class OutputProcess(multiprocessing.Process):
                     self.quiet = True
                 # if timewindows are not updated for 25 seconds, we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
                 elif 'stop' != line:
                     if not self.quiet:
@@ -152,13 +154,16 @@ class OutputProcess(multiprocessing.Process):
                 else:
                     # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
                     print('Stopping the output thread')
+                    self.shutdown_gracefully()
+                    return True
+
             except (KeyboardInterrupt, EOFError):
-                __database__.publish('finished_modules', self.name)
+                self.shutdown_gracefully()
                 return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
-                print(f'\tProblem with OutputProcess() line {exception_line}')
-                print(type(inst))
-                print(inst.args)
-                print(inst)
-                sys.exit(1)
+                print(f'\tProblem with OutputProcess() line {exception_line}', 0, 1)
+                print(type(inst), 0, 1)
+                print(inst.args, 0, 1)
+                print(inst, 0, 1)
+                return True

@@ -44,7 +44,7 @@ class InputProcess(multiprocessing.Process):
         self.input_type = input_type
         self.given_path = input_information
         self.zeek_folder = './zeek_files'
-        self.name = 'input'
+        self.name = 'InputProcess'
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
         # Read the configuration
@@ -348,18 +348,19 @@ class InputProcess(multiprocessing.Process):
                 self.profilerqueue.put(line)
                 self.lines += 1
 
-                # go through the rst of the file
-                for t_line in file_stream:
-                    time.sleep(self.read_lines_delay)
-                    line['data'] = t_line
-                    # argus files are either tab separated orr comma separated
-                    if len(t_line.strip()) != 0:
-                        self.profilerqueue.put(line)
-                    self.lines += 1
+            # go through the rest of the file
+            for t_line in file_stream:
+                time.sleep(self.read_lines_delay)
+                line['data'] = t_line
+                # argus files are either tab separated orr comma separated
+                if len(t_line.strip()) != 0:
+                    self.profilerqueue.put(line)
+                self.lines += 1
             self.stop_queues()
             return True
         except KeyboardInterrupt:
             return True
+
 
     def handle_suricata(self):
         try:
@@ -457,11 +458,9 @@ class InputProcess(multiprocessing.Process):
             command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} ' \
                       f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins ' \
                       f'tcp_attempt_delay=1min -f {self.packet_filter} {zeek_scripts_dir} 2>&1 > /dev/null &'
-
             self.print(f'Zeek command: {command}', 3, 0)
             # Run zeek.
             os.system(command)
-
             # Give Zeek some time to generate at least 1 file.
             time.sleep(3)
 
@@ -478,6 +477,17 @@ class InputProcess(multiprocessing.Process):
             return True
         except KeyboardInterrupt:
             return True
+
+    def shutdown_gracefully(self):
+        # Stop the observer
+        try:
+            self.event_observer.stop()
+            self.event_observer.join()
+        except AttributeError:
+            # In the case of nfdump, there is no observer
+            pass
+        __database__.publish('finished_modules', self.name)
+
 
     def run(self):
         try:
@@ -511,17 +521,10 @@ class InputProcess(multiprocessing.Process):
                 # default value
                 self.print(f'Unrecognized file type "{self.input_type}". Stopping.')
                 return False
-
+            self.shutdown_gracefully()
+            return True
         except KeyboardInterrupt:
-            self.outputqueue.put("04|input|[In] \nNo more input. Stopping input process. Sent {} lines".format(self.lines))
-            try:
-                self.event_observer.stop()
-                self.event_observer.join()
-            except AttributeError:
-                # In the case of nfdump, there is no observer
-                pass
-            except NameError:
-                pass
+            self.shutdown_gracefully()
             return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -530,11 +533,6 @@ class InputProcess(multiprocessing.Process):
             self.print(type(inst), 0, 1)
             self.print(inst.args, 0, 1)
             self.print(inst, 0, 1)
-            try:
-                self.event_observer.stop()
-                self.event_observer.join()
-            except AttributeError:
-                # In the case of nfdump, there is no observer
-                pass
-            self.print(traceback.format_exc())
-            sys.exit(1)
+            self.print(traceback.format_exc(), 0 , 1)
+            self.shutdown_gracefully()
+            return True

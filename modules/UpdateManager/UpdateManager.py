@@ -86,6 +86,14 @@ class UpdateManager(Module, multiprocessing.Process):
         '''
         self.update_manager.update()
 
+
+    def shutdown_gracefully(self):
+        # terminating the timer for the process to be killed
+        self.timer_manager.cancel()
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+        return True
+
     def run(self):
         try:
             # Starting timer to update files
@@ -97,22 +105,22 @@ class UpdateManager(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             return True
+        except KeyboardInterrupt:
+            self.shutdown_gracefully()
+            return True
+
         # Main loop function
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
-                    # terminating the timer for the process to be killed
-                    self.timer_manager.cancel()
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
-                continue
 
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

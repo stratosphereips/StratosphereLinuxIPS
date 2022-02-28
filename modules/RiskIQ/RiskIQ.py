@@ -93,6 +93,11 @@ class Module(Module, multiprocessing.Process):
 
         return sorted_pt_results
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
+
     def run(self):
         if not self.riskiq_email or not self.riskiq_key:
             return False
@@ -102,8 +107,7 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_ip'):
@@ -117,8 +121,8 @@ class Module(Module, multiprocessing.Process):
                             __database__.set_passive_dns(ip, passive_dns)
 
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

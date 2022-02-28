@@ -164,82 +164,72 @@ class Module(Module, multiprocessing.Process):
         Returns nothing, but the dictionary should be filled
         :param ti_file_path: full path_to local threat intel file
         """
-        try:
-            data_file_name = ti_file_path.split('/')[-1]
-            malicious_ips_dict = {}
-            malicious_domains_dict = {}
-            # used for debugging
-            line_number = 0
-            with open(ti_file_path) as local_ti_file:
+        data_file_name = ti_file_path.split('/')[-1]
+        malicious_ips_dict = {}
+        malicious_domains_dict = {}
+        # used for debugging
+        line_number = 0
+        with open(ti_file_path) as local_ti_file:
 
-                self.print('Reading local file {}'.format(ti_file_path), 2, 0)
+            self.print('Reading local file {}'.format(ti_file_path), 2, 0)
 
-                # skip comments
-                while True:
-                    line_number+=1
-                    line = local_ti_file.readline()
-                    if not line.startswith('#'):
-                        break
+            # skip comments
+            while True:
+                line_number+=1
+                line = local_ti_file.readline()
+                if not line.startswith('#'):
+                    break
 
-                for line in local_ti_file:
-                    line_number+=1
-                    # The format of the file should be
-                    # "103.15.53.231","critical", "Karel from our village. He is bad guy."
-                    data = line.replace("\n","").replace("\"","").split(",")
+            for line in local_ti_file:
+                line_number+=1
+                # The format of the file should be
+                # "103.15.53.231","critical", "Karel from our village. He is bad guy."
+                data = line.replace("\n","").replace("\"","").split(",")
 
-                    # the column order is hardcoded because it's owr own ti file and we know the format,
-                    # we shouldn't be trying to find it
-                    ioc, threat_level, description,  = data[0], data [1].lower(), data[2]
+                # the column order is hardcoded because it's owr own ti file and we know the format,
+                # we shouldn't be trying to find it
+                ioc, threat_level, description,  = data[0], data [1].lower(), data[2]
 
-                    # validate the threat level taken from the user
-                    if threat_level not in ('info', 'low', 'medium', 'high', 'critical'):
-                        # default value
-                        threat_level = 'medium'
+                # validate the threat level taken from the user
+                if threat_level not in ('info', 'low', 'medium', 'high', 'critical'):
+                    # default value
+                    threat_level = 'medium'
 
-                    # is the IoC an IPv4, IPv6 or domain?
+                # is the IoC an IPv4, IPv6 or domain?
+                try:
+                    ip_address = ipaddress.IPv4Address(ioc.strip())
+                    self.print(f'The data in line {line_number} is valid and is ipv4: {ip_address}', 2,0)
+                    # Store the ip in our local dict
+                    malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
+                                                                      'source': data_file_name,
+                                                                      'threat_level': threat_level})
+                except ipaddress.AddressValueError:
+                    # Is it ipv6?
                     try:
-                        ip_address = ipaddress.IPv4Address(ioc.strip())
-                        self.print(f'The data in line {line_number} is valid and is ipv4: {ip_address}', 2,0)
-                        # Store the ip in our local dict
+                        ip_address = ipaddress.IPv6Address(ioc.strip())
+                        self.print(f'The data in line {line_number} is valid and is ipv6: {ioc}', 2,0)
                         malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
                                                                           'source': data_file_name,
                                                                           'threat_level': threat_level})
                     except ipaddress.AddressValueError:
-                        # Is it ipv6?
-                        try:
-                            ip_address = ipaddress.IPv6Address(ioc.strip())
-                            self.print(f'The data in line {line_number} is valid and is ipv6: {ioc}', 2,0)
-                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
-                                                                              'source': data_file_name,
-                                                                              'threat_level': threat_level})
-                        except ipaddress.AddressValueError:
-                            # It does not look as IP address.
-                            # So it should be a domain
-                            if validators.domain(ioc.strip()):
-                                self.print(f'The data in line {line_number} is valid and is a domain: {ioc}', 2,0)
-                                malicious_domains_dict[ioc] = json.dumps({'description': description,
-                                                                          'source': data_file_name,
-                                                                          'threat_level': threat_level})
-                            else:
-                                # invalid ioc, skip it
-                                self.print(f'Error while reading the TI file {local_ti_file}.'
-                                           f' Line {line_number} has invalid data: {ioc}', 0, 1)
+                        # It does not look as IP address.
+                        # So it should be a domain
+                        if validators.domain(ioc.strip()):
+                            self.print(f'The data in line {line_number} is valid and is a domain: {ioc}', 2,0)
+                            malicious_domains_dict[ioc] = json.dumps({'description': description,
+                                                                      'source': data_file_name,
+                                                                      'threat_level': threat_level})
+                        else:
+                            # invalid ioc, skip it
+                            self.print(f'Error while reading the TI file {local_ti_file}.'
+                                       f' Line {line_number} has invalid data: {ioc}', 0, 1)
 
-            # Add all loaded malicious ips to the database
-            __database__.add_ips_to_IoC(malicious_ips_dict)
-            # Add all loaded malicious domains to the database
-            __database__.add_domains_to_IoC(malicious_domains_dict)
-            return True
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on parse_ti_file() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            print(traceback.format_exc())
-            return True
+        # Add all loaded malicious ips to the database
+        __database__.add_ips_to_IoC(malicious_ips_dict)
+        # Add all loaded malicious domains to the database
+        __database__.add_domains_to_IoC(malicious_domains_dict)
+        return True
+
 
     def __delete_old_source_IPs(self, file):
         """
@@ -284,114 +274,96 @@ class Module(Module, multiprocessing.Process):
         Returns nothing, but the dictionary should be filled
         :param path: full path_to local threat intel file
         """
-        try:
-            data_file_name = path.split('/')[-1]
-            ja3_dict = {}
-            # used for debugging
-            line_number = 0
+        data_file_name = path.split('/')[-1]
+        ja3_dict = {}
+        # used for debugging
+        line_number = 0
 
-            with open(path) as local_ja3_file:
-                self.print('Reading local file {}'.format(path), 2, 0)
+        with open(path) as local_ja3_file:
+            self.print('Reading local file {}'.format(path), 2, 0)
 
-                # skip comments
-                while True:
-                    line_number+=1
-                    line = local_ja3_file.readline()
-                    if not line.startswith('#'):
-                        break
+            # skip comments
+            while True:
+                line_number+=1
+                line = local_ja3_file.readline()
+                if not line.startswith('#'):
+                    break
 
-                for line in local_ja3_file:
-                    line_number+=1
-                    # The format of the file should be
-                    # "JA3 hash", "Threat level", "Description"
-                    data = line.replace("\n","").replace("\"","").split(",")
+            for line in local_ja3_file:
+                line_number+=1
+                # The format of the file should be
+                # "JA3 hash", "Threat level", "Description"
+                data = line.replace("\n","").replace("\"","").split(",")
 
-                    # the column order is hardcoded because it's owr own ti file and we know the format,
-                    # we shouldn't be trying to find it
-                    ja3, threat_level, description = data[0], data [1].lower(), data[2]
+                # the column order is hardcoded because it's owr own ti file and we know the format,
+                # we shouldn't be trying to find it
+                ja3, threat_level, description = data[0], data [1].lower(), data[2]
 
-                    # validate the threat level taken from the user
-                    if threat_level not in ('info', 'low', 'medium', 'high', 'critical'):
-                        # default value
-                        threat_level = 'medium'
+                # validate the threat level taken from the user
+                if threat_level not in ('info', 'low', 'medium', 'high', 'critical'):
+                    # default value
+                    threat_level = 'medium'
 
-                    # validate the ja3 hash taken from the user
-                    if not validators.md5(ja3):
-                        continue
+                # validate the ja3 hash taken from the user
+                if not validators.md5(ja3):
+                    continue
 
-                    ja3_dict[ja3] = json.dumps({'description': description,
-                                                'source': data_file_name,
-                                                'threat_level': threat_level})
-            # Add all loaded JA3 to the database
-            __database__.add_ja3_to_IoC(ja3_dict)
-            return True
-        except KeyboardInterrupt:
-            return True
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on parse_ti_file() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            print(traceback.format_exc())
-            return True
+                ja3_dict[ja3] = json.dumps({'description': description,
+                                            'source': data_file_name,
+                                            'threat_level': threat_level})
+        # Add all loaded JA3 to the database
+        __database__.add_ja3_to_IoC(ja3_dict)
+        return True
 
     def check_local_ti_files(self, path_to_files: str) -> bool:
         """
         Checks if a local TI file was changed based
         on it's hash. if so, update its content and delete old data
         """
-        try:
-            local_ti_files = os.listdir(path_to_files)
-            for localfile in local_ti_files:
-                self.print(f'Loading local TI file {localfile}', 2, 0)
-                # Get what files are stored in cache db and their E-TAG to comapre with current files
-                data = __database__.get_TI_file_info(localfile)
-                old_hash = data.get('e-tag', False)
+        local_ti_files = os.listdir(path_to_files)
+        for localfile in local_ti_files:
+            self.print(f'Loading local TI file {localfile}', 2, 0)
+            # Get what files are stored in cache db and their E-TAG to comapre with current files
+            data = __database__.get_TI_file_info(localfile)
+            old_hash = data.get('e-tag', False)
 
-                # In the case of the local file, we dont store the e-tag
-                # we calculate the hash
-                new_hash = utils.get_hash_from_file(path_to_files + '/' + localfile)
+            # In the case of the local file, we dont store the e-tag
+            # we calculate the hash
+            new_hash = utils.get_hash_from_file(path_to_files + '/' + localfile)
 
-                if not new_hash:
-                    # Something failed. Do not download
-                    self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 3)
-                    return False
+            if not new_hash:
+                # Something failed. Do not download
+                self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 3)
+                return False
 
-                if old_hash == new_hash:
-                    # The 2 hashes are identical. File is up to date.
-                    self.print(f'File {localfile} is up to date.', 2, 0)
+            if old_hash == new_hash:
+                # The 2 hashes are identical. File is up to date.
+                self.print(f'File {localfile} is up to date.', 2, 0)
 
-                    return True
-                elif old_hash != new_hash:
-                    # Our malicious file was changed. Load the new one
-                    self.print(f'Updating the local TI file {localfile}', 2, 0)
-                    if old_hash:
-                        # File is updated and was in database.
-                        # Delete previous data of this file.
-                        self.__delete_old_source_data_from_database(localfile)
+                return True
+            elif old_hash != new_hash:
+                # Our malicious file was changed. Load the new one
+                self.print(f'Updating the local TI file {localfile}', 2, 0)
+                if old_hash:
+                    # File is updated and was in database.
+                    # Delete previous data of this file.
+                    self.__delete_old_source_data_from_database(localfile)
 
-                    full_path_to_file = f'{path_to_files}/{localfile}'
-                    # we have 2 types of local files, TI and JA3 files
-                    if 'ja3' in localfile.lower():
-                        self.parse_ja3_file(full_path_to_file)
-                    else:
-                        # Load updated data to the database
-                        self.parse_ti_file(full_path_to_file)
+                full_path_to_file = f'{path_to_files}/{localfile}'
+                # we have 2 types of local files, TI and JA3 files
+                if 'ja3' in localfile.lower():
+                    self.parse_ja3_file(full_path_to_file)
+                else:
+                    # Load updated data to the database
+                    self.parse_ti_file(full_path_to_file)
 
-                    # Store the new etag and time of file in the database
-                    malicious_file_info = {}
-                    malicious_file_info['e-tag'] = new_hash
-                    malicious_file_info['time'] =  ''
-                    __database__.set_TI_file_info(localfile, malicious_file_info)
-                    return True
+                # Store the new etag and time of file in the database
+                malicious_file_info = {}
+                malicious_file_info['e-tag'] = new_hash
+                malicious_file_info['time'] =  ''
+                __database__.set_TI_file_info(localfile, malicious_file_info)
+                return True
 
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on __load_malicious_local_files() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
 
 
 
@@ -416,6 +388,11 @@ class Module(Module, multiprocessing.Process):
         return False
 
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+        return True
+
     def run(self):
         try:
             # Load the local Threat Intelligence files that are stored in the local folder
@@ -438,11 +415,10 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time
                 # (see at logsProcess.py), we will stop slips automatically.
-                # The 'stop_process' line is sent from logsProcess.py.
                 if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
+
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
                 if utils.is_msg_intended_for(message, 'give_threat_intelligence' ):
@@ -506,8 +482,8 @@ class Module(Module, multiprocessing.Process):
                                 __database__.set_malicious_domain(domain, profileid, twid)
 
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

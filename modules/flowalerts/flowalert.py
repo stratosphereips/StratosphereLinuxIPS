@@ -795,6 +795,10 @@ class Module(Module, multiprocessing.Process):
                                  ts, category, source_target_tag=source_target_tag,
                                  profileid=profileid, twid=twid, uid=uid)
 
+    def shutdown_gracefully(self):
+        __database__.publish('finished_modules', self.name)
+
+
     def run(self):
         # Main loop function
         while True:
@@ -803,8 +807,7 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
-                    # confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_flow'):
                     data = message['data']
@@ -995,11 +998,17 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Detect successful SSH connections ---
                 message = self.c2.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
                 if utils.is_msg_intended_for(message, 'new_ssh'):
                     self.check_ssh(message)
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
                 message = self.c3.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
                 if utils.is_msg_intended_for(message, 'new_notice'):
                     data = message['data']
                     if type(data) == str:
@@ -1107,6 +1116,9 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Detect maliciuos JA3 TLS servers ---
                 message = self.c4.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
                 if utils.is_msg_intended_for(message, 'new_ssl'):
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
@@ -1151,6 +1163,9 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Learn ports that Zeek knows but Slips doesn't ---
                 message = self.c5.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
                 if utils.is_msg_intended_for(message, 'new_service'):
                     data = json.loads(message['data'])
                     # uid = data['uid']
@@ -1168,6 +1183,9 @@ class Module(Module, multiprocessing.Process):
 
                 # --- Detect DNS resolutions without connection ---
                 message = self.c6.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
                 if utils.is_msg_intended_for(message, 'new_dns_flow'):
                     data = json.loads(message["data"])
                     profileid = data['profileid']
@@ -1186,6 +1204,9 @@ class Module(Module, multiprocessing.Process):
                         self.detect_DGA(rcode_name, domain, stime, profileid, twid, uid)
 
                 message = self.c7.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
                 if utils.is_msg_intended_for(message, 'new_downloaded_file'):
                     data = json.loads(message['data'])
                     source = data.get('source', '')
@@ -1201,7 +1222,8 @@ class Module(Module, multiprocessing.Process):
                     self.set_evidence_malicious_ssl(data, ssl_info_from_db)
 
             except KeyboardInterrupt:
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
