@@ -3,6 +3,30 @@
 # Here we have a list of organizations range/ip and the port it's known to use
 "Organization","IP/IP range","port","protocol"
 Spotify,78.31.8.0/22,4070,tcp
+Apple,17.173.255.129,16384,udp
+Apple,17.173.255.189,16384,udp
+Apple,17.173.255.129,16385,udp
+Apple,17.173.255.189,16385,udp
+Apple,17.173.255.129,16386,udp
+Apple,17.173.255.189,16386,udp
+Apple,17.173.255.129,16387,udp
+Apple,17.173.255.189,16387,udp
+Spotify,104.199.65.124,4070,tcp
+Spotify,104.199.65.131,4070,tcp
+Zoom,149.137.0.0/17,3478,udp
+Zoom,149.137.0.0/17,3479,udp
+Zoom,149.137.0.0/17,8801,udp
+Zoom,149.137.0.0/17,8802,udp
+Zoom,149.137.0.0/17,8803,udp
+Zoom,149.137.0.0/17,8804,udp
+Zoom,149.137.0.0/17,8805,udp
+Zoom,149.137.0.0/17,8806,udp
+Zoom,149.137.0.0/17,8807,udp
+Zoom,149.137.0.0/17,8808,udp
+Zoom,149.137.0.0/17,8809,udp
+Zoom,149.137.0.0/17,8810,udp
+JustEat,"",3515,tcp
+Kaspersky,"",1443,tcp
 Apple,"",16384,udp
 Apple,"",16385,udp
 Apple,"",16386,udp

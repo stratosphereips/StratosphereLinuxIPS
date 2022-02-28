@@ -184,11 +184,10 @@ class UpdateFileManager:
 
     def update_local_file(self, file_path) -> bool:
         """
-        Return True if update was successfull
+        Returns True if update was sucessfull
         """
         try:
             # each file is updated differently
-
             if 'ports_used_by_specific_orgs.csv' in file_path:
                 self.read_ports_info(file_path)
 
@@ -213,6 +212,7 @@ class UpdateFileManager:
         """
         Decides whether to update or not based on the file hash.
         Used for local files that are updated if the contents of the file hash changed
+        for example: files in slips_files/ports_info
         """
 
         # compute file sha256 hash
