@@ -136,7 +136,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                         # Between threshold and 10 pkts compute a kind of linear grow
                         confidence = pkts_sent / 10.0
                     # Description
-                    description = (f'horizontal port scan to port {dport}/{protocol}. '
+                    portproto = f'{dport}/{protocol}'
+                    port_info = __database__.get_port_info(portproto)
+                    description = (f'horizontal port scan to port {port_info if port_info else ""} {portproto}. '
                                    f'From {saddr} to {amount_of_dips} unique dst IPs. '
                                    f'Tot pkts: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}')
                     uid = next(iter(dstips.values()))['uid'] # first uid in the dictionary
