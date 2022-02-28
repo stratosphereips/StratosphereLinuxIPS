@@ -348,14 +348,15 @@ class InputProcess(multiprocessing.Process):
                 self.profilerqueue.put(line)
                 self.lines += 1
 
-            # go through the rest of the file
-            for t_line in file_stream:
-                time.sleep(self.read_lines_delay)
-                line['data'] = t_line
-                # argus files are either tab separated orr comma separated
-                if len(t_line.strip()) != 0:
-                    self.profilerqueue.put(line)
-                self.lines += 1
+                # go through the rest of the file
+                for t_line in file_stream:
+                    time.sleep(self.read_lines_delay)
+                    line['data'] = t_line
+                    # argus files are either tab separated orr comma separated
+                    if len(t_line.strip()) != 0:
+                        self.profilerqueue.put(line)
+                    self.lines += 1
+
             self.stop_queues()
             return True
         except KeyboardInterrupt:
