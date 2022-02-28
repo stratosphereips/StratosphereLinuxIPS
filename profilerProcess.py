@@ -1021,13 +1021,20 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['scanning_ip'] = self.column_values['saddr']
             self.column_values['scanned_port'] =  self.column_values['dport']
             self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
-        elif '/files' in new_line['type']:
-            self.column_values['type'] = 'files'
-            self.column_values['uid'] = line[4]
-            self.column_values['saddr'] = line[2]
-            self.column_values['daddr'] = line[3] #rx_hosts
-            self.column_values['size'] = line[13]
-            self.column_values['md5'] = line[19]
+        elif 'files' in new_line['type']:
+            """ Parse the fields we're interested in in the files.log file """
+            # the slash before files to distinguish between 'files' in the dir name and file.log
+            self.column_values.update({'type' :'files',
+                                'uid' : line[4],
+                                'saddr' : line[2],
+                                'daddr' : line[3], #rx_hosts
+                                'size' : line[13], # downloaded file size
+                                'md5' : line[19],
+                                # used for detecting ssl certs
+                                'source' : line[5],
+                                'analyzers' : line[7],
+                                'sha1' : line[19]})
+
         elif 'arp' in new_line['type']:
             self.column_values['type'] = 'arp'
             self.column_values['operation'] = line[1]
@@ -1249,7 +1256,6 @@ class ProfilerProcess(multiprocessing.Process):
                                 'analyzers' : line.get('analyzers', ''),
                                 'sha1' : line.get('sha1', '')})
 
-            #todo process zeek tabs files.log
         elif 'arp' in file_type:
             self.column_values.update({'type' : 'arp',
                                 'src_mac' : line.get('src_mac', ''),
