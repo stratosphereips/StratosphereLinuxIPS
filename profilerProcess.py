@@ -2654,6 +2654,10 @@ class ProfilerProcess(multiprocessing.Process):
             self.print("Error in get_timewindow().", 0, 1)
             self.print("{}".format(e), 0, 1)
 
+    def shutdown_gracefully(self):
+        # can't use self.name because multiprocessing library adds the child number to the name so it's not const
+        __database__.publish('finished_modules', 'ProfilerProcess')
+
     def run(self):
         rec_lines = 0
         # Main loop function
@@ -2662,67 +2666,66 @@ class ProfilerProcess(multiprocessing.Process):
                 line = self.inputqueue.get()
                 if 'stop' in line:
                     # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                    # can't use self.name because multiprocessing library adds the child number to the name so it's not const
-                    __database__.publish('finished_modules', 'ProfilerProcess')
+                    self.shutdown_gracefully()
                     self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 2,0)
                     return True
+
+                # Received new input data
+                # Extract the columns smartly
+                self.print("< Received Line: {}".format(line),2,0)
+                rec_lines += 1
+                if not self.input_type:
+                    # Find the type of input received
+                    # This line will be discarded because
+                    self.define_type(line)
+                    # We should do this before checking the type of input so we don't lose the first line of input
+                # What type of input do we have?
+                if not self.input_type:
+                    # can't definee the type of input
+                    self.print("Can't determine input type.",5,6)
+                elif self.input_type == 'zeek':
+                    # self.print('Zeek line')
+                    self.process_zeek_input(line)
+                    # Add the flow to the profile
+                    self.add_flow_to_profile()
+                elif self.input_type == 'argus' or self.input_type == 'argus-tabs':
+                    # self.print('Argus line')
+                    # Argus puts the definition of the columns on the first line only
+                    # So read the first line and define the columns
+                    try:
+                        # Are the columns defined? Just try to access them
+                        _ = self.column_idx['starttime']
+                        # Yes
+                        # Quickly process all lines
+                        self.process_argus_input(line)
+                        # Add the flow to the profile
+                        self.add_flow_to_profile()
+                    except AttributeError:
+                        # No. Define columns. Do not add this line to profile, its only headers
+                        self.define_columns(line)
+                    except KeyError:
+                        # When the columns are not there. Not sure if it works
+                        self.define_columns(line)
+                elif self.input_type == 'suricata':
+                    # self.print('Suricata line')
+                    self.process_suricata_input(line)
+                    # Add the flow to the profile
+                    self.add_flow_to_profile()
+                elif self.input_type == 'zeek-tabs':
+                    # self.print('Zeek-tabs line')
+                    self.process_zeek_tabs_input(line)
+                    # Add the flow to the profile
+                    self.add_flow_to_profile()
+                elif self.input_type == 'nfdump':
+                    self.process_nfdump_input(line)
+                    self.add_flow_to_profile()
                 else:
-                    # Received new input data
-                    # Extract the columns smartly
-                    self.print("< Received Line: {}".format(line),2,0)
-                    rec_lines += 1
-                    if not self.input_type:
-                        # Find the type of input received
-                        # This line will be discarded because
-                        self.define_type(line)
-                        # We should do this before checking the type of input so we don't lose the first line of input
-                    # What type of input do we have?
-                    if not self.input_type:
-                        # can't definee the type of input
-                        self.print("Can't determine input type.",5,6)
-                    elif self.input_type == 'zeek':
-                        # self.print('Zeek line')
-                        self.process_zeek_input(line)
-                        # Add the flow to the profile
-                        self.add_flow_to_profile()
-                    elif self.input_type == 'argus' or self.input_type == 'argus-tabs':
-                        # self.print('Argus line')
-                        # Argus puts the definition of the columns on the first line only
-                        # So read the first line and define the columns
-                        try:
-                            # Are the columns defined? Just try to access them
-                            _ = self.column_idx['starttime']
-                            # Yes
-                            # Quickly process all lines
-                            self.process_argus_input(line)
-                            # Add the flow to the profile
-                            self.add_flow_to_profile()
-                        except AttributeError:
-                            # No. Define columns. Do not add this line to profile, its only headers
-                            self.define_columns(line)
-                        except KeyError:
-                            # When the columns are not there. Not sure if it works
-                            self.define_columns(line)
-                    elif self.input_type == 'suricata':
-                        # self.print('Suricata line')
-                        self.process_suricata_input(line)
-                        # Add the flow to the profile
-                        self.add_flow_to_profile()
-                    elif self.input_type == 'zeek-tabs':
-                        # self.print('Zeek-tabs line')
-                        self.process_zeek_tabs_input(line)
-                        # Add the flow to the profile
-                        self.add_flow_to_profile()
-                    elif self.input_type == 'nfdump':
-                        self.process_nfdump_input(line)
-                        self.add_flow_to_profile()
-                    else:
-                        self.print("Can't recognize input file type.")
+                    self.print("Can't recognize input file type.")
 
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
                 message = self.c1.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
-                    __database__.publish('finished_modules', 'ProfilerProcess')
+                    self.shutdown_gracefully()
                     return True
                 if message and message['channel'] == 'reload_whitelist' and type(message['data']) == str:
                     # if whitelist.conf is edited using pycharm
@@ -2731,8 +2734,8 @@ class ProfilerProcess(multiprocessing.Process):
                     self.read_whitelist()
 
             except KeyboardInterrupt:
-                # self.print("Received {} lines.".format(rec_lines), 0, 1)
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print("Error. Stopped Profiler Process. Received {} lines".format(rec_lines), 0, 1)

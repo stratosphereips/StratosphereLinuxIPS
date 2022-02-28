@@ -37,6 +37,11 @@ class Module(Module, multiprocessing.Process):
         self.yara_rules_path = 'modules/leak_detector/yara_rules/rules/'
         self.compiled_yara_rules_path = 'modules/leak_detector/yara_rules/compiled/'
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
+
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -221,6 +226,7 @@ class Module(Module, multiprocessing.Process):
             # run the yara rules on the given pcap
             self.find_matches()
         except KeyboardInterrupt:
+            self.shutdown_gracefully()
             return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno

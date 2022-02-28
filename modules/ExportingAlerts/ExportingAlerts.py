@@ -334,6 +334,17 @@ class Module(Module, multiprocessing.Process):
             return True
         return False
 
+    def shutdown_gracefully(self):
+        # We need to publish to taxii server before stopping
+        if 'stix' in self.export_to:
+            self.push_to_TAXII_server()
+
+        if self.json_file_handle:
+            self.json_file_handle.close()
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
+
     def run(self):
         # Main loop function
         while True:
@@ -341,14 +352,7 @@ class Module(Module, multiprocessing.Process):
                 message_c1 = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message_c1['data'] == 'stop_process':
-                    # We need to publish to taxii server before stopping
-                    if 'stix' in self.export_to:
-                        self.push_to_TAXII_server()
-
-                    if self.json_file_handle:
-                        self.json_file_handle.close()
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
                 if message_c1['channel'] == 'evidence_added':
                     if type(message_c1['data']) == str:
@@ -376,8 +380,8 @@ class Module(Module, multiprocessing.Process):
                         if 'json' in self.export_to:
                             self.export_to_json(evidence)
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

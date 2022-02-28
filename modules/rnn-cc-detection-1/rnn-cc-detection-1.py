@@ -113,6 +113,11 @@ class Module(Module, multiprocessing.Process):
         # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
         return pre_behavioral_model
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+        return True
+
     def run(self, model_file="modules/rnn-cc-detection-1/rnn_model.h5"):
         # TODO: set the decision threshold in the function call
         try:
@@ -129,8 +134,8 @@ class Module(Module, multiprocessing.Process):
             self.print('Error loading the model.')
             self.print(e)
         except KeyboardInterrupt:
-            # enter the while loop to recieve stop_process msg
-            pass
+            self.shutdown_gracefully()
+            return True
 
         # Main loop function
         while True:
@@ -138,8 +143,7 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_letters'):
@@ -187,8 +191,9 @@ class Module(Module, multiprocessing.Process):
                     """
 
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
+
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

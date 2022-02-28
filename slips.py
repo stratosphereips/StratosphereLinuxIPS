@@ -18,6 +18,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import configparser
+import signal
 import sys
 import redis
 import os
@@ -274,69 +275,93 @@ def shutdown_gracefully(input_information):
     try:
         print('\n'+'-'*27)
         print('Stopping Slips')
-        # is slips currently exporting alerts?
-        send_to_warden = config.get('CESNET', 'send_alerts').lower()
         # Stop the modules that are subscribed to channels
         __database__.publish_stop()
-        # Here we should Wait for any channel if it has still
-        # data to receive in its channel
-        finished_modules = []
-        try:
-            loaded_modules = modules_to_call.keys()
-        except NameError:
-            # this is the case of -d <rdb file> we don't have loaded_modules
-            loaded_modules = []
 
+        finished_modules = []
         # get dict of PIDs spawned by slips
         PIDs = __database__.get_PIDs()
+        slips_processes = len(list(PIDs.keys()))
+
+        # Send manual stops to the processes not using channels
+        for process in ('OutputProcess', 'ProfilerProcess', 'EvidenceProcess', 'InputProcess', 'logsProcess'):
+            try:
+                os.kill(int(PIDs[process]), signal.SIGINT)
+            except KeyError:
+                # process hasn't started so we can't send sigint
+                continue
+
+        # only print that modules are still running once
+        warning_printed = False
+
         # timeout variable so we don't loop forever
         max_loops = 130
         # loop until all loaded modules are finished
-        while len(finished_modules) < len(loaded_modules) and max_loops != 0:
-            # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
-            try:
-                message = c1.get_message(timeout=0.01)
-            except NameError:
-                # Sometimes the c1 variable does not exist yet. So just force the shutdown
-                message = {
-                    'data': 'dummy_value_not_stopprocess',
-                    'channel': 'finished_modules'}
+        try:
+            while len(finished_modules) < slips_processes and max_loops != 0:
+                # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
+                try:
+                    message = c1.get_message(timeout=0.01)
+                except NameError:
+                    # Sometimes the c1 variable does not exist yet. So just force the shutdown
+                    message = {
+                        'data': 'dummy_value_not_stopprocess',
+                        'channel': 'finished_modules'}
 
-            if message and message['data'] == 'stop_process':
-                continue
-            if message and message['channel'] == 'finished_modules' and type(message['data']) == str:
-                # all modules must reply with their names in this channel after
-                # receiving the stop_process msg
-                # to confirm that all processing is done and we can safely exit now
-                module_name = message['data']
+                if message and message['data'] == 'stop_process':
+                    continue
+                if message and message['channel'] == 'finished_modules' and type(message['data']) == str:
+                    # all modules must reply with their names in this channel after
+                    # receiving the stop_process msg
+                    # to confirm that all processing is done and we can safely exit now
+                    module_name = message['data']
 
-                if module_name not in finished_modules:
-                    finished_modules.append(module_name)
-                    try:
-                        # remove module from the list of opened pids
-                        PIDs.pop(module_name)
-                    except KeyError:
-                        continue
-                    modules_left = len(list(PIDs.keys()))
-                    # to vertically align them when printing
-                    module_name = module_name + ' '*(20-len(module_name))
-                    print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
-            max_loops -= 1
+                    if module_name not in finished_modules:
+                        finished_modules.append(module_name)
+                        try:
+                            # remove module from the list of opened pids
+                            PIDs.pop(module_name)
+                        except KeyError:
+                            continue
+                        modules_left = len(list(PIDs.keys()))
+                        # to vertically align them when printing
+                        module_name = module_name + ' '*(20-len(module_name))
+                        print(f"\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.")
+                max_loops -= 1
+                # after reaching the max_loops and before killing the modules that aren't finished,
+                # make sure we're not in the middle of processing
+                if len(PIDs) > 0 and max_loops < 2:
+                    if not warning_printed:
+                        # some modules publish in finished_modules channel before slips.py starts listening,
+                        # but they finished gracefully.
+                        # remove already stopped modules from PIDs dict
+                        for module, pid in PIDs.items():
+                            try:
+                                # signal 0 is used to check if the pid exists
+                                os.kill(int(pid), 0)
+                            except ProcessLookupError:
+                                # pid doesn't exist because module already stopped
+                                finished_modules.append(module)
 
-            # before killing the modules that aren't finished
-            # make sure we're not in the middle of exporting alerts
-            # if the PID of CESNET module is there in PIDs dict,
-            # it means the module hasn't stopped yet
-            if 'yes' in send_to_warden and 'CESNET' in PIDs:
-                # we're in the middle of sending alerts to warden server
-                # delay killing unstopped modules
-                max_loops += 1
+                        # exclude the module that are already stopped from the pending modules
+                        pending_modules = [module for module in list(PIDs.keys()) if module not in finished_modules]
+                        if len(pending_modules) > 0:
+                            print(f"\n[Main] The following modules are busy working on your data."
+                                  f"\n\n{pending_modules}\n\n"
+                                  "You can wait for them to finish, or you can press CTRL-C again to force-kill.\n")
+                            warning_printed = True
+                    # delay killing unstopped modules
+                    max_loops += 1
+                    continue
+        except KeyboardInterrupt:
+            # either the user wants to kill the remaining modules (pressed ctrl +c again)
+            # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
+            # pass to kill the remaining modules
+            pass
+
 
         # modules that aren't subscribed to any channel will always be killed and not stopped
-        # some modules continue on sigint, but recieve
-        # other msgs (other than stop_message) in the queue before stop_process
-        # they will always be killed
-        # kill processes that didn't stop after timeout
+        # comes here if the user pressed ctrl+c again
         for unstopped_proc, pid in PIDs.items():
             unstopped_proc = unstopped_proc+' '*(20-len(unstopped_proc))
             try:
@@ -344,25 +369,7 @@ def shutdown_gracefully(input_information):
                 print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tKilled.')
             except ProcessLookupError:
                 print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready stopped.')
-        # Send manual stops to the process not using channels
-        try:
-            logsProcessQueue.put('stop_process')
-        except NameError:
-            # The logsProcessQueue is not there because we
-            # didnt started the logs files (used -l)
-            pass
-        try:
-            outputProcessQueue.put('stop_process')
-        except NameError:
-            pass
-        try:
-            profilerProcessQueue.put('stop_process')
-        except NameError:
-            pass
-        try:
-            inputProcess.terminate()
-        except NameError:
-            pass
+
 
         # save redis database if '-s' is specified
         if args.save:
@@ -406,10 +413,6 @@ def shutdown_gracefully(input_information):
         os._exit(-1)
         return True
     except KeyboardInterrupt:
-        # display a warning if the user's trying to stop
-        # slips while we're still exporting
-        if 'yes' in send_to_warden and 'CESNET' in PIDs:
-            print("[Main] Exporting alerts to warden server was cancelled.")
         return False
 
 
@@ -519,9 +522,9 @@ if __name__ == '__main__':
         if args.db:
             from slips_files.core.database import __database__
             __database__.start(config)
-            if not __database__.load(args.db): 
+            if not __database__.load(args.db):
                 print(f"[Main] Failed to {args.db}")
-            else: 
+            else:
                 print(f"{args.db.split('/')[-1]} loaded successfully. Run ./kalipso.sh")
             terminate_slips()
 
@@ -736,7 +739,7 @@ if __name__ == '__main__':
                 to_ignore.append('blocking')
 
             # leak detector only works on pcap files
-            if input_type != 'pcap': 
+            if input_type != 'pcap':
                 to_ignore.append('leak_detector')
             try:
                 # This 'imports' all the modules somehow, but then we ignore some
@@ -804,13 +807,13 @@ if __name__ == '__main__':
 
         # Input process
         # Create the input process and start it
-        inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue, 
+        inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue,
                                     input_type, input_information, config, args.pcapfilter, zeek_bro)
         inputProcess.start()
         outputProcessQueue.put('10|main|Started input thread [PID {}]'.format(inputProcess.pid))
         time.sleep(0.5)
         print()
-        __database__.store_process_PID('inputProcess', int(inputProcess.pid))
+        __database__.store_process_PID('InputProcess', int(inputProcess.pid))
 
         enable_metadata = read_configuration(config, 'parameters', 'metadata_dir')
         if 'yes' in enable_metadata.lower():

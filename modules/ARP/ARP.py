@@ -5,6 +5,7 @@ import multiprocessing
 from slips_files.core.database import __database__
 from slips_files.common.slips_utils import utils
 import configparser
+import signal, os
 
 # Your imports
 import json
@@ -39,6 +40,8 @@ class Module(Module, multiprocessing.Process):
         self.arp_scan_threshold = 5
         # get the default gateway
         self.gateway = __database__.get_default_gateway()
+
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -226,6 +229,10 @@ class Module(Module, multiprocessing.Process):
                                      description, ts, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
             return True
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
 
     def run(self):
         # Main loop function
@@ -233,8 +240,7 @@ class Module(Module, multiprocessing.Process):
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_arp'):
@@ -284,8 +290,8 @@ class Module(Module, multiprocessing.Process):
                             # don't break, keep looking for more keys that belong to the same tw
 
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

@@ -153,6 +153,8 @@ class Module(Module, multiprocessing.Process):
         # store it in the database
         __database__.add_user_agent_to_profile(profileid, UA_info)
 
+    def shutdown_gracefully(self):
+        __database__.publish('finished_modules', self.name)
 
     def run(self):
         # Main loop function
@@ -160,7 +162,7 @@ class Module(Module, multiprocessing.Process):
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_http'):
@@ -179,8 +181,8 @@ class Module(Module, multiprocessing.Process):
                     self.get_user_agent_info(user_agent, profileid)
 
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
