@@ -822,8 +822,8 @@ class UpdateFileManager:
                 # either a not supported ioc type or a header line etc.
                 # make sure the header keywords are lowercase because
                 # we convert lines to lowercase when comparing
-                header_keywords = ('type', 'first_seen_utc', 'ip_v4','"domain"','#"type"','#fields', "number")
-                ignored_IoCs = ('email', 'url', 'file_hash')
+                header_keywords = ('type', 'first_seen_utc', 'ip_v4','"domain"','#"type"','#fields', "number", "atom_type")
+                ignored_IoCs = ('email', 'url', 'file_hash', 'file')
 
                 while True:
                     line = feed.readline()
@@ -911,10 +911,18 @@ class UpdateFileManager:
                     # domain,www.netspy.net,NetSpy
 
                     # skip comments and headers
-                    if line.startswith('#') or line.startswith(';')\
-                            or 'FILE_HASH' in line\
-                            or 'EMAIL' in line or 'URL' in line:
+                    if line.startswith('#') or line.startswith(';'):
                         continue
+
+                    # skip unsupported IoC types
+                    process_line = True
+                    for keyword in ignored_IoCs:
+                        if keyword in line.lower():
+                            process_line = False
+
+                    if not process_line:
+                        continue
+
 
                     line = line.replace("\n", "").replace("\"", "")
 
