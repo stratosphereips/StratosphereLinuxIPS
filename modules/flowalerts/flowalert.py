@@ -337,9 +337,11 @@ class Module(Module, multiprocessing.Process):
             # can be an ip or a range
             org_ip = organization_info['ip']
             # org_name = organization_info['org_name']
-            # it's an ip and it belongs to this org, consider the port as known
+
             if daddr in org_ip:
+                # it's an ip and it belongs to this org, consider the port as known
                 return False
+
             # is it a range?
             try:
                 # we have the org range in our database, check if the daddr belongs to this range
