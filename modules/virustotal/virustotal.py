@@ -616,6 +616,9 @@ class Module(Module, multiprocessing.Process):
                             self.set_vt_data_in_IPInfo(ip, cached_data)
 
                 message = self.c2.get_message(timeout=self.timeout)
+                if (message and message['data'] == 'stop_process'):
+                    self.shutdown_gracefully()
+                    return True
                 if utils.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message["data"]
 
@@ -639,6 +642,9 @@ class Module(Module, multiprocessing.Process):
 
 
                 message = self.c3.get_message(timeout=self.timeout)
+                if (message and message['data'] == 'stop_process'):
+                    self.shutdown_gracefully()
+                    return True
                 if utils.is_msg_intended_for(message, 'new_url'):
                     data = message["data"]
                     data = json.loads(data)
@@ -658,6 +664,9 @@ class Module(Module, multiprocessing.Process):
                             self.set_url_data_in_URLInfo(url, cached_data)
 
                 message = self.c4.get_message(timeout=self.timeout)
+                if (message and message['data'] == 'stop_process'):
+                    self.shutdown_gracefully()
+                    return True
                 if utils.is_msg_intended_for(message, 'new_downloaded_file'):
                     self.file_info = json.loads(message['data'])
                     file_info = self.file_info.copy()

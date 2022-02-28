@@ -279,6 +279,10 @@ class Module(Module, multiprocessing.Process):
 
                 # if the tw is closed, remove all its entries from the cache dict
                 message = self.c2.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
                 if utils.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data']
                     # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore

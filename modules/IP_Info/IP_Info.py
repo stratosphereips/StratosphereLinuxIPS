@@ -292,14 +292,12 @@ class Module(Module, multiprocessing.Process):
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
         return MAC_info
 
-    def close_dbs(self):
-        """ function to close the databases when there's an error or when shutting down"""
+
+
+    def shutdown_gracefully(self):
         if hasattr(self, 'asn_db'): self.asn_db.close()
         if hasattr(self, 'country_db'): self.country_db.close()
         if hasattr(self, 'mac_db'): self.mac_db.close()
-
-    def shutdown_gracefully(self):
-        self.close_dbs()
         # confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
@@ -347,6 +345,9 @@ class Module(Module, multiprocessing.Process):
                     self.get_rdns(ip)
 
                 message = self.c2.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
                 if utils.is_msg_intended_for(message, 'new_MAC'):
                     data = json.loads(message['data'])
                     mac_addr = data['MAC']
@@ -364,5 +365,5 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
-                self.close_dbs()
+                self.shutdown_gracefully()
                 return True
