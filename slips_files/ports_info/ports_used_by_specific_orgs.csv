@@ -26,7 +26,7 @@ Zoom,149.137.0.0/17,8807,udp
 Zoom,149.137.0.0/17,8808,udp
 Zoom,149.137.0.0/17,8809,udp
 Zoom,149.137.0.0/17,8810,udp
-JustEat,52.208.51.0,3515,tcp
+JE-apps,52.208.51.0,3515,tcp
 Kaspersky,"",1443,tcp
 Apple,"",16384,udp
 Apple,"",16385,udp
