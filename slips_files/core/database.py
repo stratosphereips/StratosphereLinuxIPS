@@ -233,11 +233,12 @@ class Database(object):
                         and validators.ipv4(found_ip)):
                     # associate the ipv4 we found with the incoming ipv6
                     self.r.hmset(profileid, {'IPv6': incoming_ip})
-
+                    break
                 elif (validators.ipv6(found_ip)
                       and validators.ipv4(incoming_ip)):
                     # associate the ipv6 we found with the incoming ipv4
                     self.r.hmset(profileid, {'IPv4': incoming_ip})
+                    break
                 else:
                     # both are ipv4 or ipv6 and are claiming to have the same mac address
                     # OR one of them is 0.0.0.0 and didn't take an ip yet

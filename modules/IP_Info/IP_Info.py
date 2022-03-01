@@ -272,7 +272,7 @@ class Module(Module, multiprocessing.Process):
         self.mac_db.seek(0)
         while True:
             line = self.mac_db.readline()
-            if line =='':
+            if line == '':
                 # reached the end of file without finding the vendor
                 # set the vendor to unknown to avoid searching for it again
                 MAC_info.update({'Vendor': 'Unknown'})
