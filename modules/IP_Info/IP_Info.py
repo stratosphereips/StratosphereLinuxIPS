@@ -296,10 +296,13 @@ class Module(Module, multiprocessing.Process):
 
     def get_age(self, domain):
 
+        if domain.endswith('.arpa') or domain.endswith('.local'):
+            return False
+
         cached_data = __database__.getDomainData(domain)
         if cached_data and 'Age' in cached_data:
             # we already have age info about this domain
-            return True
+            return False
 
         # get registration date
         creation_date = whois.query(domain).creation_date
