@@ -26,5 +26,6 @@ slackclient==2.9.3
 scipy==1.7.3
 sklearn==0.0
 setuptools
+whois
 wheel
 gitpython
