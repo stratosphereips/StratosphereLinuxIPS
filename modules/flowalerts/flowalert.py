@@ -722,7 +722,6 @@ class Module(Module, multiprocessing.Process):
                                  confidence, description, timestamp, category,
                                  source_target_tag=source_target_tag, profileid=profileid, twid=twid)
 
-
     def detect_DGA(self, rcode_name, query, stime, profileid, twid, uid):
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
@@ -795,9 +794,36 @@ class Module(Module, multiprocessing.Process):
                                  ts, category, source_target_tag=source_target_tag,
                                  profileid=profileid, twid=twid, uid=uid)
 
+    def detect_young_domains(self, domain, stime, profileid, twid, uid):
+        domain_info = __database__.getDomainData(domain)
+        if domain_info and 'Age' not in domain_info:
+            # we don't have age info about this domain
+            return False
+
+        # age is in days
+        age = domain_info['Age']
+        if age >= 60:
+            return False
+
+        confidence = 1
+        threat_level = 'low'
+        category = 'Anomaly.Traffic'
+        type_evidence = 'YoungDomain'
+        type_detection  = 'dstdomain'
+        detection_info = domain
+        description = f'Domain {domain} was registered {age} days ago.'
+
+        conn_count = 1
+        if not twid: twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 stime, category, conn_count=conn_count,
+                                 profileid=profileid, twid=twid, uid=uid)
+
+
+
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
-
 
     def run(self):
         # Main loop function
@@ -1195,13 +1221,16 @@ class Module(Module, multiprocessing.Process):
                     domain = flow_data.get('query', False)
                     answers = flow_data.get('answers', False)
                     rcode_name = flow_data.get('rcode_name', False)
-                    stime = data.get('stime',False)
+                    stime = data.get('stime', False)
 
                     # only check dns without connection if we have answers(we're sure the query is resolved)
                     if answers:
                         self.check_dns_resolution_without_connection(domain, answers, stime, profileid, twid, uid)
                     if rcode_name:
                         self.detect_DGA(rcode_name, domain, stime, profileid, twid, uid)
+                    if domain:
+                        # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
+                        self.detect_young_domains(domain, stime, profileid, twid, uid)
 
                 message = self.c7.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':

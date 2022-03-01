@@ -390,7 +390,8 @@ class Module(Module, multiprocessing.Process):
                     uid = data['uid']
                     flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
                     domain = flow_data.get('query', False)
-                    self.get_age(domain)
+                    if domain:
+                        self.get_age(domain)
 
 
             except KeyboardInterrupt:
