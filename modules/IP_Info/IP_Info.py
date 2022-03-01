@@ -43,6 +43,21 @@ class Module(Module, multiprocessing.Process):
         self.timeout = 0.0000001
         # update asn every 1 month
         self.update_period = 2592000
+        # we can only getthe age of these tlds
+        self.valid_tlds = ['.ac_uk', '.am', '.amsterdam', '.ar', '.at', '.au',
+                           '.bank', '.be', '.biz', '.br', '.by', '.ca', '.cc',
+                           '.cl', '.club', '.cn', '.co', '.co_il', '.co_jp', '.com',
+                           '.com_au', '.com_tr', '.cr', '.cz', '.de', '.download', '.edu',
+                           '.education', '.eu', '.fi', '.fm', '.fr', '.frl', '.game', '.global_',
+                           '.hk', '.id_', '.ie', '.im', '.in_', '.info', '.ink', '.io',
+                           '.ir', '.is_', '.it', '.jp', '.kr', '.kz', '.link', '.lt', '.lv',
+                           '.me', '.mobi', '.mu', '.mx', '.name', '.net', '.ninja',
+                           '.nl', '.nu', '.nyc', '.nz', '.online', '.org', '.pe',
+                           '.pharmacy', '.pl', '.press', '.pro', '.pt', '.pub', '.pw',
+                           '.rest', '.ru', '.ru_rf', '.rw', '.sale', '.se', '.security',
+                           '.sh', '.site', '.space', '.store', '.tech', '.tel', '.theatre',
+                           '.tickets', '.trade', '.tv', '.ua', '.uk', '.us', '.uz', '.video',
+                           '.website', '.wiki', '.work', '.xyz', '.za']
     
     def open_dbs(self):
         """ Function to open the different offline databases used in this module. ASN, Country etc.. """
@@ -323,6 +338,15 @@ class Module(Module, multiprocessing.Process):
     def get_age(self, domain):
 
         if domain.endswith('.arpa') or domain.endswith('.local'):
+            return False
+
+        # make sure whois supports the given tld
+        for tld in self.valid_tlds:
+            if domain.endswith(tld):
+                # valid tld
+                break
+        else:
+            # tld not supported
             return False
 
         cached_data = __database__.getDomainData(domain)
