@@ -8,6 +8,7 @@ import sys
 
 # Your imports
 import time
+import datetime
 import maxminddb
 import ipaddress
 import ipwhois
@@ -37,6 +38,7 @@ class Module(Module, multiprocessing.Process):
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
+        self.c2 = __database__.subscribe('new_dns_flow')
         self.timeout = 0.0000001
         # update asn every 1 month
         self.update_period = 2592000
@@ -292,6 +294,40 @@ class Module(Module, multiprocessing.Process):
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
         return MAC_info
 
+    def get_age(self, domain):
+
+        # get registration date
+        info = ipwhois.IPWhois(domain).lookup_rdap(depth=1, nir_field_list=['created'])
+        try:
+            info:list = info['network']['events']
+            for event in info:
+                # each event is a dict
+                if event['action'] == 'registration':
+                    create_date = event['timestamp']
+                    # convert to datetime obj
+                    create_date = datetime.datetime.fromisoformat(create_date)
+                    break
+            else:
+                # can't find registration field
+                return False
+        except KeyError:
+            # can't get date
+            return False
+
+        # calculate age
+        today = datetime.datetime.today()
+
+        day = today.day - create_date.day
+        month = today.month - create_date.month
+        year = today.year - create_date.year
+
+        age = (year*365) + (month*30) + day
+        age = age/365
+        # print(f'@@@@@@@@@@@@@@@@@@ ip: {ip} create_date: {create_date} \n')
+        # print(age)
+        # print(f'@@@@@@@@@@@@@@@@@@  age: {age} \n')
+
+        return age
 
 
     def shutdown_gracefully(self):

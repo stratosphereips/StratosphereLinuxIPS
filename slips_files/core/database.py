@@ -1445,7 +1445,7 @@ class Database(object):
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
             self.rcache.hset('DomainsInfo', domain, '{}')
-            # Publish that there is a new IP ready in the channel
+            # Publish that there is a new domain ready in the channel
             self.publish('new_dns', domain)
 
     def setNewIP(self, ip: str):
