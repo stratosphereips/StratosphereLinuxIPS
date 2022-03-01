@@ -14,6 +14,7 @@ import ipaddress
 import ipwhois, whois
 import socket
 import json
+import requests
 from dns.resolver import NoResolverConfiguration
 #todo add to conda env
 
@@ -170,14 +171,39 @@ class Module(Module, multiprocessing.Process):
             dns.resolver.default_resolver.nameservers=['8.8.8.8']
             return False
 
+    def get_asn_online(self, ip):
+        """
+        Get asn of an ip using ip-api.com only if the asn wasn't found in our offline db
+        """
+
+        asn = {'asn': {'asnorg': 'Unknown'}}
+        ip_obj = ipaddress.ip_address(ip)
+        if ip_obj.is_private or ip_obj.is_multicast:
+            return asn
+
+        url = 'http://ip-api.com/json/'
+        try:
+            response = requests.get( f'{url}/{ip}', timeout=5)
+            if response.status_code == 200:
+                ip_info = json.loads(response.text)
+                if ip_info['as'] != '':
+                    asn['asn']['asnorg'] = ip_info['as']
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
+            pass
+
+        return asn
+
     def get_asn(self, ip, cached_ip_info):
-        """ Gets ASN info about IP, either cached or from our offline mmdb """
+        """ Gets ASN info about IP, either cached, from our offline mmdb or from ip-api.com"""
 
         # do we have asn cached for this range?
         cached_asn = self.get_cached_asn(ip)
         if not cached_asn:
             # we don't have it cached in our db, get it from geolite
             asn = self.get_asn_info_from_geolite(ip)
+            if asn['asn']['asnorg'] == 'Unknown':
+                # can't find asn in mmdb
+                asn = self.get_asn_online(ip)
             cached_ip_info.update(asn)
             # cache this range in our redis db
             self.cache_ip_range(ip)
@@ -305,9 +331,16 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # get registration date
-        creation_date = whois.query(domain).creation_date
-        if not creation_date:
+        try:
+            creation_date = whois.query(domain).creation_date
+        except AttributeError:
             # cant get creation date
+            return False
+        except whois.exceptions.UnknownTld:
+            return False
+        except whois.exceptions.FailedParsingWhoisOutput:
+            # connection limit exceeded
+            # todo should we do something about this?
             return False
 
         today = datetime.datetime.today()
@@ -366,7 +399,7 @@ class Module(Module, multiprocessing.Process):
 
                     # ------ ASN -------
                     # Get the ASN
-                    # Before returning, update the ASN for this IP if more than 1 month 
+                    # only update the ASN for this IP if more than 1 month
                     # passed since last ASN update on this IP 
                     update_asn = self.update_asn(cached_ip_info)
                     if update_asn:
