@@ -306,6 +306,9 @@ class Module(Module, multiprocessing.Process):
 
         # get registration date
         creation_date = whois.query(domain).creation_date
+        if not creation_date:
+            # cant get creation date
+            return False
 
         today = datetime.datetime.today()
 

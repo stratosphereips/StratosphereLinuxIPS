@@ -795,14 +795,23 @@ class Module(Module, multiprocessing.Process):
                                  profileid=profileid, twid=twid, uid=uid)
 
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
+
+        age_threshold = 60
+
+        if domain.endswith('.arpa') or domain.endswith('.local'):
+            return False
+
         domain_info = __database__.getDomainData(domain)
-        if domain_info and 'Age' not in domain_info:
+        if not domain_info:
+            return False
+
+        if 'Age' not in domain_info:
             # we don't have age info about this domain
             return False
 
         # age is in days
         age = domain_info['Age']
-        if age >= 60:
+        if age >= age_threshold:
             return False
 
         confidence = 1
@@ -811,15 +820,12 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'YoungDomain'
         type_detection  = 'dstdomain'
         detection_info = domain
-        description = f'Domain {domain} was registered {age} days ago.'
-
-        conn_count = 1
+        description = f'connection to a young domain: {domain} registered {age} days ago.'
         if not twid: twid = ''
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
-                                 stime, category, conn_count=conn_count,
+                                 stime, category,
                                  profileid=profileid, twid=twid, uid=uid)
-
 
 
     def shutdown_gracefully(self):
