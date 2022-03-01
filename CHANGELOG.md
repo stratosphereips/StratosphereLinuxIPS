@@ -1,3 +1,8 @@
+-0.8.5
+* Slips
+  - Detect young domains that was registered less than 60 days ago.
+  - 
+
 -0.8.4
 * Slips
   - Add support for local JA3 feeds

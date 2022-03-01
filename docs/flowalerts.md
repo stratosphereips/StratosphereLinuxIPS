@@ -17,6 +17,7 @@ The detection techniques are:
 - DGA
 - Connection to multiple ports
 - Malicious SSL certificates
+- Young domains
 
 The details of each detection follows.
 
@@ -137,6 +138,11 @@ Slips uses SSL certificates sha1 hashes to detect C&C servers.
 Slips supports SSL feeds and is shipped with Abuse.ch feed of malicious SSL hashes by default. 
 And you can add other SSL feeds in ```ssl_feeds``` in ```slips.conf```.
 
+## Young Domains
+
+Slips uses whois python library to get the creation date of every domain met in the dns flows.
+
+If a domain's age is less than 60 days, slips sets an alert.
 
 ---
 

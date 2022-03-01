@@ -8,11 +8,13 @@ import sys
 
 # Your imports
 import time
+import datetime
 import maxminddb
 import ipaddress
-import ipwhois
+import ipwhois, whois
 import socket
 import json
+import requests
 from dns.resolver import NoResolverConfiguration
 #todo add to conda env
 
@@ -37,9 +39,25 @@ class Module(Module, multiprocessing.Process):
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
+        self.c3 = __database__.subscribe('new_dns_flow')
         self.timeout = 0.0000001
         # update asn every 1 month
         self.update_period = 2592000
+        # we can only getthe age of these tlds
+        self.valid_tlds = ['.ac_uk', '.am', '.amsterdam', '.ar', '.at', '.au',
+                           '.bank', '.be', '.biz', '.br', '.by', '.ca', '.cc',
+                           '.cl', '.club', '.cn', '.co', '.co_il', '.co_jp', '.com',
+                           '.com_au', '.com_tr', '.cr', '.cz', '.de', '.download', '.edu',
+                           '.education', '.eu', '.fi', '.fm', '.fr', '.frl', '.game', '.global_',
+                           '.hk', '.id_', '.ie', '.im', '.in_', '.info', '.ink', '.io',
+                           '.ir', '.is_', '.it', '.jp', '.kr', '.kz', '.link', '.lt', '.lv',
+                           '.me', '.mobi', '.mu', '.mx', '.name', '.net', '.ninja',
+                           '.nl', '.nu', '.nyc', '.nz', '.online', '.org', '.pe',
+                           '.pharmacy', '.pl', '.press', '.pro', '.pt', '.pub', '.pw',
+                           '.rest', '.ru', '.ru_rf', '.rw', '.sale', '.se', '.security',
+                           '.sh', '.site', '.space', '.store', '.tech', '.tel', '.theatre',
+                           '.tickets', '.trade', '.tv', '.ua', '.uk', '.us', '.uz', '.video',
+                           '.website', '.wiki', '.work', '.xyz', '.za']
     
     def open_dbs(self):
         """ Function to open the different offline databases used in this module. ASN, Country etc.. """
@@ -168,14 +186,39 @@ class Module(Module, multiprocessing.Process):
             dns.resolver.default_resolver.nameservers=['8.8.8.8']
             return False
 
+    def get_asn_online(self, ip):
+        """
+        Get asn of an ip using ip-api.com only if the asn wasn't found in our offline db
+        """
+
+        asn = {'asn': {'asnorg': 'Unknown'}}
+        ip_obj = ipaddress.ip_address(ip)
+        if ip_obj.is_private or ip_obj.is_multicast:
+            return asn
+
+        url = 'http://ip-api.com/json/'
+        try:
+            response = requests.get( f'{url}/{ip}', timeout=5)
+            if response.status_code == 200:
+                ip_info = json.loads(response.text)
+                if ip_info['as'] != '':
+                    asn['asn']['asnorg'] = ip_info['as']
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
+            pass
+
+        return asn
+
     def get_asn(self, ip, cached_ip_info):
-        """ Gets ASN info about IP, either cached or from our offline mmdb """
+        """ Gets ASN info about IP, either cached, from our offline mmdb or from ip-api.com"""
 
         # do we have asn cached for this range?
         cached_asn = self.get_cached_asn(ip)
         if not cached_asn:
             # we don't have it cached in our db, get it from geolite
             asn = self.get_asn_info_from_geolite(ip)
+            if asn['asn']['asnorg'] == 'Unknown':
+                # can't find asn in mmdb
+                asn = self.get_asn_online(ip)
             cached_ip_info.update(asn)
             # cache this range in our redis db
             self.cache_ip_range(ip)
@@ -292,6 +335,49 @@ class Module(Module, multiprocessing.Process):
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
         return MAC_info
 
+    def get_age(self, domain):
+
+        if domain.endswith('.arpa') or domain.endswith('.local'):
+            return False
+
+        # make sure whois supports the given tld
+        for tld in self.valid_tlds:
+            if domain.endswith(tld):
+                # valid tld
+                break
+        else:
+            # tld not supported
+            return False
+
+        cached_data = __database__.getDomainData(domain)
+        if cached_data and 'Age' in cached_data:
+            # we already have age info about this domain
+            return False
+
+        # get registration date
+        try:
+            creation_date = whois.query(domain).creation_date
+        except AttributeError:
+            # cant get creation date
+            return False
+        except whois.exceptions.UnknownTld:
+            return False
+        except whois.exceptions.FailedParsingWhoisOutput:
+            # connection limit exceeded
+            # todo should we do something about this?
+            return False
+
+        today = datetime.datetime.today()
+
+        # calculate age
+        day = today.day - creation_date.day
+        month = today.month - creation_date.month
+        year = today.year - creation_date.year
+
+        # get the age in days
+        age = (year*365) + (month*30) + day
+        __database__.setInfoForDomains(domain, {'Age': age})
+        return age
 
 
     def shutdown_gracefully(self):
@@ -337,7 +423,7 @@ class Module(Module, multiprocessing.Process):
 
                     # ------ ASN -------
                     # Get the ASN
-                    # Before returning, update the ASN for this IP if more than 1 month 
+                    # only update the ASN for this IP if more than 1 month
                     # passed since last ASN update on this IP 
                     update_asn = self.update_asn(cached_ip_info)
                     if update_asn:
@@ -354,6 +440,22 @@ class Module(Module, multiprocessing.Process):
                     host_name = data.get('host_name', False)
                     profileid = data['profileid']
                     self.get_vendor(mac_addr, host_name, profileid)
+
+                message = self.c3.get_message(timeout=self.timeout)
+                if (message and message['data'] == 'stop_process'):
+                    self.shutdown_gracefully()
+                    return True
+                if utils.is_msg_intended_for(message, 'new_dns_flow'):
+                    data = message["data"]
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    uid = data['uid']
+                    flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                    domain = flow_data.get('query', False)
+                    if domain:
+                        self.get_age(domain)
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

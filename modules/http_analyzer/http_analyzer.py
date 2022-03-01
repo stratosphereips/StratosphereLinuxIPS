@@ -84,7 +84,7 @@ class Module(Module, multiprocessing.Process):
         # 1 to google.com and another one to www.google.com
 
         for host in self.hosts:
-            if contacted_host== host or contacted_host==f'www.{host}' and request_body_len==0:
+            if contacted_host == host or contacted_host == f'www.{host}' and request_body_len==0:
                 try:
                     # this host has past connections, increate counter
                     self.connections_counter[host] +=1

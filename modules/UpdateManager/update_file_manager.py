@@ -980,7 +980,8 @@ class UpdateFileManager:
                                                                                 'tags': self.url_feeds[link_to_download]['tags']})
                     elif data_type == 'ip':
                         # make sure we're not blacklisting a private ip
-                        if ipaddress.ip_address(data).is_private or ipaddress.ip_address(data).is_multicast:
+                        ip_obj = ipaddress.ip_address(data)
+                        if ip_obj.is_private or ip_obj.is_multicast:
                             continue
 
                         try:
