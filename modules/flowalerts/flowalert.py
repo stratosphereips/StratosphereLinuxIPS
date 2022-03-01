@@ -357,6 +357,11 @@ class Module(Module, multiprocessing.Process):
                 if (org_name in src_mac_vendor.lower()
                         and org_name in dst_mac_vendor.lower()):
                     return True
+                else:
+                    # check if the SNI, hostname, rDNS of this ip belong to org_name
+                    ip_identification = __database__.getIPIdentification(daddr)
+                    if org_name in ip_identification.lower():
+                        return True
 
         # consider this port as unknown
         return False
