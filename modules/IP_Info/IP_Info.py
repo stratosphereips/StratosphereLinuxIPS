@@ -11,7 +11,7 @@ import time
 import datetime
 import maxminddb
 import ipaddress
-import ipwhois
+import ipwhois, whois
 import socket
 import json
 from dns.resolver import NoResolverConfiguration
@@ -296,37 +296,24 @@ class Module(Module, multiprocessing.Process):
 
     def get_age(self, domain):
 
-        # get registration date
-        info = ipwhois.IPWhois(domain).lookup_rdap(depth=1, nir_field_list=['created'])
-        try:
-            info:list = info['network']['events']
-            for event in info:
-                # each event is a dict
-                if event['action'] == 'registration':
-                    create_date = event['timestamp']
-                    # convert to datetime obj
-                    create_date = datetime.datetime.fromisoformat(create_date)
-                    break
-            else:
-                # can't find registration field
-                return False
-        except KeyError:
-            # can't get date
-            return False
+        cached_data = __database__.getDomainData(domain)
+        if cached_data and 'Age' in cached_data:
+            # we already have age info about this domain
+            return True
 
-        # calculate age
+        # get registration date
+        creation_date = whois.query(domain).creation_date
+
         today = datetime.datetime.today()
 
-        day = today.day - create_date.day
-        month = today.month - create_date.month
-        year = today.year - create_date.year
+        # calculate age
+        day = today.day - creation_date.day
+        month = today.month - creation_date.month
+        year = today.year - creation_date.year
 
+        # get the age in days
         age = (year*365) + (month*30) + day
-        age = age/365
-        # print(f'@@@@@@@@@@@@@@@@@@ ip: {ip} create_date: {create_date} \n')
-        # print(age)
-        # print(f'@@@@@@@@@@@@@@@@@@  age: {age} \n')
-
+        __database__.setInfoForDomains(domain, {'Age': age})
         return age
 
 
@@ -403,6 +390,7 @@ class Module(Module, multiprocessing.Process):
                     uid = data['uid']
                     flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
                     domain = flow_data.get('query', False)
+                    self.get_age(domain)
 
 
             except KeyboardInterrupt:
