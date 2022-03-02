@@ -366,11 +366,13 @@ class Module(Module, multiprocessing.Process):
             # connection limit exceeded
             # todo should we do something about this?
             return False
+        except whois.exceptions.WhoisCommandFailed:
+            return False
         
         if not creation_date: 
             # no creation date was found for this domain
             return False
-        
+
         today = datetime.datetime.today()
 
         # calculate age
