@@ -43,6 +43,7 @@ class Module(Module, multiprocessing.Process):
         self.c5 = __database__.subscribe('new_service')
         self.c6 = __database__.subscribe('new_dns_flow')
         self.c7 = __database__.subscribe('new_downloaded_file')
+        self.c8 = __database__.subscribe('new_smtp')
         self.timeout = 0.0000001
         self.p2p_daddrs = {}
         # get the default gateway
@@ -1245,6 +1246,7 @@ class Module(Module, multiprocessing.Process):
                         # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
                         self.detect_young_domains(domain, stime, profileid, twid, uid)
 
+                # --- Detect malicious SSL certificates ---
                 message = self.c7.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -1262,6 +1264,14 @@ class Module(Module, multiprocessing.Process):
                     ssl_info_from_db = __database__.get_ssl_info(sha1)
                     if not ssl_info_from_db: continue
                     self.set_evidence_malicious_ssl(data, ssl_info_from_db)
+
+                # --- Detect Bad SMTP logins ---
+                message = self.c8.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+                if utils.is_msg_intended_for(message, 'new_smtp'):
+                    data = json.loads(message['data'])
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

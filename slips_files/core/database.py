@@ -1667,7 +1667,7 @@ class Database(object):
                               'dns_info_change', 'tw_closed', 'core_messages',
                               'new_blocking', 'new_ssh', 'new_notice', 'new_url',
                               'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                              'new_service',  'new_arp', 'new_MAC', 'new_alert']
+                              'new_service',  'new_arp', 'new_MAC', 'new_alert', 'new_smtp']
         for supported_channel in supported_channels:
             if supported_channel in channel:
                 self.pubsub.subscribe(channel)
