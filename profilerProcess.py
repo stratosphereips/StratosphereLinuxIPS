@@ -983,7 +983,11 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'smb_mapping' in new_line['type']:
             self.column_values['type'] = 'smb_mapping'
         elif 'smtp' in new_line['type']:
+            # "ts uid id.orig_h id.orig_p id.resp_h id.resp_p trans_depth helo mailfrom
+            # rcptto date from to reply_to msg_id in_reply_to subject x_originating_ip
+            # first_received second_received last_reply path user_agent tls fuids is_webmail"
             self.column_values['type'] = 'smtp'
+            self.column_values['last_reply'] = line[20]
         elif 'socks' in new_line['type']:
             self.column_values['type'] = 'socks'
         elif 'syslog' in new_line['type']:
@@ -1216,7 +1220,9 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'smb_mapping' in file_type:
             self.column_values.update({'type': 'smb_mapping'})
         elif 'smtp' in file_type:
-            self.column_values.update({'type': 'smtp'})
+            self.column_values.update({'type': 'smtp',
+                                       'last_reply': line.get('last_reply','')
+                                       })
         elif 'socks' in file_type:
             self.column_values.update({'type': 'socks'})
         elif 'syslog' in file_type:
@@ -1958,7 +1964,7 @@ class ProfilerProcess(multiprocessing.Process):
             if not self.column_values:
                     return True
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
-                                                    'dhcp','files', 'known_services', 'arp','ftp'):
+                                                    'dhcp','files', 'known_services', 'arp', 'ftp', 'smtp'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -2156,7 +2162,8 @@ class ProfilerProcess(multiprocessing.Process):
                     used_port = self.column_values['used_port']
                     if used_port:
                         __database__.set_ftp_port(used_port)
-
+                elif flow_type == 'smtp':
+                    pass
                 elif flow_type == 'files':
                     """" Send files.log data to new_downloaded_file channel in vt module to see if it's malicious """
                     to_send = {
