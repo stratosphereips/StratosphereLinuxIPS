@@ -2163,7 +2163,16 @@ class ProfilerProcess(multiprocessing.Process):
                     if used_port:
                         __database__.set_ftp_port(used_port)
                 elif flow_type == 'smtp':
-                    pass
+                    to_send = {
+                        'uid' : self.column_values['uid'],
+                        'daddr': self.column_values['daddr'],
+                        'saddr': self.column_values['saddr'],
+                        'profileid' : profileid,
+                        'twid' : twid,
+                        'ts' : starttime,
+                        'last_reply': self.column_values['last_reply']}
+                    to_send = json.dumps(to_send)
+                    __database__.publish('new_smtp', to_send)
                 elif flow_type == 'files':
                     """" Send files.log data to new_downloaded_file channel in vt module to see if it's malicious """
                     to_send = {
