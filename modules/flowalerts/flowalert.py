@@ -62,6 +62,10 @@ class Module(Module, multiprocessing.Process):
         self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
         self.nxdomains_threshold = 10
+        # when the ctr reaches the threshold in 10 seconds, we detect an smtp bruteforce
+        self.smtp_bruteforce_threshold = 3
+        self.smtp_bruteforce_ctr = 0
+
 
     def is_ignored_ip(self, ip) -> bool:
         """
@@ -835,19 +839,33 @@ class Module(Module, multiprocessing.Process):
                                  stime, category,
                                  profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_bad_smtp_login(self, last_reply, daddr, stime, profileid, twid, uid):
+    def set_evidence_bad_smtp_login(self, saddr, daddr, stime, profileid, twid, uid):
         confidence = 1
         threat_level = 'high'
         category = 'Attempt.Login'
         type_evidence = 'BadSMTPLogin'
-        type_detection  = 'dstip'
-        detection_info = daddr
-        description = f'Bad SMTP login'
+        type_detection  = 'srcip'
+        detection_info = saddr
+        description = f'performing bad SMTP login to {daddr}'
         if not twid: twid = ''
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  stime, category,
                                  profileid=profileid, twid=twid, uid=uid)
+
+    def set_evidence_smtp_bruteforce(self, saddr, daddr, stime, profileid, twid, uid):
+        confidence = 1
+        threat_level = 'high'
+        category = 'Attempt.Login'
+        type_detection  = 'srcip'
+        type_evidence = 'SMTPLoginBruteforce'
+        description = f'performing SMTP login bruteforce to {daddr}'
+        detection_info = saddr
+        conn_count = self.smtp_bruteforce_threshold
+        if not twid: twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                 description, stime, category,
+                                 conn_count=conn_count, profileid=profileid, twid=twid)
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
@@ -1289,10 +1307,18 @@ class Module(Module, multiprocessing.Process):
                     twid = data['twid']
                     uid = data['uid']
                     daddr = data['daddr']
+                    saddr = data['saddr']
                     stime = data.get('ts', False)
                     last_reply = data.get('last_reply', False)
+
                     if 'bad smtp-auth user' in last_reply:
-                        self.set_evidence_bad_smtp_login(last_reply, daddr, stime, profileid, twid, uid)
+                        self.smtp_bruteforce_ctr += 1
+                        self.set_evidence_bad_smtp_login(saddr, daddr, stime, profileid, twid, uid)
+
+                        if self.smtp_bruteforce_ctr == self.smtp_bruteforce_threshold:
+                            self.smtp_bruteforce_ctr = 0
+                            self.set_evidence_smtp_bruteforce(saddr, daddr, stime, profileid, twid, uid)
+
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
