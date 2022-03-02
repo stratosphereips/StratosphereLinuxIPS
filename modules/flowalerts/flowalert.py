@@ -64,7 +64,7 @@ class Module(Module, multiprocessing.Process):
         self.nxdomains_threshold = 10
         # when the ctr reaches the threshold in 10 seconds, we detect an smtp bruteforce
         self.smtp_bruteforce_threshold = 3
-        self.smtp_bruteforce_ctr = 0
+        self.smtp_bruteforce_cache = {}
 
 
     def is_ignored_ip(self, ip) -> bool:
@@ -859,7 +859,7 @@ class Module(Module, multiprocessing.Process):
         category = 'Attempt.Login'
         type_detection  = 'srcip'
         type_evidence = 'SMTPLoginBruteforce'
-        description = f'performing SMTP login bruteforce to {daddr}'
+        description = f'performing SMTP login bruteforce to {daddr}. {self.smtp_bruteforce_threshold} logins in 10 seconds.'
         detection_info = saddr
         conn_count = self.smtp_bruteforce_threshold
         if not twid: twid = ''
@@ -1312,12 +1312,27 @@ class Module(Module, multiprocessing.Process):
                     last_reply = data.get('last_reply', False)
 
                     if 'bad smtp-auth user' in last_reply:
-                        self.smtp_bruteforce_ctr += 1
+                        try:
+                            self.smtp_bruteforce_cache[profileid].append(stime)
+                        except KeyError:
+                            # first time for this profileid to preform bad smtp login
+                            self.smtp_bruteforce_cache.update({
+                                profileid: [stime]
+                            })
                         self.set_evidence_bad_smtp_login(saddr, daddr, stime, profileid, twid, uid)
 
-                        if self.smtp_bruteforce_ctr == self.smtp_bruteforce_threshold:
-                            self.smtp_bruteforce_ctr = 0
-                            self.set_evidence_smtp_bruteforce(saddr, daddr, stime, profileid, twid, uid)
+                        # check if (3) bad login attemps happened
+                        if len(self.smtp_bruteforce_cache[profileid]) == self.smtp_bruteforce_threshold:
+                            # check if they happened within 10 seconds or less
+                            diff = int(self.smtp_bruteforce_cache[profileid][-1]) - int(self.smtp_bruteforce_cache[profileid][0])
+                            if diff <= 10:
+                                # remove all 3 logins that caused this alert
+                                self.smtp_bruteforce_cache[profileid] = []
+                                self.set_evidence_smtp_bruteforce(saddr, daddr, stime, profileid, twid, uid)
+                            else:
+                                # remove the first element so we can check the next 3 logins
+                                self.smtp_bruteforce_cache[profileid].pop(0)
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
