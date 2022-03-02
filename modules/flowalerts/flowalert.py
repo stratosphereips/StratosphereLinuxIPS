@@ -835,6 +835,19 @@ class Module(Module, multiprocessing.Process):
                                  stime, category,
                                  profileid=profileid, twid=twid, uid=uid)
 
+    def set_evidence_bad_smtp_login(self, last_reply, daddr, stime, profileid, twid, uid):
+        confidence = 1
+        threat_level = 'high'
+        category = 'Attempt.Login'
+        type_evidence = 'BadSMTPLogin'
+        type_detection  = 'dstip'
+        detection_info = daddr
+        description = f'Bad SMTP login'
+        if not twid: twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 stime, category,
+                                 profileid=profileid, twid=twid, uid=uid)
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
@@ -1272,7 +1285,14 @@ class Module(Module, multiprocessing.Process):
                     return True
                 if utils.is_msg_intended_for(message, 'new_smtp'):
                     data = json.loads(message['data'])
-
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    uid = data['uid']
+                    daddr = data['daddr']
+                    stime = data.get('ts', False)
+                    last_reply = data.get('last_reply', False)
+                    if 'bad smtp-auth user' in last_reply:
+                        self.set_evidence_bad_smtp_login(last_reply, daddr, stime, profileid, twid, uid)
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
