@@ -409,45 +409,6 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
-                # if timewindows are not updated for a long time (see at logsProcess.py),
-                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, 'new_ip'):
-                    # Get the IP from the message
-                    ip = message['data']
-                    try:
-                        # make sure its a valid ip
-                        ip_addr = ipaddress.ip_address(ip)
-                        if ip_addr.is_multicast:
-                            continue
-                    except ValueError:
-                        # not a valid ip skip
-                        continue
-
-                    # Do we have cached info about this ip in redis?
-                    # If yes, load it
-                    cached_ip_info = __database__.getIPData(ip)
-                    if not cached_ip_info:
-                        cached_ip_info = {}
-                    
-                    # ------ GeoCountry -------
-                    # Get the geocountry
-                    if cached_ip_info == {} or 'geocountry' not in cached_ip_info:
-                        self.get_geocountry(ip)
-
-                    # ------ ASN -------
-                    # Get the ASN
-                    # only update the ASN for this IP if more than 1 month
-                    # passed since last ASN update on this IP 
-                    update_asn = self.update_asn(cached_ip_info)
-                    if update_asn:
-                        self.get_asn(ip, cached_ip_info)
-                    self.get_rdns(ip)
-
                 message = self.c2.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -474,6 +435,43 @@ class Module(Module, multiprocessing.Process):
                     if domain:
                         self.get_age(domain)
 
+                message = self.c1.get_message(timeout=self.timeout)
+                # if timewindows are not updated for a long time (see at logsProcess.py),
+                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'new_ip'):
+                    # Get the IP from the message
+                    ip = message['data']
+                    try:
+                        # make sure its a valid ip
+                        ip_addr = ipaddress.ip_address(ip)
+                    except ValueError:
+                        # not a valid ip skip
+                        continue
+
+                    if not ip_addr.is_multicast:
+                        # Do we have cached info about this ip in redis?
+                        # If yes, load it
+                        cached_ip_info = __database__.getIPData(ip)
+                        if not cached_ip_info:
+                            cached_ip_info = {}
+
+                        # ------ GeoCountry -------
+                        # Get the geocountry
+                        if cached_ip_info == {} or 'geocountry' not in cached_ip_info:
+                            self.get_geocountry(ip)
+
+                        # ------ ASN -------
+                        # Get the ASN
+                        # only update the ASN for this IP if more than 1 month
+                        # passed since last ASN update on this IP
+                        update_asn = self.update_asn(cached_ip_info)
+                        if update_asn:
+                            self.get_asn(ip, cached_ip_info)
+                        self.get_rdns(ip)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

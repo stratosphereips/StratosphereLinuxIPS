@@ -414,22 +414,20 @@ class Module(Module, multiprocessing.Process):
 
                         # After processing the flow, it may happen that we delete icmp/arp/etc
                         # so the dataframe can be empty
-                        if self.flow.empty:
-                            continue
+                        if not self.flow.empty:
+                            # Predict
+                            pred = self.detect()
+                            label = self.flow_dict["label"]
 
-                        # Predict
-                        pred = self.detect()
-                        label = self.flow_dict["label"]
-
-                        # Report
-                        if label and label != 'unknown' and label != pred[0]:
-                            # If the user specified a label in test mode, and the label
-                            # is diff from the prediction, print in debug mode
-                            self.print(f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 3)
-                        if pred[0] == 'Malware':
-                            # Generate an alert
-                            self.set_evidence_malicious_flow(self.flow_dict['saddr'], self.flow_dict['sport'], self.flow_dict['daddr'], self.flow_dict['dport'], profileid, twid, uid)
-                            self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
+                            # Report
+                            if label and label != 'unknown' and label != pred[0]:
+                                # If the user specified a label in test mode, and the label
+                                # is diff from the prediction, print in debug mode
+                                self.print(f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 3)
+                            if pred[0] == 'Malware':
+                                # Generate an alert
+                                self.set_evidence_malicious_flow(self.flow_dict['saddr'], self.flow_dict['sport'], self.flow_dict['daddr'], self.flow_dict['dport'], profileid, twid, uid)
+                                self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
