@@ -231,13 +231,15 @@ class Database(object):
                 # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
                 if (validators.ipv6(incoming_ip)
                         and validators.ipv4(found_ip)):
-                    # associate the ipv4 we found with the incoming ipv6
-                    self.r.hmset(profileid, {'IPv6': incoming_ip})
+                    # associate the ipv4 we found with the incoming ipv6 and vice versa
+                    self.r.hmset(profileid, {'IPv4': found_ip})
+                    self.r.hmset(stored_profile, {'IPv6': incoming_ip})
                     break
                 elif (validators.ipv6(found_ip)
                       and validators.ipv4(incoming_ip)):
-                    # associate the ipv6 we found with the incoming ipv4
-                    self.r.hmset(profileid, {'IPv4': incoming_ip})
+                    # associate the ipv6 we found with the incoming ipv4 and vice versa
+                    self.r.hmset(profileid, {'IPv6': found_ip})
+                    self.r.hmset(stored_profile, {'IPv4': incoming_ip})
                     break
                 else:
                     # both are ipv4 or ipv6 and are claiming to have the same mac address
@@ -296,6 +298,34 @@ class Database(object):
         """
         hostname = self.r.hmget(profileid, 'host_name')[0]
         return hostname
+
+    def get_ipv4_from_profile(self, profileid) -> str:
+        """
+        Returns ipv4 about a certain profile or None
+        """
+        ipv4 = self.r.hmget(profileid, 'IPv4')[0]
+        return ipv4
+
+    def get_ipv6_from_profile(self, profileid) -> str:
+        """
+        Returns ipv6 about a certain profile or None
+        """
+        ipv6 = self.r.hmget(profileid, 'IPv6')[0]
+        return ipv6
+
+    def get_the_other_ip_version(self, profileid):
+        """
+        Given an ipv4, returns the ipv6 of the same computer
+        Given an ipv6, returns the ipv4 of the same computer
+        """
+        srcip = profileid.split('_')[1]
+        ip = False
+        if validators.ipv4(srcip):
+            ip = self.get_ipv6_from_profile(profileid)
+        elif validators.ipv6(srcip):
+            ip = self.get_ipv4_from_profile(profileid)
+
+        return ip
 
     def get_IP_of_MAC(self, MAC):
         """
@@ -2034,7 +2064,8 @@ class Database(object):
 
         # Add DNS resolution to the db if there are answers for the query
         if answers:
-            self.set_dns_resolution(query, answers, stime, uid, qtype_name)
+            srcip = profileid.split('_')[1]
+            self.set_dns_resolution(query, answers, stime, uid, qtype_name, srcip)
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
@@ -2351,15 +2382,18 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str):
+    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str, srcip: str):
         """
         Cache DNS answers
         1- For each ip in the answer, store the domain
         stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
         2- For each domain, store the ip
         stored in DomainsInfo
+        :param srcip: ip that performed the dns query
         """
         # don't store queries ending with arpa as dns resolutions, they're reverse dns
+        # type A: for ipv4
+        # type AAAA: for ipv6
         if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
 
@@ -2376,13 +2410,30 @@ class Database(object):
                     continue
 
                 # get stored DNS resolution from our db
-                domains = self.get_dns_resolution(answer)
+                ip_info_from_db =  self.get_dns_resolution(answer, all_info=True)
+                if ip_info_from_db == []:
+                    # if the domain(query) we have isn't already in DNSresolution in the db
+                    resolved_by = [srcip]
+                    domains = []
+                else:
+                    # we have info about this domain in DNSresolution in the db
+                    # keep track of all srcips that resolved this domain
+                    resolved_by = ip_info_from_db.get('resolved-by', [])
+                    if srcip not in resolved_by:
+                        resolved_by.append(srcip)
+                    # we'll be appending the current answer to these cached domains
+                    domains = ip_info_from_db.get('domains', [])
+
                 # if the domain(query) we have isn't already in DNSresolution in the db, add it
                 if query not in domains:
                     domains.append(query)
 
                 # domains should be a list, not a string!, so don't use json.dumps here
-                ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
+                ip_info = {'ts': ts,
+                           'uid': uid,
+                           'domains': domains,
+                           'resolved-by': resolved_by
+                           }
                 ip_info = json.dumps(ip_info)
                 # we store ALL dns resolutions seen since starting slips in DNSresolution
                 self.r.hset('DNSresolution', answer, ip_info)
@@ -2408,15 +2459,18 @@ class Database(object):
     def get_dns_resolution(self, ip, all_info=False):
         """
         Get DNS name of the IP, a list
-        :param all_info: if provided returns a dict with {ts: .. , 'answers': .. , 'uid':... } of this IP
-        if not returns answers only
+        :param all_info: if True, returns a dict with {ts: .. ,
+                                                    'domains': .. ,
+                                                    'uid':...,
+                                                    'resolved-by':.. } of this IP
+        if False, returns domains only
         this function is called for every IP in the timeline of kalipso
         """
         ip_info = self.r.hget('DNSresolution', ip)
         if ip_info:
             ip_info = json.loads(ip_info)
             if all_info:
-                # return a dict with 'ts' 'uid' 'answers' about this IP
+                # return a dict with 'ts' 'uid' 'domains' about this IP
                 return ip_info
             # return answers only
             domains = ip_info['domains']
