@@ -437,10 +437,8 @@ class Module(Module, multiprocessing.Process):
                     #self.print(ip)
 
                     # If given an IP, ask for it
-                    if ip:
-                        # Block only if the traffic isn't outgoing ICMP port unreachable packet
-                        if self.is_outgoing_icmp_packet(protocol,ip_state): continue
-
+                    # Block only if the traffic isn't outgoing ICMP port unreachable packet
+                    if ip and not self.is_outgoing_icmp_packet(protocol, ip_state):
                         # Search for this IP in our database of IoC
                         ip_info = __database__.search_IP_in_IoC(ip)
                         # check if it's a blacklisted ip
@@ -452,15 +450,17 @@ class Module(Module, multiprocessing.Process):
 
                         # check if this ip belongs to any of our blacklisted ranges
                         ip_ranges = __database__.get_malicious_ip_ranges()
-                        if not ip_ranges: continue
-
-                        for range,info in ip_ranges.items():
-                            if ipaddress.ip_address(ip) in ipaddress.ip_network(range):
-                                # ip was found in one of the blacklisted ranges
-                                ip_info = json.loads(info)
-                                # Set the evidence on this detection
-                                self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
-                                break
+                        try:
+                            for range,info in ip_ranges.items():
+                                if ipaddress.ip_address(ip) in ipaddress.ip_network(range):
+                                    # ip was found in one of the blacklisted ranges
+                                    ip_info = json.loads(info)
+                                    # Set the evidence on this detection
+                                    self.set_evidence_malicious_ip(ip, uid, timestamp, ip_info, profileid, twid, ip_state)
+                                    break
+                        except AttributeError:
+                            # we don't have ip_ranges in our db
+                            pass
                     else:
                         # We were not given an IP. Check if we were given a domain
 
