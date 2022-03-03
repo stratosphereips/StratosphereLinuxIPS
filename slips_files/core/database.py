@@ -315,6 +315,20 @@ class Database(object):
         ipv6 = self.r.hmget(profileid, 'IPv6')[0]
         return ipv6
 
+    def get_the_other_ip_version(self, profileid):
+        """
+        Given an ipv4, returns the ipv6 of the same computer
+        Given an ipv6, returns the ipv4 of the same computer
+        """
+        srcip = profileid.split('_')[1]
+        ip = False
+        if validators.ipv4(srcip):
+            ip = self.get_ipv6_from_profile(profileid)
+        elif validators.ipv6(srcip):
+            ip = self.get_ipv4_from_profile(profileid)
+
+        return ip
+
     def get_IP_of_MAC(self, MAC):
         """
         Returns the IP associated with the given MAC in our database
