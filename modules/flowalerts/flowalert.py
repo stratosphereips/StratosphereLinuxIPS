@@ -427,6 +427,30 @@ class Module(Module, multiprocessing.Process):
                                  timestamp, category, source_target_tag=source_target_tag,
                                  conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
 
+    def check_if_resolution_was_made_by_different_version(self, profileid, daddr):
+        """
+        Sometimes the same computer makes dns requests using its ipv4 and ipv6 address, check if this is the case
+        """
+        srcip = profileid.split('_')[1]
+        # get info about the dns resolution of this connection
+        dns_resolution = __database__.get_dns_resolution(daddr, all_info=True)
+
+        # is it ipv4? get it's ipv6
+        if validators.ipv4(srcip):
+            ipv6 = __database__.get_ipv6_from_profile(profileid)
+            # check if a resolution was made by this ipv6
+            if ipv6 and ipv6 in dns_resolution.get('resolved-by', []):
+                return True
+
+        elif validators.ipv6(srcip):
+            # is it ipv6? get it's ipv4
+            ipv4 = __database__.get_ipv4_from_profile(profileid)
+            # check if a resolution was made by this ipv4
+            if ipv4 and ipv4 in dns_resolution.get('resolved-by', []):
+                return True
+
+        return False
+
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
 
@@ -471,7 +495,11 @@ class Module(Module, multiprocessing.Process):
             elif uid in self.connections_checked_in_conn_dns_timer_thread:
                 # It means we already checked this conn with the Timer process
                 # (we waited 5 seconds for the dns to arrive after the connection was made)
-                # but still no dns resolution for it. So now alert
+                # but still no dns resolution for it.
+                # Sometimes the same computer makes requests using its ipv4 and ipv6 address, check if this is the case
+                if self.check_if_resolution_was_made_by_different_version(profileid, daddr):
+                    return False
+
                 #self.print(f'Alerting after timer conn without dns on {daddr},
                 # uid {uid}. time {datetime.datetime.now()}')
                 threat_level = 'high'
@@ -914,9 +942,9 @@ class Module(Module, multiprocessing.Process):
                     # 1- Do not check for DNS requests
                     # 2- Ignore some IPs like private IPs, multicast, and broadcast
                     if flow_type == 'conn' and appproto != 'dns' and not self.is_ignored_ip(daddr):
-                        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
-                        # after starting slips because the dns may have happened before starting slips
                         if '-i' in sys.argv:
+                            # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
+                            # after starting slips because the dns may have happened before starting slips
                             start_time = __database__.get_slips_start_time()
                             now = datetime.datetime.now()
                             diff = now - start_time
