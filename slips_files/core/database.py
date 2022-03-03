@@ -301,6 +301,20 @@ class Database(object):
         hostname = self.r.hmget(profileid, 'host_name')[0]
         return hostname
 
+    def get_ipv4_from_profile(self, profileid) -> str:
+        """
+        Returns ipv4 about a certain profile or None
+        """
+        ipv4 = self.r.hmget(profileid, 'IPv4')[0]
+        return ipv4
+
+    def get_ipv6_from_profile(self, profileid) -> str:
+        """
+        Returns ipv6 about a certain profile or None
+        """
+        ipv6 = self.r.hmget(profileid, 'IPv6')[0]
+        return ipv6
+
     def get_IP_of_MAC(self, MAC):
         """
         Returns the IP associated with the given MAC in our database
