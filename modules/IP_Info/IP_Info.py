@@ -16,6 +16,8 @@ import socket
 import json
 import requests
 from dns.resolver import NoResolverConfiguration
+from contextlib import redirect_stdout
+
 #todo add to conda env
 
 class Module(Module, multiprocessing.Process):
@@ -337,7 +339,6 @@ class Module(Module, multiprocessing.Process):
 
     def get_age(self, domain):
 
-        return False
         if domain.endswith('.arpa') or domain.endswith('.local'):
             return False
 
@@ -355,20 +356,30 @@ class Module(Module, multiprocessing.Process):
             # we already have age info about this domain
             return False
 
-        # get registration date
-        try:
-            creation_date = whois.query(domain).creation_date
-        except AttributeError:
-            # cant get creation date
-            return False
-        except whois.exceptions.UnknownTld:
-            return False
-        except whois.exceptions.FailedParsingWhoisOutput:
-            # connection limit exceeded
-            # todo should we do something about this?
-            return False
-        except whois.exceptions.WhoisCommandFailed:
-            return False
+        # whois library doesn't only raise an exception, it prints the error!
+        # the errors are the same exceptions we're handling
+        # temorarily change stdout to /dev/null
+        with open('/dev/null', 'w') as f:
+            with redirect_stdout(f):
+                # get registration date
+                try:
+                    creation_date = whois.query(domain).creation_date
+                except AttributeError:
+                    # the query doesn't have a creation date
+                    return False
+                except whois.exceptions.UnknownTld:
+                    # solved by manually checking valid TLDs
+                    return False
+                except whois.exceptions.FailedParsingWhoisOutput:
+                    # connection limit exceeded
+                    # todo should we do something about this?
+                    return False
+                except whois.exceptions.WhoisCommandFailed:
+                    # timeout while performing 'whois' command
+                    return False
+                except KeyError:
+                    # ocassionally occurs in whois/_3_adjust.py
+                    return False
 
         if not creation_date:
             # no creation date was found for this domain
