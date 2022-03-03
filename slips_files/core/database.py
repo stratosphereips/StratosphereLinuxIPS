@@ -234,14 +234,12 @@ class Database(object):
                     # associate the ipv4 we found with the incoming ipv6 and vice versa
                     self.r.hmset(profileid, {'IPv4': found_ip})
                     self.r.hmset(stored_profile, {'IPv6': incoming_ip})
-                    # print(f'@@@@@@@@@@@@@@@@@@ profile {profileid} has 2 ips  {found_ip} and  {incoming_ip} \n')
                     break
                 elif (validators.ipv6(found_ip)
                       and validators.ipv4(incoming_ip)):
                     # associate the ipv6 we found with the incoming ipv4 and vice versa
                     self.r.hmset(profileid, {'IPv6': found_ip})
                     self.r.hmset(stored_profile, {'IPv4': incoming_ip})
-                    # print(f'@@@@@@@@@@@@@@@@@@ profile {profileid} has 2 ips {found_ip} and  {incoming_ip} \n')
                     break
                 else:
                     # both are ipv4 or ipv6 and are claiming to have the same mac address
@@ -2387,6 +2385,8 @@ class Database(object):
         :param srcip: ip that performed the dns query
         """
         # don't store queries ending with arpa as dns resolutions, they're reverse dns
+        # type A: for ipv4
+        # type AAAA: for ipv6
         if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
             # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
 

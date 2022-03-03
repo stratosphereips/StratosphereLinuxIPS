@@ -441,7 +441,7 @@ class Module(Module, multiprocessing.Process):
         if other_ip and other_ip in dns_resolution.get('resolved-by', []):
             return True
 
-    def check_if_connection_was_made_by_different_version(profileid, twid, daddr):
+    def check_if_connection_was_made_by_different_version(self, profileid, twid, daddr):
         """
         :param daddr: the ip this connection is made to (destination ip)
         """
