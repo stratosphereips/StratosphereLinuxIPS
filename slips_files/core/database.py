@@ -2027,7 +2027,8 @@ class Database(object):
 
         # Add DNS resolution to the db if there are answers for the query
         if answers:
-            self.set_dns_resolution(query, answers, stime, uid, qtype_name)
+            srcip = profileid.split('_')[1]
+            self.set_dns_resolution(query, answers, stime, uid, qtype_name, srcip)
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
@@ -2344,13 +2345,14 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str):
+    def set_dns_resolution(self, query: str, answers: list, ts: float, uid: str, qtype_name: str, srcip: str):
         """
         Cache DNS answers
         1- For each ip in the answer, store the domain
         stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
         2- For each domain, store the ip
         stored in DomainsInfo
+        :param srcip: ip that performed the dns query
         """
         # don't store queries ending with arpa as dns resolutions, they're reverse dns
         if (qtype_name == 'AAAA' or qtype_name == 'A') and answers != '-' and not query.endswith('arpa'):
@@ -2369,13 +2371,30 @@ class Database(object):
                     continue
 
                 # get stored DNS resolution from our db
-                domains = self.get_dns_resolution(answer)
+                ip_info_from_db =  self.get_dns_resolution(answer, all_info=True)
+                if ip_info_from_db == []:
+                    # if the domain(query) we have isn't already in DNSresolution in the db
+                    resolved_by = [srcip]
+                    domains = []
+                else:
+                    # we have info about this domain in DNSresolution in the db
+                    # keep track of all srcips that resolved this domain
+                    resolved_by = ip_info_from_db.get('resolved-by', [])
+                    if srcip not in resolved_by:
+                        resolved_by.append(srcip)
+                    # we'll be appending the current answer to these cached domains
+                    domains = ip_info_from_db.get('domains', [])
+
                 # if the domain(query) we have isn't already in DNSresolution in the db, add it
                 if query not in domains:
                     domains.append(query)
 
                 # domains should be a list, not a string!, so don't use json.dumps here
-                ip_info = {'ts': ts , 'domains': domains, 'uid':uid }
+                ip_info = {'ts': ts,
+                           'uid': uid,
+                           'domains': domains,
+                           'resolved-by': resolved_by
+                           }
                 ip_info = json.dumps(ip_info)
                 # we store ALL dns resolutions seen since starting slips in DNSresolution
                 self.r.hset('DNSresolution', answer, ip_info)
@@ -2401,15 +2420,18 @@ class Database(object):
     def get_dns_resolution(self, ip, all_info=False):
         """
         Get DNS name of the IP, a list
-        :param all_info: if provided returns a dict with {ts: .. , 'answers': .. , 'uid':... } of this IP
-        if not returns answers only
+        :param all_info: if True, returns a dict with {ts: .. ,
+                                                    'domains': .. ,
+                                                    'uid':...,
+                                                    'resolved-by':.. } of this IP
+        if False, returns domains only
         this function is called for every IP in the timeline of kalipso
         """
         ip_info = self.r.hget('DNSresolution', ip)
         if ip_info:
             ip_info = json.loads(ip_info)
             if all_info:
-                # return a dict with 'ts' 'uid' 'answers' about this IP
+                # return a dict with 'ts' 'uid' 'domains' about this IP
                 return ip_info
             # return answers only
             domains = ip_info['domains']
