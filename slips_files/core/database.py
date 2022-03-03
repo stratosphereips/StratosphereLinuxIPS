@@ -1363,17 +1363,24 @@ class Database(object):
         current_data = self.getIPData(ip)
         identification = ''
         if current_data:
-            if 'asn' in current_data.keys():
+            if 'asn' in current_data:
                 asn = current_data['asn']['asnorg']
                 if 'Unknown' not in asn and asn != '':
                     identification += 'AS: ' + asn + ', '
-            if 'SNI' in current_data.keys():
+
+            if 'SNI' in current_data:
                 SNI = current_data['SNI']
                 if type(SNI) == list:
                     SNI = SNI[0]
                 identification += 'SNI: ' + SNI['server_name'] + ', '
-            if 'reverse_dns' in current_data.keys():
+
+            if 'reverse_dns' in current_data:
                 identification += 'rDNS: ' + current_data['reverse_dns'] + ', '
+
+            if 'threatintelligence' in current_data:
+                identification += 'Description: ' + current_data['threatintelligence']['description'] + ', '
+                identification += 'Tags: ' + current_data['threatintelligence']['tags'] + ', '
+
         identification = identification[:-2]
         return identification
 
