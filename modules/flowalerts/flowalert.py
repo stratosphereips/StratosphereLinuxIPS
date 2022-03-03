@@ -427,29 +427,40 @@ class Module(Module, multiprocessing.Process):
                                  timestamp, category, source_target_tag=source_target_tag,
                                  conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
 
+
+
     def check_if_resolution_was_made_by_different_version(self, profileid, daddr):
         """
         Sometimes the same computer makes dns requests using its ipv4 and ipv6 address, check if this is the case
         """
-        srcip = profileid.split('_')[1]
+        # get the other ip version of this computer
+        other_ip = __database__.get_the_other_ip_version(profileid)
         # get info about the dns resolution of this connection
         dns_resolution = __database__.get_dns_resolution(daddr, all_info=True)
 
-        # is it ipv4? get it's ipv6
-        if validators.ipv4(srcip):
-            ipv6 = __database__.get_ipv6_from_profile(profileid)
-            # check if a resolution was made by this ipv6
-            if ipv6 and ipv6 in dns_resolution.get('resolved-by', []):
-                return True
+        if other_ip and other_ip in dns_resolution.get('resolved-by', []):
+            return True
 
-        elif validators.ipv6(srcip):
-            # is it ipv6? get it's ipv4
-            ipv4 = __database__.get_ipv4_from_profile(profileid)
-            # check if a resolution was made by this ipv4
-            if ipv4 and ipv4 in dns_resolution.get('resolved-by', []):
-                return True
+    def check_if_connection_was_made_by_different_version(profileid, twid, daddr):
+        """
+        :param daddr: the ip this connection is made to (destination ip)
+        """
+        # get the other ip version of this computer
+        other_ip = __database__.get_the_other_ip_version(profileid)
+        if not other_ip:
+            return False
 
-        return False
+        # get the ips contacted by the other_ip
+        contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(f'profileid_{other_ip}', twid)
+        if not contacted_ips:
+            return False
+
+        if daddr in contacted_ips:
+            # now we're sure that the connection was made
+            # by this computer but using a different ip version
+            return True
+
+
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
@@ -536,6 +547,7 @@ class Module(Module, multiprocessing.Process):
                 except ValueError:
                     pass
 
+
     def check_dns_resolution_without_connection(self, domain, answers, timestamp, profileid, twid, uid):
         """
         Makes sure all cached DNS answers are used in contacted_ips
@@ -549,7 +561,12 @@ class Module(Module, multiprocessing.Process):
         ## - Domains check from Chrome, like xrvwsrklpqrw
         ## - The WPAD domain of windows
 
-        if 'arpa' in domain or '.local' in domain or '*' in domain or '.cymru.com' in domain[-10:] or len(domain.split('.')) == 1 or domain == 'WPAD':
+        if ('arpa' in domain
+                or '.local' in domain
+                or '*' in domain
+                or '.cymru.com' in domain[-10:]
+                or len(domain.split('.')) == 1
+                or domain == 'WPAD'):
             return False
 
         # One DNS query may not be answered exactly by UID, but the computer can re-ask the donmain, and the next DNS resolution can be
@@ -589,6 +606,7 @@ class Module(Module, multiprocessing.Process):
             if ip in contacted_ips:
                 # this dns resolution has a connection. We can exit
                 return False
+
         #self.print(f'It seems that none of the IPs were contacted')
         # Found a DNS query which none of its IPs was contacted
         # It can be that Slips is still reading it from the files. Lets check back in some time
@@ -604,7 +622,10 @@ class Module(Module, multiprocessing.Process):
         elif uid in self.connections_checked_in_dns_conn_timer_thread:
             #self.print(f'Alerting on {domain}, uid {uid}. time {datetime.datetime.now()}')
             # It means we already checked this dns with the Timer process
-            # but still no connection for it. So now alert
+            # but still no connection for it.
+            for ip in answers:
+                if self.check_if_connection_was_made_by_different_version(profileid, twid, ip):
+                    return False
             confidence = 0.8
             threat_level = 'low'
             category = 'Anomaly.Traffic'
@@ -861,7 +882,6 @@ class Module(Module, multiprocessing.Process):
                                  threat_level, confidence, description,
                                  stime, category,
                                  profileid=profileid, twid=twid, uid=uid)
-
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
