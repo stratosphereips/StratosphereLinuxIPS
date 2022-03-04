@@ -122,19 +122,22 @@ class Module(Module, multiprocessing.Process):
         Get OS and browser info about a use agent from an online database http://useragentstring.com
         """
         # some zeek http flows don't have a user agent field
-        if not user_agent: return False
-
+        if not user_agent:
+            return False
         # don't make a request again if we already have a user agent associated with this profile
         if __database__.get_user_agent_from_profile(profileid) != None:
             # this profile already has a user agent
             return True
 
         url = f'http://useragentstring.com/?uas={user_agent}&getJSON=all'
+        UA_info = {'user_agent': user_agent}
         try:
             response = requests.get(url)
         except requests.exceptions.ConnectionError:
+            __database__.add_user_agent_to_profile(profileid, json.dumps(UA_info))
             return False
         if response.status_code != 200:
+            __database__.add_user_agent_to_profile(profileid, json.dumps(UA_info))
             return False
 
         # returns the following
@@ -143,14 +146,18 @@ class Module(Module, multiprocessing.Process):
         # "os_producer":"","os_producerURL":"","linux_distibution":"Null","agent_language":"","agent_languageTag":""}
 
         json_response = json.loads(response.text)
-        os_type = json_response.get('os_type', '')
-        os_name = json_response.get('os_name', '')
-        browser = json_response.get('agent_name', '')
-        # store the ua and the info we got in one string
         # the above website returns unknown if it has no info about this UA,
         # remove the 'unknown' from the string before storing in the db
-        UA_info = f'{user_agent} {os_name} {os_type} {browser}'.replace('unknown','').replace('  ','')
-        # store it in the database
+        os_type = json_response.get('os_type', '').replace('unknown','').replace('  ','')
+        os_name = json_response.get('os_name', '').replace('unknown','').replace('  ','')
+        browser = json_response.get('agent_name', '').replace('unknown','').replace('  ','')
+
+        UA_info.update({
+            'os_name':os_name,
+            'os_type': os_type,
+            'browser': browser,
+        })
+        UA_info = json.dumps(UA_info)
         __database__.add_user_agent_to_profile(profileid, UA_info)
 
     def shutdown_gracefully(self):
