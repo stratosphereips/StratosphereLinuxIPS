@@ -64,7 +64,14 @@ class Module(Module, multiprocessing.Process):
         self.nxdomains_threshold = 10
         # when the ctr reaches the threshold in 10 seconds, we detect an smtp bruteforce
         self.smtp_bruteforce_threshold = 3
+        # dict to keep track of bad smtp logins to check for bruteforce later
+        # format {profileid: [ts,ts,...]}
         self.smtp_bruteforce_cache = {}
+        # dict to keep track of arpa queries to check for DNS arpa scans later
+        # format {profileid: [ts,ts,...]}
+        self.dns_arpa_queries = {}
+        # after this number of arpa queries, slips will detect an arpa scan
+        self.arpa_scan_threshold = 10
 
 
     def is_ignored_ip(self, ip) -> bool:
@@ -465,6 +472,44 @@ class Module(Module, multiprocessing.Process):
             # by this computer but using a different ip version
             return True
 
+    def check_dns_arpa_scan(self, domain, stime, profileid, twid, uid):
+        """
+        Detect and ARPA scan if an ip performed 10(arpa_scan_threshold) or more arpa queries within 2 seconds
+        """
+        if not domain.endswith('.in-addr.arpa'):
+            return False
+
+        try:
+            # format of this dict is {profileid: [stime of first arpa query, stim eof second, etc..]}
+            self.dns_arpa_queries[profileid].append(stime)
+        except KeyError:
+            # first time for this profileid to perform an arpa query
+            self.dns_arpa_queries[profileid] = [stime]
+
+        if not len(self.dns_arpa_queries[profileid]) >= self.arpa_scan_threshold:
+            # didn't reach the threshold yet
+            return False
+
+        # reached the threshold, did the 10 quries happen within 2 seconds?
+        diff = self.dns_arpa_queries[profileid][-1] - self.dns_arpa_queries[profileid][0]
+        if not diff <= 2:
+            # happened within more than 2 seconds
+            return False
+
+        confidence = 0.7
+        threat_level = 'medium'
+        category = 'Recon.Scanning'
+        type_detection = 'srcip'
+        type_evidence = 'DNS-ARPA-Scan'
+        description = f'performing DNS ARPA scan. Scanned {self.arpa_scan_threshold} hosts within 2 seconds.'
+        detection_info = profileid.split('_')[1]
+        conn_count = self.arpa_scan_threshold
+        if not twid: twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                 description, stime, category,
+                                 conn_count=conn_count, profileid=profileid, twid=twid)
+        # empty the list of arpa queries timestamps, we don't need thm anymore
+        self.dns_arpa_queries[profileid] = []
 
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
@@ -1325,6 +1370,8 @@ class Module(Module, multiprocessing.Process):
                     if domain:
                         # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
                         self.detect_young_domains(domain, stime, profileid, twid, uid)
+                        self.check_dns_arpa_scan(domain, stime, profileid, twid, uid)
+
 
                 # --- Detect malicious SSL certificates ---
                 message = self.c7.get_message(timeout=self.timeout)
