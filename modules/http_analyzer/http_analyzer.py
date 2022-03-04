@@ -117,7 +117,21 @@ class Module(Module, multiprocessing.Process):
         return False
 
     def set_evidence_incompatible_user_agent(self, host, uri, vendor, user_agent, timestamp, profileid, twid, uid):
-        pass
+        type_detection = 'srcip'
+        source_target_tag = 'UsingSuspiciousUserAgent'
+        detection_info = profileid.split("_")[1]
+        type_evidence = 'IncompatibleUserAgent'
+        threat_level = 'high'
+        category = 'Anomaly.Behaviour'
+        confidence = 1
+        description = f'using incompatible user-agent: "{user_agent}" ' \
+                      f'while connecting to {host}{uri}. ' \
+                      f'IP has MAC vendor: {vendor.capitalize()}'
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                 description, timestamp, category, source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid, uid=uid)
 
     def check_incompatible_user_agent(self, host, uri, timestamp, profileid, twid, uid):
         """
@@ -252,8 +266,6 @@ class Module(Module, multiprocessing.Process):
                     if not cached_ua or (cached_ua and cached_ua['user_agent'] != user_agent):
                         self.get_user_agent_info(user_agent, profileid)
                     self.check_incompatible_user_agent(host, uri, timestamp, profileid, twid, uid)
-
-
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
