@@ -116,6 +116,67 @@ class Module(Module, multiprocessing.Process):
             return True
         return False
 
+    def set_evidence_incompatible_user_agent(self, host, uri, vendor, user_agent, timestamp, profileid, twid, uid):
+        pass
+
+    def check_incompatible_user_agent(self, host, uri, timestamp, profileid, twid, uid):
+        """
+        Compare the user agent of this profile to the MAC vendor and check incompatibility
+        """
+        # get the mac vendor
+        vendor = __database__.get_mac_vendor_from_profile(profileid)
+        if not vendor:
+            return False
+        vendor = vendor.lower()
+
+        user_agent:str = __database__.get_user_agent_from_profile(profileid)
+        if not user_agent:
+            return False
+        os_type = user_agent['os_type'].lower()
+        os_name = user_agent['os_name'].lower()
+        browser = user_agent['browser'].lower()
+        user_agent = user_agent['user_agent']
+
+        if 'safari' in browser and 'apple' not in vendor :
+            self.set_evidence_incompatible_user_agent(host, uri, vendor, user_agent, timestamp, profileid, twid, uid)
+
+        # make sure all of them are lowercase
+        # no user agent should contain 2 keywords from different tuples
+        os_keywords = [('macos', 'ios', 'apple', 'os x', 'mac', 'macintosh', 'darwin'),
+                       ('microsoft', 'windows', 'nt'),
+                       ('android', 'google')]
+
+        # check which tuple does the vendor belong to
+        found_vendor_tuple = False
+        for tuple_ in os_keywords:
+            for keyword in tuple_:
+                if keyword in vendor:
+                    # this means this computer belongs to this org
+                    # create a copy of the os_keywords list without the correct org
+                    # FOR EXAMPLE if the mac vendor is apple, the os_keyword should be
+                    # [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
+                    os_keywords.pop(os_keywords.index(tuple_))
+                    found_vendor_tuple = True
+                    break
+            if found_vendor_tuple:
+                break
+
+        if not found_vendor_tuple:
+            # mac vendor isn't apple, microsoft  or google
+            # we don't know how to check for incompatibility  #todo
+            return False
+
+        for tuple_ in os_keywords:
+            for keyword in tuple_:
+                if keyword in f'{os_name} {os_type}':
+                    # from the same example,
+                    # this means that one of these keywords [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
+                    # is found in the UA that belongs to an apple device
+                    self.set_evidence_incompatible_user_agent(host, uri, vendor,
+                                                              user_agent, timestamp,
+                                                              profileid, twid, uid)
+
+                    return True
 
     def get_user_agent_info(self, user_agent, profileid) -> bool:
         """
@@ -185,7 +246,14 @@ class Module(Module, multiprocessing.Process):
                     request_body_len = flow.get('request_body_len')
                     self.check_suspicious_user_agents(uid, host, uri, timestamp, user_agent, profileid, twid)
                     self.check_multiple_empty_connections(uid, host, timestamp, request_body_len, profileid, twid)
-                    self.get_user_agent_info(user_agent, profileid)
+                    # find the UA of this profileid if we don't have it
+                    # get the last used ua of this profile
+                    cached_ua = __database__.get_user_agent_from_profile(profileid)
+                    if not cached_ua or (cached_ua and cached_ua['user_agent'] != user_agent):
+                        self.get_user_agent_info(user_agent, profileid)
+                    self.check_incompatible_user_agent(host, uri, timestamp, profileid, twid, uid)
+
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
