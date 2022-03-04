@@ -1,7 +1,7 @@
 -0.8.5
 * Slips
   - Detect young domains that was registered less than 60 days ago.
-  - 
+  - Detect incompatible user agents by comparing mac vendors with user agents found in http traffic.
 
 -0.8.4
 * Slips
