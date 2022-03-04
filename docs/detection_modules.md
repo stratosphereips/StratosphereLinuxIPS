@@ -205,13 +205,18 @@ for example:
 
 Supported detections are:
 
-ARPScan, ARP-ouside-localnet, UnsolicitedARP, MITM-ARP-attack, SSHSuccessful, LongConnection, MultipleReconnectionAttempts,
-ConnectionToMultiplePorts, InvalidCertificate, UnknownPort, Port0Connection, ConnectionWithoutDNS, DNSWithoutConnection,
-MaliciousJA3, DataExfiltration, SelfSignedCertificate, PortScanType1, PortScanType2, Password_Guessing, MaliciousFlow,
-SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, ICMPSweep, Command-and-Control-channels-detection,
-ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP, MaliciousDownloadedFile, DGA, YoungDomain
 
-
+ARPScan, ARP-outside-localnet, UnsolicitedARP, MITM-ARP-attack, SSHSuccessful, 
+LongConnection, MultipleReconnectionAttempts,
+ConnectionToMultiplePorts, InvalidCertificate, UnknownPort, Port0Connection, 
+ConnectionWithoutDNS, DNSWithoutConnection,
+MaliciousJA3, DataExfiltration, SelfSignedCertificate, PortScanType1, 
+PortScanType2, Password_Guessing, MaliciousFlow,
+SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, 
+ICMPSweep, Command-and-Control-channels-detection,
+ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP,
+MaliciousDownloadedFile, DGA, MaliciousSSLCert, YoungDomain
+DNS-ARPA-Scan, SMTPLoginBruteforce, BadSMTPLogin
 
 ## Threat Intelligence Module
 
