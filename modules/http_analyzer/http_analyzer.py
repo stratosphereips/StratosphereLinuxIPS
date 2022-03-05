@@ -116,25 +116,103 @@ class Module(Module, multiprocessing.Process):
             return True
         return False
 
+    def set_evidence_incompatible_user_agent(self, host, uri, vendor, user_agent, timestamp, profileid, twid, uid):
+        type_detection = 'srcip'
+        source_target_tag = 'UsingSuspiciousUserAgent'
+        detection_info = profileid.split("_")[1]
+        type_evidence = 'IncompatibleUserAgent'
+        threat_level = 'high'
+        category = 'Anomaly.Behaviour'
+        confidence = 1
+        description = f'using incompatible user-agent: "{user_agent}" ' \
+                      f'while connecting to {host}{uri}. ' \
+                      f'IP has MAC vendor: {vendor.capitalize()}'
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                 description, timestamp, category, source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid, uid=uid)
+
+    def check_incompatible_user_agent(self, host, uri, timestamp, profileid, twid, uid):
+        """
+        Compare the user agent of this profile to the MAC vendor and check incompatibility
+        """
+        # get the mac vendor
+        vendor = __database__.get_mac_vendor_from_profile(profileid)
+        if not vendor:
+            return False
+        vendor = vendor.lower()
+
+        user_agent:str = __database__.get_user_agent_from_profile(profileid)
+        if not user_agent:
+            return False
+        os_type = user_agent['os_type'].lower()
+        os_name = user_agent['os_name'].lower()
+        browser = user_agent['browser'].lower()
+        user_agent = user_agent['user_agent']
+
+        if 'safari' in browser and 'apple' not in vendor :
+            self.set_evidence_incompatible_user_agent(host, uri, vendor, user_agent, timestamp, profileid, twid, uid)
+
+        # make sure all of them are lowercase
+        # no user agent should contain 2 keywords from different tuples
+        os_keywords = [('macos', 'ios', 'apple', 'os x', 'mac', 'macintosh', 'darwin'),
+                       ('microsoft', 'windows', 'nt'),
+                       ('android', 'google')]
+
+        # check which tuple does the vendor belong to
+        found_vendor_tuple = False
+        for tuple_ in os_keywords:
+            for keyword in tuple_:
+                if keyword in vendor:
+                    # this means this computer belongs to this org
+                    # create a copy of the os_keywords list without the correct org
+                    # FOR EXAMPLE if the mac vendor is apple, the os_keyword should be
+                    # [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
+                    os_keywords.pop(os_keywords.index(tuple_))
+                    found_vendor_tuple = True
+                    break
+            if found_vendor_tuple:
+                break
+
+        if not found_vendor_tuple:
+            # mac vendor isn't apple, microsoft  or google
+            # we don't know how to check for incompatibility  #todo
+            return False
+
+        for tuple_ in os_keywords:
+            for keyword in tuple_:
+                if keyword in f'{os_name} {os_type}':
+                    # from the same example,
+                    # this means that one of these keywords [('microsoft', 'windows', 'NT'), ('android'), ('linux')]
+                    # is found in the UA that belongs to an apple device
+                    self.set_evidence_incompatible_user_agent(host, uri, vendor,
+                                                              user_agent, timestamp,
+                                                              profileid, twid, uid)
+
+                    return True
 
     def get_user_agent_info(self, user_agent, profileid) -> bool:
         """
         Get OS and browser info about a use agent from an online database http://useragentstring.com
         """
         # some zeek http flows don't have a user agent field
-        if not user_agent: return False
-
+        if not user_agent:
+            return False
         # don't make a request again if we already have a user agent associated with this profile
         if __database__.get_user_agent_from_profile(profileid) != None:
             # this profile already has a user agent
             return True
 
         url = f'http://useragentstring.com/?uas={user_agent}&getJSON=all'
+        UA_info = {'user_agent': user_agent}
         try:
             response = requests.get(url)
         except requests.exceptions.ConnectionError:
+            __database__.add_user_agent_to_profile(profileid, json.dumps(UA_info))
             return False
         if response.status_code != 200:
+            __database__.add_user_agent_to_profile(profileid, json.dumps(UA_info))
             return False
 
         # returns the following
@@ -143,14 +221,18 @@ class Module(Module, multiprocessing.Process):
         # "os_producer":"","os_producerURL":"","linux_distibution":"Null","agent_language":"","agent_languageTag":""}
 
         json_response = json.loads(response.text)
-        os_type = json_response.get('os_type', '')
-        os_name = json_response.get('os_name', '')
-        browser = json_response.get('agent_name', '')
-        # store the ua and the info we got in one string
         # the above website returns unknown if it has no info about this UA,
         # remove the 'unknown' from the string before storing in the db
-        UA_info = f'{user_agent} {os_name} {os_type} {browser}'.replace('unknown','').replace('  ','')
-        # store it in the database
+        os_type = json_response.get('os_type', '').replace('unknown','').replace('  ','')
+        os_name = json_response.get('os_name', '').replace('unknown','').replace('  ','')
+        browser = json_response.get('agent_name', '').replace('unknown','').replace('  ','')
+
+        UA_info.update({
+            'os_name':os_name,
+            'os_type': os_type,
+            'browser': browser,
+        })
+        UA_info = json.dumps(UA_info)
         __database__.add_user_agent_to_profile(profileid, UA_info)
 
     def shutdown_gracefully(self):
@@ -178,7 +260,12 @@ class Module(Module, multiprocessing.Process):
                     request_body_len = flow.get('request_body_len')
                     self.check_suspicious_user_agents(uid, host, uri, timestamp, user_agent, profileid, twid)
                     self.check_multiple_empty_connections(uid, host, timestamp, request_body_len, profileid, twid)
-                    self.get_user_agent_info(user_agent, profileid)
+                    # find the UA of this profileid if we don't have it
+                    # get the last used ua of this profile
+                    cached_ua = __database__.get_user_agent_from_profile(profileid)
+                    if not cached_ua or (cached_ua and cached_ua['user_agent'] != user_agent):
+                        self.get_user_agent_info(user_agent, profileid)
+                    self.check_incompatible_user_agent(host, uri, timestamp, profileid, twid, uid)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
