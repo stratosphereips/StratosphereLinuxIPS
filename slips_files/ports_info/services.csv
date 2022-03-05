@@ -13,6 +13,7 @@ smtp,25,tcp,Simple Mail Transfer
 smtp,25,udp,Simple Mail Transfer
 time,37,tcp,Time
 time,37,udp,Time
+whois,43,tcp,Whois
 DNS,53,tcp,Domain Name Server
 DNS,53,udp,Domain Name Server
 whoispp,63,tcp,whois++
