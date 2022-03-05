@@ -198,19 +198,23 @@ class Module(Module, multiprocessing.Process):
                 # is the IoC an IPv4, IPv6 or domain?
                 try:
                     ip_address = ipaddress.IPv4Address(ioc.strip())
-                    self.print(f'The data in line {line_number} is valid and is ipv4: {ip_address}', 2,0)
-                    # Store the ip in our local dict
-                    malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
-                                                                      'source': data_file_name,
-                                                                      'threat_level': threat_level})
+                    # Only use global addresses. Ignore multicast, broadcast, private, reserved and undefined
+                    if ip_address.is_global:
+                        self.print(f'The data in line {line_number} is valid and is ipv4: {ip_address}', 2,0)
+                        # Store the ip in our local dict
+                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
+                                                                          'source': data_file_name,
+                                                                          'threat_level': threat_level})
                 except ipaddress.AddressValueError:
                     # Is it ipv6?
                     try:
                         ip_address = ipaddress.IPv6Address(ioc.strip())
-                        self.print(f'The data in line {line_number} is valid and is ipv6: {ioc}', 2,0)
-                        malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
-                                                                          'source': data_file_name,
-                                                                          'threat_level': threat_level})
+                        # Only use global addresses. Ignore multicast, broadcast, private, reserved and undefined
+                        if ip_address.is_global:
+                            self.print(f'The data in line {line_number} is valid and is ipv6: {ioc}', 2,0)
+                            malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
+                                                                              'source': data_file_name,
+                                                                              'threat_level': threat_level})
                     except ipaddress.AddressValueError:
                         # It does not look as IP address.
                         # So it should be a domain
