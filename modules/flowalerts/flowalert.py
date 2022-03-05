@@ -443,8 +443,12 @@ class Module(Module, multiprocessing.Process):
         # get info about the dns resolution of this connection
         dns_resolution = __database__.get_dns_resolution(daddr, all_info=True)
 
-        if other_ip and other_ip in dns_resolution.get('resolved-by', []):
-            return True
+        try:
+            if other_ip and other_ip in dns_resolution.get('resolved-by', []):
+                return True
+        except AttributeError:
+            # It can be that the dns_resolution sometimes gives back a list and gets this error
+            return False
 
     def check_if_connection_was_made_by_different_version(self, profileid, twid, daddr):
         """
