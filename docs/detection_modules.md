@@ -205,12 +205,19 @@ for example:
 
 Supported detections are:
 
-ARPScan, ARP-ouside-localnet, UnsolicitedARP, MITM-ARP-attack, SSHSuccessful, LongConnection, MultipleReconnectionAttempts,
-ConnectionToMultiplePorts, InvalidCertificate, UnknownPort, Port0Connection, ConnectionWithoutDNS, DNSWithoutConnection,
-MaliciousJA3, DataExfiltration, SelfSignedCertificate, PortScanType1, PortScanType2, Password_Guessing, MaliciousFlow,
-SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, ICMPSweep, Command-and-Control-channels-detection,
-ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP, MaliciousDownloadedFile, DGA, YoungDomain
 
+ARPScan, ARP-outside-localnet, UnsolicitedARP, MITM-ARP-attack, SSHSuccessful, 
+LongConnection, MultipleReconnectionAttempts,
+ConnectionToMultiplePorts, InvalidCertificate, UnknownPort, Port0Connection, 
+ConnectionWithoutDNS, DNSWithoutConnection,
+MaliciousJA3, DataExfiltration, SelfSignedCertificate, PortScanType1, 
+PortScanType2, Password_Guessing, MaliciousFlow,
+SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, 
+ICMPSweep, Command-and-Control-channels-detection,
+ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP,
+MaliciousDownloadedFile, DGA, MaliciousSSLCert, YoungDomain, 
+DNS-ARPA-Scan, SMTPLoginBruteforce, BadSMTPLogin, 
+IncompatibleUserAgent
 
 
 ## Threat Intelligence Module
@@ -457,6 +464,7 @@ Available detection are:
 
 - Multiple empty connections
 - Suspicious user agents
+- Incompatible user agents
 
 ### Multiple empty connections
 
@@ -472,6 +480,17 @@ and evidence.
 
 Our current list of user agents has:
 ['httpsend', 'chm_msdn', 'pb', 'jndi', 'tesseract']
+  
+### Incompatible user agents
+
+Slips uses and offlice mac address database to detect the type of device based on the MAC OUI.
+
+When slips encounters a user agent in HTTP traffic, it performs an online query to get more info about this user agent,
+like the os type, name and browser.
+
+When slips has both information available (MAC vendor and user agent),
+it compares them to detect incompatibility using a list of keywords for each operating system.
+
 
 ## Leak Detector Module
 

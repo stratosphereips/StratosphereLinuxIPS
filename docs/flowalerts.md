@@ -18,6 +18,9 @@ The detection techniques are:
 - Connection to multiple ports
 - Malicious SSL certificates
 - Young domains
+- Bad SMTP logins
+- SMTP login bruteforce
+- DNS ARPA Scans
 
 The details of each detection follows.
 
@@ -143,6 +146,14 @@ And you can add other SSL feeds in ```ssl_feeds``` in ```slips.conf```.
 Slips uses whois python library to get the creation date of every domain met in the dns flows.
 
 If a domain's age is less than 60 days, slips sets an alert.
+
+## Bad SMTP logins
+
+Slips uses zeek to detect SMTP connections, When zeek detects a bad smtp login, slips also detects it.
+
+## SMTP bruteforce
+
+Slips detects a SMTP bruteforce when 3 or more bad SMTP logins happen within 10 seconds.
 
 ---
 

@@ -204,10 +204,13 @@ class Database(object):
 
     def get_user_agent_from_profile(self, profileid) -> str:
         """
-        Returns user agent used by a certain profile or None
+        Returns a dict of {'os_name',  'os_type', 'browser': , 'user_agent': }
+        used by a certain profile or None
         """
         user_agent = self.r.hmget(profileid, 'User-agent')[0]
-        return user_agent
+        if user_agent:
+            user_agent = json.loads(user_agent)
+            return user_agent
 
 
 
@@ -247,18 +250,6 @@ class Database(object):
                     # will be detected later by the ARP module
                     pass
 
-    def add_user_agent_to_profile(self, profileid, user_agent: str):
-        """
-        Used to associate this profile with it's used user_agent
-        """
-        self.r.hmset(profileid, {'User-agent': user_agent})
-
-    def get_user_agent_from_profile(self, profileid) -> str:
-        """
-        Returns user agent used by a certain profile or None
-        """
-        user_agent = self.r.hmget(profileid, 'User-agent')[0]
-        return user_agent
 
     def add_mac_addr_to_profile(self,profileid, MAC_info):
         """
