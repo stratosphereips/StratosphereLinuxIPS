@@ -87,7 +87,8 @@ class Module(Module, multiprocessing.Process):
         saddr = profileid.split('_')[1]
 
         # Dont detect ARP scan from the GW router
-        if self.gateway in saddr:
+        # Don't use 'in' since 192.168.1.1 is in 192.168.1.117 and that is wrong
+        if self.gateway == saddr:
             return False
 
         try:
