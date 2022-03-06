@@ -7,6 +7,8 @@
   - Update our list of ports used by specific organizations to minimize false positive 'unknown destination port' alerts
   - Add support for Russia-Ukraine IoCs
   - Detect incompatible user agents by comparing mac vendors with user agents found in http traffic.
+  - The default time to wait to alert on DNS without resolution now is 30 mins
+  - The time to wait for DNS without resolution now works in interface capture mode and in reading any file
 
 -0.8.4
 * Slips
