@@ -1044,17 +1044,16 @@ class Module(Module, multiprocessing.Process):
                     # 1- Do not check for DNS requests
                     # 2- Ignore some IPs like private IPs, multicast, and broadcast
                     if flow_type == 'conn' and appproto != 'dns' and not self.is_ignored_ip(daddr):
-                        if '-i' in sys.argv:
-                            # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 2 minutes has passed
-                            # after starting slips because the dns may have happened before starting slips
-                            start_time = __database__.get_slips_start_time()
-                            now = datetime.datetime.now()
-                            diff = now - start_time
-                            diff = diff.seconds
-                            if int(diff) >= self.conn_without_dns_interface_wait_time:
-                                self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
-                        else:
-                                self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
+                        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 30 minutes has passed
+                        # after starting slips because the dns may have happened before starting slips
+                        start_time = __database__.get_slips_start_time()
+                        internal_time = float(__database__.getSlipsInternalTime())
+                        internal_time = datetime.datetime.fromtimestamp(internal_time)
+                        diff_internal = internal_time - start_time
+                        diff_internal = diff_internal.seconds
+                        #self.print(f'Start: {start_time}, InternalTime: {internal_time} [diff {diff_internal}]. TH: {self.conn_without_dns_interface_wait_time}')
+                        if int(diff_internal) >= self.conn_without_dns_interface_wait_time:
+                            self.check_connection_without_dns_resolution(daddr, twid, profileid, timestamp, uid)
 
                     # --- Detect Connection to multiple ports (for RAT) ---
                     if proto == 'tcp' and state == 'Established':
@@ -1217,7 +1216,7 @@ class Module(Module, multiprocessing.Process):
                                                      twid=twid, uid=uid)
                         """
 
-                        # --- Detect port scans from Zeek logs---
+                        # --- Detect port scans from Zeek logs ---
                         # We're looking for port scans in notice.log in the note field
                         if 'Port_Scan' in note:
                             # Vertical port scan
@@ -1237,6 +1236,7 @@ class Module(Module, multiprocessing.Process):
                                                      source_target_tag=source_target_tag, conn_count=conn_count,
                                                      profileid=profileid, twid=twid, uid=uid)
 
+                        # --- Detect SSL cert validation failed ---
                         if 'SSL certificate validation failed' in msg \
                                 and 'unable to get local issuer certificate' not in msg:
                                 ip = flow['daddr']
@@ -1247,6 +1247,7 @@ class Module(Module, multiprocessing.Process):
                                                                            description, uid, timestamp)
                                 #self.print(description, 3, 0)
 
+                        # --- Detect horizontal portscan by zeek ---
                         if 'Address_Scan' in note:
                             # Horizontal port scan
                             # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
@@ -1265,6 +1266,7 @@ class Module(Module, multiprocessing.Process):
                                                      source_target_tag=source_target_tag, conn_count=conn_count,
                                                      profileid=profileid, twid=twid, uid=uid)
 
+                        # --- Detect password guessing by zeek ---
                         if 'Password_Guessing' in note:
                             # Vertical port scan
                             # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
@@ -1350,7 +1352,7 @@ class Module(Module, multiprocessing.Process):
                         # add to known ports
                         __database__.set_port_info(f'{port}/{proto}', service[0])
 
-                # --- Detect DNS resolutions without connection ---
+                # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs ---
                 message = self.c6.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
