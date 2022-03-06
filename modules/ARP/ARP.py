@@ -97,6 +97,8 @@ class Module(Module, multiprocessing.Process):
             # Append the ARP request, and when it happened
             cached_requests.update({daddr: {'uid' : uid,
                                     'ts' : ts}})
+            # Update the dict
+            self.cache_arp_requests[f'{profileid}_{twid}'] = cached_requests
         except KeyError:
             # create the key for this profileid_twid if it doesn't exist
             self.cache_arp_requests[f'{profileid}_{twid}'] = {daddr: {'uid' : uid,
