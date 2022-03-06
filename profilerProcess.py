@@ -1717,7 +1717,6 @@ class ProfilerProcess(multiprocessing.Process):
         """
         Checks if the src IP or dst IP or domain or organization of this flow is whitelisted.
         """
-
         #self.print(f'List of whitelist: Domains: {whitelisted_domains}, IPs: {whitelisted_IPs}, Orgs: {whitelisted_orgs}')
 
         # check if we have domains whitelisted
@@ -1923,31 +1922,31 @@ class ProfilerProcess(multiprocessing.Process):
                                     #            f"a subdomain of {org} domain: {domain}")
                                     return True
 
-                    # check if we have mac addresses whitelisted
-                    whitelisted_mac = __database__.get_whitelist('mac')
+        # check if we have mac addresses whitelisted
+        whitelisted_mac = __database__.get_whitelist('mac')
 
-                    if whitelisted_mac:
+        if whitelisted_mac:
 
-                        # try to get the mac address of the current flow
-                        src_mac =  self.column_values.get('src_mac',False)
-                        if not src_mac: src_mac = self.column_values.get('mac',False)
-                        if not src_mac:
-                            src_mac = __database__.get_mac_addr_from_profile(f'profile_{saddr}')[0]
+            # try to get the mac address of the current flow
+            src_mac =  self.column_values.get('src_mac',False)
+            if not src_mac: src_mac = self.column_values.get('mac',False)
+            if not src_mac:
+                src_mac = __database__.get_mac_addr_from_profile(f'profile_{saddr}')[0]
 
-                        if src_mac and src_mac in list(whitelisted_mac.keys()):
-                            # the src mac of this flow is whitelisted, but which direction?
-                            from_ = whitelisted_mac[src_mac]['from']
-                            if 'src' in from_ or 'both' in from_:
-                                # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
-                                return True
+            if src_mac and src_mac in list(whitelisted_mac.keys()):
+                # the src mac of this flow is whitelisted, but which direction?
+                from_ = whitelisted_mac[src_mac]['from']
+                if 'src' in from_ or 'both' in from_:
+                    # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
+                    return True
 
-                        dst_mac = self.column_values.get('dst_mac',False)
-                        if dst_mac and dst_mac in list(whitelisted_mac.keys()):
-                            # the dst mac of this flow is whitelisted, but which direction?
-                            from_ = whitelisted_mac[dst_mac]['from']
-                            if 'dst' in from_ or 'both' in from_:
-                                # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
-                                return True
+            dst_mac = self.column_values.get('dst_mac',False)
+            if dst_mac and dst_mac in list(whitelisted_mac.keys()):
+                # the dst mac of this flow is whitelisted, but which direction?
+                from_ = whitelisted_mac[dst_mac]['from']
+                if 'dst' in from_ or 'both' in from_:
+                    # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
+                    return True
 
         return False
 
