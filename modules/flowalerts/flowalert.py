@@ -367,7 +367,7 @@ class Module(Module, multiprocessing.Process):
                 dst_mac_vendor = str(__database__.get_mac_vendor_from_profile(f'profile_{daddr}'))
                 org_name = organization_info['org_name'].lower()
                 if (org_name in src_mac_vendor.lower()
-                        and org_name in dst_mac_vendor.lower()):
+                        or org_name in dst_mac_vendor.lower()):
                     return True
                 else:
                     # check if the SNI, hostname, rDNS of this ip belong to org_name
