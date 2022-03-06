@@ -124,7 +124,7 @@ class Module(Module, multiprocessing.Process):
                 # we are sure this is an arp scan
                 confidence = 0.8
                 threat_level = 'low'
-                description = f'{saddr} performing an ARP scan. Confidence {confidence}.'
+                description = f'Detected performing an ARP scan. Confidence {confidence}.'
                 type_evidence = 'ARPScan'
                 # category of this evidence according to idea categories
                 category = 'Recon.Scanning'
@@ -263,7 +263,7 @@ class Module(Module, multiprocessing.Process):
                     is_gratuitous = saddr==daddr and (dst_mac=="ff:ff:ff:ff:ff:ff" or dst_mac=="00:00:00:00:00:00" or dst_mac==src_mac)
                     if is_gratuitous:
                         # for MITM arp attack, the arp has to be gratuitous
-                        # and it has to be a reply operation, not a request
+                        # and it has to be a reply operation, not a request.
                         if 'reply' in operation:
                             self.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac)
                     else:
