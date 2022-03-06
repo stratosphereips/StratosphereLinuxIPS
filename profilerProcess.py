@@ -303,7 +303,8 @@ class ProfilerProcess(multiprocessing.Process):
                 while line:
                     # each line will be something like this: 34.64.0.0/10
                     line = line.replace("\n","").strip()
-                    org_asn.append(line)
+                    # Read all as upper
+                    org_asn.append(line.upper())
                     line = f.readline()
             return org_asn
 
@@ -333,7 +334,7 @@ class ProfilerProcess(multiprocessing.Process):
                 while line:
                     # each line will be something like this: 34.64.0.0/10
                     line = line.replace("\n","").strip()
-                    domains.append(line)
+                    domains.append(line.lower())
                     line = f.readline()
             return domains
         except (FileNotFoundError, IOError):
