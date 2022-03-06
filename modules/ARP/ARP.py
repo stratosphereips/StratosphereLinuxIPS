@@ -85,10 +85,6 @@ class Module(Module, multiprocessing.Process):
         # The Gratuitous ARP is sent as a broadcast, as a way for a node to announce or update its IP to MAC mapping to the entire network.
         # It shouldn't be marked as an arp scan
         saddr = profileid.split('_')[1]
-        if saddr==daddr and (dst_mac=="ff:ff:ff:ff:ff:ff" or dst_mac=="00:00:00:00:00:00" or dst_mac==src_mac):
-            # dst_mac is the broadcast address, we're sure it's a gratuitous arp, ignore it
-            return False
-
 
         # Dont detect ARP scan from the GW router
         if self.gateway in saddr:
