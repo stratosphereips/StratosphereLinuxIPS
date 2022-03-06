@@ -124,7 +124,7 @@ class Module(Module, multiprocessing.Process):
                 # we are sure this is an arp scan
                 confidence = 0.8
                 threat_level = 'low'
-                description = f'Detected performing an ARP scan. Confidence {confidence}.'
+                description = f'performing an ARP scan. Confidence {confidence}.'
                 type_evidence = 'ARPScan'
                 # category of this evidence according to idea categories
                 category = 'Recon.Scanning'
