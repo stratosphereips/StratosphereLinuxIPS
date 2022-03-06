@@ -57,7 +57,7 @@ class Module(Module, multiprocessing.Process):
         # Threshold how much time to wait when capturing in an interface, to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In seconds
-        self.conn_without_dns_interface_wait_time = 180
+        self.conn_without_dns_interface_wait_time = 1800
         # this dict will contain the number of nxdomains found in every profile
         self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
