@@ -20,6 +20,7 @@ import multiprocessing
 import sys
 import io
 from slips_files.core.database import __database__
+import os
 
 # Output Process
 class OutputProcess(multiprocessing.Process):
@@ -28,6 +29,10 @@ class OutputProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
+        if self.debug == 0:
+            # create the file
+            if os.path.exists('output/errors.log'):
+                open('output/errors.log', 'w').close()
         self.name = 'OutputProcess'
         self.queue = inputqueue
         self.config = config
@@ -120,7 +125,9 @@ class OutputProcess(multiprocessing.Process):
         (level, sender, msg) = self.process_line(line)
         verbose_level, debug_level = int(level[0]), int(level[1])
         # if verbosity level is 3 make it red
-        if debug_level == 3 : msg = f'\033[0;35;40m{msg}\033[00m'
+        if debug_level == 3:
+            msg = f'\033[0;35;40m{msg}\033[00m'
+
         # There should be a level 0 that we never print. So its >, and not >=
         if verbose_level > 0 and verbose_level <= 3 and verbose_level <= self.verbose:
             if 'Start' in msg:
@@ -133,7 +140,13 @@ class OutputProcess(multiprocessing.Process):
                 return
             # For now print DEBUG, then we can use colors or something
             print(f'{sender}{msg}')
-        # This is to test if we are reading the flows completely
+
+        # if the line is an error and we're running slips without -e 1 , we should log the error to output/errors.log
+        # make sure thee msg is an error. debug_level==1 is the one printing errors
+        if self.debug == 0 and debug_level == 1:
+            # it's an error. we should log it
+            with open('output/errors.log', 'a') as self.errors_logfile:
+                self.errors_logfile.write(f'{sender}{msg}\n')
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
@@ -157,7 +170,7 @@ class OutputProcess(multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-            except (KeyboardInterrupt, EOFError):
+            except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
             except Exception as inst:

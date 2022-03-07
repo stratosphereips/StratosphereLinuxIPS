@@ -630,6 +630,10 @@ if __name__ == '__main__':
             except OSError:
                 # Directory not empty (may contain hidden non-deletable files), don't delete dir
                 pass
+            try:
+                os.remove(args.output + 'errors.log')
+            except OSError:
+                pass
 
         # Create output folder for alerts.txt and alerts.json if they do not exist
         if not args.output.endswith('/'):
