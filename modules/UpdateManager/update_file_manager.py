@@ -58,7 +58,7 @@ class UpdateFileManager:
 
         try:
             # Read the list of ja3 feeds to download. Convert to list
-            self.ja3_feed_tuples = self.config.get('threatintelligence', 'ja3_feeds').split(', ')
+            self.ja3_feed_tuples = self.config.get('threatintelligence', 'ja3_feeds').split('\n')
             self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -66,7 +66,7 @@ class UpdateFileManager:
 
         try:
             # Read the list of ja3 feeds to download. Convert to list
-            self.ssl_feed_tuples = self.config.get('threatintelligence', 'ssl_feeds').split(', ')
+            self.ssl_feed_tuples = self.config.get('threatintelligence', 'ssl_feeds').split('\n')
             self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -101,17 +101,13 @@ class UpdateFileManager:
         url_feeds = {}
         # Each tuple_ is in turn a url, threat_level and tags
         for line in feeds:
-            try:
-                url, threat_level, tags = line.split(',')
-            except ValueError:
-                # invalid line
+            line = line.replace('\n', '')
+            if line == '':
                 continue
 
-            url = url.replace('\n','')
-            tags = tags.replace('\n','')
+            url, threat_level, tags = line.split(', ')
             tags = tags.replace('tags=','')
             threat_level = threat_level.replace('threat_level=','').strip()
-
 
             # remove commented lines from the cache db
             if url.startswith(';'):
@@ -131,8 +127,6 @@ class UpdateFileManager:
 
             url_feeds[url] =  {'threat_level': threat_level,
                                'tags':tags[:30]}
-
-
         return url_feeds
 
     def print(self, text, verbose=1, debug=0):
