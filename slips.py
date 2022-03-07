@@ -288,7 +288,7 @@ def shutdown_gracefully(input_information):
             try:
                 os.kill(int(PIDs[process]), signal.SIGINT)
             except KeyError:
-                # process hasn't started so we can't send sigint
+                # process hasn't started (for example logsProcess) so we can't send sigint,
                 continue
 
         # only print that modules are still running once
@@ -322,7 +322,14 @@ def shutdown_gracefully(input_information):
                             # remove module from the list of opened pids
                             PIDs.pop(module_name)
                         except KeyError:
-                            continue
+                            # reaching this block means a module that belongs to slips
+                            # is publishing in  finished_modules
+                            # but slips doesn't know of it's PID!!
+                            print(f"[Main] Module{module_name} just published in "
+                                  f"finished_modules channel and Slips doesn't know about it's PID!", 0, 1)
+                            # pass insead of continue because
+                            # this module is finished and we need to print that it has stopped
+                            pass
                         modules_left = len(list(PIDs.keys()))
                         # to vertically align them when printing
                         module_name = module_name + ' '*(20-len(module_name))
