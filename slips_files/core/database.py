@@ -2648,6 +2648,7 @@ class Database(object):
     def set_TI_file_info(self, file, data):
         '''
         Set/update time and/or e-tag for TI file
+        :param file: a valid filename not a feed url
         '''
         # data = self.get_malicious_file_info(file)
         # for key in file_data:
@@ -2658,6 +2659,7 @@ class Database(object):
     def get_TI_file_info(self, file):
         '''
         Get TI file info
+        :param file: a valid filename not a feed url
         '''
         data = self.rcache.hget('TI_files_info', file)
         if data:
@@ -2666,7 +2668,8 @@ class Database(object):
             data = {}
         return data
 
-
+    def delete_file_info(self, file):
+        self.rcache.hdel('TI_files_info', file)
 
 
     def set_asn_cache(self, asn, asn_range) -> None:
