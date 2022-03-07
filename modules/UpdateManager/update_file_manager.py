@@ -981,7 +981,10 @@ class UpdateFileManager:
                     elif data_type == 'ip':
                         # make sure we're not blacklisting a private ip
                         ip_obj = ipaddress.ip_address(data)
-                        if ip_obj.is_private or ip_obj.is_multicast or '8.8.8.8' in data:
+                        if (ip_obj.is_private
+                                or ip_obj.is_multicast
+                                or ip_obj.is_link_local
+                                or '8.8.8.8' in data):
                             continue
 
                         try:
@@ -1010,10 +1013,14 @@ class UpdateFileManager:
                                                                         'threat_level':self.url_feeds[link_to_download]['threat_level'],
                                                                         'tags': self.url_feeds[link_to_download]['tags']})
                     elif data_type == 'ip_range':
-                        # make sure we're not blacklisting a private ip range
+                        # make sure we're not blacklisting a private or multicast ip range
                         # get network address from range
                         net_addr = data[:data.index('/')]
-                        if net_addr in utils.home_networks or '224.0.0.0' in net_addr:
+                        ip_obj = ipaddress.ip_address(net_addr)
+                        if (ip_obj.is_multicast
+                                or ip_obj.is_private
+                                or ip_obj.is_link_local
+                                or net_addr in utils.home_networks):
                             continue
 
                         try:
