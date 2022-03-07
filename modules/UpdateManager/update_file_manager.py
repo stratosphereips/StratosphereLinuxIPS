@@ -50,7 +50,7 @@ class UpdateFileManager:
 
         try:
             # Read the list of URLs to download. Convert to list
-            self.ti_feed_tuples = self.config.get('threatintelligence', 'ti_files').split(', ')
+            self.ti_feed_tuples = self.config.get('threatintelligence', 'ti_files').split('\n')
             self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -99,38 +99,40 @@ class UpdateFileManager:
         """
         # this dict will contain every link and its threat_level
         url_feeds = {}
-        # Empty the variables so we know which ones we read already
-        url, threat_level, tags= '', '', ''
         # Each tuple_ is in turn a url, threat_level and tags
-        for tuple_ in feeds:
-            if not url:
-                url = tuple_.replace('\n','')
-            elif url.startswith(';'):
-                # remove commented lines from the cache db
+        for line in feeds:
+            try:
+                url, threat_level, tags = line.split(',')
+            except ValueError:
+                # invalid line
+                continue
+
+            url = url.replace('\n','')
+            tags = tags.replace('\n','')
+            tags = tags.replace('tags=','')
+            threat_level = threat_level.replace('threat_level=','').strip()
+
+
+            # remove commented lines from the cache db
+            if url.startswith(';'):
                 feed = url.split('/')[-1]
-                __database__.delete_feed(feed)
-                # to avoid calling delete_feed again with the same feed
-                url = ''
-            elif not threat_level:
-                threat_level = tuple_.replace('threat_level=','')
-                # make sure threat level is a valid value
-                if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
-                    # not a valid threat_level
-                    self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
-                    threat_level = 'low'
-            elif not tags:
-                if '\n' in tuple_:
-                    # Is a combined tags+url.
-                    # This is an issue with the library
-                    tags = tuple_.split('\n')[0].replace('tags=','')
-                    url_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
-                    url = tuple_.split('\n')[1]
-                    threat_level = ''
-                    tags = ''
-                else:
-                    # The first line is not combined tag+url
-                    tags = tuple_.replace('tags=','')
-                    url_feeds[url] = {'threat_level': threat_level, 'tags':tags[:30]}
+                if __database__.get_TI_file_info(feed):
+                    __database__.delete_feed(feed)
+                    # to avoid calling delete_feed again with the same feed
+                    __database__.delete_file_info(feed)
+                continue
+
+            # make sure threat level is a valid value
+            if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
+                # not a valid threat_level
+                self.print(f"Invalid threat level found in slips.conf: {threat_level} "
+                           f"for TI feed: {url}. Using 'low' instead.", 0,1)
+                threat_level = 'low'
+
+            url_feeds[url] =  {'threat_level': threat_level,
+                               'tags':tags[:30]}
+
+
         return url_feeds
 
     def print(self, text, verbose=1, debug=0):
