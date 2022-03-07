@@ -140,12 +140,11 @@ class LogsProcess(multiprocessing.Process):
             except UnboundLocalError:
                 # The timer variable didn't exist, so just end
                 pass
-
-
             self.outputqueue.put('01|logs|\t[Logs] Error with LogsProcess')
             self.outputqueue.put('01|logs|\t[Logs] {}'.format(type(inst)))
             self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))
             sys.exit(1)
+            return True
 
     def createProfileFolder(self, profileid):
         """
@@ -517,6 +516,7 @@ class LogsProcess(multiprocessing.Process):
             sys.exit(1)
 
 
+
 class TimerThread(threading.Thread):
     """Thread that executes a task every N seconds. Only to run the process_global_data."""
     
@@ -539,6 +539,12 @@ class TimerThread(threading.Thread):
                 # sleep for interval or until shutdown
                 self._finished.wait(self._interval)
         except KeyboardInterrupt:
+            return True
+        except Exception as inst:
+            self.outputqueue.put('01|[Logs] Error in process_global_data in LogsProcess')
+            self.outputqueue.put(f'01|[Logs] {type(inst)}')
+            self.outputqueue.put('01|[Logs] {}'.format(inst))
+            sys.exit(1)
             return True
     
     def task(self):
