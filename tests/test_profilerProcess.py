@@ -32,7 +32,7 @@ def test_read_whitelist(outputQueue, inputQueue, database):
     assert 'apple.com' in database.get_whitelist("domains").keys()
     assert 'microsoft' in database.get_whitelist("organizations").keys()
 
-@pytest.mark.parametrize("org,asn",[('google','as19448')])
+@pytest.mark.parametrize("org,asn",[('google','AS6432')])
 def test_load_org_asn(org, outputQueue, inputQueue, asn):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
     assert profilerProcess.load_org_asn(org) != False
