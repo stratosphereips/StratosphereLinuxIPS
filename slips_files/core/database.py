@@ -2401,8 +2401,8 @@ class Database(object):
                     continue
 
                 # get stored DNS resolution from our db
-                ip_info_from_db =  self.get_dns_resolution(answer, all_info=True)
-                if ip_info_from_db == []:
+                ip_info_from_db =  self.get_dns_resolution(answer)
+                if ip_info_from_db == {}:
                     # if the domain(query) we have isn't already in DNSresolution in the db
                     resolved_by = [srcip]
                     domains = []
@@ -2447,28 +2447,22 @@ class Database(object):
 
 
 
-    def get_dns_resolution(self, ip, all_info=False):
+    def get_dns_resolution(self, ip):
         """
         Get DNS name of the IP, a list
-        :param all_info: if True, returns a dict with {ts: .. ,
-                                                    'domains': .. ,
-                                                    'uid':...,
-                                                    'resolved-by':.. } of this IP
-        if False, returns domains only
+        returns a dict with {ts: .. ,
+                            'domains': .. ,
+                            'uid':...,
+                            'resolved-by':.. } of this IP or {}
+
         this function is called for every IP in the timeline of kalipso
         """
         ip_info = self.r.hget('DNSresolution', ip)
         if ip_info:
             ip_info = json.loads(ip_info)
-            if all_info:
-                # return a dict with 'ts' 'uid' 'domains' about this IP
-                return ip_info
-            # return answers only
-            domains = ip_info['domains']
-
-            return domains
-        else:
-            return []
+            # return a dict with 'ts' 'uid' 'domains' about this IP
+            return ip_info
+        return {}
 
     def get_all_dns_resolutions(self):
         dns_resolutions = self.r.hgetall('DNSresolution')
@@ -2654,6 +2648,7 @@ class Database(object):
     def set_TI_file_info(self, file, data):
         '''
         Set/update time and/or e-tag for TI file
+        :param file: a valid filename not a feed url
         '''
         # data = self.get_malicious_file_info(file)
         # for key in file_data:
@@ -2664,6 +2659,7 @@ class Database(object):
     def get_TI_file_info(self, file):
         '''
         Get TI file info
+        :param file: a valid filename not a feed url
         '''
         data = self.rcache.hget('TI_files_info', file)
         if data:
@@ -2672,7 +2668,8 @@ class Database(object):
             data = {}
         return data
 
-
+    def delete_file_info(self, file):
+        self.rcache.hdel('TI_files_info', file)
 
 
     def set_asn_cache(self, asn, asn_range) -> None:

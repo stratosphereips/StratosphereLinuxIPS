@@ -322,6 +322,8 @@ class Module(Module, multiprocessing.Process):
                     return server_name
         # we don't have cached info about this ip, was it resolved?
         ip_info = __database__.get_dns_resolution(ip)
+        ip_info = ip_info.get('domains', [])
+
         if ip_info:
             return ip_info
 
@@ -448,7 +450,7 @@ class Module(Module, multiprocessing.Process):
         # get the other ip version of this computer
         other_ip = __database__.get_the_other_ip_version(profileid)
         # get info about the dns resolution of this connection
-        dns_resolution = __database__.get_dns_resolution(daddr, all_info=True)
+        dns_resolution = __database__.get_dns_resolution(daddr)
 
         try:
             if other_ip and other_ip in dns_resolution.get('resolved-by', []):
@@ -537,7 +539,7 @@ class Module(Module, multiprocessing.Process):
                 # less than 2 minutes have passed
                 return False
 
-        answers_dict = __database__.get_dns_resolution(daddr, all_info=True)
+        answers_dict = __database__.get_dns_resolution(daddr)
         if not answers_dict:
             #self.print(f'No DNS resolution in {answers_dict}')
             # There is no DNS resolution, but it can be that Slips is

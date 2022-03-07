@@ -254,8 +254,10 @@ class EvidenceProcess(multiprocessing.Process):
         '''
         evidence_string = ''
         dns_resolution_detection_info = __database__.get_dns_resolution(detection_info)
-        dns_resolution_detection_info_final = dns_resolution_detection_info[0:3] if dns_resolution_detection_info else ''
+        dns_resolution_detection_info = dns_resolution_detection_info.get('domains', [])
+        dns_resolution_detection_info = dns_resolution_detection_info[0:3] if dns_resolution_detection_info else ''
         dns_resolution_ip = __database__.get_dns_resolution(ip)
+        dns_resolution_ip = dns_resolution_ip.get('domains', [])
         if len(dns_resolution_ip) >= 1:
             dns_resolution_ip = dns_resolution_ip[0]
         elif len(dns_resolution_ip) == 0:
@@ -367,6 +369,8 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             #self.print(f"DNS of src IP {self.column_values['saddr']}: {__database__.get_dns_resolution(self.column_values['saddr'])}")
             src_dns_domains = __database__.get_dns_resolution(flow['saddr'])
+            src_dns_domains = src_dns_domains.get('domains', [])
+
             for dns_domain in src_dns_domains:
                 domains_to_check_src.append(dns_domain)
         except (KeyError, TypeError):

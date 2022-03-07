@@ -50,7 +50,7 @@ class UpdateFileManager:
 
         try:
             # Read the list of URLs to download. Convert to list
-            self.ti_feed_tuples = self.config.get('threatintelligence', 'ti_files').split(', ')
+            self.ti_feed_tuples = self.config.get('threatintelligence', 'ti_files').split('\n')
             self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -58,7 +58,7 @@ class UpdateFileManager:
 
         try:
             # Read the list of ja3 feeds to download. Convert to list
-            self.ja3_feed_tuples = self.config.get('threatintelligence', 'ja3_feeds').split(', ')
+            self.ja3_feed_tuples = self.config.get('threatintelligence', 'ja3_feeds').split('\n')
             self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -66,7 +66,7 @@ class UpdateFileManager:
 
         try:
             # Read the list of ja3 feeds to download. Convert to list
-            self.ssl_feed_tuples = self.config.get('threatintelligence', 'ssl_feeds').split(', ')
+            self.ssl_feed_tuples = self.config.get('threatintelligence', 'ssl_feeds').split('\n')
             self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
@@ -99,38 +99,34 @@ class UpdateFileManager:
         """
         # this dict will contain every link and its threat_level
         url_feeds = {}
-        # Empty the variables so we know which ones we read already
-        url, threat_level, tags= '', '', ''
         # Each tuple_ is in turn a url, threat_level and tags
-        for tuple_ in feeds:
-            if not url:
-                url = tuple_.replace('\n','')
-            elif url.startswith(';'):
-                # remove commented lines from the cache db
+        for line in feeds:
+            line = line.replace('\n', '')
+            if line == '':
+                continue
+
+            url, threat_level, tags = line.split(', ')
+            tags = tags.replace('tags=','')
+            threat_level = threat_level.replace('threat_level=','').strip()
+
+            # remove commented lines from the cache db
+            if url.startswith(';'):
                 feed = url.split('/')[-1]
-                __database__.delete_feed(feed)
-                # to avoid calling delete_feed again with the same feed
-                url = ''
-            elif not threat_level:
-                threat_level = tuple_.replace('threat_level=','')
-                # make sure threat level is a valid value
-                if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
-                    # not a valid threat_level
-                    self.print(f"Invalid threat level found in slips.conf: {threat_level} for TI feed: {url}. Using 'low' instead.", 0,1)
-                    threat_level = 'low'
-            elif not tags:
-                if '\n' in tuple_:
-                    # Is a combined tags+url.
-                    # This is an issue with the library
-                    tags = tuple_.split('\n')[0].replace('tags=','')
-                    url_feeds[url] =  {'threat_level': threat_level, 'tags':tags[:30]}
-                    url = tuple_.split('\n')[1]
-                    threat_level = ''
-                    tags = ''
-                else:
-                    # The first line is not combined tag+url
-                    tags = tuple_.replace('tags=','')
-                    url_feeds[url] = {'threat_level': threat_level, 'tags':tags[:30]}
+                if __database__.get_TI_file_info(feed):
+                    __database__.delete_feed(feed)
+                    # to avoid calling delete_feed again with the same feed
+                    __database__.delete_file_info(feed)
+                continue
+
+            # make sure threat level is a valid value
+            if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
+                # not a valid threat_level
+                self.print(f"Invalid threat level found in slips.conf: {threat_level} "
+                           f"for TI feed: {url}. Using 'low' instead.", 0,1)
+                threat_level = 'low'
+
+            url_feeds[url] =  {'threat_level': threat_level,
+                               'tags':tags[:30]}
         return url_feeds
 
     def print(self, text, verbose=1, debug=0):
@@ -981,7 +977,10 @@ class UpdateFileManager:
                     elif data_type == 'ip':
                         # make sure we're not blacklisting a private ip
                         ip_obj = ipaddress.ip_address(data)
-                        if ip_obj.is_private or ip_obj.is_multicast:
+                        if (ip_obj.is_private
+                                or ip_obj.is_multicast
+                                or ip_obj.is_link_local
+                                or '8.8.8.8' in data):
                             continue
 
                         try:
@@ -1010,10 +1009,14 @@ class UpdateFileManager:
                                                                         'threat_level':self.url_feeds[link_to_download]['threat_level'],
                                                                         'tags': self.url_feeds[link_to_download]['tags']})
                     elif data_type == 'ip_range':
-                        # make sure we're not blacklisting a private ip range
+                        # make sure we're not blacklisting a private or multicast ip range
                         # get network address from range
                         net_addr = data[:data.index('/')]
-                        if net_addr in utils.home_networks or '224.0.0.0' in net_addr:
+                        ip_obj = ipaddress.ip_address(net_addr)
+                        if (ip_obj.is_multicast
+                                or ip_obj.is_private
+                                or ip_obj.is_link_local
+                                or net_addr in utils.home_networks):
                             continue
 
                         try:

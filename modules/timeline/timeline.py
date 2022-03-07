@@ -135,8 +135,9 @@ class Module(Module, multiprocessing.Process):
                 if 'TCP' in proto or 'UDP' in proto:
                     warning_empty = ''
                     critical_warning_dport_name = ''
-                    dns_resolution = ''
                     dns_resolution = __database__.get_dns_resolution(daddr)
+                    dns_resolution = dns_resolution.get('domains', [])
+
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
                     if len(dns_resolution) > 3:
                         dns_resolution = dns_resolution[-1]
@@ -207,6 +208,8 @@ class Module(Module, multiprocessing.Process):
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
                     dns_resolution = __database__.get_dns_resolution(daddr)
+                    dns_resolution = dns_resolution.get('domains', [])
+
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
                     if len(dns_resolution) > 3:
                         dns_resolution = dns_resolution[-1]

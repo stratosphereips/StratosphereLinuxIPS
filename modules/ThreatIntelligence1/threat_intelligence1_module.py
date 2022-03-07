@@ -67,6 +67,7 @@ class Module(Module, multiprocessing.Process):
         confidence = 1
         category = 'Anomaly.Traffic'
         dns_resolution = __database__.get_dns_resolution(ip)
+        dns_resolution = dns_resolution.get('domains', [])
         dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
 
         if 'src' in ip_state:
