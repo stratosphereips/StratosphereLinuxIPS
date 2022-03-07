@@ -2401,8 +2401,8 @@ class Database(object):
                     continue
 
                 # get stored DNS resolution from our db
-                ip_info_from_db =  self.get_dns_resolution(answer, all_info=True)
-                if ip_info_from_db == []:
+                ip_info_from_db =  self.get_dns_resolution(answer)
+                if ip_info_from_db == {}:
                     # if the domain(query) we have isn't already in DNSresolution in the db
                     resolved_by = [srcip]
                     domains = []
@@ -2447,28 +2447,22 @@ class Database(object):
 
 
 
-    def get_dns_resolution(self, ip, all_info=False):
+    def get_dns_resolution(self, ip):
         """
         Get DNS name of the IP, a list
-        :param all_info: if True, returns a dict with {ts: .. ,
-                                                    'domains': .. ,
-                                                    'uid':...,
-                                                    'resolved-by':.. } of this IP
-        if False, returns domains only
+        returns a dict with {ts: .. ,
+                            'domains': .. ,
+                            'uid':...,
+                            'resolved-by':.. } of this IP or {}
+
         this function is called for every IP in the timeline of kalipso
         """
         ip_info = self.r.hget('DNSresolution', ip)
         if ip_info:
             ip_info = json.loads(ip_info)
-            if all_info:
-                # return a dict with 'ts' 'uid' 'domains' about this IP
-                return ip_info
-            # return answers only
-            domains = ip_info['domains']
-
-            return domains
-        else:
-            return []
+            # return a dict with 'ts' 'uid' 'domains' about this IP
+            return ip_info
+        return {}
 
     def get_all_dns_resolutions(self):
         dns_resolutions = self.r.hgetall('DNSresolution')

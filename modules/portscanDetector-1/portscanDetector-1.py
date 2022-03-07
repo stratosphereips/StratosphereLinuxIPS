@@ -101,6 +101,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # Remove dstips that have DNS resolution already
                 for dip in dstips:
                     dns_resolution = __database__.get_dns_resolution(dip)
+                    dns_resolution = dns_resolution.get('domains', [])
                     if dns_resolution:
                         dstips_to_discard.append(dip)
                 # remove the resolved dstips from dstips dict

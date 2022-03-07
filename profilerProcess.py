@@ -1699,6 +1699,7 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             #self.print(f"DNS of src IP {self.column_values['saddr']}: {__database__.get_dns_resolution(self.column_values['saddr'])}")
             src_dns_domains = __database__.get_dns_resolution(self.column_values['saddr'])
+            src_dns_domains = src_dns_domains.get('domains', [])
             for dns_domain in src_dns_domains:
                 domains_to_check_src.append(dns_domain)
         except (KeyError, TypeError):
@@ -1739,6 +1740,7 @@ class ProfilerProcess(multiprocessing.Process):
             try:
                 #self.print(f"DNS of dst IP {self.column_values['daddr']}: {__database__.get_dns_resolution(self.column_values['daddr'])}")
                 dst_dns_domains = __database__.get_dns_resolution(self.column_values['daddr'])
+                dst_dns_domains = dst_dns_domains.get('domains', [])
                 for dns_domain in dst_dns_domains:
                     domains_to_check_dst.append(dns_domain)
             except (KeyError, TypeError):
