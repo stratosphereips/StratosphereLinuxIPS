@@ -981,7 +981,7 @@ class UpdateFileManager:
                     elif data_type == 'ip':
                         # make sure we're not blacklisting a private ip
                         ip_obj = ipaddress.ip_address(data)
-                        if ip_obj.is_private or ip_obj.is_multicast:
+                        if ip_obj.is_private or ip_obj.is_multicast or '8.8.8.8' in data:
                             continue
 
                         try:
