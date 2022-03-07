@@ -692,7 +692,10 @@ class EvidenceProcess(multiprocessing.Process):
         alert_to_print = f'{Fore.RED}{human_readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
 
-
+    def shutdown_gracefully(self):
+        self.logfile.close()
+        self.jsonfile.close()
+        __database__.publish('finished_modules','EvidenceProcess')
 
     def run(self):
         # add metadata to alerts.log
@@ -711,9 +714,7 @@ class EvidenceProcess(multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message and message['data'] == 'stop_process':
-                    self.logfile.close()
-                    self.jsonfile.close()
-                    __database__.publish('finished_modules','EvidenceProcess')
+                    self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'evidence_added'):
@@ -893,10 +894,9 @@ class EvidenceProcess(multiprocessing.Process):
                                 __database__.markProfileTWAsBlocked(profileid, twid)
 
             except KeyboardInterrupt:
-                self.logfile.close()
-                self.jsonfile.close()
+                self.shutdown_gracefully()
                 # self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
-                continue
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.outputqueue.put(f'01|[Evidence] Error in the Evidence Process line {exception_line}')
