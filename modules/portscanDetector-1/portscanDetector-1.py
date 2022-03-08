@@ -227,8 +227,36 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
 
-        #todo
-        return
+        if 'TimestampScan' in note:
+            type_evidence = 'ICMP-Timestamp-Scan'
+        elif 'ICMPAddressScan' in note:
+            type_evidence = 'ICMPAddressScan'
+        elif 'AddressMaskScan' in note:
+            type_evidence = 'AddressMaskScan'
+        else:
+            # unsupported notice type
+            return False
+
+
+        hosts_scanned = 0#todo
+        confidence = 0 # todo based on packets send
+        pkts_sent = 0 #todo
+        #todo use uid
+        threat_level = 'medium'
+        category = 'Recon.Scanning'
+        # type_detection is set to dstip even though the srcip is the one performing the scan
+        # because setEvidence doesn't alert on the same key twice, so we have to send different keys to be able
+        # to generate an alert every 5,10,15,.. scans #todo test this
+        type_detection = 'srcip'
+        # this is the last dip scanned
+        detection_info = profileid.split('_')[1]
+        source_target_tag = 'Recon'
+        description = msg
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag,
+                                 conn_count=pkts_sent, profileid=profileid, twid=twid)
+
 
     def check_portscan_type3(self):
      """
