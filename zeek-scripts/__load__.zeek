@@ -2,6 +2,7 @@
 @load ./ja3.zeek
 @load ./ja3s.zeek
 @load ./arp.zeek
+@load ./icmp-scans.zeek
 
 
 @unload protocols/ssl/validate-certs
