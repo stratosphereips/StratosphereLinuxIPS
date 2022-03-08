@@ -83,7 +83,7 @@ export {
                     if ( ! ICMP::shut_down_thresh_reached[orig] &&
                          orig !in ICMP::skip_scan_sources &&
                          orig !in ICMP::skip_scan_nets &&
-                         |ICMP::distinct_peers[orig]| >= scan_threshold )
+                         |ICMP::distinct_peers[orig]| % 5 == 0 )
                             return T ;
             }
         return F ;
@@ -171,9 +171,6 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
                         ICMP::shut_down_thresh_reached[orig] = T;
 		}
 	}
-
-
-
 
         if (icmp$itype==17|| icmp$itype == 18)
         {
