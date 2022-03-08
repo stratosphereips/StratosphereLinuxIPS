@@ -129,7 +129,7 @@ function track_icmp_echo_request (cid: conn_id, icmp: icmp_info)
 	{
 		NOTICE([$note=ICMPAddressScan, $src=orig,
 			$n=scan_threshold,
-			$msg=fmt("%s has icmp echo scanned %s hosts",
+			$msg=fmt("%s performed ICMP address scan on %s hosts",
 			orig, scan_threshold)]);
 
 		ICMP::shut_down_thresh_reached[orig] = T;
@@ -165,7 +165,7 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
 		{
 	              NOTICE([$note=TimestampScan, $src=orig,
                                 $n=scan_threshold,
-                                $msg=fmt("%s has icmp timestamp scan %s hosts",
+                                $msg=fmt("%s performed ICMP timestamp scan on %s hosts",
                                 orig, scan_threshold)]);
 
                         ICMP::shut_down_thresh_reached[orig] = T;
@@ -178,7 +178,7 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
                 {
                       NOTICE([$note=AddressMaskScan, $src=orig,
                                 $n=scan_threshold,
-                                $msg=fmt("%s has icmp timestamp scan %s hosts",
+                                $msg=fmt("%s performed ICMP address mask scan on %s hosts",
                                 orig, scan_threshold)]);
 
                         ICMP::shut_down_thresh_reached[orig] = T;
