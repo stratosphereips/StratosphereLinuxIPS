@@ -8,7 +8,7 @@ import sys
 
 # Your imports
 import ipaddress
-import datetime
+import json
 
 # Port Scan Detector Process
 class PortScanProcess(Module, multiprocessing.Process):
@@ -32,6 +32,8 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.fieldseparator = __database__.getFieldSeparator()
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('tw_modified')
+        self.c2 = __database__.subscribe('new_notice')
+
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
@@ -223,65 +225,10 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # Store in our local cache how many dips were there:
                     self.cache_det_thresholds[cache_key] = amount_of_dports
 
-    def check_icmp_sweep(self, profileid, twid):
+    def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
 
-        # Check ICMP Sweep
-        type_evidence = 'ICMPSweep'
-        # is used to find out which hosts are alive in a network or large number of IP addresses using ping/icmp.
-        direction = 'Dst'
-        role = 'Client'
-        protocol = 'ICMP'
-        state = 'Established'
-        type_data = 'IPs'
-
-        srcip = profileid.split("_")[1]
-        # get all icmp requests done in this profileid_twid sorted by dstip
-        #todo investigate getDataFromProfileTW
-        icmp_requests = __database__.getDataFromProfileTW(profileid, twid, direction, state, protocol, role, type_data)
-        dstips = list(icmp_requests.keys())
-        scanned_dstips = len(dstips)
-
-        # We detect a scan every Threshold. So we detect when there is 5,10,15,20,.. etc. dips
-        # The idea is that after 5 dips we detect a sweep. and then we cache the amount of dips to make sure we don't detect
-        # the same amount of dips twice.
-
-        # this key is used for storing last number of dst IPs that generated an evidence
-        # each srcip will have an entry in this dict, the value will be the amount of dstips scanned
-        cache_key = f'{profileid}:{twid}:srcip:{srcip}:{type_evidence}'
-        try:
-            prev_amount_dstips = self.cache_det_thresholds[cache_key]
-        except KeyError:
-            prev_amount_dstips = 0
-        # every 5,10,15 .. etc. different dstips generate an alert
-        if scanned_dstips % 5 == 0 and prev_amount_dstips < scanned_dstips:
-            # Compute the confidence based on the packets sent
-            pkts_sent = 0
-            for dip in dstips:
-                # Get the total amount of pkts sent to the same port to all IPs
-                pkts_sent += icmp_requests[dip]['totalpkt']
-            if pkts_sent > 10:
-                confidence = 1
-            else:
-                confidence = pkts_sent / 10.0
-            threat_level = 'medium'
-            category = 'Recon.Scanning'
-            # type_detection is set to dstip even though the srcip is the one performing the scan
-            # because setEvidence doesn't alert on the same key twice, so we have to send different keys to be able
-            # to generate an alert every 5,10,15,.. scans #todo test this
-            type_detection = 'srcip'
-            # this is the last dip scanned
-            detection_info = srcip
-            source_target_tag = 'Recon'
-            description = f'performing PING sweep. {scanned_dstips} different IPs scanned'
-            timestamp = icmp_requests[dip]['stime']
-            __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                     threat_level, confidence, description,
-                                     timestamp, category, source_target_tag=source_target_tag,
-                                     conn_count=pkts_sent, profileid=profileid, twid=twid)
-
-            # cache the amount of dips to make sure we don't detect
-            # the same amount of dips twice.
-            self.cache_det_thresholds[cache_key] = scanned_dstips
+        #todo
+        return
 
     def check_portscan_type3(self):
      """
@@ -342,7 +289,32 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                         self.check_horizontal_portscan(profileid, twid)
                         self.check_vertical_portscan(profileid, twid)
-                        self.check_icmp_sweep(profileid, twid)
+
+                message = self.c2.get_message(timeout=self.timeout)
+                #print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
+                if message and  message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'new_notice'):
+                    data = message['data']
+                    if type(data) != str:
+                        continue
+                    # Convert from json to dict
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    # Get flow as a json
+                    flow = data['flow']
+                    # Convert flow to a dict
+                    flow = json.loads(flow)
+                    timestamp = flow['stime']
+                    uid = data['uid']
+                    msg = flow['msg']
+                    note = flow['note']
+                    self.check_icmp_sweep(msg, note, profileid, uid, twid, timestamp)
+
+
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
