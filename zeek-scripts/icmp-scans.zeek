@@ -90,13 +90,13 @@ export {
 
 
 
-    event ICMP::m_w_shut_down_thresh_reached(ip: addr)
-        {
+  #  event ICMP::m_w_shut_down_thresh_reached(ip: addr)
+   #     {
+#
+#        if (ip !in ICMP::shut_down_thresh_reached)
+ #           ICMP::shut_down_thresh_reached[ip]  = T ;
 
-        if (ip !in ICMP::shut_down_thresh_reached)
-            ICMP::shut_down_thresh_reached[ip]  = T ;
-
-        }
+  #      }
 
 @endif
 
@@ -131,8 +131,8 @@ function track_icmp_echo_request (cid: conn_id, icmp: icmp_info)
 			$msg=fmt("%s performed ICMP address scan on %s hosts",
 			orig, |ICMP::distinct_peers[orig]|)]);
 
-		ICMP::shut_down_thresh_reached[orig] = T;
-		event ICMP::m_w_shut_down_thresh_reached(orig);
+		#ICMP::shut_down_thresh_reached[orig] = T;
+		#event ICMP::m_w_shut_down_thresh_reached(orig);
 	}
 
 
@@ -167,7 +167,7 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
                                 $msg=fmt("%s performed ICMP timestamp scan on %s hosts",
                                 orig, |ICMP::distinct_peers[orig]|)]);
 
-                        ICMP::shut_down_thresh_reached[orig] = T;
+                        #ICMP::shut_down_thresh_reached[orig] = T;
 		}
 	}
 
@@ -180,7 +180,7 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
                                 $msg=fmt("%s performed ICMP address mask scan on %s hosts",
                                 orig, |ICMP::distinct_peers[orig]|)]);
 
-                        ICMP::shut_down_thresh_reached[orig] = T;
+                        #ICMP::shut_down_thresh_reached[orig] = T;
                 }
         }
 	}
