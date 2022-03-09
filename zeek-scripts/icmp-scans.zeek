@@ -14,8 +14,7 @@ export {
 
         # ICMP scan detection.
         const detect_scans = T &redef;
-        const scan_threshold = 25 &redef;
-	    const scan_summary_trigger = 25 &redef;
+        #const scan_threshold = 25 &redef;
 
 	    global scan_summary: function(t: table[addr] of set[addr], orig: addr): interval;
 
@@ -128,9 +127,9 @@ function track_icmp_echo_request (cid: conn_id, icmp: icmp_info)
 	if (check_scan(orig,resp))
 	{
 		NOTICE([$note=ICMPAddressScan, $src=orig,
-			$n=scan_threshold,
+			$n=|ICMP::distinct_peers[orig]|,
 			$msg=fmt("%s performed ICMP address scan on %s hosts",
-			orig, scan_threshold)]);
+			orig, |ICMP::distinct_peers[orig]|)]);
 
 		ICMP::shut_down_thresh_reached[orig] = T;
 		event ICMP::m_w_shut_down_thresh_reached(orig);
@@ -164,9 +163,9 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
 		if (check_scan(orig, resp))
 		{
 	              NOTICE([$note=TimestampScan, $src=orig,
-                                $n=scan_threshold,
+                                $n=|ICMP::distinct_peers[orig]|,
                                 $msg=fmt("%s performed ICMP timestamp scan on %s hosts",
-                                orig, scan_threshold)]);
+                                orig, |ICMP::distinct_peers[orig]|)]);
 
                         ICMP::shut_down_thresh_reached[orig] = T;
 		}
@@ -177,9 +176,9 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
                 if (check_scan(orig, resp))
                 {
                       NOTICE([$note=AddressMaskScan, $src=orig,
-                                $n=scan_threshold,
+                                $n=|ICMP::distinct_peers[orig]|,
                                 $msg=fmt("%s performed ICMP address mask scan on %s hosts",
-                                orig, scan_threshold)]);
+                                orig, |ICMP::distinct_peers[orig]|)]);
 
                         ICMP::shut_down_thresh_reached[orig] = T;
                 }
