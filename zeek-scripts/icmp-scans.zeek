@@ -66,7 +66,7 @@ export {
 
 @if ( ! Cluster::is_enabled() || Cluster::local_node_type() == Cluster::MANAGER)
 
-    function check_scan(orig: addr, resp: addr):bool
+    function check_scan(orig: addr, resp: addr, icmp: icmp_info):bool
         {
 
          if ( detect_scans && (orig !in ICMP::distinct_peers || resp !in ICMP::distinct_peers[orig]) )
@@ -124,7 +124,7 @@ function track_icmp_echo_request (cid: conn_id, icmp: icmp_info)
         local orig = cid$orig_h;
         local resp = cid$resp_h;
 
-	if (check_scan(orig,resp))
+	if (check_scan(orig, resp, icmp))
 	{
 		NOTICE([$note=ICMPAddressScan, $src=orig,
 			$n=|ICMP::distinct_peers[orig]|,
@@ -160,7 +160,7 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
 
 	if (icmp$itype==13 || icmp$itype == 14) # timestamp queries
 	{
-		if (check_scan(orig, resp))
+		if (check_scan(orig, resp, icmp))
 		{
 	              NOTICE([$note=TimestampScan, $src=orig,
                                 $n=|ICMP::distinct_peers[orig]|,
@@ -173,7 +173,7 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
 
         if (icmp$itype==17|| icmp$itype == 18)
         {
-                if (check_scan(orig, resp))
+                if (check_scan(orig, resp, icmp))
                 {
                       NOTICE([$note=AddressMaskScan, $src=orig,
                                 $n=|ICMP::distinct_peers[orig]|,
