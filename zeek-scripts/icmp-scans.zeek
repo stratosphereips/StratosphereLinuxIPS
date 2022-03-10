@@ -188,12 +188,19 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
 	{
 		if (check_scan(orig, resp, icmp))
 		{
-	              NOTICE([$note=TimestampScan, $src=orig,
-                                $n=|ICMP::distinct_peers_TimestampScan[orig]|,
-                                $msg=fmt("%s performed ICMP timestamp scan on %s hosts",
-                                orig, |ICMP::distinct_peers_TimestampScan[orig]|)]);
+              NOTICE([$note=TimestampScan, $src=orig,
+                            $n=|ICMP::distinct_peers_TimestampScan[orig]|,
+                            $msg=fmt("%s performed ICMP timestamp scan on %s hosts",
+                            orig, |ICMP::distinct_peers_TimestampScan[orig]|)]);
 
-                        #ICMP::shut_down_thresh_reached[orig] = T;
+              # when any ip scans 255 hosts, start counting from scratch
+              if (|ICMP::distinct_peers_TimestampScan[orig]|==255)
+              {
+                    ICMP::distinct_peers_TimestampScan[orig] = set();
+
+              }
+
+              #ICMP::shut_down_thresh_reached[orig] = T;
 		}
 	}
 
@@ -206,6 +213,11 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
                                 $msg=fmt("%s performed ICMP address mask scan on %s hosts",
                                 orig, |ICMP::distinct_peers_AddressMaskScan[orig]|)]);
 
+                      # when any ip scans 255 hosts, start counting from scratch
+                      if (|ICMP::distinct_peers_AddressMaskScan[orig]|==255)
+                      {
+                            ICMP::distinct_peers_AddressMaskScan[orig] = set();
+                      }
                         #ICMP::shut_down_thresh_reached[orig] = T;
                 }
         }
