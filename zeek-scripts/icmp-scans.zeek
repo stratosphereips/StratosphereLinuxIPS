@@ -76,86 +76,50 @@ export {
 
 @if ( ! Cluster::is_enabled() || Cluster::local_node_type() == Cluster::MANAGER)
 
+
     function check_scan(orig: addr, resp: addr, icmp: icmp_info):bool
         {
 
             if ( !detect_scans ) {return F;}
 
-            # echo request
-            if ( icmp$itype==8 &&
-                (orig !in ICMP::distinct_peers_AddressScan || resp !in ICMP::distinct_peers_AddressScan[orig]) )
-                {
-                    # whenever there's an icmp packet, update it's distinct peer table
+            local used_table: table[addr] of set[addr];
 
-                    # if we don't have the saddr in the table, add it
-                    if ( orig !in ICMP::distinct_peers_AddressScan ) {
-                            local empty_peer_set: set[addr] ;
-                            ICMP::distinct_peers_AddressScan[orig] = empty_peer_set;
-                            }
+            if ( icmp$itype==8){
+                used_table =  ICMP::distinct_peers_AddressScan;
+            }
 
-                    # if it's the first time for the saddr sending an ICMP packet to the daddr,
-                    # add the daddr to the set
-                    if ( resp !in ICMP::distinct_peers_AddressScan[orig] )
-                            add ICMP::distinct_peers_AddressScan[orig][resp];
+            if (icmp$itype==13 || icmp$itype == 14) {
+                used_table = distinct_peers_TimestampScan;
+            }
 
-                   # is it a scan?
-                    if ( ! ICMP::shut_down_thresh_reached[orig] &&
-                         orig !in ICMP::skip_scan_sources &&
-                         orig !in ICMP::skip_scan_nets &&
-                         |ICMP::distinct_peers_AddressScan[orig]| % 5 == 0 )
-                            return T ;
-                }
+            if (icmp$itype==17|| icmp$itype == 18){
+                used_table = distinct_peers_AddressMaskScan;
+            }
 
-            # timestamp icmp packet
-            if ( (icmp$itype==13 || icmp$itype == 14) &&
-                (orig !in ICMP::distinct_peers_TimestampScan || resp !in ICMP::distinct_peers_TimestampScan[orig]) )
-                {
-                    # whenever there's an icmp packet, update it's distinct peer table
 
-                    # if we don't have the saddr in the table, add it
-                    if ( orig !in ICMP::distinct_peers_TimestampScan ) {
-                            local TimestampScan_empty_peer_set: set[addr] ;
-                            ICMP::distinct_peers_TimestampScan[orig] = TimestampScan_empty_peer_set;
-                            }
+            if (orig !in used_table || resp !in used_table[orig])
+            {
+                # whenever there's an icmp packet, update it's distinct peer table
 
-                    # if it's the first time for the saddr sending an ICMP packet to the daddr,
-                    # add the daddr to the set
-                    if ( resp !in ICMP::distinct_peers_TimestampScan[orig] )
-                            add ICMP::distinct_peers_TimestampScan[orig][resp];
+                # if we don't have the saddr in the table, add it
+                if ( orig !in used_table ) {
+                        local empty_peer_set: set[addr] ;
+                        used_table[orig] = empty_peer_set;
+                        }
 
-                   # is it a scan?
-                    if ( ! ICMP::shut_down_thresh_reached[orig] &&
-                         orig !in ICMP::skip_scan_sources &&
-                         orig !in ICMP::skip_scan_nets &&
-                         |ICMP::distinct_peers_TimestampScan[orig]| % 5 == 0 )
-                            return T ;
-                }
+                # if it's the first time for the saddr sending an ICMP packet to the daddr,
+                # add the daddr to the set
+                if ( resp !in used_table[orig] )
+                        add used_table[orig][resp];
 
-                # address mask scan icmp packet
-                if ( (icmp$itype==17|| icmp$itype == 18) &&
-                    (orig !in ICMP::distinct_peers_AddressMaskScan || resp !in ICMP::distinct_peers_AddressMaskScan[orig]) )
-                    {
-                        # whenever there's an icmp packet, update it's distinct peer table
-
-                        # if we don't have the saddr in the table, add it
-                        if ( orig !in ICMP::distinct_peers_AddressMaskScan ) {
-                                local AddressMaskScan_empty_peer_set: set[addr] ;
-                                ICMP::distinct_peers_AddressMaskScan[orig] = AddressMaskScan_empty_peer_set;
-                                }
-
-                        # if it's the first time for the saddr sending an ICMP packet to the daddr,
-                        # add the daddr to the set
-                        if ( resp !in ICMP::distinct_peers_AddressMaskScan[orig] )
-                                add ICMP::distinct_peers_AddressMaskScan[orig][resp];
-
-                       # is it a scan?
-                        if ( ! ICMP::shut_down_thresh_reached[orig] &&
-                             orig !in ICMP::skip_scan_sources &&
-                             orig !in ICMP::skip_scan_nets &&
-                             |ICMP::distinct_peers_AddressMaskScan[orig]| % 5 == 0 )
-                                return T ;
-                    }
-                return F ;
+               # is it a scan?
+                if ( ! ICMP::shut_down_thresh_reached[orig] &&
+                     orig !in ICMP::skip_scan_sources &&
+                     orig !in ICMP::skip_scan_nets &&
+                     |used_table[orig]| % 5 == 0 )
+                        return T ;
+            }
+            return F ;
         }
 
   #  event ICMP::m_w_shut_down_thresh_reached(ip: addr)
