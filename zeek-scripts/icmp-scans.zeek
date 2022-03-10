@@ -73,26 +73,37 @@ export {
     function check_scan(orig: addr, resp: addr, icmp: icmp_info):bool
         {
 
-         if ( detect_scans && (orig !in ICMP::distinct_peers || resp !in ICMP::distinct_peers[orig]) )
-                    {
-                    if ( orig !in ICMP::distinct_peers ) {
-                            local empty_peer_set: set[addr] ;
-                            ICMP::distinct_peers[orig] = empty_peer_set;
-                            }
+             if ( detect_scans ){
 
-                    if ( resp !in ICMP::distinct_peers[orig] )
-                            add ICMP::distinct_peers[orig][resp];
+                    # echo request
+                    if ( icmp$itype==8 &&
+                        (orig !in ICMP::distinct_peers_AddressScan || resp !in ICMP::distinct_peers_AddressScan[orig]) )
+                        {
+                            # whenever there's an icmp packet, update it's distinct peer table
 
-                    if ( ! ICMP::shut_down_thresh_reached[orig] &&
-                         orig !in ICMP::skip_scan_sources &&
-                         orig !in ICMP::skip_scan_nets &&
-                         |ICMP::distinct_peers[orig]| % 5 == 0 )
-                            return T ;
+                            # if we don't have the saddr in the table, add it
+                            if ( orig !in ICMP::distinct_peers_AddressScan ) {
+                                    local empty_peer_set: set[addr] ;
+                                    ICMP::distinct_peers_AddressScan[orig] = empty_peer_set;
+                                    }
+
+                            # if it's the first time for the saddr sending an ICMP packet to the daddr,
+                            # add the daddr to the set
+                            if ( resp !in ICMP::distinct_peers_AddressScan[orig] )
+                                    add ICMP::distinct_peers_AddressScan[orig][resp];
+
+                           # is it a scan?
+                            if ( ! ICMP::shut_down_thresh_reached[orig] &&
+                                 orig !in ICMP::skip_scan_sources &&
+                                 orig !in ICMP::skip_scan_nets &&
+                                 |ICMP::distinct_peers_AddressScan[orig]| % 5 == 0 )
+                                    return T ;
+                        }
+
+                return F ;
             }
-        return F ;
+
         }
-
-
 
   #  event ICMP::m_w_shut_down_thresh_reached(ip: addr)
    #     {
