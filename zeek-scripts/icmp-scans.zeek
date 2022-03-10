@@ -18,8 +18,12 @@ export {
 
 	    global scan_summary: function(t: table[addr] of set[addr], orig: addr): interval;
 
+        global distinct_peers_AddressScan: table[addr] of set[addr]
+        &read_expire = 1 days  &expire_func=scan_summary &redef;
+
         global distinct_peers: table[addr] of set[addr]
-                &read_expire = 1 days  &expire_func=scan_summary &redef;
+        &read_expire = 1 days  &expire_func=scan_summary &redef;
+
 
         global shut_down_thresh_reached: table[addr] of bool &default=F;
 
@@ -126,10 +130,17 @@ function track_icmp_echo_request (cid: conn_id, icmp: icmp_info)
 
 	if (check_scan(orig, resp, icmp))
 	{
+
 		NOTICE([$note=ICMPAddressScan, $src=orig,
-			$n=|ICMP::distinct_peers[orig]|,
+			$n=|ICMP::distinct_peers_AddressScan[orig]|,
 			$msg=fmt("%s performed ICMP address scan on %s hosts",
-			orig, |ICMP::distinct_peers[orig]|)]);
+			orig, |ICMP::distinct_peers_AddressScan[orig]|)]);
+
+       # when any ip scans 255 hosts, start counting from scratch
+       if (|ICMP::distinct_peers_AddressScan[orig]|==255) {
+                ICMP::distinct_peers_AddressScan[orig] = set();
+
+       }
 
 		#ICMP::shut_down_thresh_reached[orig] = T;
 		#event ICMP::m_w_shut_down_thresh_reached(orig);
