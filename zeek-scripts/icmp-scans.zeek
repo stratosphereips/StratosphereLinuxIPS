@@ -21,6 +21,12 @@ export {
         global distinct_peers_AddressScan: table[addr] of set[addr]
         &read_expire = 1 days  &expire_func=scan_summary &redef;
 
+        global distinct_peers_AddressMaskScan: table[addr] of set[addr]
+        &read_expire = 1 days  &expire_func=scan_summary &redef;
+
+        global distinct_peers_TimestampScan: table[addr] of set[addr]
+        &read_expire = 1 days  &expire_func=scan_summary &redef;
+
         global distinct_peers: table[addr] of set[addr]
         &read_expire = 1 days  &expire_func=scan_summary &redef;
 
@@ -73,36 +79,34 @@ export {
     function check_scan(orig: addr, resp: addr, icmp: icmp_info):bool
         {
 
-             if ( detect_scans ){
+            if ( !detect_scans ) {return F;}
 
-                    # echo request
-                    if ( icmp$itype==8 &&
-                        (orig !in ICMP::distinct_peers_AddressScan || resp !in ICMP::distinct_peers_AddressScan[orig]) )
-                        {
-                            # whenever there's an icmp packet, update it's distinct peer table
+            # echo request
+            if ( icmp$itype==8 &&
+                (orig !in ICMP::distinct_peers_AddressScan || resp !in ICMP::distinct_peers_AddressScan[orig]) )
+                {
+                    # whenever there's an icmp packet, update it's distinct peer table
 
-                            # if we don't have the saddr in the table, add it
-                            if ( orig !in ICMP::distinct_peers_AddressScan ) {
-                                    local empty_peer_set: set[addr] ;
-                                    ICMP::distinct_peers_AddressScan[orig] = empty_peer_set;
-                                    }
+                    # if we don't have the saddr in the table, add it
+                    if ( orig !in ICMP::distinct_peers_AddressScan ) {
+                            local empty_peer_set: set[addr] ;
+                            ICMP::distinct_peers_AddressScan[orig] = empty_peer_set;
+                            }
 
-                            # if it's the first time for the saddr sending an ICMP packet to the daddr,
-                            # add the daddr to the set
-                            if ( resp !in ICMP::distinct_peers_AddressScan[orig] )
-                                    add ICMP::distinct_peers_AddressScan[orig][resp];
+                    # if it's the first time for the saddr sending an ICMP packet to the daddr,
+                    # add the daddr to the set
+                    if ( resp !in ICMP::distinct_peers_AddressScan[orig] )
+                            add ICMP::distinct_peers_AddressScan[orig][resp];
 
-                           # is it a scan?
-                            if ( ! ICMP::shut_down_thresh_reached[orig] &&
-                                 orig !in ICMP::skip_scan_sources &&
-                                 orig !in ICMP::skip_scan_nets &&
-                                 |ICMP::distinct_peers_AddressScan[orig]| % 5 == 0 )
-                                    return T ;
-                        }
+                   # is it a scan?
+                    if ( ! ICMP::shut_down_thresh_reached[orig] &&
+                         orig !in ICMP::skip_scan_sources &&
+                         orig !in ICMP::skip_scan_nets &&
+                         |ICMP::distinct_peers_AddressScan[orig]| % 5 == 0 )
+                            return T ;
+                }
 
                 return F ;
-            }
-
         }
 
   #  event ICMP::m_w_shut_down_thresh_reached(ip: addr)
@@ -185,9 +189,9 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
 		if (check_scan(orig, resp, icmp))
 		{
 	              NOTICE([$note=TimestampScan, $src=orig,
-                                $n=|ICMP::distinct_peers[orig]|,
+                                $n=|ICMP::distinct_peers_TimestampScan[orig]|,
                                 $msg=fmt("%s performed ICMP timestamp scan on %s hosts",
-                                orig, |ICMP::distinct_peers[orig]|)]);
+                                orig, |ICMP::distinct_peers_TimestampScan[orig]|)]);
 
                         #ICMP::shut_down_thresh_reached[orig] = T;
 		}
@@ -198,9 +202,9 @@ event ICMP::w_m_icmp_sent(c: connection, icmp: icmp_info )
                 if (check_scan(orig, resp, icmp))
                 {
                       NOTICE([$note=AddressMaskScan, $src=orig,
-                                $n=|ICMP::distinct_peers[orig]|,
+                                $n=|ICMP::distinct_peers_AddressMaskScan[orig]|,
                                 $msg=fmt("%s performed ICMP address mask scan on %s hosts",
-                                orig, |ICMP::distinct_peers[orig]|)]);
+                                orig, |ICMP::distinct_peers_AddressMaskScan[orig]|)]);
 
                         #ICMP::shut_down_thresh_reached[orig] = T;
                 }
