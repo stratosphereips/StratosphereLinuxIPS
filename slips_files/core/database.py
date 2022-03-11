@@ -2924,7 +2924,7 @@ class Database(object):
 
     def store_blame_report(self, ip, network_evaluation):
         """
-        :param network_evaluation: a dict with {'score': ..,'confidence': ..} taken from a blame report
+        :param network_evaluation: a dict with {'score': ..,'confidence': .., 'ts': ..} taken from a blame report
         """
         self.rcache.hset('p2p-received-blame-reports', ip, network_evaluation)
 
