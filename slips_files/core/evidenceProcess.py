@@ -847,9 +847,12 @@ class EvidenceProcess(multiprocessing.Process):
 
                     # this is the score_confidence received from the peer
                     evaluation = data["evaluation"]
-                    # todo in this case how to get the profileid and twid that this ip wil be blocked in??
-                    # todo will the ip be blocked forever?
-                    # self.decide_blocking(key, profileid, twid)
+                    # {"key_type": "ip", "key": "1.2.3.40",
+                    # "evaluation_type": "score_confidence",
+                    # "evaluation": { "score": 0.9, "confidence": 0.6 }}
+                    ip_info = {'p2p4slips': evaluation}
+                    __database__.store_blame_report(key, evaluation)
+                    # todo send to blocking module
 
 
             except KeyboardInterrupt:
