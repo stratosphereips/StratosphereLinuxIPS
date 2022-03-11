@@ -33,6 +33,7 @@ import platform
 import os
 import psutil
 import pwd
+import time
 from git import Repo
 
 
@@ -930,6 +931,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # "evaluation_type": "score_confidence",
                     # "evaluation": { "score": 0.9, "confidence": 0.6 }}
                     ip_info = {'p2p4slips': evaluation}
+                    ip_info['p2p4slips'].update({'ts': time.time()})
                     __database__.store_blame_report(key, evaluation)
                     # todo send to blocking module
 
