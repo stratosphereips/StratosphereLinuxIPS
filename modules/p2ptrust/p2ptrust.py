@@ -20,26 +20,38 @@ from slips_files.core.database import __database__
 
 def validate_slips_data(message_data: str) -> (str, int):
     """
-    Check that message received from slips channel has correct format: ip, timeout
+    Check that message received from p2p_data_request channel has correct
+    format:  json serialized {
+                    'ip': str(saddr),
+                    'profileid' : str(profileid),
+                    'twid' :  str(twid),
+                    'proto' : str(proto),
+                    'ip_state' : 'srcip',
+                    'stime': starttime,
+                    'uid': uid,
+                    'cache_age': cache_age
+                }
 
-    The message should contain an IP address (string), followed by a space and an integer timeout. If the message is
-    correct, the two values are returned as a tuple (str, int). If not, (None, None) is returned.
+    If the message is correct, the two values are returned as a tuple (str, int).
+    If not, (None, None) is returned.
     :param message_data: data from slips request channel
-    :return: parsed values or None tuple
+    :return: the received msg or None tuple
     """
 
     try:
-        ip_address, time_since_cached = message_data.split(" ", 1)
-        time_since_cached = int(time_since_cached)
+        message_data = json.loads(message_data)
+        ip_address = message_data.get('ip')
+        time_since_cached = int(message_data.get('cache_age',0))
+
 
         if not utils.validate_ip_address(ip_address):
-            return None, None
+            return None
 
-        return ip_address, time_since_cached
+        return message_data
 
     except ValueError:
         # message has wrong format
-        return None, None
+        return None
 
 
 class Trust(Module, multiprocessing.Process):
@@ -190,10 +202,13 @@ class Trust(Module, multiprocessing.Process):
             self.print(f"IP/domain {detection_info} doesn't have a confidence")
             return
 
-        # get the  int representing this threat_level
-        score = self.threat_levels[threat_level]
 
-        # todo when we genarate a new evidence, we give it a score and a tl, but we don't update th IP_Info and give it a score in th db!
+        # get the int representing this threat_level
+        score = self.threat_levels[threat_level]
+        # todo what we're currently sharing is the threat level(int) of the evidence cause by this ip
+
+        # todo when we genarate a new evidence,
+        #  we give it a score and a tl, but we don't update the IP_Info and give it(the ip) a score in th db!
 
         # TODO: discuss - only share score if confidence is high enough?
         # compare slips data with data in go
@@ -211,8 +226,8 @@ class Trust(Module, multiprocessing.Process):
 
         # TODO: in the future, be smarter and share only when needed. For now, we will always share
         if not data_already_reported:
+            # Take data and send it to a peer as report.
             utils.send_evaluation_to_go(detection_info, score, confidence, "*", self.pygo_channel)
-
 
     def gopy_callback(self, msg: Dict):
         try:
@@ -240,7 +255,8 @@ class Trust(Module, multiprocessing.Process):
 
         This method checks if Slips has a new score that are different
         from the scores known to the network, and if so, it means that it is worth
-        sharing and it will be shared. Additionally, if the score is serious, the node will be blamed(blocked)
+        sharing and it will be shared.
+        Additionally, if the score is serious, the node will be blamed(blocked)
         :param ip_address: The IP address sent through the ip_info_change channel (if it is not valid IP, it returns)
         """
 
@@ -275,19 +291,24 @@ class Trust(Module, multiprocessing.Process):
             return
 
         # TODO: in the future, be smarter and share only when needed. For now, we will always share
-        # if not data_already_reported:
-        #     send_evaluation_to_go(ip_address, score, confidence, "*")
-        utils.send_evaluation_to_go(ip_address, score, confidence, "*", self.pygo_channel)
+        if not data_already_reported:
+            utils.send_evaluation_to_go(ip_address, score, confidence, "*", self.pygo_channel)
 
         # TODO: discuss - based on what criteria should we start blaming?
+        # decide whether or not to block
         if score > 0.8 and confidence > 0.6:
+            #todo finish the blocking logic and actually block the ip
+
             # tell other peers that we're blocking this IP
-            #todo finish the blocking logic and edit the above ip statement
             utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
+
+    def set_evidence_malicious_ip(self, ip_info, threat_level, confidence):
+        pass
+
 
     def handle_data_request(self, message_data: str) -> None:
         """
-        Process the request from Slips and ask the network.
+        Process the request from Slips, ask the network and process the network response.
 
         Three `arguments` are expected in the redis channel:
             ip_address: str,
@@ -300,21 +321,36 @@ class Trust(Module, multiprocessing.Process):
             network_competence: float,
             network_trust: float
 
-        This method will check if any data not older than `cache_age` is saved in cache. If yes, this data is returned.
-        If not, the database is checked. An ASK query is sent to the network and responses are collected and saved into
+        This method will check if any data not older than `cache_age`
+        is saved in cache. If yes, this data is returned.
+        If not, the database is checked.
+        An ASK query is sent to the network and responses are collected and saved into
         the redis database.
 
         :param message_data: The data received from the redis channel `p2p_data_response`
         :return: None, the result is saved into the redis database under key `p2p4slips`
         """
-        # todo what is cache age?
-        # make sure that IP address is valid and cache age is a valid timestamp from the past
-        ip_address, cache_age = validate_slips_data(message_data)
-        if ip_address is None:
+
+        # make sure that IP address is valid
+        # and cache age is a valid timestamp from the past
+        ip_info = validate_slips_data(message_data)
+        if ip_info is None:
             # IP address is not valid, aborting
             return
-
-        # if data is in cache and is recent enough, nothing happens and Slips should just check the database
+        # ip_info is  {
+        #             'ip': str(saddr),
+        #             'profileid' : str(profileid),
+        #             'twid' :  str(twid),
+        #             'proto' : str(proto),
+        #             'ip_state' : 'srcip',
+        #             'stime': starttime,
+        #             'uid': uid,
+        #             'cache_age': cache_age
+        #         }
+        ip_address = ip_info.get('ip')
+        cache_age = ip_info.get('cache_age')
+        # if data is in cache and is recent enough,
+        # nothing happens and Slips should just check the database
         score, confidence, network_score, timestamp = self.trust_db.get_cached_network_opinion("ip", ip_address)
         if score is not None and time.time() - timestamp < cache_age:
             # cached value is ok, do nothing
@@ -327,8 +363,10 @@ class Trust(Module, multiprocessing.Process):
         #       when everybody responds asap?
         utils.send_request_to_go(ip_address, self.pygo_channel)
 
-        # go will send a reply in no longer than 10s (or whatever the timeout there is set to). The reply will be
-        # processed by an independent process in this module and database will be updated accordingly
+        # go will send a reply in no longer than 10s (or whatever the
+        # timeout there is set to). The reply will be
+        # processed by an independent process in this module and
+        # database will be updated accordingly
         # TODO: the timeout is lowered to allow fast experiments
         time.sleep(0.5)
 
@@ -342,8 +380,13 @@ class Trust(Module, multiprocessing.Process):
             self.print("Network shared some data, saving it now!")
             self.print(
                 "IP: " + ip_address + ", result: [" + str(combined_score) + ", " + str(combined_confidence) + "]")
+            # save it to IPsInfo hash in p2p4slips key in the db
             utils.save_ip_report_to_db(ip_address, combined_score, combined_confidence, network_score,
                                        self.storage_name)
+            if int(combined_score) * int(confidence) > 0:
+                self.set_evidence_malicious_ip(ip_info, combined_score, confidence )
+
+
 
     def respond_to_message_request(self, key, reporter):
         # todo do you mean another peer is asking me about an ip?

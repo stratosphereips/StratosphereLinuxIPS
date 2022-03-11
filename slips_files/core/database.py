@@ -32,7 +32,7 @@ class Database(object):
                           'dns_info_change', 'tw_closed', 'core_messages',
                           'new_blocking', 'new_ssh', 'new_notice', 'new_url',
                           'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                          'new_service', 'new_arp', 'new_MAC', 'new_blame'}
+                          'new_service', 'new_arp', 'new_MAC', 'new_smtp', 'new_blame'}
 
     """ Database object management """
     def __init__(self):
@@ -719,6 +719,11 @@ class Database(object):
                 }
                 data_to_send = json.dumps(data_to_send)
                 self.publish('give_threat_intelligence', data_to_send)
+                # ask other peers their opinion about this IP
+                cache_age = 1000
+                data_to_send.update({'cache_age': cache_age})
+                self.publish("p2p_data_request", json.dumps(data_to_send))
+
                 # Check source ip
                 data_to_send = {
                     'ip': str(saddr),
@@ -729,11 +734,12 @@ class Database(object):
                     'stime': starttime,
                     'uid': uid
                 }
-                data_to_send = json.dumps(data_to_send)
-                self.publish('give_threat_intelligence', data_to_send)
+
+                self.publish('give_threat_intelligence', json.dumps(data_to_send))
                 # ask other peers their opinion about this IP
-                cache_age = 1000 # todo what does this mean?
-                self.publish("p2p_data_request", f'{daddr} {cache_age}')
+                cache_age = 1000
+                data_to_send.update({'cache_age': cache_age})
+                self.publish("p2p_data_request", json.dumps(data_to_send))
 
 
             if role == 'Client':
@@ -1735,12 +1741,13 @@ class Database(object):
     def subscribe(self, channel: str, ignore_subscribe_messages=False):
         """ Subscribe to channel """
         # For when a TW is modified
-        if channel not in Database.supported_channels:
+        if channel not in self.supported_channels:
             return False
 
-        pubsub = self.r.pubsub()
-        pubsub.subscribe(channel, ignore_subscribe_messages=ignore_subscribe_messages)
-        return pubsub
+        self.pubsub = self.r.pubsub()
+        self.pubsub.subscribe(channel,
+                              ignore_subscribe_messages=ignore_subscribe_messages)
+        return self.pubsub
 
 
     def publish(self, channel, data):
