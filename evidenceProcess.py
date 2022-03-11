@@ -65,6 +65,7 @@ class EvidenceProcess(multiprocessing.Process):
         # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
         self.c2 = __database__.subscribe('new_blame')
+        # clear alerts.log
         self.logfile = self.clean_evidence_log_file(output_folder)
         # clear alerts.json
         self.jsonfile = self.clean_evidence_json_file(output_folder)
@@ -759,10 +760,10 @@ class EvidenceProcess(multiprocessing.Process):
                     tags = data.get('tags',False)
                     confidence = data.get('confidence', False)
                     threat_level = data.get('threat_level', False)
-                    category = data.get('category',False)
-                    conn_count = data.get('conn_count',False)
-                    port = data.get('port',False)
-                    proto = data.get('proto',False)
+                    category = data.get('category', False)
+                    conn_count = data.get('conn_count', False)
+                    port = data.get('port', False)
+                    proto = data.get('proto', False)
                     source_target_tag = data.get('source_target_tag', False)
 
                     # Ignore alert if IP is whitelisted
@@ -933,7 +934,15 @@ class EvidenceProcess(multiprocessing.Process):
                     ip_info = {'p2p4slips': evaluation}
                     ip_info['p2p4slips'].update({'ts': time.time()})
                     __database__.store_blame_report(key, evaluation)
-                    # todo send to blocking module
+
+                    blocking_data = {'ip': key,
+                                     'block': True,
+                                     'to': True,
+                                     'from': True,
+                                     'block_for': self.width*2 # block for 2 timewindows
+                                     }
+                    blocking_data = json.dumps(blocking_data)
+                    __database__.publish('new_blocking', blocking_data)
 
 
             except KeyboardInterrupt:
