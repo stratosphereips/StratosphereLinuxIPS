@@ -303,8 +303,53 @@ class Trust(Module, multiprocessing.Process):
             utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
 
     def set_evidence_malicious_ip(self, ip_info, threat_level, confidence):
-        pass
+        '''
+        Set an evidence for a malicious IP met in the timewindow
+        ip_info format is json serialized {
+        #             'ip': the source/dst ip
+        #             'profileid' : profile where the alert was generated. It includes the src ip
+        #             'twid' : name of the timewindow when it happened.
+        #             'proto' : protocol
+        #             'ip_state' : 'srcip/dstip',
+        #             'stime': Exact time when the evidence happened
+        #             'uid': Zeek uid of the flow that generated the evidence,
+        #             'cache_age': How old is the info about this ip
+        #         }
+        :param threat_level: the threat level we learned form the network
+        :param confidence: how confident the network opinion is about this opinion
+        '''
 
+        ip = ip_info.get('ip')
+        ip_state = ip_info.get('ip_state')
+        proto = ip_info.get('proto','').upper()
+        uid = ip_info.get('uid')
+        profileid = ip_info.get('profileid')
+        twid = ip_info.get('twid')
+        timestamp = str(ip_info.get('stime'))
+
+        type_detection = ip_state
+        detection_info = ip
+        type_evidence = 'Malicious-IP-from-P2P-network'
+
+        category = 'Anomaly.Traffic'
+        dns_resolution = __database__.get_dns_resolution(ip)
+        dns_resolution = dns_resolution.get('domains', [])
+        dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
+        if 'src' in ip_state:
+            direction = 'from'
+        elif 'dst' in ip_state:
+            direction = 'to'
+
+        description = f'connection {direction} blacklisted IP {ip}{dns_resolution}.' \
+                      f' Source: Slips P2P network.'
+
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 timestamp, category,
+                                 profileid=profileid, twid=twid, uid=uid)
+
+        # add this ip to our MaliciousIPs hash in the database
+        __database__.set_malicious_ip(ip, profileid, twid)
 
     def handle_data_request(self, message_data: str) -> None:
         """
