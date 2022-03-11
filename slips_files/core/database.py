@@ -684,8 +684,7 @@ class Database(object):
                     'stime':starttime,
                     'uid': uid
                 }
-                data_to_send = json.dumps(data_to_send)
-                self.publish('give_threat_intelligence', data_to_send)
+                self.publish('give_threat_intelligence', json.dumps(data_to_send))
                 # ask other peers their opinion about this IP
                 cache_age = 1000
                 data_to_send.update({'cache_age': cache_age})
