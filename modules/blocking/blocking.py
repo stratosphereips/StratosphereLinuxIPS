@@ -255,7 +255,7 @@ class Module(Module, multiprocessing.Process):
             if block_for:
                 time_of_blocking = time.time()
                 #  unblock ip after block_for period passes
-                self.unblock_ips.update({ ip: {'block_for': block_for,
+                self.unblock_ips.update({ip_to_block: {'block_for': block_for,
                                               'time_of_blocking': time_of_blocking,
                                               'blocking_details': {
                                                   "from"     : from_ ,
@@ -308,6 +308,9 @@ class Module(Module, multiprocessing.Process):
             return True
         return False
 
+    def shutdown_gracefully(self):
+        __database__.publish('finished_modules', self.name)
+
     def run(self):
         # Main loop function
         while True:
@@ -315,8 +318,7 @@ class Module(Module, multiprocessing.Process):
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
                 # There's an IP that needs to be blocked
                 if message and message['channel'] == 'new_blocking' \
@@ -355,6 +357,7 @@ class Module(Module, multiprocessing.Process):
                     else:
                         self.unblock_ip(ip, from_, to, dport, sport, protocol)
 
+                unblocked_ips = set()
                 # check if any ip needs to be unblocked
                 for ip, info in self.unblock_ips.items():
                     # info is a dict with:
@@ -366,13 +369,23 @@ class Module(Module, multiprocessing.Process):
                     #       "dport"    : dport,
                     #       "sport"    : sport,
                     #       "protocol" : protocol}}}
-                    if time.time >= info['time_of_blocking'] + info['block_for']:
+                    if time.time() >= info['time_of_blocking'] + info['block_for']:
                         blocking_details = info['blocking_details']
-                        self.unblock_ip(ip, info['from'], info['to'], info['dport'], info['sport'], info['protocol'])
+                        self.unblock_ip(ip, blocking_details['from'],
+                                        blocking_details['to'],
+                                        blocking_details['dport'],
+                                        blocking_details['sport'],
+                                        blocking_details['protocol'])
+                        # since ip is unblocked, remove it from dict
+                        unblocked_ips.add(ip)
+
+                for ip in unblocked_ips:
+                    self.unblock_ips.pop(ip)
+
+
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
