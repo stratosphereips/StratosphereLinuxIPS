@@ -20,26 +20,38 @@ from slips_files.core.database import __database__
 
 def validate_slips_data(message_data: str) -> (str, int):
     """
-    Check that message received from slips channel has correct format: ip, timeout
+    Check that message received from p2p_data_request channel has correct
+    format:  json serialized {
+                    'ip': str(saddr),
+                    'profileid' : str(profileid),
+                    'twid' :  str(twid),
+                    'proto' : str(proto),
+                    'ip_state' : 'srcip',
+                    'stime': starttime,
+                    'uid': uid,
+                    'cache_age': cache_age
+                }
 
-    The message should contain an IP address (string), followed by a space and an integer timeout. If the message is
-    correct, the two values are returned as a tuple (str, int). If not, (None, None) is returned.
+    If the message is correct, the two values are returned as a tuple (str, int).
+    If not, (None, None) is returned.
     :param message_data: data from slips request channel
-    :return: parsed values or None tuple
+    :return: the received msg or None tuple
     """
 
     try:
-        ip_address, time_since_cached = message_data.split(" ", 1)
-        time_since_cached = int(time_since_cached)
+        message_data = json.loads(message_data)
+        ip_address = message_data.get('ip')
+        time_since_cached = int(message_data.get('cache_age',0))
+
 
         if not utils.validate_ip_address(ip_address):
-            return None, None
+            return None
 
-        return ip_address, time_since_cached
+        return message_data
 
     except ValueError:
         # message has wrong format
-        return None, None
+        return None
 
 
 class Trust(Module, multiprocessing.Process):
@@ -290,6 +302,10 @@ class Trust(Module, multiprocessing.Process):
             # tell other peers that we're blocking this IP
             utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
 
+    def set_evidence_malicious_ip(self, ip_info, threat_level, confidence):
+        pass
+
+
     def handle_data_request(self, message_data: str) -> None:
         """
         Process the request from Slips, ask the network and process the network response.
@@ -314,14 +330,25 @@ class Trust(Module, multiprocessing.Process):
         :param message_data: The data received from the redis channel `p2p_data_response`
         :return: None, the result is saved into the redis database under key `p2p4slips`
         """
-        # todo what is cache age?
+
         # make sure that IP address is valid
         # and cache age is a valid timestamp from the past
-        ip_address, cache_age = validate_slips_data(message_data)
-        if ip_address is None:
+        ip_info = validate_slips_data(message_data)
+        if ip_info is None:
             # IP address is not valid, aborting
             return
-
+        # ip_info is  {
+        #             'ip': str(saddr),
+        #             'profileid' : str(profileid),
+        #             'twid' :  str(twid),
+        #             'proto' : str(proto),
+        #             'ip_state' : 'srcip',
+        #             'stime': starttime,
+        #             'uid': uid,
+        #             'cache_age': cache_age
+        #         }
+        ip_address = ip_info.get('ip')
+        cache_age = ip_info.get('cache_age')
         # if data is in cache and is recent enough,
         # nothing happens and Slips should just check the database
         score, confidence, network_score, timestamp = self.trust_db.get_cached_network_opinion("ip", ip_address)
@@ -353,8 +380,13 @@ class Trust(Module, multiprocessing.Process):
             self.print("Network shared some data, saving it now!")
             self.print(
                 "IP: " + ip_address + ", result: [" + str(combined_score) + ", " + str(combined_confidence) + "]")
+            # save it to IPsInfo hash in p2p4slips key in the db
             utils.save_ip_report_to_db(ip_address, combined_score, combined_confidence, network_score,
                                        self.storage_name)
+            if int(combined_score) * int(confidence) > 0:
+                self.set_evidence_malicious_ip(ip_info, combined_score, confidence )
+
+
 
     def respond_to_message_request(self, key, reporter):
         # todo do you mean another peer is asking me about an ip?
