@@ -235,13 +235,13 @@ class Trust(Module, multiprocessing.Process):
         except Exception as e:
             self.printer.err(f"Exception {e} in gopy_callback")
 
-    def update_callback(self, msg: Dict):
-        try:
-            data = msg["data"]
-            self.print(f"IP info was updated in slips for ip: {data}")
-            self.handle_update(data)
-        except Exception as e:
-            self.printer.err(f"Exception {e} in update_callback")
+    # def update_callback(self, msg: Dict):
+    #     try:
+    #         data = msg["data"]
+    #         self.print(f"IP info was updated in slips for ip: {data}")
+    #         self.handle_update(data)
+    #     except Exception as e:
+    #         self.printer.err(f"Exception {e} in update_callback")
 
     def data_request_callback(self, msg: Dict):
         try:
@@ -249,58 +249,58 @@ class Trust(Module, multiprocessing.Process):
         except Exception as e:
             self.printer.err(f"Exception {e} in data_request_callback")
 
-    def handle_update(self, ip_address: str) -> None:
-        """
-        Handle IP scores changing in Slips received from the ip_info_change channel
-
-        This method checks if Slips has a new score that are different
-        from the scores known to the network, and if so, it means that it is worth
-        sharing and it will be shared.
-        Additionally, if the score is serious, the node will be blamed(blocked)
-        :param ip_address: The IP address sent through the ip_info_change channel (if it is not valid IP, it returns)
-        """
-
-        # abort if the IP is not valid
-        if not utils.validate_ip_address(ip_address):
-            self.print("IP validation failed")
-            return
-
-        score, confidence = utils.get_ip_info_from_slips(ip_address)
-        if score is None:
-            self.print("IP doesn't have any score/confidence values in DB")
-            return
-
-        # insert data from slips to database
-        self.trust_db.insert_slips_score(ip_address, score, confidence)
-
-        # TODO: discuss - only share score if confidence is high enough?
-
-        # compare slips data with data in go
-        data_already_reported = True
-        try:
-            cached_opinion = self.trust_db.get_cached_network_opinion("ip", ip_address)
-            cached_score, cached_confidence, network_score, timestamp = cached_opinion
-            if cached_score is None:
-                data_already_reported = False
-            elif abs(score - cached_score) < 0.1:
-                data_already_reported = False
-        except KeyError:
-            data_already_reported = False
-        except IndexError:
-            # data saved in local db have wrong structure, this is an invalid state
-            return
-
-        # TODO: in the future, be smarter and share only when needed. For now, we will always share
-        if not data_already_reported:
-            utils.send_evaluation_to_go(ip_address, score, confidence, "*", self.pygo_channel)
-
-        # TODO: discuss - based on what criteria should we start blaming?
-        # decide whether or not to block
-        if score > 0.8 and confidence > 0.6:
-            #todo finish the blocking logic and actually block the ip
-
-            # tell other peers that we're blocking this IP
-            utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
+    # def handle_update(self, ip_address: str) -> None:
+    #     """
+    #     Handle IP scores changing in Slips received from the ip_info_change channel
+    #
+    #     This method checks if Slips has a new score that are different
+    #     from the scores known to the network, and if so, it means that it is worth
+    #     sharing and it will be shared.
+    #     Additionally, if the score is serious, the node will be blamed(blocked)
+    #     :param ip_address: The IP address sent through the ip_info_change channel (if it is not valid IP, it returns)
+    #     """
+    #
+    #     # abort if the IP is not valid
+    #     if not utils.validate_ip_address(ip_address):
+    #         self.print("IP validation failed")
+    #         return
+    #
+    #     score, confidence = utils.get_ip_info_from_slips(ip_address)
+    #     if score is None:
+    #         self.print("IP doesn't have any score/confidence values in DB")
+    #         return
+    #
+    #     # insert data from slips to database
+    #     self.trust_db.insert_slips_score(ip_address, score, confidence)
+    #
+    #     # TODO: discuss - only share score if confidence is high enough?
+    #
+    #     # compare slips data with data in go
+    #     data_already_reported = True
+    #     try:
+    #         cached_opinion = self.trust_db.get_cached_network_opinion("ip", ip_address)
+    #         cached_score, cached_confidence, network_score, timestamp = cached_opinion
+    #         if cached_score is None:
+    #             data_already_reported = False
+    #         elif abs(score - cached_score) < 0.1:
+    #             data_already_reported = False
+    #     except KeyError:
+    #         data_already_reported = False
+    #     except IndexError:
+    #         # data saved in local db have wrong structure, this is an invalid state
+    #         return
+    #
+    #     # TODO: in the future, be smarter and share only when needed. For now, we will always share
+    #     if not data_already_reported:
+    #         utils.send_evaluation_to_go(ip_address, score, confidence, "*", self.pygo_channel)
+    #
+    #     # TODO: discuss - based on what criteria should we start blaming?
+    #     # decide whether or not to block
+    #     if score > 0.8 and confidence > 0.6:
+    #         #todo finish the blocking logic and actually block the ip
+    #
+    #         # tell other peers that we're blocking this IP
+    #         utils.send_blame_to_go(ip_address, score, confidence, self.pygo_channel)
 
     def set_evidence_malicious_ip(self, ip_info, threat_level, confidence):
         '''
@@ -466,7 +466,7 @@ class Trust(Module, multiprocessing.Process):
             # channel to send msgs to whenever slips needs info from other peers about an ip
             self.p2p_data_request_channel: self.data_request_callback,
 
-            self.slips_update_channel: self.update_callback,
+            # self.slips_update_channel: self.update_callback,
 
             # this channel receives peers requests/updates
             self.gopy_channel: self.gopy_callback,
