@@ -779,7 +779,7 @@ class Database(object):
             # - Update the total packets sent by this ip
             # - Update the total bytes sent by this ip
             # Get the state. Established, NotEstablished
-            summaryState = __database__.getFinalStateFromFlags(state, pkts)
+            summaryState = self.getFinalStateFromFlags(state, pkts)
             # Get the previous data about this key
             prev_data = self.getDataFromProfileTW(profileid, twid, type_host_key, summaryState, proto, role, 'IPs')
             try:
@@ -2921,5 +2921,12 @@ class Database(object):
         ps.print_stats()
         print(s.getvalue())
         print("-"*30+ " Done profiling")
+
+    def store_blame_report(self, ip, network_evaluation):
+        """
+        :param network_evaluation: a dict with {'score': ..,'confidence': ..} taken from a blame report
+        """
+        self.rcache.hset('p2p-received-blame-reports', ip, network_evaluation)
+
 
 __database__ = Database()
