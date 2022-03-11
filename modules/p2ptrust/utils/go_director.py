@@ -182,7 +182,8 @@ class GoDirector:
         """
         Handle data request from a peer
 
-        Details are read from the request, and response is read from slips database. Response data is formatted as json
+        Details are read from the request, and response is read from slips database.
+        Response data is formatted as json
         and sent to the peer that asked.
 
         :param reporter: The peer that sent the request

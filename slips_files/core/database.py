@@ -701,7 +701,7 @@ class Database(object):
                 data_to_send = json.dumps(data_to_send)
                 self.publish('give_threat_intelligence', data_to_send)
                 # ask other peers their opinion about this IP
-                cache_age = 1000 # todo what does this mean?
+                cache_age = 1000
                 self.publish("p2p_data_request", f'{daddr} {cache_age}')
 
 
