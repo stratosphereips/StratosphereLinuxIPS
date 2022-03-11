@@ -11,6 +11,7 @@ import os
 import shutil
 import json
 import subprocess
+import time
 
 class Module(Module, multiprocessing.Process):
     """Data should be passed to this module as a json encoded python dict,
@@ -47,6 +48,10 @@ class Module(Module, multiprocessing.Process):
         self.firewall = self.determine_linux_firewall()
         self.set_sudo_according_to_env()
         self.initialize_chains_in_firewall()
+        # this will keep track of ips that are blocked only for a specific time
+        # format {ip: (block_for(seconds), time_of_blocking(epoch))}
+        self.unblock_ips = {}
+
         # self.test()
 
 
@@ -59,16 +64,18 @@ class Module(Module, multiprocessing.Process):
                           "block"    : True ,
                           "from"     : True ,
                           "to"       : True ,
+                          "block_for": 5
                           # "dport"    : Optional destination port number
                           # "sport"    : Optional source port number
                           # "protocol" : Optional protocol
+
                       }
             # Example of passing blocking_data to this module:
             blocking_data = json.dumps(blocking_data)
             __database__.publish('new_blocking', blocking_data )
-            self.print("Blocked ip.")
+            self.print("[test] Blocked ip.")
         else:
-            self.print("IP is already blocked")
+            self.print("[test] IP is already blocked")
         # self.unblock_ip("2.2.0.0",True,True)
 
     def set_sudo_according_to_env(self):
@@ -212,7 +219,8 @@ class Module(Module, multiprocessing.Process):
         return ip in result
 
     def block_ip(self, ip_to_block=None, from_=True, to=True,
-                 dport=None, sport=None, protocol=None):
+                 dport=None, sport=None, protocol=None,
+                 block_for=False):
         """
             This function determines the user's platform and firewall and calls
             the appropriate function to add the rules to the used firewall.
@@ -227,9 +235,9 @@ class Module(Module, multiprocessing.Process):
                 from_, to = True, True
             # This dictionary will be used to construct the rule
             options = {
-                "protocol" : " -p " + protocol if protocol is not None else '' ,
-                "dport"    : " --dport " + str(dport)  if dport is not None else '',
-                "sport"    : " --sport " + str(sport)  if sport is not None else '',
+                "protocol" : " -p " + protocol if protocol != None else '' ,
+                "dport"    : " --dport " + str(dport) if dport != None else '',
+                "sport"    : " --sport " + str(sport) if sport != None else '',
             }
 
             if from_:
@@ -244,6 +252,17 @@ class Module(Module, multiprocessing.Process):
                                                          ip_to_block=ip_to_block,
                                                          flag='-d',
                                                          options=options)
+            if block_for:
+                time_of_blocking = time.time()
+                #  unblock ip after block_for period passes
+                self.unblock_ips.update({ ip: {'block_for': block_for,
+                                              'time_of_blocking': time_of_blocking,
+                                              'blocking_details': {
+                                                  "from"     : from_ ,
+                                                  "to"       : to,
+                                                  "dport"    : dport,
+                                                  "sport"    : sport,
+                                                  "protocol" : protocol}}})
 
             if blocked:
                 # Successfully blocked an ip
@@ -314,6 +333,7 @@ class Module(Module, multiprocessing.Process):
                     #       "dport"    : Optional destination port number
                     #       "sport"    : Optional source port number
                     #       "protocol" : Optional protocol
+                    #       'block_for': Optional, after this time (in seconds) this ip will be unblocked
                     #   }
                     # Example of passing blocking_data to this module:
                     #   blocking_data = json.dumps(blocking_data)
@@ -329,11 +349,26 @@ class Module(Module, multiprocessing.Process):
                     dport = data.get("dport")
                     sport = data.get("sport")
                     protocol = data.get("protocol")
+                    block_for = data.get("block_for")
                     if block:
-                        self.block_ip(ip, from_, to, dport, sport, protocol)
+                        self.block_ip(ip, from_, to, dport, sport, protocol, block_for)
                     else:
                         self.unblock_ip(ip, from_, to, dport, sport, protocol)
 
+                # check if any ip needs to be unblocked
+                for ip, info in self.unblock_ips.items():
+                    # info is a dict with:
+                    # 'block_for': block_for,
+                    #   'time_of_blocking': time_of_blocking,
+                    #   'blocking_details': {
+                    #       "from"     : from_ ,
+                    #       "to"       : to,
+                    #       "dport"    : dport,
+                    #       "sport"    : sport,
+                    #       "protocol" : protocol}}}
+                    if time.time >= info['time_of_blocking'] + info['block_for']:
+                        blocking_details = info['blocking_details']
+                        self.unblock_ip(ip, info['from'], info['to'], info['dport'], info['sport'], info['protocol'])
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
