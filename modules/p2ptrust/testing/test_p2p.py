@@ -8,6 +8,7 @@ from modules.p2ptrust.trust.trustdb import TrustDB
 from slips_files.core.database import __database__
 from multiprocessing import Queue
 from outputProcess import OutputProcess
+import json
 
 # TODO
 # base_dir = "/home/dita/ownCloud/stratosphere/SLIPS/modules/p2ptrust/testing/"
@@ -114,7 +115,18 @@ def test_slips_integration():
 
     print("Slips asks about data for 1.2.3.5")
     # slips asks for data about 1.2.3.5
-    __database__.publish("p2p_data_request", "1.2.3.5 1000")
+    data_to_send = {
+                    'ip': 'tst',
+                    'profileid' : 'profileid_192.168.1.1',
+                    'twid' :  'timewindow1',
+                    'proto' : "TCP",
+                    'ip_state' : 'dstip',
+                    'stime': time.time(),
+                    'uid': '123',
+                    'cache_age' : 1000,
+                }
+    data_to_send = json.dumps(data_to_send)
+    __database__.publish("p2p_data_request", data_to_send)
     time.sleep(1)
     print()
 
@@ -228,7 +240,18 @@ def slips_listener_test():
 def test_handle_slips_update():
     print("Slips asks about data for 1.2.3.5")
     # slips asks for data about 1.2.3.5 and cache age 1000
-    __database__.publish("p2p_data_request", "1.2.3.5 1000")
+    data_to_send = {
+                    'ip': 'tst',
+                    'profileid' : 'profileid_192.168.1.1',
+                    'twid' :  'timewindow1',
+                    'proto' : "TCP",
+                    'ip_state' : 'dstip',
+                    'stime': time.time(),
+                    'uid': '123',
+                    'cache_age' : 1000,
+                }
+    data_to_send = json.dumps(data_to_send)
+    __database__.publish("p2p_data_request", data_to_send)
 
     time.sleep(1)
 
