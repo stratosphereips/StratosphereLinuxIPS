@@ -602,15 +602,20 @@ class Module(Module, multiprocessing.Process):
                         flow_data = json.loads(value)
                     ip = flow_data['daddr']
                     cached_data = __database__.getIPData(ip)
+                    if not cached_data:
+                        cached_data = {}
+
                     # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
                     ip_addr = ipaddress.ip_address(ip)
                     # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
                     # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
-                    if (not cached_data or 'VirusTotal' not in cached_data) and not ip_addr.is_multicast:
+                    if ('VirusTotal' not in cached_data
+                            and not ip_addr.is_multicast
+                            and not ip_addr.is_private):
                         self.set_vt_data_in_IPInfo(ip, cached_data)
 
                     # if VT data of this IP is in the IPInfo, check the timestamp.
-                    elif cached_data and 'VirusTotal' in cached_data:
+                    elif 'VirusTotal' in cached_data:
                         # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                         if (time.time() - cached_data["VirusTotal"]['timestamp']) > self.update_period:
                             self.set_vt_data_in_IPInfo(ip, cached_data)
@@ -621,14 +626,12 @@ class Module(Module, multiprocessing.Process):
                     return True
                 if utils.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message["data"]
-
                     data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    uid = data['uid']
+                    # profileid = data['profileid']
+                    # twid = data['twid']
+                    # uid = data['uid']
                     flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
-                    domain = flow_data.get('query',False)
-
+                    domain = flow_data.get('query', False)
 
                     cached_data = __database__.getDomainData(domain)
                     # If VT data of this domain is not in the DomainInfo, ask VT
@@ -648,8 +651,8 @@ class Module(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message, 'new_url'):
                     data = message["data"]
                     data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
+                    # profileid = data['profileid']
+                    # twid = data['twid']
                     flow_data = json.loads(data['flow'])
                     url = flow_data['host'] + flow_data.get('uri','')
                     cached_data = __database__.getURLData(url)
