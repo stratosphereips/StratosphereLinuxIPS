@@ -9,7 +9,15 @@ The architecture of Slips is basically:
 
 Slips is heavily based on the Zeek monitoring tool as input tool for packets from the interface and pcap file, due to its excelent recognition of protocols and easiness to identify the content of the traffic.
 
-Figure 1 shows how the data is analyzed by Slips. As we can see, Slips internally uses <a href="https://zeek.org/">Zeek</a>, an open source network security monitoring tool. Slips divides flows into profiles and each proifle into a timewindows. Slips runs detection modules on each flow and stores all evidence, alerts and features in an appropriate profile structure. All data, i.e. zeek flows, performed detections, profiles and timewindows' data, is stored inside a <a href="https://redis.io/">Redis</a> database. The output of Slips is a folder with logs, alert.json or alerts.log, and Kalipso, a terminal graphical user interface.
+Figure 1 shows how the data is analyzed by Slips. 
+As we can see, Slips internally uses <a href="https://zeek.org/">Zeek</a>, an
+open source network security monitoring tool. Slips divides flows into profiles and
+each profile into a timewindows.
+Slips runs detection modules on each flow and stores all evidence, 
+alerts and features in an appropriate profile structure. 
+All data, i.e. zeek flows, performed detections, profiles and timewindows' data,
+is stored inside a <a href="https://redis.io/">Redis</a> database. 
+The output of Slips is a folder with logs (output/ directory) that has alert.json, alerts.log, errors.log. And Kalipso, a terminal graphical user interface.
 
 <style>
 .zoom {

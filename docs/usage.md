@@ -311,8 +311,11 @@ Refer to the [exporting section of the docs](https://stratospherelinuxips.readth
 To enable the creation of log files, there are two options:
 1. Running Slips with ```-l``` flag. 
 2. Setting ```create_log_files``` to ```yes``` in ```slips.conf```.
+3. Running Slips with ```verbose``` and ```debug``` flags
+4. Using errors.log
 
-When logging is enabled, Slips will create a directory with the current date and create 3 summary files for each IP/profile it encounters.
+When logging is enabled, Slips will create a directory with the current date and 
+create 3 summary files for each IP/profile it encounters.
 
 Summaries created contain profile data, complete timeline outgoing actions and timeline of all traffic that involves this IP.
 
@@ -327,7 +330,7 @@ Once slips is done, you will find a copy of your zeek files in ```<output_dir>/z
 
 We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
 
-Defaut value for both of them is 1
+Default value for both of them is 0
 
 To change them, We use ```-v``` for verbosity and ```-e``` for debugging
 
@@ -379,6 +382,8 @@ Below is a table showing each level of both.
 </tbody>
 </table>
 
+Slips also logs all errors to output/errors.log, whether you're using -e or not.
+errors.log is cleared on every startup on Slips.
 
 ## Plug in a zeek script
 
