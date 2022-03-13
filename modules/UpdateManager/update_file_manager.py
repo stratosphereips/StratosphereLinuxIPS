@@ -979,8 +979,7 @@ class UpdateFileManager:
                         ip_obj = ipaddress.ip_address(data)
                         if (ip_obj.is_private
                                 or ip_obj.is_multicast
-                                or ip_obj.is_link_local
-                                or '8.8.8.8' in data):
+                                or ip_obj.is_link_local):
                             continue
 
                         try:
