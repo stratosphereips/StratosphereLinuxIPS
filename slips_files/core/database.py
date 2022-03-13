@@ -193,6 +193,9 @@ class Database(object):
                 self.r.hset(profileid, 'starttime', starttime)
                 # For now duration of the TW is fixed
                 self.r.hset(profileid, 'duration', duration)
+                # When a new profiled is created assign threat level = 0 and confidence = 0.05
+                self.r.hset(profileid, 'threat_level', 0)
+                self.r.hset(profileid, 'confidence', 0.05)
                 # The IP of the profile should also be added as a new IP we know about.
                 ip = profileid.split(self.separator)[1]
                 # If the ip is new add it to the list of ips
@@ -1257,6 +1260,10 @@ class Database(object):
 
         self.r.hset(profileid + self.separator + twid, 'Evidence', current_evidence)
         self.r.hset('evidence'+profileid, twid, current_evidence)
+
+        # an alert is generated for this profile, change the threat level to = 1, and confidence = 1
+        self.r.hset(profileid, 'threat_level', 1)
+        self.r.hset(profileid, 'confidence', 1)
 
         return True
 
