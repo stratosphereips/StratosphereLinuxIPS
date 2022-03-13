@@ -252,6 +252,7 @@ def add_metadata():
     shutil.copy(whitelist, metadata_dir)
 
     branch_info = utils.get_branch_info()
+    commit, branch = None, None
     if branch_info != False:
         # it's false when we're in docker because there's no .git/ there
         commit, branch = branch_info[0], branch_info[1]
@@ -437,12 +438,21 @@ if __name__ == '__main__':
     try:
         # Before the argparse, we need to set up the default path fr alerts.log
         # and alerts.json. In our case, it is output folder.
-        alerts_default_path = 'output/'
+        slips_version =  f'Slips. Version {version}'
 
-        print('Slips. Version {}'.format(version))
+        from slips_files.common.slips_utils import utils
+        branch_info = utils.get_branch_info()
+        commit, branch = None, None
+        if branch_info != False:
+            # it's false when we're in docker because there's no .git/ there
+            commit = branch_info[0]
+            slips_version += f' ({commit[:8]})'
+
+        print(slips_version)
         print('https://stratosphereips.org')
         print('-'*27)
 
+        alerts_default_path = 'output/'
         # Parse the parameters
         slips_conf_path = get_cwd() + 'slips.conf'
         parser = ArgumentParser(usage="./slips.py -c <configfile> [options] [file ...]",
@@ -686,7 +696,7 @@ if __name__ == '__main__':
         # Creation of the threads
         ##########################
         from slips_files.core.database import __database__
-        from slips_files.common.slips_utils import utils
+
         # Output thread. This thread should be created first because it handles
         # the output of the rest of the threads.
         # Create the queue
