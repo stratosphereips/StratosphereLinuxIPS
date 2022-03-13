@@ -213,11 +213,11 @@ ConnectionWithoutDNS, DNSWithoutConnection,
 MaliciousJA3, DataExfiltration, SelfSignedCertificate, PortScanType1, 
 PortScanType2, Password_Guessing, MaliciousFlow,
 SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, 
-ICMPSweep, Command-and-Control-channels-detection,
+ Command-and-Control-channels-detection,
 ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP,
 MaliciousDownloadedFile, DGA, MaliciousSSLCert, YoungDomain, 
 DNS-ARPA-Scan, SMTPLoginBruteforce, BadSMTPLogin, 
-IncompatibleUserAgent
+IncompatibleUserAgent, ICMP-Timestamp-Scan, ICMP-AddressScan, ICMP-AddressMaskScan
 
 
 ## Threat Intelligence Module
@@ -581,12 +581,16 @@ there is 6, 9, 12, etc. destination destination IPs.
 ### PING Sweeps
 
 PING sweeps or ICMP sweeps is used to find out
-which hosts are alive in a network or large number of IP addresses using ping/icmp.
+which hosts are alive in a network or large number of IP addresses using PING/ICMP.
 
 
 We detect a scan every threshold. So we generate an evidence when there is 
 5,10,15,.. etc. ICMP established connections to different IPs.
 
+
+We detect 3 types of ICMP scans: ICMP-Timestamp-Scan, ICMP-AddressScan,
+and ICMP-AddressMaskScan using Slips' own zeek script located in 
+zeek-scripts/icmps-scans.zeek
 
 ---
 
