@@ -251,10 +251,10 @@ def add_metadata():
     whitelist = config.get('parameters', 'whitelist_path')
     shutil.copy(whitelist, metadata_dir)
 
-    from git import Repo
-    repo = Repo('.')
-    branch = repo.active_branch.name
-    commit = repo.active_branch.commit.hexsha
+    branch_info = utils.get_branch_info()
+    if branch_info != False:
+        # it's false when we're in docker because there's no .git/ there
+        commit, branch = branch_info[0], branch_info[1]
     now = datetime.now()
 
     info_path = os.path.join(metadata_dir, 'info.txt')
@@ -686,6 +686,7 @@ if __name__ == '__main__':
         # Creation of the threads
         ##########################
         from slips_files.core.database import __database__
+        from slips_files.common.slips_utils import utils
         # Output thread. This thread should be created first because it handles
         # the output of the rest of the threads.
         # Create the queue

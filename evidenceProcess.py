@@ -33,7 +33,6 @@ import platform
 import os
 import psutil
 import pwd
-from git import Repo
 
 
 # Evidence Process
@@ -92,21 +91,6 @@ class EvidenceProcess(multiprocessing.Process):
             # these json files are inside the logs dir, not the output/ dir
             self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
             self.logs_jsonfile = self.clean_evidence_json_file(logs_folder+'/')
-
-    def get_branch_info(self):
-        """
-        Returns a tuple containing (commit,branch)
-        """
-        try:
-            repo = Repo('.')
-        except:
-            # when in docker, we copy the repo instead of clone it so there's no .git files
-            # we can't add repo metadata
-            return False
-        # add branch name and commit
-        branch = repo.active_branch.name
-        commit = repo.active_branch.commit.hexsha
-        return (commit, branch)
 
 
     def setup_notifications(self):
@@ -703,7 +687,7 @@ class EvidenceProcess(multiprocessing.Process):
 
     def run(self):
         # add metadata to alerts.log
-        branch_info = self.get_branch_info()
+        branch_info = utils.get_branch_info()
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]

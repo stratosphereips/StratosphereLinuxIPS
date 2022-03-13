@@ -3,6 +3,7 @@ import hashlib
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 import validators
+from git import Repo
 
 class Utils(object):
     name = 'utils'
@@ -45,6 +46,21 @@ class Utils(object):
                 and type(message['data']) == str
                 and message['data'] != 'stop_process'
                 and message['channel'] == channel)
+
+    def get_branch_info(self):
+        """
+        Returns a tuple containing (commit,branch)
+        """
+        try:
+            repo = Repo('.')
+        except:
+            # when in docker, we copy the repo instead of clone it so there's no .git files
+            # we can't add repo metadata
+            return False
+        # add branch name and commit
+        branch = repo.active_branch.name
+        commit = repo.active_branch.commit.hexsha
+        return (commit, branch)
 
     def format_timestamp(self, timestamp):
         """
