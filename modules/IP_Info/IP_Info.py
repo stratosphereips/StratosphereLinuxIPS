@@ -68,18 +68,23 @@ class Module(Module, multiprocessing.Process):
         try:
             self.asn_db = maxminddb.open_database('databases/GeoLite2-ASN.mmdb')
         except:
-            self.print('Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. Please download it from https://dev.maxmind.com/geoip/docs/databases/asn?lang=en Please note it must be the MaxMind DB version.')
+            self.print('Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. '
+                       'Please download it from https://dev.maxmind.com/geoip/docs/databases/asn?lang=en '
+                       'Please note it must be the MaxMind DB version.')
         
         # Open the maminddb Country offline db
         try:
             self.country_db = maxminddb.open_database('databases/GeoLite2-Country.mmdb')
         except:
-            self.print('Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. Please download it from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. Please note it must be the MaxMind DB version.')
+            self.print('Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. '
+                       'Please download it from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. '
+                       'Please note it must be the MaxMind DB version.')
         
         try:
             self.mac_db = open('databases/macaddress-db.json','r')
         except OSError:
-            self.print('Error opening the macaddress db in databases/macaddress-db.json. Please download it from https://macaddress.io/database-download/json.')
+            self.print('Error opening the macaddress db in databases/macaddress-db.json. '
+                       'Please download it from https://macaddress.io/database-download/json.')
 
     def print(self, text, verbose=1, debug=0):
         """

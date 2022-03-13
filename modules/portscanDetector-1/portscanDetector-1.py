@@ -230,18 +230,16 @@ class PortScanProcess(Module, multiprocessing.Process):
         if 'TimestampScan' in note:
             type_evidence = 'ICMP-Timestamp-Scan'
         elif 'ICMPAddressScan' in note:
-            type_evidence = 'ICMPAddressScan'
+            type_evidence = 'ICMP-AddressScan'
         elif 'AddressMaskScan' in note:
-            type_evidence = 'AddressMaskScan'
+            type_evidence = 'ICMP-AddressMaskScan'
         else:
             # unsupported notice type
             return False
 
-
-        hosts_scanned = 0#todo
-        confidence = 0 # todo based on packets send
-        pkts_sent = 0 #todo
-        #todo use uid
+        hosts_scanned = int(msg.split('on ')[1].split(' hosts')[0])
+        # get the confidence from 0 to 1 based on the number of hosts scanned
+        confidence = 1/(255-5)*(hosts_scanned-255)+1
         threat_level = 'medium'
         category = 'Recon.Scanning'
         # type_detection is set to dstip even though the srcip is the one performing the scan
@@ -255,7 +253,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag,
-                                 conn_count=pkts_sent, profileid=profileid, twid=twid)
+                                 conn_count=hosts_scanned, profileid=profileid, twid=twid, uid=uid)
 
 
     def check_portscan_type3(self):

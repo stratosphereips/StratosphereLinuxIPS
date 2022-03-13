@@ -295,7 +295,7 @@ class Module(Module, multiprocessing.Process):
                     break
 
             for line in local_ja3_file:
-                line_number+=1
+                line_number += 1
                 # The format of the file should be
                 # "JA3 hash", "Threat level", "Description"
                 data = line.replace("\n","").replace("\"","").split(",")
