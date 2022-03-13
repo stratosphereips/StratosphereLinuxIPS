@@ -25,6 +25,7 @@ pytest-xdist==2.4.0
 slackclient==2.9.3
 scipy==1.7.3
 sklearn==0.0
+GitPython==3.1.14
 setuptools
 whois
 wheel
