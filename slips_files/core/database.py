@@ -508,6 +508,12 @@ class Database(object):
             self.r.zadd('tws' + profileid, data)
             self.outputqueue.put('04|database|[DB]: Created and added to DB for profile {} on TW with id {}. Time: {} '.format(profileid, twid, startoftw))
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
+
+            # When a new TW is created for this profile,
+            # change the threat level of the profile to 0 and confidence to 0.05
+            self.r.hset(profileid, 'threat_level', 0)
+            self.r.hset(profileid, 'confidence', 0.5)
+
             return twid
         except redis.exceptions.ResponseError as e:
             self.outputqueue.put('01|database|Error in addNewTW')
