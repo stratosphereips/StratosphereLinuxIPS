@@ -29,10 +29,8 @@ class OutputProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
-        if self.debug == 0:
-            # create the file
-            if os.path.exists('output/errors.log'):
-                open('output/errors.log', 'w').close()
+        # create the file and clear it
+        open('output/errors.log', 'w').close()
         self.name = 'OutputProcess'
         self.queue = inputqueue
         self.config = config
@@ -143,10 +141,10 @@ class OutputProcess(multiprocessing.Process):
 
         # if the line is an error and we're running slips without -e 1 , we should log the error to output/errors.log
         # make sure thee msg is an error. debug_level==1 is the one printing errors
-        if self.debug == 0 and debug_level == 1:
+        if debug_level == 1:
             # it's an error. we should log it
-            with open('output/errors.log', 'a') as self.errors_logfile:
-                self.errors_logfile.write(f'{sender}{msg}\n')
+            with open('output/errors.log', 'a') as errors_logfile:
+                errors_logfile.write(f'{sender}{msg}\n')
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
@@ -157,7 +155,8 @@ class OutputProcess(multiprocessing.Process):
                 line = self.queue.get()
                 if 'quiet' == line:
                     self.quiet = True
-                # if timewindows are not updated for 25 seconds, we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                # if timewindows are not updated for 25 seconds,
+                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
                     self.shutdown_gracefully()
                     return True
@@ -165,7 +164,8 @@ class OutputProcess(multiprocessing.Process):
                     if not self.quiet:
                         self.output_line(line)
                 else:
-                    # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
+                    # Here we should still print the lines coming in
+                    # the input for a while after receiving a 'stop'. We don't know how to do it.
                     print('Stopping the output thread')
                     self.shutdown_gracefully()
                     return True
