@@ -213,52 +213,6 @@ class Database(object):
             return user_agent
 
 
-
-    def search_for_profile_with_the_same_MAC(self, profileid, MAC_address):
-        """
-        If we have different profiles for IPv6 and IPv4 of the same computer(same MAC),
-        store it in the database
-        This function is called whenever slips sees a new MAC address
-        """
-        # some cases we have ipv4 and ipv6 on the same computer, they should be associated with the same mac
-        # and both profiles should be aware of both IPs
-        # get all profiles in the db
-        for stored_profile in self.getProfiles():
-            # get the mac of the profile
-            found_mac = self.get_mac_addr_from_profile(stored_profile)
-            if found_mac == MAC_address:
-                # we found another profile that has the same mac as this one
-                incoming_ip = profileid.split('_')[1]
-                found_ip = stored_profile.split('_')[1]
-
-                # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
-                if (validators.ipv6(incoming_ip)
-                        and validators.ipv4(found_ip)):
-                    # associate the ipv4 we found with the incoming ipv6 and vice versa
-                    self.r.hmset(profileid, {'IPv4': found_ip})
-                    self.r.hmset(stored_profile, {'IPv6': incoming_ip})
-                    break
-                elif (validators.ipv6(found_ip)
-                      and validators.ipv4(incoming_ip)):
-                    # associate the ipv6 we found with the incoming ipv4 and vice versa
-                    self.r.hmset(profileid, {'IPv6': found_ip})
-                    self.r.hmset(stored_profile, {'IPv4': incoming_ip})
-                    break
-                else:
-                    # both are ipv4 or ipv6 and are claiming to have the same mac address
-                    # OR one of them is 0.0.0.0 and didn't take an ip yet
-                    # will be detected later by the ARP module
-                    pass
-
-
-    def add_mac_addr_to_profile(self,profileid, MAC_info):
-        """
-        Used to associate this profile with it's MAC addr
-        :param MAC_info: dict containing mac address, hostname and vendor info
-        """
-        # Add the MAC addr, hostname and vendor to this profile
-        self.r.hmset(profileid, MAC_info)
-
     def mark_profile_as_dhcp(self, profileid):
         """
         Used to mark this profile as dhcp server
@@ -268,6 +222,43 @@ class Database(object):
         if not is_dhcp_set:
             self.r.hmset(profileid, {'dhcp': 'true'})
 
+    def get_IP_of_MAC(self, MAC):
+        """
+        Returns the IP associated with the given MAC in our database
+        """
+        return self.r.hget('MAC', MAC)
+
+    def add_mac_addr_to_profile(self, profileid, MAC_info):
+        """
+        Used to associate this profile with it's MAC addr
+        :param MAC_info: dict containing mac address, hostname and vendor info
+        """
+        # Add the MAC addr, hostname and vendor to this profile
+        self.r.hmset(profileid, MAC_info)
+        cached_ip = self.r.hmget('MAC', MAC_info['MAC'])
+        if not cached_ip:
+            self.r.hmset('MAC', MAC_info['MAC'], [profileid.split('_')[1]])
+        else:
+            # we found another profile that has the same mac as this one
+            incoming_ip = profileid.split('_')[1]
+            found_ip = cached_ip[0]
+
+            # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
+            if (validators.ipv6(incoming_ip)
+                    and validators.ipv4(found_ip)):
+                # associate the ipv4 we found with the incoming ipv6 and vice versa
+                self.r.hmset(profileid, {'IPv4': found_ip})
+                self.r.hmset(f'profileid_{found_ip}', {'IPv6': incoming_ip})
+            elif (validators.ipv6(found_ip)
+                  and validators.ipv4(incoming_ip)):
+                # associate the ipv6 we found with the incoming ipv4 and vice versa
+                self.r.hmset(profileid, {'IPv6': found_ip})
+                self.r.hmset(f'profileid_{found_ip}', {'IPv4': incoming_ip})
+            else:
+                # both are ipv4 or ipv6 and are claiming to have the same mac address
+                # OR one of them is 0.0.0.0 and didn't take an ip yet
+                # will be detected later by the ARP module
+                self.publish()
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
@@ -318,19 +309,6 @@ class Database(object):
 
         return ip
 
-    def get_IP_of_MAC(self, MAC):
-        """
-        Returns the IP associated with the given MAC in our database
-        """
-        profiles = self.getProfiles()
-        if profiles:
-            # get the mac of every profile we have
-            for profile in profiles:
-                MAC_of_profile = self.get_mac_addr_from_profile(profile)
-                # does this profile has the MAC we're searching for?
-                if MAC_of_profile and MAC in MAC_of_profile:
-                    # found the profile with the wanted mac
-                    return profile.split('_')[1]
 
     def getProfileIdFromIP(self, daddr_as_obj):
         """ Receive an IP and we want the profileid"""
