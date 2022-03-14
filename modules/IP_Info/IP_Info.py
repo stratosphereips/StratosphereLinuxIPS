@@ -208,7 +208,7 @@ class Module(Module, multiprocessing.Process):
             response = requests.get( f'{url}/{ip}', timeout=5)
             if response.status_code == 200:
                 ip_info = json.loads(response.text)
-                if ip_info['as'] != '':
+                if ip_info.get('as', '') != '':
                     asn['asn']['asnorg'] = ip_info['as']
         except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
             pass
