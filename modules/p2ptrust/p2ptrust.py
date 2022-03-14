@@ -450,6 +450,8 @@ class Trust(Module, multiprocessing.Process):
         # give the report to evidenceProcess to decide whether to block or not
         __database__.publish('new_blame', data)
 
+    def shutdown_gracefully(self):
+        __database__.publish('finished_modules', self.name)
 
     def run(self):
         try:
@@ -498,13 +500,12 @@ class Trust(Module, multiprocessing.Process):
                 time.sleep(0.1)
 
         except KeyboardInterrupt:
-            pass
-
+            self.shutdown_gracefully()
+            return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f"Problem with P2P. line {exception_line}", 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
-
-        return True
+            return True
