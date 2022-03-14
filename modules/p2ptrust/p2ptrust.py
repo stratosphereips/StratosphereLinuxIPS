@@ -452,31 +452,31 @@ class Trust(Module, multiprocessing.Process):
 
 
     def run(self):
-        # configure process
-        self._configure()
-
-        # check if it was possible to start up pigeon
-        if self.start_pigeon and self.pigeon is None:
-            self.print("Module was supposed to start up pigeon but it was not possible to start pigeon! Exiting...")
-            return
-
-        pubsub = __database__.r.pubsub()
-
-        # callbacks for subscribed channels
-        callbacks = {
-            # channel to send msgs to whenever slips needs info from other peers about an ip
-            self.p2p_data_request_channel: self.data_request_callback,
-
-            # self.slips_update_channel: self.update_callback,
-
-            # this channel receives peers requests/updates
-            self.gopy_channel: self.gopy_callback,
-
-            'evidence_added': self.new_evidence_callback
-        }
-
-        pubsub.subscribe(**callbacks, ignore_subscribe_messages=True)
         try:
+            # configure process
+            self._configure()
+            # check if it was possible to start up pigeon
+            if self.start_pigeon and self.pigeon is None:
+                self.print("Module was supposed to start up pigeon but it was not possible to start pigeon! Exiting...")
+                return
+
+            pubsub = __database__.r.pubsub()
+
+            # callbacks for subscribed channels
+            callbacks = {
+                # channel to send msgs to whenever slips needs info from other peers about an ip
+                self.p2p_data_request_channel: self.data_request_callback,
+
+                # self.slips_update_channel: self.update_callback,
+
+                # this channel receives peers requests/updates
+                self.gopy_channel: self.gopy_callback,
+
+                'evidence_added': self.new_evidence_callback
+            }
+
+            pubsub.subscribe(**callbacks, ignore_subscribe_messages=True)
+
             while True:
                 ret_code = self.pigeon.poll()
                 if ret_code is not None:
