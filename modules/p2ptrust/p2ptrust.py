@@ -231,8 +231,13 @@ class Trust(Module, multiprocessing.Process):
             utils.send_evaluation_to_go(detection_info, score, confidence, "*", self.pygo_channel)
 
     def gopy_callback(self, msg: Dict):
+        """
+        this function is called whenever slips receives peers requests/updates
+        happens when a msg is sent in the gopy_channel.
+        """
         try:
-            self.go_director.handle_gopy_data(msg["data"])
+            msg = json.dumps(msg["data"])
+            self.go_director.handle_gopy_data(msg)
         except Exception as e:
             self.printer.err(f"Exception {e} in gopy_callback")
 
@@ -431,8 +436,6 @@ class Trust(Module, multiprocessing.Process):
                                        self.storage_name)
             if int(combined_score) * int(confidence) > 0:
                 self.set_evidence_malicious_ip(ip_info, combined_score, confidence )
-
-
 
     def respond_to_message_request(self, key, reporter):
         # todo do you mean another peer is asking me about an ip?
