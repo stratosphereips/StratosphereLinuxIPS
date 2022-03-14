@@ -368,6 +368,7 @@ class UpdateFileManager:
         with open(full_path, 'w') as f:
             f.write(response.text)
 
+
     def parse_ssl_feed(self, url, full_path):
         """
         Read all ssl fingerprints in full_path and store the info in our db
@@ -504,6 +505,10 @@ class UpdateFileManager:
 
             self.print(f'Successfully updated remote file {link_to_download}')
             self.loaded_ti_files += 1
+
+            # done parsing the file, delte it from disk
+            os.remove(full_path)
+
             return True
 
         except Exception as inst:
@@ -855,12 +860,21 @@ class UpdateFileManager:
                 line = line.replace("\n","").replace("\"","")
 
                 # Separate the lines like CSV, either by commas or tabs
-                separators = ('#', ',', ';','\t')
+                separators = ('#', ',', ';', '\t')
                 for separator in separators:
                     if separator in line:
+                        # lines and descriptions in this feed are separated with ',' , so we get
+                        # an invalid number of columns
+                        if 'OCD-Datalak' in malicious_data_path:
+                            # the valid line
+                            new_line = line.split('Z,')[0]
+                            # replace every ',' from the description
+                            description = line.split('Z,',1)[1].replace(', ', "")
+                            line = new_line + "," + description
+
                         # get a list of every field in the line e.g [ioc, description, date]
                         line_fields = line.split(separator)
-                        amount_of_columns =  len(line_fields)
+                        amount_of_columns = len(line_fields)
                         break
                 else:
                     # no separator of the above was found
@@ -871,7 +885,7 @@ class UpdateFileManager:
                     else:
                         separator = '\t'
                         line_fields = line.split(separator)
-                        amount_of_columns =  len(line_fields)
+                        amount_of_columns = len(line_fields)
 
 
 
@@ -910,6 +924,13 @@ class UpdateFileManager:
                     if line.startswith('#') or line.startswith(';'):
                         continue
 
+                    if 'OCD-Datalak' in malicious_data_path:
+                        # the valid line
+                        new_line = line.split('Z,')[0]
+                        # replace every ',' from the description
+                        description = line.split('Z,',1)[1].replace(', ', "")
+                        line = new_line + "," + description
+
                     # skip unsupported IoC types
                     process_line = True
                     for keyword in ignored_IoCs:
@@ -939,7 +960,8 @@ class UpdateFileManager:
                         description = line_fields[description_column].strip()
                     except (IndexError, UnboundLocalError):
                         description = ''
-                        self.print(f'IndexError Description column: {description_column}. Line: {line}',0,1)
+                        self.print(f'IndexError Description column: {description_column}. Line: {line} in {malicious_data_path}',0,1)
+                        return False
 
                     self.print('\tRead Data {}: {}'.format(data, description), 3, 0)
 
