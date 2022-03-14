@@ -73,7 +73,8 @@ class GoDirector:
             self.print("Couldn't load message from pigeon - invalid json")
 
         except KeyError:
-            self.print("Json from the pigeon doesn't contain expected values")
+            self.print(f"Json from the pigeon: {data_dict} doesn't contain "
+                       "expected values message_type or message_contents")
 
     def process_go_data(self, report: dict) -> None:
         """Process peer updates, requests and reports sent by the go layer
