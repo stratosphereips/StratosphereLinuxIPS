@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict
 import json
 import sys
+import socket
 
 import modules.p2ptrust.trust.base_model as reputation_model
 import modules.p2ptrust.trust.trustdb as trustdb
@@ -85,7 +86,7 @@ class Trust(Module, multiprocessing.Process):
         self.output_queue = output_queue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
-        self.port = pigeon_port
+        self.port = self.get_available_port()
         self.rename_with_port = rename_with_port
         self.gopy_channel_raw = gopy_channel
         self.pygo_channel_raw = pygo_channel
@@ -137,6 +138,17 @@ class Trust(Module, multiprocessing.Process):
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(text, verbose, debug)
+
+    def get_available_port(self):
+        for port in range(32768, 65535):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.bind(("0.0.0.0", port))
+                sock.close()
+                return port
+            except:
+                # port is in use
+                continue
 
     def _configure(self):
         # TODO: do not drop tables on startup
