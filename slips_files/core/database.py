@@ -234,10 +234,10 @@ class Database(object):
         :param MAC_info: dict containing mac address, hostname and vendor info
         """
         # Add the MAC addr, hostname and vendor to this profile
-        self.r.hmset(profileid, MAC_info)
         cached_ip = self.r.hmget('MAC', MAC_info['MAC'])
         if not cached_ip:
             self.r.hmset('MAC', MAC_info['MAC'], [profileid.split('_')[1]])
+            self.r.hmset(profileid, MAC_info)
         else:
             # we found another profile that has the same mac as this one
             incoming_ip = profileid.split('_')[1]
@@ -249,16 +249,25 @@ class Database(object):
                 # associate the ipv4 we found with the incoming ipv6 and vice versa
                 self.r.hmset(profileid, {'IPv4': found_ip})
                 self.r.hmset(f'profileid_{found_ip}', {'IPv6': incoming_ip})
+
+                # add the incoming ipv6 to the list of ips that belong to this mac
+                cached_ip.append(profileid.split('_')[1])
+                self.r.hmset('MAC', MAC_info['MAC'], cached_ip)
+
             elif (validators.ipv6(found_ip)
                   and validators.ipv4(incoming_ip)):
                 # associate the ipv6 we found with the incoming ipv4 and vice versa
                 self.r.hmset(profileid, {'IPv6': found_ip})
                 self.r.hmset(f'profileid_{found_ip}', {'IPv4': incoming_ip})
+
+                # add te incoming ipv4 to the list of ips that belong to this mac
+                cached_ip.append(profileid.split('_')[1])
+                self.r.hmset('MAC', MAC_info['MAC'], cached_ip)
             else:
                 # both are ipv4 or ipv6 and are claiming to have the same mac address
                 # OR one of them is 0.0.0.0 and didn't take an ip yet
                 # will be detected later by the ARP module
-                self.publish()
+                pass
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
