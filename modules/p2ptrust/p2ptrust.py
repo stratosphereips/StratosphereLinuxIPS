@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Dict
 import json
+import sys
 
 import modules.p2ptrust.trust.base_model as reputation_model
 import modules.p2ptrust.trust.trustdb as trustdb
@@ -499,7 +500,11 @@ class Trust(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             pass
 
-        except Exception as e:
-            self.print(f"Exception {e}")
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f"Problem with P2P. line {exception_line}", 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
 
         return True
