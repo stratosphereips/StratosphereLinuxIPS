@@ -250,6 +250,10 @@ class Database(object):
             # get the last one of them
             found_ip = cached_ips[-1]
 
+            # we already have the incoming ip associated with this mac in the db
+            if incoming_ip in cached_ips:
+                return False
+
             # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
             if (validators.ipv6(incoming_ip)
                     and validators.ipv4(found_ip)):
