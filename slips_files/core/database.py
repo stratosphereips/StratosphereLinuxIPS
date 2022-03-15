@@ -233,15 +233,22 @@ class Database(object):
         Used to associate this profile with it's MAC addr
         :param MAC_info: dict containing mac address, hostname and vendor info
         """
+        if '0.0.0.0' in profileid:
+            return False
+
         # Add the MAC addr, hostname and vendor to this profile
-        cached_ip = self.r.hmget('MAC', MAC_info['MAC'])
-        if not cached_ip:
-            self.r.hmset('MAC', MAC_info['MAC'], [profileid.split('_')[1]])
+        cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
+        if not cached_ip or cached_ip == None:
+            ip = json.dumps([profileid.split('_')[1]])
+            self.r.hset('MAC', MAC_info['MAC'], ip)
             self.r.hmset(profileid, MAC_info)
         else:
             # we found another profile that has the same mac as this one
             incoming_ip = profileid.split('_')[1]
-            found_ip = cached_ip[0]
+            # all the ips , v4 and 6 , that are stored with this mac
+            cached_ips = json.loads(cached_ip)
+            # get the last one of them
+            found_ip = cached_ips[-1]
 
             # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
             if (validators.ipv6(incoming_ip)
@@ -251,8 +258,9 @@ class Database(object):
                 self.r.hmset(f'profileid_{found_ip}', {'IPv6': incoming_ip})
 
                 # add the incoming ipv6 to the list of ips that belong to this mac
-                cached_ip.append(profileid.split('_')[1])
-                self.r.hmset('MAC', MAC_info['MAC'], cached_ip)
+                cached_ips.append(profileid.split('_')[1])
+                cached_ips = json.dumps(cached_ips)
+                self.r.hset('MAC', MAC_info['MAC'], cached_ips)
 
             elif (validators.ipv6(found_ip)
                   and validators.ipv4(incoming_ip)):
@@ -261,8 +269,9 @@ class Database(object):
                 self.r.hmset(f'profileid_{found_ip}', {'IPv4': incoming_ip})
 
                 # add te incoming ipv4 to the list of ips that belong to this mac
-                cached_ip.append(profileid.split('_')[1])
-                self.r.hmset('MAC', MAC_info['MAC'], cached_ip)
+                cached_ips.append(profileid.split('_')[1])
+                cached_ips = json.dumps(cached_ips)
+                self.r.hset('MAC', MAC_info['MAC'], cached_ips)
             else:
                 # both are ipv4 or ipv6 and are claiming to have the same mac address
                 # OR one of them is 0.0.0.0 and didn't take an ip yet
