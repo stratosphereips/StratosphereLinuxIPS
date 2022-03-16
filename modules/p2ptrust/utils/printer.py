@@ -26,5 +26,3 @@ class Printer:
         levels = f'{verbose}{debug}'
         self.output_queue.put(f"{levels}|{self.name}|{text}")
 
-    def err(self, e: str):
-        self.print(e, verbose=0)
