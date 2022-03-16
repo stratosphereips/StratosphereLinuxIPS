@@ -209,10 +209,10 @@ class Trust(Module, multiprocessing.Process):
         confidence = data.get('confidence', False)
         threat_level = data.get('threat_level', False)
         if not threat_level:
-            self.print(f"IP/domain {detection_info} doesn't have a threat_level")
+            self.print(f"IP/domain {detection_info} doesn't have a threat_level. not sharing to the network.", 0, 2)
             return
         if not confidence:
-            self.print(f"IP/domain {detection_info} doesn't have a confidence")
+            self.print(f"IP/domain {detection_info} doesn't have a confidence. not sharing to the network.", 0, 2)
             return
 
 
@@ -251,7 +251,7 @@ class Trust(Module, multiprocessing.Process):
             msg = json.dumps(msg["data"])
             self.go_director.handle_gopy_data(msg)
         except Exception as e:
-            self.printer.err(f"Exception {e} in gopy_callback")
+            self.printer.print(f"Exception {e} in gopy_callback", 0, 1)
 
     # def update_callback(self, msg: Dict):
     #     try:
@@ -259,7 +259,7 @@ class Trust(Module, multiprocessing.Process):
     #         self.print(f"IP info was updated in slips for ip: {data}")
     #         self.handle_update(data)
     #     except Exception as e:
-    #         self.printer.err(f"Exception {e} in update_callback")
+    #         self.printer.print(f"Exception {e} in update_callback")
 
     def data_request_callback(self, msg: Dict):
         try:
@@ -267,7 +267,7 @@ class Trust(Module, multiprocessing.Process):
             if msg and type(msg["data"]) != int:
                 self.handle_data_request(msg["data"])
         except Exception as e:
-            self.printer.err(f"Exception {e} in data_request_callback")
+            self.printer.print(f"Exception {e} in data_request_callback", 0 ,1)
 
     # def handle_update(self, ip_address: str) -> None:
     #     """
@@ -440,10 +440,10 @@ class Trust(Module, multiprocessing.Process):
 
         # no data in db - this happens when testing, if there is not enough data on peers
         if combined_score is None:
-            self.print(f"No data received from network about {ip_address}\n")
+            self.print(f"No data received from network about {ip_address}\n", 0 , 2)
         else:
             self.print(f"Network shared some data about {ip_address}, "
-                       f"Shared data: score={combined_score}, confidence={combined_confidence} saving it now!\n")
+                       f"Shared data: score={combined_score}, confidence={combined_confidence} saving it now!\n", 0, 2)
             # save it to IPsInfo hash in p2p4slips key in the db
             utils.save_ip_report_to_db(ip_address, combined_score, combined_confidence, network_score,
                                        self.storage_name)
@@ -451,7 +451,14 @@ class Trust(Module, multiprocessing.Process):
                 self.set_evidence_malicious_ip(ip_info, combined_score, confidence )
 
     def respond_to_message_request(self, key, reporter):
-        # todo do you mean another peer is asking me about an ip?
+        # todo do you mean another peer is asking me about an ip? yes. in override mode
+        """
+        Handle data request from a peer (in overriding p2p mode) (set to false by defualt)
+        :param key: The ip requested by the peer
+        :param reporter: The peer that sent the request
+        return a json response
+
+        """
         pass
 
     def process_message_report(self, reporter: str, report_time: int, data: dict):
@@ -506,7 +513,6 @@ class Trust(Module, multiprocessing.Process):
 
                 # listen to slips kill signal and quit
                 if message and message['data'] == 'stop_process':
-                    self.print("Received stop signal from slips, stopping")
                     if self.start_pigeon:
                         self.pigeon.send_signal(signal.SIGINT)
 
