@@ -60,6 +60,10 @@ class Module(Module, multiprocessing.Process):
         '''
         Set an evidence for malicious Tuple
         '''
+
+        # to reduce false positives
+        if score < 0.99:
+            return
         type_detection = 'outTuple'
         detection_info = tupleid
         source_target_tag = 'Botnet'
