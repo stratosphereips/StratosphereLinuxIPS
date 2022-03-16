@@ -202,7 +202,10 @@ class Module(Module, multiprocessing.Process):
 
     def detect_unsolicited_arp(self, profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw):
         """ Unsolicited ARP is used to update the neighbours' ARP caches but can also be used in ARP spoofing """
-        if dst_mac=="ff:ff:ff:ff:ff:ff" and dst_hw=="ff:ff:ff:ff:ff:ff" and src_mac != '00:00:00:00:00:00' and src_hw != '00:00:00:00:00:00':
+        if dst_mac=="ff:ff:ff:ff:ff:ff" \
+                and dst_hw=="ff:ff:ff:ff:ff:ff" \
+                and src_mac != '00:00:00:00:00:00' \
+                and src_hw != '00:00:00:00:00:00':
             # We're sure this is unsolicited arp
             confidence = 0.8
             threat_level = 'info'
