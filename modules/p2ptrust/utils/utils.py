@@ -199,7 +199,8 @@ def send_empty_evaluation_to_go(ip: str, recipient: str, channel_name: str) -> N
     Creates empty message and sends it to recipient;ip
 
     :param ip: The IP that is being reported
-    :param recipient: The peer that should receive the report. Use "*" wildcard to broadcast to everyone
+    :param recipient: The peer that should receive the report.
+    Use "*" wildcard to broadcast to everyone
     :return: None
     """
     message_raw = build_go_message("report", "ip", ip, "score_confidence", evaluation=None)
@@ -265,21 +266,24 @@ def send_b64_to_go(message: str, recipient: str, channel_name: str) -> None:
     """
     Send message to a peer
 
-    Encode message as base64 string, assign the recipient for the message and send it to the go part. It will look for
-    the recipient and send the message to him. Use "*" to broadcast to everybody.
+    Encode message as base64 string, assign the recipient for the message and send it to the go part.
+    It will look for the recipient and send the message to him.
+     Use "*" to broadcast to everybody.
 
     :param message: The message to send
-    :param recipient: The peerID of the peer that should get the message, or "*" to broadcast the message
+    :param recipient: The peerID of the peer that should get the message,
+                        or "*" to broadcast the message
     :return: None
     """
 
     data_raw = {"message": message, "recipient": recipient}
     data_json = json.dumps(data_raw)
-    print("[publish trust -> go]", data_json)
     __database__.publish(channel_name, data_json)
 
     decoded_data = base64.b64decode(message)
-    print("[raw published data]", decoded_data)
+    data_json = json.loads(decoded_data.decode('utf-8'))
+
+    print(f"[Slips -> The Network] {data_json['message_type']} about {data_json['key']} recipient: {recipient}")
 
 
 def read_configuration(config, section: str, name: str) -> str:
