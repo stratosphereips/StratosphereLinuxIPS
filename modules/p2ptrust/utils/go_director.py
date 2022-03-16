@@ -209,7 +209,7 @@ class GoDirector:
             # calls respond_to_message_request in p2ptrust.py
             self.request_func(key, reporter)
         else:
-            print("Not overriding p2p")
+            self.print("Not overriding p2p")
             self.respond_to_message_request(key, reporter)
 
     def respond_to_message_request(self, key, reporter):
@@ -219,10 +219,10 @@ class GoDirector:
         score, confidence = get_ip_info_from_slips(key)
         if score is not None:
             send_evaluation_to_go(key, score, confidence, reporter, self.pygo_channel)
-            print(f"[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.", 2, 0)
+            self.print(f"[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.", 2, 0)
         else:
             send_empty_evaluation_to_go(key, reporter, self.pygo_channel)
-            print(f"[Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}", 2, 0)
+            self.print(f"[Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}", 2, 0)
 
     def process_message_report(self, reporter: str, report_time: int, data: dict):
         """

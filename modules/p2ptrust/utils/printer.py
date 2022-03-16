@@ -5,6 +5,7 @@ class Printer:
     def __init__(self, output_queue: multiprocessing.Queue, module_name: str):
         self.output_queue = output_queue
         self.name = module_name
+        self.logs_file = "./output/p2ptrust_runtime/pigeon_logs"
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -24,5 +25,9 @@ class Printer:
         """
 
         levels = f'{verbose}{debug}'
-        self.output_queue.put(f"{levels}|{self.name}|{text}")
+        msg = f"{levels}|{self.name}|{text}"
+        self.output_queue.put(msg)
+        with open(self.logs_file,'a') as f:
+            f.write(f'[p2ptrust] {text}\n')
+
 

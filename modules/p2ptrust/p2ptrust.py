@@ -172,7 +172,6 @@ class Trust(Module, multiprocessing.Process):
                 self.print(f'P2p4slips binary not found in \"{self.pigeon_binary}\". '
                            f'Did you include it in PATH?. Exiting process.')
                 return
-
             executable = [self.pigeon_binary]
             port_param = ["-port", str(self.port)]
             keyfile_param = ["-key-file", self.data_dir + self.pigeon_key_file]
@@ -427,6 +426,7 @@ class Trust(Module, multiprocessing.Process):
         #       I do not remember writing this comment. I have no idea in which cases there is no need to wait? Maybe
         #       when everybody responds asap?
         utils.send_request_to_go(ip_address, self.pygo_channel)
+        self.print(f"[Slips -> The Network] request about {ip_address}")
 
         # go will send a reply in no longer than 10s (or whatever the
         # timeout there is set to). The reply will be
