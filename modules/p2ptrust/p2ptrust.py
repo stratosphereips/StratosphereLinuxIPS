@@ -65,7 +65,7 @@ class Trust(Module, multiprocessing.Process):
     def __init__(self,
                  output_queue: multiprocessing.Queue,
                  config: configparser.ConfigParser,
-                 data_dir: str = "./p2ptrust_runtime/",
+                 data_dir: str = "./output/p2ptrust_runtime/",
                  pigeon_port=6668,
                  rename_with_port=False,
                  slips_update_channel="ip_info_change",
