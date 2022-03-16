@@ -283,7 +283,6 @@ def send_b64_to_go(message: str, recipient: str, channel_name: str) -> None:
     decoded_data = base64.b64decode(message)
     data_json = json.loads(decoded_data.decode('utf-8'))
 
-    print(f"[Slips -> The Network] {data_json['message_type']} about {data_json['key']} recipient: {recipient}")
 
 
 def read_configuration(config, section: str, name: str) -> str:
