@@ -236,16 +236,26 @@ class Database(object):
         if '0.0.0.0' in profileid:
             return False
 
-        # Add the MAC addr, hostname and vendor to this profile
+        incoming_ip = profileid.split('_')[1]
+
+        # sometimes we create profiles with the mac address.
+        # don't save that in MAC hash
+        if not validators.ip_address(incoming_ip):
+            return False
+
+        # get the ips that belong to this mac
         cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
         if not cached_ip or cached_ip == None:
-            ip = json.dumps([profileid.split('_')[1]])
+            # no mac info stored for profileid
+            ip = json.dumps([incoming_ip])
             self.r.hset('MAC', MAC_info['MAC'], ip)
+            # Add the MAC addr, hostname and vendor to this profile
             self.r.hmset(profileid, MAC_info)
         else:
             # we found another profile that has the same mac as this one
-            incoming_ip = profileid.split('_')[1]
-            # all the ips , v4 and 6 , that are stored with this mac
+            # incoming_ip = profileid.split('_')[1]
+
+            # get all the ips, v4 and 6, that are stored with this mac
             cached_ips = json.loads(cached_ip)
             # get the last one of them
             found_ip = cached_ips[-1]
@@ -262,7 +272,7 @@ class Database(object):
                 self.r.hmset(f'profileid_{found_ip}', {'IPv6': incoming_ip})
 
                 # add the incoming ipv6 to the list of ips that belong to this mac
-                cached_ips.append(profileid.split('_')[1])
+                cached_ips.append(incoming_ip)
                 cached_ips = json.dumps(cached_ips)
                 self.r.hset('MAC', MAC_info['MAC'], cached_ips)
 
@@ -273,7 +283,7 @@ class Database(object):
                 self.r.hmset(f'profileid_{found_ip}', {'IPv4': incoming_ip})
 
                 # add te incoming ipv4 to the list of ips that belong to this mac
-                cached_ips.append(profileid.split('_')[1])
+                cached_ips.append(incoming_ip)
                 cached_ips = json.dumps(cached_ips)
                 self.r.hset('MAC', MAC_info['MAC'], cached_ips)
             else:
