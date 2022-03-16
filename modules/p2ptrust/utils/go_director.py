@@ -205,11 +205,16 @@ class GoDirector:
             self.respond_to_message_request(key, reporter)
 
     def respond_to_message_request(self, key, reporter):
+        """
+        Gets the info about the IP the peer asked about, and send it to the network
+        """
         score, confidence = get_ip_info_from_slips(key)
         if score is not None:
             send_evaluation_to_go(key, score, confidence, reporter, self.pygo_channel)
+            print(f"Slips responded with info about IP: {key} to {reporter}.")
         else:
             send_empty_evaluation_to_go(key, reporter, self.pygo_channel)
+            print(f"Slips has no info about IP: {key}. Responded with empty report to {reporter}")
 
     def process_message_report(self, reporter: str, report_time: int, data: dict):
         """

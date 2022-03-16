@@ -441,11 +441,10 @@ class Trust(Module, multiprocessing.Process):
 
         # no data in db - this happens when testing, if there is not enough data on peers
         if combined_score is None:
-            self.print("No data received from network :(")
+            self.print(f"No data received from network about {ip_address}\n")
         else:
-            self.print("Network shared some data, saving it now!")
-            self.print(
-                "IP: " + ip_address + ", result: [" + str(combined_score) + ", " + str(combined_confidence) + "]")
+            self.print(f"Network shared some data about {ip_address}, "
+                       f"Shared data: score={combined_score}, confidence={combined_confidence} saving it now!\n")
             # save it to IPsInfo hash in p2p4slips key in the db
             utils.save_ip_report_to_db(ip_address, combined_score, combined_confidence, network_score,
                                        self.storage_name)
