@@ -51,7 +51,7 @@ class GoDirector:
 
     def handle_gopy_data(self, data: str):
         """
-        Method that receives raw data sent into p2p_gopy redis channel
+        Method that receives raw data from peers sent into p2p_gopy redis channel
         """
         try:
             data_dict = json.loads(data)
@@ -70,7 +70,7 @@ class GoDirector:
                 self.print("Invalid command: " + message_type)
 
         except json.decoder.JSONDecodeError:
-            self.print("Couldn't load message from pigeon - invalid json")
+            self.print(f"Couldn't load message from pigeon - invalid Json from the pigeon: {data_dict}")
 
         except KeyError:
             self.print(f"Json from the pigeon: {data_dict} doesn't contain "
@@ -79,8 +79,9 @@ class GoDirector:
     def process_go_data(self, report: dict) -> None:
         """Process peer updates, requests and reports sent by the go layer
 
-        The data is expected to be a list of messages received from go peers. They are parsed and inserted into the
-         database. If a message does not comply with the format, the reporter's reputation is lowered.
+        The data is expected to be a list of messages received from go peers.
+        They are parsed and inserted into the database.
+        If a message does not comply with the format, the reporter's reputation is lowered.
         """
 
         # check that the data was parsed correctly in the go part of the app

@@ -53,6 +53,7 @@ def validate_slips_data(message_data: str) -> (str, int):
 
     except ValueError:
         # message has wrong format
+        print(f"The message received from p2p_data_request channel has incorrect format: {message_data}")
         return None
 
 
@@ -263,7 +264,9 @@ class Trust(Module, multiprocessing.Process):
 
     def data_request_callback(self, msg: Dict):
         try:
-            self.handle_data_request(msg["data"])
+            # ignore subscribe msgs (first 2 msgs sent in redis channel)
+            if msg and type(msg["data"]) != int:
+                self.handle_data_request(msg["data"])
         except Exception as e:
             self.printer.err(f"Exception {e} in data_request_callback")
 
