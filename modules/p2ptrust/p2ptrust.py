@@ -205,7 +205,6 @@ class Trust(Module, multiprocessing.Process):
             # the detection is a srcport, dstport, etc. don't share
             return
 
-        # todo what exactly do we need to send to the netwrok? srcip/srdomain, threat_level and confidence?
         detection_info = data.get('detection_info')
         confidence = data.get('confidence', False)
         threat_level = data.get('threat_level', False)

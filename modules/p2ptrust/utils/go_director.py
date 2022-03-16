@@ -115,6 +115,7 @@ class GoDirector:
             # a peer reporting an IP
             self.process_message_report(reporter, report_time, data)
 
+
         elif message_type == "request":
             # a peer requesting info about an ip
             self.process_message_request(reporter, report_time, data)
@@ -198,8 +199,11 @@ class GoDirector:
             return
 
         key = data["key"]
+        self.print(f"[The Network -> Slips] Peer request about {key} reporter: {reporter}")
+
         if self.override_p2p:
             print("Overriding p2p")
+            # TODO  this is not implemented yet line 28 go_director.py
             self.request_func(key, reporter)
         else:
             print("Not overriding p2p")
@@ -212,10 +216,10 @@ class GoDirector:
         score, confidence = get_ip_info_from_slips(key)
         if score is not None:
             send_evaluation_to_go(key, score, confidence, reporter, self.pygo_channel)
-            print(f"Slips responded with info about IP: {key} to {reporter}.")
+            print(f"[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.")
         else:
             send_empty_evaluation_to_go(key, reporter, self.pygo_channel)
-            print(f"Slips has no info about IP: {key}. Responded with empty report to {reporter}")
+            print(f"[Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}")
 
     def process_message_report(self, reporter: str, report_time: int, data: dict):
         """
@@ -263,7 +267,7 @@ class GoDirector:
             return
 
         self.evaluation_processors[evaluation_type](reporter, report_time, key_type, key, evaluation)
-
+        self.print(f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}")
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
 
@@ -328,10 +332,11 @@ class GoDirector:
         """
         Handle update in peers reliability or IP address.
 
-        The message is expected to be JSON string, and it should contain data according to the specified format. It must
-        have the field `peerid`, which specifies the peer that is being updated, and then values to update: `ip` or
-        `reliability`. It is OK if only one of these is provided. Additionally, `timestamp` may be set, but is not
-        mandatory - if it is missing, current time will be used.
+        The message is expected to be JSON string, and it should contain data according to the specified format.
+        It must have the field `peerid`, which specifies the peer that is being updated,
+        and then values to update: `ip` or `reliability`.
+        It is OK if only one of these is provided.
+        Additionally, `timestamp` may be set, but is not mandatory - if it is missing, current time will be used.
         :param message: A string sent from go, should be json as specified above
         :return: None
         """
@@ -368,6 +373,8 @@ class GoDirector:
                 self.print("IP address is invalid")
                 return
             self.trustdb.insert_go_ip_pairing(peerid, ip_address, timestamp=timestamp)
+            self.print(f"[The Network -> Slips] Peer update {peerid} with IP: {ip_address} Reliability: {reliability} ")
+
         except KeyError:
             self.print("IP address missing")
             return
