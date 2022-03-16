@@ -42,7 +42,6 @@ class Module(Module, multiprocessing.Process):
         self.gateway = __database__.get_default_gateway()
 
 
-
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -72,7 +71,6 @@ class Module(Module, multiprocessing.Process):
             self.home_network = utils.home_network_ranges
         # convert the ranges into network obj
         self.home_network = list(map(ipaddress.ip_network,self.home_network))
-
 
     def check_arp_scan(self, profileid, twid, daddr, uid, ts, dst_mac, src_mac):
         """
@@ -178,7 +176,10 @@ class Module(Module, multiprocessing.Process):
 
     def detect_unsolicited_arp(self, profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw):
         """ Unsolicited ARP is used to update the neighbours' ARP caches but can also be used in ARP spoofing """
-        if dst_mac=="ff:ff:ff:ff:ff:ff" and dst_hw=="ff:ff:ff:ff:ff:ff" and src_mac != '00:00:00:00:00:00' and src_hw != '00:00:00:00:00:00':
+        if dst_mac=="ff:ff:ff:ff:ff:ff" \
+                and dst_hw=="ff:ff:ff:ff:ff:ff" \
+                and src_mac != '00:00:00:00:00:00' \
+                and src_hw != '00:00:00:00:00:00':
             # We're sure this is unsolicited arp
             confidence = 0.8
             threat_level = 'info'
