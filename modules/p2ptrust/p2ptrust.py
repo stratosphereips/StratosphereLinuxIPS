@@ -174,7 +174,7 @@ class Trust(Module, multiprocessing.Process):
                 return
             executable = [self.pigeon_binary]
             port_param = ["-port", str(self.port)]
-            keyfile_param = ["-key-file", self.data_dir + self.pigeon_key_file]
+            keyfile_param = ["-key-file", self.pigeon_key_file]
             rename_with_port_param = ["-rename-with-port", str(self.rename_with_port).lower()]
             pygo_channel_param = ["-redis-channel-pygo", self.pygo_channel_raw]
             gopy_channel_param = ["-redis-channel-gopy", self.gopy_channel_raw]
