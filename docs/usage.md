@@ -325,7 +325,12 @@ You can enable or disable deleting zeek log files after stopping slips by settin
 
 You can also enable storing a copy of zeek log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes.
 
-Once slips is done, you will find a copy of your zeek files in ```<output_dir>/zeek_files/``` 
+Once slips is done, you will find a copy of your zeek files in ```<output_dir>/zeek_files/```
+
+
+DISCLAIMER: Once slips knows you do not want a copy of zeek log files after slips is done by enabling
+ ```delete_zeek_files``` and disabling ```store_a_copy_of_zeek_files``` parameters,
+it deletes large log files periodically (like arp.log).
 
 
 We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.

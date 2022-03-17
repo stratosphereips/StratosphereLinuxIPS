@@ -10,6 +10,7 @@
   - The default time to wait to alert on DNS without resolution now is 30 mins
   - The time to wait for DNS without resolution now works in interface capture mode and in reading any file
   - detect ICMP timestamp scan, Address scan and address mask scan
+  - Support deleting of large log files (arp.log) in case the user doesn't want a copy of the log files after slips is done
 
 -0.8.4
 * Slips
