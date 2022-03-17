@@ -483,13 +483,22 @@ Our current list of user agents has:
   
 ### Incompatible user agents
 
-Slips uses and offlice mac address database to detect the type of device based on the MAC OUI.
+Slips uses and offline MAC address database to detect the type of device based on the MAC OUI.
 
-When slips encounters a user agent in HTTP traffic, it performs an online query to get more info about this user agent,
+First, Slips store the MAC address and vendor of every IP it sees (if available)
+
+Second, When slips encounters a user agent in HTTP traffic it performs an online
+query to http://useragentstring.com to get more info about this user agent, 
 like the os type, name and browser.
 
-When slips has both information available (MAC vendor and user agent),
+Third, When slips has both information available (MAC vendor and user agent),
 it compares them to detect incompatibility using a list of keywords for each operating system.
+
+Available keywords for Apple: ('macos', 'ios', 'apple', 'os x', 'mac', 'macintosh', 'darwin')
+
+Available keywords for Microsoft: ('microsoft', 'windows', 'nt') 
+
+Available keywords for Android: ('android', 'google')
 
 
 ## Leak Detector Module
