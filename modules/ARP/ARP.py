@@ -41,6 +41,16 @@ class Module(Module, multiprocessing.Process):
         self.arp_scan_threshold = 5
         # get the default gateway
         self.gateway = __database__.get_default_gateway()
+        self.delete_arp_periodically = False
+        self.arp_ts = 0
+        self.period_before_deleting = 0
+        if 'yes' in self.delete_zeek_files and 'no' in self.store_zeek_files_copy:
+            self.delete_arp_periodically = True
+            # first time arp.log is created
+            self.arp_ts = time.time()
+            # in seconds
+            self.period_before_deleting = 3600
+
 
 
 
@@ -76,21 +86,17 @@ class Module(Module, multiprocessing.Process):
 
 
         try:
-            delete_zeek_files = self.config.get('parameters', 'delete_zeek_files')
+            self.delete_zeek_files = self.config.get('parameters', 'delete_zeek_files')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            delete_zeek_files = 'no'
+            self.delete_zeek_files = 'no'
 
         try:
-            store_zeek_files_copy = self.config.get('parameters', 'store_a_copy_of_zeek_files')
+            self.store_zeek_files_copy = self.config.get('parameters', 'store_a_copy_of_zeek_files')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            store_zeek_files_copy = 'yes'
+            self.store_zeek_files_copy = 'yes'
 
-        if 'yes' in delete_zeek_files and 'no' in store_zeek_files_copy:
-            self.delete_arp_periodically = True
-            # first time arp.log is read by slips
-            self.arp_ts = time.time()
 
     def check_arp_scan(self, profileid, twid, daddr, uid, ts, dst_mac, src_mac):
         """
@@ -255,6 +261,13 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
+                if (self.delete_arp_periodically
+                        and time.time() >= self.arp_ts + self.period_before_deleting):
+                    # clear arp.log
+                    open('zeek_files/arp.log','w').close()
+                    # update ts of the new arp.log
+                    self.arp_ts = time.time()
+
                 message = self.c1.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
