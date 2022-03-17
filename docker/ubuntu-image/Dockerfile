@@ -36,6 +36,7 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-tzlocal \
     nfdump \
     tshark \
+    git \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Requirements for compiling yara
@@ -51,8 +52,7 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
   && make install
 
 
-# Copy slips from the current directory into slips dir inside the container
-COPY . ${SLIPS_DIR}/
+RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
 RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 
 
