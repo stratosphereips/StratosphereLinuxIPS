@@ -334,6 +334,28 @@ class Module(Module, multiprocessing.Process):
                 MAC_info.update({'Vendor': vendor})
                 break
 
+
+        if MAC_info['Vendor'] == 'Unknown':
+            # couldn't find vendor using offline db, search online
+            url = 'https://www.macvendorlookup.com/api/v2'
+            try:
+                response = requests.get(f'{url}/{mac_addr}', timeout=5)
+                if response.status_code == 200:
+                    # this onnline db returns results in an array like str [{results}],
+                    # make it json
+                    online_info = response.text.replace("]","").replace("[","")
+                    online_info = json.loads(online_info)
+                    vendor = online_info.get('company', False)
+                    if vendor:
+                        MAC_info.update({'Vendor': vendor})
+                else:
+                    # If there is no match in the online database,
+                    # you will receive an empty response with a status code of HTTP/1.1 204 No Content
+                    pass
+            except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError, json.decoder.JSONDecodeError):
+                pass
+
+
         # either we found the vendor or not, store the mac of this ip to the db
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
         return MAC_info
