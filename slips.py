@@ -296,7 +296,8 @@ def shutdown_gracefully(input_information):
         warning_printed = False
 
         # timeout variable so we don't loop forever
-        max_loops = 130
+        # give slips enough time to close all modules - make sure all modules aren't considered 'busy' when slips stops
+        max_loops = 430
         # loop until all loaded modules are finished
         try:
             while len(finished_modules) < slips_processes and max_loops != 0:
