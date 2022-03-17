@@ -10,7 +10,8 @@
   - The default time to wait to alert on DNS without resolution now is 30 mins
   - The time to wait for DNS without resolution now works in interface capture mode and in reading any file
   - detect ICMP timestamp scan, Address scan and address mask scan
-
+  - Update our offline MAC vendor database and add support for getting unknown vendors from an online database
+  -  
 -0.8.4
 * Slips
   - Add support for local JA3 feeds
@@ -96,7 +97,7 @@
 		- Detect connection to and from port 0/TCP and 0/UDP.
 		- Detect Connection without DNS resolution and DNS resolutions without a following TCP or UDP connection.
 		- Use whitelists of IPs, domains, and complete Organizations (using lists of ASN and domains and IPs) to ignore flows or to ignore alerts (organizations preconfigured for Google, Apple, Facebook, and Twitter).
-		- New module to detect data exfiltration by checking large transfers (commit ef88fc6).
+		- New module to data exfiltration by checking large transfers (commit ef88fc6).
 		- Detect connections to unkown TCP and UDP ports (ignore P2P traffic).
 		- New export alerts in suricata-style format.
 		- Check suspicious user agents in HTTP (for now only 'httpsend', 'chm_msdn', 'pb').

@@ -393,10 +393,12 @@ to search for Geolocation.
 Slips is shipped with an offline database ```databases/macaddress-db.json``` for 
 MAC address vendor mapping.
 
-Slips gets the MAC address of each IP from dhcp.log and then searches the offline
+Slips gets the MAC address of each IP from dhcp.log and arp.log and then searches the offline
 database using the OUI.
 
-Slips makes sure it doesn't perform duplicate searches of the same MAC Address.
+If the vendor isn't found in the offline MAC database, Slips tries to get the MAc using the online database https://www.macvendorlookup.com
+
+Slips makes sure it doesn't perform duplicate searches of the same MAC Address either online, or offline.
 
 ## Reverse DNS
 This is obtained by doing a standard in-addr.arpa DNS request.
