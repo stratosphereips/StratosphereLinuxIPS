@@ -12,6 +12,7 @@ import json
 import sys
 import datetime
 import ipaddress
+import time
 
 
 class Module(Module, multiprocessing.Process):
@@ -73,6 +74,23 @@ class Module(Module, multiprocessing.Process):
         # convert the ranges into network obj
         self.home_network = list(map(ipaddress.ip_network,self.home_network))
 
+
+        try:
+            delete_zeek_files = self.config.get('parameters', 'delete_zeek_files')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            delete_zeek_files = 'no'
+
+        try:
+            store_zeek_files_copy = self.config.get('parameters', 'store_a_copy_of_zeek_files')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            store_zeek_files_copy = 'yes'
+
+        if 'yes' in delete_zeek_files and 'no' in store_zeek_files_copy:
+            self.delete_arp_periodically = True
+            # first time arp.log is read by slips
+            self.arp_ts = time.time()
 
     def check_arp_scan(self, profileid, twid, daddr, uid, ts, dst_mac, src_mac):
         """
