@@ -419,6 +419,19 @@ def shutdown_gracefully(input_information):
             zeek_files_path = os.path.join(args.output, 'zeek_files')
             copy_tree("zeek_files", zeek_files_path)
             print(f"[Main] Stored a copy of zeek files to {zeek_files_path}.")
+
+        # if delete_zeek_files is set to yes in slips.conf,
+        # delete the whole zeek_files
+        try:
+            delete_zeek_files = config.get('parameters', 'delete_zeek_files')
+            delete_zeek_files = False if 'no' in delete_zeek_files.lower() else True
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            delete_zeek_files = True
+
+        if delete_zeek_files:
+            shutil.rmtree('zeek_files')
+
         os._exit(-1)
         return True
     except KeyboardInterrupt:
