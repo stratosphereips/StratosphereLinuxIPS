@@ -1952,6 +1952,30 @@ class ProfilerProcess(multiprocessing.Process):
 
         return False
 
+    def publish_to_new_MAC(self, mac, ip):
+        """
+        check if mac and ip aren't multicast or link-local
+        and publish to new_MAC channel to get more info about the mac
+        :param mac: src/dst mac
+        :param ip: src/dst ip
+        src macs should be passed with srcips, dstmac with dstips
+        """
+        # get the src and dst addresses as objects
+        if validators.ipv4(ip):
+            ip_obj = ipaddress.IPv4Address(ip)
+        else:
+            ip_obj = ipaddress.IPv6Address(ip)
+
+
+        if (mac not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff')
+                and not (ip_obj.is_multicast or ip_obj.is_link_local)):
+            # send the src and dst MAC to IP_Info module to get vendor info about this MAC
+            to_send = {'MAC': mac,
+                       'profileid': f'profile_{ip}'}
+            __database__.publish('new_MAC', json.dumps(to_send))
+
+
+
     def add_flow_to_profile(self):
         """
         This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
@@ -2045,6 +2069,9 @@ class ProfilerProcess(multiprocessing.Process):
                 direction = self.column_values['dir']
                 dpkts = self.column_values['dpkts']
                 dbytes = self.column_values['dbytes']
+                smac = self.column_values.get('smac')
+                dmac = self.column_values.get('dmac')
+
 
             elif 'dns' in flow_type:
                 query = self.column_values['query']
@@ -2121,6 +2148,7 @@ class ProfilerProcess(multiprocessing.Process):
                                           dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
                                           spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid,
                                           label=self.label, flow_type=flow_type)
+
                 elif 'dns' in flow_type:
                     __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name,
                                              qtype_name, rcode_name, answers, ttls)
@@ -2226,29 +2254,8 @@ class ProfilerProcess(multiprocessing.Process):
                     to_send = json.dumps(to_send)
                     __database__.publish('new_arp', to_send)
 
-                    # get the src and dst addresses as objects
-                    if validators.ipv4(self.daddr):
-                        daddr_obj = ipaddress.IPv4Address(self.daddr)
-                    else:
-                        daddr_obj = ipaddress.IPv6Address(self.daddr)
-
-                    if validators.ipv4(self.saddr):
-                        saddr_obj = ipaddress.IPv4Address(self.saddr)
-                    else:
-                        saddr_obj = ipaddress.IPv6Address(self.saddr)
-
-                    if (self.column_values['dst_mac'] not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff')
-                            and not (daddr_obj.is_multicast or daddr_obj.is_link_local)):
-                        # send the src and dst MAC to IP_Info module to get vendor info about this MAC
-                        to_send = {'MAC': self.column_values['dst_mac'],
-                                   'profileid': f'profile_{self.daddr}'}
-                        __database__.publish('new_MAC', json.dumps(to_send))
-
-                    if (self.column_values['src_mac'] not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff')
-                            and not (saddr_obj.is_multicast or saddr_obj.is_link_local)):
-                        to_send = {'MAC': self.column_values['src_mac'],
-                                   'profileid': f'profile_{self.saddr}'}
-                        __database__.publish('new_MAC', json.dumps(to_send))
+                    self.publish_to_new_MAC(self.column_values['dst_mac'], self.daddr)
+                    self.publish_to_new_MAC(self.column_values['src_mac'], self.saddr)
 
                     # Add the flow with all the fields interpreted
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur='0',
