@@ -1240,6 +1240,11 @@ class Database(object):
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
 
+        # if the ip we want to block is the same as the profileid,
+        # make the evidence threat_level=info
+        if profileid.split('_')[1] in detection_info:
+            threat_level  = 'info'
+
         evidence_to_send = {
                 'profileid': str(profileid),
                 'twid': str(twid),
