@@ -1026,15 +1026,20 @@ class Module(Module, multiprocessing.Process):
                         self.check_unknown_port(dport, proto.lower(), daddr, profileid, twid, uid, timestamp)
 
                     # --- Detect Multiple Reconnection attempts ---
-                    key = saddr + '-' + daddr + ':' + str(dport)
+                    key = saddr + '-' + daddr
                     if dport != 0 and origstate == 'REJ':
+
+                        # add this conn to the stored number of reconnections
                         current_reconnections = __database__.getReconnectionsForTW(profileid,twid)
                         current_reconnections[key] = current_reconnections.get(key, 0) + 1
                         __database__.setReconnections(profileid, twid, current_reconnections)
-                        for key, count_reconnections in current_reconnections.items():
-                            if count_reconnections >= 5:
-                                description = "Multiple reconnection attempts to Destination IP: {} from IP: {}".format(daddr,saddr)
-                                self.set_evidence_for_multiple_reconnection_attempts(profileid, twid, daddr, description, uid, timestamp)
+
+                        if current_reconnections[key] >= 5:
+                            description = f"Multiple reconnection attempts to Destination IP: {daddr} " \
+                                          f"from IP: {saddr} reconnections: {current_reconnections[key]}"
+                            self.set_evidence_for_multiple_reconnection_attempts(profileid, twid,
+                                                                                 daddr, description,
+                                                                                 uid, timestamp)
 
                     # --- Detect Connection to port 0 ---
                     if proto not in ('igmp', 'icmp', 'ipv6-icmp') and (sport == 0 or dport == 0):
