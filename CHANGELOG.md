@@ -12,7 +12,8 @@
   - detect ICMP timestamp scan, Address scan and address mask scan
   - Support deleting of large log files (arp.log) in case the user doesn't want a copy of the log files after slips is done
   - Update our offline MAC vendor database and add support for getting unknown vendors from an online database
-  -  
+  - Fix FP Multiple reconnection attempts
+  - 
 -0.8.4
 * Slips
   - Add support for local JA3 feeds

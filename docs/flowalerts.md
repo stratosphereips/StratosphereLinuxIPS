@@ -105,7 +105,7 @@ Slips detects any connection to port 0 using any protocol other than 'IGMP' and 
 
 ## Multiple reconnection attempts 
 
-Multiple reconnection attempts in Slips are 5 or more not established flows (reconnections) to the same destination port.
+Multiple reconnection attempts in Slips are 5 or more not established flows (reconnections) to the same destination IP.
 
 
 
