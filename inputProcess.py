@@ -162,7 +162,7 @@ class InputProcess(multiprocessing.Process):
                                 should_be_ignored = True
                                 break
                         if should_be_ignored: continue
-                        file_handler = open(filename + '.log', 'r')
+                        file_handler = open(filename , 'r')
                         open_file_handlers[filename] = file_handler
                         # self.print(f'New File found {filename}', 0, 6)
 
