@@ -712,9 +712,22 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['state_hist'] = line[15]
             except IndexError:
                 self.column_values['state_hist'] = self.column_values['state']
-            # We do not know the indexes of MACs.
-            self.column_values['smac'] = '' #todo
-            self.column_values['dmac'] = ''
+
+            try:
+                self.column_values['state_hist'] = line[15]
+            except IndexError:
+                self.column_values['state_hist'] = self.column_values['state']
+
+            try:
+                self.column_values['smac'] = line[21]
+            except IndexError:
+                self.column_values['smac'] = ''
+
+            try:
+                self.column_values['dmac'] = line[22]
+            except IndexError:
+                self.column_values['dmac'] = ''
+
         elif 'dns.log' in new_line['type']:
             self.column_values['type'] = 'dns'
             try:
