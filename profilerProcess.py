@@ -664,7 +664,7 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             self.column_values['daddr'] = ''
 
-        if 'conn' in new_line['type']:
+        if 'conn.log' in new_line['type']:
             self.column_values['type'] = 'conn'
             try:
                 self.column_values['dur'] = float(line[8])
@@ -713,9 +713,9 @@ class ProfilerProcess(multiprocessing.Process):
             except IndexError:
                 self.column_values['state_hist'] = self.column_values['state']
             # We do not know the indexes of MACs.
-            self.column_values['smac'] = ''
+            self.column_values['smac'] = '' #todo
             self.column_values['dmac'] = ''
-        elif 'dns' in new_line['type']:
+        elif 'dns.log' in new_line['type']:
             self.column_values['type'] = 'dns'
             try:
                 self.column_values['query'] = line[9]
@@ -745,7 +745,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['TTLs'] = line[22]
             except IndexError:
                 self.column_values['TTLs'] = ''
-        elif 'http' in new_line['type']:
+        elif 'http.log' in new_line['type']:
             self.column_values['type'] = 'http'
             try:
                 self.column_values['method'] = line[7]
@@ -791,7 +791,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['resp_fuids'] = line[26]
             except IndexError:
                 self.column_values['resp_fuids'] = ''
-        elif 'ssl' in new_line['type']:
+        elif 'ssl.log' in new_line['type']:
             self.column_values['type'] = 'ssl'
             try:
                 self.column_values['sport'] = line[3]
@@ -855,7 +855,7 @@ class ProfilerProcess(multiprocessing.Process):
             except IndexError:
                 self.column_values['ja3s'] = ''
 
-        elif 'ssh' in new_line['type']:
+        elif 'ssh.log' in new_line['type']:
             self.column_values['type'] = 'ssh'
             try:
                 self.column_values['version'] = line[6]
@@ -947,7 +947,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'irc'
         elif 'long' in new_line['type']:
             self.column_values['type'] = 'long'
-        elif 'dhcp' in new_line['type']:
+        elif 'dhcp.log' in new_line['type']:
             self.column_values['type'] = 'dhcp'
             #  daddr in dhcp.log is the server_addr at index 3, not 4 like most log files
             self.column_values['daddr'] = line[3]
@@ -983,19 +983,19 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'smb_files'
         elif 'smb_mapping' in new_line['type']:
             self.column_values['type'] = 'smb_mapping'
-        elif 'smtp' in new_line['type']:
+        elif 'smtp.log' in new_line['type']:
             # "ts uid id.orig_h id.orig_p id.resp_h id.resp_p trans_depth helo mailfrom
             # rcptto date from to reply_to msg_id in_reply_to subject x_originating_ip
             # first_received second_received last_reply path user_agent tls fuids is_webmail"
             self.column_values['type'] = 'smtp'
             self.column_values['last_reply'] = line[20]
-        elif 'socks' in new_line['type']:
+        elif 'socks.log' in new_line['type']:
             self.column_values['type'] = 'socks'
-        elif 'syslog' in new_line['type']:
+        elif 'syslog.log' in new_line['type']:
             self.column_values['type'] = 'syslog'
-        elif 'tunnel' in new_line['type']:
+        elif 'tunnel.log' in new_line['type']:
             self.column_values['type'] = 'tunnel'
-        elif 'notice' in new_line['type']:
+        elif 'notice.log' in new_line['type']:
             #fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	fuid	file_mime_type	file_desc
             # proto	note	msg	sub	src	dst	p	n	peer_descr	actions	suppress_for
             self.column_values['type'] = 'notice'
@@ -1026,7 +1026,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['scanning_ip'] = self.column_values['saddr']
             self.column_values['scanned_port'] =  self.column_values['dport']
             self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
-        elif 'files' in new_line['type']:
+        elif 'files.log' in new_line['type']:
             """ Parse the fields we're interested in in the files.log file """
             # the slash before files to distinguish between 'files' in the dir name and file.log
             self.column_values.update({'type' :'files',
@@ -1040,7 +1040,7 @@ class ProfilerProcess(multiprocessing.Process):
                                 'analyzers' : line[7],
                                 'sha1' : line[19]})
 
-        elif 'arp' in new_line['type']:
+        elif 'arp.log' in new_line['type']:
             self.column_values['type'] = 'arp'
             self.column_values['operation'] = line[1]
             self.column_values['src_mac'] = line[2]
@@ -1249,7 +1249,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # set daddr to src for now because the notice that contains portscan doesn't have a dst field and slips needs it to work
                 self.column_values.update({'daddr' : line.get('dst', self.column_values['saddr']) })
 
-        elif 'files' in file_type:
+        elif 'files.log' in file_type:
             """ Parse the fields we're interested in in the files.log file """
             # the slash before files to distinguish between 'files' in the dir name and file.log
             self.column_values.update({'type' :'files',
@@ -2072,6 +2072,10 @@ class ProfilerProcess(multiprocessing.Process):
                 smac = self.column_values.get('smac')
                 dmac = self.column_values.get('dmac')
 
+                if smac:
+                    self.publish_to_new_MAC(smac, self.saddr)
+                if dmac:
+                    self.publish_to_new_MAC(dmac, self.daddr)
 
             elif 'dns' in flow_type:
                 query = self.column_values['query']
