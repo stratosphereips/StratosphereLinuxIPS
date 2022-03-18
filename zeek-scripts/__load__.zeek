@@ -3,7 +3,7 @@
 @load ./ja3s.zeek
 @load ./arp.zeek
 @load ./icmp-scans.zeek
-
+@load protocols/conn/mac-logging.zeek
 
 @unload protocols/ssl/validate-certs
 
