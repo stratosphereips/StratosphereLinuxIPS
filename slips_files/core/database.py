@@ -2757,7 +2757,7 @@ class Database(object):
         # info will be stored in OrgInfo key {'facebook_asn': .., 'twitter_domains': ...}
         org_info = self.rcache.hget('OrgInfo', f'{org}_{info_type}')
         if not org_info:
-            org_info = '{}'
+            org_info = '[]'
         return org_info
 
     def set_whitelist(self, type, whitelist_dict):

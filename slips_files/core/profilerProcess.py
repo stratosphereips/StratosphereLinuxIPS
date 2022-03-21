@@ -1645,7 +1645,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['filesize'] = ''
 
 
-    def is_whitelisted_asn(self, ip, org)
+    def is_whitelisted_asn(self, ip, org):
         ip_data = __database__.getIPData(ip)
         try:
             ip_asn = ip_data['asn']['asnorg']
@@ -1683,6 +1683,34 @@ class ProfilerProcess(multiprocessing.Process):
             __database__.publish('new_MAC', json.dumps(to_send))
 
 
+        # check if we have IPs whitelisted
+        whitelisted_IPs = __database__.get_whitelist('IPs')
+
+        if whitelisted_IPs:
+            #self.print('Check the IPs')
+            # Check if the IPs are whitelisted
+            ips_to_whitelist = list(whitelisted_IPs.keys())
+
+            if saddr in ips_to_whitelist:
+                # The flow has the src IP to whitelist
+                from_ = whitelisted_IPs[saddr]['from']
+                what_to_ignore = whitelisted_IPs[saddr]['what_to_ignore']
+                if ('src' in from_ or 'both' in from_)\
+                        and ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                    # self.print(f"Whitelisting the src IP {self.column_values['saddr']}")
+                    return True
+
+            if daddr in ips_to_whitelist: # should be if and not elif
+                # The flow has the dst IP to whitelist
+                from_ = whitelisted_IPs[daddr]['from']
+                what_to_ignore = whitelisted_IPs[daddr]['what_to_ignore']
+                if ('dst' in from_  or 'both' in from_) \
+                        and ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                    # self.print(f"Whitelisting the dst IP {self.column_values['daddr']}")
+                    return True
+
+        # check if we have orgs whitelisted
+        whitelisted_orgs = __database__.get_whitelist('organizations')
 
         # Check if the orgs are whitelisted
         if whitelisted_orgs:
