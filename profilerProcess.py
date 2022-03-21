@@ -280,7 +280,6 @@ class ProfilerProcess(multiprocessing.Process):
                 self.read_whitelist()
 
 
-
         # store everything in the cache db because we'll be needing this info in the evidenceProcess
         __database__.set_whitelist("IPs", whitelisted_IPs)
         __database__.set_whitelist("domains", whitelisted_domains)
@@ -1832,12 +1831,14 @@ class ProfilerProcess(multiprocessing.Process):
 
                 if 'flows' in what_to_ignore or 'both' in what_to_ignore:
                     # We want to block flows from this org. get the domains of this flow based on the direction.
-                    if 'both' in from_ : domains_to_check = domains_to_check_src + domains_to_check_dst
-                    elif 'src' in from_: domains_to_check = domains_to_check_src
-                    elif 'dst' in from_: domains_to_check = domains_to_check_dst
-                    # get the ips of this org?? #todo
-                    org_subnets = json.loads(whitelisted_orgs[org].get('IPs','{}'))
-
+                    if 'both' in from_:
+                        domains_to_check = domains_to_check_src + domains_to_check_dst
+                    elif 'src' in from_:
+                        domains_to_check = domains_to_check_src
+                    elif 'dst' in from_:
+                        domains_to_check = domains_to_check_dst
+                    # get the ips of this org
+                    org_subnets = json.loads(__database__.get_org_info(org, 'IPs'))
 
                     if 'src' in from_ or 'both' in from_:
                         # Method 1 Check if src IP belongs to a whitelisted organization range
@@ -1865,7 +1866,7 @@ class ProfilerProcess(multiprocessing.Process):
                             pass
 
                         # Method 3 Check if the domains of this flow belong to this org
-                        org_domains = json.loads(whitelisted_orgs[org].get('domains','{}'))
+                        org_domains = json.loads(__database__.get_org_info(org, 'domains'))
                         # domains to check are usually 1 or 2 domains
                         for flow_domain in domains_to_check:
                             if org in flow_domain:
@@ -1906,7 +1907,9 @@ class ProfilerProcess(multiprocessing.Process):
                         ip_data = __database__.getIPData(self.column_values['daddr'])
                         try:
                             ip_asn = ip_data['asn']['asnorg']
-                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in whitelisted_orgs[org]['asn']):
+                            org_asn = json.loads(__database__.get_org_info(org, 'asn'))
+                            if ip_asn and ip_asn != 'Unknown' and \
+                                    (org.lower() in ip_asn.lower() or ip_asn in org_asn):
                                 # this ip belongs to a whitelisted org, ignore flow
                                 # self.print(f"The ASN {ip_asn} of IP {self.column_values['daddr']} "
                                 #            f"is in the values of org {org}. Whitelisted.")
