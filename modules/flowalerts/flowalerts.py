@@ -317,6 +317,70 @@ class Module(Module, multiprocessing.Process):
         # empty the list of arpa queries timestamps, we don't need thm anymore
         self.dns_arpa_queries[profileid] = []
 
+    def is_well_known_org(self, ip):
+        """get the SNI, ASN, and  rDNS of the IP to check if it belongs
+         to a well-known org"""
+        supported_orgs = ('google', 'microsoft', 'apple', 'facebook', 'twitter')
+        ip_data = __database__.getIPData(ip)
+        try:
+            ip_asn = ip_data['asn']['asnorg']
+        except (KeyError, TypeError):
+            # No asn data for this ip
+            ip_asn = False
+
+        try:
+            SNI = ip_data['SNI']
+            if type(SNI) == list:
+                SNI = SNI[0]
+                if SNI in (None, ''):
+                    SNI = False
+        except (KeyError, TypeError):
+            # No SNI data for this ip
+            SNI = False
+
+        try:
+            rdns = ip_data['reverse_dns']
+        except (KeyError, TypeError):
+            # No SNI data for this ip
+            rdns = False
+
+        flow_domain = rdns or SNI
+        for org in supported_orgs:
+            if ip_asn and ip_asn != 'Unknown':
+                org_asn = json.loads(__database__.get_org_info(org, 'asn'))
+                if org.lower() in ip_asn.lower() or ip_asn in org_asn:
+                    return True
+            # remove the asn from ram
+            org_asn = ''
+            if flow_domain:
+                # we have the rdns or sni of this flow , now check
+                if org in flow_domain:
+                    # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
+                    return True
+
+                org_domains = json.loads(__database__.get_org_info(org, 'domains'))
+
+                flow_TLD = flow_domain.split(".")[-1]
+                for org_domain in org_domains:
+                    org_domain_TLD = org_domain.split(".")[-1]
+                    # make sure the 2 domains have the same same top level domain
+                    if flow_TLD != org_domain_TLD:
+                        continue
+
+                    # match subdomains too
+                    # return true if org has org.com, and the flow_domain is xyz.org.com
+                    # or if org has xyz.org.com, and the flow_domain is org.com return true
+                    if org_domain in flow_domain or flow_domain in org_domain :
+                        return True
+
+                # remove from ram
+                org_domains = ''
+
+            org_ips = json.loads(__database__.get_org_info(org, 'IPs'))
+            if ip in org_ips:
+                return True
+
+
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
 
@@ -366,6 +430,9 @@ class Module(Module, multiprocessing.Process):
                 if self.check_if_resolution_was_made_by_different_version(profileid, daddr):
                     return False
 
+                if self.is_well_known_org(daddr):
+                    # if the SNI or rDNS of the IP matches a well-known org, then this is a FP
+                    return False
                 #self.print(f'Alerting after timer conn without dns on {daddr},
                 self.helper.set_evidence_conn_without_dns(daddr, timestamp, profileid, twid, uid)
                 # This UID will never appear again, so we can remove it and

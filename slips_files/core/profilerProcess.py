@@ -236,12 +236,16 @@ class ProfilerProcess(multiprocessing.Process):
                     # Validate the type before processing
                     try:
                         if ('ip' in type_ and
-                            (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
-                            whitelisted_IPs[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                            (validators.ip_address.ipv6(data)
+                             or validators.ip_address.ipv4(data))):
+                            whitelisted_IPs[data] = {'from': from_,
+                                                     'what_to_ignore': what_to_ignore}
                         elif 'domain' in type_ and validators.domain(data):
-                            whitelisted_domains[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                            whitelisted_domains[data] = {'from': from_,
+                                                         'what_to_ignore': what_to_ignore}
                         elif 'mac' in type_ and validators.mac_address(data):
-                            whitelisted_mac[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                            whitelisted_mac[data] = {'from': from_,
+                                                    'what_to_ignore': what_to_ignore}
                         elif 'org' in type_:
                             #organizations dicts look something like this:
                             #  {'google': {'from':'dst',
@@ -253,7 +257,8 @@ class ProfilerProcess(multiprocessing.Process):
                                 whitelisted_orgs[data]['what_to_ignore'] = what_to_ignore
                             except KeyError:
                                 # first time seeing this org
-                                whitelisted_orgs[data] = {'from' : from_, 'what_to_ignore' : what_to_ignore}
+                                whitelisted_orgs[data] = {'from' : from_,
+                                                          'what_to_ignore' : what_to_ignore}
 
                         else:
                             self.print(f"{data} is not a valid {type_}.",1,0)
