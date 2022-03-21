@@ -1714,7 +1714,7 @@ class ProfilerProcess(multiprocessing.Process):
             pass
         return domains_to_check_dst, domains_to_check_src
 
-    def is_whitelisted_asn(self, ip, org)
+    def is_whitelisted_asn(self, ip, org):
         ip_data = __database__.getIPData(ip)
         try:
             ip_asn = ip_data['asn']['asnorg']
@@ -1816,7 +1816,8 @@ class ProfilerProcess(multiprocessing.Process):
                 # The flow has the src IP to whitelist
                 from_ = whitelisted_IPs[saddr]['from']
                 what_to_ignore = whitelisted_IPs[saddr]['what_to_ignore']
-                if ('src' in from_ or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                if ('src' in from_ or 'both' in from_)\
+                        and ('flows' in what_to_ignore or 'both' in what_to_ignore):
                     # self.print(f"Whitelisting the src IP {self.column_values['saddr']}")
                     return True
 
@@ -1824,7 +1825,8 @@ class ProfilerProcess(multiprocessing.Process):
                 # The flow has the dst IP to whitelist
                 from_ = whitelisted_IPs[daddr]['from']
                 what_to_ignore = whitelisted_IPs[daddr]['what_to_ignore']
-                if ('dst' in from_  or 'both' in from_) and ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                if ('dst' in from_  or 'both' in from_) \
+                        and ('flows' in what_to_ignore or 'both' in what_to_ignore):
                     # self.print(f"Whitelisting the dst IP {self.column_values['daddr']}")
                     return True
 

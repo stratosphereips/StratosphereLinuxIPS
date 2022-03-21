@@ -385,7 +385,7 @@ class EvidenceProcess(multiprocessing.Process):
         # the database won't return the whitelist
         # so we need to try several times until the db returns the populated whitelist
         # empty dicts evaluate to False
-        while bool(whitelist) is False and max_tries!=0:
+        while bool(whitelist) == False and max_tries != 0:
             # try max 10 times to get the whitelist, if it's still empty then it's not empty by mistake
             max_tries -=1
             whitelist = __database__.get_all_whitelist()
@@ -521,10 +521,11 @@ class EvidenceProcess(multiprocessing.Process):
                         ip_data = __database__.getIPData(ip)
                         if ip_data:
                             ip_asn = ip_data.get('asn',{'asnorg':''})['asnorg']
+                            org_asn = json.loads(__database__.get_org_info(org, 'asn'))
                             # make sure the asn field contains a value
                             if (ip_asn not in ('','Unknown')
                                 and (org.lower() in ip_asn.lower()
-                                        or ip_asn in whitelisted_orgs[org].get('asn',''))):
+                                        or ip_asn in org_asn)):
                                 # this ip belongs to a whitelisted org, ignore alert
                                 #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
                                 return True
@@ -532,7 +533,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # Method 2 using the organization's list of ips
                     # ip doesn't have asn info, search in the list of organization IPs
                     try:
-                        org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
+                        org_subnets = json.loads(__database__.get_org_info(org, 'IPs'))
                         ip = ipaddress.ip_address(ip)
                         for network in org_subnets:
                             # check if ip belongs to this network
@@ -543,12 +544,13 @@ class EvidenceProcess(multiprocessing.Process):
                         # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
                         # and ip doesn't have asn info.
                         pass
+
                 if data_type == 'domain':
                     flow_domain = data
                     flow_TLD = flow_domain.split(".")[-1]
                     # Method 3 Check if the domains of this flow belong to this org domains
                     try:
-                        org_domains = json.loads(whitelisted_orgs[org].get('domains','{}'))
+                        org_domains = json.loads(__database__.get_org_info(org, 'domains'))
                         if org in flow_domain:
                             # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
                             return True
