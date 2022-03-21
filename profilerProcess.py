@@ -1714,6 +1714,22 @@ class ProfilerProcess(multiprocessing.Process):
             pass
         return domains_to_check_dst, domains_to_check_src
 
+    def is_whitelisted_asn(self, ip, org)
+        ip_data = __database__.getIPData(ip)
+        try:
+            ip_asn = ip_data['asn']['asnorg']
+            org_asn = json.loads(__database__.get_org_info(org, 'asn'))
+            if ip_asn and ip_asn != 'Unknown' and \
+                    (org.lower() in ip_asn.lower() or ip_asn in org_asn):
+                # this ip belongs to a whitelisted org, ignore flow
+                # self.print(f"The ASN {ip_asn} of IP {self.column_values['daddr']} "
+                #            f"is in the values of org {org}. Whitelisted.")
+                return True
+        except (KeyError, TypeError):
+            # No asn data for src ip
+            pass
+
+
     def is_whitelisted(self) -> bool:
         """
         Checks if the src IP or dst IP or domain or organization of this flow is whitelisted.
@@ -1854,16 +1870,10 @@ class ProfilerProcess(multiprocessing.Process):
 
 
                         # Method 2 Check if the ASN of this src IP is any of these organizations
-                        ip_data = __database__.getIPData(saddr)
-                        try:
-                            ip_asn = ip_data['asn']['asnorg']
-                            if ip_asn and ip_asn != 'Unknown' and (org.lower() in ip_asn.lower() or ip_asn in whitelisted_orgs[org]['asn']):
-                                # this ip belongs to a whitelisted org, ignore flow
-                                # self.print(f"The ASN {ip_asn} of IP {saddr} is in the values of org {org}. Whitelisted.")
-                                return True
-                        except (KeyError, TypeError):
-                            # No asn data for src ip
-                            pass
+                        if self.is_whitelisted_asn(saddr, org):
+                            # this ip belongs to a whitelisted org, ignore flow
+                            # self.print(f"The ASN {ip_asn} of IP {saddr} is in the values of org {org}. Whitelisted.")
+                            return True
 
                         # Method 3 Check if the domains of this flow belong to this org
                         org_domains = json.loads(__database__.get_org_info(org, 'domains'))
@@ -1903,20 +1913,13 @@ class ProfilerProcess(multiprocessing.Process):
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
                                 return False
+
                         # Method 2 Check if the ASN of this dst IP is any of these organizations
-                        ip_data = __database__.getIPData(self.column_values['daddr'])
-                        try:
-                            ip_asn = ip_data['asn']['asnorg']
-                            org_asn = json.loads(__database__.get_org_info(org, 'asn'))
-                            if ip_asn and ip_asn != 'Unknown' and \
-                                    (org.lower() in ip_asn.lower() or ip_asn in org_asn):
-                                # this ip belongs to a whitelisted org, ignore flow
-                                # self.print(f"The ASN {ip_asn} of IP {self.column_values['daddr']} "
-                                #            f"is in the values of org {org}. Whitelisted.")
-                                return True
-                        except (KeyError, TypeError):
-                            # No asn data for src ip
-                            pass
+                        if self.is_whitelisted_asn(saddr, org):
+                            # this ip belongs to a whitelisted org, ignore flow
+                            # self.print(f"The ASN {ip_asn} of IP {saddr} is in the values of org {org}. Whitelisted.")
+                            return True
+
 
                         # Method 3 Check if the domains of this flow belong to this org
                         for domain in org_domains:
