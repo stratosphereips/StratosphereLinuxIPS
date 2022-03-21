@@ -1659,13 +1659,13 @@ class ProfilerProcess(multiprocessing.Process):
         else:
             ip_obj = ipaddress.IPv6Address(ip)
 
-
         if (mac not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff')
-                and not (ip_obj.is_multicast or ip_obj.is_link_local)):
+            and not (ip_obj.is_multicast or ip_obj.is_link_local)):
             # send the src and dst MAC to IP_Info module to get vendor info about this MAC
             to_send = {'MAC': mac,
                        'profileid': f'profile_{ip}'}
             __database__.publish('new_MAC', json.dumps(to_send))
+
 
 
 

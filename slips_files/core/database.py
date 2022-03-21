@@ -2744,9 +2744,23 @@ class Database(object):
         : param org_info: a json serialized list of asns or ips or domains
         :param info_type: supported types are 'asn', 'domains', 'IPs'
         """
-        self.rcache.hset(org, info_type, org_info)
+        # info will be stored in OrgInfo key {'facebook_asn': .., 'twitter_domains': ...}
+        self.rcache.hset('OrgInfo', f'{org}_{info_type}', org_info)
 
-    def set_whitelist(self,type, whitelist_dict):
+    def get_org_info(self, org, info_type) -> str:
+        """
+        get the ASN, IP and domains of an org from the db
+        :param org: supported orgs are ('google', 'microsoft', 'apple', 'facebook', 'twitter')
+        :param info_type: supported types are 'asn', 'domains', 'IPs'
+        " returns a json serialized dict with info
+        """
+        # info will be stored in OrgInfo key {'facebook_asn': .., 'twitter_domains': ...}
+        org_info = self.rcache.hget('OrgInfo', f'{org}_{info_type}')
+        if not org_info:
+            org_info = '{}'
+        return org_info
+
+    def set_whitelist(self, type, whitelist_dict):
         """
         Store the whitelist_dict in the given key
         :param type: supporte types are IPs, domains and organizations
