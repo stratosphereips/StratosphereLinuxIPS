@@ -2698,6 +2698,16 @@ class Database(object):
         """ returns a dict with module names as keys and pids as values """
         return self.r.hgetall('PIDs')
 
+
+    def set_org_info(self, org, org_info, info_type):
+        """
+        store ASN, IP and domains of an org in the db
+        :param org: supported orgs are ('google', 'microsoft', 'apple', 'facebook', 'twitter')
+        : param org_info: a json serialized list of asns or ips or domains
+        :param info_type: supported types are 'asn', 'domains', 'IPs'
+        """
+        self.rcache.hset(org, info_type, org_info)
+
     def set_whitelist(self,type, whitelist_dict):
         """
         Store the whitelist_dict in the given key
@@ -2715,7 +2725,7 @@ class Database(object):
         Whitelist supports different keys like : IPs domains and organizations
         this function is used to check if we have any of the above keys whitelisted
         """
-        whitelist = self.r.hget('whitelist',key)
+        whitelist = self.r.hget('whitelist', key)
         if whitelist:
             return json.loads(whitelist)
         else:

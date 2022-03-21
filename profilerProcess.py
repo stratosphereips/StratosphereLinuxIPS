@@ -167,24 +167,21 @@ class ProfilerProcess(multiprocessing.Process):
         supported_orgs = ('google', 'microsoft', 'apple', 'facebook', 'twitter')
 
         for org in supported_orgs:
-            # each org will have a key in this dict
-            orgs_info = {org: {}}
-
             # Store the IPs, domains and asn of this org in the db
             org_subnets = self.load_org_IPs(org)
             if org_subnets:
                 # Store the IPs of this org
-                orgs_info[org].update({'IPs': json.dumps(org_subnets)})
+                 __database__.set_org_info(org, json.dumps(org_subnets), 'IPs')
 
             org_domains = self.load_org_domains(org)
             if org_domains:
-                # Store the ASN of this org
-                orgs_info[org].update({'domains': json.dumps(org_domains)})
+                 __database__.set_org_info(org, json.dumps(org_domains), 'domains')
 
             org_asn = self.load_org_asn(org)
             if org_asn:
-                # Store the ASN of this org
-                orgs_info[org].update({'asn': json.dumps(org_asn)})
+                 __database__.set_org_info(org, json.dumps(org_asn), 'asn')
+
+
 
 
     def read_whitelist(self):
