@@ -72,9 +72,9 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
 
 
 @pytest.mark.parametrize("zeek_dir_path,expected_profiles, expected_evidence,  output_dir",
-     [('dataset/sample_zeek_files',4,'SSL certificate validation failed with (certificate is not yet valid)','sample_zeek_files/'),
-      ('dataset/sample_zeek_files-2',20,'horizontal port scan','sample_zeek_files-2/')])
-def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,  output_dir):
+     [('dataset/sample_zeek_files', 4,'SSL certificate validation failed with (certificate is not yet valid)','sample_zeek_files/'),
+      ('dataset/sample_zeek_files-2', 20,'horizontal port scan', 'sample_zeek_files-2/')])
+def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence, output_dir):
     import time
     time.sleep(3)
     try:

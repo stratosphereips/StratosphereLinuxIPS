@@ -150,7 +150,8 @@ def test_setInfoForDomains(database):
     database.setInfoForDomains(domain,domain_data)
 
     stored_data = database.getDomainData(domain)
-    assert  stored_data == {'threatintelligence': 'sample data'}
+    assert 'threatintelligence' in stored_data
+    assert stored_data['threatintelligence'] = 'sample data'
 
 def test_subscribe(database):
     # invalid channel
