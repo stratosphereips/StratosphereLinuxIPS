@@ -51,6 +51,8 @@ class ProfilerProcess(multiprocessing.Process):
         # Read the whitelist
         # anything in this list will be ignored
         self.whitelist.read_whitelist()
+        self.read_orgs_info()
+        self.whitelist.read_whitelist()
         # Start the DB
         __database__.start(self.config)
         # Set the database output queue
@@ -144,6 +146,245 @@ class ProfilerProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default
             self.label = 'unknown'
+
+    def read_orgs_info(self):
+        """Function to read and store all the domains, ASN,
+         IPs we have about an org andd store in the db"""
+
+        supported_orgs = ('google', 'microsoft', 'apple', 'facebook', 'twitter')
+
+        for org in supported_orgs:
+            # each org will have a key in this dict
+            orgs_info = {org: {}}
+
+            # Store the IPs, domains and asn of this org in the db
+            org_subnets = self.load_org_IPs(org)
+            if org_subnets:
+                # Store the IPs of this org
+                orgs_info[org].update({'IPs': json.dumps(org_subnets)})
+
+            org_domains = self.load_org_domains(org)
+            if org_domains:
+                # Store the ASN of this org
+                orgs_info[org].update({'domains': json.dumps(org_domains)})
+
+            org_asn = self.load_org_asn(org)
+            if org_asn:
+                # Store the ASN of this org
+                orgs_info[org].update({'asn': json.dumps(org_asn)})
+
+
+    def read_whitelist(self):
+        """ Reads the content of whitelist.conf and stores information about each ip/org/domain in the database """
+
+        # since this function can be run when the user modifies whitelist.conf
+        # we need to check if the dicts are already there
+        whitelisted_IPs = __database__.get_whitelist('IPs')
+        whitelisted_domains = __database__.get_whitelist('domains')
+        whitelisted_orgs = __database__.get_whitelist('organizations')
+        whitelisted_mac = __database__.get_whitelist('mac')
+
+        try:
+            with open(self.whitelist_path) as whitelist:
+                # Process lines after comments
+                line_number = 0
+                line = whitelist.readline()
+                while line:
+                    line_number+=1
+                    if line.startswith('"IoCType"'):
+                        line = whitelist.readline()
+                        continue
+
+                    # check if the user commented an org, ip or domain that was whitelisted
+                    if line.startswith('#'):
+                        if whitelisted_IPs:
+                            for ip in list(whitelisted_IPs):
+                                # make sure the user commented the line we have in cache exactly
+                                if ip in line and whitelisted_IPs[ip]['from'] in line\
+                                        and whitelisted_IPs[ip]['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_ips
+                                    whitelisted_IPs.pop(ip)
+                                    break
+
+                        if whitelisted_domains:
+                            for domain in list(whitelisted_domains):
+                                if domain in line \
+                                and whitelisted_domains[domain]['from'] in line \
+                                and whitelisted_domains[domain]['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_domains
+                                    whitelisted_domains.pop(domain)
+                                    break
+
+                        if whitelisted_orgs:
+                            for org in list(whitelisted_orgs):
+                                if org in line \
+                                and whitelisted_orgs[org]['from'] in line \
+                                and whitelisted_orgs[org]['what_to_ignore'] in line:
+                                    # remove that entry from whitelisted_domains
+                                    whitelisted_orgs.pop(org)
+                                    break
+
+                        line = whitelist.readline()
+                        continue
+                    # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
+                    line = line.replace("\n","").replace(" ","").split(",")
+                    try:
+                        type_, data, from_, what_to_ignore = (line[0]).lower(), line[1], line[2], line[3]
+                    except IndexError:
+                        # line is missing a column, ignore it.
+                        self.print(f"Line {line_number} in whitelist.conf is missing a column. Skipping.")
+                        line = whitelist.readline()
+                        continue
+
+                    # Validate the type before processing
+                    try:
+                        if ('ip' in type_ and
+                            (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
+                            whitelisted_IPs[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                        elif 'domain' in type_ and validators.domain(data):
+                            whitelisted_domains[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                        elif 'mac' in type_ and validators.mac_address(data):
+                            whitelisted_mac[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                        elif 'org' in type_:
+                            #organizations dicts look something like this:
+                            #  {'google': {'from':'dst',
+                            #               'what_to_ignore': 'alerts'
+                            #               'IPs': {'34.64.0.0/10': subnet}}
+                            try:
+                                # org already whitelisted, update info
+                                whitelisted_orgs[data]['from'] = from_
+                                whitelisted_orgs[data]['what_to_ignore'] = what_to_ignore
+                            except KeyError:
+                                # first time seeing this org
+                                whitelisted_orgs[data] = {'from' : from_, 'what_to_ignore' : what_to_ignore}
+
+                        else:
+                            self.print(f"{data} is not a valid {type_}.",1,0)
+                    except:
+                        self.print(f"Line {line_number} in whitelist.conf is invalid. Skipping.")
+                    line = whitelist.readline()
+        except FileNotFoundError:
+            self.print(f"Can't find {self.whitelist_path}, using slips default whitelist.conf instead")
+            if self.whitelist_path != 'whitelist.conf':
+                self.whitelist_path = 'whitelist.conf'
+                self.read_whitelist()
+
+
+
+        # store everything in the cache db because we'll be needing this info in the evidenceProcess
+        __database__.set_whitelist("IPs", whitelisted_IPs)
+        __database__.set_whitelist("domains", whitelisted_domains)
+        __database__.set_whitelist("organizations", whitelisted_orgs)
+        __database__.set_whitelist("mac", whitelisted_mac)
+
+        return line_number
+
+    def load_org_asn(self, org) -> list :
+        """
+        Reads the specified org's asn from slips_files/organizations_info and stores the info in the database
+        org: 'google', 'facebook', 'twitter', etc...
+        returns a list containing the org's asn
+        """
+        try:
+            # Each file is named after the organization's name followed by _asn
+            org_asn =[]
+            file = f'slips_files/organizations_info/{org}_asn'
+            with open(file,'r') as f:
+                line = f.readline()
+                while line:
+                    # each line will be something like this: 34.64.0.0/10
+                    line = line.replace("\n","").strip()
+                    # Read all as upper
+                    org_asn.append(line.upper())
+                    line = f.readline()
+            return org_asn
+
+        except (FileNotFoundError, IOError):
+            # theres no slips_files/organizations_info/{org}_asn for this org
+            # see if the org has asn cached in our db
+            asn_cache = __database__.get_asn_cache()
+            org_asn =[]
+            for asn in asn_cache:
+                if org in asn.lower():
+                    org_asn.append(org)
+            if org_asn != []: return org_asn
+            return False
+
+    def load_org_domains(self, org) -> list :
+        """
+        Reads the specified org's domains from slips_files/organizations_info and stores the info in the database
+        org: 'google', 'facebook', 'twitter', etc...
+        returns a list containing the org's domains
+        """
+        try:
+            # Each file is named after the organization's name followed by _domains
+            domains =[]
+            file = f'slips_files/organizations_info/{org}_domains'
+            with open(file,'r') as f:
+                line = f.readline()
+                while line:
+                    # each line will be something like this: 34.64.0.0/10
+                    line = line.replace("\n","").strip()
+                    domains.append(line.lower())
+                    line = f.readline()
+            return domains
+        except (FileNotFoundError, IOError):
+            return False
+
+    def load_org_IPs(self, org) -> list :
+        """
+        Reads the specified org's info from slips_files/organizations_info and stores the info in the database
+        if there's no file for this org, it get the IP ranges from asnlookup.com
+        org: 'google', 'facebook', 'twitter', etc...
+        returns a list of this organization's subnets
+        """
+        try:
+            # Each file is named after the organization's name
+            # Each line of the file containes an ip range, for example: 34.64.0.0/10
+            org_subnets = []
+            file = f'slips_files/organizations_info/{org}'
+            with open(file,'r') as f:
+                line = f.readline()
+                while line:
+                    # each line will be something like this: 34.64.0.0/10
+                    line = line.replace("\n","").strip()
+                    try:
+                        # make sure this line is a valid network
+                        is_valid_line = ipaddress.ip_network(line)
+                        org_subnets.append(line)
+                    except ValueError:
+                        # not a valid line, ignore it
+                        pass
+                    line = f.readline()
+            return org_subnets
+        except (FileNotFoundError, IOError):
+            # there's no slips_files/organizations_info/{org} for this org
+            org_subnets = []
+            # see if we can get asn about this org
+            try:
+                response = requests.get('http://asnlookup.com/api/lookup?org=' + org.replace('_', ' '),
+                                        headers ={  'User-Agent': 'ASNLookup PY/Client'}, timeout = 10)
+            except requests.exceptions.ConnectionError:
+                # Connection reset by peer
+                return False
+            ip_space = json.loads(response.text)
+            if ip_space:
+                with open(f'slips_files/organizations_info/{org}','w') as f:
+                    for subnet in ip_space:
+                        # get ipv4 only
+                        if ':' not in subnet:
+                            try:
+                                # make sure this line is a valid network
+                                is_valid_line = ipaddress.ip_network(subnet)
+                                f.write(subnet + '\n')
+                                org_subnets.append(subnet)
+                            except ValueError:
+                                # not a valid line, ignore it
+                                continue
+                return org_subnets
+            else:
+                # can't get org IPs from asnlookup.com
+                return False
 
     def define_type(self, line):
         """
