@@ -1242,8 +1242,8 @@ class Database(object):
 
         # if the ip we want to block is the same as the profileid,
         # make the evidence threat_level=info
-        if profileid.split('_')[1] in detection_info:
-            threat_level  = 'info'
+        if profileid.split('_')[1] in str(detection_info):
+            threat_level = 'info'
 
         evidence_to_send = {
                 'profileid': str(profileid),

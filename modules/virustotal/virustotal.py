@@ -18,7 +18,7 @@ import validators
 
 class Module(Module, multiprocessing.Process):
     name = 'virustotal'
-    description = 'IP, domain and file hash lookup on VirusTotal'
+    description = 'IP, domain and file hash lookup on Virustotal'
     authors = ['Dita Hollmannova, Kamila Babayeva', 'Alya Gomaa', 'Sebastian Garcia']
 
     def __init__(self, outputqueue, config, testing=False):
@@ -59,7 +59,7 @@ class Module(Module, multiprocessing.Process):
         # this will be true when there's a problem with the API key, then the module will exit
         self.incorrect_API_key = False
 
-    def __read_configuration(self) -> str:
+    def __read_configuration(self):
         """ Read the configuration file for what we need """
         # Get the time of log report
         try:

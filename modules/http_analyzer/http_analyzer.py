@@ -146,10 +146,10 @@ class Module(Module, multiprocessing.Process):
         user_agent:str = __database__.get_user_agent_from_profile(profileid)
         if not user_agent:
             return False
-        os_type = user_agent['os_type'].lower()
-        os_name = user_agent['os_name'].lower()
-        browser = user_agent['browser'].lower()
-        user_agent = user_agent['user_agent']
+        os_type = user_agent.get('os_type', '').lower()
+        os_name = user_agent.get('os_name', '').lower()
+        browser = user_agent.get('browser', '').lower()
+        user_agent = user_agent.get('user_agent', '')
 
         if 'safari' in browser and 'apple' not in vendor :
             self.set_evidence_incompatible_user_agent(host, uri, vendor, user_agent, timestamp, profileid, twid, uid)
