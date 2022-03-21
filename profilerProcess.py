@@ -64,6 +64,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.read_configuration()
         # Read the whitelist
         # anything in this list will be ignored
+        self.read_orgs_info()
         self.read_whitelist()
         # Start the DB
         __database__.start(self.config)
@@ -159,6 +160,33 @@ class ProfilerProcess(multiprocessing.Process):
             # By default
             self.label = 'unknown'
 
+    def read_orgs_info(self):
+        """Function to read and store all the domains, ASN,
+         IPs we have about an org andd store in the db"""
+
+        supported_orgs = ('google', 'microsoft', 'apple', 'facebook', 'twitter')
+
+        for org in supported_orgs:
+            # each org will have a key in this dict
+            orgs_info = {org: {}}
+
+            # Store the IPs, domains and asn of this org in the db
+            org_subnets = self.load_org_IPs(org)
+            if org_subnets:
+                # Store the IPs of this org
+                orgs_info[org].update({'IPs': json.dumps(org_subnets)})
+
+            org_domains = self.load_org_domains(org)
+            if org_domains:
+                # Store the ASN of this org
+                orgs_info[org].update({'domains': json.dumps(org_domains)})
+
+            org_asn = self.load_org_asn(org)
+            if org_asn:
+                # Store the ASN of this org
+                orgs_info[org].update({'asn': json.dumps(org_asn)})
+
+
     def read_whitelist(self):
         """ Reads the content of whitelist.conf and stores information about each ip/org/domain in the database """
 
@@ -185,7 +213,8 @@ class ProfilerProcess(multiprocessing.Process):
                         if whitelisted_IPs:
                             for ip in list(whitelisted_IPs):
                                 # make sure the user commented the line we have in cache exactly
-                                if ip in line and whitelisted_IPs[ip]['from'] in line and whitelisted_IPs[ip]['what_to_ignore'] in line:
+                                if ip in line and whitelisted_IPs[ip]['from'] in line\
+                                        and whitelisted_IPs[ip]['what_to_ignore'] in line:
                                     # remove that entry from whitelisted_ips
                                     whitelisted_IPs.pop(ip)
                                     break
@@ -208,13 +237,12 @@ class ProfilerProcess(multiprocessing.Process):
                                     whitelisted_orgs.pop(org)
                                     break
 
-                        # todo if the user closes slips, changes the whitelist, and reopens slips , slips will still have the old whitelist in the cache!
                         line = whitelist.readline()
                         continue
                     # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
                     line = line.replace("\n","").replace(" ","").split(",")
                     try:
-                        type_ , data, from_ , what_to_ignore = (line[0]).lower(), line[1], line[2], line[3]
+                        type_, data, from_, what_to_ignore = (line[0]).lower(), line[1], line[2], line[3]
                     except IndexError:
                         # line is missing a column, ignore it.
                         self.print(f"Line {line_number} in whitelist.conf is missing a column. Skipping.")
@@ -255,30 +283,6 @@ class ProfilerProcess(multiprocessing.Process):
                 self.read_whitelist()
 
 
-        # after we're done reading the file, process organizations info and store in the db
-        orgs_in_cache = __database__.get_whitelist('organizations')
-        for org in whitelisted_orgs:
-            # make sure we don't already have info about this org in the cache db
-            if orgs_in_cache and org in orgs_in_cache:
-                # we have orgs in cache but do we have this org?
-                # if we have the org in cache , we have its ips domains and asn, skip it
-                continue
-
-            # Store the IPs, domains and asn of this org in the db
-            org_subnets = self.load_org_IPs(org)
-            if org_subnets:
-                # Store the IPs of this org
-                whitelisted_orgs[org].update({'IPs' : json.dumps(org_subnets)})
-
-            org_domains = self.load_org_domains(org)
-            if org_domains:
-                # Store the ASN of this org
-                whitelisted_orgs[org].update({'domains' : json.dumps(org_domains)})
-
-            org_asn = self.load_org_asn(org)
-            if org_asn:
-                # Store the ASN of this org
-                whitelisted_orgs[org].update({'asn' : json.dumps(org_asn)})
 
         # store everything in the cache db because we'll be needing this info in the evidenceProcess
         __database__.set_whitelist("IPs", whitelisted_IPs)
