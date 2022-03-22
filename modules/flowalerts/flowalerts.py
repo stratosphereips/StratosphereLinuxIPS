@@ -4,6 +4,7 @@ import multiprocessing
 from slips_files.core.database import __database__
 from slips_files.common.slips_utils import utils
 import platform
+from .TimerThread import TimerThread
 
 # Your imports
 import json
@@ -14,11 +15,12 @@ import time
 import sys
 import socket
 import validators
-from .TimerThread import TimerThread
+from .set_evidence import Helper
 
 class Module(Module, multiprocessing.Process):
     name = 'flowalerts'
-    description = 'Alerts about flows: long connection, successful ssh, password guessing, self-signed certificate, data exfiltration, etc.'
+    description = 'Alerts about flows: long connection, successful ssh, ' \
+                  'password guessing, self-signed certificate, data exfiltration, etc.'
     authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']
 
     def __init__(self, outputqueue, config):
@@ -44,13 +46,17 @@ class Module(Module, multiprocessing.Process):
         self.c6 = __database__.subscribe('new_dns_flow')
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
+        # helper contains all functions used to set evidence
+        self.helper = Helper()
         self.timeout = 0.0000001
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = __database__.get_default_gateway()
-        # Cache list of connections that we already checked in the timer thread (we waited for the connection of these dns resolutions)
+        # Cache list of connections that we already checked in the timer
+        # thread (we waited for the connection of these dns resolutions)
         self.connections_checked_in_dns_conn_timer_thread = []
-        # Cache list of connections that we already checked in the timer thread (we waited for the dns resolution for these connections)
+        # Cache list of connections that we already checked in the timer
+        # thread (we waited for the dns resolution for these connections)
         self.connections_checked_in_conn_dns_timer_thread = []
         # Cache list of connections that we already checked in the timer thread for ssh check
         self.connections_checked_in_ssh_timer_thread = []
@@ -135,123 +141,6 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-    def set_evidence_ssh_successful(self, profileid, twid, saddr,
-                                    daddr, size, uid, timestamp,
-                                    by='', ip_state='ip'):
-        """
-        Set an evidence for a successful SSH login.
-        This is not strictly a detection, but we don't have
-        a better way to show it.
-        The threat_level is 0.01 to show that this is not a detection
-        """
-
-        type_detection = 'srcip'
-        detection_info = saddr
-        type_evidence = f'SSHSuccessful-by-{saddr}'
-        threat_level = 'info'
-        confidence = 0.5
-        category = 'Infomation'
-        ip_identification = __database__.getIPIdentification(daddr)
-        description = f'SSH successful to IP {daddr}. {ip_identification}. ' \
-                      f'From IP {saddr}. Size: {str(size)}. Detection model {by}.' \
-                      f' Confidence {confidence}'
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
-
-    def set_evidence_long_connection(self, ip, duration, profileid, twid,
-                                     uid, timestamp, ip_state='ip'):
-        '''
-        Set an evidence for a long connection.
-        '''
-        type_detection = ip_state
-        detection_info = ip
-        type_evidence = 'LongConnection'
-        threat_level = 'low'
-        category = 'Anomaly.Connection'
-        # confidence depends on how long the connection
-        # scale the confidence from 0 to 1, 1 means 24 hours long
-        confidence = 1/(3600*24)*(duration-3600*24)+1
-        confidence = round(confidence, 2)
-        ip_identification = __database__.getIPIdentification(ip)
-        # get the duration in minutes
-        duration = int(duration/60)
-        description = f'Long Connection. Connection to: {ip} {ip_identification} took {duration} mins'
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid,
-                                 twid=twid, uid=uid)
-
-    def set_evidence_self_signed_certificates(self, profileid, twid, ip,
-                                              description, uid, timestamp, ip_state='ip'):
-        '''
-        Set evidence for self signed certificates.
-        '''
-        confidence = 0.5
-        threat_level = 'low'
-        category = 'Anomaly.Behaviour'
-        type_detection = 'dstip'
-        type_evidence = 'SelfSignedCertificate'
-        detection_info = ip
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
-
-    def set_evidence_for_multiple_reconnection_attempts(self,profileid, twid, ip, description, uid, timestamp):
-        '''
-        Set evidence for Reconnection Attempts.
-        '''
-        confidence = 0.5
-        threat_level = 'medium'
-        category = 'Anomaly.Traffic'
-        type_detection  = 'dstip'
-        type_evidence = 'MultipleReconnectionAttempts'
-        detection_info = ip
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid,
-                                 twid=twid, uid=uid)
-
-    def set_evidence_for_connection_to_multiple_ports(self,profileid, twid, ip, description, uid, timestamp):
-        '''
-        Set evidence for connection to multiple ports.
-        '''
-        confidence = 0.5
-        threat_level = 'medium'
-        category = 'Anomaly.Connection'
-        type_detection  = 'dstip'
-        type_evidence = 'ConnectionToMultiplePorts'
-        detection_info = ip
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
-
-    def set_evidence_for_invalid_certificates(self, profileid, twid, ip, description, uid, timestamp):
-        '''
-        Set evidence for Invalid SSL certificates.
-        '''
-        confidence = 0.5
-        threat_level = 'low'
-        category = "Anomaly.Behaviour"
-        type_detection  = 'dstip'
-        type_evidence = 'InvalidCertificate'
-        detection_info = ip
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
-
     def check_long_connection(self, dur, daddr, saddr, profileid, twid, uid, timestamp):
         """
         Check if a duration of the connection is
@@ -271,7 +160,7 @@ class Module(Module, multiprocessing.Process):
                                                   uid,
                                                   module_name,
                                                   module_label)
-            self.set_evidence_long_connection(daddr, dur, profileid, twid, uid, timestamp, ip_state='ip')
+            self.helper.set_evidence_long_connection(daddr, dur, profileid, twid, uid, timestamp, ip_state='ip')
         else:
             # set "flowalerts-long-connection:normal" label in the flow (needed for Ensembling module)
             module_name = "flowalerts-long-connection"
@@ -417,32 +306,6 @@ class Module(Module, multiprocessing.Process):
                                      timestamp, category, port=dport, proto=proto,profileid=profileid,
                                      twid=twid, uid=uid)
 
-    def set_evidence_for_port_0_connection(self, saddr, daddr, direction, profileid, twid, uid, timestamp):
-        """ :param direction: 'source' or 'destination' """
-        confidence = 0.8
-        threat_level = 'high'
-        category = 'Anomaly.Connection'
-        type_detection  = 'srcip' if direction == 'source' else 'dstip'
-        source_target_tag = "Recon"
-        type_evidence = 'Port0Connection'
-        detection_info = saddr if direction == 'source' else daddr
-
-        if direction == 'source':
-            ip_identification = __database__.getIPIdentification(daddr)
-            description = f'Connection on port 0 from {saddr} to {daddr}. {ip_identification}.'
-        else:
-            ip_identification = __database__.getIPIdentification(saddr)
-            description = f'Connection on port 0 from {daddr} to {saddr}. {ip_identification}'
-
-        conn_count = 1
-        if not twid: twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag,
-                                 conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
-
-
-
     def check_if_resolution_was_made_by_different_version(self, profileid, daddr):
         """
         Sometimes the same computer makes dns requests using its ipv4 and ipv6 address, check if this is the case
@@ -516,7 +379,6 @@ class Module(Module, multiprocessing.Process):
                                  conn_count=conn_count, profileid=profileid, twid=twid)
         # empty the list of arpa queries timestamps, we don't need thm anymore
         self.dns_arpa_queries[profileid] = []
-
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
@@ -602,7 +464,6 @@ class Module(Module, multiprocessing.Process):
                     self.connections_checked_in_conn_dns_timer_thread.remove(uid)
                 except ValueError:
                     pass
-
 
     def check_dns_resolution_without_connection(self, domain, answers, timestamp, profileid, twid, uid):
         """
@@ -724,7 +585,7 @@ class Module(Module, multiprocessing.Process):
                     daddr = ssh_flow_dict['daddr']
                     saddr = ssh_flow_dict['saddr']
                     size = ssh_flow_dict['allbytes']
-                    self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, timestamp, by='Zeek')
+                    self.helper.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, timestamp, by='Zeek')
                     try:
                         self.connections_checked_in_ssh_timer_thread.remove(uid)
                     except ValueError:
@@ -753,7 +614,7 @@ class Module(Module, multiprocessing.Process):
                         # Set the evidence because there is no
                         # easier way to show how Slips detected
                         # the successful ssh and not Zeek
-                        self.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, timestamp, by='Slips')
+                        self.helper.set_evidence_ssh_successful(profileid, twid, saddr, daddr, size, uid, timestamp, by='Slips')
                         try:
                             self.connections_checked_in_ssh_timer_thread.remove(uid)
                         except ValueError:
@@ -872,40 +733,6 @@ class Module(Module, multiprocessing.Process):
                                      conn_count=conn_count, profileid=profileid, twid=twid)
             return True
 
-    def set_evidence_malicious_ssl(self, ssl_info: dict, ssl_info_from_db: dict):
-        """
-        :param ssl_info: info about this ssl cert as found in zeek
-        :param ssl_info_from_db: ti feed, tags, description of this malicious cert
-        """
-        profileid = ssl_info.get('profileid', '')
-        twid = ssl_info.get('twid', '')
-        ts = ssl_info.get('ts', '')
-        daddr = ssl_info.get('daddr', '')
-        uid = ssl_info.get('uid', '')
-        ssl_info_from_db = json.loads(ssl_info_from_db)
-        import pprint
-        pprint.pp(ssl_info_from_db)
-        tags = ssl_info_from_db['tags']
-        cert_description = ssl_info_from_db['description']
-        threat_level = ssl_info_from_db['threat_level']
-
-        description = f'Malicious SSL certificate to server {daddr}. '
-        # append daddr identification to the description
-        ip_identification = __database__.getIPIdentification(daddr)
-        description += f'{ip_identification} description: {cert_description} {tags}  '
-
-        type_evidence = 'MaliciousSSLCert'
-        category =  'Intrusion.Botnet'
-        source_target_tag = "CC"
-        type_detection  = 'dstip'
-
-        detection_info = daddr
-        confidence = 1
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 ts, category, source_target_tag=source_target_tag,
-                                 profileid=profileid, twid=twid, uid=uid)
-
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
 
         age_threshold = 60
@@ -938,34 +765,6 @@ class Module(Module, multiprocessing.Process):
                                  threat_level, confidence, description,
                                  stime, category,
                                  profileid=profileid, twid=twid, uid=uid)
-
-    def set_evidence_bad_smtp_login(self, saddr, daddr, stime, profileid, twid, uid):
-        confidence = 1
-        threat_level = 'high'
-        category = 'Attempt.Login'
-        type_evidence = 'BadSMTPLogin'
-        type_detection  = 'srcip'
-        detection_info = saddr
-        description = f'performing bad SMTP login to {daddr}'
-        if not twid: twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 stime, category,
-                                 profileid=profileid, twid=twid, uid=uid)
-
-    def set_evidence_smtp_bruteforce(self, saddr, daddr, stime, profileid, twid, uid):
-        confidence = 1
-        threat_level = 'high'
-        category = 'Attempt.Login'
-        type_detection  = 'srcip'
-        type_evidence = 'SMTPLoginBruteforce'
-        description = f'performing SMTP login bruteforce to {daddr}. {self.smtp_bruteforce_threshold} logins in 10 seconds.'
-        detection_info = saddr
-        conn_count = self.smtp_bruteforce_threshold
-        if not twid: twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                 description, stime, category,
-                                 conn_count=conn_count, profileid=profileid, twid=twid)
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
@@ -1044,7 +843,7 @@ class Module(Module, multiprocessing.Process):
                     # --- Detect Connection to port 0 ---
                     if proto not in ('igmp', 'icmp', 'ipv6-icmp') and (sport == 0 or dport == 0):
                         direction = 'source' if sport==0 else 'destination'
-                        self.set_evidence_for_port_0_connection(saddr, daddr, direction, profileid, twid, uid, timestamp)
+                        self.helper.set_evidence_for_port_0_connection(saddr, daddr, direction, profileid, twid, uid, timestamp)
 
                     # --- Detect if this is a connection without a DNS resolution ---
                     # The exceptions are:
@@ -1087,7 +886,7 @@ class Module(Module, multiprocessing.Process):
                                     dstports = list(dst_IPs_ports[daddr]['dstports'])
                                     if len(dstports) > 1:
                                         description = "Connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
-                                        self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
+                                        self.helper.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
 
                             # Connection to multiple port to the Source IP. Happens in the mode 'all'
                             elif profileid.split('_')[1] == daddr:
@@ -1100,7 +899,7 @@ class Module(Module, multiprocessing.Process):
                                 dstports = list(src_IPs_ports[saddr]['dstports'])
                                 if len(dstports) > 1:
                                     description = "Connection to multiple ports {} of Source IP: {}".format(dstports, saddr)
-                                    self.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
+                                    self.helper.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
 
                     # --- Detect Data exfiltration ---
                     # we’re looking for systems that are transferring large amount of data in 20 mins span
@@ -1169,7 +968,7 @@ class Module(Module, multiprocessing.Process):
                                         for uid, flow in flow_dict.items():
                                             if flow['daddr'] == daddr:
                                                 break
-                                    self.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
+                                    self.helper.set_evidence_data_exfiltration(most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid)
 
                 # --- Detect successful SSH connections ---
                 message = self.c2.get_message(timeout=self.timeout)
@@ -1250,7 +1049,7 @@ class Module(Module, multiprocessing.Process):
                                 # get the description inside parenthesis
                                 ip_identification = __database__.getIPIdentification(ip)
                                 description = msg + f' Destination IP: {ip}. {ip_identification}'
-                                self.set_evidence_for_invalid_certificates(profileid, twid, ip,
+                                self.helper.set_evidence_for_invalid_certificates(profileid, twid, ip,
                                                                            description, uid, timestamp)
                                 #self.print(description, 3, 0)
 
@@ -1325,7 +1124,7 @@ class Module(Module, multiprocessing.Process):
                                 description = f'Self-signed certificate. Destination IP: {ip}. {ip_identification}'
                             else:
                                 description = f'Self-signed certificate. Destination IP: {ip}, SNI: {server_name}. {ip_identification}'
-                            self.set_evidence_self_signed_certificates(profileid,twid, ip, description, uid, timestamp)
+                            self.helper.set_evidence_self_signed_certificates(profileid,twid, ip, description, uid, timestamp)
                             self.print(description, 3, 0)
 
                         if ja3 or ja3s:
@@ -1334,10 +1133,10 @@ class Module(Module, multiprocessing.Process):
                             malicious_ja3_dict = __database__.get_ja3_in_IoC()
 
                             if ja3 in malicious_ja3_dict:
-                                self.set_evidence_malicious_JA3(malicious_ja3_dict, saddr, profileid, twid, uid, timestamp,  type_='ja3', ioc=ja3)
+                                self.helper.set_evidence_malicious_JA3(malicious_ja3_dict, saddr, profileid, twid, uid, timestamp,  type_='ja3', ioc=ja3)
 
                             if ja3s in malicious_ja3_dict:
-                                self.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='ja3s', ioc=ja3s)
+                                self.helper.set_evidence_malicious_JA3(malicious_ja3_dict, daddr, profileid, twid, uid, timestamp, type_='ja3s', ioc=ja3s)
 
                 # --- Learn ports that Zeek knows but Slips doesn't ---
                 message = self.c5.get_message(timeout=self.timeout)
@@ -1403,7 +1202,7 @@ class Module(Module, multiprocessing.Process):
                     # check if we have this sha1 marked as malicious from one of our feeds
                     ssl_info_from_db = __database__.get_ssl_info(sha1)
                     if not ssl_info_from_db: continue
-                    self.set_evidence_malicious_ssl(data, ssl_info_from_db)
+                    self.helper.set_evidence_malicious_ssl(data, ssl_info_from_db)
 
                 # --- Detect Bad SMTP logins ---
                 message = self.c8.get_message(timeout=self.timeout)
@@ -1428,7 +1227,7 @@ class Module(Module, multiprocessing.Process):
                             self.smtp_bruteforce_cache.update({
                                 profileid: [stime]
                             })
-                        self.set_evidence_bad_smtp_login(saddr, daddr, stime, profileid, twid, uid)
+                        self.helper.set_evidence_bad_smtp_login(saddr, daddr, stime, profileid, twid, uid)
 
                         # check if (3) bad login attemps happened
                         if len(self.smtp_bruteforce_cache[profileid]) == self.smtp_bruteforce_threshold:
@@ -1437,7 +1236,7 @@ class Module(Module, multiprocessing.Process):
                             if diff <= 10:
                                 # remove all 3 logins that caused this alert
                                 self.smtp_bruteforce_cache[profileid] = []
-                                self.set_evidence_smtp_bruteforce(saddr, daddr, stime, profileid, twid, uid)
+                                self.helper.set_evidence_smtp_bruteforce(saddr, daddr, stime, profileid, twid, uid)
                             else:
                                 # remove the first element so we can check the next 3 logins
                                 self.smtp_bruteforce_cache[profileid].pop(0)
