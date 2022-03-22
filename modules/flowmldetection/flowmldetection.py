@@ -137,7 +137,7 @@ class Module(Module, multiprocessing.Process):
         try:
             # Discard some type of flows that they dont have ports
             dataset = dataset[dataset.proto != 'arp']
-            dataset = dataset[dataset.proto != 'ARP']
+            dataset = dataset[dataset.proto != 'arp']
             dataset = dataset[dataset.proto != 'icmp']
             dataset = dataset[dataset.proto != 'igmp']
             dataset = dataset[dataset.proto != 'ipv6-icmp']

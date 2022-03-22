@@ -1150,7 +1150,7 @@ class Module(Module, multiprocessing.Process):
                                 total_bytes = 0
                                 for flow in flows_list:
                                     daddr = flow['daddr']
-                                    # In ARP the sbytes is actually ''
+                                    # In arp the sbytes is actually ''
                                     if flow['sbytes'] == '':
                                         sbytes = 0
                                     else:

@@ -20,14 +20,14 @@ import sys
 
 # Your imports
 import configparser
-from modules.UpdateManager.timer_manager import InfiniteTimer
-from modules.UpdateManager.update_file_manager import UpdateFileManager
+from modules.update_manager.timer_manager import InfiniteTimer
+from modules.update_manager.update_file_manager import UpdateFileManager
 from signal import SIGSTOP
 
 
 class UpdateManager(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'UpdateManager'
+    name = 'update_manager'
     description = 'Update malicious files from Threat Intelligence'
     authors = ['Kamila Babayeva']
 

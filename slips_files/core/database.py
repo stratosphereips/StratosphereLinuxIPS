@@ -231,7 +231,7 @@ class Database(object):
                 incoming_ip = profileid.split('_')[1]
                 found_ip = stored_profile.split('_')[1]
 
-                # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
+                # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM arp detections)
                 if (validators.ipv6(incoming_ip)
                         and validators.ipv4(found_ip)):
                     # associate the ipv4 we found with the incoming ipv6 and vice versa
@@ -247,7 +247,7 @@ class Database(object):
                 else:
                     # both are ipv4 or ipv6 and are claiming to have the same mac address
                     # OR one of them is 0.0.0.0 and didn't take an ip yet
-                    # will be detected later by the ARP module
+                    # will be detected later by the arp module
                     pass
 
 
