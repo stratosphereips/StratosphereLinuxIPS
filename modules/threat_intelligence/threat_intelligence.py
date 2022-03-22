@@ -44,7 +44,7 @@ class Module(Module, multiprocessing.Process):
                                                                           'download_path_for_local_threat_intelligence')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.path_to_local_threat_intelligence_data = 'modules/ThreatIntelligence1/local_data_files/'
+            self.path_to_local_threat_intelligence_data = 'modules/threat_intelligence/local_data_files/'
 
     def set_evidence_malicious_ip(self, ip, uid, timestamp, ip_info: dict, profileid='', twid='', ip_state=''):
         '''
@@ -401,7 +401,7 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         try:
             # Load the local Threat Intelligence files that are stored in the local folder
-            # The remote files are being loaded by the UpdateManager
+            # The remote files are being loaded by the update_manager
             # check if we should update the files
             if not self.check_local_ti_files(self.path_to_local_threat_intelligence_data):
                 self.print(f'Could not load the local TI files {self.path_to_local_threat_intelligence_data}')

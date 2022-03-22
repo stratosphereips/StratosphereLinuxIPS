@@ -263,7 +263,6 @@ class Database(object):
             # we already have the incoming ip associated with this mac in the db
             if incoming_ip in cached_ips:
                 return False
-
             # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
             if (validators.ipv6(incoming_ip)
                     and validators.ipv4(found_ip)):
@@ -292,8 +291,6 @@ class Database(object):
 
                 ipv6 = self.r.hmget(profileid, 'IPv6')
                 if not ipv6 or ipv6 == [None] :
-                    ipv6 = json.dumps([found_ip])
-                else:
                     ipv6 = json.loads(ipv6)
                     ipv6.append(incoming_ip)
                     ipv6 = json.dumps(ipv6)

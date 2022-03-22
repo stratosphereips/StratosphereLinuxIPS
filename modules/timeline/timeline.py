@@ -255,8 +255,8 @@ class Module(Module, multiprocessing.Process):
                 elif 'IGMP' in proto:
                     dport_name = 'IGMP'
                     activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human, 'Duration': dur}
-                elif 'ARP' in proto:
-                    activity = {'timestamp': timestamp_human, 'dport_name': 'ARP' ,'preposition': 'to', 'daddr': daddr}
+                elif 'arp' in proto:
+                    activity = {'timestamp': timestamp_human, 'dport_name': 'arp' ,'preposition': 'to', 'daddr': daddr}
 
 
             #################################

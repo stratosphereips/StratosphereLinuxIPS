@@ -22,7 +22,7 @@ from contextlib import redirect_stdout
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'IP_Info'
+    name = 'ip_info'
     description = 'Get different info about an IP/MAC address'
     authors = ['Alya Gomaa', 'Sebastian Garcia']
 

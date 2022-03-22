@@ -27,7 +27,7 @@ import shutil
 from datetime import datetime
 import socket
 import warnings
-from modules.UpdateManager.update_file_manager import UpdateFileManager
+from modules.update_manager.update_file_manager import UpdateFileManager
 import json
 import pkgutil
 import inspect
@@ -149,22 +149,22 @@ def load_modules(to_ignore):
     plugins = {}
     failed_to_load_modules = 0
     # Walk recursively through all modules an import them
-    supported_modules = ('ARP.ARP',
-                         'IP_Info.IP_Info',
-                         'RiskIQ.RiskIQ',
-                         'ThreatIntelligence1.threat_intelligence1_module',
-                         'UpdateManager.UpdateManager',
-                         'flowalerts.flowalert',
-                         'flowmldetection.flowmldetection',
-                         'http_analyzer.http_analyzer',
-                         'leak_detector.leak_detector',
-                         'portscanDetector-1.portscanDetector-1',
-                         'rnn-cc-detection-1.rnn-cc-detection-1',
-                         'timeline.timeline',
-                         'virustotal.virustotal')
+    supported_modules = ('arp',
+                         'ip_info',
+                         'RiskIQ',
+                         'threat_intelligence',
+                         'update_manager',
+                         'flowalerts',
+                         'flowmldetection',
+                         'http_analyzer',
+                         'leak_detector',
+                         'portscan_detector',
+                         'rnn-cc-detection',
+                         'timeline',
+                         'virustotal')
     for module_name in supported_modules:
         # get the path of the module
-        module_name = "modules." + module_name
+        module_name = f"modules.{module_name}.{module_name}"
         if any(module_name.__contains__(mod) for mod in to_ignore):
             continue
         # Try to import the module, otherwise skip.
@@ -769,7 +769,7 @@ if __name__ == '__main__':
             # Ignore exporting alerts module if export_to is empty
             export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ", "").lower()
             if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
-                to_ignore.append('ExportingAlerts')
+                to_ignore.append('exporting_alerts')
             # ignore CESNET sharing module if send and receive are are disabled in slips.conf
             send_to_warden = config.get('CESNET', 'send_alerts').lower()
             receive_from_warden = config.get('CESNET', 'receive_alerts').lower()

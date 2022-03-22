@@ -18,7 +18,7 @@ class UpdateFileManager:
         self.outputqueue = outputqueue
         self.config = config
         # For now, read the malicious IPs from here
-        self.name = 'UpdateManager'
+        self.name = 'update_manager'
         self.new_update_time = float('-inf')
         # Start the database
         __database__.start(self.config)
@@ -44,7 +44,7 @@ class UpdateFileManager:
             self.path_to_threat_intelligence_data = self.sanitize(self.path_to_threat_intelligence_data)
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.path_to_threat_intelligence_data = 'modules/ThreatIntelligence1/remote_data_files/'
+            self.path_to_threat_intelligence_data = 'modules/threat_intelligence/remote_data_files/'
         if not os.path.exists(self.path_to_threat_intelligence_data):
             os.mkdir(self.path_to_threat_intelligence_data)
 

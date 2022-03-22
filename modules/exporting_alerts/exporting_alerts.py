@@ -24,7 +24,7 @@ class Module(Module, multiprocessing.Process):
     Module to export alerts to slack and/or STX
     You need to have the token in your environment variables to use this module
     """
-    name = 'ExportingAlerts'
+    name = 'exporting_alerts'
     description = 'Export alerts to slack, STIX and json format'
     authors = ['Alya Gomaa']
 
@@ -41,43 +41,43 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('evidence_added')
         # slack_bot_token_secret should contain your slack token only
         try:
-            with open("modules/ExportingAlerts/slack_bot_token_secret", "r") as f:
+            with open("modules/exporting_alerts/slack_bot_token_secret", "r") as f:
                 self.BOT_TOKEN = f.read()
         except FileNotFoundError:
-            self.print("Please add slack bot token to modules/ExportingAlerts/slack_bot_token_secret. Stopping.")
+            self.print("Please add slack bot token to modules/exporting_alerts/slack_bot_token_secret. Stopping.")
             # Stop the module
             __database__.publish('export_alert','stop_process')
         # Get config vaeriables
         # Available options ['slack','stix']
-        self.export_to = self.config.get('ExportingAlerts', 'export_to')
+        self.export_to = self.config.get('exporting_alerts', 'export_to')
         # convert to list
         self.export_to = self.export_to.strip('][').replace(" ","").split(',')
         # Convert to lowercase
         self.export_to =  [option.lower() for option in self.export_to]
-        self.slack_channel_name = self.config.get('ExportingAlerts', 'slack_channel_name')
-        self.sensor_name = self.config.get('ExportingAlerts', 'sensor_name')
-        self.TAXII_server = self.config.get('ExportingAlerts', 'TAXII_server')
+        self.slack_channel_name = self.config.get('exporting_alerts', 'slack_channel_name')
+        self.sensor_name = self.config.get('exporting_alerts', 'sensor_name')
+        self.TAXII_server = self.config.get('exporting_alerts', 'TAXII_server')
         # taxii server port
-        self.port = self.config.get('ExportingAlerts', 'port')
-        self.use_https = self.config.get('ExportingAlerts', 'use_https')
+        self.port = self.config.get('exporting_alerts', 'port')
+        self.use_https = self.config.get('exporting_alerts', 'use_https')
         if self.use_https.lower() == 'true':
             self.use_https = True
         elif self.use_https.lower() == 'false':
             self.use_https = False
-        self.discovery_path = self.config.get('ExportingAlerts', 'discovery_path')
-        self.inbox_path = self.config.get('ExportingAlerts', 'inbox_path')
+        self.discovery_path = self.config.get('exporting_alerts', 'discovery_path')
+        self.inbox_path = self.config.get('exporting_alerts', 'inbox_path')
         # push delay exists -> create thread that waits
         # push delay doesnt exist -> running using file not interface -> only push to taxii server once before stopping
         try:
-            self.push_delay = int(self.config.get('ExportingAlerts', 'push_delay'))
+            self.push_delay = int(self.config.get('exporting_alerts', 'push_delay'))
         except:
             # Here means that push_delay is None in slips.conf(default value).
             # we set it to export to the server every 1h by default
             self.push_delay = 60*60
-        self.collection_name = self.config.get('ExportingAlerts', 'collection_name')
-        self.taxii_username = self.config.get('ExportingAlerts', 'taxii_username')
-        self.taxii_password = self.config.get('ExportingAlerts', 'taxii_password')
-        self.jwt_auth_url = self.config.get('ExportingAlerts', 'jwt_auth_url')
+        self.collection_name = self.config.get('exporting_alerts', 'collection_name')
+        self.taxii_username = self.config.get('exporting_alerts', 'taxii_username')
+        self.taxii_password = self.config.get('exporting_alerts', 'taxii_password')
+        self.jwt_auth_url = self.config.get('exporting_alerts', 'jwt_auth_url')
         # This bundle should be created once and we should append all indicators to it
         self.is_bundle_created = False
         self.is_thread_created = False
@@ -135,7 +135,7 @@ class Module(Module, multiprocessing.Process):
         # Token to login to your slack bot. it should be set in slack_bot_token_secret
         if self.BOT_TOKEN is '':
             # The file is empty
-            self.print("Can't find SLACK_BOT_TOKEN in modules/ExportingAlerts/slack_bot_token_secret.", 0, 2)
+            self.print("Can't find SLACK_BOT_TOKEN in modules/exporting_alerts/slack_bot_token_secret.", 0, 2)
             return False
         slack_client = WebClient(token=self.BOT_TOKEN)
         try:

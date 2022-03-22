@@ -2111,7 +2111,7 @@ class ProfilerProcess(multiprocessing.Process):
                 if client_addr:
                     profileid = get_rev_profile(starttime, client_addr)[0]
                 if mac_addr:
-                    # send this to IP_Info module to get vendor info about this MAC
+                    # send this to ip_info module to get vendor info about this MAC
                     to_send = {'MAC': mac_addr,
                                'profileid': profileid}
                     if host_name: to_send.update({'host_name': host_name})

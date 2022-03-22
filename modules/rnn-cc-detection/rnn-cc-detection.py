@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'rnn-cc-detection-1'
+    name = 'rnn-cc-detection'
     description = 'Detect C&C channels based on behavioral letters'
     authors = ['Sebastian Garcia', 'Kamila Babayeva', 'Ondrej Lukas']
 
@@ -124,7 +124,7 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
         return True
 
-    def run(self, model_file="modules/rnn-cc-detection-1/rnn_model.h5"):
+    def run(self, model_file="modules/rnn-cc-detection/rnn_model.h5"):
         # TODO: set the decision threshold in the function call
         try:
             # Download lstm model
