@@ -27,7 +27,7 @@ from signal import SIGSTOP
 
 class UpdateManager(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'update_manager'
+    name = 'UpdateManager'
     description = 'Update malicious files from Threat Intelligence'
     authors = ['Kamila Babayeva']
 
