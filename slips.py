@@ -148,18 +148,28 @@ def load_modules(to_ignore):
 
     plugins = {}
     failed_to_load_modules = 0
-    # Walk recursively through all modules and packages found on the . folder.
-    # __path__ is the current path of this python program
-    for loader, module_name, ispkg in pkgutil.walk_packages(modules.__path__, modules.__name__ + '.'):
+    # Walk recursively through all modules an import them
+    supported_modules = ('ARP.ARP',
+                         'IP_Info.IP_Info',
+                         'RiskIQ.RiskIQ',
+                         'ThreatIntelligence1.threat_intelligence1_module',
+                         'UpdateManager.UpdateManager',
+                         'flowalerts.flowalert',
+                         'flowmldetection.flowmldetection',
+                         'http_analyzer.http_analyzer',
+                         'leak_detector.leak_detector',
+                         'portscanDetector-1.portscanDetector-1',
+                         'rnn-cc-detection-1.rnn-cc-detection-1',
+                         'timeline.timeline',
+                         'virustotal.virustotal')
+    for module_name in supported_modules:
+        # get the path of the module
+        module_name = "modules." + module_name
         if any(module_name.__contains__(mod) for mod in to_ignore):
             continue
-        # If current item is a package, skip.
-        if ispkg:
-            continue
-
         # Try to import the module, otherwise skip.
         try:
-            # "level specifies whether to use absolute or relative imports. The default is -1 which 
+            # "level specifies whether to use absolute or relative imports. The default is -1 which
             # indicates both absolute and relative imports will be attempted. 0 means only perform 
             # absolute imports. Positive values for level indicate the number of parent 
             # directories to search relative to the directory of the module calling __import__()."
