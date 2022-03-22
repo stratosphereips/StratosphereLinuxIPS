@@ -156,6 +156,12 @@ def load_modules(to_ignore):
         # If current item is a package, skip.
         if ispkg:
             continue
+        # to avoid loading everything in the dir,
+        # only load modules that have the same name as the dir name
+        dir_name = module_name.split('.')[1]
+        file_name = module_name.split('.')[2]
+        if dir_name != file_name:
+            continue
 
         # Try to import the module, otherwise skip.
         try:
