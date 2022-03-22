@@ -1,5 +1,5 @@
-""" Unit test for ../ARP.py """
-from ..modules.ARP.ARP import Module
+""" Unit test for ../arp.py """
+from ..modules.arp.arp import Module
 import configparser
 
 # random values for testing
@@ -11,7 +11,7 @@ def do_nothing(*args):
     pass
 
 def create_ARP_instance(outputQueue):
-    """ Create an instance of ARP.py
+    """ Create an instance of arp.py
         needed by every other test in this file  """
     config = configparser.ConfigParser(interpolation=None)
     ARP = Module(outputQueue, config)

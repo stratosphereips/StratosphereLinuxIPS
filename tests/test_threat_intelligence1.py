@@ -1,5 +1,5 @@
-""" Unit test for modules/ThreatIntelligence1/threat_intelligence1_module.py """
-from ..modules.ThreatIntelligence1.threat_intelligence1_module import Module
+""" Unit test for modules/threat_intelligence/threat_intelligence.py """
+from ..modules.threat_intelligence.threat_intelligence import Module
 import configparser
 
 def do_nothing(*args):
@@ -21,7 +21,7 @@ def test_load_malicious_datafile(outputQueue):
     dir_ = threatintel.path_to_local_threat_intelligence_data
     # get the first local threat intel file in local_data_files
     import os
-    filename = os.listdir('modules/ThreatIntelligence1/local_data_files')[0]
+    filename = os.listdir('modules/threat_intelligence/local_data_files')[0]
     assert threatintel.parse_ti_file(dir_ + filename) == True
 
 def test_load_malicious_local_files(outputQueue):

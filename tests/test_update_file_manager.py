@@ -1,7 +1,7 @@
-""" Unit test for modules/UpdateManager/update_file_manager.py """
+""" Unit test for modules/update_manager/update_file_manager.py """
 import os
 
-from ..modules.UpdateManager.update_file_manager import UpdateFileManager
+from ..modules.update_manager.update_file_manager import UpdateFileManager
 import configparser
 import pytest
 

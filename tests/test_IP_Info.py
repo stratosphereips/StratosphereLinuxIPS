@@ -1,5 +1,5 @@
-""" Unit test for modules/IP_Info/IP_Info.py """
-from ..modules.IP_Info.IP_Info import Module
+""" Unit test for modules/ip_info/ip_info.py """
+from ..modules.ip_info.ip_info import Module
 import configparser
 
 
