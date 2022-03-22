@@ -31,7 +31,7 @@ def has_errors(output_file):
 
 @pytest.mark.parametrize("pcap_path,expected_profiles, output_dir, expected_evidence",
                          [('dataset/hide-and-seek-short.pcap',15,'pcap/', 'horizontal port scan to port  23'),
-                          ('dataset/arp-only.pcap',3,'pcap2/','performing an ARP scan')])
+                          ('dataset/arp-only.pcap',3,'pcap2/','performing an arp scan')])
 def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evidence):
     try:
         os.mkdir(output_dir)
