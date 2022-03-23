@@ -21,7 +21,7 @@ from datetime import datetime
 from datetime import timedelta
 import sys
 import configparser
-from slips_files.core.database import __database__
+from .database import __database__
 import time
 import ipaddress
 import traceback

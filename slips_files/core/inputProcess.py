@@ -21,8 +21,8 @@ import sys
 import os
 from datetime import datetime
 from watchdog.observers import Observer
-from filemonitor import FileEventHandler
-from slips_files.core.database import __database__
+from .filemonitor import FileEventHandler
+from .database import __database__
 import configparser
 import time
 import json
