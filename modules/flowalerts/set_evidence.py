@@ -8,6 +8,39 @@ import time
 import sys
 
 class Helper:
+    def set_evidence_young_domain(self, domain, age, stime, profileid, twid, uid):
+        confidence = 1
+        threat_level = 'low'
+        category = 'Anomaly.Traffic'
+        type_evidence = 'YoungDomain'
+        type_detection  = 'dstdomain'
+        detection_info = domain
+        description = f'connection to a young domain: {domain} registered {age} days ago.'
+        if not twid: twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 stime, category,
+                                 profileid=profileid, twid=twid, uid=uid)
+
+    def set_evidence_DGA(self, nxdomains:int, stime, profileid, twid, uid):
+        confidence = (1/100)*(nxdomains-100)+1
+        confidence = round(confidence, 2)   # for readability
+        threat_level = 'high'
+        category = 'Intrusion.Botnet'
+        # the srcip performing all the dns queries
+        type_detection  = 'srcip'
+        source_target_tag = 'OriginMalware'
+        type_evidence = f'DGA-{nxdomains}-NXDOMAINs'
+        detection_info = profileid.split('_')[1]
+        description = f'possible DGA or domain scanning. {detection_info} failed to resolve {nxdomains} domains'
+        conn_count = nxdomains
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                 description, stime, category, source_target_tag=source_target_tag,
+                                 conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
+
+
     def set_evidence_DNS_without_conn(self, domain, timestamp, profileid, twid, uid):
         confidence = 0.8
         threat_level = 'low'
@@ -282,9 +315,6 @@ class Helper:
 
 
     def set_evidence_malicious_JA3(self, malicious_ja3_dict, ip, profileid, twid, uid, timestamp, type_='', ioc=''):
-        """
-        :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
-        """
         malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
         tags = malicious_ja3_dict['tags']
         ja3_description = malicious_ja3_dict['description']
