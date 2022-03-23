@@ -1227,6 +1227,8 @@ class Database(object):
         if self.is_detection_disabled(type_evidence):
             return False
 
+        if not twid:
+            twid = ''
         # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
