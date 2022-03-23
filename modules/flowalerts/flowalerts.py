@@ -541,60 +541,6 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
-    def set_evidence_malicious_JA3(self, malicious_ja3_dict, ip, profileid, twid, uid, timestamp, type_='', ioc=''):
-        """
-        :param alert: is True only if the confidence of the JA3 feed is > 0.5 so we generate an alert
-        """
-        malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
-        tags = malicious_ja3_dict['tags']
-        ja3_description = malicious_ja3_dict['description']
-        threat_level = malicious_ja3_dict['threat_level']
-
-        if type_ == 'ja3':
-            description = f'Malicious JA3: {ioc} from source address {ip} '
-            type_evidence = 'MaliciousJA3'
-            category = 'Intrusion.Botnet'
-            source_target_tag = "Botnet"
-            type_detection  = 'srcip'
-        elif type_ == 'ja3s':
-            description = f'Malicious JA3s: (possible C&C server): {ioc} to server {ip} '
-            type_evidence = 'MaliciousJA3s'
-            category =  'Intrusion.Botnet'
-            source_target_tag = "CC"
-            type_detection  = 'dstip'
-
-        # append daddr identification to the description
-        ip_identification = __database__.getIPIdentification(ip)
-        description += f'{ip_identification} description: {ja3_description} {tags}'
-
-
-        detection_info = ip
-        confidence = 1
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag,
-                                 profileid=profileid, twid=twid, uid=uid)
-
-    def set_evidence_data_exfiltration(self, most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
-        confidence = 0.6
-        threat_level = 'high'
-        type_detection  = 'dstip'
-        source_target_tag = 'OriginMalware'
-        type_evidence = 'DataUpload'
-        category = 'Malware'
-        detection_info = most_contacted_daddr
-        bytes_sent_in_MB = int(total_bytes / (10**6))
-        ip_identification = __database__.getIPIdentification(most_contacted_daddr)
-        description = f'possible data upload. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}.'
-        description+= f'{ip_identification}. IP contacted {times_contacted} times in the past 1h'
-        timestamp = datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
-        if not twid:
-            twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
-                                 confidence, description, timestamp, category,
-                                 source_target_tag=source_target_tag, profileid=profileid, twid=twid)
 
     def detect_DGA(self, rcode_name, query, stime, profileid, twid, uid):
         """
@@ -617,21 +563,7 @@ class Module(Module, multiprocessing.Process):
         # every 10,15,20 .. etc. nxdomains, generate an alert.
         if (self.nxdomains[profileid_twid] % 5 == 0 and
             self.nxdomains[profileid_twid] >= self.nxdomains_threshold):
-            confidence = (1/100)*(self.nxdomains[profileid_twid]-100)+1
-            confidence = round(confidence, 2) # for readability
-            threat_level = 'high'
-            category = 'Intrusion.Botnet'
-            # the srcip performing all the dns queries
-            type_detection  = 'srcip'
-            source_target_tag = 'OriginMalware'
-            type_evidence = f'DGA-{self.nxdomains[profileid_twid]}-NXDOMAINs'
-            detection_info = profileid.split('_')[1]
-            description = f'possible DGA or domain scanning. {detection_info} failed to resolve {self.nxdomains[profileid_twid]} domains'
-            conn_count = self.nxdomains[profileid_twid]
-            if not twid: twid = ''
-            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                     description, stime, category, source_target_tag=source_target_tag,
-                                     conn_count=conn_count, profileid=profileid, twid=twid)
+            self.helper.set_evidence_DGA(self.nxdomains[profileid_twid], stime, profileid, twid, uid)
             return True
 
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
@@ -654,18 +586,7 @@ class Module(Module, multiprocessing.Process):
         if age >= age_threshold:
             return False
 
-        confidence = 1
-        threat_level = 'low'
-        category = 'Anomaly.Traffic'
-        type_evidence = 'YoungDomain'
-        type_detection  = 'dstdomain'
-        detection_info = domain
-        description = f'connection to a young domain: {domain} registered {age} days ago.'
-        if not twid: twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description,
-                                 stime, category,
-                                 profileid=profileid, twid=twid, uid=uid)
+        self.helper.set_evidence_young_domain(domain, age, stime, profileid, twid, uid)
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
