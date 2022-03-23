@@ -18,7 +18,7 @@
 
 import os
 from watchdog.events import RegexMatchingEventHandler
-from slips_files.core.database import __database__
+from .database import __database__
 
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r".*\.log$", r".*\.conf$"]

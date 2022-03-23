@@ -19,7 +19,7 @@
 import multiprocessing
 import sys
 import io
-from slips_files.core.database import __database__
+from .database import __database__
 import os
 
 # Output Process

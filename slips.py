@@ -664,12 +664,12 @@ if __name__ == '__main__':
         Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
         """
         from multiprocessing import Queue
-        from inputProcess import InputProcess
-        from outputProcess import OutputProcess
-        from profilerProcess import ProfilerProcess
-        from guiProcess import GuiProcess
-        from logsProcess import LogsProcess
-        from evidenceProcess import EvidenceProcess
+        from slips_files.core.inputProcess import InputProcess
+        from slips_files.core.outputProcess import OutputProcess
+        from slips_files.core.profilerProcess import ProfilerProcess
+        from slips_files.core.guiProcess import GuiProcess
+        from slips_files.core.logsProcess import LogsProcess
+        from slips_files.core.evidenceProcess import EvidenceProcess
 
         # Any verbosity passed as parameter overrides the configuration. Only check its value
         if args.verbose is None:

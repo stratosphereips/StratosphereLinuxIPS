@@ -23,7 +23,7 @@ from datetime import timedelta
 import os
 import threading
 import time
-from slips_files.core.database import __database__
+from .database import __database__
 import configparser
 import json
 
