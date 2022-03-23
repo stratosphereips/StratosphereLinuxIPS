@@ -110,7 +110,7 @@ class Helper:
         confidence = 0.5
         threat_level = 'medium'
         category = 'Anomaly.Connection'
-        type_detection  = 'dstip'
+        type_detection = 'dstip'
         type_evidence = 'ConnectionToMultiplePorts'
         detection_info = ip
         if not twid:
