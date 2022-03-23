@@ -389,7 +389,7 @@ class Whitelist():
                     ignore_alerts_from_domain = ignore_alerts and is_srcdomain and ('src' in from_ or 'both' in from_)
                     ignore_alerts_to_domain = ignore_alerts and is_dstdomain and ('dst' in from_ or 'both' in from_)
                     if ignore_alerts_from_domain or ignore_alerts_to_domain:
-                        self.print(f'Whitelisting evidence about {domain_in_whitelist}, due to a connection related to {data} in {description}')
+                        # self.print(f'Whitelisting evidence about {domain_in_whitelist}, due to a connection related to {data} in {description}')
                         return True
         # Check orgs
         if whitelisted_orgs:
@@ -416,7 +416,7 @@ class Whitelist():
                                 and (org.lower() in ip_asn.lower()
                                         or ip_asn in whitelisted_orgs[org].get('asn',''))):
                                 # this ip belongs to a whitelisted org, ignore alert
-                                self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
+                                # self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
                                 return True
 
                     # Method 2 using the organization's list of ips
@@ -427,7 +427,7 @@ class Whitelist():
                         for network in org_subnets:
                             # check if ip belongs to this network
                             if ip in ipaddress.ip_network(network):
-                                self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
+                                # self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
                                 return True
                     except (KeyError, TypeError):
                         # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
@@ -440,7 +440,7 @@ class Whitelist():
                     try:
                         org_domains = json.loads(whitelisted_orgs[org].get('domains','{}'))
                         if org in flow_domain:
-                            self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
+                            # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
                             return True
 
                         for org_domain in org_domains:
