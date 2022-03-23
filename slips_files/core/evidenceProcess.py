@@ -18,6 +18,7 @@
 import multiprocessing
 from .database import __database__
 from slips_files.common.slips_utils import utils
+from .notify import Notify
 import json
 from datetime import datetime, timedelta
 import configparser
@@ -29,10 +30,7 @@ import sys
 import subprocess
 import socket
 import re
-import platform
 import os
-import psutil
-import pwd
 
 
 # Evidence Process
@@ -55,10 +53,10 @@ class EvidenceProcess(multiprocessing.Process):
         self.read_configuration()
         # If logs enabled, write alerts to the log folder as well
         self.clear_logs_dir(logs_folder)
-
         if self.popup_alerts:
+            self.notify = Notify()
             # The way we send notifications differ depending on the user and the OS
-            self.setup_notifications()
+            self.notify.setup_notifications()
 
         # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
@@ -91,40 +89,6 @@ class EvidenceProcess(multiprocessing.Process):
             # these json files are inside the logs dir, not the output/ dir
             self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
             self.logs_jsonfile = self.clean_evidence_json_file(logs_folder+'/')
-
-
-    def setup_notifications(self):
-        """
-        Get the used display, the user using this display and the uid of this user in case of using Slips as root on linux
-        """
-        # in linux, if the user's not root, notifications command will need extra configurations
-        if platform.system() != 'Linux' or os.geteuid() != 0:
-            self.notify_cmd = 'notify-send -t 5000 '
-            return False
-
-        # Get the used display (if the user has only 1 screen it will be set to 0), if not we should know which screen is slips running on.
-        # A "display" is the address for your screen. Any program that wants to write to your screen has to know the address.
-        used_display = psutil.Process().environ()['DISPLAY']
-
-        # when you login as user x in linux, no user other than x is authorized to write to your display, not even root
-        # now that we're running as root, we dont't have acess to the used_display
-        # get the owner of the used_display, there's no other way than running the 'who' command
-        command = f'who | grep "({used_display})" '
-        cmd_output = os.popen(command).read()
-
-        # make sure we found the user of this used display
-        if len(cmd_output) < 5:
-            # we don't know the user of this display!!, try getting it using psutil
-            # user 0 is the one that owns tty1
-            user = str(psutil.users()[0].name)
-        else:
-            # get the first user from the 'who' command
-            user = cmd_output.split("\n")[0].split()[0]
-
-        # get the uid
-        uid = pwd.getpwnam(user).pw_uid
-        # run notify-send as user using the used_display and give it the dbus addr
-        self.notify_cmd = f'sudo -u {user} DISPLAY={used_display} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send -t 5000 '
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -577,15 +541,6 @@ class EvidenceProcess(multiprocessing.Process):
                         pass
         return False
 
-    def show_popup(self, alert_to_log: str):
-        """
-        Function to display a popup with the alert depending on the OS
-        """
-        if platform.system() == 'Linux':
-            #  is notify_cmd is set in setup_notifications function depending on the user
-            os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
-        elif platform.system() == 'Darwin':
-            os.system(f"osascript -e 'display notification \"{alert_to_log}\" with title \"Slips\"' ")
 
     def get_ts_format(self, timestamp):
         """
@@ -604,8 +559,6 @@ class EvidenceProcess(multiprocessing.Process):
             newformat = newformat.replace('S','S.%f')
         return newformat
 
-
-
     def add_to_log_folder(self, data):
         # If logs folder is enabled (using -l), write alerts in the folder as well
         if not self.logs_jsonfile:
@@ -614,7 +567,6 @@ class EvidenceProcess(multiprocessing.Process):
         self.logs_jsonfile.write(data_json)
         self.logs_jsonfile.write('\n')
         self.logs_jsonfile.flush()
-
 
     def format_evidence_causing_this_alert(self, all_evidence, profileid, twid, flow_datetime) -> str:
         """
@@ -865,11 +817,12 @@ class EvidenceProcess(multiprocessing.Process):
                                 if self.popup_alerts:
                                     # remove the colors from the aletss before printing
                                     alert_to_print = alert_to_print.replace(Fore.RED, '').replace(Fore.CYAN, '').replace(Style.RESET_ALL,'')
-                                    self.show_popup(alert_to_print)
+                                    self.notify.show_popup(alert_to_print)
 
                                 # Send to the blocking module.
                                 # Check that the dst ip isn't our own IP
-                                if type_detection=='dstip' and detection_info not in self.our_ips:
+                                if type_detection == 'dstip' \
+                                        and detection_info not in self.our_ips:
                                     #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
                                     # blocking_data = {
                                     #     'ip':str(detection_info),

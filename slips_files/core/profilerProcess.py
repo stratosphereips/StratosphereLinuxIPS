@@ -27,12 +27,8 @@ import traceback
 import os
 import binascii
 import base64
-import subprocess
 from re import split
 from tzlocal import get_localzone
-import validators
-import socket
-import requests
 from .whitelist import Whitelist
 
 def timeit(method):
