@@ -26,9 +26,6 @@ from os import path
 from colorama import Fore, Style
 import ipaddress
 import sys
-
-import subprocess
-import socket
 import re
 import os
 
@@ -62,9 +59,10 @@ class EvidenceProcess(multiprocessing.Process):
         self.c1 = __database__.subscribe('evidence_added')
 
         # clear alerts.log
-        self.logfile = self.clean_evidence_log_file(output_folder)
+        self.logfile = self.clean_file(output_folder , 'alerts.log')
+
         # clear alerts.json
-        self.jsonfile = self.clean_evidence_json_file(output_folder)
+        self.jsonfile = self.clean_file(output_folder , 'alerts.json')
 
         self.timeout = 0.0000001
         # this list will have our local and public ips
@@ -89,8 +87,8 @@ class EvidenceProcess(multiprocessing.Process):
         self.logs_jsonfile = False
         if logs_folder:
             # these json files are inside the logs dir, not the output/ dir
-            self.logs_logfile = self.clean_evidence_log_file(logs_folder+'/')
-            self.logs_jsonfile = self.clean_evidence_json_file(logs_folder+'/')
+            self.logs_jsonfile = self.clean_file(logs_folder+'/' , 'alerts.json')
+            self.logs_logfile = self.clean_file(logs_folder+'/' , 'alerts.log')
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -213,21 +211,14 @@ class EvidenceProcess(multiprocessing.Process):
 
         return f'{evidence_string}'
 
-    def clean_evidence_log_file(self, output_folder):
+    def clean_file(self, output_folder, file_to_clean):
         '''
-        Clear the file if exists for evidence log
+        Clear the file if exists and return an open handle to it
         '''
-        if path.exists(output_folder  + 'alerts.log'):
-            open(output_folder  + 'alerts.log', 'w').close()
-        return open(output_folder + 'alerts.log', 'a')
-
-    def clean_evidence_json_file(self, output_folder):
-        '''
-        Clear the file if exists for evidence log
-        '''
-        if path.exists(output_folder  + 'alerts.json'):
-            open(output_folder  + 'alerts.json', 'w').close()
-        return open(output_folder + 'alerts.json', 'a')
+        logfile_path = f'{output_folder}{file_to_clean}'
+        if path.exists(logfile_path):
+            open(logfile_path, 'w').close()
+        return open(logfile_path, 'a')
 
     def addDataToJSONFile(self, IDEA_dict: dict):
         """
