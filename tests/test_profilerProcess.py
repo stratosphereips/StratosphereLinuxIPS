@@ -143,7 +143,7 @@ def test_define_columns(outputQueue, inputQueue,file,separator,expected_value):
 def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
     # we're testing another functionality here
-    profilerProcess.is_whitelisted =  do_nothing
+    profilerProcess.is_whitelisted_flow =  do_nothing
     # get zeek flow
     with open(file) as f:
         sample_flow = f.readline().replace('\n','')
