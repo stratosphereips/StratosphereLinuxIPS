@@ -272,24 +272,6 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-
-    def get_ts_format(self, timestamp):
-        """
-        returns the appropriate format of the given ts
-        """
-        if '+' in timestamp:
-            # timestamp contains UTC offset, set the new format accordingly
-            newformat = "%Y-%m-%d %H:%M:%S%z"
-        else:
-            # timestamp doesn't contain UTC offset, set the new format accordingly
-            newformat = "%Y-%m-%d %H:%M:%S"
-
-        # is the seconds field a float?
-        if '.' in timestamp:
-            # append .f to the seconds field
-            newformat = newformat.replace('S','S.%f')
-        return newformat
-
     def add_to_log_folder(self, data):
         # If logs folder is enabled (using -l), write alerts in the folder as well
         if not self.logs_jsonfile:
@@ -312,12 +294,12 @@ class EvidenceProcess(multiprocessing.Process):
             srcip = profileid.split(self.separator)[1]
             # Get the start time of this TW
             twid_start_time = None
-            while twid_start_time==None:
+            while twid_start_time == None:
                 # give the database time to retreive the time
                 twid_start_time = __database__.getTimeTW(profileid, twid)
 
             tw_start_time_str = utils.format_timestamp(float(twid_start_time))
-            tw_start_time_datetime = datetime.strptime(tw_start_time_str, self.get_ts_format(tw_start_time_str).replace(' ','T'))
+            tw_start_time_datetime = datetime.strptime(tw_start_time_str, utils.get_ts_format(tw_start_time_str).replace(' ','T'))
             # Convert the tw width to deltatime
             tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
             # Get the stop time of the TW
