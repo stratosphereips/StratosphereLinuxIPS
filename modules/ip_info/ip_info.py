@@ -3,6 +3,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
 from slips_files.common.slips_utils import utils
+from .asn_info import ASN
 import platform
 import sys
 
@@ -36,6 +37,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         # open mmdbs
         self.open_dbs()
+        self.asn = ASN()
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
@@ -106,137 +108,6 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-    # ASN functions
-    def get_cached_asn(self, ip):
-        """
-        If this ip belongs to a cached ip range, return the cached asn info of it
-        :param ip: str
-        """
-        cached_asn = __database__.get_asn_cache()
-        try:
-            for asn,asn_range in cached_asn.items():
-                # convert to objects
-                ip_range = ipaddress.ip_network(asn_range)
-                try:
-                    ip = ipaddress.ip_address(ip)
-                except ValueError:
-                    # not a valid ip
-                    break
-                if ip in ip_range:
-                    return asn
-        except AttributeError:
-            # cached_asn is not found
-            return False
-
-    def update_asn(self, cached_data) -> bool:
-        """
-        Returns True if
-        - no asn data is found in the db OR ip has no cached info
-        - OR a month has passed since we last updated asn info in the db
-        :param cached_data: ip cached info from the database, dict
-        """
-        try:
-            update = (time.time() - cached_data['asn']['timestamp']) > self.update_period
-            return update
-        except (KeyError, TypeError):
-            # no there's no cached asn info,or no timestamp, or cached_data is None
-            # we should update
-            return True
-
-    def get_asn_info_from_geolite(self, ip) -> dict:
-        """
-        Get ip info from geolite database
-        :param ip: str
-        return a dict with {'asn': {'asnorg':asnorg}}
-        """
-        if not hasattr(self, 'asn_db'):
-            return {'asn': {'asnorg': 'Unknown'}}
-
-        asninfo = self.asn_db.get(ip)
-        data = {}
-        try:
-            # found info in geolite
-            asnorg = asninfo['autonomous_system_organization']
-            data['asn'] = {'asnorg': asnorg}
-        except (KeyError,TypeError):
-            # asn info not found in geolite
-            data['asn'] ={'asnorg': 'Unknown'}
-
-        return data
-
-    def cache_ip_range(self, ip) -> bool:
-        """ caches the asn of current ip range """
-        try:
-            # Cache the range of this ip
-            whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
-            asnorg = whois_info.get('asn_description', False)
-            asn_cidr = whois_info.get('asn_cidr', False)
-            if asnorg and asn_cidr not in ('' , 'NA'):
-                __database__.set_asn_cache(asnorg, asn_cidr)
-            return True
-        except (ipwhois.exceptions.IPDefinedError,ipwhois.exceptions.HTTPLookupError):
-            # private ip or RDAP lookup failed. don't cache
-            return False
-        except NoResolverConfiguration:
-            # Resolver configuration could not be read or specified no nameservers
-            self.print('Error: Resolver configuration could not be read or specified no nameservers.')
-            return False
-        except ipwhois.exceptions.ASNRegistryError:
-            # ASN lookup failed with no more methods to try
-            pass
-        except dns.resolver.NoResolverConfiguration:
-            # ipwhois can't read /etc/resolv.conf
-            # manually specify the dns server
-            # ignore resolv.conf
-            dns.resolver.default_resolver=dns.resolver.Resolver(configure=False)
-            # use google's DNS
-            dns.resolver.default_resolver.nameservers=['8.8.8.8']
-            return False
-
-    def get_asn_online(self, ip):
-        """
-        Get asn of an ip using ip-api.com only if the asn wasn't found in our offline db
-        """
-
-        asn = {'asn': {'asnorg': 'Unknown'}}
-        ip_obj = ipaddress.ip_address(ip)
-        if ip_obj.is_private or ip_obj.is_multicast:
-            return asn
-
-        url = 'http://ip-api.com/json/'
-        try:
-            response = requests.get( f'{url}/{ip}', timeout=5)
-            if response.status_code == 200:
-                ip_info = json.loads(response.text)
-                if ip_info.get('as', '') != '':
-                    asn['asn']['asnorg'] = ip_info['as']
-        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
-            pass
-
-        return asn
-
-    def get_asn(self, ip, cached_ip_info):
-        """ Gets ASN info about IP, either cached, from our offline mmdb or from ip-api.com"""
-
-        # do we have asn cached for this range?
-        cached_asn = self.get_cached_asn(ip)
-        if not cached_asn:
-            # we don't have it cached in our db, get it from geolite
-            asn = self.get_asn_info_from_geolite(ip)
-            if asn['asn']['asnorg'] == 'Unknown':
-                # can't find asn in mmdb
-                asn = self.get_asn_online(ip)
-            cached_ip_info.update(asn)
-            # cache this range in our redis db
-            self.cache_ip_range(ip)
-        else:
-            # found cached asn for this ip range, store it
-            cached_ip_info.update({'asn' : {'asnorg': cached_asn}})
-
-        # store asn info in the db
-        cached_ip_info['asn'].update({'timestamp': time.time()})
-
-        __database__.setInfoForIPs(ip, cached_ip_info)
 
     # GeoInfo functions
     def get_geocountry(self, ip) -> dict:
@@ -360,6 +231,7 @@ class Module(Module, multiprocessing.Process):
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
         return MAC_info
 
+    # domain info
     def get_age(self, domain):
 
         if domain.endswith('.arpa') or domain.endswith('.local'):
@@ -419,7 +291,6 @@ class Module(Module, multiprocessing.Process):
         age = (year*365) + (month*30) + day
         __database__.setInfoForDomains(domain, {'Age': age})
         return age
-
 
     def shutdown_gracefully(self):
         if hasattr(self, 'asn_db'): self.asn_db.close()
@@ -491,9 +362,9 @@ class Module(Module, multiprocessing.Process):
                         # Get the ASN
                         # only update the ASN for this IP if more than 1 month
                         # passed since last ASN update on this IP
-                        update_asn = self.update_asn(cached_ip_info)
+                        update_asn = self.asn.update_asn(cached_ip_info, self.update_period)
                         if update_asn:
-                            self.get_asn(ip, cached_ip_info)
+                            self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)
 
             except KeyboardInterrupt:
