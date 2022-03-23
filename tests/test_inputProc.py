@@ -1,5 +1,5 @@
 import pytest
-from inputProcess import InputProcess
+from slips_files.core.inputProcess import InputProcess
 import configparser
 import shutil
 

@@ -1,5 +1,6 @@
 """ Unit test for ../profilerProcess.py """
-from ..profilerProcess import ProfilerProcess
+from slips_files.core.profilerProcess import ProfilerProcess
+from slips_files.core.whitelist import Whitelist
 import subprocess
 import configparser
 import pytest
@@ -20,29 +21,39 @@ def create_profilerProcess_instance(outputQueue, inputQueue):
     profilerProcess.whitelist_path = "tests/test_whitelist.conf"
     return profilerProcess
 
+def create_whitelist_instance(outputQueue):
+    """ Create an instance of whitelist.py
+        needed by every other test in this file  """
+    config = configparser.ConfigParser(interpolation=None)
+    whitelist = Whitelist(outputQueue, config)
+    # override the self.print function to avoid broken pipes
+    whitelist.print = do_nothing
+    whitelist.whitelist_path = "tests/test_whitelist.conf"
+    return whitelist
+
 def test_read_whitelist(outputQueue, inputQueue, database):
     """
     make sure the content of whitelists is read and stored properly
     uses tests/test_whitelist.conf for testing
     """
-    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
+    whitelist = create_whitelist_instance(outputQueue)
     # 9 is the number of lines read after the comment lines at th ebegging of the file
-    assert profilerProcess.read_whitelist() == 29
+    assert whitelist.read_whitelist() == 29
     assert '91.121.83.118' in database.get_whitelist("IPs").keys()
     assert 'apple.com' in database.get_whitelist("domains").keys()
     assert 'microsoft' in database.get_whitelist("organizations").keys()
 
 @pytest.mark.parametrize("org,asn",[('google','AS6432')])
 def test_load_org_asn(org, outputQueue, inputQueue, asn):
-    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
-    assert profilerProcess.load_org_asn(org) != False
-    assert asn in profilerProcess.load_org_asn(org)
+    whitelist = create_whitelist_instance(outputQueue)
+    assert whitelist.load_org_asn(org) != False
+    assert asn in whitelist.load_org_asn(org)
 
 @pytest.mark.parametrize("org,subnet",[('google','216.73.80.0/20')])
 def test_load_org_IPs(org, outputQueue, inputQueue, subnet):
-    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
-    assert profilerProcess.load_org_IPs(org) != False
-    assert subnet in profilerProcess.load_org_IPs(org)
+    whitelist = create_whitelist_instance(outputQueue)
+    assert whitelist.load_org_IPs(org) != False
+    assert subnet in whitelist.load_org_IPs(org)
 
 @pytest.mark.parametrize("file,expected_value",[('dataset/suricata-flows.json','suricata')])
 def test_define_type_suricata(outputQueue, inputQueue, file, expected_value):
