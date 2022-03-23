@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 import sys
 import configparser
 from .database import __database__
-import time
+from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback
 import os
@@ -31,18 +31,6 @@ from re import split
 from tzlocal import get_localzone
 from .whitelist import Whitelist
 
-def timeit(method):
-    def timed(*args, **kw):
-        ts = time.time()
-        result = method(*args, **kw)
-        te = time.time()
-        if 'log_time' in kw:
-            name = kw.get('log_name', method.__name__.upper())
-            kw['log_time'][name] = int((te - ts) * 1000)
-        else:
-            print(f'\t\033[1;32;40mFunction {method.__name__}() took {(te - ts) * 1000:2.2f}ms\033[00m')
-        return result
-    return timed
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -155,8 +143,6 @@ class ProfilerProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default
             self.label = 'unknown'
-
-
 
     def define_type(self, line):
         """
@@ -301,47 +287,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.print(str(inst), 0, 1)
             sys.exit(1)
 
-    def define_time_format(self, time: str) -> str:
-        time_format: str = None
-        try:
-            # Try unix timestamp in seconds.
-            datetime.fromtimestamp(float(time))
-            time_format = 'unixtimestamp'
-            return time_format
-        except ValueError:
-            pass
-
-        try:
-            # Try the default time format for suricata.
-            datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f%z')
-            time_format = '%Y-%m-%dT%H:%M:%S.%f%z'
-            return time_format
-        except ValueError:
-            pass
-
-        # Let's try the classic time format "'%Y-%m-%d %H:%M:%S.%f'"
-        try:
-            datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
-            time_format = '%Y-%m-%d %H:%M:%S.%f'
-            return time_format
-        except ValueError:
-            pass
-
-        try:
-            datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
-            time_format = '%Y-%m-%d %H:%M:%S'
-            return time_format
-        except ValueError:
-            pass
-
-        try:
-            datetime.strptime(time, '%Y/%m/%d %H:%M:%S.%f')
-            time_format = '%Y/%m/%d %H:%M:%S.%f'
-            return time_format
-        except ValueError:
-            # We did not find the right time format.
-            self.outputqueue.put("01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
-
     def get_time(self, time: str) -> datetime:
         """
         Take time in string and return datetime object.
@@ -352,8 +297,10 @@ class ProfilerProcess(multiprocessing.Process):
 
         if not self.timeformat:
             # The time format was not defined from configuration file neither from last flows.
-            self.timeformat = self.define_time_format(time)
-
+            self.timeformat = utils.define_time_format(time)
+            if not self.timeformat:
+                # We did not find the right time format.
+                self.outputqueue.put("01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
         defined_datetime: datetime = None
         if self.timeformat:
             if self.timeformat == 'unixtimestamp':
@@ -1936,7 +1883,10 @@ class ProfilerProcess(multiprocessing.Process):
             self.print("{}".format(inst), 0, 1)
             return False
 
-    def compute_symbol(self, profileid, twid, tupleid, current_time, current_duration, current_size, tuple_key: str):
+    def compute_symbol(self, profileid, twid,
+                       tupleid, current_time,
+                       current_duration, current_size,
+                       tuple_key: str):
         """
         This function computes the new symbol for the tuple according to the
         original stratosphere ips model of letters
