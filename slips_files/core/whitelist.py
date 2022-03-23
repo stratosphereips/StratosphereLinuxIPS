@@ -580,7 +580,7 @@ class Whitelist():
                 #self.print(f'Checking {org}, from:{from_} type {what_to_ignore}')
 
                 # get the domains of this flow
-                domains_to_check_dst, domains_to_check_src = self.get_domains_of_flow()
+                domains_to_check_dst, domains_to_check_src = self.get_domains_of_flow(column_values)
 
                 if 'flows' in what_to_ignore or 'both' in what_to_ignore:
                     # We want to block flows from this org. get the domains of this flow based on the direction.

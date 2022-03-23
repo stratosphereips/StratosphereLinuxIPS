@@ -154,7 +154,7 @@ def test_define_columns(outputQueue, inputQueue,file,separator,expected_value):
 def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
     # we're testing another functionality here
-    profilerProcess.is_whitelisted_flow =  do_nothing
+    profilerProcess.whitelist.is_whitelisted_flow = do_nothing
     # get zeek flow
     with open(file) as f:
         sample_flow = f.readline().replace('\n','')
@@ -164,14 +164,15 @@ def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
     # process it
     assert profilerProcess.process_zeek_input(sample_flow) == True
     # add to profile
-    assert profilerProcess.add_flow_to_profile() != False
-    profileid, twid = profilerProcess.add_flow_to_profile()
+    ret = profilerProcess.add_flow_to_profile()
+    assert type(ret) == tuple
+    profileid, twid = ret[0], ret[1]
     # get the uid of the current flow
     uid = profilerProcess.column_values['uid']
     # make sure it's added
     if type_ == 'conn':
         added_flow = database.get_flow(profileid,twid,uid)[uid]
     else:
-        added_flow =  database.get_altflow_from_uid(profileid, twid, uid ) != None
+        added_flow = database.get_altflow_from_uid(profileid, twid, uid ) != None
     assert added_flow != None
 
