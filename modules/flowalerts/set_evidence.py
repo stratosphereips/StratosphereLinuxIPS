@@ -230,19 +230,20 @@ class Helper:
                                      stime, category,
                                      profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_smtp_bruteforce(self, saddr, daddr, stime, profileid, twid, uid):
+    def set_evidence_smtp_bruteforce(self, saddr, daddr, stime, profileid, twid, uid, smtp_bruteforce_threshold):
             confidence = 1
             threat_level = 'high'
             category = 'Attempt.Login'
             type_detection  = 'srcip'
             type_evidence = 'SMTPLoginBruteforce'
-            description = f'performing SMTP login bruteforce to {daddr}. {self.smtp_bruteforce_threshold} logins in 10 seconds.'
+            description = f'performing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds.'
             detection_info = saddr
-            conn_count = self.smtp_bruteforce_threshold
-            if not twid: twid = ''
+            conn_count = smtp_bruteforce_threshold
+            if not twid:
+                twid = ''
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                      description, stime, category,
-                                     conn_count=conn_count, profileid=profileid, twid=twid)
+                                     conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_malicious_ssl(self, ssl_info: dict, ssl_info_from_db: dict):
             """
