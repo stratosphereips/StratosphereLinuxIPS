@@ -17,6 +17,24 @@ class Utils(object):
         self.home_network_ranges = ('192.168.0.0/16', '172.16.0.0/12', '10.0.0.0/8')
         self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
 
+    def get_ts_format(self, timestamp):
+        """
+        returns the appropriate format of the given ts
+        """
+        print(f'@@@@@@@@@@@@@@@@@@ here1?  \n')
+        if '+' in timestamp:
+            # timestamp contains UTC offset, set the new format accordingly
+            newformat = "%Y-%m-%d %H:%M:%S%z"
+        else:
+            # timestamp doesn't contain UTC offset, set the new format accordingly
+            newformat = "%Y-%m-%d %H:%M:%S"
+
+        # is the seconds field a float?
+        if '.' in timestamp:
+            # append .f to the seconds field
+            newformat = newformat.replace('S','S.%f')
+        return newformat
+
     def get_own_IPs(self):
         """ Returns a list of our local and public IPs"""
         IPs = []
