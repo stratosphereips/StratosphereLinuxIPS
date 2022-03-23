@@ -16,7 +16,7 @@ class Helper:
         type_detection  = 'dstdomain'
         detection_info = domain
         description = f'connection to a young domain: {domain} registered {age} days ago.'
-        if not twid: twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  stime, category,
@@ -34,8 +34,7 @@ class Helper:
         detection_info = profileid.split('_')[1]
         description = f'possible DGA or domain scanning. {detection_info} failed to resolve {nxdomains} domains'
         conn_count = nxdomains
-        if not twid:
-            twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                  description, stime, category, source_target_tag=source_target_tag,
                                  conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
@@ -76,8 +75,6 @@ class Helper:
 
                 ip_identification = __database__.getIPIdentification(daddr)
                 description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
-                if not twid:
-                    twid = ''
                 __database__.setEvidence(type_evidence, type_detection, detection_info,
                                          threat_level, confidence, description,
                                          timestamp, category, source_target_tag=source_target_tag,
@@ -92,8 +89,7 @@ class Helper:
         type_evidence = 'DNS-ARPA-Scan'
         description = f'performing DNS ARPA scan. Scanned {arpa_scan_threshold} hosts within 2 seconds.'
         detection_info = profileid.split('_')[1]
-        if not twid:
-            twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                  description, stime, category,
                                  conn_count=arpa_scan_threshold, profileid=profileid, twid=twid, uid=uid)
@@ -109,8 +105,7 @@ class Helper:
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'Connection to unknown destination port {dport}/{proto.upper()} ' \
                       f'destination IP {daddr}. {ip_identification}'
-        if not twid:
-            twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, port=dport, proto=proto,
@@ -189,8 +184,7 @@ class Helper:
         description = f'SSH successful to IP {daddr}. {ip_identification}. ' \
                       f'From IP {saddr}. Size: {str(size)}. Detection model {by}.' \
                       f' Confidence {confidence}'
-        if not twid:
-            twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
@@ -215,8 +209,6 @@ class Helper:
         # get the duration in minutes
         duration = int(duration/60)
         description = f'Long Connection. Connection to: {ip} {ip_identification} took {duration} mins'
-        if not twid:
-            twid = ''
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid,
@@ -233,8 +225,7 @@ class Helper:
         type_detection = 'dstip'
         type_evidence = 'SelfSignedCertificate'
         detection_info = ip
-        if not twid:
-            twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
@@ -249,8 +240,7 @@ class Helper:
         type_detection  = 'dstip'
         type_evidence = 'MultipleReconnectionAttempts'
         detection_info = ip
-        if not twid:
-            twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid,
@@ -266,8 +256,7 @@ class Helper:
         type_detection = 'dstip'
         type_evidence = 'ConnectionToMultiplePorts'
         detection_info = ip
-        if not twid:
-            twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
@@ -282,8 +271,7 @@ class Helper:
         type_detection  = 'dstip'
         type_evidence = 'InvalidCertificate'
         detection_info = ip
-        if not twid:
-            twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
@@ -307,7 +295,7 @@ class Helper:
             description = f'Connection on port 0 from {daddr} to {saddr}. {ip_identification}'
 
         conn_count = 1
-        if not twid: twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag,
@@ -340,8 +328,7 @@ class Helper:
 
         detection_info = ip
         confidence = 1
-        if not twid:
-            twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag,
@@ -360,8 +347,7 @@ class Helper:
         description = f'possible data upload. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}.'
         description+= f'{ip_identification}. IP contacted {times_contacted} times in the past 1h'
         timestamp = datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
-        if not twid:
-            twid = ''
+        
         __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
                                  confidence, description, timestamp, category,
                                  source_target_tag=source_target_tag, profileid=profileid, twid=twid)
@@ -374,7 +360,7 @@ class Helper:
             type_detection  = 'srcip'
             detection_info = saddr
             description = f'performing bad SMTP login to {daddr}'
-            if not twid: twid = ''
+            
             __database__.setEvidence(type_evidence, type_detection, detection_info,
                                      threat_level, confidence, description,
                                      stime, category,
@@ -389,8 +375,7 @@ class Helper:
             description = f'performing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds.'
             detection_info = saddr
             conn_count = smtp_bruteforce_threshold
-            if not twid:
-                twid = ''
+            
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                      description, stime, category,
                                      conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
