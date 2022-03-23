@@ -7,6 +7,7 @@ from git import Repo
 import socket
 import subprocess
 import json
+import time
 
 class Utils(object):
     name = 'utils'
@@ -17,11 +18,63 @@ class Utils(object):
         self.home_network_ranges = ('192.168.0.0/16', '172.16.0.0/12', '10.0.0.0/8')
         self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
 
+    def timeit(method):
+        def timed(*args, **kw):
+            ts = time.time()
+            result = method(*args, **kw)
+            te = time.time()
+            if 'log_time' in kw:
+                name = kw.get('log_name', method.__name__.upper())
+                kw['log_time'][name] = int((te - ts) * 1000)
+            else:
+                print(f'\t\033[1;32;40mFunction {method.__name__}() took {(te - ts) * 1000:2.2f}ms\033[00m')
+            return result
+        return timed
+
+    def define_time_format(self, time: str) -> str:
+        time_format: str = None
+        try:
+            # Try unix timestamp in seconds.
+            datetime.fromtimestamp(float(time))
+            time_format = 'unixtimestamp'
+            return time_format
+        except ValueError:
+            pass
+
+        try:
+            # Try the default time format for suricata.
+            datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f%z')
+            time_format = '%Y-%m-%dT%H:%M:%S.%f%z'
+            return time_format
+        except ValueError:
+            pass
+
+        # Let's try the classic time format "'%Y-%m-%d %H:%M:%S.%f'"
+        try:
+            datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
+            time_format = '%Y-%m-%d %H:%M:%S.%f'
+            return time_format
+        except ValueError:
+            pass
+
+        try:
+            datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
+            time_format = '%Y-%m-%d %H:%M:%S'
+            return time_format
+        except ValueError:
+            pass
+
+        try:
+            datetime.strptime(time, '%Y/%m/%d %H:%M:%S.%f')
+            time_format = '%Y/%m/%d %H:%M:%S.%f'
+            return time_format
+        except ValueError:
+            return False
+
     def get_ts_format(self, timestamp):
         """
         returns the appropriate format of the given ts
         """
-        print(f'@@@@@@@@@@@@@@@@@@ here1?  \n')
         if '+' in timestamp:
             # timestamp contains UTC offset, set the new format accordingly
             newformat = "%Y-%m-%d %H:%M:%S%z"
