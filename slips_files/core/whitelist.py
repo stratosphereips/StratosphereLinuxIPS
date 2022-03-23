@@ -1,20 +1,9 @@
 
 import json
-from datetime import datetime, timedelta
-import sys
 import configparser
 from .database import __database__
-import time
 import ipaddress
-import traceback
-import os
-import binascii
-import base64
-import subprocess
-from re import split
-from tzlocal import get_localzone
 import validators
-import socket
 import requests
 
 class Whitelist():
@@ -308,7 +297,7 @@ class Whitelist():
                     if domain in main_domain:
                         # We can ignore flows or alerts, what is it?
                         if 'flows' in what_to_ignore or 'both' in what_to_ignore:
-                            self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
+                            # self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
                             return True
 
                 # do we wanna whitelist flows coming from or going to this domain or both?
@@ -321,7 +310,7 @@ class Whitelist():
                         if domain in main_domain:
                             # We can ignore flows or alerts, what is it?
                             if 'flows' in what_to_ignore or 'both' in what_to_ignore:
-                                self.print(f"Whitelisting the domain {domain_to_check} because is related to domain {domain} of src IP {column_values['saddr']}")
+                                # self.print(f"Whitelisting the domain {domain_to_check} because is related to domain {domain} of src IP {column_values['saddr']}")
                                 return True
 
                 # Now check the related domains of the dst IP
@@ -331,8 +320,8 @@ class Whitelist():
                         if domain in main_domain:
                             # We can ignore flows or alerts, what is it?
                             if 'flows' in what_to_ignore or 'both' in what_to_ignore:
-                                self.print(f"Whitelisting the domain {domain_to_check} because is related"
-                                           f" to domain {domain} of dst IP {column_values['daddr']}")
+                                # self.print(f"Whitelisting the domain {domain_to_check} because is related"
+                                #            f" to domain {domain} of dst IP {column_values['daddr']}")
                                 return True
 
         saddr = column_values['saddr']
