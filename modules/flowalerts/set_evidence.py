@@ -95,7 +95,7 @@ class Helper:
                                  conn_count=arpa_scan_threshold, profileid=profileid, twid=twid, uid=uid)
 
 
-    def set_evidence_unknown_port(daddr, dport, proto, timestamp, profileid, twid, uid):
+    def set_evidence_unknown_port(self, daddr, dport, proto, timestamp, profileid, twid, uid):
         confidence = 1
         threat_level = 'high'
         category = 'Anomaly.Connection'
