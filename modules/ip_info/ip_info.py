@@ -8,15 +8,12 @@ import platform
 import sys
 
 # Your imports
-import time
 import datetime
 import maxminddb
 import ipaddress
-import ipwhois, whois
+import whois
 import socket
 import json
-import requests
-from dns.resolver import NoResolverConfiguration
 from contextlib import redirect_stdout
 
 #todo add to conda env
@@ -66,14 +63,14 @@ class Module(Module, multiprocessing.Process):
     def open_dbs(self):
         """ Function to open the different offline databases used in this module. ASN, Country etc.. """
         
-        # Open the maxminddb ASN offline db 
+        # Open the maxminddb ASN offline db
         try:
             self.asn_db = maxminddb.open_database('databases/GeoLite2-ASN.mmdb')
         except:
             self.print('Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. '
                        'Please download it from https://dev.maxmind.com/geoip/docs/databases/asn?lang=en '
                        'Please note it must be the MaxMind DB version.')
-        
+
         # Open the maminddb Country offline db
         try:
             self.country_db = maxminddb.open_database('databases/GeoLite2-Country.mmdb')
