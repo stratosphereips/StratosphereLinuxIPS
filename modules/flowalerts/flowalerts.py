@@ -1231,7 +1231,9 @@ class Module(Module, multiprocessing.Process):
                             if diff <= 10:
                                 # remove all 3 logins that caused this alert
                                 self.smtp_bruteforce_cache[profileid] = []
-                                self.helper.set_evidence_smtp_bruteforce(saddr, daddr, stime, profileid, twid, uid)
+                                self.helper.set_evidence_smtp_bruteforce(saddr, daddr, stime,
+                                                                         profileid, twid, uid,
+                                                                         self.smtp_bruteforce_threshold)
                             else:
                                 # remove the first element so we can check the next 3 logins
                                 self.smtp_bruteforce_cache[profileid].pop(0)
