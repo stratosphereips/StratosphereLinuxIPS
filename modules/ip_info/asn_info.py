@@ -1,20 +1,24 @@
 # Must imports
-from slips_files.common.abstracts import Module
-import multiprocessing
 from slips_files.core.database import __database__
-from slips_files.common.slips_utils import utils
-import platform
-import sys
 
 # Your imports
 import time
 import ipaddress
-import ipwhois, whois
+import ipwhois
 import json
 import requests
+import maxminddb
 from dns.resolver import NoResolverConfiguration
 
 class ASN:
+    def __init__(self):
+        # Open the maxminddb ASN offline db
+        try:
+            self.asn_db = maxminddb.open_database('databases/GeoLite2-ASN.mmdb')
+        except:
+            # errors are printed in IP_info
+            pass
+
     def get_cached_asn(self, ip):
         """
         If this ip belongs to a cached ip range, return the cached asn info of it
