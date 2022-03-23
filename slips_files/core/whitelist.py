@@ -247,7 +247,8 @@ class Whitelist():
             ip_data = __database__.getIPData(column_values['daddr'])
             if ip_data:
                 sni_info = ip_data.get('SNI',[{}])[0]
-                if sni_info : domains_to_check_dst.append(sni_info.get('server_name'))
+                if sni_info:
+                    domains_to_check_dst.append(sni_info.get('server_name'))
         except (KeyError, TypeError):
             pass
         return domains_to_check_dst, domains_to_check_src

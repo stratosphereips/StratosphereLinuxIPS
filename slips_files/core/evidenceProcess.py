@@ -68,7 +68,9 @@ class EvidenceProcess(multiprocessing.Process):
 
         self.timeout = 0.0000001
         # this list will have our local and public ips
-        self.our_ips = self.get_IP()
+        self.our_ips = utils.get_own_IPs()
+        if not self.our_ips:
+            self.print('Error getting local and public IPs', 0, 1)
         # all evidence slips detects has threat levels of strings
         # each string should have a corresponding int value to be able to calculate
         # the accumulated threat level and alert
@@ -109,28 +111,6 @@ class EvidenceProcess(multiprocessing.Process):
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
-
-    def get_IP(self):
-        """ Returns a list of our local and public IPs"""
-        IPs = []
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(('10.255.255.255', 1))
-            IPs.append(s.getsockname()[0])
-        except Exception:
-            IPs.append('127.0.0.1')
-        finally:
-            s.close()
-        # get public ip
-        command = f'curl -m 5 -s http://ipinfo.io/json'
-        result = subprocess.run(command.split(), capture_output=True)
-        text_output = result.stdout.decode("utf-8").replace('\n','')
-        if not text_output or 'Connection timed out' in text_output:
-            self.print('Error getting local and public IPs', 0, 1)
-        else:
-            public_ip = json.loads(text_output)['ip']
-            IPs.append(public_ip)
-        return IPs
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -299,37 +279,6 @@ class EvidenceProcess(multiprocessing.Process):
             self.print(type(inst))
             self.print(inst)
 
-    def get_domains_of_flow(self, flow:dict):
-        """ Returns the domains of each ip (src and dst) that appeared in this flow """
-        # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
-        try:
-            flow = json.loads(list(flow.values())[0])
-        except TypeError:
-            # sometimes this function is called before the flow is add to our database
-            return [],[]
-        domains_to_check_src = []
-        domains_to_check_dst = []
-        try:
-            #self.print(f"IPData of src IP {self.column_values['saddr']}: {__database__.getIPData(self.column_values['saddr'])}")
-            domains_to_check_src.append(__database__.getIPData(flow['saddr']).get('SNI',[{}])[0].get('server_name'))
-        except (KeyError, TypeError):
-            pass
-        try:
-            #self.print(f"DNS of src IP {self.column_values['saddr']}: {__database__.get_dns_resolution(self.column_values['saddr'])}")
-            src_dns_domains = __database__.get_dns_resolution(flow['saddr'])
-            src_dns_domains = src_dns_domains.get('domains', [])
-
-            for dns_domain in src_dns_domains:
-                domains_to_check_src.append(dns_domain)
-        except (KeyError, TypeError):
-            pass
-        try:
-            # self.print(f"IPData of dst IP {self.column_values['daddr']}: {__database__.getIPData(self.column_values['daddr'])}")
-            domains_to_check_dst.append(__database__.getIPData(flow['daddr']).get('SNI',[{}])[0].get('server_name'))
-        except (KeyError, TypeError):
-            pass
-
-        return domains_to_check_dst, domains_to_check_src
 
     def is_whitelisted(self, srcip: str, data, type_detection, description, flow: dict) -> bool:
         """

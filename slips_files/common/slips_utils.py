@@ -4,6 +4,9 @@ from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 import validators
 from git import Repo
+import socket
+import subprocess
+import json
 
 class Utils(object):
     name = 'utils'
@@ -13,6 +16,29 @@ class Utils(object):
     def __init__(self):
         self.home_network_ranges = ('192.168.0.0/16', '172.16.0.0/12', '10.0.0.0/8')
         self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
+
+    def get_own_IPs(self):
+        """ Returns a list of our local and public IPs"""
+        IPs = []
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('10.255.255.255', 1))
+            IPs.append(s.getsockname()[0])
+        except Exception:
+            IPs.append('127.0.0.1')
+        finally:
+            s.close()
+        # get public ip
+        command = f'curl -m 5 -s http://ipinfo.io/json'
+        result = subprocess.run(command.split(), capture_output=True)
+        text_output = result.stdout.decode("utf-8").replace('\n','')
+        if not text_output or 'Connection timed out' in text_output:
+
+            return False
+        else:
+            public_ip = json.loads(text_output)['ip']
+            IPs.append(public_ip)
+        return IPs
 
     def get_hash_from_file(self, filename):
         """
